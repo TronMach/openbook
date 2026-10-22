@@ -89,6 +89,14 @@ public sealed class User
         SecurityStamp = NewStamp();
     }
 
+    /// <summary>Recovery by someone with access to the machine: new password, sessions ended, lockout cleared.</summary>
+    public void ResetPassword(string newPasswordHash)
+    {
+        ChangePassword(newPasswordHash);
+        FailedLoginCount = 0;
+        LockedUntil = null;
+    }
+
     /// <summary>Re-hash with stronger parameters after a successful sign-in; sessions stay valid.</summary>
     public void UpgradePasswordHash(string newPasswordHash) => PasswordHash = newPasswordHash;
 

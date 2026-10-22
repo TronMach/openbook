@@ -52,7 +52,7 @@ tests/
 | M4 | Purchases / A/P | Vendors, expenses, bills, pay bills (partial, multi-bill), CSV import for vendors | M |
 | M5 | Reports + polish | P&L, Balance Sheet, Trial Balance, GL detail, transaction list/journal report, date range filters, global search | M |
 
-**M0 status (2026-10-22): complete.** Scaffold, `Money`, posting engine, void/reversal, audit log, EF Core/SQLite with migrations, DB integrity triggers, minimal REST API, setup wizard, local sign-in (lockout, session revocation on password change), backup download and validated restore with safety copy. 87 tests. Known gap: no password recovery yet.
+**M0 status (2026-10-22): complete.** Scaffold, `Money`, posting engine, void/reversal, audit log, EF Core/SQLite with migrations, DB integrity triggers, minimal REST API, setup wizard, local sign-in (lockout, session revocation on password change), backup download and validated restore with safety copy. Password recovery via the `reset-password` command. 92 tests.
 
 **Exit criteria:** a sole proprietor can set up a company, run a year of invoicing, bills and banking, reconcile, and get a correct P&L and balance sheet, all on one SQLite file they can back up.
 

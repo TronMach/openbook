@@ -2,11 +2,16 @@ using Microsoft.AspNetCore.Http.Features;
 using OpenBook.Api;
 using OpenBook.Application;
 using OpenBook.Infrastructure;
+using OpenBook.Web.Cli;
 using OpenBook.Web.Components;
 using OpenBook.Web.Endpoints;
 using OpenBook.Web.Security;
 
+var isResetPassword = args is [ResetPasswordCommand.Name, ..];
+
 var builder = WebApplication.CreateBuilder(args);
+if (isResetPassword)
+    builder.Logging.ClearProviders();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -22,6 +27,9 @@ builder.Services
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
 
 var app = builder.Build();
+
+if (isResetPassword)
+    return await ResetPasswordCommand.RunAsync(app.Services, args);
 
 await app.Services.MigrateOpenBookDatabaseAsync();
 
@@ -47,3 +55,4 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+return 0;

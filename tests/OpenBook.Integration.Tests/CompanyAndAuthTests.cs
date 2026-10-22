@@ -64,6 +64,14 @@ public sealed class CompanySetupTests : IAsyncLifetime
         Assert.Equal("company.already_set_up", ex.Code);
     }
 
+    [Fact]
+    public async Task Reset_before_setup_points_to_the_wizard()
+    {
+        var ex = await Assert.ThrowsAsync<DomainException>(() => _db.InScope(sp => sp.GetRequiredService<AuthService>()
+            .ResetPasswordAsync(null, LedgerDatabase.OwnerPassword, "console:tester")));
+        Assert.Equal("company.not_set_up", ex.Code);
+    }
+
     [Theory]
     [InlineData("short", "USD", "user.password_too_short")]
     [InlineData(LedgerDatabase.OwnerPassword, "US", "currency.invalid")]
@@ -147,6 +155,55 @@ public sealed class AuthTests : IAsyncLifetime
         Assert.True(await SessionValid(after));
         Assert.Equal(SignInStatus.InvalidCredentials, (await SignIn(LedgerDatabase.OwnerPassword)).Status);
         Assert.Equal(SignInStatus.Succeeded, (await SignIn("a brand new passphrase")).Status);
+    }
+
+    private Task<string> Reset(string? username, string password = "recovered passphrase") =>
+        _db.InScope(sp => sp.GetRequiredService<AuthService>().ResetPasswordAsync(username, password, "console:tester"));
+
+    [Fact]
+    public async Task Reset_sets_new_password_clears_lockout_ends_sessions_and_audits()
+    {
+        var session = (await SignIn(LedgerDatabase.OwnerPassword)).User!;
+        for (var i = 0; i < User.MaxFailedLogins; i++)
+            await SignIn("wrong password");
+        Assert.Equal(SignInStatus.LockedOut, (await SignIn(LedgerDatabase.OwnerPassword)).Status);
+
+        Assert.Equal(LedgerDatabase.OwnerUsername, await Reset(username: null));
+
+        Assert.False(await SessionValid(session));
+        Assert.Equal(SignInStatus.InvalidCredentials, (await SignIn(LedgerDatabase.OwnerPassword)).Status);
+        Assert.Equal(SignInStatus.Succeeded, (await SignIn("recovered passphrase")).Status);
+
+        var audit = await _db.InDb(db => db.AuditRecords.OrderBy(r => r.Id).LastAsync());
+        Assert.Equal("console:tester", audit.Actor);
+        Assert.Contains("\"Via\":\"reset\"", audit.After, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Reset_needs_a_username_when_there_are_several_users()
+    {
+        await _db.InDb(db =>
+        {
+            db.Users.Add(User.Create("bookkeeper", "unused-hash", _db.Clock.UtcNow));
+            return db.SaveChangesAsync();
+        });
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Reset(username: null));
+        Assert.Equal("auth.username_required", ex.Code);
+        Assert.Contains("bookkeeper, owner", ex.Message, StringComparison.Ordinal);
+
+        Assert.Equal("bookkeeper", await Reset(" BookKeeper "));
+    }
+
+    [Theory]
+    [InlineData("nobody", "recovered passphrase", "user.not_found")]
+    [InlineData(null, "short", "user.password_too_short")]
+    public async Task Invalid_reset_changes_nothing(string? username, string password, string code)
+    {
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Reset(username, password));
+
+        Assert.Equal(code, ex.Code);
+        Assert.Equal(SignInStatus.Succeeded, (await SignIn(LedgerDatabase.OwnerPassword)).Status);
     }
 
     [Fact]

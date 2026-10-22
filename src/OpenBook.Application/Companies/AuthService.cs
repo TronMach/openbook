@@ -79,6 +79,41 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         return new AuthenticatedUser(user.Id, user.Username, user.SecurityStamp);
     }
 
+    /// <summary>
+    /// Sets a new password without the current one. Only offered on the server's command line, where the
+    /// caller could already read or replace the company file. <paramref name="username"/> may be omitted
+    /// when the file has a single user.
+    /// </summary>
+    /// <returns>The username whose password was reset.</returns>
+    public async Task<string> ResetPasswordAsync(string? username, string newPassword, string actor, CancellationToken ct = default)
+    {
+        var users = await store.ListUsersAsync(ct);
+        if (users.Count == 0)
+            throw new DomainException("company.not_set_up", "This company file has no users yet. Run the setup wizard instead.");
+
+        User user;
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            user = users.Count == 1
+                ? users[0]
+                : throw new DomainException("auth.username_required",
+                    $"This company file has several users; name one of: {string.Join(", ", users.Select(u => u.Username))}.");
+        }
+        else
+        {
+            var normalized = username.Trim().ToLowerInvariant();
+            user = users.SingleOrDefault(u => u.Username == normalized)
+                ?? throw new DomainException("user.not_found", $"There is no user '{normalized}'.");
+        }
+
+        User.ValidatePassword(newPassword);
+        user.ResetPassword(hasher.Hash(newPassword));
+        store.Add(AuditRecord.Create(clock.UtcNow, actor, AuditAction.Updated, "user", user.Id, null,
+            JsonSerializer.Serialize(new { Changed = "password", Via = "reset" })));
+        await store.SaveChangesAsync(ct);
+        return user.Username;
+    }
+
     private async Task<bool> CheckPasswordAsync(User user, string? password, CancellationToken ct)
     {
         var now = clock.UtcNow;

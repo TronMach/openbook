@@ -7,6 +7,7 @@ Open-source QuickBooks alternative in .NET 10. Plan and milestones: `ROADMAP.md`
 - Build: `dotnet build`
 - Test: `dotnet test` (Domain.Tests = pure unit; Integration.Tests = migrated in-memory SQLite incl. triggers)
 - Run: `dotnet run --project src/OpenBook.Web` (migrates `openbook.db` on startup; API under `/api`)
+- Reset a forgotten password: `dotnet run --project src/OpenBook.Web -- reset-password [username]` (same config as the web app; prompts twice, reads lines when stdin is piped; refuses if the company file is missing rather than creating one)
 - New migration: `dotnet ef migrations add <Name> -p src/OpenBook.Infrastructure -s src/OpenBook.Infrastructure -o Persistence/Migrations`
 
 ## Layout

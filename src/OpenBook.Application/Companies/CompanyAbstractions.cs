@@ -22,6 +22,7 @@ public interface ICompanyStore
     /// <summary>Null until the setup wizard has run.</summary>
     Task<Company?> GetCompanyAsync(CancellationToken ct);
 
+    Task<IReadOnlyList<User>> ListUsersAsync(CancellationToken ct);
     Task<User?> GetUserAsync(Guid id, CancellationToken ct);
     Task<User?> FindUserAsync(string normalizedUsername, CancellationToken ct);
 
