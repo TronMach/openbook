@@ -1,0 +1,16 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Test names use underscores for readability.
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+# xUnit IAsyncLifetime owns fixture cleanup.
+dotnet_diagnostic.CA1001.severity = none
+
+# EF Core migrations are generated code.
+[src/**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenBook.Api/OpenBook.Api.csproj" />
+    <Project Path="src/OpenBook.Application/OpenBook.Application.csproj" />
+    <Project Path="src/OpenBook.Domain/OpenBook.Domain.csproj" />
+    <Project Path="src/OpenBook.Infrastructure/OpenBook.Infrastructure.csproj" />
+    <Project Path="src/OpenBook.Web/OpenBook.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenBook.Domain.Tests/OpenBook.Domain.Tests.csproj" />
+    <Project Path="tests/OpenBook.Integration.Tests/OpenBook.Integration.Tests.csproj" />
+  </Folder>
+</Solution>
