@@ -14,6 +14,36 @@ public enum JournalEntryStatus
     Voided,
 }
 
+/// <summary>How a report is prepared.</summary>
+public enum ReportBasis
+{
+    Accrual,
+    Cash,
+}
+
+/// <summary>
+/// Which report basis an entry counts toward. Nearly everything is <see cref="Both"/>; accountants use the
+/// others for adjusting entries that only make sense on one basis. Documents (invoices, bills) will add
+/// payment-driven cash-basis rules in M3/M4.
+/// </summary>
+public enum EntryBasis
+{
+    Both,
+    AccrualOnly,
+    CashOnly,
+}
+
+public static class EntryBases
+{
+    public static bool AppliesTo(this EntryBasis basis, ReportBasis report) => basis switch
+    {
+        EntryBasis.Both => true,
+        EntryBasis.AccrualOnly => report == ReportBasis.Accrual,
+        EntryBasis.CashOnly => report == ReportBasis.Cash,
+        _ => false,
+    };
+}
+
 /// <summary>
 /// A balanced, immutable set of ledger lines. Every business document (invoice, bill, payment, ...)
 /// posts through here. Posted entries are never edited or deleted: correcting one means voiding it,
@@ -36,6 +66,8 @@ public sealed class JournalEntry
     public JournalEntryStatus Status { get; private set; }
 
     /// <summary>What produced the entry ("manual", later "invoice", "bill", ...).</summary>
+    public EntryBasis Basis { get; private set; }
+
     public string Source { get; private set; }
 
     /// <summary>The originating document's id, when <see cref="Source"/> is not manual.</summary>
@@ -61,13 +93,16 @@ public sealed class JournalEntry
         DateTimeOffset postedAt,
         string? memo = null,
         string source = ManualSource,
-        Guid? sourceId = null)
+        Guid? sourceId = null,
+        EntryBasis basis = EntryBasis.Both)
     {
         ArgumentNullException.ThrowIfNull(lines);
         if (number <= 0)
             throw new DomainException("journal.number_invalid", "Entry numbers start at 1.");
         if (date == default)
             throw new DomainException("journal.date_required", "A journal entry needs a date.");
+        if (!Enum.IsDefined(basis))
+            throw new DomainException("journal.basis_invalid", $"Unknown entry basis {basis}.");
         if (string.IsNullOrWhiteSpace(source))
             throw new DomainException("journal.source_required", "A journal entry needs a source.");
         if (lines.Count < 2)
@@ -81,6 +116,7 @@ public sealed class JournalEntry
             Currency = currency,
             Memo = Normalize(memo),
             Kind = JournalEntryKind.Standard,
+            Basis = basis,
             Status = JournalEntryStatus.Posted,
             Source = source,
             SourceId = sourceId,
@@ -125,6 +161,7 @@ public sealed class JournalEntry
             Currency = Currency,
             Memo = $"Void of #{Number}: {reason.Trim()}",
             Kind = JournalEntryKind.Reversal,
+            Basis = Basis,
             Status = JournalEntryStatus.Posted,
             Source = Source,
             SourceId = SourceId,

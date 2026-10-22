@@ -1,0 +1,150 @@
+@page "/journal/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject PostingEngine Engine
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+
+<PageTitle>Journal entry @(_entry?.Number) · OpenBook</PageTitle>
+
+@if (_entry is null)
+{
+    <div class="card"><p>That journal entry doesn't exist. <a href="/journal">Back to the journal</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Journal entry @_entry.Number</h1>
+        <a class="button secondary" href="/journal">Back to journal</a>
+        <a class="button" href="/journal/new">New entry</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_entry.Status == JournalEntryStatus.Voided)
+    {
+        <div class="alert notice" role="status">
+            Voided on @_entry.VoidedAt?.ToLocalTime().ToString("g"): @_entry.VoidReason.
+            @if (_reversalId is { } reversalId)
+            {
+                <a href="/journal/@reversalId">See the reversing entry</a>
+            }
+        </div>
+    }
+    @if (_entry.ReversesEntryId is { } originalId)
+    {
+        <div class="alert notice" role="status">This entry reverses a voided entry. <a href="/journal/@originalId">See the original</a>.</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt>
+            <dd>@Labels.Date(_entry.Date)</dd>
+            @if (_entry.Memo is not null)
+            {
+                <dt>Memo</dt>
+                <dd>@_entry.Memo</dd>
+            }
+            <dt>Counts toward</dt>
+            <dd>@Labels.For(_entry.Basis)</dd>
+            <dt>Posted</dt>
+            <dd>@_entry.PostedAt.ToLocalTime().ToString("g")</dd>
+        </dl>
+    </div>
+
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th class="num">Debit</th>
+                    <th class="num">Credit</th>
+                    <th>Memo</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in _entry.Lines.OrderBy(l => l.LineNumber))
+                {
+                    <tr>
+                        <td><a href="/accounts/@line.AccountId">@Labels.AccountName(_chart, line.AccountId, _useNumbers)</a></td>
+                        <td class="num">@Labels.AmountOrBlank(line.Debit)</td>
+                        <td class="num">@Labels.AmountOrBlank(line.Credit)</td>
+                        <td>@line.Memo</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td>Total (@_entry.Currency)</td>
+                    <td class="num">@Labels.Amount(_entry.TotalDebits.Amount)</td>
+                    <td class="num">@Labels.Amount(_entry.TotalCredits.Amount)</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    @if (_entry.Status == JournalEntryStatus.Posted && _entry.Kind == JournalEntryKind.Standard)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this entry</h2>
+            <p class="muted">Voiding posts a reversing entry on the same date, so both stay in the books and the effect cancels out.</p>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <button type="submit" class="danger">Void entry</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private JournalEntry? _entry;
+    private Guid? _reversalId;
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+        _chart = await AccountService.GetChartAsync();
+        _entry = await Engine.GetAsync(Id);
+        if (_entry?.Status == JournalEntryStatus.Voided)
+            _reversalId = await Engine.FindReversalIdAsync(_entry.Id);
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            await Engine.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/journal/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the entry is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

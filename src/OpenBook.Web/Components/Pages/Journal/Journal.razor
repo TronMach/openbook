@@ -1,0 +1,134 @@
+@page "/journal"
+@inject PostingEngine Engine
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>Journal · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Journal entries</h1>
+        <form method="get" action="/journal" data-enhance="false">
+            <div class="field">
+                <label for="from">From</label>
+                <input id="from" name="from" type="date" value="@From?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="to">To</label>
+                <input id="to" name="to" type="date" value="@To?.ToString("yyyy-MM-dd")" />
+            </div>
+            <button type="submit" class="secondary">Filter</button>
+        </form>
+        <a class="button" href="/journal/new">New entry</a>
+    </div>
+
+    @if (_entries.Count == 0)
+    {
+        <div class="card">
+            <p>
+                @(From is null && To is null ? "No journal entries yet." : "No entries in that date range.")
+                <a href="/journal/new">Record one</a>.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th class="num">No.</th>
+                        <th>Accounts</th>
+                        <th>Memo</th>
+                        <th class="num">Amount</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in _entries)
+                    {
+                        <tr class="@(entry.Status == JournalEntryStatus.Voided ? "inactive" : null)">
+                            <td>@Labels.Date(entry.Date)</td>
+                            <td class="num"><a href="/journal/@entry.Id">@entry.Number</a></td>
+                            <td>@AccountsSummary(entry)</td>
+                            <td>@entry.Memo</td>
+                            <td class="num">@Labels.Amount(entry.TotalDebits.Amount)</td>
+                            <td>
+                                @if (entry.Status == JournalEntryStatus.Voided)
+                                {
+                                    <span class="badge">Voided</span>
+                                }
+                                @if (entry.Kind == JournalEntryKind.Reversal)
+                                {
+                                    <span class="badge">Reversal</span>
+                                }
+                                @if (entry.Basis != EntryBasis.Both)
+                                {
+                                    <span class="badge">@Labels.For(entry.Basis)</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pager">
+            <span class="muted">@(_skip + 1)–@(_skip + _entries.Count) of @_total</span>
+            @if (Page > 1)
+            {
+                <a href="@PageLink(Page - 1)">Newer</a>
+            }
+            @if (_skip + _entries.Count < _total)
+            {
+                <a href="@PageLink(Page + 1)">Older</a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const int PageSize = 50;
+
+    private IReadOnlyList<JournalEntry> _entries = [];
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private int _total;
+    private int _skip;
+
+    [SupplyParameterFromQuery]
+    private DateOnly? From { get; set; }
+
+    [SupplyParameterFromQuery]
+    private DateOnly? To { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    private int Page { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Page = Math.Max(Page, 1);
+        _skip = (Page - 1) * PageSize;
+        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+        _chart = await AccountService.GetChartAsync();
+        (_entries, _total) = await Engine.ListAsync(new JournalEntryFilter(From, To, _skip, PageSize));
+    }
+
+    private string AccountsSummary(JournalEntry entry)
+    {
+        var names = entry.Lines.OrderBy(l => l.LineNumber).Select(l => Labels.AccountName(_chart, l.AccountId, _useNumbers)).Distinct().ToList();
+        return names.Count <= 2 ? string.Join(", ", names) : $"{names[0]}, {names[1]} +{names.Count - 2} more";
+    }
+
+    private string PageLink(int page)
+    {
+        var query = new List<string>();
+        if (From is { } from)
+            query.Add($"from={from:yyyy-MM-dd}");
+        if (To is { } to)
+            query.Add($"to={to:yyyy-MM-dd}");
+        query.Add($"page={page}");
+        return "/journal?" + string.Join('&', query);
+    }
+}

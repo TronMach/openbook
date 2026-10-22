@@ -26,6 +26,18 @@ public class CompanyTests
         Assert.Equal("company.fiscal_month_invalid", Assert.Throws<DomainException>(() => WithFiscalStart(month)).Code);
 
     [Fact]
+    public void Fiscal_year_end_is_the_day_before_the_next_start() =>
+        Assert.Equal(new DateOnly(2026, 6, 30), WithFiscalStart(7).FiscalYearEnd(new DateOnly(2026, 3, 15)));
+
+    [Fact]
+    public void New_companies_number_accounts_and_report_on_accrual()
+    {
+        var company = WithFiscalStart(1);
+        Assert.True(company.UseAccountNumbers);
+        Assert.Equal(OpenBook.Domain.Ledger.ReportBasis.Accrual, company.DefaultReportBasis);
+    }
+
+    [Fact]
     public void Name_is_required() =>
         Assert.Equal("company.name_required",
             Assert.Throws<DomainException>(() => Company.Create(" ", BusinessType.Other, Currency.Usd, 1, Now)).Code);

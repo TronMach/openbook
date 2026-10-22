@@ -21,9 +21,9 @@ public sealed class PostingEngineTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _db.InitializeAsync();
-        _cash = await _db.CreateAccount("Checking", AccountType.Asset, "1000");
+        _cash = await _db.CreateAccount("Checking", AccountType.Bank, "1000");
         _sales = await _db.CreateAccount("Sales", AccountType.Income, "4000");
-        _tax = await _db.CreateAccount("Sales Tax Payable", AccountType.Liability, "2200");
+        _tax = await _db.CreateAccount("Sales Tax Payable", AccountType.OtherCurrentLiability, "2200");
     }
 
     public Task DisposeAsync() => _db.DisposeAsync();

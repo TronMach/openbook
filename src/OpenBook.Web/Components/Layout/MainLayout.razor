@@ -6,10 +6,13 @@
             <a class="brand" href="/">OpenBook</a>
             <nav>
                 <NavLink href="/" Match="NavLinkMatch.All">Home</NavLink>
-                <NavLink href="/backup">Backup &amp; restore</NavLink>
-                <NavLink href="/account/password">Change password</NavLink>
+                <NavLink href="/accounts">Accounts</NavLink>
+                <NavLink href="/journal">Journal</NavLink>
+                <NavLink href="/reports/trial-balance">Trial balance</NavLink>
+                <NavLink href="/settings">Settings</NavLink>
+                <NavLink href="/backup">Backup</NavLink>
             </nav>
-            <span class="muted">@context.User.Identity?.Name</span>
+            <a class="muted" href="/account/password" title="Change password">@context.User.Identity?.Name</a>
             <form method="post" action="/logout">
                 <AntiforgeryToken />
                 <button type="submit" class="link">Sign out</button>

@@ -1,0 +1,167 @@
+@page "/accounts/import"
+@rendermode InteractiveServer
+@inject Operations Ops
+
+<PageTitle>Import accounts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import chart of accounts</h1>
+        <a class="button secondary" href="/accounts">Back to accounts</a>
+    </div>
+
+    <div class="card">
+        <p>
+            Upload a CSV file with a header row. OpenBook needs an account <strong>name</strong> column and a
+            <strong>type</strong> column; <strong>number</strong> and <strong>description</strong> are optional.
+            Write subaccounts QuickBooks-style as <code>Parent:Child</code>. A QuickBooks chart-of-accounts export
+            works as-is. Accounts that already exist are skipped, and nothing is imported unless every row is valid.
+        </p>
+        <p>
+            <a href="/samples/chart-of-accounts.csv" download>Download a starter chart for a small service business</a>.
+            Edit it in a spreadsheet, then upload it here.
+        </p>
+        <details>
+            <summary>Example</summary>
+            <pre class="sample">Number,Account,Type,Description
+1000,Checking,Bank,Main operating account
+6000,Utilities,Expense,
+6010,Utilities:Electric,Expense,
+6020,Utilities:Internet,Expense,Broadband and phone</pre>
+        </details>
+
+        <div class="field" style="margin-top: 1rem">
+            <label for="file">CSV file</label>
+            <InputFile id="file" accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">
+            Imported @_imported.NewCount account(s). <a href="/accounts">View the chart of accounts</a>.
+        </div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        <div class="card">
+            <h2>Preview of @_fileName</h2>
+            <div class="import-summary">
+                <span><span class="badge ok">@_preview.NewCount</span> new</span>
+                <span><span class="badge">@_preview.ExistingCount</span> already exist</span>
+                <span><span class="badge @(_preview.ErrorCount > 0 ? "warn" : null)">@_preview.ErrorCount</span> with errors</span>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th class="num">Line</th>
+                            <th>Status</th>
+                            <th>Number</th>
+                            <th>Account</th>
+                            <th>Type</th>
+                            <th>Note</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _preview.Rows)
+                        {
+                            <tr class="@(row.Status == ImportRowStatus.Exists ? "inactive" : null)">
+                                <td class="num">@row.Line</td>
+                                <td><span class="badge @(row.Status switch { ImportRowStatus.New => "ok", ImportRowStatus.Error => "warn", _ => null })">@Labels.For(row.Status)</span></td>
+                                <td>@row.Number</td>
+                                <td>@row.FullName</td>
+                                <td>@(row.Type is { } t ? Labels.For(t) : null)</td>
+                                <td class="@(row.Status == ImportRowStatus.Error ? "out-of-balance" : "muted")">@row.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">
+                    Import @_preview.NewCount account(s)
+                </button>
+                @if (_preview.ErrorCount > 0)
+                {
+                    <span class="muted">Fix the rows with errors and upload the file again.</span>
+                }
+                else if (_preview.NewCount == 0)
+                {
+                    <span class="muted">Every account in this file already exists.</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxFileBytes = 2 * 1024 * 1024;
+
+    private string? _csv;
+    private string? _fileName;
+    private ChartImportResult? _preview;
+    private ChartImportResult? _imported;
+    private string? _error;
+    private bool _busy;
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _preview = null;
+        _imported = null;
+        _busy = true;
+        try
+        {
+            if (e.File.Size > MaxFileBytes)
+            {
+                _error = "That file is larger than 2 MB. Split it into smaller files.";
+                return;
+            }
+
+            _fileName = e.File.Name;
+            await using var stream = e.File.OpenReadStream(MaxFileBytes);
+            using var reader = new StreamReader(stream);
+            _csv = await reader.ReadToEndAsync();
+            _preview = await Ops.RunAsync<ChartImportService, ChartImportResult>(s => s.PreviewAsync(_csv));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_csv is null)
+            return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _imported = await Ops.RunAsync<ChartImportService, ChartImportResult>(s => s.ImportAsync(_csv));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            // The chart may have changed since the preview; show the current state.
+            _preview = await Ops.RunAsync<ChartImportService, ChartImportResult>(s => s.PreviewAsync(_csv));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -70,7 +70,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasKey(a => a.Id);
             b.Property(a => a.Name).HasMaxLength(200);
             b.Property(a => a.Number).HasMaxLength(20);
-            b.Property(a => a.Type).HasConversion<string>().HasMaxLength(20);
+            b.Property(a => a.Description).HasMaxLength(500);
+            b.Property(a => a.Type).HasConversion<string>().HasMaxLength(30);
             b.HasIndex(a => a.Number).IsUnique();
             b.HasOne<Account>().WithMany().HasForeignKey(a => a.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -86,6 +87,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(e => e.Currency).HasConversion(c => c.Code, code => new Currency(code)).HasMaxLength(3);
             b.Property(e => e.Memo).HasMaxLength(1000);
             b.Property(e => e.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(e => e.Basis).HasConversion<string>().HasMaxLength(20);
             b.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
             b.Property(e => e.Source).HasMaxLength(40);
             b.Property(e => e.VoidReason).HasMaxLength(500);
@@ -138,6 +140,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Email).HasMaxLength(320);
             b.Property(c => c.Phone).HasMaxLength(50);
             b.Property(c => c.Address).HasMaxLength(1000);
+            b.Property(c => c.DefaultReportBasis).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<User>(b =>

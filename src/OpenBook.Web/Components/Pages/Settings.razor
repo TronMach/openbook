@@ -1,0 +1,171 @@
+@page "/settings"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject CompanySettingsService SettingsService
+
+<PageTitle>Settings · OpenBook</PageTitle>
+
+<div class="card">
+    <h1>Company settings</h1>
+
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">Settings saved.</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="settings" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+
+        <fieldset>
+            <legend>Company</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="name">Company name</label>
+                    <InputText id="name" @bind-Value="Input.Name" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="legal-name">Legal name <span class="muted">(optional)</span></label>
+                    <InputText id="legal-name" @bind-Value="Input.LegalName" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="business-type">Business type</label>
+                    <InputSelect id="business-type" @bind-Value="Input.BusinessType">
+                        @foreach (var type in Enum.GetValues<BusinessType>())
+                        {
+                            <option value="@type">@Labels.For(type)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="email">Email <span class="muted">(optional)</span></label>
+                    <InputText id="email" type="email" @bind-Value="Input.Email" />
+                    <ValidationMessage For="() => Input.Email" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="phone">Phone <span class="muted">(optional)</span></label>
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="address">Address <span class="muted">(optional)</span></label>
+                <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Books</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="fiscal-month">Fiscal year starts in</label>
+                    <InputSelect id="fiscal-month" @bind-Value="Input.FiscalYearStartMonth">
+                        @for (var month = 1; month <= 12; month++)
+                        {
+                            <option value="@month">@Labels.Month(month)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">Sets the reporting year. Changing it doesn't alter any transactions.</span>
+                </div>
+                <div class="field">
+                    <label for="basis">Reports open on</label>
+                    <InputSelect id="basis" @bind-Value="Input.DefaultReportBasis">
+                        @foreach (var basis in Enum.GetValues<ReportBasis>())
+                        {
+                            <option value="@basis">@Labels.For(basis)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">Each report can still switch basis.</span>
+                </div>
+            </div>
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.UseAccountNumbers" />
+                <span>Use account numbers</span>
+            </label>
+            <dl class="facts">
+                <dt>Home currency</dt>
+                <dd>@_currency <span class="muted">(set at setup; can't be changed)</span></dd>
+            </dl>
+        </fieldset>
+
+        <button type="submit">Save settings</button>
+    </EditForm>
+</div>
+
+@code {
+    private string? _currency;
+    private bool _saved;
+    private string? _error;
+
+    [SupplyParameterFromForm]
+    private SettingsModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await SettingsService.GetAsync();
+        _currency = company.HomeCurrency.Code;
+        Input ??= new SettingsModel
+        {
+            Name = company.Name,
+            LegalName = company.LegalName,
+            BusinessType = company.BusinessType,
+            Email = company.Email,
+            Phone = company.Phone,
+            Address = company.Address,
+            FiscalYearStartMonth = company.FiscalYearStartMonth,
+            UseAccountNumbers = company.UseAccountNumbers,
+            DefaultReportBasis = company.DefaultReportBasis,
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
+                Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis));
+            _saved = true;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class SettingsModel
+    {
+        [Required(ErrorMessage = "Enter your company's name.")]
+        [StringLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [StringLength(200)]
+        public string? LegalName { get; set; }
+
+        public BusinessType BusinessType { get; set; }
+
+        // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
+        [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
+        public string? Email { get; set; }
+
+        [StringLength(50)]
+        public string? Phone { get; set; }
+
+        [StringLength(1000)]
+        public string? Address { get; set; }
+
+        [Range(1, 12)]
+        public int FiscalYearStartMonth { get; set; } = 1;
+
+        public bool UseAccountNumbers { get; set; }
+
+        public ReportBasis DefaultReportBasis { get; set; }
+    }
+}

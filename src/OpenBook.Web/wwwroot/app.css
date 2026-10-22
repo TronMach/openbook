@@ -154,3 +154,46 @@ button.link { background: none; border: 0; color: var(--muted); padding: 0; font
 dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; }
 dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; }
+
+/* ---- M1: tables, toolbars, ledger grid ---- */
+/* Pages that wrap their content in <div class="wide"> get a wider column. */
+.page:has(> .wide) { max-width: 1080px; }
+
+.toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.toolbar h1 { margin: 0; flex: 1; }
+.toolbar form { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; margin: 0; }
+.toolbar form .field { margin: 0; }
+.toolbar input, .toolbar select { width: auto; }
+
+.table-wrap { overflow-x: auto; }
+table.data { width: 100%; border-collapse: collapse; background: var(--surface); }
+table.data th, table.data td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+table.data th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 600; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.data tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: 0; }
+table.data tr.inactive td { color: var(--muted); }
+table.data a { text-decoration: none; }
+table.data a:hover { text-decoration: underline; }
+
+table.data td.indent-1 { padding-left: 0.6rem; }
+table.data td.indent-2 { padding-left: 1.85rem; }
+table.data td.indent-3 { padding-left: 3.1rem; }
+table.data td.indent-4 { padding-left: 4.35rem; }
+table.data td.indent-5 { padding-left: 5.6rem; }
+
+.badge { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.badge.warn { border-color: var(--danger); color: var(--danger); }
+.badge.ok { border-color: var(--accent); color: var(--accent); }
+
+.pager { display: flex; gap: 1rem; align-items: center; justify-content: flex-end; margin-top: 0.75rem; }
+
+/* Journal entry grid */
+table.entry td { padding: 0.35rem; }
+table.entry input, table.entry select { padding: 0.35rem 0.45rem; }
+table.entry input.amount { text-align: right; min-width: 7rem; }
+table.entry .remove { background: none; border: 0; color: var(--muted); font-size: 1.1rem; padding: 0 0.3rem; }
+.out-of-balance { color: var(--danger); }
+.actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+
+.import-summary { display: flex; gap: 1.25rem; flex-wrap: wrap; margin: 0.75rem 0; }
+pre.sample { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; overflow-x: auto; font-size: 0.85rem; }

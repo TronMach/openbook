@@ -22,7 +22,7 @@ public sealed class DatabaseInvariantTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _db.InitializeAsync();
-        _cash = await _db.CreateAccount("Checking", AccountType.Asset);
+        _cash = await _db.CreateAccount("Checking", AccountType.Bank);
         _sales = await _db.CreateAccount("Sales", AccountType.Income);
         _entry = await _db.InScope(sp => sp.GetRequiredService<PostingEngine>()
             .PostAsync(new PostJournalEntryCommand(new DateOnly(2026, 1, 15), [Dr(_cash.Id, 10m), Cr(_sales.Id, 10m)])));

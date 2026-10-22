@@ -1,45 +1,48 @@
 using OpenBook.Application.Companies;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Application.Ledger;
 
-public sealed record TrialBalanceLine(Guid AccountId, string? Number, string Name, AccountType Type, Money Debit, Money Credit);
+public sealed record TrialBalanceLine(Guid AccountId, string? Number, string FullName, AccountType Type, Money Debit, Money Credit);
 
-public sealed record TrialBalance(DateOnly AsOf, IReadOnlyList<TrialBalanceLine> Lines, Money TotalDebits, Money TotalCredits)
+public sealed record TrialBalance(DateOnly AsOf, ReportBasis Basis, IReadOnlyList<TrialBalanceLine> Lines, Money TotalDebits, Money TotalCredits)
 {
     public bool IsBalanced => TotalDebits == TotalCredits;
 }
 
-/// <summary>Minimal trial balance used to verify the engine. Full reporting arrives in M5.</summary>
+/// <summary>Trial balance in chart order. Full reporting (P&amp;L, balance sheet) arrives in M5.</summary>
 public sealed class TrialBalanceQuery(ILedgerStore store, ICompanyStore companies)
 {
-    public async Task<TrialBalance> RunAsync(DateOnly asOf, CancellationToken ct = default)
+    /// <param name="basis">Defaults to the company's default report basis.</param>
+    public async Task<TrialBalance> RunAsync(DateOnly asOf, ReportBasis? basis = null, CancellationToken ct = default)
     {
-        var currency = (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency;
-        var balances = await store.GetBalancesAsync(asOf, ct);
-        var accounts = await store.GetAccountsAsync(balances.Select(b => b.AccountId).ToList(), ct);
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var reportBasis = basis ?? company.DefaultReportBasis;
+        var currency = company.HomeCurrency;
 
-        var lines = balances
-            .Where(b => b.Balance != 0m)
-            .Select(b =>
+        var balances = (await store.GetBalancesAsync(asOf, reportBasis, ct)).ToDictionary(b => b.AccountId, b => b.Balance);
+        var chart = new ChartOfAccounts(await store.ListAccountsAsync(ct));
+
+        var lines = chart.Ordered()
+            .Where(x => balances.GetValueOrDefault(x.Account.Id) != 0m)
+            .Select(x =>
             {
-                var a = accounts[b.AccountId];
+                var balance = balances[x.Account.Id];
                 return new TrialBalanceLine(
-                    a.Id,
-                    a.Number,
-                    a.Name,
-                    a.Type,
-                    new Money(Math.Max(b.Balance, 0m), currency),
-                    new Money(Math.Max(-b.Balance, 0m), currency));
+                    x.Account.Id,
+                    x.Account.Number,
+                    chart.FullName(x.Account.Id),
+                    x.Account.Type,
+                    new Money(Math.Max(balance, 0m), currency),
+                    new Money(Math.Max(-balance, 0m), currency));
             })
-            .OrderBy(l => l.Type)
-            .ThenBy(l => l.Number, StringComparer.Ordinal)
-            .ThenBy(l => l.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
         return new TrialBalance(
             asOf,
+            reportBasis,
             lines,
             new Money(lines.Sum(l => l.Debit.Amount), currency),
             new Money(lines.Sum(l => l.Credit.Amount), currency));

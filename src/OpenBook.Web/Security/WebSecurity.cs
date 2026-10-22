@@ -38,6 +38,7 @@ public static class WebSecurity
         services.AddScoped<CircuitUser>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, UserCircuitHandler>());
         services.AddScoped<ICurrentUser, WebCurrentUser>();
+        services.AddScoped<Operations>();
         services.AddSingleton<SetupState>();
         return services;
     }

@@ -20,7 +20,15 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Money is `decimal` (or `Money`) in code and integer minor units (`AmountMinor`) in the DB. Never `double`/`float` in Domain (`ArchitectureTests` enforces).
 - Posted entries are immutable. Corrections = `VoidAsync`, which posts a same-date reversal. Never delete.
 - Every change writes an `AuditRecord` in the same save.
-- DB triggers (`SqliteLedgerTriggers`) enforce balance-on-seal, immutability and append-only audit. New entries are inserted unsealed and sealed in the same transaction by `OpenBookDbContext.SaveChangesAsync`. A schema change touching these tables must keep the triggers in sync.
+- DB triggers enforce balance-on-seal, immutability and append-only audit (overview in `SqliteLedgerTriggers`). New entries are inserted unsealed and sealed in the same transaction by `OpenBookDbContext.SaveChangesAsync`.
+
+## Migrations (SQLite)
+
+- Trigger SQL lives frozen inside the migration that creates it (`*_InitialLedger.Triggers.cs`, `*_ChartAndSettings.cs`). Never edit an applied migration; to change a trigger, add a migration that drops and recreates it. Add new trigger names to `SqliteLedgerTriggers.Names`.
+- A new column on `JournalEntries` must be added to the `TR_JournalEntries_Immutable` condition (via a new migration).
+- Never let EF rebuild `JournalEntries`, `JournalLines` or `AuditRecords` (its SQLite `DropColumn`/`AlterColumn`): the rebuild loses triggers and its table swap runs after all `Sql()` steps. Drop the triggers, use native `ALTER TABLE … DROP COLUMN` via `Sql()`, recreate the triggers. Check generated migrations for `ef_temp_`.
+- Backfill non-null columns explicitly in the migration (`defaultValue`), not with model `HasDefaultValue` (EF's sentinel rule would turn `false`/`0` into the DB default).
+- `MigrationTests` cover a fresh database, upgrading an M0-era file, and downgrading.
 - Keep SQL provider-neutral (quoted identifiers, no SQLite-only functions) for the V1.8 PostgreSQL provider.
 - Domain errors throw `DomainException` with a stable `code`; the API maps them to 400 (404 for `EntityNotFoundException`).
 
@@ -30,5 +38,13 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Cookie auth (`Web/Security/WebSecurity.cs`). The cookie carries the user's `SecurityStamp`, checked on every request, so changing a password or restoring a backup ends other sessions. Pages require auth via `Components/Pages/_Imports.razor`; mark public pages `[AllowAnonymous]`. The `/api` group requires auth and returns 401 instead of redirecting.
 - Audit actor comes from `ICurrentUser`, which the host registers (`WebCurrentUser` covers both HTTP requests and interactive circuits).
 - Backup = SQLite online backup API → plain `.openbook.db` file. Restore validates (integrity, known migrations, triggers present, company present, ledger balanced), writes a safety copy to `backups/` next to the company file, then copies over the live DB in place. A new trigger must be added to `SqliteLedgerTriggers.Names` or restore won't check for it.
-- Pages are static server-rendered; use plain HTML forms with `<AntiforgeryToken />` for posts to minimal API endpoints (`Web/Endpoints`).
+- Pages are static server-rendered by default; use plain HTML forms with `<AntiforgeryToken />` for posts to minimal API endpoints (`Web/Endpoints`). Wrap a page's content in `<div class="wide">` for the wide layout.
+- Interactive pages (`@rendermode InteractiveServer`: journal entry form, CSV import) must not inject application services directly: use `Operations.RunAsync` so each action gets a fresh scope and the right audit actor.
+
+## Chart of accounts and reporting
+
+- `AccountType` is QuickBooks' list (Bank, AccountsReceivable, …); `AccountClass` groups them for statements. Pick the narrowest type; M2–M4 key off Bank/CreditCard/AR/AP.
+- Rules spanning accounts live in `ChartOfAccounts` (subaccount = parent's type, max 5 levels, unique sibling names and numbers, no cycles, class change blocked once posted). Full names use `Parent:Child`. Accounts are deactivated, never deleted.
+- CSV import (`ChartImportService`, parser in `Application/Import/Csv.cs`) matches headers loosely and is all-or-nothing. The starter chart at `Web/wwwroot/samples/chart-of-accounts.csv` is covered by a test.
+- `ReportBasis` (Accrual/Cash) per report, default from company settings. `EntryBasis` on each entry (Both / AccrualOnly / CashOnly) decides inclusion. Payment-driven cash basis for invoices/bills comes with M3/M4.
 - Dev preview: `.claude/launch.json` → `openbook-web` on port 5188, data in `src/OpenBook.Web/openbook.dev.db`.

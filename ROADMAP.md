@@ -54,6 +54,8 @@ tests/
 
 **M0 status (2026-10-22): complete.** Scaffold, `Money`, posting engine, void/reversal, audit log, EF Core/SQLite with migrations, DB integrity triggers, minimal REST API, setup wizard, local sign-in (lockout, session revocation on password change), backup download and validated restore with safety copy. Password recovery via the `reset-password` command. 92 tests.
 
+**M1 status (2026-10-22): complete.** QuickBooks account types, chart hierarchy (5 levels) with optional numbering, add/edit/deactivate, CSV import with preview and a starter chart, journal list/entry/detail/void screens, company settings (fiscal year, numbering, default basis), accrual/cash report basis with per-entry basis, trial balance page, API for all of it. 147 tests.
+
 **Exit criteria:** a sole proprietor can set up a company, run a year of invoicing, bills and banking, reconcile, and get a correct P&L and balance sheet, all on one SQLite file they can back up.
 
 ## Phase 2 — V1 (what most small businesses expect)

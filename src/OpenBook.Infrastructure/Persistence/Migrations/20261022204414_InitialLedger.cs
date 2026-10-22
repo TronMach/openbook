@@ -155,14 +155,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                 columns: new[] { "JournalEntryId", "LineNumber" },
                 unique: true);
 
-            foreach (var sql in SqliteLedgerTriggers.Create)
+            foreach (var sql in Triggers)
                 migrationBuilder.Sql(sql);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            foreach (var sql in SqliteLedgerTriggers.Drop)
+            foreach (var sql in TriggerNames.Select(n => $"DROP TRIGGER IF EXISTS \"{n}\";"))
                 migrationBuilder.Sql(sql);
 
             migrationBuilder.DropTable(

@@ -22,7 +22,7 @@ public sealed class BackupTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _db.InitializeAsync();
-        _cash = await _db.CreateAccount("Checking", AccountType.Asset);
+        _cash = await _db.CreateAccount("Checking", AccountType.Bank);
         _sales = await _db.CreateAccount("Sales", AccountType.Income);
     }
 
@@ -171,10 +171,13 @@ public sealed class BackupTests : IAsyncLifetime
     {
         await Post(100m);
         var path = await CreateBackup();
-        await Tamper(path, $"""
+        await Tamper(path, """
             DROP TRIGGER "TR_JournalLines_NoUpdate";
             UPDATE "JournalLines" SET "AmountMinor" = "AmountMinor" + 1 WHERE "LineNumber" = 1;
-            {SqliteLedgerTriggers.Create.Single(sql => sql.Contains("\"TR_JournalLines_NoUpdate\"", StringComparison.Ordinal))}
+            CREATE TRIGGER "TR_JournalLines_NoUpdate" BEFORE UPDATE ON "JournalLines"
+            BEGIN
+                SELECT RAISE(ABORT, 'ledger: journal lines are immutable');
+            END;
             """);
 
         Assert.Equal("backup.ledger_corrupt", await RestoreRejected(path));

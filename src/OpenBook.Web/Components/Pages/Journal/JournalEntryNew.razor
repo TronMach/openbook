@@ -1,0 +1,168 @@
+@page "/journal/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>New journal entry · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>New journal entry</h1>
+        <a class="button secondary" href="/journal">Back to journal</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_accounts.Count == 0 && _loaded)
+    {
+        <div class="card"><p>There are no active accounts yet. <a href="/accounts/new">Add accounts</a> or <a href="/accounts/import">import a chart of accounts</a> first.</p></div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="basis">Counts toward</label>
+                    <select id="basis" @bind="_basis">
+                        @foreach (var basis in Enum.GetValues<EntryBasis>())
+                        {
+                            <option value="@basis">@Labels.For(basis)</option>
+                        }
+                    </select>
+                    <span class="hint">Leave on "Both bases" unless this is a cash- or accrual-only adjustment.</span>
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th class="num">Debit</th>
+                            <th class="num">Credit</th>
+                            <th>Line memo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr @key="line">
+                                <td>
+                                    <select @bind="line.AccountId" aria-label="Account">
+                                        <option value="">Choose an account…</option>
+                                        @foreach (var group in _accounts.GroupBy(a => a.Type.ClassOf()))
+                                        {
+                                            <optgroup label="@Labels.For(group.Key)">
+                                                @foreach (var account in group)
+                                                {
+                                                    <option value="@account.Id">@Labels.AccountName(_chart, account.Id, _useNumbers)</option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input class="amount" type="number" min="0" step="0.01" aria-label="Debit" @bind="line.Debit" @bind:after="() => line.Credit = line.Debit > 0 ? null : line.Credit" /></td>
+                                <td><input class="amount" type="number" min="0" step="0.01" aria-label="Credit" @bind="line.Credit" @bind:after="() => line.Debit = line.Credit > 0 ? null : line.Debit" /></td>
+                                <td><input @bind="line.Memo" aria-label="Line memo" /></td>
+                                <td>
+                                    @if (_lines.Count > 2)
+                                    {
+                                        <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => _lines.Remove(line)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td>
+                                <button type="button" class="secondary" @onclick="AddLine">Add line</button>
+                            </td>
+                            <td class="num">@Labels.Amount(TotalDebits)</td>
+                            <td class="num">@Labels.Amount(TotalCredits)</td>
+                            <td colspan="2" class="@(IsBalanced ? "muted" : "out-of-balance")">
+                                @(IsBalanced ? "Balanced" : $"Out of balance by {Labels.Amount(Math.Abs(TotalDebits - TotalCredits))}")
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="PostAsync" disabled="@(!CanPost || _busy)">Post entry</button>
+                <span class="muted">Posted entries can't be edited. To correct one, void it and record a new entry.</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Account> _accounts = [];
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private EntryBasis _basis = EntryBasis.Both;
+    private string? _memo;
+    private List<LineModel> _lines = [new(), new()];
+
+    private IEnumerable<LineModel> FilledLines => _lines.Where(l => l.AccountId is not null || l.Debit > 0 || l.Credit > 0);
+    private decimal TotalDebits => _lines.Sum(l => l.Debit ?? 0m);
+    private decimal TotalCredits => _lines.Sum(l => l.Credit ?? 0m);
+    private bool IsBalanced => TotalDebits == TotalCredits && TotalDebits > 0m;
+    private bool CanPost => IsBalanced && FilledLines.Count() >= 2 && FilledLines.All(l => l.AccountId is not null && (l.Debit > 0) != (l.Credit > 0));
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_chart, _useNumbers) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
+        _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _loaded = true;
+    }
+
+    private void AddLine() => _lines.Add(new LineModel());
+
+    private async Task PostAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var drafts = FilledLines.Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit ?? 0m, l.Credit ?? 0m, l.Memo)).ToList();
+            var entry = await Ops.RunAsync<PostingEngine, JournalEntry>(e => e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis)));
+            Navigation.NavigateTo($"/journal/{entry.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class LineModel
+    {
+        public Guid? AccountId { get; set; }
+        public decimal? Debit { get; set; }
+        public decimal? Credit { get; set; }
+        public string? Memo { get; set; }
+    }
+}

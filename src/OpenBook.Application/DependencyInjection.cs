@@ -12,7 +12,9 @@ public static class DependencyInjection
         services.AddScoped<PostingEngine>();
         services.AddScoped<TrialBalanceQuery>();
         services.AddScoped<AccountService>();
+        services.AddScoped<ChartImportService>();
         services.AddScoped<CompanySetupService>();
+        services.AddScoped<CompanySettingsService>();
         services.AddScoped<AuthService>();
         return services;
     }

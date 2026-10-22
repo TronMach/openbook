@@ -12,7 +12,8 @@ public sealed record PostJournalEntryCommand(
     IReadOnlyCollection<JournalLineDraft> Lines,
     string? Memo = null,
     string Source = JournalEntry.ManualSource,
-    Guid? SourceId = null);
+    Guid? SourceId = null,
+    EntryBasis Basis = EntryBasis.Both);
 
 /// <summary>
 /// The single way anything reaches the ledger. Validates against the chart of accounts,
@@ -37,7 +38,8 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
             clock.UtcNow,
             command.Memo,
             command.Source,
-            command.SourceId);
+            command.SourceId,
+            command.Basis);
 
         store.Add(entry);
         store.Add(Audit(AuditAction.Posted, entry.Id, before: null, after: Snapshot(entry)));
@@ -62,6 +64,16 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
 
     public Task<JournalEntry?> GetAsync(Guid entryId, CancellationToken ct = default) => store.GetEntryAsync(entryId, ct);
 
+    public Task<Guid?> FindReversalIdAsync(Guid entryId, CancellationToken ct = default) => store.FindReversalIdAsync(entryId, ct);
+
+    public Task<(IReadOnlyList<JournalEntry> Entries, int Total)> ListAsync(JournalEntryFilter filter, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        if (filter.Take is < 1 or > 500 || filter.Skip < 0)
+            throw new DomainException("journal.page_invalid", "Pages hold 1 to 500 entries.");
+        return store.ListEntriesAsync(filter, ct);
+    }
+
     private async Task EnsurePostableAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken ct)
     {
         var accounts = await store.GetAccountsAsync(accountIds, ct);
@@ -85,6 +97,7 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
         e.Memo,
         Kind = e.Kind.ToString(),
         Status = e.Status.ToString(),
+        Basis = e.Basis.ToString(),
         e.Source,
         e.SourceId,
         e.ReversesEntryId,

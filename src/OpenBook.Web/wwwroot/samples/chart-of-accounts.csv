@@ -1,0 +1,35 @@
+Number,Account,Type,Description
+1000,Checking,Bank,Main operating account
+1010,Savings,Bank,
+1100,Accounts Receivable,Accounts Receivable,Money customers owe you
+1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited
+1300,Prepaid Expenses,Other Current Asset,
+1500,Equipment,Fixed Asset,Computers and other equipment
+1510,Equipment:Accumulated Depreciation,Fixed Asset,
+2000,Accounts Payable,Accounts Payable,Money you owe vendors
+2100,Business Credit Card,Credit Card,
+2200,Sales Tax Payable,Other Current Liability,
+2300,Payroll Liabilities,Other Current Liability,
+2700,Loan Payable,Long Term Liability,
+3000,Owner's Equity,Equity,
+3010,Owner's Equity:Owner Contributions,Equity,
+3020,Owner's Equity:Owner Draws,Equity,
+3900,Retained Earnings,Equity,Prior years' net income
+4000,Service Revenue,Income,
+4100,Product Sales,Income,
+4900,Refunds and Discounts,Income,
+5000,Cost of Goods Sold,Cost of Goods Sold,
+6000,Advertising and Marketing,Expense,
+6100,Bank Fees,Expense,
+6200,Insurance,Expense,
+6300,Office Supplies,Expense,
+6400,Professional Fees,Expense,Accounting and legal
+6500,Rent,Expense,
+6600,Software and Subscriptions,Expense,
+6700,Travel,Expense,
+6710,Travel:Meals,Expense,
+6800,Utilities,Expense,
+6810,Utilities:Electric,Expense,
+6820,Utilities:Internet and Phone,Expense,
+7000,Interest Income,Other Income,
+8000,Interest Expense,Other Expense,

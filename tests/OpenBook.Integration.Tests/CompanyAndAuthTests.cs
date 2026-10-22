@@ -26,7 +26,7 @@ public sealed class CompanySetupTests : IAsyncLifetime
     [Fact]
     public async Task Books_cannot_be_used_before_setup()
     {
-        var cash = await _db.CreateAccount("Cash", AccountType.Asset);
+        var cash = await _db.CreateAccount("Cash", AccountType.Bank);
         var sales = await _db.CreateAccount("Sales", AccountType.Income);
 
         var ex = await Assert.ThrowsAsync<DomainException>(() => _db.InScope(sp => sp.GetRequiredService<PostingEngine>()

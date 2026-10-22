@@ -1,0 +1,75 @@
+@page "/accounts"
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>Chart of accounts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Chart of accounts</h1>
+        <a class="button secondary" href="@(ShowInactive ? "/accounts" : "/accounts?showInactive=true")">
+            @(ShowInactive ? "Hide inactive" : "Show inactive")
+        </a>
+        <a class="button secondary" href="/accounts/import">Import CSV</a>
+        <a class="button" href="/accounts/new">New account</a>
+    </div>
+
+    @if (_rows.Count == 0)
+    {
+        <div class="card">
+            <p>No accounts yet. <a href="/accounts/new">Add one</a>, or <a href="/accounts/import">import a chart of accounts</a> from a CSV file. The import page has a starter chart you can download and edit.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        @if (_useNumbers)
+                        {
+                            <th>Number</th>
+                        }
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (account, depth) in _rows)
+                    {
+                        <tr class="@(account.IsActive ? null : "inactive")">
+                            @if (_useNumbers)
+                            {
+                                <td>@account.Number</td>
+                            }
+                            <td class="indent-@depth">
+                                <a href="/accounts/@account.Id">@account.Name</a>
+                                @if (!account.IsActive)
+                                {
+                                    <span class="badge">Inactive</span>
+                                }
+                            </td>
+                            <td>@Labels.For(account.Type)</td>
+                            <td class="muted">@account.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<(Account Account, int Depth)> _rows = [];
+    private bool _useNumbers;
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+        _rows = (await AccountService.GetChartAsync()).Ordered(includeInactive: ShowInactive).ToList();
+    }
+}

@@ -1,0 +1,102 @@
+@page "/reports/trial-balance"
+@inject TrialBalanceQuery Query
+@inject CompanySettingsService Settings
+
+<PageTitle>Trial balance · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Trial balance</h1>
+        <form method="get" action="/reports/trial-balance" data-enhance="false">
+            <div class="field">
+                <label for="as-of">As of</label>
+                <input id="as-of" name="asOf" type="date" value="@_report.AsOf.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="basis">Basis</label>
+                <select id="basis" name="basis">
+                    @foreach (var basis in Enum.GetValues<ReportBasis>())
+                    {
+                        <option value="@basis" selected="@(basis == _report.Basis)">@Labels.For(basis)</option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="secondary">Run report</button>
+        </form>
+    </div>
+
+    <p class="muted">
+        @_companyName · @Labels.For(_report.Basis) · as of @Labels.Date(_report.AsOf) · @_report.TotalDebits.Currency
+        @if (!_report.IsBalanced)
+        {
+            <span class="badge warn">Out of balance</span>
+        }
+    </p>
+
+    @if (_report.Lines.Count == 0)
+    {
+        <div class="card"><p>No balances as of this date.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        @if (_useNumbers)
+                        {
+                            <th>Number</th>
+                        }
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th class="num">Debit</th>
+                        <th class="num">Credit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _report.Lines)
+                    {
+                        <tr>
+                            @if (_useNumbers)
+                            {
+                                <td>@line.Number</td>
+                            }
+                            <td>@line.FullName</td>
+                            <td class="muted">@Labels.For(line.Type)</td>
+                            <td class="num">@Labels.AmountOrBlank(line.Debit.Amount)</td>
+                            <td class="num">@Labels.AmountOrBlank(line.Credit.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="@(_useNumbers ? 3 : 2)">Total</td>
+                        <td class="num">@Labels.Amount(_report.TotalDebits.Amount)</td>
+                        <td class="num">@Labels.Amount(_report.TotalCredits.Amount)</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private TrialBalance _report = null!;
+    private string? _companyName;
+    private bool _useNumbers;
+
+    [SupplyParameterFromQuery]
+    private DateOnly? AsOf { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Basis { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        _companyName = company.Name;
+        _useNumbers = company.UseAccountNumbers;
+        ReportBasis? basis = Enum.TryParse<ReportBasis>(Basis, ignoreCase: true, out var parsed) ? parsed : null;
+        _report = await Query.RunAsync(AsOf ?? DateOnly.FromDateTime(DateTime.Today), basis);
+    }
+}
