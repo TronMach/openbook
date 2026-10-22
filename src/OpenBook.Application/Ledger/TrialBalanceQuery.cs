@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
 
@@ -11,11 +12,11 @@ public sealed record TrialBalance(DateOnly AsOf, IReadOnlyList<TrialBalanceLine>
 }
 
 /// <summary>Minimal trial balance used to verify the engine. Full reporting arrives in M5.</summary>
-public sealed class TrialBalanceQuery(ILedgerStore store, LedgerOptions options)
+public sealed class TrialBalanceQuery(ILedgerStore store, ICompanyStore companies)
 {
     public async Task<TrialBalance> RunAsync(DateOnly asOf, CancellationToken ct = default)
     {
-        var currency = options.HomeCurrency;
+        var currency = (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency;
         var balances = await store.GetBalancesAsync(asOf, ct);
         var accounts = await store.GetAccountsAsync(balances.Select(b => b.AccountId).ToList(), ct);
 

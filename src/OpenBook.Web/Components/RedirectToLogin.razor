@@ -1,0 +1,7 @@
+@inject NavigationManager Navigation
+
+@code {
+    // Only reached during interactive navigation; full page requests are challenged by the cookie handler.
+    protected override void OnInitialized() =>
+        Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + Navigation.ToBaseRelativePath(Navigation.Uri))}", forceLoad: true);
+}

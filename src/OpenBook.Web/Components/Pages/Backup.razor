@@ -1,0 +1,65 @@
+@page "/backup"
+@using OpenBook.Web.Endpoints
+
+<PageTitle>Backup &amp; restore · OpenBook</PageTitle>
+
+<h1>Backup &amp; restore</h1>
+
+<div class="card">
+    <h2>Download a backup</h2>
+    <p class="muted">
+        A complete copy of your company file: every transaction, setting and the audit log. It's a standard
+        SQLite database, so any SQLite tool can open it. Keep copies somewhere other than this computer.
+    </p>
+    <a class="button" href="/backup/download">Download backup</a>
+</div>
+
+<div class="card">
+    <h2>Restore from a backup</h2>
+    <p class="muted">
+        Replaces <strong>all</strong> current data with the backup. A safety copy of the current data is saved
+        to the backups folder first. You'll be signed out and must sign in with an account from the backup.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Message(Error)</div>
+    }
+
+    <form method="post" action="/backup/restore" enctype="multipart/form-data">
+        <AntiforgeryToken />
+        <div class="field">
+            <label for="file">Backup file</label>
+            <input id="file" name="file" type="file" accept=".db,.sqlite,.sqlite3" required />
+            <span class="hint">Up to @(AccountEndpoints.MaxBackupUploadBytes / 1024 / 1024) MB.</span>
+        </div>
+        <div class="field">
+            <label for="password">Your password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <label class="check">
+            <input name="confirm" type="checkbox" value="true" required />
+            <span>I understand that restoring replaces all current data.</span>
+        </label>
+        <button type="submit" class="danger">Restore backup</button>
+    </form>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? Error { get; set; }
+
+    private static string Message(string code) => code switch
+    {
+        "backup.file_required" => "Choose a backup file to restore.",
+        "backup.confirm_required" => "Tick the box to confirm you want to replace the current data.",
+        "auth.wrong_password" => "That password is incorrect. Repeated failures lock the account for a few minutes.",
+        "backup.invalid_file" => "That file isn't an OpenBook backup.",
+        "backup.integrity" => "The backup file is damaged and can't be restored.",
+        "backup.newer_version" => "That backup was made by a newer version of OpenBook. Update OpenBook first.",
+        "backup.missing_safeguards" => "That backup has been altered outside OpenBook, so it can't be trusted.",
+        "backup.no_company" => "That backup doesn't contain a set-up company.",
+        "backup.ledger_corrupt" => "That backup contains journal entries that don't balance.",
+        _ => "The backup couldn't be restored.",
+    };
+}

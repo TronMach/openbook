@@ -2,21 +2,31 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Companies;
 using OpenBook.Domain.Accounts;
-using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Infrastructure;
 using OpenBook.Infrastructure.Persistence;
 
 namespace OpenBook.Integration.Tests;
 
-/// <summary>A fresh, fully migrated in-memory SQLite database (triggers included) per test.</summary>
-public sealed class LedgerDatabase : IAsyncLifetime
+/// <summary>
+/// A fresh, fully migrated in-memory SQLite database (triggers included) per test,
+/// with a company already set up unless the test opts out.
+/// </summary>
+public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 {
+    public const string OwnerUsername = "owner";
+    public const string OwnerPassword = "correct horse battery";
+
     private readonly string _connectionString = $"Data Source=file:openbook-{Guid.NewGuid():N}?mode=memory&cache=shared";
     private SqliteConnection? _keepAlive;
 
     public ServiceProvider Services { get; private set; } = null!;
     public FixedClock Clock { get; } = new();
+    public string ConnectionString => _connectionString;
+    public string BackupDirectory { get; } = Path.Combine(Path.GetTempPath(), $"openbook-tests-{Guid.NewGuid():N}");
+    public User? Owner { get; private set; }
 
     public async Task InitializeAsync()
     {
@@ -24,12 +34,16 @@ public sealed class LedgerDatabase : IAsyncLifetime
         await _keepAlive.OpenAsync();
 
         Services = new ServiceCollection()
-            .AddOpenBookApplication(new LedgerOptions(Currency.Usd))
-            .AddOpenBookInfrastructure(_connectionString)
+            .AddOpenBookApplication()
+            .AddOpenBookInfrastructure(_connectionString, BackupDirectory)
             .AddSingleton<IClock>(Clock)
+            .AddSingleton<ICurrentUser, TestUser>()
             .BuildServiceProvider(validateScopes: true);
 
         await Services.MigrateOpenBookDatabaseAsync();
+
+        if (setUpCompany)
+            Owner = await SetUpCompany();
     }
 
     public async Task DisposeAsync()
@@ -37,7 +51,14 @@ public sealed class LedgerDatabase : IAsyncLifetime
         await Services.DisposeAsync();
         if (_keepAlive is not null)
             await _keepAlive.DisposeAsync();
+        SqliteConnection.ClearAllPools();
+        if (Directory.Exists(BackupDirectory))
+            Directory.Delete(BackupDirectory, recursive: true);
     }
+
+    public Task<User> SetUpCompany(string name = "Test Co") =>
+        InScope(sp => sp.GetRequiredService<CompanySetupService>().SetUpAsync(
+            new SetUpCompanyCommand(name, BusinessType.SingleMemberLlc, "USD", 1, OwnerUsername, OwnerPassword)));
 
     /// <summary>Runs <paramref name="work"/> in its own scope, like one HTTP request.</summary>
     public async Task<T> InScope<T>(Func<IServiceProvider, Task<T>> work)
@@ -58,4 +79,9 @@ public sealed class LedgerDatabase : IAsyncLifetime
 public sealed class FixedClock : IClock
 {
     public DateTimeOffset UtcNow { get; set; } = new(2026, 1, 31, 9, 0, 0, TimeSpan.Zero);
+}
+
+public sealed class TestUser : ICurrentUser
+{
+    public string Actor => LedgerDatabase.OwnerUsername;
 }

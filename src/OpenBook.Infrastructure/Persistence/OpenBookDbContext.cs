@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Infrastructure.Persistence;
@@ -18,6 +19,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
+    public DbSet<Company> Companies => Set<Company>();
+    public DbSet<User> Users => Set<User>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -122,6 +125,29 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.Action).HasConversion<string>().HasMaxLength(20);
             b.Property(r => r.EntityType).HasMaxLength(60);
             b.HasIndex(r => new { r.EntityType, r.EntityId });
+        });
+
+        modelBuilder.Entity<Company>(b =>
+        {
+            b.ToTable("Companies");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Name).HasMaxLength(200);
+            b.Property(c => c.LegalName).HasMaxLength(200);
+            b.Property(c => c.BusinessType).HasConversion<string>().HasMaxLength(30);
+            b.Property(c => c.HomeCurrency).HasConversion(c => c.Code, code => new Currency(code)).HasMaxLength(3);
+            b.Property(c => c.Email).HasMaxLength(320);
+            b.Property(c => c.Phone).HasMaxLength(50);
+            b.Property(c => c.Address).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<User>(b =>
+        {
+            b.ToTable("Users");
+            b.HasKey(u => u.Id);
+            b.Property(u => u.Username).HasMaxLength(64);
+            b.HasIndex(u => u.Username).IsUnique();
+            b.Property(u => u.PasswordHash).HasMaxLength(500);
+            b.Property(u => u.SecurityStamp).HasMaxLength(64);
         });
     }
 }

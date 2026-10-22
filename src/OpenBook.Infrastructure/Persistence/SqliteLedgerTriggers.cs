@@ -87,15 +87,18 @@ public static class SqliteLedgerTriggers
         """,
     ];
 
-    public static IReadOnlyList<string> Drop { get; } =
+    /// <summary>Every trigger above; restore refuses a backup that is missing any of them.</summary>
+    public static IReadOnlyList<string> Names { get; } =
     [
-        """DROP TRIGGER IF EXISTS "TR_AuditRecords_NoDelete";""",
-        """DROP TRIGGER IF EXISTS "TR_AuditRecords_NoUpdate";""",
-        """DROP TRIGGER IF EXISTS "TR_JournalLines_NoDelete";""",
-        """DROP TRIGGER IF EXISTS "TR_JournalLines_NoUpdate";""",
-        """DROP TRIGGER IF EXISTS "TR_JournalLines_NoInsertAfterSeal";""",
-        """DROP TRIGGER IF EXISTS "TR_JournalEntries_NoDelete";""",
-        """DROP TRIGGER IF EXISTS "TR_JournalEntries_Immutable";""",
-        """DROP TRIGGER IF EXISTS "TR_JournalEntries_Seal";""",
+        "TR_JournalEntries_Seal",
+        "TR_JournalEntries_Immutable",
+        "TR_JournalEntries_NoDelete",
+        "TR_JournalLines_NoInsertAfterSeal",
+        "TR_JournalLines_NoUpdate",
+        "TR_JournalLines_NoDelete",
+        "TR_AuditRecords_NoUpdate",
+        "TR_AuditRecords_NoDelete",
     ];
+
+    public static IReadOnlyList<string> Drop { get; } = Names.Reverse().Select(n => $"""DROP TRIGGER IF EXISTS "{n}";""").ToList();
 }

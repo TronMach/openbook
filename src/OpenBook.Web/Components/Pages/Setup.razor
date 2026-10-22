@@ -1,0 +1,187 @@
+@page "/setup"
+@attribute [AllowAnonymous]
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject CompanySetupService SetupService
+@inject SetupState State
+@inject NavigationManager Navigation
+
+<PageTitle>Set up your company · OpenBook</PageTitle>
+
+<div class="card">
+    <h1>Set up your company</h1>
+    <p class="muted">This creates your company file and the account you'll sign in with. You can change company details later.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="setup" OnValidSubmit="SetUpAsync" method="post">
+        <DataAnnotationsValidator />
+
+        <fieldset>
+            <legend>1. Company</legend>
+            <div class="field">
+                <label for="company-name">Company name</label>
+                <InputText id="company-name" @bind-Value="Input.CompanyName" autocomplete="organization" />
+                <ValidationMessage For="() => Input.CompanyName" />
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="legal-name">Legal name <span class="muted">(optional)</span></label>
+                    <InputText id="legal-name" @bind-Value="Input.LegalName" />
+                </div>
+                <div class="field">
+                    <label for="business-type">Business type</label>
+                    <InputSelect id="business-type" @bind-Value="Input.BusinessType">
+                        @foreach (var type in Enum.GetValues<BusinessType>())
+                        {
+                            <option value="@type">@Labels.For(type)</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="email">Email <span class="muted">(optional)</span></label>
+                    <InputText id="email" type="email" @bind-Value="Input.Email" autocomplete="email" />
+                    <ValidationMessage For="() => Input.Email" />
+                </div>
+                <div class="field">
+                    <label for="phone">Phone <span class="muted">(optional)</span></label>
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" autocomplete="tel" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="address">Address <span class="muted">(optional, printed on invoices)</span></label>
+                <InputTextArea id="address" rows="3" @bind-Value="Input.Address" autocomplete="street-address" />
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>2. Books</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="fiscal-month">Fiscal year starts in</label>
+                    <InputSelect id="fiscal-month" @bind-Value="Input.FiscalYearStartMonth">
+                        @for (var month = 1; month <= 12; month++)
+                        {
+                            <option value="@month">@Labels.Month(month)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">Most small businesses use January.</span>
+                </div>
+                <div class="field">
+                    <label for="currency">Home currency</label>
+                    <InputText id="currency" @bind-Value="Input.HomeCurrency" maxlength="3" />
+                    <span class="hint">3-letter code, e.g. USD. This can't be changed later.</span>
+                    <ValidationMessage For="() => Input.HomeCurrency" />
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>3. Your sign-in</legend>
+            <div class="field">
+                <label for="username">Username</label>
+                <InputText id="username" @bind-Value="Input.Username" autocomplete="username" />
+                <ValidationMessage For="() => Input.Username" />
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="password">Password</label>
+                    <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="new-password" />
+                    <span class="hint">At least @User.MinPasswordLength characters.</span>
+                    <ValidationMessage For="() => Input.Password" />
+                </div>
+                <div class="field">
+                    <label for="confirm">Confirm password</label>
+                    <InputText id="confirm" type="password" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" />
+                    <ValidationMessage For="() => Input.ConfirmPassword" />
+                </div>
+            </div>
+            <p class="hint muted">There is no password recovery yet, so keep this password somewhere safe.</p>
+        </fieldset>
+
+        <button type="submit">Create company</button>
+    </EditForm>
+</div>
+
+@code {
+    private string? _error;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private SetupModel Input { get; set; } = default!;
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task SetUpAsync()
+    {
+        try
+        {
+            var owner = await SetupService.SetUpAsync(new SetUpCompanyCommand(
+                Input.CompanyName,
+                Input.BusinessType,
+                Input.HomeCurrency,
+                Input.FiscalYearStartMonth,
+                Input.Username,
+                Input.Password,
+                Input.LegalName,
+                Input.Email,
+                Input.Phone,
+                Input.Address), HttpContext.RequestAborted);
+
+            State.MarkSetUp();
+            await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp));
+            Navigation.NavigateTo("/");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class SetupModel
+    {
+        [Required(ErrorMessage = "Enter your company's name.")]
+        [StringLength(200)]
+        public string CompanyName { get; set; } = string.Empty;
+
+        [StringLength(200)]
+        public string? LegalName { get; set; }
+
+        public BusinessType BusinessType { get; set; } = BusinessType.SoleProprietorship;
+
+        // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
+        [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
+        public string? Email { get; set; }
+
+        [StringLength(50)]
+        public string? Phone { get; set; }
+
+        [StringLength(1000)]
+        public string? Address { get; set; }
+
+        [Range(1, 12)]
+        public int FiscalYearStartMonth { get; set; } = 1;
+
+        [Required]
+        [RegularExpression("^[A-Za-z]{3}$", ErrorMessage = "Use a 3-letter currency code, e.g. USD.")]
+        public string HomeCurrency { get; set; } = "USD";
+
+        [Required(ErrorMessage = "Choose a username.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Choose a password.")]
+        [StringLength(User.MaxPasswordLength, MinimumLength = User.MinPasswordLength, ErrorMessage = "Passwords need 8 to 128 characters.")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Repeat the password.")]
+        [Compare(nameof(Password), ErrorMessage = "The passwords don't match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

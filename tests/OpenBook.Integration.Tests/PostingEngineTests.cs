@@ -121,7 +121,7 @@ public sealed class PostingEngineTests : IAsyncLifetime
             audit.Select(r => (r.Action, r.EntityId)));
         Assert.Contains("\"Status\":\"Posted\"", audit[1].Before, StringComparison.Ordinal);
         Assert.Contains("\"Status\":\"Voided\"", audit[1].After, StringComparison.Ordinal);
-        Assert.All(audit, r => Assert.Equal("local", r.Actor));
+        Assert.All(audit, r => Assert.Equal(LedgerDatabase.OwnerUsername, r.Actor));
     }
 
     [Fact]

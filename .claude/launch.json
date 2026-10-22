@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "openbook-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/OpenBook.Web", "--", "--urls", "http://localhost:5188", "--ConnectionStrings:OpenBook=Data Source=openbook.dev.db"],
+      "port": 5188
+    }
+  ]
+}

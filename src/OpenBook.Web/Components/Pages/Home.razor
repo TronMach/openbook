@@ -1,7 +1,41 @@
 ﻿@page "/"
+@inject ICompanyStore Companies
 
-<PageTitle>Home</PageTitle>
+<PageTitle>@(_company?.Name ?? "OpenBook")</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (_company is not null)
+{
+    <h1>@_company.Name</h1>
 
-Welcome to your new app.
+    <div class="card">
+        <h2>Company</h2>
+        <dl class="facts">
+            @if (_company.LegalName is not null)
+            {
+                <dt>Legal name</dt>
+                <dd>@_company.LegalName</dd>
+            }
+            <dt>Business type</dt>
+            <dd>@Labels.For(_company.BusinessType)</dd>
+            <dt>Home currency</dt>
+            <dd>@_company.HomeCurrency</dd>
+            <dt>Fiscal year</dt>
+            <dd>Starts in @Labels.Month(_company.FiscalYearStartMonth); current year began @_company.FiscalYearStart(DateOnly.FromDateTime(DateTime.Today)).ToString("d")</dd>
+        </dl>
+    </div>
+
+    <div class="card">
+        <h2>Coming next</h2>
+        <p class="muted">The chart of accounts and journal entry screens arrive in milestone M1. Until then the ledger is available through the REST API under <code>/api</code>.</p>
+    </div>
+}
+
+@code {
+    private OpenBook.Domain.Companies.Company? _company;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync() =>
+        _company = await Companies.GetCompanyAsync(HttpContext.RequestAborted);
+}

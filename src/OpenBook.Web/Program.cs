@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Http.Features;
 using OpenBook.Api;
 using OpenBook.Application;
-using OpenBook.Domain.Common;
 using OpenBook.Infrastructure;
 using OpenBook.Web.Components;
+using OpenBook.Web.Endpoints;
+using OpenBook.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,11 +12,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Home currency moves into company settings with the setup wizard.
 builder.Services
-    .AddOpenBookApplication(new LedgerOptions(new Currency(builder.Configuration["OpenBook:HomeCurrency"] ?? "USD")))
-    .AddOpenBookInfrastructure(builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db")
-    .AddOpenBookApi();
+    .AddOpenBookApplication()
+    .AddOpenBookInfrastructure(
+        builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db",
+        builder.Configuration["OpenBook:BackupDirectory"])
+    .AddOpenBookApi()
+    .AddOpenBookWebSecurity();
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
 
 var app = builder.Build();
 
@@ -30,10 +35,14 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseMiddleware<SetupGateMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapOpenBookApi();
+app.MapAccountEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

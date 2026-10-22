@@ -6,6 +6,7 @@ public enum AuditAction
     Updated,
     Posted,
     Voided,
+    Restored,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

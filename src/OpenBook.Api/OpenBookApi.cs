@@ -18,7 +18,7 @@ public static class OpenBookApi
 
     public static IEndpointRouteBuilder MapOpenBookApi(this IEndpointRouteBuilder app)
     {
-        var api = app.MapGroup("/api").AddEndpointFilter(MapDomainErrors);
+        var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter(MapDomainErrors);
 
         api.MapGet("/accounts", async (AccountService accounts, CancellationToken ct) =>
             (await accounts.ListAsync(ct)).Select(AccountResponse.From));

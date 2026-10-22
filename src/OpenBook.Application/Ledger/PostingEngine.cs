@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBook.Application.Companies;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -17,7 +18,7 @@ public sealed record PostJournalEntryCommand(
 /// The single way anything reaches the ledger. Validates against the chart of accounts,
 /// assigns entry numbers and writes the audit trail in the same save.
 /// </summary>
-public sealed class PostingEngine(ILedgerStore store, IClock clock, ICurrentUser user, LedgerOptions options)
+public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "journal_entry";
 
@@ -31,7 +32,7 @@ public sealed class PostingEngine(ILedgerStore store, IClock clock, ICurrentUser
         var entry = JournalEntry.Post(
             await store.NextEntryNumberAsync(ct),
             command.Date,
-            options.HomeCurrency,
+            (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency,
             command.Lines,
             clock.UtcNow,
             command.Memo,
