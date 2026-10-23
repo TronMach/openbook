@@ -1,0 +1,206 @@
+@page "/purchases/vendor-credits/apply"
+@rendermode InteractiveServer
+@inject Operations Ops
+
+<PageTitle>Apply vendor credit · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Apply vendor credit</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+    </div>
+    <p class="muted">Uses a vendor's credits to pay their bills. Nothing new is posted: the credit and the bills already sit in accounts payable.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">Credit applied.</div>
+    }
+
+    @if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="vendor">Vendor</label>
+                    <select id="vendor" value="@_vendorId" @onchange="PickVendorAsync">
+                        <option value="">Choose a vendor…</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="date">Apply on</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+        </div>
+
+        @if (_vendorId is not null)
+        {
+            @if (_credits.Count == 0 || _bills.Count == 0)
+            {
+                <div class="card"><p>@(_credits.Count == 0 ? "This vendor has no unused credit." : "This vendor has no unpaid bills.")</p></div>
+            }
+            else
+            {
+                <div class="split-grid">
+                    <div>
+                        <h2>Credit</h2>
+                        <table class="data">
+                            <thead><tr><th>Credit</th><th>Date</th><th class="num">Available</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in _credits)
+                                {
+                                    <tr>
+                                        <td><a href="/purchases/vendor-credits/@c.Id" target="_blank">@(c.Reference ?? "Vendor credit")</a></td>
+                                        <td>@Labels.Date(c.Date)</td>
+                                        <td class="num">@Labels.Amount(c.Balance)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h2>Bills</h2>
+                        <table class="data entry">
+                            <thead><tr><th>Bill</th><th>Due</th><th class="num">Balance</th><th class="num">Apply</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in _bills)
+                                {
+                                    <tr @key="row.Bill.Id">
+                                        <td><a href="/purchases/bills/@row.Bill.Id" target="_blank">@(row.Bill.Reference ?? Labels.Date(row.Bill.Date))</a></td>
+                                        <td>@Labels.Date(row.Bill.DueDate)</td>
+                                        <td class="num">@Labels.Amount(row.Bill.Balance)</td>
+                                        <td><input class="amount" type="number" step="0.01" min="0" aria-label="Apply to bill @row.Bill.Reference" @bind="row.Amount" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot><tr><td colspan="3">Applied</td><td class="num">@Labels.Amount(Applied)</td></tr></tfoot>
+                        </table>
+                    </div>
+                </div>
+                <p class="@(Problem is null ? "muted" : "out-of-balance")">@(Problem ?? "Credit is used oldest first.")</p>
+                <div class="actions">
+                    <button type="button" @onclick="SaveAsync" disabled="@(Problem is not null || Applied <= 0m || _busy)">Apply credit</button>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Vendor> _vendors = [];
+    private Guid? _vendorId;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<VendorCredit> _credits = [];
+    private List<BillRow> _bills = [];
+    private bool _loaded;
+    private bool _busy;
+    private bool _saved;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "vendor")]
+    private Guid? PresetVendor { get; set; }
+
+    private decimal Applied => _bills.Sum(r => r.Amount ?? 0m);
+
+    private string? Problem =>
+        _bills.Any(r => (r.Amount ?? 0m) < 0m || (r.Amount ?? 0m) > r.Bill.Balance) ? "An amount is more than the bill's balance."
+        : Applied > _credits.Sum(c => c.Balance) ? "That's more than the credit available."
+        : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _vendors = await Ops.RunAsync(async sp =>
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList());
+        if (PresetVendor is { } preset)
+            await LoadAsync(preset);
+        _loaded = true;
+    }
+
+    private Task PickVendorAsync(ChangeEventArgs e) => LoadAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    private async Task LoadAsync(Guid? vendorId)
+    {
+        _vendorId = vendorId;
+        _saved = false;
+        if (vendorId is not { } id)
+        {
+            (_credits, _bills) = ([], []);
+            return;
+        }
+
+        var (credits, bills) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<VendorCreditService>().AvailableAsync(id),
+            await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync(id)));
+        _credits = credits;
+        _bills = bills.Select(b => new BillRow(b)).ToList();
+
+        // Oldest bills first, up to the credit available.
+        var remaining = _credits.Sum(c => c.Balance);
+        foreach (var row in _bills)
+        {
+            var amount = Math.Min(remaining, row.Bill.Balance);
+            row.Amount = amount > 0m ? amount : null;
+            remaining -= amount;
+        }
+    }
+
+    /// <summary>Pairs credits (oldest first) with the bills in order.</summary>
+    private List<ApplyVendorCredit> Pairings()
+    {
+        var left = _credits.Select(c => (c.Id, Left: c.Balance)).ToList();
+        var result = new List<ApplyVendorCredit>();
+        var index = 0;
+        foreach (var row in _bills.Where(r => (r.Amount ?? 0m) > 0m))
+        {
+            var need = row.Amount!.Value;
+            while (need > 0m && index < left.Count)
+            {
+                var take = Math.Min(need, left[index].Left);
+                if (take > 0m)
+                    result.Add(new ApplyVendorCredit(left[index].Id, row.Bill.Id, take));
+                need -= take;
+                left[index] = (left[index].Id, left[index].Left - take);
+                if (left[index].Left == 0m)
+                    index++;
+            }
+        }
+
+        return result;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var vendorId = _vendorId!.Value;
+            var applications = Pairings();
+            await Ops.RunAsync<VendorCreditService, bool>(async s => { await s.ApplyAsync(vendorId, _date, applications); return true; });
+            await LoadAsync(vendorId);
+            _saved = true;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class BillRow(Bill bill)
+    {
+        public Bill Bill { get; } = bill;
+        public decimal? Amount { get; set; }
+    }
+}

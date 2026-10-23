@@ -25,7 +25,7 @@ public sealed class BillService(
     IClock clock,
     ICurrentUser user)
 {
-    private const string EntityType = "bill";
+    internal const string EntityType = "bill";
 
     public Task<Bill?> GetAsync(Guid id, CancellationToken ct = default) => store.GetBillAsync(id, ct);
 
@@ -33,7 +33,12 @@ public sealed class BillService(
 
     public Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid billId, CancellationToken ct = default) => store.ListPaymentsForBillAsync(billId, ct);
 
-    public async Task<Bill> CreateAsync(CreateBillCommand command, CancellationToken ct = default)
+    public Task<IReadOnlyList<VendorCredit>> ListCreditsAsync(Guid billId, CancellationToken ct = default) => store.ListVendorCreditsForBillAsync(billId, ct);
+
+    public Task<Bill> CreateAsync(CreateBillCommand command, CancellationToken ct = default) => CreateAsync(command, recurringBillId: null, ct);
+
+    /// <param name="recurringBillId">The template entering it, recorded on the bill.</param>
+    internal async Task<Bill> CreateAsync(CreateBillCommand command, Guid? recurringBillId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -57,7 +62,7 @@ public sealed class BillService(
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Bill.Postings(payables.Id, lines, memo), memo, Bill.Source, id), ct);
 
         var bill = Bill.Create(id, vendor.Id, payables.Id, command.Date, command.DueDate ?? vendor.DueDateFor(command.Date),
-            lines, entry.Id, clock.UtcNow, reference, command.Memo);
+            lines, entry.Id, clock.UtcNow, reference, command.Memo, recurringBillId);
         store.Add(bill);
         store.Add(Audit(AuditAction.Created, bill, before: null));
         await store.SaveChangesAsync(ct);
@@ -70,7 +75,7 @@ public sealed class BillService(
         if (bill.Status == DocumentStatus.Voided)
             throw new DomainException("bill.already_voided", "This bill is already voided.");
         if (bill.AmountPaid > 0m)
-            throw new DomainException("bill.has_payments", "This bill has payments applied. Void those payments first.");
+            throw new DomainException("bill.has_payments", "This bill has payments or credits applied. Void or remove those first.");
 
         var before = Snapshot(bill);
         await engine.StageVoidAsync(bill.JournalEntryId, reason, fromDocument: true, ct);
@@ -83,7 +88,7 @@ public sealed class BillService(
     private AuditRecord Audit(AuditAction action, Bill b, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, b.Id, before, Snapshot(b));
 
-    private static string Snapshot(Bill b) => JsonSerializer.Serialize(new
+    internal static string Snapshot(Bill b) => JsonSerializer.Serialize(new
     {
         b.VendorId,
         b.Reference,

@@ -1,0 +1,227 @@
+@page "/purchases/recurring/new"
+@page "/purchases/recurring/{Id:guid}"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New recurring bill" : _name) · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New recurring bill" : _name)</h1>
+        <a class="button secondary" href="/purchases/recurring">Back to recurring bills</a>
+        @if (Id is { } id)
+        {
+            <a class="button secondary" href="/audit?entityId=@id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+
+    @if (_notFound)
+    {
+        <div class="card"><p>That recurring bill doesn't exist. <a href="/purchases/recurring">Back to recurring bills</a>.</p></div>
+    }
+    else if (_loaded && _vendors.Count == 0)
+    {
+        <div class="card"><p>Recurring bills need a vendor. <a href="/vendors/new">Add one</a> first.</p></div>
+    }
+    else if (_loaded)
+    {
+        @if (!_active)
+        {
+            <div class="alert notice" role="status">This recurring bill is inactive, so no bills are entered from it.</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <input id="name" @bind="_name" maxlength="100" />
+                </div>
+                <div class="field">
+                    <label for="vendor">Vendor</label>
+                    <select id="vendor" @bind="_vendorId">
+                        <option value="">Choose a vendor…</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="interval">Repeat every</label>
+                    <div class="inline">
+                        <input id="interval" class="short" type="number" min="1" max="99" @bind="_interval" />
+                        <select aria-label="Frequency" @bind="_frequency">
+                            @foreach (var frequency in Enum.GetValues<RecurrenceFrequency>())
+                            {
+                                <option value="@frequency">@RecurrenceLabels.Unit(frequency, _interval)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="start">First bill date</label>
+                    <input id="start" type="date" @bind="_startDate" />
+                </div>
+                <div class="field">
+                    <label for="end">End date <span class="muted">(optional)</span></label>
+                    <input id="end" type="date" @bind="_endDate" />
+                </div>
+                <div class="field">
+                    <label for="max">Times <span class="muted">(optional)</span></label>
+                    <input id="max" class="short" type="number" min="1" @bind="_maxOccurrences" />
+                </div>
+            </div>
+            <label class="check">
+                <input type="checkbox" @bind="_autoCreate" />
+                <span>Enter bills automatically when due</span>
+            </label>
+
+            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional; defaults to the name)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(_vendorId is null || string.IsNullOrWhiteSpace(_name) || !BillLineModel.IsComplete(_lines) || _busy)">Save</button>
+                @if (Id is not null)
+                {
+                    <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>
+                }
+                @if (_created > 0)
+                {
+                    <span class="muted">@_created entered so far. Changes apply to future bills only.</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Vendor> _vendors = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private bool _loaded;
+    private bool _notFound;
+    private bool _busy;
+    private bool _saved;
+    private string? _error;
+
+    private string _name = string.Empty;
+    private Guid? _vendorId;
+    private string? _memo;
+    private int _interval = 1;
+    private RecurrenceFrequency _frequency = RecurrenceFrequency.Monthly;
+    private DateOnly _startDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _endDate;
+    private int? _maxOccurrences;
+    private bool _autoCreate;
+    private bool _active = true;
+    private int _created;
+    private List<BillLineModel> _lines = [new()];
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        RecurringBill? template;
+        (_vendors, _chart, _useNumbers, template) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(s => s.Vendor).ToList(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
+            Id is { } id ? await sp.GetRequiredService<RecurringBillService>().GetAsync(id) : null));
+        _categories = BillLineModel.Categories(_chart);
+
+        if (Id is not null)
+        {
+            if (template is null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            Show(template);
+        }
+
+        _loaded = true;
+    }
+
+    private void Show(RecurringBill t)
+    {
+        _name = t.Name;
+        _vendorId = t.VendorId;
+        _memo = t.Memo;
+        _interval = t.Interval;
+        _frequency = t.Frequency;
+        _startDate = t.StartDate;
+        _endDate = t.EndDate;
+        _maxOccurrences = t.MaxOccurrences;
+        _autoCreate = t.AutoCreate;
+        _active = t.IsActive;
+        _created = t.OccurrencesPosted;
+        _lines = t.Lines.OrderBy(l => l.LineNumber).Select(l => BillLineModel.From(l.ToDraft())).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            var details = new RecurringBillDetails(_name, _vendorId!.Value, BillLineModel.Drafts(_lines), _frequency, _startDate, _interval,
+                _endDate, _maxOccurrences, _autoCreate, _memo);
+            if (Id is { } id)
+            {
+                Show(await Ops.RunAsync<RecurringBillService, RecurringBill>(s => s.UpdateAsync(id, details)));
+                _saved = true;
+            }
+            else
+            {
+                var created = await Ops.RunAsync<RecurringBillService, RecurringBill>(s => s.CreateAsync(details));
+                Navigation.NavigateTo($"/purchases/recurring/{created.Id}");
+            }
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _active = (await Ops.RunAsync<RecurringBillService, RecurringBill>(s => s.SetActiveAsync(Id!.Value, !_active))).IsActive;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -23,11 +23,17 @@
         <h1>Bill from @_vendor.DisplayName</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
         <a class="button secondary" href="/purchases">Back to purchases</a>
+        <a class="button secondary" href="/audit?entityId=@_bill.Id">History</a>
         @if (_bill.IsOpen)
         {
+            <a class="button secondary" href="/purchases/vendor-credits/apply?vendor=@_vendor.Id">Apply credit</a>
             <a class="button" href="/purchases/pay-bills?vendor=@_vendor.Id">Pay bills</a>
         }
     </div>
+    @if (_bill.RecurringBillId is { } recurringId)
+    {
+        <p class="muted">Entered by a <a href="/purchases/recurring/@recurringId">recurring bill</a>.</p>
+    }
 
     @if (_error is not null)
     {
@@ -61,7 +67,7 @@
             <tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_bill.Total)</td></tr>
             @if (_bill.AmountPaid > 0m)
             {
-                <tr><td colspan="2">Paid</td><td class="num">-@Labels.Amount(_bill.AmountPaid)</td></tr>
+                <tr><td colspan="2">Paid and credited</td><td class="num">-@Labels.Amount(_bill.AmountPaid)</td></tr>
             }
             <tr><td colspan="2">Balance due</td><td class="num">@Labels.Amount(_bill.Balance)</td></tr>
         </tfoot>
@@ -86,13 +92,32 @@
         </table>
     }
 
+    @if (_credits.Count > 0)
+    {
+        <h2 style="margin-top: 1.5rem">Vendor credits applied</h2>
+        <table class="data">
+            <thead><tr><th>Credit</th><th>Applied on</th><th class="num">Applied to this bill</th></tr></thead>
+            <tbody>
+                @foreach (var c in _credits)
+                {
+                    var application = c.Applications.Single(a => a.BillId == _bill.Id);
+                    <tr>
+                        <td><a href="/purchases/vendor-credits/@c.Id">@(c.Reference ?? Labels.Date(c.Date))</a></td>
+                        <td>@Labels.Date(application.AppliedOn)</td>
+                        <td class="num">@Labels.Amount(application.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
     @if (_bill.Status == DocumentStatus.Posted)
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this bill</h2>
             <p class="muted">
                 @(_bill.AmountPaid > 0m
-                    ? "This bill has payments applied. Void those payments first."
+                    ? "This bill has payments or vendor credits applied, so it can't be voided."
                     : "Voiding reverses its journal entry on the same date and removes it from what you owe.")
             </p>
             @if (_bill.AmountPaid == 0m)
@@ -110,12 +135,15 @@
             }
         </div>
     }
+
+    <Attachments EntityType="bill" EntityId="_bill.Id" />
 </div>
 
 @code {
     private Bill? _bill;
     private Vendor? _vendor;
     private IReadOnlyList<BillPayment> _payments = [];
+    private IReadOnlyList<VendorCredit> _credits = [];
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
     private string? _error;
@@ -135,6 +163,7 @@
             return;
         _vendor = await VendorService.GetAsync(_bill.VendorId);
         _payments = await Bills.ListPaymentsAsync(Id);
+        _credits = await Bills.ListCreditsAsync(Id);
         _chart = await AccountService.GetChartAsync();
         _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
     }

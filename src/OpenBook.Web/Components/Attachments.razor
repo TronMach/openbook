@@ -1,0 +1,76 @@
+@* Files kept with a record: a list, an upload form and remove buttons. Plain forms, so it works on static pages. *@
+@using OpenBook.Application.Attachments
+@using OpenBook.Domain.Attachments
+@inject AttachmentService AttachmentService
+@inject NavigationManager Navigation
+
+<section id="attachments" class="card no-print attachments" style="margin-top: 1.5rem">
+    <h2>Attachments</h2>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@ErrorText(Error)</div>
+    }
+    @if (_files.Count == 0)
+    {
+        <p class="muted">No files yet. Attach the receipt, the vendor's bill or anything else that backs this up.</p>
+    }
+    else
+    {
+        <ul class="files">
+            @foreach (var file in _files)
+            {
+                <li>
+                    <a href="/attachments/@file.Id" target="_blank">@file.FileName</a>
+                    <span class="muted">@Size(file.Size) · @file.AddedBy · @file.AddedAt.ToLocalTime().ToString("d")</span>
+                    <form method="post" action="/attachments/@file.Id/remove" class="inline-form">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                        <button type="submit" class="link" onclick="return confirm('Remove @file.FileName?')">Remove</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    }
+    <form method="post" action="/attachments" enctype="multipart/form-data" class="inline" data-enhance="false">
+        <AntiforgeryToken />
+        <input type="hidden" name="entityType" value="@EntityType" />
+        <input type="hidden" name="entityId" value="@EntityId" />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <input type="file" name="file" aria-label="File to attach" accept="@Accept" required />
+        <button type="submit" class="secondary">Attach</button>
+    </form>
+    <p class="hint">PDF, images, text, CSV, Word or Excel; up to @(Attachment.MaxBytes / (1024 * 1024)) MB. Files are kept in the company file and its backups.</p>
+</section>
+
+@code {
+    private static readonly string Accept = string.Join(",", Attachment.AllowedTypes.Keys);
+    private IReadOnlyList<Attachment> _files = [];
+
+    [Parameter, EditorRequired]
+    public string EntityType { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public Guid EntityId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "attachError")]
+    private string? Error { get; set; }
+
+    private string ReturnUrl => "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+
+    protected override async Task OnParametersSetAsync() => _files = await AttachmentService.ListAsync(EntityType, EntityId);
+
+    private static string Size(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0} KB",
+        _ => $"{bytes / (1024.0 * 1024):0.0} MB",
+    };
+
+    private static string ErrorText(string code) => code switch
+    {
+        "attachment.too_large" => $"That file is larger than {Attachment.MaxBytes / (1024 * 1024)} MB.",
+        "attachment.type_not_allowed" => "That kind of file can't be attached. Attach PDFs, images, text, CSV, Word or Excel files.",
+        "attachment.empty" => "Choose a file to attach.",
+        _ => "The file couldn't be attached.",
+    };
+}

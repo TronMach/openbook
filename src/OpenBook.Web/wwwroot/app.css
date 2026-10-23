@@ -259,3 +259,8 @@ table.aging-report tr.grand-total td { font-weight: 700; border-top: 2px solid v
 tr.discount-line td { background: var(--notice-bg); }
 .split-grid h2 { margin-top: 0; }
 input[type=color] { height: 2.4rem; padding: 0.15rem; max-width: 6rem; }
+
+/* V1.4: payables, attachments */
+.attachments ul.files { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: 0.4rem; }
+.attachments ul.files li { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; }
+.inline-form { display: inline; margin: 0; }

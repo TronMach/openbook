@@ -19,8 +19,13 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@(_vendor?.DisplayName ?? "New vendor")</h1>
+        @if (_vendor is not null)
+        {
+            <a class="button secondary" href="/audit?entityId=@_vendor.Id">History</a>
+        }
         @if (_vendor is { IsActive: true })
         {
+            <a class="button secondary" href="/purchases/vendor-credits/new?vendor=@_vendor.Id">Vendor credit</a>
             <a class="button secondary" href="/purchases/pay-bills?vendor=@_vendor.Id">Pay bills</a>
             <a class="button" href="/purchases/bills/new?vendor=@_vendor.Id">New bill</a>
         }
@@ -153,6 +158,36 @@
                 <label for="notes">Notes <span class="muted">(private)</span></label>
                 <InputText id="notes" @bind-Value="Input.Notes" />
             </div>
+            <fieldset>
+                <legend>1099</legend>
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.Track1099" />
+                    <span>Track payments for a 1099 (contractors, landlords, attorneys)</span>
+                </label>
+                <div class="row">
+                    <div class="field">
+                        <label for="box">Reported in</label>
+                        <InputSelect id="box" @bind-Value="Input.Form1099Box">
+                            @foreach (var box in Enum.GetValues<Form1099Box>())
+                            {
+                                <option value="@box">@Labels.For(box)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="tax-id">Tax ID (EIN or SSN) @(_vendor?.MaskedTaxId is { } masked ? $"· saved: {masked}" : "")</label>
+                        <InputText id="tax-id" @bind-Value="Input.TaxId" autocomplete="off" placeholder="@(_vendor?.MaskedTaxId is null ? "12-3456789" : "Leave blank to keep it")" />
+                        <span class="hint">From their W-9. It's never shown in full again; enter a new one to replace it.</span>
+                    </div>
+                </div>
+                @if (_vendor?.TaxId is not null)
+                {
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.ClearTaxId" />
+                        <span>Remove the saved tax ID</span>
+                    </label>
+                }
+            </fieldset>
             <div class="actions">
                 <button type="submit">@(_vendor is null ? "Create vendor" : "Save changes")</button>
                 <a href="/vendors">Cancel</a>
@@ -212,6 +247,8 @@
                 PaymentTermsDays = _vendor.PaymentTermsDays,
                 DefaultExpenseAccountId = _vendor.DefaultExpenseAccountId,
                 Notes = _vendor.Notes,
+                Track1099 = _vendor.Track1099,
+                Form1099Box = _vendor.Form1099Box,
             };
     }
 
@@ -220,7 +257,8 @@
         try
         {
             var details = new VendorDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone, Input.Address,
-                Input.AccountNumber, Input.PaymentTermsDays, Input.DefaultExpenseAccountId, Input.Notes);
+                Input.AccountNumber, Input.PaymentTermsDays, Input.DefaultExpenseAccountId, Input.Notes, Input.Track1099,
+                Input.ClearTaxId ? "" : string.IsNullOrWhiteSpace(Input.TaxId) ? null : Input.TaxId, Input.Form1099Box);
             var saved = _vendor is null ? await VendorService.CreateAsync(details) : await VendorService.UpdateAsync(_vendor.Id, details);
             Navigation.NavigateTo($"/vendors/{saved.Id}");
         }
@@ -271,5 +309,13 @@
 
         [StringLength(2000)]
         public string? Notes { get; set; }
+
+        public bool Track1099 { get; set; }
+
+        public Form1099Box Form1099Box { get; set; }
+
+        public string? TaxId { get; set; }
+
+        public bool ClearTaxId { get; set; }
     }
 }

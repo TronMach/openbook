@@ -182,6 +182,9 @@
         "payment" => "Customer payment",
         "credit_memo" => "Credit memo",
         "recurring_invoice" => "Recurring invoice",
+        "vendor_credit" => "Vendor credit",
+        "vendor_refund" => "Vendor refund",
+        "recurring_bill" => "Recurring bill",
         "email_settings" => "Email settings",
         "form_style" => "Invoice style",
         _ => char.ToUpperInvariant(entityType[0]) + entityType[1..].Replace('_', ' '),
@@ -191,6 +194,8 @@
     {
         AuditAction.ClosedPeriodOverride => "Closed-period change",
         AuditAction.Emailed => "Emailed",
+        AuditAction.Attached => "File attached",
+        AuditAction.Detached => "File removed",
         _ => action.ToString(),
     };
 

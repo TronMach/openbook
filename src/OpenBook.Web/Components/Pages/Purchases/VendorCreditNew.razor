@@ -1,0 +1,124 @@
+@page "/purchases/vendor-credits/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>New vendor credit · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>New vendor credit</h1>
+        <a class="button secondary" href="/purchases?show=credits">Back to vendor credits</a>
+    </div>
+    <p class="muted">For returns and billing corrections: reduces what you owe the vendor. Apply it to their bills afterwards, or record the refund when they pay you back.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _vendors.Count == 0)
+    {
+        <div class="card"><p>Vendor credits need a vendor. <a href="/vendors/new">Add one</a> first.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="vendor">Vendor</label>
+                    <select id="vendor" value="@_vendorId" @onchange="PickVendor">
+                        <option value="">Choose a vendor…</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="reference">Credit no. <span class="muted">(the vendor's, optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+
+            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(_vendorId is null || !BillLineModel.IsComplete(_lines) || _busy)">Save vendor credit</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Vendor> _vendors = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private Guid? _vendorId;
+    private string? _reference;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _memo;
+    private List<BillLineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    [SupplyParameterFromQuery(Name = "vendor")]
+    private Guid? PresetVendor { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_vendors, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
+        _categories = BillLineModel.Categories(_chart);
+        if (PresetVendor is { } preset)
+            SetVendor(preset);
+        _loaded = true;
+    }
+
+    private void PickVendor(ChangeEventArgs e) => SetVendor(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    private void SetVendor(Guid? id)
+    {
+        _vendorId = _vendors.Any(v => v.Id == id) ? id : null;
+        if (_vendors.FirstOrDefault(v => v.Id == id)?.DefaultExpenseAccountId is { } category && _lines[0].AccountId is null)
+            _lines[0].AccountId = category;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new CreateVendorCreditCommand(_vendorId!.Value, _date, BillLineModel.Drafts(_lines), _reference, _memo);
+            var credit = await Ops.RunAsync<VendorCreditService, VendorCredit>(s => s.CreateAsync(command), _closingPassword);
+            Navigation.NavigateTo($"/purchases/vendor-credits/{credit.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

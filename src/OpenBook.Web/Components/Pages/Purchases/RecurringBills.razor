@@ -1,0 +1,117 @@
+@page "/purchases/recurring"
+@inject RecurringBillService Recurring
+@inject VendorService VendorService
+
+<PageTitle>Recurring bills · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Recurring bills</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <a class="button" href="/purchases/recurring/new">New recurring bill</a>
+    </div>
+    <p class="muted">
+        Bills entered on a schedule, such as rent or a subscription. Ones set to enter automatically are entered when
+        they fall due; the rest wait here until you enter them.
+    </p>
+
+    @foreach (var result in _results)
+    {
+        <div class="alert @(result.Error is null ? "notice" : "error")" role="status">
+            <strong>@result.Template.Name</strong>:
+            @if (result.Created.Count > 0)
+            {
+                <text>entered @result.Created.Count @(result.Created.Count == 1 ? "bill" : "bills"):</text>
+                @foreach (var (bill, i) in result.Created.Select((x, i) => (x, i)))
+                {
+                    @(i == 0 ? " " : ", ")<a href="/purchases/bills/@bill.Id">@Labels.Date(bill.Date)</a>
+                }
+                <text>.</text>
+            }
+            @if (result.Error is not null)
+            {
+                <text> Stopped: @result.Error</text>
+            }
+        </div>
+    }
+
+    @if (_templates.Count == 0)
+    {
+        <div class="card"><p>No recurring bills yet. <a href="/purchases/recurring/new">Set one up</a>.</p></div>
+    }
+    else
+    {
+        @if (_dueCount > 0)
+        {
+            <form class="card" method="post" @formname="create-due" @onsubmit="CreateDueAsync">
+                <AntiforgeryToken />
+                <p>@_dueCount recurring @(_dueCount == 1 ? "bill is" : "bills are") due.</p>
+                <button type="submit">Enter due bills</button>
+            </form>
+        }
+
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Name</th><th>Vendor</th><th>Schedule</th><th class="num">Amount</th><th>Next</th><th class="num">Entered</th><th>Entering</th></tr></thead>
+                <tbody>
+                    @foreach (var t in _templates)
+                    {
+                        <tr class="@(t.IsActive ? null : "inactive")">
+                            <td><a href="/purchases/recurring/@t.Id">@t.Name</a></td>
+                            <td>@_vendors.GetValueOrDefault(t.VendorId)</td>
+                            <td>@RecurrenceLabels.Schedule(t.Frequency, t.Interval, t.StartDate, t.EndDate, t.MaxOccurrences)</td>
+                            <td class="num">@Labels.Amount(t.Lines.Sum(l => l.Amount))</td>
+                            <td>
+                                @if (!t.IsActive)
+                                {
+                                    <span class="muted">Inactive</span>
+                                }
+                                else if (t.NextDate is { } next)
+                                {
+                                    @Labels.Date(next)
+                                    @if (next <= Today)
+                                    {
+                                        <span class="badge">Due</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="muted">Finished</span>
+                                }
+                            </td>
+                            <td class="num">@t.OccurrencesPosted</td>
+                            <td>@(t.AutoCreate ? "Automatic" : "Manual")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RecurringBill> _templates = [];
+    private IReadOnlyList<RecurringBillResult> _results = [];
+    private Dictionary<Guid, string> _vendors = [];
+    private int _dueCount;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _vendors = (await VendorService.ListAsync(Today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _templates = await Recurring.ListAsync();
+        _dueCount = _templates.Count(t => t.IsDue(Today));
+    }
+
+    private async Task CreateDueAsync()
+    {
+        _results = await Recurring.CreateDueAsync(Today, automaticOnly: false);
+        await LoadAsync();
+    }
+}

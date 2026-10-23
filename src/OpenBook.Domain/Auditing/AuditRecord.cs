@@ -13,6 +13,12 @@ public enum AuditAction
 
     /// <summary>A form sent to a customer by email.</summary>
     Emailed,
+
+    /// <summary>A file added to the record.</summary>
+    Attached,
+
+    /// <summary>A file removed from the record.</summary>
+    Detached,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

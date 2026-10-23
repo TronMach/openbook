@@ -95,6 +95,15 @@ public static class Labels
         _ => "Classic",
     };
 
+    public static string For(OpenBook.Domain.Purchases.Form1099Box box) => box switch
+    {
+        OpenBook.Domain.Purchases.Form1099Box.MiscRents => "1099-MISC box 1: Rents",
+        OpenBook.Domain.Purchases.Form1099Box.MiscOtherIncome => "1099-MISC box 3: Other income",
+        OpenBook.Domain.Purchases.Form1099Box.MiscMedical => "1099-MISC box 6: Medical and health care",
+        OpenBook.Domain.Purchases.Form1099Box.MiscAttorney => "1099-MISC box 10: Attorney proceeds",
+        _ => "1099-NEC box 1: Nonemployee compensation",
+    };
+
     public static string For(ItemType type) => type == ItemType.Service ? "Service" : "Non-inventory product";
 
     public static string Terms(int days) => days == 0 ? "Due on receipt" : $"Net {days}";

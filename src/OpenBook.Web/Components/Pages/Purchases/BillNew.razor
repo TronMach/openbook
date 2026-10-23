@@ -50,48 +50,7 @@
                 </div>
             </div>
 
-            <div class="table-wrap">
-                <table class="data entry">
-                    <thead><tr><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
-                    <tbody>
-                        @foreach (var line in _lines)
-                        {
-                            <tr @key="line">
-                                <td>
-                                    <select @bind="line.AccountId" aria-label="Category">
-                                        <option value="">Choose a category…</option>
-                                        @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
-                                        {
-                                            <optgroup label="@Labels.For(group.Key)">
-                                                @foreach (var a in group)
-                                                {
-                                                    <option value="@a.Id">@Labels.AccountName(_chart, a.Id, _useNumbers)</option>
-                                                }
-                                            </optgroup>
-                                        }
-                                    </select>
-                                </td>
-                                <td><input @bind="line.Description" aria-label="Description" /></td>
-                                <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" /></td>
-                                <td>
-                                    @if (_lines.Count > 1)
-                                    {
-                                        <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => _lines.Remove(line)">×</button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td><button type="button" class="secondary" @onclick="() => _lines.Add(new LineModel())">Add line</button></td>
-                            <td class="num">Total</td>
-                            <td class="num">@Labels.Amount(Total)</td>
-                            <td></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
@@ -119,7 +78,7 @@
     private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly _dueDate = DateOnly.FromDateTime(DateTime.Today);
     private string? _memo;
-    private List<LineModel> _lines = [new()];
+    private List<BillLineModel> _lines = [new()];
     private bool _loaded;
     private bool _busy;
     private string? _error;
@@ -129,9 +88,7 @@
     [SupplyParameterFromQuery(Name = "vendor")]
     private Guid? PresetVendor { get; set; }
 
-    private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
-    private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
-    private bool CanSave => _vendor is not null && Total > 0m && Filled.All(l => l.AccountId is not null && (l.Amount ?? 0m) != 0m);
+    private bool CanSave => _vendor is not null && BillLineModel.IsComplete(_lines);
 
     protected override async Task OnInitializedAsync()
     {
@@ -139,10 +96,7 @@
             (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList(),
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
-        _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
-            .Where(a => a.Type is not (AccountType.AccountsPayable or AccountType.AccountsReceivable))
-            .OrderBy(a => a.Type.ClassOf() != AccountClass.Expense)
-            .ToList();
+        _categories = BillLineModel.Categories(_chart);
         if (PresetVendor is { } preset)
             SetVendor(preset);
         _loaded = true;
@@ -174,7 +128,7 @@
         _error = null;
         try
         {
-            var lines = Filled.Select(l => new BillLineDraft(l.AccountId!.Value, l.Amount!.Value, l.Description)).ToList();
+            var lines = BillLineModel.Drafts(_lines);
             var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo);
             var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/purchases/bills/{bill.Id}");
@@ -188,12 +142,5 @@
         {
             _busy = false;
         }
-    }
-
-    private sealed class LineModel
-    {
-        public Guid? AccountId { get; set; }
-        public string? Description { get; set; }
-        public decimal? Amount { get; set; }
     }
 }

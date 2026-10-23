@@ -1,0 +1,270 @@
+@page "/purchases/vendor-credits/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject VendorCreditService Credits
+@inject BillService Bills
+@inject VendorService VendorService
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Vendor credit · OpenBook</PageTitle>
+
+@if (_credit is null)
+{
+    <div class="card"><p>That vendor credit doesn't exist. <a href="/purchases?show=credits">Back to vendor credits</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Credit from @_vendor?.DisplayName @_credit.Reference</h1>
+        @if (_credit.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        else
+        {
+            <span class="badge @(_credit.Balance > 0m ? "ok" : null)">@(_credit.Balance > 0m ? $"{Labels.Amount(_credit.Balance)} available" : "Used")</span>
+        }
+        <a class="button secondary" href="/purchases?show=credits">Back to vendor credits</a>
+        <a class="button secondary" href="/audit?entityId=@_credit.Id">History</a>
+        @if (_credit.Balance > 0m)
+        {
+            <a class="button" href="/purchases/vendor-credits/apply?vendor=@_credit.VendorId">Apply to bills</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Vendor</dt><dd><a href="/vendors/@_credit.VendorId">@_vendor?.DisplayName</a></dd>
+            <dt>Date</dt><dd>@Labels.Date(_credit.Date)</dd>
+            <dt>Total</dt><dd>@Labels.Amount(_credit.Total)</dd>
+            @if (_credit.AmountApplied > 0m) { <dt>Applied to bills</dt><dd>@Labels.Amount(_credit.AmountApplied)</dd> }
+            @if (_credit.AmountRefunded > 0m) { <dt>Refunded to you</dt><dd>@Labels.Amount(_credit.AmountRefunded)</dd> }
+            @if (_credit.Memo is not null) { <dt>Memo</dt><dd>@_credit.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_credit.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    <table class="data" style="margin-top: 1rem">
+        <thead><tr><th>Category</th><th>Description</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (var line in _credit.Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr><td>@_chart.FullName(line.AccountId)</td><td>@line.Description</td><td class="num">@Labels.Amount(line.Amount)</td></tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_credit.Applications.Count > 0)
+    {
+        <h2>Applied to</h2>
+        <table class="data">
+            <thead><tr><th>Bill</th><th>Applied on</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+                @foreach (var a in _credit.Applications)
+                {
+                    <tr>
+                        <td><a href="/purchases/bills/@a.BillId">Bill @(_billRefs.GetValueOrDefault(a.BillId))</a></td>
+                        <td>@Labels.Date(a.AppliedOn)</td>
+                        <td class="num">@Labels.Amount(a.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_refunds.Count > 0)
+    {
+        <h2>Refunds received</h2>
+        <table class="data">
+            <thead><tr><th>Date</th><th>Into</th><th>Reference</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _refunds)
+                {
+                    <tr class="@(r.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td>@Labels.Date(r.Date)</td>
+                        <td>@_chart.FullName(r.DepositAccountId)</td>
+                        <td>@r.Reference</td>
+                        <td class="num">@Labels.Amount(r.Amount)</td>
+                        <td>
+                            @if (r.Status == DocumentStatus.Voided)
+                            {
+                                <span class="muted">Voided</span>
+                            }
+                            else
+                            {
+                                <form method="post" @formname="@($"void-refund-{r.Id:N}")" @onsubmit="() => VoidRefundAsync(r.Id)" class="inline-form">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="link">Void</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_credit.Balance > 0m)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Record a refund from the vendor</h2>
+            <EditForm Model="RefundInput" FormName="refund" OnValidSubmit="RecordRefundAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="row">
+                    <div class="field">
+                        <label for="refund-amount">Amount</label>
+                        <InputNumber id="refund-amount" @bind-Value="RefundInput.Amount" step="0.01" />
+                        <ValidationMessage For="() => RefundInput.Amount" />
+                    </div>
+                    <div class="field">
+                        <label for="refund-account">Deposited to</label>
+                        <InputSelect id="refund-account" @bind-Value="RefundInput.AccountId">
+                            @foreach (var a in _depositAccounts)
+                            {
+                                <option value="@a.Id">@a.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="refund-date">Date</label>
+                        <InputDate id="refund-date" @bind-Value="RefundInput.Date" />
+                    </div>
+                    <div class="field">
+                        <label for="refund-ref">Reference <span class="muted">(optional)</span></label>
+                        <InputText id="refund-ref" @bind-Value="RefundInput.Reference" />
+                    </div>
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="RefundInput.ClosingPassword" />
+                <button type="submit" class="secondary">Record refund</button>
+            </EditForm>
+        </div>
+    }
+
+    @if (_credit.Status == DocumentStatus.Posted && _credit.AmountApplied == 0m && _credit.AmountRefunded == 0m)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this credit</h2>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void vendor credit</button>
+            </EditForm>
+        </div>
+    }
+
+    <Attachments EntityType="vendor_credit" EntityId="_credit.Id" />
+</div>
+
+@code {
+    private VendorCredit? _credit;
+    private Vendor? _vendor;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _depositAccounts = [];
+    private Dictionary<Guid, string?> _billRefs = [];
+    private IReadOnlyList<VendorRefund> _refunds = [];
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "refund")]
+    private RefundModel RefundInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _credit = await Credits.GetAsync(Id);
+        if (_credit is null)
+            return;
+        _vendor = await VendorService.GetAsync(_credit.VendorId);
+        _chart = await AccountService.GetChartAsync();
+        _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.Bank or AccountType.CreditCard or AccountType.OtherCurrentAsset).ToList();
+        _billRefs = (await Bills.ListAsync(_credit.VendorId)).ToDictionary(b => b.Id, b => b.Reference);
+        _refunds = (await Credits.ListRefundsAsync(_credit.VendorId)).Where(r => r.VendorCreditId == _credit.Id).ToList();
+        RefundInput ??= new RefundModel { Amount = _credit.Balance, AccountId = _depositAccounts.FirstOrDefault()?.Id ?? Guid.Empty };
+    }
+
+    private async Task RecordRefundAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = RefundInput.ClosingPassword;
+            await Credits.RecordRefundAsync(new RecordVendorRefundCommand(Id, RefundInput.Date, RefundInput.AccountId, RefundInput.Amount ?? 0m, RefundInput.Reference));
+            Navigation.NavigateTo($"/purchases/vendor-credits/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private async Task VoidRefundAsync(Guid refundId)
+    {
+        try
+        {
+            await Credits.VoidRefundAsync(refundId, "Refund voided");
+            Navigation.NavigateTo($"/purchases/vendor-credits/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Credits.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/purchases/vendor-credits/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the credit is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+
+    private sealed class RefundModel
+    {
+        [Required(ErrorMessage = "Enter the amount received.")]
+        [Range(typeof(decimal), "0.01", "999999999999", ErrorMessage = "Enter an amount above zero.")]
+        public decimal? Amount { get; set; }
+
+        public Guid AccountId { get; set; }
+        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+        [StringLength(30)]
+        public string? Reference { get; set; }
+
+        public string? ClosingPassword { get; set; }
+    }
+}

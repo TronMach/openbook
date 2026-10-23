@@ -21,6 +21,25 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct);
 
+    /// <summary>Tracked, with lines and applications.</summary>
+    Task<VendorCredit?> GetVendorCreditAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<VendorCredit>> ListVendorCreditsAsync(Guid? vendorId, CancellationToken ct);
+
+    /// <summary>Vendor credits (any status) applied to the bill.</summary>
+    Task<IReadOnlyList<VendorCredit>> ListVendorCreditsForBillAsync(Guid billId, CancellationToken ct);
+
+    Task<VendorRefund?> GetVendorRefundAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<VendorRefund>> ListVendorRefundsAsync(Guid? vendorId, CancellationToken ct);
+
+    /// <summary>Tracked, ordered by name.</summary>
+    Task<IReadOnlyList<RecurringBill>> ListRecurringBillsAsync(CancellationToken ct);
+
+    Task<RecurringBill?> GetRecurringBillAsync(Guid id, CancellationToken ct);
+
     Task<BillPayment?> GetPaymentAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid? vendorId, CancellationToken ct);
     Task<IReadOnlyList<BillPayment>> ListPaymentsForBillAsync(Guid billId, CancellationToken ct);
@@ -31,6 +50,9 @@ public interface IPurchasesStore
     void Add(Vendor vendor);
     void Add(Bill bill);
     void Add(BillPayment payment);
+    void Add(VendorCredit credit);
+    void Add(VendorRefund refund);
+    void Add(RecurringBill recurringBill);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

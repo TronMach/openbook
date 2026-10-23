@@ -1,0 +1,17 @@
+@page "/purchases/vendor-refunds/{Id:guid}"
+@inject VendorCreditService Credits
+@inject NavigationManager Navigation
+
+@* Vendor refunds are shown (and voided) on the credit they were paid against. *@
+<div class="card"><p>That refund doesn't exist. <a href="/purchases?show=credits">Back to vendor credits</a>.</p></div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await Credits.GetRefundAsync(Id) is { } refund)
+            Navigation.NavigateTo($"/purchases/vendor-credits/{refund.VendorCreditId}");
+    }
+}

@@ -49,6 +49,37 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public void Add(BillPayment payment) => db.BillPayments.Add(payment);
 
+    public void Add(VendorCredit credit) => db.VendorCredits.Add(credit);
+
+    public void Add(VendorRefund refund) => db.VendorRefunds.Add(refund);
+
+    public void Add(RecurringBill recurringBill) => db.RecurringBills.Add(recurringBill);
+
+    public Task<VendorCredit?> GetVendorCreditAsync(Guid id, CancellationToken ct) => db.VendorCredits.SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    // SQLite can't ORDER BY DateTimeOffset, so newest-first ordering happens in memory.
+    public async Task<IReadOnlyList<VendorCredit>> ListVendorCreditsAsync(Guid? vendorId, CancellationToken ct) =>
+        (await db.VendorCredits.AsNoTracking().Where(c => vendorId == null || c.VendorId == vendorId).ToListAsync(ct))
+            .OrderByDescending(c => c.Date)
+            .ThenByDescending(c => c.CreatedAt)
+            .ToList();
+
+    public async Task<IReadOnlyList<VendorCredit>> ListVendorCreditsForBillAsync(Guid billId, CancellationToken ct) =>
+        await db.VendorCredits.AsNoTracking().Where(c => c.Applications.Any(a => a.BillId == billId)).OrderBy(c => c.Date).ToListAsync(ct);
+
+    public Task<VendorRefund?> GetVendorRefundAsync(Guid id, CancellationToken ct) => db.VendorRefunds.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public async Task<IReadOnlyList<VendorRefund>> ListVendorRefundsAsync(Guid? vendorId, CancellationToken ct) =>
+        (await db.VendorRefunds.AsNoTracking().Where(r => vendorId == null || r.VendorId == vendorId).ToListAsync(ct))
+            .OrderByDescending(r => r.Date)
+            .ThenByDescending(r => r.CreatedAt)
+            .ToList();
+
+    public async Task<IReadOnlyList<RecurringBill>> ListRecurringBillsAsync(CancellationToken ct) =>
+        (await db.RecurringBills.ToListAsync(ct)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+    public Task<RecurringBill?> GetRecurringBillAsync(Guid id, CancellationToken ct) => db.RecurringBills.SingleOrDefaultAsync(r => r.Id == id, ct);
+
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

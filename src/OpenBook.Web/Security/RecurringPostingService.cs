@@ -1,13 +1,14 @@
 using System.Security.Claims;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Common;
 
 namespace OpenBook.Web.Security;
 
 /// <summary>
-/// Posts recurring journal entries and creates recurring invoices set to run automatically (emailing those
+/// Posts recurring journal entries and enters recurring invoices and bills set to run automatically (emailing invoices
 /// set to be emailed): at startup, then every hour, so whatever is due today happens even if nobody opens
 /// the app. The audit log names the actor "system".
 /// </summary>
@@ -60,6 +61,16 @@ internal sealed partial class RecurringPostingService(
                 if (result.EmailError is not null)
                     LogStopped(result.Template.Name, result.EmailError);
             }
+
+            var bills = await scope.ServiceProvider.GetRequiredService<RecurringBillService>()
+                .CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: true, ct);
+            foreach (var result in bills)
+            {
+                if (result.Created.Count > 0)
+                    LogBillsCreated(result.Created.Count, result.Template.Name);
+                if (result.Error is not null)
+                    LogStopped(result.Template.Name, result.Error);
+            }
         }
         catch (Exception ex) when (ex is DomainException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
         {
@@ -73,6 +84,9 @@ internal sealed partial class RecurringPostingService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Created {Count} invoices from recurring invoice '{Template}' ({Emailed} emailed).")]
     private partial void LogInvoicesCreated(int count, string template, int emailed);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Entered {Count} bills from recurring bill '{Template}'.")]
+    private partial void LogBillsCreated(int count, string template);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Recurring '{Template}' stopped: {Error}")]
     private partial void LogStopped(string template, string error);

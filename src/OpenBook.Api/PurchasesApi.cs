@@ -19,11 +19,15 @@ public sealed record VendorResponse(
     Guid? DefaultExpenseAccountId,
     string? Notes,
     bool IsActive,
-    decimal? Balance = null)
+    decimal? Balance = null,
+    bool Track1099 = false,
+    string? TaxId = null,
+    Form1099Box Form1099Box = Form1099Box.NecNonemployeeCompensation)
 {
+    /// <summary>The tax ID is masked: the API never returns it in full.</summary>
     public static VendorResponse From(Vendor v, decimal? balance = null) =>
         new(v.Id, v.DisplayName, v.CompanyName, v.Email, v.Phone, v.Address, v.AccountNumber, v.PaymentTermsDays,
-            v.DefaultExpenseAccountId, v.Notes, v.IsActive, balance);
+            v.DefaultExpenseAccountId, v.Notes, v.IsActive, balance, v.Track1099, v.MaskedTaxId, v.Form1099Box);
 }
 
 public sealed record BillResponse(

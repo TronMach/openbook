@@ -19,7 +19,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
-        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, Bill.Source, CustomerPayment.Source, BillPayment.Source];
+        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
 
     /// <param name="from">Null for "since the beginning".</param>
     public async Task<IReadOnlyList<LedgerLine>> LinesAsync(ReportBasis basis, DateOnly? from, DateOnly to, CancellationToken ct = default)
@@ -94,6 +94,22 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                     foreach (var (accountId, share) in Allocate(application.Amount, billLines))
                         cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, share, memo, BillPayment.Source, payment.Id));
                 }
+            }
+        }
+
+        // A vendor refund of a credit reduces expense on the refund date, split like the credit's lines.
+        var vendorRefunds = (await purchases.ListVendorRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date)).ToList();
+        if (vendorRefunds.Count > 0)
+        {
+            var vendorCredits = (await purchases.ListVendorCreditsAsync(null, ct)).ToDictionary(c => c.Id);
+            foreach (var refund in vendorRefunds)
+            {
+                var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
+                var memo = lines.FirstOrDefault(l => l.JournalEntryId == refund.JournalEntryId)?.EntryMemo;
+                cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.DepositAccountId, refund.Amount, memo, VendorRefund.Source, refund.Id));
+                var creditLines = vendorCredits[refund.VendorCreditId].Lines.Select(l => (l.AccountId, l.Amount)).ToList();
+                foreach (var (accountId, share) in Allocate(refund.Amount, creditLines))
+                    cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, -share, memo, VendorRefund.Source, refund.Id));
             }
         }
 

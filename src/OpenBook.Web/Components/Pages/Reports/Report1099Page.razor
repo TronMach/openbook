@@ -1,0 +1,115 @@
+@page "/reports/1099"
+@inject PayablesService Payables
+@inject CompanySettingsService Settings
+
+<PageTitle>1099 summary · OpenBook</PageTitle>
+
+<div class="wide">
+    <form class="card filters no-print" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="year">Tax year</label>
+                <input id="year" name="year" type="number" min="2000" max="2100" value="@YearValue" />
+            </div>
+            <div class="field">
+                <label for="threshold">Reporting threshold</label>
+                <input id="threshold" name="threshold" type="number" step="0.01" min="0" value="@(Threshold?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))"
+                       placeholder="@PayablesService.DefaultThreshold(YearValue).ToString("0", System.Globalization.CultureInfo.InvariantCulture)" />
+                <span class="hint">$600 through 2025 and $2,000 for 2026. From 2027 it's adjusted for inflation: enter the IRS figure for the year.</span>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit">Run report</button>
+            <button type="button" class="secondary" onclick="window.print()">Print</button>
+        </div>
+    </form>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    else if (_report is not null)
+    {
+        <div class="report">
+            <header class="report-heading">
+                <h1>1099 summary for @_report.Year</h1>
+                <p>@_companyName</p>
+                <p>Vendors tracked for 1099s · threshold @Labels.Amount(_report.Threshold)</p>
+            </header>
+
+            @if (_report.Vendors.Count == 0)
+            {
+                <p class="muted">No vendors are tracked for 1099s. Turn on "Track payments for a 1099" on the vendor's page.</p>
+            }
+            else
+            {
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Vendor</th><th>Tax ID</th><th>Form and box</th><th class="num">Paid by cash, check or bank</th><th class="num">Paid by card (1099-K)</th><th>File a 1099?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var v in _report.Vendors)
+                        {
+                            <tr class="@(v.MeetsThreshold ? null : "inactive")">
+                                <td><a href="/vendors/@v.Vendor.Id">@v.Vendor.DisplayName</a></td>
+                                <td>@(v.Vendor.MaskedTaxId ?? "Missing")</td>
+                                <td>@Labels.For(v.Vendor.Form1099Box)</td>
+                                <td class="num">@Labels.Amount(v.Total)</td>
+                                <td class="num">@Labels.AmountOrBlank(v.CardPayments)</td>
+                                <td>
+                                    @if (v.MeetsThreshold)
+                                    {
+                                        <span class="badge @(v.Vendor.TaxId is null ? "warn" : "ok")">@(v.Vendor.TaxId is null ? "Yes, tax ID needed" : "Yes")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">Below threshold</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="grand-total">
+                            <td colspan="3">Total reportable (@_report.Vendors.Count(v => v.MeetsThreshold) @(_report.Vendors.Count(v => v.MeetsThreshold) == 1 ? "vendor" : "vendors"))</td>
+                            <td class="num">@Labels.Amount(_report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total))</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <p class="hint">
+                    Counts bill payments and expenses dated in the year. Card payments are left out because the card company reports
+                    them on Form 1099-K. This summary is a starting point: check it with your tax adviser before filing.
+                </p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Report1099? _report;
+    private string? _companyName;
+    private string? _error;
+
+    [SupplyParameterFromQuery] private int? Year { get; set; }
+    [SupplyParameterFromQuery] private decimal? Threshold { get; set; }
+
+    /// <summary>Last year by default: 1099s are filed early in the following year.</summary>
+    private int YearValue => Year ?? DateTime.Today.Year - 1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _companyName = (await Settings.GetAsync()).Name;
+        try
+        {
+            _report = await Payables.Report1099Async(YearValue, Threshold);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

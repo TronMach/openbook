@@ -4,6 +4,7 @@
 @inject IPurchasesStore PurchasesStore
 @inject VendorService VendorService
 @inject BankingService BankingService
+@inject VendorCreditService Credits
 
 <PageTitle>Purchases · OpenBook</PageTitle>
 
@@ -11,6 +12,8 @@
     <div class="toolbar">
         <h1>Purchases</h1>
         <a class="button secondary" href="/vendors">Vendors</a>
+        <a class="button secondary" href="/purchases/recurring">Recurring</a>
+        <a class="button secondary" href="/purchases/vendor-credits/new">Vendor credit</a>
         <a class="button secondary" href="/purchases/pay-bills">Pay bills</a>
         <a class="button" href="/purchases/bills/new">New bill</a>
     </div>
@@ -41,6 +44,31 @@
 
     @switch (Show)
     {
+        case "credits":
+            @if (_credits.Count == 0)
+            {
+                <div class="card"><p>No vendor credits. <a href="/purchases/vendor-credits/new">Enter one</a>.</p></div>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Vendor</th><th>Credit no.</th><th class="num">Total</th><th class="num">Available</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _credits)
+                        {
+                            <tr class="@(c.Status == DocumentStatus.Voided ? "inactive" : null)">
+                                <td><a href="/purchases/vendor-credits/@c.Id">@Labels.Date(c.Date)</a></td>
+                                <td>@Vendor(c.VendorId)</td>
+                                <td>@c.Reference</td>
+                                <td class="num">@Labels.Amount(c.Total)</td>
+                                <td class="num">@Labels.AmountOrBlank(c.Balance)</td>
+                                <td>@(c.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            break;
         case "payments":
             <table class="data">
                 <thead><tr><th>Date</th><th>Vendor</th><th>Ref</th><th class="num">Bills</th><th class="num">Amount</th><th></th></tr></thead>
@@ -109,11 +137,12 @@
 
 @code {
     private static readonly (string Key, string Label)[] Tabs =
-        [("open", "Unpaid bills"), ("all-bills", "All bills"), ("payments", "Bill payments"), ("expenses", "Expenses")];
+        [("open", "Unpaid bills"), ("all-bills", "All bills"), ("payments", "Bill payments"), ("credits", "Vendor credits"), ("expenses", "Expenses")];
 
     private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
     private IReadOnlyList<Bill> _bills = [];
     private IReadOnlyList<BillPayment> _payments = [];
+    private IReadOnlyList<VendorCredit> _credits = [];
     private IReadOnlyList<BankTransaction> _expenses = [];
     private IReadOnlyList<BankAccountSummary> _bankAccounts = [];
     private Dictionary<Guid, string> _vendors = [];
@@ -128,6 +157,7 @@
         Show ??= "open";
         _bills = await Bills.ListAsync();
         _payments = await Payments.ListAsync();
+        _credits = await Credits.ListAsync();
         _expenses = await PurchasesStore.ListExpensesAsync(null, default);
         _bankAccounts = await BankingService.ListAccountsAsync();
         _vendors = (await VendorService.ListAsync(_today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);

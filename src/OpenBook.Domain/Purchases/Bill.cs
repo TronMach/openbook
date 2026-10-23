@@ -48,7 +48,13 @@ public sealed class Bill
     public DateOnly DueDate { get; private set; }
     public string? Memo { get; private set; }
     public decimal Total { get; private set; }
+
+    /// <summary>Settled so far: payments and vendor credits applied.</summary>
     public decimal AmountPaid { get; private set; }
+
+    /// <summary>The recurring bill template that entered it.</summary>
+    public Guid? RecurringBillId { get; private set; }
+
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -113,7 +119,8 @@ public sealed class Bill
         Guid journalEntryId,
         DateTimeOffset createdAt,
         string? reference = null,
-        string? memo = null)
+        string? memo = null,
+        Guid? recurringBillId = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         if (dueDate < date)
@@ -131,6 +138,7 @@ public sealed class Bill
             Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
+            RecurringBillId = recurringBillId,
         };
         bill._lines.AddRange(lines);
         bill.Total = lines.Sum(l => l.Amount);

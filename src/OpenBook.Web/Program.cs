@@ -51,6 +51,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapOpenBookApi();
 app.MapAccountEndpoints();
+app.MapAttachmentEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

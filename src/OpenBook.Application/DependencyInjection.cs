@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Attachments;
 using OpenBook.Application.Auditing;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
@@ -52,6 +53,10 @@ public static class DependencyInjection
         services.AddScoped<VendorService>();
         services.AddScoped<BillService>();
         services.AddScoped<BillPaymentService>();
+        services.AddScoped<VendorCreditService>();
+        services.AddScoped<RecurringBillService>();
+        services.AddScoped<PayablesService>();
+        services.AddScoped<AttachmentService>();
         services.AddScoped<VendorImportService>();
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();
