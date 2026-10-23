@@ -57,7 +57,7 @@
         <table class="data" style="margin-top: 1rem">
             <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
             <tbody>
-                @foreach (var line in _receipt.Lines.OrderBy(l => l.LineNumber))
+                @foreach (var line in _receipt.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
                 {
                     <tr>
                         <td>@line.Description</td>
@@ -67,7 +67,13 @@
                     </tr>
                 }
             </tbody>
-            <tfoot><tr><td colspan="3">Total paid</td><td class="num">@Labels.Amount(_receipt.Total)</td></tr></tfoot>
+            <tfoot>
+                @foreach (var t in FormService.TaxTotals(_receipt.Lines, _receipt.TaxCodeId, _receipt.TaxExemption))
+                {
+                    <tr><td colspan="3">@t.Label</td><td class="num">@Labels.Amount(t.Amount)</td></tr>
+                }
+                <tr><td colspan="3">Total paid</td><td class="num">@Labels.Amount(_receipt.Total)</td></tr>
+            </tfoot>
         </table>
         @if (_receipt.Memo is not null)
         {

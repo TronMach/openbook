@@ -69,6 +69,10 @@
                 <ValidationMessage For="() => Input.IncomeAccountId" />
             </div>
         </div>
+        <label class="check">
+            <InputCheckbox @bind-Value="Input.Taxable" />
+            <span>Taxable: charge sales tax on it where the customer or document has a tax code</span>
+        </label>
         <div class="actions">
             <button type="submit">@(_item is null ? "Create" : "Save changes")</button>
             <a href="/items">Cancel</a>
@@ -102,15 +106,15 @@
         _incomeAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
         _item = Id is { } id ? await ItemService.GetAsync(id) : null;
         Input ??= _item is null
-            ? new ItemModel { IncomeAccountId = _incomeAccounts.FirstOrDefault()?.Id }
-            : new ItemModel { Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId };
+            ? new ItemModel { IncomeAccountId = _incomeAccounts.FirstOrDefault()?.Id, Taxable = true }
+            : new ItemModel { Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable };
     }
 
     private async Task SaveAsync()
     {
         try
         {
-            var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description);
+            var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable);
             _ = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             Navigation.NavigateTo("/items");
         }
@@ -141,5 +145,7 @@
 
         [Required(ErrorMessage = "Choose an income account.")]
         public Guid? IncomeAccountId { get; set; }
+
+        public bool Taxable { get; set; }
     }
 }

@@ -1,0 +1,167 @@
+@page "/sales-tax/codes/new"
+@page "/sales-tax/codes/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject SalesTaxService Taxes
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New tax code" : "Tax code") · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New tax code" : _code?.Name ?? "Tax code")</h1>
+        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        @if (Id is { } id)
+        {
+            <a class="button secondary" href="/audit?entityId=@id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (Id is not null && _code is null)
+    {
+        <p>That tax code doesn't exist. <a href="/sales-tax">Back to sales tax</a>.</p>
+    }
+    else
+    {
+        <p class="muted">
+            What a customer or document is taxed at. Tick one rate, or several to combine them (for example state + county + city):
+            each rate becomes its own line on the invoice, so every agency's share is tracked.
+        </p>
+        <EditForm Model="Input" FormName="code" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" placeholder="e.g. Austin" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="description">Description <span class="muted">(optional)</span></label>
+                    <InputText id="description" @bind-Value="Input.Description" />
+                </div>
+            </div>
+            <fieldset>
+                <legend>Rates</legend>
+                @* Indexed fields: each rate posts its id, and "true" when ticked. *@
+                @for (var i = 0; i < Input.Rates.Count; i++)
+                {
+                    var choice = Input.Rates[i];
+                    if (!_rateById.TryGetValue(choice.Id, out var r))
+                        continue;
+                    <input type="hidden" name="Input.Rates[@i].Id" value="@choice.Id" />
+                    <label class="check">
+                        <input type="checkbox" name="Input.Rates[@i].Selected" value="true" checked="@choice.Selected" />
+                        <span>@r.Name · @Labels.Percent(r.Percent) <span class="muted">· @_agencyNames.GetValueOrDefault(r.AgencyId)</span></span>
+                    </label>
+                }
+                @if (_rates.Count == 0)
+                {
+                    <p>No rates yet. <a href="/sales-tax/rates/new">Add a rate</a> first.</p>
+                }
+            </fieldset>
+            <div class="actions">
+                <button type="submit">Save tax code</button>
+            </div>
+        </EditForm>
+
+        @if (_code is not null)
+        {
+            <p class="hint">Changing the rates affects documents from now on; existing ones keep their tax lines.</p>
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_code.IsActive ? "Make inactive" : "Make active")</button>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private TaxCode? _code;
+    private IReadOnlyList<TaxRate> _rates = [];
+    private Dictionary<Guid, TaxRate> _rateById = [];
+    private Dictionary<Guid, string> _agencyNames = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "code")]
+    private CodeModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rates = await Taxes.ListRatesAsync();
+        _rateById = _rates.ToDictionary(r => r.Id);
+        _agencyNames = (await Taxes.ListAgenciesAsync()).ToDictionary(a => a.Id, a => a.Name);
+        if (Id is { } id)
+        {
+            _code = await Taxes.GetCodeAsync(id);
+            if (_code is null)
+                return;
+            Input ??= new CodeModel { Name = _code.Name, Description = _code.Description, Rates = Choices(_code.RateIds) };
+        }
+        else
+        {
+            Input ??= new CodeModel { Rates = Choices([]) };
+        }
+    }
+
+    /// <summary>The active rates, plus any inactive ones the code already charges; the code's rates first, in its order.</summary>
+    private List<RateChoice> Choices(IReadOnlyList<Guid> selected) =>
+        selected.Where(_rateById.ContainsKey).Select(id => new RateChoice { Id = id, Selected = true })
+            .Concat(_rates.Where(r => r.IsActive && !selected.Contains(r.Id)).Select(r => new RateChoice { Id = r.Id }))
+            .ToList();
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            // Ticked rates in the order shown, which is the order their tax lines print in.
+            var details = new TaxCodeDetails(Input.Name, Input.Rates.Where(r => r.Selected && _rateById.ContainsKey(r.Id)).Select(r => r.Id).Distinct().ToList(), Input.Description);
+            if (Id is { } id)
+                await Taxes.UpdateCodeAsync(id, details);
+            else
+                await Taxes.CreateCodeAsync(details);
+            Navigation.NavigateTo("/sales-tax");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Taxes.SetCodeActiveAsync(_code!.Id, !_code.IsActive);
+            Navigation.NavigateTo($"/sales-tax/codes/{_code.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class CodeModel
+    {
+        [Required(ErrorMessage = "Give the code a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+
+        public List<RateChoice> Rates { get; set; } = [];
+    }
+
+    private sealed class RateChoice
+    {
+        public Guid Id { get; set; }
+        public bool Selected { get; set; }
+    }
+}

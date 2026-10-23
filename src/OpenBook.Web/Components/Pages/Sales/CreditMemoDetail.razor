@@ -128,7 +128,8 @@
     {
         get
         {
-            var totals = new List<(string, decimal)> { ("Total credit", _credit!.Total) };
+            var totals = FormService.TaxTotals(_credit!.Lines, _credit.TaxCodeId, _credit.TaxExemption).Select(t => (t.Label, t.Amount)).ToList();
+            totals.Add(("Total credit", _credit.Total));
             if (_credit.AmountApplied > 0m)
                 totals.Add(("Applied to invoices", -_credit.AmountApplied));
             if (_credit.AmountRefunded > 0m)

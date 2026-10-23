@@ -28,6 +28,7 @@ internal sealed class EfAttachmentStore(OpenBookDbContext db) : IAttachmentStore
         "deposit" => db.BankDeposits.AnyAsync(x => x.Id == entityId, ct),
         "bill" => db.Bills.AnyAsync(x => x.Id == entityId, ct),
         "bill_payment" => db.BillPayments.AnyAsync(x => x.Id == entityId, ct),
+        "sales_tax_payment" => db.SalesTaxPayments.AnyAsync(x => x.Id == entityId, ct),
         "vendor_credit" => db.VendorCredits.AnyAsync(x => x.Id == entityId, ct),
         "vendor_refund" => db.VendorRefunds.AnyAsync(x => x.Id == entityId, ct),
         "bank_transaction" => db.BankTransactions.AnyAsync(x => x.Id == entityId, ct),

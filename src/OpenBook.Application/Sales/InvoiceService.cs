@@ -9,6 +9,7 @@ namespace OpenBook.Application.Sales;
 /// <param name="DueDate">Defaults to the invoice date plus the customer's payment terms.</param>
 /// <param name="Number">Defaults to the next number in sequence.</param>
 /// <param name="EstimateId">The estimate being invoiced; it's closed in the same save.</param>
+/// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
 public sealed record CreateInvoiceCommand(
     Guid CustomerId,
     DateOnly Date,
@@ -16,7 +17,8 @@ public sealed record CreateInvoiceCommand(
     DateOnly? DueDate = null,
     string? Number = null,
     string? Memo = null,
-    Guid? EstimateId = null);
+    Guid? EstimateId = null,
+    Guid? TaxCodeId = null);
 
 public sealed class InvoiceService(
     ISalesStore store,
@@ -71,7 +73,7 @@ public sealed class InvoiceService(
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
 
-        var lines = await lineBuilder.BuildAsync(command.Lines, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
 
         var id = Guid.CreateVersion7();
@@ -82,7 +84,7 @@ public sealed class InvoiceService(
         var terms = customer.Terms;
         var invoice = Invoice.Create(
             id, number, customer.Id, receivables.Id, command.Date, command.DueDate ?? terms.DueDate(command.Date),
-            lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId);
+            lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId, taxCodeId, exemption);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
         if (estimate is not null)
@@ -142,6 +144,8 @@ public sealed class InvoiceService(
         i.EarlyPaymentDiscountDate,
         i.EstimateId,
         i.RecurringInvoiceId,
-        Lines = i.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
+        i.TaxCodeId,
+        i.TaxExemption,
+        Lines = i.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
     });
 }

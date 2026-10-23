@@ -13,20 +13,22 @@ namespace OpenBook.Api;
 
 public sealed record EstimateResponse(
     Guid Id, string Number, Guid CustomerId, DateOnly Date, DateOnly? ExpirationDate, string? Memo, decimal Total,
-    EstimateStatus Status, Guid? InvoiceId, DateTimeOffset? LastEmailedAt, IReadOnlyList<SalesLineResponse> Lines)
+    EstimateStatus Status, Guid? InvoiceId, DateTimeOffset? LastEmailedAt, IReadOnlyList<SalesLineResponse> Lines,
+    Guid? TaxCodeId = null, string? TaxExemption = null, decimal Subtotal = 0m, decimal TaxTotal = 0m)
 {
     public static EstimateResponse From(Estimate e) => new(
         e.Id, e.Number, e.CustomerId, e.Date, e.ExpirationDate, e.Memo, e.Total, e.Status, e.InvoiceId, e.LastEmailedAt,
-        e.Lines.Select(SalesLineResponse.From).ToList());
+        e.Lines.Select(SalesLineResponse.From).ToList(), e.TaxCodeId, e.TaxExemption, e.Subtotal, e.TaxTotal);
 }
 
 public sealed record CreditMemoResponse(
     Guid Id, string Number, Guid CustomerId, DateOnly Date, string? Memo, decimal Total, decimal AmountApplied, decimal AmountRefunded,
-    decimal Balance, DocumentStatus Status, Guid JournalEntryId, IReadOnlyList<SalesLineResponse> Lines)
+    decimal Balance, DocumentStatus Status, Guid JournalEntryId, IReadOnlyList<SalesLineResponse> Lines,
+    Guid? TaxCodeId = null, string? TaxExemption = null, decimal Subtotal = 0m, decimal TaxTotal = 0m)
 {
     public static CreditMemoResponse From(CreditMemo c) => new(
         c.Id, c.Number, c.CustomerId, c.Date, c.Memo, c.Total, c.AmountApplied, c.AmountRefunded, c.Balance, c.Status, c.JournalEntryId,
-        c.Lines.Select(SalesLineResponse.From).ToList());
+        c.Lines.Select(SalesLineResponse.From).ToList(), c.TaxCodeId, c.TaxExemption, c.Subtotal, c.TaxTotal);
 }
 
 public sealed record RefundResponse(

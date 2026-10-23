@@ -4,6 +4,7 @@
 @inject CustomerService CustomerService
 @inject InvoiceService Invoices
 @inject PaymentService Payments
+@inject SalesTaxService Taxes
 @inject NavigationManager Navigation
 
 <PageTitle>@(_customer?.DisplayName ?? "New customer") · OpenBook</PageTitle>
@@ -142,6 +143,46 @@
                     <span class="hint">For terms like "2% 10, Net 30". Offered when you receive a payment in time.</span>
                 </div>
             </div>
+            <fieldset>
+                <legend>Sales tax</legend>
+                <div class="row">
+                    <div class="field">
+                        <label for="tax-code">Tax code</label>
+                        <InputSelect id="tax-code" @bind-Value="Input.TaxCodeId">
+                            <option value="">No sales tax</option>
+                            @foreach (var c in _taxCodes.Where(c => c.IsActive || c.Id == Input.TaxCodeId))
+                            {
+                                <option value="@c.Id">@c.Name@(c.IsActive ? "" : " (inactive)")</option>
+                            }
+                        </InputSelect>
+                        <span class="hint">Where you deliver to them decides the rate. New invoices, receipts and estimates start with it.</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="exemption">Exemption certificate no. <span class="muted">(if exempt)</span></label>
+                        <InputText id="exemption" @bind-Value="Input.ExemptionCertificate" />
+                    </div>
+                    <div class="field">
+                        <label for="exemption-reason">Reason</label>
+                        <InputSelect id="exemption-reason" @bind-Value="Input.ExemptionReason">
+                            <option value="">Choose…</option>
+                            @foreach (var r in Enum.GetValues<ExemptionReason>())
+                            {
+                                <option value="@r">@ExemptionReasons.Label(r)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="exemption-expires">Expires <span class="muted">(optional)</span></label>
+                        <InputDate id="exemption-expires" @bind-Value="Input.ExemptionExpiresOn" />
+                    </div>
+                </div>
+                <span class="hint">
+                    While the certificate is valid, their sales are taxed at zero and show as exempt on the liability report. Attach a copy
+                    of the certificate below.
+                </span>
+            </fieldset>
             <div class="row">
                 <div class="field">
                     <label for="notes">Notes <span class="muted">(private)</span></label>
@@ -161,6 +202,8 @@
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_customer.IsActive ? "Make inactive" : "Make active")</button>
         </form>
+
+        <Attachments EntityType="customer" EntityId="_customer.Id" />
     }
 </div>
 
@@ -168,6 +211,7 @@
     private Customer? _customer;
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
+    private IReadOnlyList<TaxCode> _taxCodes = [];
     private string? _error;
 
     [Parameter]
@@ -178,6 +222,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _taxCodes = await Taxes.ListCodesAsync();
         if (Id is { } id)
         {
             _customer = await CustomerService.GetAsync(id);
@@ -201,6 +246,10 @@
                 EarlyPaymentDiscountPercent = _customer.EarlyPaymentDiscountPercent,
                 EarlyPaymentDiscountDays = _customer.EarlyPaymentDiscountDays,
                 Notes = _customer.Notes,
+                TaxCodeId = _customer.TaxCodeId,
+                ExemptionCertificate = _customer.ExemptionCertificate,
+                ExemptionReason = _customer.ExemptionReason,
+                ExemptionExpiresOn = _customer.ExemptionExpiresOn,
             };
     }
 
@@ -210,7 +259,8 @@
         {
             var details = new CustomerDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone,
                 Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
-                Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0);
+                Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
+                Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
         }
@@ -265,5 +315,13 @@
 
         [StringLength(2000)]
         public string? Notes { get; set; }
+
+        public Guid? TaxCodeId { get; set; }
+
+        [StringLength(50)]
+        public string? ExemptionCertificate { get; set; }
+
+        public ExemptionReason? ExemptionReason { get; set; }
+        public DateOnly? ExemptionExpiresOn { get; set; }
     }
 }

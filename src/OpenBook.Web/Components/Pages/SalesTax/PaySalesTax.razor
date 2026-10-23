@@ -1,0 +1,219 @@
+@page "/sales-tax/pay"
+@using System.ComponentModel.DataAnnotations
+@inject SalesTaxService Taxes
+@inject SalesTaxPaymentService Payments
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Pay sales tax · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>Pay sales tax</h1>
+        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_agencies.Count == 0)
+    {
+        <p>There are no tax agencies yet. <a href="/sales-tax/agencies/new">Add one</a> first.</p>
+    }
+    else if (_payFrom.Count == 0)
+    {
+        <p>Sales tax is paid from a bank or credit card account. <a href="/accounts/new">Add one</a> first.</p>
+    }
+    else
+    {
+        <EditForm Model="Input" FormName="pay" OnValidSubmit="PayAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="agency">Agency</label>
+                    <InputSelect id="agency" @bind-Value="Input.AgencyId">
+                        <option value="">Choose…</option>
+                        @foreach (var a in _agencies)
+                        {
+                            <option value="@a.Id">@a.Name (owed at period end: @Labels.Amount(_owedAtEnd.GetValueOrDefault(a.Id)))</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => Input.AgencyId" />
+                </div>
+                <div class="field">
+                    <label for="period">For the period ending</label>
+                    <InputDate id="period" @bind-Value="Input.PeriodEnd" />
+                    <span class="hint">The amount below starts as what was owed on this date.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Payment date</label>
+                    <InputDate id="date" @bind-Value="Input.Date" />
+                </div>
+                <div class="field">
+                    <label for="account">Paid from</label>
+                    <InputSelect id="account" @bind-Value="Input.PaymentAccountId">
+                        @foreach (var a in _payFrom)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="amount">Amount paid</label>
+                    <InputNumber id="amount" @bind-Value="Input.Amount" step="0.01" min="0" />
+                    <ValidationMessage For="() => Input.Amount" />
+                </div>
+            </div>
+            <fieldset>
+                <legend>Adjustment <span class="muted">(optional)</span></legend>
+                <p class="hint">
+                    A discount or credit the agency allows (for filing on time, say) settles part of what's owed without being paid;
+                    a penalty or interest is paid on top of it.
+                </p>
+                <div class="row">
+                    <div class="field">
+                        <label for="adjustment-kind">Kind</label>
+                        <InputSelect id="adjustment-kind" @bind-Value="Input.AdjustmentKind">
+                            <option value="@AdjustmentKind.Discount">Discount or credit</option>
+                            <option value="@AdjustmentKind.Penalty">Penalty or interest</option>
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="adjustment">Amount</label>
+                        <InputNumber id="adjustment" @bind-Value="Input.AdjustmentAmount" step="0.01" min="0" />
+                    </div>
+                    <div class="field">
+                        <label for="adjustment-account">Account</label>
+                        <InputSelect id="adjustment-account" @bind-Value="Input.AdjustmentAccountId">
+                            <option value="">Choose…</option>
+                            @foreach (var group in _adjustmentAccounts.GroupBy(a => a.Type.ClassOf()))
+                            {
+                                <optgroup label="@Labels.For(group.Key)">
+                                    @foreach (var a in group)
+                                    {
+                                        <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                    }
+                                </optgroup>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="row">
+                <div class="field">
+                    <label for="reference">Check no. or confirmation <span class="muted">(optional)</span></label>
+                    <InputText id="reference" @bind-Value="Input.Reference" />
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <InputText id="memo" @bind-Value="Input.Memo" />
+                </div>
+            </div>
+            <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+            <div class="actions">
+                <button type="submit">Record payment</button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<TaxAgency> _agencies = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _payFrom = [];
+    private List<Account> _adjustmentAccounts = [];
+    private IReadOnlyDictionary<Guid, decimal> _owedAtEnd = new Dictionary<Guid, decimal>();
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [SupplyParameterFromQuery(Name = "agency")]
+    private Guid? PresetAgency { get; set; }
+
+    [SupplyParameterFromForm(FormName = "pay")]
+    private PayModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _agencies = (await Taxes.ListAgenciesAsync()).Where(a => a.IsActive || a.Id == PresetAgency).ToList();
+        _chart = await AccountService.GetChartAsync();
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _payFrom = active.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+        _adjustmentAccounts = active.Where(a => a.Type.ClassOf() is AccountClass.Income or AccountClass.Expense).ToList();
+
+        if (Input is null)
+        {
+            var agency = _agencies.FirstOrDefault(a => a.Id == PresetAgency) ?? (_agencies.Count == 1 ? _agencies[0] : null);
+            var periodEnd = agency is null ? today : FilingPeriods.LastCompleted(agency.FilingFrequency, today).To;
+            _owedAtEnd = await Payments.OwedAsync(periodEnd);
+            Input = new PayModel
+            {
+                AgencyId = agency?.Id,
+                PeriodEnd = periodEnd,
+                Date = today,
+                PaymentAccountId = _payFrom.FirstOrDefault(a => a.Type == AccountType.Bank)?.Id ?? _payFrom.FirstOrDefault()?.Id,
+                Amount = agency is null ? null : Math.Max(0m, _owedAtEnd.GetValueOrDefault(agency.Id)),
+            };
+        }
+        else
+        {
+            _owedAtEnd = await Payments.OwedAsync(Input.PeriodEnd ?? today);
+        }
+    }
+
+    private async Task PayAsync()
+    {
+        try
+        {
+            var adjustment = Input.AdjustmentAmount ?? 0m;
+            if (Input.AdjustmentKind == AdjustmentKind.Penalty)
+                adjustment = -adjustment;
+            ClosingOverride.Password = Input.ClosingPassword;
+            var payment = await Payments.PayAsync(new PaySalesTaxCommand(
+                Input.AgencyId!.Value, Input.Date, Input.PaymentAccountId ?? Guid.Empty, Input.Amount ?? 0m,
+                adjustment, Input.AdjustmentAccountId, Input.PeriodEnd, Input.Reference, Input.Memo));
+            Navigation.NavigateTo($"/sales-tax/payments/{payment.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private enum AdjustmentKind
+    {
+        Discount,
+        Penalty,
+    }
+
+    private sealed class PayModel
+    {
+        [Required(ErrorMessage = "Choose the agency you're paying.")]
+        public Guid? AgencyId { get; set; }
+
+        public DateOnly? PeriodEnd { get; set; }
+        public DateOnly Date { get; set; }
+        public Guid? PaymentAccountId { get; set; }
+
+        [Required(ErrorMessage = "Enter the amount paid.")]
+        public decimal? Amount { get; set; }
+
+        public AdjustmentKind AdjustmentKind { get; set; }
+        public decimal? AdjustmentAmount { get; set; }
+        public Guid? AdjustmentAccountId { get; set; }
+
+        [StringLength(30)]
+        public string? Reference { get; set; }
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+
+        public string? ClosingPassword { get; set; }
+    }
+}

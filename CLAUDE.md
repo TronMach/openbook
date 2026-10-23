@@ -127,3 +127,15 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Checks: `CheckService` lists bank (not card) spends and bill payments; printing renders `CheckForm`s (voucher layout, absolutely positioned MigraDoc frames, `AmountInWords.ForCheck`) and sets `PrintedAt` with an audit record. Printing goes through the web form endpoint `/checks/print` (antiforgery), which binds `IFormCollection`: minimal APIs on .NET 10 can't bind a `string[]` form parameter.
 - Blazor `[SupplyParameterFromQuery]` can't bind enums: take a string and `Enum.TryParse`.
 - Audit entity types: bank_rule, bank_feed_item, bank_feed_import.
+
+## Sales tax (V1.5)
+
+- Domain in `Domain/SalesTax`: `TaxAgency` (owns a liability account: a subaccount of "Sales Tax Payable", created by `SalesTaxService` on agency creation), `TaxRate` (one agency, percent to 4 decimals, stored as ten-thousandths), `TaxCode` (1–10 rates in print order; "combined" when more than one), `SalesTaxPayment` (`Source = salestax.payment`).
+- Tax lines are `SalesLine`s of kind `Tax`, appended after the other lines by `SalesLineBuilder.BuildAsync(drafts, customer, taxCodeId, date)`: one per rate of the code, even when zero, with `TaxRateId`, `Rate` = the percent charged and `IncomeAccountId` = the agency's liability account, so `SalesLine.Postings` credits it and cash-basis allocation covers it. They're never drafted: use `SalesLine.Drafts(lines)` to copy a document's lines (`ToDraft()` throws on a tax line).
+- `TaxCalculator` is the one place for the math (the web preview calls it too): taxable amount = taxable item lines less each discount's taxable share; tax = taxable × combined percent rounded once, split by rate with the remainder on the last.
+- Command `TaxCodeId`: null takes the customer's code, `Guid.Empty` charges no tax. Documents store `TaxCodeId` and `TaxExemption` (the customer's exemption text when valid on the document date; tax lines are then zero). Recurring invoices use the customer's code; estimates pass theirs to the invoice.
+- Line `Taxable` defaults from the item (`Item.Taxable`; existing items were backfilled taxable); `SalesLineDraft.Taxable` null means "the item's setting".
+- Inactive codes, rates and agencies can't be charged (`tax.code_inactive`, …); a rate in an active code and an agency with active rates can't be deactivated.
+- `SalesTaxReports.LiabilityAsync` works from the documents (accrual): invoices and receipts plus credit memos negated, each counted on every rate of its code; owed figures are the liability accounts' ledger balances. `FilingPeriods.LastCompleted` gives the period to file.
+- `FormService.TaxTotals` gives the subtotal/tax rows for screens and PDFs; tax lines never show as ordinary lines.
+- Audit entity types: tax_agency, tax_rate, tax_code, sales_tax_payment (attachments allowed on sales_tax_payment and now shown on customers, for certificates).

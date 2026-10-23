@@ -80,7 +80,7 @@
         <table class="data" style="margin-top: 1rem">
             <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
             <tbody>
-                @foreach (var line in _invoice.Lines.OrderBy(l => l.LineNumber))
+                @foreach (var line in _invoice.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
                 {
                     <tr>
                         <td>@line.Description</td>
@@ -91,6 +91,10 @@
                 }
             </tbody>
             <tfoot>
+                @foreach (var t in FormService.TaxTotals(_invoice.Lines, _invoice.TaxCodeId, _invoice.TaxExemption))
+                {
+                    <tr><td colspan="3">@t.Label</td><td class="num">@Labels.Amount(t.Amount)</td></tr>
+                }
                 <tr><td colspan="3">Total</td><td class="num">@Labels.Amount(_invoice.Total)</td></tr>
                 @if (_invoice.AmountPaid > 0m)
                 {

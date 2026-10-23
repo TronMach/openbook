@@ -1,0 +1,142 @@
+@page "/sales-tax/agencies/new"
+@page "/sales-tax/agencies/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject SalesTaxService Taxes
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New tax agency" : "Tax agency") · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New tax agency" : _agency?.Name ?? "Tax agency")</h1>
+        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        @if (Id is { } id)
+        {
+            <a class="button secondary" href="/audit?entityId=@id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (Id is not null && _agency is null)
+    {
+        <p>That agency doesn't exist. <a href="/sales-tax">Back to sales tax</a>.</p>
+    }
+    else
+    {
+        @if (_agency is null)
+        {
+            <p class="muted">
+                A government body you collect sales tax for and pay it to. OpenBook adds an account for it under "Sales Tax Payable";
+                the tax you charge is credited there and your payments debit it.
+            </p>
+        }
+        <EditForm Model="Input" FormName="agency" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label for="name">Name</label>
+                <InputText id="name" @bind-Value="Input.Name" placeholder="e.g. Texas Comptroller" />
+                <ValidationMessage For="() => Input.Name" />
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="frequency">You file</label>
+                    <InputSelect id="frequency" @bind-Value="Input.FilingFrequency">
+                        @foreach (var f in Enum.GetValues<FilingFrequency>())
+                        {
+                            <option value="@f">@Labels.For(f)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">Sets the period the sales tax page suggests reporting and paying.</span>
+                </div>
+                <div class="field">
+                    <label for="registration">Permit or account number <span class="muted">(optional)</span></label>
+                    <InputText id="registration" @bind-Value="Input.RegistrationNumber" />
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit">Save agency</button>
+            </div>
+        </EditForm>
+
+        @if (_agency is not null)
+        {
+            <p class="muted">Tax owed to it is tracked in <a href="/reports/general-ledger?accountId=@_agency.LiabilityAccountId">its liability account</a>.</p>
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_agency.IsActive ? "Make inactive" : "Make active")</button>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private TaxAgency? _agency;
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "agency")]
+    private AgencyModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is { } id)
+        {
+            _agency = await Taxes.GetAgencyAsync(id);
+            if (_agency is null)
+                return;
+            Input ??= new AgencyModel { Name = _agency.Name, FilingFrequency = _agency.FilingFrequency, RegistrationNumber = _agency.RegistrationNumber };
+        }
+        else
+        {
+            Input ??= new AgencyModel();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber);
+            if (Id is { } id)
+                await Taxes.UpdateAgencyAsync(id, details);
+            else
+                await Taxes.CreateAgencyAsync(details);
+            Navigation.NavigateTo("/sales-tax");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Taxes.SetAgencyActiveAsync(_agency!.Id, !_agency.IsActive);
+            Navigation.NavigateTo($"/sales-tax/agencies/{_agency.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class AgencyModel
+    {
+        [Required(ErrorMessage = "Give the agency a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        public FilingFrequency FilingFrequency { get; set; } = FilingFrequency.Quarterly;
+
+        [StringLength(50)]
+        public string? RegistrationNumber { get; set; }
+    }
+}

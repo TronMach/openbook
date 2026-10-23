@@ -26,6 +26,10 @@ public sealed class Item
     public decimal Rate { get; private set; }
 
     public Guid IncomeAccountId { get; private set; }
+
+    /// <summary>Whether sales tax applies by default; each sales line can override it.</summary>
+    public bool Taxable { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public static Item Create(ItemDetails details)
@@ -42,6 +46,7 @@ public sealed class Item
         Type = Enum.IsDefined(details.Type) ? details.Type : throw new DomainException("item.type_invalid", $"Unknown item type {details.Type}.");
         Description = Text.Optional(details.Description, 1000, "item.description_too_long", "Description");
         Rate = SalesLine.ValidRate(details.Rate);
+        Taxable = details.Taxable;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
             ? throw new DomainException("item.income_account_required", "Choose the income account sales of this item post to.")
             : details.IncomeAccountId;
@@ -66,4 +71,4 @@ public sealed class Item
         ?? throw new DomainException("item.name_required", "An item needs a name.");
 }
 
-public sealed record ItemDetails(string Name, ItemType Type, Guid IncomeAccountId, decimal Rate = 0m, string? Description = null);
+public sealed record ItemDetails(string Name, ItemType Type, Guid IncomeAccountId, decimal Rate = 0m, string? Description = null, bool Taxable = true);

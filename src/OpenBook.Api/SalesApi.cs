@@ -21,21 +21,27 @@ public sealed record CustomerResponse(
     decimal? Balance = null,
     decimal EarlyPaymentDiscountPercent = 0m,
     int EarlyPaymentDiscountDays = 0,
-    string? Terms = null)
+    string? Terms = null,
+    Guid? TaxCodeId = null,
+    string? ExemptionCertificate = null,
+    ExemptionReason? ExemptionReason = null,
+    DateOnly? ExemptionExpiresOn = null)
 {
     public static CustomerResponse From(Customer c, decimal? balance = null) =>
         new(c.Id, c.DisplayName, c.CompanyName, c.Email, c.Phone, c.BillingAddress, c.ShippingAddress, c.PaymentTermsDays, c.Notes, c.IsActive, balance,
-            c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label);
+            c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label, c.TaxCodeId, c.ExemptionCertificate, c.ExemptionReason, c.ExemptionExpiresOn);
 }
 
-public sealed record ItemResponse(Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive)
+public sealed record ItemResponse(Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive, bool Taxable = true)
 {
-    public static ItemResponse From(Item i) => new(i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive);
+    public static ItemResponse From(Item i) => new(i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable);
 }
 
-public sealed record SalesLineResponse(int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount, SalesLineKind Kind)
+/// <param name="Rate">For a tax line, the percentage charged.</param>
+public sealed record SalesLineResponse(
+    int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount, SalesLineKind Kind, bool Taxable = false, Guid? TaxRateId = null)
 {
-    public static SalesLineResponse From(SalesLine l) => new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind);
+    public static SalesLineResponse From(SalesLine l) => new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind, l.Taxable, l.TaxRateId);
 }
 
 public sealed record InvoiceResponse(
@@ -55,12 +61,16 @@ public sealed record InvoiceResponse(
     decimal EarlyPaymentDiscountPercent,
     Guid? EstimateId,
     Guid? RecurringInvoiceId,
-    DateTimeOffset? LastEmailedAt)
+    DateTimeOffset? LastEmailedAt,
+    Guid? TaxCodeId = null,
+    string? TaxExemption = null,
+    decimal Subtotal = 0m,
+    decimal TaxTotal = 0m)
 {
     public static InvoiceResponse From(Invoice i) => new(
         i.Id, i.Number, i.CustomerId, i.Date, i.DueDate, i.Memo, i.Total, i.AmountPaid, i.Balance, i.Status, i.JournalEntryId,
         i.Lines.Select(SalesLineResponse.From).ToList(), i.EarlyPaymentDiscountDate, i.EarlyPaymentDiscountPercent, i.EstimateId,
-        i.RecurringInvoiceId, i.LastEmailedAt);
+        i.RecurringInvoiceId, i.LastEmailedAt, i.TaxCodeId, i.TaxExemption, i.Subtotal, i.TaxTotal);
 }
 
 public sealed record PaymentResponse(
@@ -98,11 +108,15 @@ public sealed record SalesReceiptResponse(
     DocumentStatus Status,
     Guid JournalEntryId,
     IReadOnlyList<SalesLineResponse> Lines,
-    Guid? DepositId)
+    Guid? DepositId,
+    Guid? TaxCodeId = null,
+    string? TaxExemption = null,
+    decimal Subtotal = 0m,
+    decimal TaxTotal = 0m)
 {
     public static SalesReceiptResponse From(SalesReceipt r) => new(
         r.Id, r.Number, r.CustomerId, r.Date, r.DepositAccountId, r.Reference, r.Memo, r.Total, r.Status, r.JournalEntryId,
-        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId);
+        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal);
 }
 
 public sealed record SetActiveRequest(bool Active);

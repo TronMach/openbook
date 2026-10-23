@@ -164,6 +164,7 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
         var description = cols.Find("description", "salesdescription", "salesdesc");
         var price = cols.Find("price", "rate", "salesprice", "unitprice", "salespricerate");
         var account = cols.Find("incomeaccount", "account", "incomeaccountname");
+        var taxable = cols.Find("taxable", "salestax", "tax", "taxcode", "salestaxcode");
 
         var chart = await accounts.GetChartAsync(ct);
         Account? defaultAccount = defaultIncomeAccountId is { } d ? chart.Get(d) : null;
@@ -192,7 +193,8 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
                     F(type) is { } t ? ParseType(t) : ItemType.Service,
                     incomeAccount.Id,
                     F(price) is { } p ? ParseRate(p) : 0m,
-                    F(description));
+                    F(description),
+                    F(taxable) is not { } tx || ParseTaxable(tx));
 
                 if (itemName is not null && existing.Contains(itemName.Trim()))
                 {
@@ -214,6 +216,14 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
 
         return (SalesImport.Result(rows, r => r.Status), created);
     }
+
+    /// <summary>"Yes"/"No", "Tax"/"Non" (QuickBooks' sales tax codes), "true"/"false" and the like.</summary>
+    internal static bool ParseTaxable(string text) => Csv.Normalize(text) switch
+    {
+        "yes" or "y" or "true" or "1" or "tax" or "taxable" or "t" => true,
+        "no" or "n" or "false" or "0" or "non" or "nontaxable" or "exempt" or "e" => false,
+        _ => throw new DomainException("import.taxable_invalid", $"'{text}' isn't a taxable setting; use Yes or No."),
+    };
 
     internal static ItemType ParseType(string text) => Csv.Normalize(text) switch
     {

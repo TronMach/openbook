@@ -2,6 +2,7 @@ using OpenBook.Domain.Banking;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
+using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Web.Components;
 
@@ -20,6 +21,7 @@ public static class Links
         (BankDeposit.Source, { } id) => $"/banking/deposits/{id}",
         (VendorCredit.Source, { } id) => $"/purchases/vendor-credits/{id}",
         (VendorRefund.Source, { } id) => $"/purchases/vendor-refunds/{id}",
+        (SalesTaxPayment.Source, { } id) => $"/sales-tax/payments/{id}",
         (BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource, { } id) => $"/banking/transactions/{id}",
         _ => $"/journal/{journalEntryId}",
     };
@@ -49,6 +51,10 @@ public static class Links
         "vendor_refund" => $"/purchases/vendor-refunds/{id}",
         "recurring_bill" => $"/purchases/recurring/{id}",
         "bank_rule" => $"/banking/rules/{id}",
+        "tax_agency" => $"/sales-tax/agencies/{id}",
+        "tax_rate" => $"/sales-tax/rates/{id}",
+        "tax_code" => $"/sales-tax/codes/{id}",
+        "sales_tax_payment" => $"/sales-tax/payments/{id}",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
         "company" => "/settings",
@@ -69,6 +75,7 @@ public static class Links
         BankDeposit.Source => "bank deposit",
         VendorCredit.Source => "vendor credit",
         VendorRefund.Source => "vendor refund",
+        SalesTaxPayment.Source => "sales tax payment",
         BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource => "bank transaction",
         _ when JournalEntry.IsJournalSource(source) => null,
         _ => "document",

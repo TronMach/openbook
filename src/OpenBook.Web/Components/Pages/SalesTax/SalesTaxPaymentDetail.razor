@@ -1,0 +1,118 @@
+@page "/sales-tax/payments/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject SalesTaxPaymentService Payments
+@inject SalesTaxService Taxes
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Sales tax payment · OpenBook</PageTitle>
+
+@if (_payment is null)
+{
+    <div class="card"><p>That payment doesn't exist. <a href="/sales-tax">Back to sales tax</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Sales tax payment to @_agency?.Name</h1>
+        @if (_payment.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        <a class="button secondary" href="/audit?entityId=@_payment.Id">History</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Agency</dt><dd><a href="/sales-tax/agencies/@_payment.AgencyId">@_agency?.Name</a></dd>
+            <dt>Date</dt><dd>@Labels.Date(_payment.Date)</dd>
+            @if (_payment.PeriodEnd is { } end) { <dt>For the period ending</dt><dd>@Labels.Date(end)</dd> }
+            <dt>Paid</dt><dd>@Labels.Amount(_payment.Amount) from <a href="/banking/@_payment.PaymentAccountId">@_chart.FullName(_payment.PaymentAccountId)</a></dd>
+            @if (_payment.Adjustment != 0m)
+            {
+                <dt>@(_payment.Adjustment > 0m ? "Discount or credit" : "Penalty or interest")</dt>
+                <dd>@Labels.Amount(Math.Abs(_payment.Adjustment)) · @(_payment.AdjustmentAccountId is { } a ? _chart.FullName(a) : "")</dd>
+            }
+            <dt>Tax settled</dt><dd>@Labels.Amount(_payment.LiabilitySettled)</dd>
+            @if (_payment.Reference is not null) { <dt>Check / confirmation</dt><dd>@_payment.Reference</dd> }
+            @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_payment.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    @if (_payment.Status == DocumentStatus.Posted)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this payment</h2>
+            <p class="muted">Voiding reverses the payment, so the tax is owed again. Payments already reconciled at the bank can't be voided.</p>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void payment</button>
+            </EditForm>
+        </div>
+    }
+
+    <Attachments EntityType="sales_tax_payment" EntityId="_payment.Id" />
+</div>
+
+@code {
+    private SalesTaxPayment? _payment;
+    private TaxAgency? _agency;
+    private ChartOfAccounts _chart = new([]);
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _payment = await Payments.GetAsync(Id);
+        if (_payment is null)
+            return;
+        _agency = await Taxes.GetAgencyAsync(_payment.AgencyId);
+        _chart = await AccountService.GetChartAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Payments.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/sales-tax/payments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the payment is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

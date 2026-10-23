@@ -10,6 +10,7 @@ using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
+using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Infrastructure.Persistence;
 
@@ -52,6 +53,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<RecurringBill> RecurringBills => Set<RecurringBill>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<AttachmentContent> AttachmentContents => Set<AttachmentContent>();
+    public DbSet<TaxAgency> TaxAgencies => Set<TaxAgency>();
+    public DbSet<TaxRate> TaxRates => Set<TaxRate>();
+    public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
+    public DbSet<SalesTaxPayment> SalesTaxPayments => Set<SalesTaxPayment>();
 
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
@@ -245,6 +250,67 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<BankRule>().WithMany().HasForeignKey(i => i.RuleId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<TaxAgency>(b =>
+        {
+            b.ToTable("TaxAgencies");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Name).HasMaxLength(100);
+            b.HasIndex(a => a.Name).IsUnique();
+            b.Property(a => a.RegistrationNumber).HasMaxLength(50);
+            b.Property(a => a.FilingFrequency).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(a => a.LiabilityAccountId).IsUnique();
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.LiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TaxRate>(b =>
+        {
+            b.ToTable("TaxRates");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(100);
+            b.HasIndex(r => r.Name).IsUnique();
+            b.Property(r => r.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+            b.HasOne<TaxAgency>().WithMany().HasForeignKey(r => r.AgencyId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TaxCode>(b =>
+        {
+            b.ToTable("TaxCodes");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Name).HasMaxLength(100);
+            b.HasIndex(c => c.Name).IsUnique();
+            b.Property(c => c.Description).HasMaxLength(500);
+            b.Ignore(c => c.RateIds);
+            b.Ignore(c => c.IsCombined);
+            b.OwnsMany(c => c.Rates, r =>
+            {
+                r.ToTable("TaxCodeRates");
+                r.WithOwner().HasForeignKey("TaxCodeId");
+                r.HasKey("TaxCodeId", nameof(TaxCodeRate.Position));
+                r.HasIndex(x => x.TaxRateId);
+                r.HasOne<TaxRate>().WithMany().HasForeignKey(x => x.TaxRateId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(c => c.Rates).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<SalesTaxPayment>(b =>
+        {
+            b.ToTable("SalesTaxPayments");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(p => p.Adjustment).HasColumnName("AdjustmentMinor").HasConversion(MinorUnits);
+            b.Property(p => p.Reference).HasMaxLength(30);
+            b.Property(p => p.Memo).HasMaxLength(1000);
+            b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(p => p.LiabilitySettled);
+            b.HasIndex(p => new { p.AgencyId, p.Date });
+            b.HasIndex(p => p.JournalEntryId).IsUnique();
+            b.HasOne<TaxAgency>().WithMany().HasForeignKey(p => p.AgencyId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.PaymentAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.LiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.AdjustmentAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<BankRule>(b =>
         {
             b.ToTable("BankRules");
@@ -337,6 +403,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Notes).HasMaxLength(2000);
             b.Property(c => c.EarlyPaymentDiscountPercent).HasColumnName("EarlyPaymentDiscountPercentTenThousandths").HasConversion(TenThousandths);
             b.Ignore(c => c.Terms);
+            b.HasOne<TaxCode>().WithMany().HasForeignKey(c => c.TaxCodeId).OnDelete(DeleteBehavior.Restrict);
+            b.Property(c => c.ExemptionCertificate).HasMaxLength(50);
+            b.Property(c => c.ExemptionReason).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<Item>(b =>
@@ -364,11 +433,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
+            l.HasOne<TaxRate>().WithMany().HasForeignKey(x => x.TaxRateId).OnDelete(DeleteBehavior.Restrict);
+        }
+
+        void TaxedDocument<TDocument>(EntityTypeBuilder<TDocument> b)
+            where TDocument : class
+        {
+            b.HasOne<TaxCode>().WithMany().HasForeignKey("TaxCodeId").OnDelete(DeleteBehavior.Restrict);
+            b.Property<string?>("TaxExemption").HasMaxLength(200);
+            b.Ignore("TaxTotal");
+            b.Ignore("Subtotal");
         }
 
         modelBuilder.Entity<Invoice>(b =>
         {
             b.ToTable("Invoices");
+            TaxedDocument(b);
             b.HasKey(i => i.Id);
             b.Property(i => i.Number).HasMaxLength(20);
             b.HasIndex(i => i.Number).IsUnique();
@@ -393,6 +473,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         modelBuilder.Entity<SalesReceipt>(b =>
         {
             b.ToTable("SalesReceipts");
+            TaxedDocument(b);
             b.HasKey(r => r.Id);
             b.Property(r => r.Number).HasMaxLength(20);
             b.HasIndex(r => r.Number).IsUnique();
@@ -445,6 +526,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         modelBuilder.Entity<Estimate>(b =>
         {
             b.ToTable("Estimates");
+            TaxedDocument(b);
             b.HasKey(e => e.Id);
             b.Property(e => e.Number).HasMaxLength(20);
             b.HasIndex(e => e.Number).IsUnique();
@@ -461,6 +543,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         modelBuilder.Entity<CreditMemo>(b =>
         {
             b.ToTable("CreditMemos");
+            TaxedDocument(b);
             b.HasKey(c => c.Id);
             b.Property(c => c.Number).HasMaxLength(20);
             b.HasIndex(c => c.Number).IsUnique();

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
@@ -7,7 +8,7 @@ namespace OpenBook.Application.Sales;
 
 public sealed record CustomerSummary(Customer Customer, decimal Balance, int OpenInvoices, decimal Overdue);
 
-public sealed class CustomerService(ISalesStore store, IClock clock, ICurrentUser user)
+public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "customer";
 
@@ -33,6 +34,7 @@ public sealed class CustomerService(ISalesStore store, IClock clock, ICurrentUse
     {
         ArgumentNullException.ThrowIfNull(details);
         await EnsureUniqueAsync(details.DisplayName, except: null, ct);
+        await CheckTaxCodeAsync(details.TaxCodeId, current: null, ct);
         var customer = Customer.Create(details);
         store.Add(customer);
         store.Add(Audit(AuditAction.Created, customer, before: null));
@@ -45,6 +47,7 @@ public sealed class CustomerService(ISalesStore store, IClock clock, ICurrentUse
         ArgumentNullException.ThrowIfNull(details);
         var customer = await store.GetCustomerAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         await EnsureUniqueAsync(details.DisplayName, except: id, ct);
+        await CheckTaxCodeAsync(details.TaxCodeId, customer.TaxCodeId, ct);
         var before = Snapshot(customer);
         customer.Update(details);
         store.Add(Audit(AuditAction.Updated, customer, before));
@@ -80,6 +83,16 @@ public sealed class CustomerService(ISalesStore store, IClock clock, ICurrentUse
             throw new DomainException("customer.name_taken", $"There's already a customer named '{normalized}'.");
     }
 
+    /// <summary>A new default tax code must exist and be active; keeping an inactive one is allowed.</summary>
+    private async Task CheckTaxCodeAsync(Guid? taxCodeId, Guid? current, CancellationToken ct)
+    {
+        if (taxCodeId is not { } id || id == Guid.Empty || id == current)
+            return;
+        var code = await taxes.GetCodeAsync(id, ct) ?? throw new EntityNotFoundException("tax_code", id);
+        if (!code.IsActive)
+            throw new DomainException("tax.code_inactive", $"Tax code '{code.Name}' is inactive.");
+    }
+
     private static string Snapshot(Customer c) => JsonSerializer.Serialize(new
     {
         c.DisplayName,
@@ -90,6 +103,10 @@ public sealed class CustomerService(ISalesStore store, IClock clock, ICurrentUse
         c.ShippingAddress,
         c.PaymentTermsDays,
         c.Notes,
+        c.TaxCodeId,
+        c.ExemptionCertificate,
+        ExemptionReason = c.ExemptionReason?.ToString(),
+        c.ExemptionExpiresOn,
         c.IsActive,
     });
 }

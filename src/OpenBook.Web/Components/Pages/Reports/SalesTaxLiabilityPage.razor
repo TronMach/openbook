@@ -1,0 +1,113 @@
+@page "/reports/sales-tax"
+@using OpenBook.Application.Reporting
+@inject SalesTaxReports Reports
+@inject CompanySettingsService Settings
+
+<PageTitle>Sales tax liability · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <ReportFilter Action="/reports/sales-tax" Query="_query" Basis="_query.Basis" ShowBasis="false" />
+    </div>
+
+    <div class="report-heading">
+        <h1>Sales tax liability</h1>
+        <p>@_companyName</p>
+        <p>@_query.Describe() · Accrual basis</p>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    else if (_report is not null)
+    {
+        @if (_report.Agencies.Count == 0)
+        {
+            <p class="muted">No tax agencies yet. <a href="/sales-tax">Set up sales tax</a>.</p>
+        }
+        <table class="data statement">
+            <thead>
+                <tr>
+                    <th>Agency and rate</th>
+                    <th class="num">Total sales</th>
+                    <th class="num">Non-taxable</th>
+                    <th class="num">Exempt</th>
+                    <th class="num">Taxable</th>
+                    <th class="num">Rate</th>
+                    <th class="num">Tax</th>
+                </tr>
+            </thead>
+            @foreach (var agency in _report.Agencies)
+            {
+                <tbody>
+                    <tr class="section-heading"><td colspan="7"><a href="/sales-tax/agencies/@agency.Agency.Id">@agency.Agency.Name</a></td></tr>
+                    @foreach (var row in agency.Rates)
+                    {
+                        <tr>
+                            <td class="indent-1">@row.RateName</td>
+                            <td class="num">@Labels.Amount(row.TotalSales)</td>
+                            <td class="num">@Labels.AmountOrBlank(row.NonTaxable)</td>
+                            <td class="num">@Labels.AmountOrBlank(row.Exempt)</td>
+                            <td class="num">@Labels.Amount(row.Taxable)</td>
+                            <td class="num">@Labels.Percent(row.Percent)</td>
+                            <td class="num">@Labels.Amount(row.Tax)</td>
+                        </tr>
+                    }
+                    @if (agency.Rates.Count == 0)
+                    {
+                        <tr><td class="indent-1 muted" colspan="7">No sales taxed in this period.</td></tr>
+                    }
+                    <tr class="subtotal"><td colspan="6">Tax charged</td><td class="num">@Labels.Amount(agency.Tax)</td></tr>
+                    <tr><td colspan="6" class="indent-1">Owed at the start of the period</td><td class="num">@Labels.Amount(agency.OwedAtStart)</td></tr>
+                    <tr><td colspan="6" class="indent-1">Paid in the period (incl. adjustments)</td><td class="num">@Labels.Amount(-agency.Paid)</td></tr>
+                    <tr class="grand-total">
+                        <td colspan="6">
+                            Owed at @Labels.Date(_report.To)
+                            @if (agency.OwedAtEnd > 0m)
+                            {
+                                <a class="no-print" href="/sales-tax/pay?agency=@agency.Agency.Id"> · Pay</a>
+                            }
+                        </td>
+                        <td class="num"><a href="/reports/general-ledger?accountId=@agency.Agency.LiabilityAccountId&amp;@_query.ToQueryString()">@Labels.Amount(agency.OwedAtEnd)</a></td>
+                    </tr>
+                </tbody>
+            }
+        </table>
+        @if (_report.UntaxedSales != 0m)
+        {
+            <p>Sales with no tax code: @Labels.Amount(_report.UntaxedSales)</p>
+        }
+        <p class="hint">
+            From invoices, sales receipts and credit memos (subtracted) dated in the period; sales are before tax and after discounts,
+            and each sale counts on every rate of its tax code. Owed figures are the agency's account in the books, so they include any
+            journal entries to it. Check the figures against your return before filing.
+        </p>
+    }
+</div>
+
+@code {
+    private TaxLiabilityReport? _report;
+    private ReportQuery _query = null!;
+    private string? _companyName;
+    private string? _error;
+
+    [SupplyParameterFromQuery] private string? Preset { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        _companyName = company.Name;
+        _query = ReportQuery.From(company, Preset, From, To, null, DatePreset.LastQuarter);
+        try
+        {
+            _report = await Reports.LiabilityAsync(_query.Range.From ?? DateRanges.Beginning, _query.Range.To);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

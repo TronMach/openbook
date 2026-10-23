@@ -45,6 +45,19 @@ public sealed class CreditMemo
     public string? Memo { get; private set; }
 
     public decimal Total { get; private set; }
+
+    /// <summary>The tax code the document was taxed under; null for no sales tax.</summary>
+    public Guid? TaxCodeId { get; private set; }
+
+    /// <summary>The customer's exemption when the document was made ("Resale, certificate …"); its tax lines are then zero.</summary>
+    public string? TaxExemption { get; private set; }
+
+    /// <summary>The sales tax lines' total.</summary>
+    public decimal TaxTotal => _lines.Where(l => l.Kind == SalesLineKind.Tax).Sum(l => l.Amount);
+
+    /// <summary>The total before sales tax.</summary>
+    public decimal Subtotal => Total - TaxTotal;
+
     public decimal AmountRefunded { get; private set; }
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
@@ -67,7 +80,9 @@ public sealed class CreditMemo
         IReadOnlyList<SalesLine> lines,
         Guid journalEntryId,
         DateTimeOffset createdAt,
-        string? memo = null)
+        string? memo = null,
+        Guid? taxCodeId = null,
+        string? taxExemption = null)
     {
         var credit = new CreditMemo
         {
@@ -77,6 +92,8 @@ public sealed class CreditMemo
             ReceivableAccountId = receivableAccountId,
             Date = date,
             Memo = Text.Optional(memo, 1000, "creditmemo.memo_too_long", "Message"),
+            TaxCodeId = taxCodeId,
+            TaxExemption = taxCodeId is null ? null : taxExemption,
             Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),

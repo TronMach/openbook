@@ -31,6 +31,18 @@ public sealed class Customer
     public PaymentTerms Terms => new(PaymentTermsDays, EarlyPaymentDiscountPercent, EarlyPaymentDiscountDays);
 
     public string? Notes { get; private set; }
+
+    /// <summary>The tax code new sales documents for this customer start with; null for none.</summary>
+    public Guid? TaxCodeId { get; private set; }
+
+    /// <summary>The customer's sales tax exemption certificate number; null when they aren't exempt.</summary>
+    public string? ExemptionCertificate { get; private set; }
+
+    public ExemptionReason? ExemptionReason { get; private set; }
+
+    /// <summary>Last day the certificate is valid; null when it doesn't expire.</summary>
+    public DateOnly? ExemptionExpiresOn { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public static Customer Create(CustomerDetails details)
@@ -56,7 +68,35 @@ public sealed class Customer
         PaymentTermsDays = terms.DueDays;
         EarlyPaymentDiscountPercent = terms.DiscountPercent;
         EarlyPaymentDiscountDays = terms.DiscountDays;
+        TaxCodeId = details.TaxCodeId == Guid.Empty ? null : details.TaxCodeId;
+
+        ExemptionCertificate = Text.Optional(details.ExemptionCertificate, 50, "customer.exemption_too_long", "Exemption certificate");
+        if (ExemptionCertificate is null)
+        {
+            if (details.ExemptionReason is not null || details.ExemptionExpiresOn is not null)
+                throw new DomainException("customer.exemption_number_required", "Enter the exemption certificate number.");
+            ExemptionReason = null;
+            ExemptionExpiresOn = null;
+        }
+        else
+        {
+            ExemptionReason = details.ExemptionReason is { } reason && Enum.IsDefined(reason)
+                ? reason
+                : throw new DomainException("customer.exemption_reason_required", "Choose why the customer is exempt.");
+            ExemptionExpiresOn = details.ExemptionExpiresOn;
+        }
     }
+
+    /// <summary>
+    /// What makes sales on <paramref name="date"/> tax exempt ("Resale, certificate 12-3456"), or null if the
+    /// customer has no certificate or it has expired by then.
+    /// </summary>
+    public string? ExemptionOn(DateOnly date) =>
+        ExemptionCertificate is not null && (ExemptionExpiresOn is null || date <= ExemptionExpiresOn)
+            ? $"{ExemptionReasons.Label(ExemptionReason!.Value)}, certificate {ExemptionCertificate}"
+            : null;
+
+    public bool ExemptionExpired(DateOnly today) => ExemptionCertificate is not null && ExemptionExpiresOn is { } e && e < today;
 
     public void Deactivate() => IsActive = false;
 
@@ -79,7 +119,35 @@ public sealed record CustomerDetails(
     int PaymentTermsDays = 30,
     string? Notes = null,
     decimal EarlyPaymentDiscountPercent = 0m,
-    int EarlyPaymentDiscountDays = 0);
+    int EarlyPaymentDiscountDays = 0,
+    Guid? TaxCodeId = null,
+    string? ExemptionCertificate = null,
+    ExemptionReason? ExemptionReason = null,
+    DateOnly? ExemptionExpiresOn = null);
+
+/// <summary>Why a customer doesn't pay sales tax, as exemption certificates state it.</summary>
+public enum ExemptionReason
+{
+    Resale,
+    Nonprofit,
+    Government,
+    Manufacturing,
+    Agriculture,
+    Other,
+}
+
+public static class ExemptionReasons
+{
+    public static string Label(ExemptionReason reason) => reason switch
+    {
+        ExemptionReason.Resale => "Resale",
+        ExemptionReason.Nonprofit => "Nonprofit organization",
+        ExemptionReason.Government => "Government",
+        ExemptionReason.Manufacturing => "Manufacturing",
+        ExemptionReason.Agriculture => "Agriculture",
+        _ => "Other",
+    };
+}
 
 /// <summary>When payment is due, with an optional discount for paying early ("2% 10, Net 30").</summary>
 public sealed record PaymentTerms(int DueDays, decimal DiscountPercent = 0m, int DiscountDays = 0)

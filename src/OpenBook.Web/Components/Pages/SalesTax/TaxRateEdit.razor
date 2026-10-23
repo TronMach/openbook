@@ -1,0 +1,156 @@
+@page "/sales-tax/rates/new"
+@page "/sales-tax/rates/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject SalesTaxService Taxes
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New tax rate" : "Tax rate") · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New tax rate" : _rate?.Name ?? "Tax rate")</h1>
+        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        @if (Id is { } id)
+        {
+            <a class="button secondary" href="/audit?entityId=@id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (Id is not null && _rate is null)
+    {
+        <p>That rate doesn't exist. <a href="/sales-tax">Back to sales tax</a>.</p>
+    }
+    else
+    {
+        <EditForm Model="Input" FormName="rate" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" placeholder="e.g. Texas state" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="percent">Rate (%)</label>
+                    <InputNumber id="percent" class="short" @bind-Value="Input.Percent" step="any" min="0" max="100" />
+                    <ValidationMessage For="() => Input.Percent" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="agency">Paid to</label>
+                <InputSelect id="agency" @bind-Value="Input.AgencyId">
+                    <option value="">Choose an agency…</option>
+                    @foreach (var a in _agencies.Where(a => a.IsActive || a.Id == Input.AgencyId))
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Input.AgencyId" />
+            </div>
+            @if (_rate is null)
+            {
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.CreateCode" />
+                    <span>Also make a tax code that charges just this rate</span>
+                </label>
+            }
+            else
+            {
+                <p class="hint">A new percentage applies to documents from now on; existing ones keep the tax they were charged.</p>
+            }
+            <div class="actions">
+                <button type="submit">Save rate</button>
+            </div>
+        </EditForm>
+
+        @if (_rate is not null)
+        {
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_rate.IsActive ? "Make inactive" : "Make active")</button>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private TaxRate? _rate;
+    private IReadOnlyList<TaxAgency> _agencies = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "agency")]
+    private Guid? PresetAgency { get; set; }
+
+    [SupplyParameterFromForm(FormName = "rate")]
+    private RateModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _agencies = await Taxes.ListAgenciesAsync();
+        if (Id is { } id)
+        {
+            _rate = await Taxes.GetRateAsync(id);
+            if (_rate is null)
+                return;
+            Input ??= new RateModel { Name = _rate.Name, Percent = _rate.Percent, AgencyId = _rate.AgencyId };
+        }
+        else
+        {
+            Input ??= new RateModel { AgencyId = PresetAgency ?? (_agencies.Count(a => a.IsActive) == 1 ? _agencies.First(a => a.IsActive).Id : null) };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new TaxRateDetails(Input.Name, Input.AgencyId ?? Guid.Empty, Input.Percent ?? 0m);
+            if (Id is { } id)
+                await Taxes.UpdateRateAsync(id, details);
+            else
+                await Taxes.CreateRateAsync(details, Input.CreateCode);
+            Navigation.NavigateTo("/sales-tax");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Taxes.SetRateActiveAsync(_rate!.Id, !_rate.IsActive);
+            Navigation.NavigateTo($"/sales-tax/rates/{_rate.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class RateModel
+    {
+        [Required(ErrorMessage = "Give the rate a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        [Required(ErrorMessage = "Enter the rate.")]
+        [Range(0, 100, ErrorMessage = "A rate is a percentage from 0 to 100.")]
+        public decimal? Percent { get; set; }
+
+        [Required(ErrorMessage = "Choose the agency this rate is paid to.")]
+        public Guid? AgencyId { get; set; }
+
+        public bool CreateCode { get; set; } = true;
+    }
+}

@@ -4,6 +4,7 @@ using OpenBook.Application.Sales;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Sales;
+using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Application.Forms;
 
@@ -65,7 +66,8 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             ("Terms", new PaymentTerms(invoice.DueDate.DayNumber - invoice.Date.DayNumber, invoice.EarlyPaymentDiscountPercent,
                 invoice.EarlyPaymentDiscountDate is { } d ? d.DayNumber - invoice.Date.DayNumber : 0).Label),
         };
-        var totals = new List<FormTotal> { new("Total", invoice.Total) };
+        var totals = TaxTotals(invoice.Lines, invoice.TaxCodeId, invoice.TaxExemption);
+        totals.Add(new FormTotal("Total", invoice.Total));
         if (invoice.AmountPaid > 0m)
             totals.Add(new FormTotal("Paid and credited", -invoice.AmountPaid));
         totals.Add(new FormTotal("Balance due", invoice.Balance, Emphasis: true));
@@ -80,14 +82,16 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         var facts = new List<(string, string)> { ("Date", D(estimate.Date)) };
         if (estimate.ExpirationDate is { } expires)
             facts.Add(("Valid until", D(expires)));
-        return (Form(company, customer, "Estimate", estimate.Number, facts, estimate.Lines, [new FormTotal("Total", estimate.Total, Emphasis: true)], estimate.Memo), customer.Id);
+        return (Form(company, customer, "Estimate", estimate.Number, facts, estimate.Lines,
+            [.. TaxTotals(estimate.Lines, estimate.TaxCodeId, estimate.TaxExemption), new FormTotal("Total", estimate.Total, Emphasis: true)], estimate.Memo), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> CreditMemoAsync(Company company, Guid id, CancellationToken ct)
     {
         var credit = await store.GetCreditMemoAsync(id, ct) ?? throw new EntityNotFoundException("credit_memo", id);
         var customer = await RequiredCustomerAsync(credit.CustomerId, ct);
-        var totals = new List<FormTotal> { new("Total credit", credit.Total) };
+        var totals = TaxTotals(credit.Lines, credit.TaxCodeId, credit.TaxExemption);
+        totals.Add(new FormTotal("Total credit", credit.Total));
         if (credit.Total != credit.Balance)
             totals.Add(new FormTotal("Used", credit.Balance - credit.Total));
         totals.Add(new FormTotal("Credit remaining", credit.Balance, Emphasis: true));
@@ -103,7 +107,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             facts.Add(("Reference", receipt.Reference));
         var party = customer is null ? new FormParty("Cash sale") : CustomerParty(customer);
         var form = new SalesForm("Sales receipt", receipt.Number, CompanyParty(company), party, facts, Lines(receipt.Lines),
-            [new FormTotal("Total paid", receipt.Total, Emphasis: true)], receipt.Memo, company.HomeCurrency.Code, Style(company));
+            [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)], receipt.Memo, company.HomeCurrency.Code, Style(company));
         return (form, customer?.Id ?? Guid.Empty);
     }
 
@@ -112,7 +116,21 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         IEnumerable<SalesLine> lines, IReadOnlyList<FormTotal> totals, string? message) =>
         new(title, number, CompanyParty(company), CustomerParty(customer), facts, Lines(lines), totals, message, company.HomeCurrency.Code, Style(company));
 
+    /// <summary>Subtotal and one row per tax line, ahead of the total; nothing for an untaxed document.</summary>
+    public static List<FormTotal> TaxTotals(IReadOnlyList<SalesLine> lines, Guid? taxCodeId, string? exemption)
+    {
+        if (taxCodeId is null)
+            return [];
+        var totals = new List<FormTotal> { new("Subtotal", TaxCalculator.SalesAmount(lines)) };
+        if (exemption is not null)
+            totals.Add(new FormTotal($"Sales tax: exempt ({exemption})", 0m));
+        else
+            totals.AddRange(lines.Where(l => l.Kind == SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => new FormTotal(l.Description ?? "Sales tax", l.Amount)));
+        return totals;
+    }
+
     private static List<FormLine> Lines(IEnumerable<SalesLine> lines) => lines
+        .Where(l => l.Kind != SalesLineKind.Tax)
         .OrderBy(l => l.LineNumber)
         .Select(l => l.Kind switch
         {

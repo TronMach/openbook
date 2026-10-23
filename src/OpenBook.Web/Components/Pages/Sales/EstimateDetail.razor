@@ -97,7 +97,8 @@
     [SupplyParameterFromForm(FormName = "status")]
     private EstimateStatus? NewStatus { get; set; }
 
-    private List<(string, decimal)> Totals => [("Total", _estimate!.Total)];
+    private List<(string, decimal)> Totals =>
+        [.. FormService.TaxTotals(_estimate!.Lines, _estimate.TaxCodeId, _estimate.TaxExemption).Select(t => (t.Label, t.Amount)), ("Total", _estimate.Total)];
 
     private List<(string, string)> Facts
     {

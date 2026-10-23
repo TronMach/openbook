@@ -31,6 +31,19 @@ public sealed class Estimate
     public string? Memo { get; private set; }
 
     public decimal Total { get; private set; }
+
+    /// <summary>The tax code the document was taxed under; null for no sales tax.</summary>
+    public Guid? TaxCodeId { get; private set; }
+
+    /// <summary>The customer's exemption when the document was made ("Resale, certificate …"); its tax lines are then zero.</summary>
+    public string? TaxExemption { get; private set; }
+
+    /// <summary>The sales tax lines' total.</summary>
+    public decimal TaxTotal => _lines.Where(l => l.Kind == SalesLineKind.Tax).Sum(l => l.Amount);
+
+    /// <summary>The total before sales tax.</summary>
+    public decimal Subtotal => Total - TaxTotal;
+
     public EstimateStatus Status { get; private set; }
 
     /// <summary>The invoice it became, once <see cref="EstimateStatus.Closed"/>.</summary>
@@ -45,7 +58,7 @@ public sealed class Estimate
 
     public static Estimate Create(
         Guid id, string number, Guid customerId, DateOnly date, DateOnly? expirationDate,
-        IReadOnlyList<SalesLine> lines, DateTimeOffset createdAt, string? memo = null)
+        IReadOnlyList<SalesLine> lines, DateTimeOffset createdAt, string? memo = null, Guid? taxCodeId = null, string? taxExemption = null)
     {
         var estimate = new Estimate
         {
@@ -54,11 +67,13 @@ public sealed class Estimate
             Status = EstimateStatus.Pending,
             CreatedAt = createdAt.ToUniversalTime(),
         };
-        estimate.Update(customerId, date, expirationDate, lines, memo);
+        estimate.Update(customerId, date, expirationDate, lines, memo, taxCodeId, taxExemption);
         return estimate;
     }
 
-    public void Update(Guid customerId, DateOnly date, DateOnly? expirationDate, IReadOnlyList<SalesLine> lines, string? memo)
+    public void Update(
+        Guid customerId, DateOnly date, DateOnly? expirationDate, IReadOnlyList<SalesLine> lines, string? memo,
+        Guid? taxCodeId = null, string? taxExemption = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         EnsureOpen();
@@ -72,6 +87,8 @@ public sealed class Estimate
         Date = date;
         ExpirationDate = expirationDate;
         Memo = Text.Optional(memo, 1000, "estimate.memo_too_long", "Message");
+        TaxCodeId = taxCodeId;
+        TaxExemption = taxCodeId is null ? null : taxExemption;
         _lines.Clear();
         _lines.AddRange(lines);
         Total = total;

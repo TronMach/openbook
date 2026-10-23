@@ -32,7 +32,7 @@ public sealed class AttachmentService(IAttachmentStore store, IClock clock, ICur
     public static readonly IReadOnlySet<string> EntityTypes = new HashSet<string>(StringComparer.Ordinal)
     {
         "invoice", "payment", "sales_receipt", "estimate", "credit_memo", "refund", "deposit",
-        "bill", "bill_payment", "vendor_credit", "vendor_refund",
+        "bill", "bill_payment", "vendor_credit", "vendor_refund", "sales_tax_payment",
         "bank_transaction", "journal_entry", "reconciliation", "customer", "vendor",
     };
 

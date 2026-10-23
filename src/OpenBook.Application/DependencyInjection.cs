@@ -10,6 +10,7 @@ using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Search;
 using OpenBook.Application.Sales;
+using OpenBook.Application.SalesTax;
 
 namespace OpenBook.Application;
 
@@ -50,6 +51,9 @@ public static class DependencyInjection
         services.AddScoped<InvoiceService>();
         services.AddScoped<PaymentService>();
         services.AddScoped<SalesReceiptService>();
+        services.AddScoped<SalesTaxService>();
+        services.AddScoped<SalesTaxPaymentService>();
+        services.AddScoped<SalesTaxReports>();
         services.AddScoped<CustomerImportService>();
         services.AddScoped<ItemImportService>();
         services.AddScoped<PurchaseAccounts>();

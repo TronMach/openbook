@@ -75,6 +75,7 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IClo
         i.Description,
         i.Rate,
         i.IncomeAccountId,
+        i.Taxable,
         i.IsActive,
     });
 }

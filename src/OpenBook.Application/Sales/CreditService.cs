@@ -7,12 +7,14 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
 
+/// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
 public sealed record CreateCreditMemoCommand(
     Guid CustomerId,
     DateOnly Date,
     IReadOnlyList<SalesLineDraft> Lines,
     string? Number = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? TaxCodeId = null);
 
 public enum CreditKind
 {
@@ -83,14 +85,14 @@ public sealed class CreditService(
         if ((await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("creditmemo.number_taken", $"Credit memo number {number} is already used.");
 
-        var lines = await lineBuilder.BuildAsync(command.Lines ?? [], ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
         var id = Guid.CreateVersion7();
         var memo = $"Credit memo {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
             new PostJournalEntryCommand(command.Date, CreditMemo.Postings(receivables.Id, lines, memo), memo, CreditMemo.Source, id), ct);
 
-        var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo);
+        var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo, taxCodeId, exemption);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
         await store.SaveChangesAsync(ct);
@@ -286,7 +288,9 @@ public sealed class CreditService(
         c.AmountRefunded,
         Status = c.Status.ToString(),
         c.Memo,
-        Lines = c.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
+        c.TaxCodeId,
+        c.TaxExemption,
+        Lines = c.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
         Applications = c.Applications.Select(a => new { a.InvoiceId, a.Amount, a.AppliedOn }),
     });
 

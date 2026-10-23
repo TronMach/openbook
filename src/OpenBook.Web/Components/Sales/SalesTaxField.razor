@@ -1,0 +1,45 @@
+@* The tax code picker on sales forms; hidden until the company has tax codes. *@
+
+@if (Choices.Count > 0 || Value is not null)
+{
+    <div class="field">
+        <label for="tax-code">Sales tax</label>
+        <select id="tax-code" value="@Value" @onchange="PickAsync">
+            <option value="">No sales tax</option>
+            @foreach (var c in Choices)
+            {
+                <option value="@c.Code.Id">@c.Code.Name (@Labels.Percent(c.CombinedPercent))</option>
+            }
+        </select>
+        @if (Exemption is not null)
+        {
+            <span class="hint">Exempt: @Exemption. Tax is charged at zero.</span>
+        }
+        else if (Expired)
+        {
+            <span class="hint warn">This customer's exemption certificate has expired, so tax is charged.</span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TaxCodeChoice> Choices { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    /// <summary>The customer's exemption on the document date, if any.</summary>
+    [Parameter]
+    public string? Exemption { get; set; }
+
+    /// <summary>The customer has a certificate, but it expired before the document date.</summary>
+    [Parameter]
+    public bool Expired { get; set; }
+
+    private Task PickAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+}

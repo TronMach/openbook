@@ -31,7 +31,7 @@
             <div class="row">
                 <div class="field">
                     <label for="customer">Customer</label>
-                    <select id="customer" @bind="_customerId">
+                    <select id="customer" @bind="_customerId" @bind:after="DefaultTaxCode">
                         <option value="">Choose a customer…</option>
                         @foreach (var c in _customers)
                         {
@@ -55,7 +55,9 @@
                 </div>
             </div>
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional, printed on the estimate)</span></label>
@@ -90,17 +92,34 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
+    private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
+    private Guid? _taxCodeId;
+
+    private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
+    private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
+    private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    /// <summary>Starts the document with the customer's tax code, when it can be charged.</summary>
+    private void DefaultTaxCode() =>
+        _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync() =>
+        Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+
     private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
 
     protected override async Task OnInitializedAsync()
     {
         Estimate? estimate;
+        _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _number, estimate) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<EstimateService>().SuggestNumberAsync(),
             Id is { } id ? await sp.GetRequiredService<EstimateService>().GetAsync(id) : null));
         _customerId = PresetCustomer;
+        DefaultTaxCode();
 
         if (Id is not null)
         {
@@ -115,7 +134,8 @@
             _date = estimate.Date;
             _expirationDate = estimate.ExpirationDate;
             _memo = estimate.Memo;
-            _lines = estimate.Lines.OrderBy(l => l.LineNumber).Select(l => SalesLineModel.From(l.ToDraft())).ToList();
+            _lines = SalesLine.Drafts(estimate.Lines).Select(SalesLineModel.From).ToList();
+            _taxCodeId = estimate.TaxCodeId;
         }
 
         _loaded = true;
@@ -127,7 +147,7 @@
         _error = null;
         try
         {
-            var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo);
+            var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo, _taxCodeId ?? Guid.Empty);
             var estimate = await Ops.RunAsync<EstimateService, Estimate>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
             Navigation.NavigateTo($"/sales/estimates/{estimate.Id}");
         }

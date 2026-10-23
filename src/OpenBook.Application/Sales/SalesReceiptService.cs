@@ -6,6 +6,7 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
 
+/// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
 public sealed record CreateSalesReceiptCommand(
     Guid? CustomerId,
     DateOnly Date,
@@ -13,7 +14,8 @@ public sealed record CreateSalesReceiptCommand(
     IReadOnlyList<SalesLineDraft> Lines,
     string? Number = null,
     string? Reference = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? TaxCodeId = null);
 
 public sealed class SalesReceiptService(
     ISalesStore store,
@@ -50,14 +52,14 @@ public sealed class SalesReceiptService(
         if ((await store.ListReceiptNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
-        var lines = await lineBuilder.BuildAsync(command.Lines, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
 
         var id = Guid.CreateVersion7();
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
             new PostJournalEntryCommand(command.Date, SalesLine.Postings(deposit.Id, lines, memo), memo, SalesReceipt.Source, id), ct);
 
-        var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo);
+        var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption);
         store.Add(receipt);
         store.Add(Audit(AuditAction.Created, receipt, before: null));
         await store.SaveChangesAsync(ct);
@@ -94,6 +96,8 @@ public sealed class SalesReceiptService(
         r.Memo,
         Status = r.Status.ToString(),
         r.DepositId,
-        Lines = r.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
+        r.TaxCodeId,
+        r.TaxExemption,
+        Lines = r.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
     });
 }

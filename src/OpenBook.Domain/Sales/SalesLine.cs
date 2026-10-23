@@ -14,6 +14,9 @@ public enum SalesLineKind
 
     /// <summary>Takes <see cref="SalesLineDraft.Rate"/> off the total.</summary>
     DiscountAmount,
+
+    /// <summary>Sales tax for one rate of the document's tax code, added after the other lines; never drafted.</summary>
+    Tax,
 }
 
 /// <summary>
@@ -21,7 +24,8 @@ public enum SalesLineKind
 /// income account; a line without an item is a note and must have no amount. Discount lines post to the
 /// "Discounts Given" account.
 /// </summary>
-public sealed record SalesLineDraft(Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item)
+/// <param name="Taxable">Whether sales tax applies to an item line; null takes the item's setting.</param>
+public sealed record SalesLineDraft(Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null)
 {
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 }
@@ -41,8 +45,17 @@ public sealed class SalesLine
     public decimal Rate { get; private set; }
     public decimal Amount { get; private set; }
 
-    /// <summary>Copied from the item when the line was created (the discounts account for a discount line); null for note lines.</summary>
+    /// <summary>
+    /// Where the line posts: copied from the item when the line was created, the discounts account for a
+    /// discount line, the agency's liability account for a tax line; null for note lines.
+    /// </summary>
     public Guid? IncomeAccountId { get; private set; }
+
+    /// <summary>Whether sales tax applies (item lines only).</summary>
+    public bool Taxable { get; private set; }
+
+    /// <summary>The rate a tax line charges; its <see cref="Rate"/> is that rate's percentage when the line was created.</summary>
+    public Guid? TaxRateId { get; private set; }
 
     /// <param name="item">The draft's item, already looked up; null for a note line.</param>
     public static SalesLine Create(int lineNumber, SalesLineDraft draft, Item? item)
@@ -50,6 +63,8 @@ public sealed class SalesLine
         ArgumentNullException.ThrowIfNull(draft);
         if (draft.IsDiscount)
             throw new DomainException("sales.discount_needs_context", "Discount lines are created with FromDrafts.");
+        if (draft.Kind == SalesLineKind.Tax)
+            throw new DomainException("sales.tax_line_drafted", "Sales tax lines are calculated, not entered.");
         var description = Text.Optional(draft.Description, 1000, "sales.line_description_too_long", "Line description");
         var quantity = ValidQuantity(draft.Quantity);
         var rate = ValidRate(draft.Rate);
@@ -79,8 +94,22 @@ public sealed class SalesLine
             Rate = rate,
             Amount = amount,
             IncomeAccountId = item?.IncomeAccountId,
+            Taxable = item is not null && (draft.Taxable ?? item.Taxable),
         };
     }
+
+    /// <summary>A sales tax line: <paramref name="amount"/> of tax at <paramref name="percent"/>, owed to the agency behind <paramref name="liabilityAccountId"/>.</summary>
+    public static SalesLine Tax(int lineNumber, Guid taxRateId, string description, decimal percent, decimal amount, Guid liabilityAccountId) => new()
+    {
+        LineNumber = lineNumber,
+        Kind = SalesLineKind.Tax,
+        Description = description,
+        Quantity = 1m,
+        Rate = percent,
+        Amount = amount,
+        IncomeAccountId = liabilityAccountId,
+        TaxRateId = taxRateId,
+    };
 
     public static decimal ValidRate(decimal rate) =>
         decimal.Round(rate, Precision) == rate
@@ -176,6 +205,16 @@ public sealed class SalesLine
         };
     }
 
-    /// <summary>The draft that would recreate this line (for copying an estimate or a recurring template).</summary>
-    public SalesLineDraft ToDraft() => new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind);
+    /// <summary>
+    /// The draft that would recreate this line (for copying an estimate or a recurring template). Tax lines
+    /// have none: they're recalculated.
+    /// </summary>
+    public SalesLineDraft ToDraft() =>
+        Kind == SalesLineKind.Tax
+            ? throw new InvalidOperationException("Tax lines are recalculated, not copied.")
+            : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null);
+
+    /// <summary>The drafts for a document's lines, leaving out its tax lines.</summary>
+    public static List<SalesLineDraft> Drafts(IEnumerable<SalesLine> lines) =>
+        lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList();
 }

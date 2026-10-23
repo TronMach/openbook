@@ -26,6 +26,18 @@ public sealed class Invoice
 
     public decimal Total { get; private set; }
 
+    /// <summary>The tax code the document was taxed under; null for no sales tax.</summary>
+    public Guid? TaxCodeId { get; private set; }
+
+    /// <summary>The customer's exemption when the document was made ("Resale, certificate …"); its tax lines are then zero.</summary>
+    public string? TaxExemption { get; private set; }
+
+    /// <summary>The sales tax lines' total.</summary>
+    public decimal TaxTotal => _lines.Where(l => l.Kind == SalesLineKind.Tax).Sum(l => l.Amount);
+
+    /// <summary>The total before sales tax.</summary>
+    public decimal Subtotal => Total - TaxTotal;
+
     /// <summary>Settled so far: payments, early payment discounts and credits applied.</summary>
     public decimal AmountPaid { get; private set; }
 
@@ -66,7 +78,9 @@ public sealed class Invoice
         string? memo = null,
         PaymentTerms? terms = null,
         Guid? estimateId = null,
-        Guid? recurringInvoiceId = null)
+        Guid? recurringInvoiceId = null,
+        Guid? taxCodeId = null,
+        string? taxExemption = null)
     {
         if (dueDate < date)
             throw new DomainException("invoice.due_before_date", "The due date can't be before the invoice date.");
@@ -87,6 +101,8 @@ public sealed class Invoice
             EarlyPaymentDiscountDate = terms?.DiscountDate(date),
             EstimateId = estimateId,
             RecurringInvoiceId = recurringInvoiceId,
+            TaxCodeId = taxCodeId,
+            TaxExemption = taxCodeId is null ? null : taxExemption,
         };
         invoice._lines.AddRange(lines);
         invoice.Total = invoice._lines.Sum(l => l.Amount);

@@ -61,7 +61,9 @@
                 </div>
             </div>
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional, printed on the invoice)</span></label>
@@ -95,6 +97,21 @@
     private bool _needsClosingPassword;
     private string? _closingPassword;
 
+    private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
+    private Guid? _taxCodeId;
+
+    private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
+    private Customer? TaxCustomer => _customer;
+    private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    /// <summary>Starts the document with the customer's tax code, when it can be charged.</summary>
+    private void DefaultTaxCode() =>
+        _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync() =>
+        Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
@@ -102,6 +119,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _number) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
@@ -119,6 +137,7 @@
         _customer = _customers.FirstOrDefault(c => c.Id == id);
         if (_customer is not null)
             _dueDate = _customer.DueDateFor(_date);
+        DefaultTaxCode();
     }
 
     private void ChangeDate(ChangeEventArgs e)
@@ -135,7 +154,7 @@
         _error = null;
         try
         {
-            var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo);
+            var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty);
             var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
         }

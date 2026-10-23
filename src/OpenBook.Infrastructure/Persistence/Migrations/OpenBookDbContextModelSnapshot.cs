@@ -1198,6 +1198,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaxExemption")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Total")
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
@@ -1211,6 +1218,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ReceivableAccountId");
+
+                    b.HasIndex("TaxCodeId");
 
                     b.HasIndex("CustomerId", "Date");
 
@@ -1247,6 +1256,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExemptionCertificate")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExemptionExpiresOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExemptionReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
@@ -1265,10 +1285,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DisplayName")
                         .IsUnique();
+
+                    b.HasIndex("TaxCodeId");
 
                     b.ToTable("Customers", (string)null);
                 });
@@ -1440,6 +1465,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaxExemption")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Total")
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
@@ -1448,6 +1480,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Number")
                         .IsUnique();
+
+                    b.HasIndex("TaxCodeId");
 
                     b.HasIndex("CustomerId", "Date");
 
@@ -1512,6 +1546,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaxExemption")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Total")
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
@@ -1529,6 +1570,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("ReceivableAccountId");
 
                     b.HasIndex("RecurringInvoiceId");
+
+                    b.HasIndex("TaxCodeId");
 
                     b.HasIndex("CustomerId", "Date");
 
@@ -1559,6 +1602,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long>("Rate")
                         .HasColumnType("INTEGER")
                         .HasColumnName("RateTenThousandths");
+
+                    b.Property<bool>("Taxable")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1680,6 +1726,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaxExemption")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Total")
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
@@ -1698,7 +1751,170 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("Number")
                         .IsUnique();
 
+                    b.HasIndex("TaxCodeId");
+
                     b.ToTable("SalesReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Adjustment")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AdjustmentMinor");
+
+                    b.Property<Guid?>("AdjustmentAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AgencyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PaymentAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PeriodEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdjustmentAccountId");
+
+                    b.HasIndex("JournalEntryId")
+                        .IsUnique();
+
+                    b.HasIndex("LiabilityAccountId");
+
+                    b.HasIndex("PaymentAccountId");
+
+                    b.HasIndex("AgencyId", "Date");
+
+                    b.ToTable("SalesTaxPayments", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.TaxAgency", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FilingFrequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiabilityAccountId")
+                        .IsUnique();
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TaxAgencies", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.TaxCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TaxCodes", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.TaxRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AgencyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Percent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PercentTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TaxRates", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Accounts.Account", b =>
@@ -2257,6 +2473,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("TaxCodeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.OwnsMany("OpenBook.Domain.Sales.CreditApplication", "Applications", b1 =>
                         {
                             b1.Property<Guid>("CreditMemoId")
@@ -2324,11 +2545,19 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
 
+                            b1.Property<Guid?>("TaxRateId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("Taxable")
+                                .HasColumnType("INTEGER");
+
                             b1.HasKey("CreditMemoId", "LineNumber");
 
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
+
+                            b1.HasIndex("TaxRateId");
 
                             b1.ToTable("CreditMemoLines", (string)null);
 
@@ -2344,11 +2573,24 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .WithMany()
                                 .HasForeignKey("ItemId")
                                 .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.SalesTax.TaxRate", null)
+                                .WithMany()
+                                .HasForeignKey("TaxRateId")
+                                .OnDelete(DeleteBehavior.Restrict);
                         });
 
                     b.Navigation("Applications");
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.Customer", b =>
+                {
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("TaxCodeId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.CustomerPayment", b =>
@@ -2465,6 +2707,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("TaxCodeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.OwnsMany("OpenBook.Domain.Sales.SalesLine", "Lines", b1 =>
                         {
                             b1.Property<Guid>("EstimateId")
@@ -2501,11 +2748,19 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
 
+                            b1.Property<Guid?>("TaxRateId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("Taxable")
+                                .HasColumnType("INTEGER");
+
                             b1.HasKey("EstimateId", "LineNumber");
 
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
+
+                            b1.HasIndex("TaxRateId");
 
                             b1.ToTable("EstimateLines", (string)null);
 
@@ -2520,6 +2775,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.HasOne("OpenBook.Domain.Sales.Item", null)
                                 .WithMany()
                                 .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.SalesTax.TaxRate", null)
+                                .WithMany()
+                                .HasForeignKey("TaxRateId")
                                 .OnDelete(DeleteBehavior.Restrict);
                         });
 
@@ -2554,6 +2814,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasOne("OpenBook.Domain.Sales.RecurringInvoice", null)
                         .WithMany()
                         .HasForeignKey("RecurringInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("TaxCodeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.OwnsMany("OpenBook.Domain.Sales.SalesLine", "Lines", b1 =>
@@ -2592,11 +2857,19 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
 
+                            b1.Property<Guid?>("TaxRateId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("Taxable")
+                                .HasColumnType("INTEGER");
+
                             b1.HasKey("InvoiceId", "LineNumber");
 
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
+
+                            b1.HasIndex("TaxRateId");
 
                             b1.ToTable("InvoiceLines", (string)null);
 
@@ -2611,6 +2884,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.HasOne("OpenBook.Domain.Sales.Item", null)
                                 .WithMany()
                                 .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.SalesTax.TaxRate", null)
+                                .WithMany()
+                                .HasForeignKey("TaxRateId")
                                 .OnDelete(DeleteBehavior.Restrict);
                         });
 
@@ -2705,6 +2983,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("TaxCodeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.OwnsMany("OpenBook.Domain.Sales.SalesLine", "Lines", b1 =>
                         {
                             b1.Property<Guid>("SalesReceiptId")
@@ -2741,11 +3024,19 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
 
+                            b1.Property<Guid?>("TaxRateId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("Taxable")
+                                .HasColumnType("INTEGER");
+
                             b1.HasKey("SalesReceiptId", "LineNumber");
 
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
+
+                            b1.HasIndex("TaxRateId");
 
                             b1.ToTable("SalesReceiptLines", (string)null);
 
@@ -2761,9 +3052,97 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("SalesReceiptId");
+
+                            b1.HasOne("OpenBook.Domain.SalesTax.TaxRate", null)
+                                .WithMany()
+                                .HasForeignKey("TaxRateId")
+                                .OnDelete(DeleteBehavior.Restrict);
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxPayment", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxAgency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.TaxAgency", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.TaxCode", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.SalesTax.TaxCodeRate", "Rates", b1 =>
+                        {
+                            b1.Property<Guid>("TaxCodeId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Position")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<Guid>("TaxRateId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("TaxCodeId", "Position");
+
+                            b1.HasIndex("TaxRateId");
+
+                            b1.ToTable("TaxCodeRates", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TaxCodeId");
+
+                            b1.HasOne("OpenBook.Domain.SalesTax.TaxRate", null)
+                                .WithMany()
+                                .HasForeignKey("TaxRateId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+                        });
+
+                    b.Navigation("Rates");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.TaxRate", b =>
+                {
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxAgency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Banking.Reconciliation", b =>

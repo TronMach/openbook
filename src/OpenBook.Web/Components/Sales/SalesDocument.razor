@@ -1,4 +1,4 @@
-@* The printable body of an estimate, credit memo or similar: who it's from and to, its lines and totals. *@
+@* The printable body of an estimate, credit memo or similar: who it's from and to, its lines and totals (tax lines go in the totals). *@
 @using OpenBook.Domain.Companies
 
 <div class="card">
@@ -26,7 +26,7 @@
     <table class="data" style="margin-top: 1rem">
         <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
         <tbody>
-            @foreach (var line in Lines.OrderBy(l => l.LineNumber))
+            @foreach (var line in Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
             {
                 <tr>
                     <td>@line.Description</td>

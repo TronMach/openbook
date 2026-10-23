@@ -1,0 +1,203 @@
+@page "/sales-tax"
+@inject SalesTaxService Taxes
+@inject SalesTaxPaymentService Payments
+@inject SalesTaxReports Reports
+
+<PageTitle>Sales tax · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Sales tax</h1>
+        <a class="button secondary" href="/reports/sales-tax">Liability report</a>
+        <a class="button" href="/sales-tax/pay">Pay sales tax</a>
+    </div>
+    <p class="muted">
+        Each <strong>agency</strong> you collect for has its own account under "Sales Tax Payable", so what you owe it is always in the
+        books. <strong>Rates</strong> belong to an agency; a <strong>tax code</strong> charges one rate or combines several (state + county +
+        city). Customers carry a default code, items say whether they're taxable, and each invoice, receipt, estimate or credit memo
+        can change both.
+    </p>
+
+    <section class="card">
+        <div class="toolbar">
+            <h2>Agencies</h2>
+            <a class="button secondary" href="/sales-tax/agencies/new">New agency</a>
+        </div>
+        @if (_agencies.Count == 0)
+        {
+            <p>No agencies yet. Start by <a href="/sales-tax/agencies/new">adding the agency you file with</a>, such as your state's department of revenue.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Agency</th><th>Files</th><th>Period to file</th><th class="num">Owed today</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _agencies)
+                        {
+                            var (from, to) = FilingPeriods.LastCompleted(a.FilingFrequency, _today);
+                            <tr class="@(a.IsActive ? null : "inactive")">
+                                <td>
+                                    <a href="/sales-tax/agencies/@a.Id">@a.Name</a>
+                                    @if (a.RegistrationNumber is not null) { <span class="muted"> · @a.RegistrationNumber</span> }
+                                </td>
+                                <td>@a.FilingFrequency</td>
+                                <td><a href="/reports/sales-tax?preset=Custom&amp;from=@from.ToString("yyyy-MM-dd")&amp;to=@to.ToString("yyyy-MM-dd")">@Labels.Date(from) – @Labels.Date(to)</a></td>
+                                <td class="num">@Labels.Amount(_owed.GetValueOrDefault(a.Id))</td>
+                                <td>
+                                    @if (_owed.GetValueOrDefault(a.Id) > 0m)
+                                    {
+                                        <a class="button secondary" href="/sales-tax/pay?agency=@a.Id">Pay</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <div class="split-grid">
+        <section class="card">
+            <div class="toolbar">
+                <h2>Rates</h2>
+                @if (_agencies.Any(a => a.IsActive))
+                {
+                    <a class="button secondary" href="/sales-tax/rates/new">New rate</a>
+                }
+            </div>
+            @if (_rates.Count == 0)
+            {
+                <p class="muted">No rates yet.</p>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>Rate</th><th>Agency</th><th class="num">Percent</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _rates)
+                        {
+                            <tr class="@(r.IsActive ? null : "inactive")">
+                                <td><a href="/sales-tax/rates/@r.Id">@r.Name</a></td>
+                                <td>@_agencyNames.GetValueOrDefault(r.AgencyId)</td>
+                                <td class="num">@Labels.Percent(r.Percent)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <section class="card">
+            <div class="toolbar">
+                <h2>Tax codes</h2>
+                @if (_rates.Any(r => r.IsActive))
+                {
+                    <a class="button secondary" href="/sales-tax/codes/new">New code</a>
+                }
+            </div>
+            @if (_codes.Count == 0)
+            {
+                <p class="muted">No tax codes yet. Each new rate makes a code of its own; add a code to combine rates.</p>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>Code</th><th>Charges</th><th class="num">Total</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _codes)
+                        {
+                            var rates = c.RateIds.Select(id => _rateById.GetValueOrDefault(id)).OfType<TaxRate>().ToList();
+                            <tr class="@(c.IsActive ? null : "inactive")">
+                                <td><a href="/sales-tax/codes/@c.Id">@c.Name</a></td>
+                                <td>@string.Join(" + ", rates.Select(r => r.Name))</td>
+                                <td class="num">@Labels.Percent(rates.Sum(r => r.Percent))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    </div>
+
+    <section class="card">
+        <h2>Exempt customers</h2>
+        @if (_exempt.Count == 0)
+        {
+            <p class="muted">No customer has an exemption certificate. Add one on the customer's page; their sales are then taxed at zero and reported as exempt.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Customer</th><th>Reason</th><th>Certificate</th><th>Expires</th></tr></thead>
+                <tbody>
+                    @foreach (var x in _exempt)
+                    {
+                        <tr>
+                            <td><a href="/customers/@x.Customer.Id">@x.Customer.DisplayName</a></td>
+                            <td>@ExemptionReasons.Label(x.Customer.ExemptionReason!.Value)</td>
+                            <td>@x.Customer.ExemptionCertificate</td>
+                            <td>
+                                @(x.Customer.ExemptionExpiresOn is { } e ? Labels.Date(e) : "Doesn't expire")
+                                @if (x.Expired) { <span class="badge warn">Expired: sales are taxed</span> }
+                                else if (x.ExpiresSoon) { <span class="badge warn">Expires soon</span> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="card">
+        <h2>Payments</h2>
+        @if (_payments.Count == 0)
+        {
+            <p class="muted">No sales tax payments yet.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Date</th><th>Agency</th><th>For period ending</th><th>Reference</th><th class="num">Paid</th><th class="num">Settled</th></tr></thead>
+                <tbody>
+                    @foreach (var p in _payments.Take(20))
+                    {
+                        <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/sales-tax/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                            <td>@_agencyNames.GetValueOrDefault(p.AgencyId)</td>
+                            <td>@(p.PeriodEnd is { } end ? Labels.Date(end) : "")</td>
+                            <td>@p.Reference</td>
+                            <td class="num">@Labels.Amount(p.Amount)</td>
+                            <td class="num">@(p.Status == DocumentStatus.Voided ? "Voided" : Labels.Amount(p.LiabilitySettled))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</div>
+
+@code {
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<TaxAgency> _agencies = [];
+    private IReadOnlyList<TaxRate> _rates = [];
+    private IReadOnlyList<TaxCode> _codes = [];
+    private IReadOnlyList<SalesTaxPayment> _payments = [];
+    private IReadOnlyList<ExemptCustomer> _exempt = [];
+    private IReadOnlyDictionary<Guid, decimal> _owed = new Dictionary<Guid, decimal>();
+    private Dictionary<Guid, string> _agencyNames = [];
+    private Dictionary<Guid, TaxRate> _rateById = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _agencies = await Taxes.ListAgenciesAsync();
+        _rates = await Taxes.ListRatesAsync();
+        _codes = await Taxes.ListCodesAsync();
+        _payments = await Payments.ListAsync();
+        _exempt = await Reports.ExemptCustomersAsync();
+        _owed = await Payments.OwedAsync(_today);
+        _agencyNames = _agencies.ToDictionary(a => a.Id, a => a.Name);
+        _rateById = _rates.ToDictionary(r => r.Id);
+    }
+}
