@@ -8,25 +8,29 @@ namespace OpenBook.Application.Sales;
 
 /// <param name="DueDate">Defaults to the invoice date plus the customer's payment terms.</param>
 /// <param name="Number">Defaults to the next number in sequence.</param>
+/// <param name="EstimateId">The estimate being invoiced; it's closed in the same save.</param>
 public sealed record CreateInvoiceCommand(
     Guid CustomerId,
     DateOnly Date,
     IReadOnlyList<SalesLineDraft> Lines,
     DateOnly? DueDate = null,
     string? Number = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? EstimateId = null);
 
 public sealed class InvoiceService(
     ISalesStore store,
     SalesAccounts salesAccounts,
+    SalesLineBuilder lineBuilder,
     PostingEngine engine,
     IClock clock,
     ICurrentUser user)
 {
     private const string EntityType = "invoice";
 
+    /// <summary>Invoices and credit memos share one number sequence, as in QuickBooks.</summary>
     public async Task<string> SuggestNumberAsync(CancellationToken ct = default) =>
-        SalesAccounts.NextNumber(await store.ListInvoiceNumbersAsync(ct));
+        SalesAccounts.NextNumber([.. await store.ListInvoiceNumbersAsync(ct), .. await store.ListCreditMemoNumbersAsync(ct)]);
 
     public Task<Invoice?> GetAsync(Guid id, CancellationToken ct = default) => store.GetInvoiceAsync(id, ct);
 
@@ -35,7 +39,14 @@ public sealed class InvoiceService(
     public Task<IReadOnlyList<CustomerPayment>> ListPaymentsAsync(Guid invoiceId, CancellationToken ct = default) =>
         store.ListPaymentsForInvoiceAsync(invoiceId, ct);
 
-    public async Task<Invoice> CreateAsync(CreateInvoiceCommand command, CancellationToken ct = default)
+    public Task<IReadOnlyList<CreditMemo>> ListCreditsAsync(Guid invoiceId, CancellationToken ct = default) =>
+        store.ListCreditMemosForInvoiceAsync(invoiceId, ct);
+
+    public Task<Invoice> CreateAsync(CreateInvoiceCommand command, CancellationToken ct = default) =>
+        CreateAsync(command, recurringInvoiceId: null, ct);
+
+    /// <param name="recurringInvoiceId">The template creating it, recorded on the invoice.</param>
+    internal async Task<Invoice> CreateAsync(CreateInvoiceCommand command, Guid? recurringInvoiceId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
@@ -44,12 +55,23 @@ public sealed class InvoiceService(
         if (!customer.IsActive)
             throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
 
+        Estimate? estimate = null;
+        if (command.EstimateId is { } estimateId)
+        {
+            estimate = await store.GetEstimateAsync(estimateId, ct) ?? throw new EntityNotFoundException("estimate", estimateId);
+            if (estimate.Status == EstimateStatus.Closed)
+                throw new DomainException("estimate.closed", $"Estimate {estimate.Number} is already invoiced.");
+            if (estimate.Status == EstimateStatus.Declined)
+                throw new DomainException("estimate.declined", $"Estimate {estimate.Number} was declined.");
+            if (estimate.CustomerId != customer.Id)
+                throw new DomainException("estimate.wrong_customer", $"Estimate {estimate.Number} is for a different customer.");
+        }
+
         var number = Invoice.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
 
-        var items = await store.GetItemsAsync(command.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value).Distinct().ToList(), ct);
-        var lines = SalesLine.FromDrafts(command.Lines, items);
+        var lines = await lineBuilder.BuildAsync(command.Lines, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
 
         var id = Guid.CreateVersion7();
@@ -57,11 +79,20 @@ public sealed class InvoiceService(
         var entry = await engine.StageAsync(
             new PostJournalEntryCommand(command.Date, SalesLine.Postings(receivables.Id, lines, memo), memo, Invoice.Source, id), ct);
 
+        var terms = customer.Terms;
         var invoice = Invoice.Create(
-            id, number, customer.Id, receivables.Id, command.Date, command.DueDate ?? customer.DueDateFor(command.Date),
-            lines, entry.Id, clock.UtcNow, command.Memo);
+            id, number, customer.Id, receivables.Id, command.Date, command.DueDate ?? terms.DueDate(command.Date),
+            lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
+        if (estimate is not null)
+        {
+            var estimateBefore = EstimateService.Snapshot(estimate);
+            estimate.MarkInvoiced(invoice.Id);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EstimateService.EntityType, estimate.Id,
+                estimateBefore, EstimateService.Snapshot(estimate)));
+        }
+
         await store.SaveChangesAsync(ct);
         return invoice;
     }
@@ -72,20 +103,32 @@ public sealed class InvoiceService(
         if (invoice.Status == DocumentStatus.Voided)
             throw new DomainException("invoice.already_voided", $"Invoice {invoice.Number} is already voided.");
         if (invoice.AmountPaid > 0m)
-            throw new DomainException("invoice.has_payments", $"Invoice {invoice.Number} has payments applied. Void those payments first.");
+            throw new DomainException("invoice.has_payments", $"Invoice {invoice.Number} has payments or credits applied. Void or remove those first.");
 
         var before = Snapshot(invoice);
         await engine.StageVoidAsync(invoice.JournalEntryId, reason, fromDocument: true, ct);
         invoice.Void();
         store.Add(Audit(AuditAction.Voided, invoice, before));
+
+        // The estimate can be invoiced again.
+        if (invoice.EstimateId is { } estimateId && await store.GetEstimateAsync(estimateId, ct) is { InvoiceId: var linked } estimate && linked == invoice.Id)
+        {
+            var estimateBefore = EstimateService.Snapshot(estimate);
+            estimate.Reopen();
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EstimateService.EntityType, estimate.Id,
+                estimateBefore, EstimateService.Snapshot(estimate)));
+        }
+
         await store.SaveChangesAsync(ct);
         return invoice;
     }
 
-    private AuditRecord Audit(AuditAction action, Invoice i, string? before) =>
+    internal static AuditRecord Audit(IClock clock, ICurrentUser user, AuditAction action, Invoice i, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, i.Id, before, Snapshot(i));
 
-    private static string Snapshot(Invoice i) => JsonSerializer.Serialize(new
+    private AuditRecord Audit(AuditAction action, Invoice i, string? before) => Audit(clock, user, action, i, before);
+
+    internal static string Snapshot(Invoice i) => JsonSerializer.Serialize(new
     {
         i.Number,
         i.CustomerId,
@@ -95,6 +138,10 @@ public sealed class InvoiceService(
         i.AmountPaid,
         Status = i.Status.ToString(),
         i.Memo,
-        Lines = i.Lines.Select(l => new { l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
+        i.EarlyPaymentDiscountPercent,
+        i.EarlyPaymentDiscountDate,
+        i.EstimateId,
+        i.RecurringInvoiceId,
+        Lines = i.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
     });
 }

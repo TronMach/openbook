@@ -10,6 +10,9 @@ public enum AuditAction
 
     /// <summary>A change dated in a closed period, allowed with the closing date password.</summary>
     ClosedPeriodOverride,
+
+    /// <summary>A form sent to a customer by email.</summary>
+    Emailed,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

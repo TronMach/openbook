@@ -24,6 +24,13 @@ public readonly record struct Money : IComparable<Money>
 
     public static Money Zero(Currency currency) => new(0m, currency);
 
+    /// <summary>Rejects amounts with fractions of a cent, for documents that keep plain decimals.</summary>
+    public static void EnsureCents(decimal amount)
+    {
+        if (decimal.Round(amount, 2) != amount)
+            throw new DomainException("money.precision", "Amounts can have at most 2 decimal places.");
+    }
+
     /// <summary>Rounds half away from zero, the usual convention for invoices and tax.</summary>
     public static Money Round(decimal amount, Currency currency) =>
         new(decimal.Round(amount, currency.MinorUnits, MidpointRounding.AwayFromZero), currency);

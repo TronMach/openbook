@@ -23,12 +23,20 @@
         <h1>Invoice @_invoice.Number</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
         <a class="button secondary" href="/sales">Back to sales</a>
-        <button type="button" class="secondary" onclick="window.print()">Print</button>
+        <a class="button secondary" href="/api/sales/invoices/@_invoice.Id/pdf" target="_blank">PDF</a>
+        <a class="button secondary" href="/sales/email/invoices/@_invoice.Id">Email</a>
+        <a class="button secondary" href="/audit?entityId=@_invoice.Id">History</a>
         @if (_invoice.IsOpen)
         {
+            <a class="button secondary" href="/sales/credits/apply?customer=@_customer.Id">Apply credit</a>
             <a class="button" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
         }
     </div>
+
+    @if (_invoice.LastEmailedAt is { } emailed)
+    {
+        <p class="muted no-print">Emailed @emailed.ToLocalTime().ToString("g").</p>
+    }
 
     @if (_error is not null)
     {
@@ -47,7 +55,19 @@
                 <dt>Invoice</dt><dd>@_invoice.Number</dd>
                 <dt>Date</dt><dd>@Labels.Date(_invoice.Date)</dd>
                 <dt>Due</dt><dd>@Labels.Date(_invoice.DueDate)</dd>
-                <dt>Terms</dt><dd>@Labels.Terms(_invoice.DueDate.DayNumber - _invoice.Date.DayNumber)</dd>
+                <dt>Terms</dt><dd>@Terms.Label</dd>
+                @if (_invoice.EarlyPaymentDiscountDate is { } discountDate)
+                {
+                    <dt>Discount</dt><dd>@Terms.DiscountPercent.ToString("0.##")% if paid by @Labels.Date(discountDate)</dd>
+                }
+                @if (_invoice.EstimateId is { } estimateId)
+                {
+                    <dt class="no-print">From</dt><dd class="no-print"><a href="/sales/estimates/@estimateId">Estimate</a></dd>
+                }
+                @if (_invoice.RecurringInvoiceId is { } recurringId)
+                {
+                    <dt class="no-print">Created by</dt><dd class="no-print"><a href="/sales/recurring/@recurringId">Recurring invoice</a></dd>
+                }
             </dl>
         </div>
         <div style="margin-top: 1rem">
@@ -74,7 +94,7 @@
                 <tr><td colspan="3">Total</td><td class="num">@Labels.Amount(_invoice.Total)</td></tr>
                 @if (_invoice.AmountPaid > 0m)
                 {
-                    <tr><td colspan="3">Paid</td><td class="num">-@Labels.Amount(_invoice.AmountPaid)</td></tr>
+                    <tr><td colspan="3">Paid and credited</td><td class="num">-@Labels.Amount(_invoice.AmountPaid)</td></tr>
                 }
                 <tr><td colspan="3">Balance due</td><td class="num">@Labels.Amount(_invoice.Balance)</td></tr>
             </tfoot>
@@ -97,8 +117,29 @@
                         <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
                             <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
                             <td>@p.Reference</td>
-                            <td class="num">@Labels.Amount(p.Applications.Single(a => a.InvoiceId == _invoice.Id).Amount)</td>
+                            <td class="num">@Labels.Amount(p.Applications.Single(a => a.InvoiceId == _invoice.Id).Settled)</td>
                             <td>@(p.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_credits.Count > 0)
+    {
+        <div class="no-print">
+            <h2>Credits applied</h2>
+            <table class="data">
+                <thead><tr><th>Credit memo</th><th>Applied on</th><th class="num">Applied to this invoice</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _credits)
+                    {
+                        var application = c.Applications.Single(a => a.InvoiceId == _invoice.Id);
+                        <tr>
+                            <td><a href="/sales/credit-memos/@c.Id">@c.Number</a></td>
+                            <td>@Labels.Date(application.AppliedOn)</td>
+                            <td class="num">@Labels.Amount(application.Amount)</td>
                         </tr>
                     }
                 </tbody>
@@ -140,6 +181,7 @@
     private OpenBook.Domain.Companies.Company? _company;
     private IReadOnlyList<CustomerPayment> _payments = [];
     private string? _error;
+    private IReadOnlyList<CreditMemo> _credits = [];
     private bool _needsClosingPassword;
 
     [Parameter]
@@ -157,7 +199,13 @@
         _customer = await CustomerService.GetAsync(_invoice.CustomerId);
         _company = await Settings.GetAsync();
         _payments = await Invoices.ListPaymentsAsync(Id);
+        _credits = await Invoices.ListCreditsAsync(Id);
     }
+
+    private PaymentTerms Terms => new(
+        _invoice!.DueDate.DayNumber - _invoice.Date.DayNumber,
+        _invoice.EarlyPaymentDiscountPercent,
+        _invoice.EarlyPaymentDiscountDate is { } d ? d.DayNumber - _invoice.Date.DayNumber : 0);
 
     private async Task VoidAsync()
     {

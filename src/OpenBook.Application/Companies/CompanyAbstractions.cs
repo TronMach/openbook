@@ -26,7 +26,11 @@ public interface ICompanyStore
     Task<User?> GetUserAsync(Guid id, CancellationToken ct);
     Task<User?> FindUserAsync(string normalizedUsername, CancellationToken ct);
 
+    /// <summary>Tracked; null until email is first set up.</summary>
+    Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct);
+
     void Add(Company company);
+    void Add(EmailSettings settings);
     void Add(User user);
     void Add(AuditRecord record);
 

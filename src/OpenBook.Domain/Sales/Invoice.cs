@@ -25,7 +25,24 @@ public sealed class Invoice
     public string? Memo { get; private set; }
 
     public decimal Total { get; private set; }
+
+    /// <summary>Settled so far: payments, early payment discounts and credits applied.</summary>
     public decimal AmountPaid { get; private set; }
+
+    /// <summary>Copied from the customer's terms when the invoice was created.</summary>
+    public decimal EarlyPaymentDiscountPercent { get; private set; }
+
+    /// <summary>Last day to take the early payment discount; null when the terms have none.</summary>
+    public DateOnly? EarlyPaymentDiscountDate { get; private set; }
+
+    /// <summary>The estimate this invoice was made from.</summary>
+    public Guid? EstimateId { get; private set; }
+
+    /// <summary>The recurring invoice template that created it.</summary>
+    public Guid? RecurringInvoiceId { get; private set; }
+
+    public DateTimeOffset? LastEmailedAt { get; private set; }
+
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -46,7 +63,10 @@ public sealed class Invoice
         IReadOnlyList<SalesLine> lines,
         Guid journalEntryId,
         DateTimeOffset createdAt,
-        string? memo = null)
+        string? memo = null,
+        PaymentTerms? terms = null,
+        Guid? estimateId = null,
+        Guid? recurringInvoiceId = null)
     {
         if (dueDate < date)
             throw new DomainException("invoice.due_before_date", "The due date can't be before the invoice date.");
@@ -63,6 +83,10 @@ public sealed class Invoice
             Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
+            EarlyPaymentDiscountPercent = terms?.DiscountPercent ?? 0m,
+            EarlyPaymentDiscountDate = terms?.DiscountDate(date),
+            EstimateId = estimateId,
+            RecurringInvoiceId = recurringInvoiceId,
         };
         invoice._lines.AddRange(lines);
         invoice.Total = invoice._lines.Sum(l => l.Amount);
@@ -70,6 +94,17 @@ public sealed class Invoice
             throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
         return invoice;
     }
+
+    /// <summary>
+    /// The early payment discount available for a payment on <paramref name="paidOn"/>: the terms' percentage
+    /// of the total, rounded to the cent, but no more than the balance.
+    /// </summary>
+    public decimal EarlyPaymentDiscountFor(DateOnly paidOn) =>
+        IsOpen && EarlyPaymentDiscountDate is { } last && paidOn <= last
+            ? Math.Min(Balance, decimal.Round(Total * EarlyPaymentDiscountPercent / 100m, 2, MidpointRounding.AwayFromZero))
+            : 0m;
+
+    public void MarkEmailed(DateTimeOffset at) => LastEmailedAt = at.ToUniversalTime();
 
     public void ApplyPayment(decimal amount)
     {

@@ -23,6 +23,12 @@
             <span class="badge">Voided</span>
         }
         <a class="button secondary" href="/sales?show=payments">Back to payments</a>
+        <a class="button secondary" href="/audit?entityId=@_payment.Id">History</a>
+        @if (_payment.Unapplied > 0m)
+        {
+            <a class="button secondary" href="/sales/credits/apply?customer=@_payment.CustomerId">Apply credit</a>
+            <a class="button secondary" href="/sales/refunds/new?payment=@_payment.Id">Refund</a>
+        }
     </div>
 
     @if (_error is not null)
@@ -35,7 +41,11 @@
             <dt>Customer</dt><dd><a href="/customers/@_payment.CustomerId">@_customer?.DisplayName</a></dd>
             <dt>Date</dt><dd>@Labels.Date(_payment.Date)</dd>
             <dt>Amount</dt><dd>@Labels.Amount(_payment.Amount)</dd>
-            <dt>Deposited to</dt><dd>@_chart.FullName(_payment.DepositAccountId)</dd>
+            @if (_payment.DiscountTaken > 0m) { <dt>Discounts taken</dt><dd>@Labels.Amount(_payment.DiscountTaken)</dd> }
+            @if (_payment.Unapplied > 0m) { <dt>Unapplied credit</dt><dd>@Labels.Amount(_payment.Unapplied)</dd> }
+            @if (_payment.AmountRefunded > 0m) { <dt>Refunded</dt><dd>@Labels.Amount(_payment.AmountRefunded)</dd> }
+            <dt>Received into</dt><dd>@_chart.FullName(_payment.DepositAccountId)</dd>
+            @if (_payment.DepositId is { } depositId) { <dt>Bank deposit</dt><dd><a href="/banking/deposits/@depositId">View deposit</a></dd> }
             @if (_payment.Reference is not null) { <dt>Reference</dt><dd>@_payment.Reference</dd> }
             @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }
             <dt>Journal entry</dt><dd><a href="/journal/@_payment.JournalEntryId">View</a></dd>
@@ -44,7 +54,7 @@
 
     <h2>Applied to</h2>
     <table class="data">
-        <thead><tr><th>Invoice</th><th>Date</th><th class="num">Invoice total</th><th class="num">Applied</th></tr></thead>
+        <thead><tr><th>Invoice</th><th>Date</th><th>Applied on</th><th class="num">Invoice total</th><th class="num">Discount</th><th class="num">Applied</th></tr></thead>
         <tbody>
             @foreach (var a in _payment.Applications)
             {
@@ -52,7 +62,9 @@
                 <tr>
                     <td><a href="/sales/invoices/@a.InvoiceId">@invoice?.Number</a></td>
                     <td>@(invoice is null ? "" : Labels.Date(invoice.Date))</td>
+                    <td>@Labels.Date(a.AppliedOn)</td>
                     <td class="num">@(invoice is null ? "" : Labels.Amount(invoice.Total))</td>
+                    <td class="num">@Labels.AmountOrBlank(a.Discount)</td>
                     <td class="num">@Labels.Amount(a.Amount)</td>
                 </tr>
             }

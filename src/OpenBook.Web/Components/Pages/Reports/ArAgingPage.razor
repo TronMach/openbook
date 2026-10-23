@@ -1,0 +1,115 @@
+@page "/reports/ar-aging"
+@inject ReceivablesService Receivables
+@inject CompanySettingsService Settings
+
+<PageTitle>A/R aging · OpenBook</PageTitle>
+
+<div class="wide">
+    <form class="card filters no-print" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="as-of">As of</label>
+                <input id="as-of" name="asOf" type="date" value="@AsOfDate.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="detail">Show</label>
+                <select id="detail" name="detail">
+                    <option value="false" selected="@(!Detail)">Summary by customer</option>
+                    <option value="true" selected="@Detail">Each open invoice and credit</option>
+                </select>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit">Run report</button>
+            <button type="button" class="secondary" onclick="window.print()">Print</button>
+        </div>
+    </form>
+
+    <div class="report">
+        <header class="report-heading">
+            <h1>Accounts receivable aging @(Detail ? "detail" : "summary")</h1>
+            <p>@_companyName</p>
+            <p>As of @Labels.Date(AsOfDate) · days past each invoice's due date</p>
+        </header>
+
+        @if (_report is null || _report.Customers.Count == 0)
+        {
+            <p class="muted">No customer owes anything on this date.</p>
+        }
+        else
+        {
+            <table class="data aging-report">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        @if (Detail)
+                        {
+                            <th>Due</th><th class="num">Days past due</th>
+                        }
+                        <th class="num">Current</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _report.Customers)
+                    {
+                        if (Detail)
+                        {
+                            <tr class="section-heading"><td colspan="9"><a href="/customers/@c.Customer.Id/statement">@c.Customer.DisplayName</a></td></tr>
+                            @foreach (var open in c.Invoices)
+                            {
+                                var row = AgingBuckets.Zero.Add(open.DaysPastDue, open.Balance);
+                                <tr>
+                                    <td class="indent-1"><a href="/sales/invoices/@open.Invoice.Id">Invoice @open.Invoice.Number</a></td>
+                                    <td>@Labels.Date(open.Invoice.DueDate)</td>
+                                    <td class="num">@(open.DaysPastDue > 0 ? open.DaysPastDue : "")</td>
+                                    <Cells Buckets="row" />
+                                </tr>
+                            }
+                            @foreach (var credit in c.Credits)
+                            {
+                                <tr>
+                                    <td class="indent-1">
+                                        <a href="@(credit.Kind == CreditKind.CreditMemo ? $"/sales/credit-memos/{credit.Id}" : $"/sales/payments/{credit.Id}")">@credit.Label</a>
+                                    </td>
+                                    <td>@Labels.Date(credit.Date)</td>
+                                    <td></td>
+                                    <Cells Buckets="AgingBuckets.Zero with { Current = -credit.Amount }" />
+                                </tr>
+                            }
+                            <tr class="subtotal"><td colspan="3">Total @c.Customer.DisplayName</td><Cells Buckets="c.Buckets" /></tr>
+                        }
+                        else
+                        {
+                            <tr>
+                                <td><a href="/reports/ar-aging?asOf=@AsOfDate.ToString("yyyy-MM-dd")&detail=true">@c.Customer.DisplayName</a></td>
+                                <Cells Buckets="c.Buckets" />
+                            </tr>
+                        }
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="grand-total">
+                        <td colspan="@(Detail ? 3 : 1)">Total</td>
+                        <Cells Buckets="_report.Totals" />
+                    </tr>
+                </tfoot>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private AgingReport? _report;
+    private string? _companyName;
+
+    [SupplyParameterFromQuery] private DateOnly? AsOf { get; set; }
+    [SupplyParameterFromQuery] private bool Detail { get; set; }
+
+    private DateOnly AsOfDate => AsOf ?? DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _companyName = (await Settings.GetAsync()).Name;
+        _report = await Receivables.AgingAsync(AsOfDate);
+    }
+}

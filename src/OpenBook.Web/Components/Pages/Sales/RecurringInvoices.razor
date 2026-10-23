@@ -1,0 +1,126 @@
+@page "/sales/recurring"
+@inject RecurringInvoiceService Recurring
+@inject CustomerService CustomerService
+
+<PageTitle>Recurring invoices · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Recurring invoices</h1>
+        <a class="button secondary" href="/sales">Back to sales</a>
+        <a class="button" href="/sales/recurring/new">New recurring invoice</a>
+    </div>
+    <p class="muted">
+        Invoices created on a schedule, such as a monthly retainer. Ones set to create automatically are created (and
+        emailed, if you chose that) when they fall due; the rest wait here until you create them.
+    </p>
+
+    @foreach (var result in _results)
+    {
+        <div class="alert @(result.Error is null && result.EmailError is null ? "notice" : "error")" role="status">
+            <strong>@result.Template.Name</strong>:
+            @if (result.Created.Count > 0)
+            {
+                <text>created @result.Created.Count @(result.Created.Count == 1 ? "invoice" : "invoices"):</text>
+                @foreach (var (invoice, i) in result.Created.Select((x, i) => (x, i)))
+                {
+                    @(i == 0 ? " " : ", ")<a href="/sales/invoices/@invoice.Id">@invoice.Number</a>
+                }
+                <text>.</text>
+            }
+            @if (result.Emailed > 0)
+            {
+                <text> Emailed @result.Emailed.</text>
+            }
+            @if (result.Error is not null)
+            {
+                <text> Stopped: @result.Error</text>
+            }
+            @if (result.EmailError is not null)
+            {
+                <text> Not emailed: @result.EmailError</text>
+            }
+        </div>
+    }
+
+    @if (_templates.Count == 0)
+    {
+        <div class="card"><p>No recurring invoices yet. <a href="/sales/recurring/new">Set one up</a>.</p></div>
+    }
+    else
+    {
+        @if (_dueCount > 0)
+        {
+            <form class="card" method="post" @formname="create-due" @onsubmit="CreateDueAsync">
+                <AntiforgeryToken />
+                <p>@_dueCount recurring @(_dueCount == 1 ? "invoice is" : "invoices are") due.</p>
+                <button type="submit">Create due invoices</button>
+            </form>
+        }
+
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr><th>Name</th><th>Customer</th><th>Schedule</th><th>Next</th><th class="num">Created</th><th>Creating</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var template in _templates)
+                    {
+                        <tr class="@(template.IsActive ? null : "inactive")">
+                            <td><a href="/sales/recurring/@template.Id">@template.Name</a></td>
+                            <td>@_customers.GetValueOrDefault(template.CustomerId)</td>
+                            <td>@RecurrenceLabels.Schedule(template.Frequency, template.Interval, template.StartDate, template.EndDate, template.MaxOccurrences)</td>
+                            <td>
+                                @if (!template.IsActive)
+                                {
+                                    <span class="muted">Inactive</span>
+                                }
+                                else if (template.NextDate is { } next)
+                                {
+                                    @Labels.Date(next)
+                                    @if (next <= Today)
+                                    {
+                                        <span class="badge">Due</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="muted">Finished</span>
+                                }
+                            </td>
+                            <td class="num">@template.OccurrencesPosted</td>
+                            <td>@(template.AutoCreate ? template.AutoEmail ? "Automatic, emailed" : "Automatic" : "Manual")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RecurringInvoice> _templates = [];
+    private IReadOnlyList<RecurringInvoiceResult> _results = [];
+    private Dictionary<Guid, string> _customers = [];
+    private int _dueCount;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = (await CustomerService.ListAsync(Today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.Customer.DisplayName);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _templates = await Recurring.ListAsync();
+        _dueCount = _templates.Count(t => t.IsDue(Today));
+    }
+
+    private async Task CreateDueAsync()
+    {
+        _results = await Recurring.CreateDueAsync(Today, automaticOnly: false);
+        await LoadAsync();
+    }
+}

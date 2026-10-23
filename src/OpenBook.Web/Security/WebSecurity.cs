@@ -39,6 +39,7 @@ public static class WebSecurity
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, UserCircuitHandler>());
         services.AddScoped<ICurrentUser, WebCurrentUser>();
         services.AddScoped<Operations>();
+        services.AddSingleton<OpenBook.Application.Forms.ISecretProtector, DataProtectionSecretProtector>();
         services.AddSingleton<SetupState>();
         services.AddHostedService<RecurringPostingService>();
         return services;

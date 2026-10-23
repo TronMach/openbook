@@ -29,6 +29,11 @@ public sealed class SalesReceipt
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>The bank deposit that moved it out of undeposited funds.</summary>
+    public Guid? DepositId { get; private set; }
+
+    public DateTimeOffset? LastEmailedAt { get; private set; }
+
     public IReadOnlyList<SalesLine> Lines => _lines;
 
     public static SalesReceipt Create(
@@ -64,10 +69,25 @@ public sealed class SalesReceipt
         return receipt;
     }
 
+    public void MarkDeposited(Guid depositId)
+    {
+        if (Status != DocumentStatus.Posted)
+            throw new DomainException("receipt.voided", $"Sales receipt {Number} is voided.");
+        if (DepositId is not null)
+            throw new DomainException("deposit.already_deposited", $"Sales receipt {Number} is already in a deposit.");
+        DepositId = depositId;
+    }
+
+    public void ClearDeposit() => DepositId = null;
+
+    public void MarkEmailed(DateTimeOffset at) => LastEmailedAt = at.ToUniversalTime();
+
     public void Void()
     {
         if (Status == DocumentStatus.Voided)
             throw new DomainException("receipt.already_voided", $"Sales receipt {Number} is already voided.");
+        if (DepositId is not null)
+            throw new DomainException("receipt.deposited", $"Sales receipt {Number} is in a bank deposit. Void the deposit first.");
         Status = DocumentStatus.Voided;
     }
 }

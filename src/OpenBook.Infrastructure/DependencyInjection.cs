@@ -5,8 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Forms;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
+using OpenBook.Infrastructure.Forms;
 using OpenBook.Infrastructure.Persistence;
 using OpenBook.Infrastructure.Security;
 
@@ -15,7 +17,7 @@ namespace OpenBook.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// The host registers <see cref="ICurrentUser"/>. <paramref name="backupDirectory"/> defaults to a
+    /// The host registers <see cref="ICurrentUser"/> and <see cref="ISecretProtector"/>. <paramref name="backupDirectory"/> defaults to a
     /// "backups" folder next to the company file and is required for in-memory databases.
     /// </summary>
     public static IServiceCollection AddOpenBookInfrastructure(this IServiceCollection services, string connectionString, string? backupDirectory = null)
@@ -30,6 +32,8 @@ public static class DependencyInjection
         services.AddScoped<IBackupService, SqliteBackupService>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();
+        services.AddSingleton<IEmailSender, MailKitEmailSender>();
         return services;
     }
 

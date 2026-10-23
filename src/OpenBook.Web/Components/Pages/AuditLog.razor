@@ -180,12 +180,17 @@
         "closing_date" => "Closing date",
         "journal_entry" => "Journal entry",
         "payment" => "Customer payment",
+        "credit_memo" => "Credit memo",
+        "recurring_invoice" => "Recurring invoice",
+        "email_settings" => "Email settings",
+        "form_style" => "Invoice style",
         _ => char.ToUpperInvariant(entityType[0]) + entityType[1..].Replace('_', ' '),
     };
 
     private static string ActionName(AuditAction action) => action switch
     {
         AuditAction.ClosedPeriodOverride => "Closed-period change",
+        AuditAction.Emailed => "Emailed",
         _ => action.ToString(),
     };
 

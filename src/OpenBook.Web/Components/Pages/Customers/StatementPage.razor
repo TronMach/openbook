@@ -1,0 +1,95 @@
+@page "/customers/{Id:guid}/statement"
+@inject ReceivablesService Receivables
+
+<PageTitle>Statement · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar no-print">
+        <h1>Statement for @_statement?.Customer.DisplayName</h1>
+        <a class="button secondary" href="/customers/@Id">Back to customer</a>
+        @if (_statement is not null)
+        {
+            <a class="button secondary" href="/api/sales/customers/@Id/statement/pdf?from=@D(_statement.From)&to=@D(_statement.To)" target="_blank">PDF</a>
+            <a class="button" href="/sales/email/statement/@Id?from=@D(_statement.From)&to=@D(_statement.To)">Email</a>
+        }
+    </div>
+
+    <form class="card filters no-print" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="from">From</label>
+                <input id="from" name="from" type="date" value="@D(From)" />
+            </div>
+            <div class="field">
+                <label for="to">To</label>
+                <input id="to" name="to" type="date" value="@D(To)" />
+            </div>
+        </div>
+        <div class="actions"><button type="submit">Show</button></div>
+    </form>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    else if (_statement is not null)
+    {
+        <div class="card">
+            <h2>Statement · @Labels.Date(_statement.From) – @Labels.Date(_statement.To)</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th>Activity</th><th>Reference</th><th class="num">Amount</th><th class="num">Balance</th></tr></thead>
+                <tbody>
+                    <tr><td>@Labels.Date(_statement.From)</td><td>Balance forward</td><td></td><td></td><td class="num">@Labels.Amount(_statement.OpeningBalance)</td></tr>
+                    @foreach (var line in _statement.Lines)
+                    {
+                        <tr>
+                            <td>@Labels.Date(line.Date)</td>
+                            <td><a href="@Link(line)">@line.Description</a></td>
+                            <td>@line.Reference</td>
+                            <td class="num">@Labels.Amount(line.Amount)</td>
+                            <td class="num">@Labels.Amount(line.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr><td colspan="4">Amount due</td><td class="num">@Labels.Amount(_statement.ClosingBalance)</td></tr></tfoot>
+            </table>
+
+            <AgingTable Buckets="_statement.Aging" />
+        </div>
+    }
+</div>
+
+@code {
+    private CustomerStatement? _statement;
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        To ??= DateOnly.FromDateTime(DateTime.Today);
+        From ??= new DateOnly(To.Value.Year, To.Value.Month, 1).AddMonths(-2);
+        try
+        {
+            _statement = await Receivables.StatementAsync(Id, From.Value, To.Value);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string D(DateOnly? date) => date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+
+    private static string Link(StatementLine line) => line.Kind switch
+    {
+        StatementLineKind.Invoice => $"/sales/invoices/{line.DocumentId}",
+        StatementLineKind.CreditMemo => $"/sales/credit-memos/{line.DocumentId}",
+        StatementLineKind.Refund => $"/sales/refunds/{line.DocumentId}",
+        _ => $"/sales/payments/{line.DocumentId}",
+    };
+}

@@ -60,7 +60,7 @@
                 <input id="reference" @bind="_reference" maxlength="30" />
             </div>
 
-            <SalesLinesEditor Lines="_lines" Items="_items" />
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
@@ -109,7 +109,8 @@
             .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
             .OrderBy(a => a.Type != AccountType.Bank)
             .ToList();
-        _depositAccountId = _depositAccounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        _depositAccountId = (_depositAccounts.FirstOrDefault(a => string.Equals(a.Name, SalesAccounts.UndepositedFundsName, StringComparison.OrdinalIgnoreCase))
+            ?? _depositAccounts.FirstOrDefault())?.Id ?? Guid.Empty;
         _loaded = true;
     }
 

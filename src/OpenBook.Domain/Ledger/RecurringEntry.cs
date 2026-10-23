@@ -65,16 +65,7 @@ public sealed class RecurringEntry
     public IReadOnlyList<RecurringEntryLine> Lines => _lines;
 
     /// <summary>The next date to post, or null once the schedule has ended.</summary>
-    public DateOnly? NextDate
-    {
-        get
-        {
-            if (MaxOccurrences is { } max && OccurrencesPosted >= max)
-                return null;
-            var next = OccurrenceDate(OccurrencesPosted);
-            return EndDate is { } end && next > end ? null : next;
-        }
-    }
+    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted);
 
     public bool IsDue(DateOnly today) => IsActive && NextDate is { } next && next <= today;
 
@@ -94,14 +85,7 @@ public sealed class RecurringEntry
         Memo = Text.Optional(details.Memo, 1000, "recurring.memo_too_long", "Memo");
         Basis = Enum.IsDefined(details.Basis) ? details.Basis : throw new DomainException("journal.basis_invalid", "Unknown entry basis.");
         Frequency = Enum.IsDefined(details.Frequency) ? details.Frequency : throw new DomainException("recurring.frequency_invalid", "Unknown frequency.");
-        if (details.Interval is < 1 or > 99)
-            throw new DomainException("recurring.interval_invalid", "Repeat every 1 to 99 periods.");
-        if (details.StartDate == default)
-            throw new DomainException("recurring.start_required", "Choose a start date.");
-        if (details.EndDate is { } end && end < details.StartDate)
-            throw new DomainException("recurring.end_before_start", "The end date can't be before the start date.");
-        if (details.MaxOccurrences is < 1)
-            throw new DomainException("recurring.occurrences_invalid", "The number of occurrences must be at least 1.");
+        Recurrence.Validate(details.Interval, details.StartDate, details.EndDate, details.MaxOccurrences);
 
         // Validates the lines the same way posting will (balance, one side each, cents).
         JournalEntry.Post(1, details.StartDate, Currency.Usd, details.Lines, DateTimeOffset.UnixEpoch);
@@ -115,13 +99,7 @@ public sealed class RecurringEntry
         _lines.AddRange(details.Lines.Select((l, i) => new RecurringEntryLine(i + 1, l)));
     }
 
-    public DateOnly OccurrenceDate(int index) => Frequency switch
-    {
-        RecurrenceFrequency.Weekly => StartDate.AddDays(7 * Interval * index),
-        RecurrenceFrequency.Monthly => StartDate.AddMonths(Interval * index),
-        RecurrenceFrequency.Quarterly => StartDate.AddMonths(3 * Interval * index),
-        _ => StartDate.AddYears(Interval * index),
-    };
+    public DateOnly OccurrenceDate(int index) => Recurrence.OccurrenceDate(Frequency, Interval, StartDate, index);
 
     public void RecordPosted(Guid entryId)
     {
@@ -145,3 +123,40 @@ public sealed record RecurringEntryDetails(
     bool AutoPost = false,
     string? Memo = null,
     EntryBasis Basis = EntryBasis.Both);
+
+/// <summary>Schedule arithmetic shared by recurring journal entries and recurring invoices.</summary>
+public static class Recurrence
+{
+    /// <summary>
+    /// The date of occurrence <paramref name="index"/> (0 = the start), computed from the start date rather
+    /// than the previous occurrence, so a schedule starting on the 31st falls on each month's last day.
+    /// </summary>
+    public static DateOnly OccurrenceDate(RecurrenceFrequency frequency, int interval, DateOnly start, int index) => frequency switch
+    {
+        RecurrenceFrequency.Weekly => start.AddDays(7 * interval * index),
+        RecurrenceFrequency.Monthly => start.AddMonths(interval * index),
+        RecurrenceFrequency.Quarterly => start.AddMonths(3 * interval * index),
+        _ => start.AddYears(interval * index),
+    };
+
+    /// <summary>The next date after <paramref name="posted"/> occurrences, or null once the schedule has ended.</summary>
+    public static DateOnly? NextDate(RecurrenceFrequency frequency, int interval, DateOnly start, DateOnly? end, int? max, int posted)
+    {
+        if (max is { } m && posted >= m)
+            return null;
+        var next = OccurrenceDate(frequency, interval, start, posted);
+        return end is { } e && next > e ? null : next;
+    }
+
+    public static void Validate(int interval, DateOnly start, DateOnly? end, int? max)
+    {
+        if (interval is < 1 or > 99)
+            throw new DomainException("recurring.interval_invalid", "Repeat every 1 to 99 periods.");
+        if (start == default)
+            throw new DomainException("recurring.start_required", "Choose a start date.");
+        if (end is { } e && e < start)
+            throw new DomainException("recurring.end_before_start", "The end date can't be before the start date.");
+        if (max is < 1)
+            throw new DomainException("recurring.occurrences_invalid", "The number of occurrences must be at least 1.");
+    }
+}

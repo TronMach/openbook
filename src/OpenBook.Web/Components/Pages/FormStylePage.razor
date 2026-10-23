@@ -1,0 +1,100 @@
+@page "/settings/forms"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+
+<PageTitle>Invoice style · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>Invoice and form style</h1>
+        <a class="button secondary" href="/settings">Back to settings</a>
+    </div>
+    <p class="muted">The look of PDF invoices, estimates, credit memos, receipts and statements. Your company name, address, email and phone come from Settings.</p>
+
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">
+            Saved.
+            @if (_sampleInvoiceId is { } sample)
+            {
+                <a href="/api/sales/invoices/@sample/pdf" target="_blank">See an invoice with this style</a><text>.</text>
+            }
+        </div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="forms" OnValidSubmit="SaveAsync" method="post">
+        <div class="row">
+            <div class="field">
+                <label for="template">Template</label>
+                <InputSelect id="template" @bind-Value="Input.Template">
+                    @foreach (var choice in Enum.GetValues<FormTemplate>())
+                    {
+                        <option value="@choice">@Labels.For(choice)</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="field">
+                <label for="color">Accent color</label>
+                <input id="color" name="Input.AccentColor" type="color" value="@Input.AccentColor" />
+            </div>
+        </div>
+        <div class="field">
+            <label for="footer">Footer <span class="muted">(optional)</span></label>
+            <InputTextArea id="footer" rows="3" @bind-Value="Input.Footer" />
+            <span class="hint">Printed at the bottom of every page, e.g. how to pay: bank details, or "Make checks payable to…".</span>
+        </div>
+        <button type="submit">Save</button>
+    </EditForm>
+</div>
+
+@code {
+    private bool _saved;
+    private string? _error;
+    private Guid? _sampleInvoiceId;
+
+    [SupplyParameterFromForm(FormName = "forms")]
+    private StyleModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    private bool Saved { get; set; }
+
+    [Inject]
+    private InvoiceService Invoices { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        Input ??= new StyleModel { Template = company.FormTemplate, AccentColor = company.FormAccentColor, Footer = company.FormFooter };
+        _saved = Saved;
+        if (_saved)
+            _sampleInvoiceId = (await Invoices.ListAsync()).FirstOrDefault()?.Id;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await Settings.UpdateFormStyleAsync(Input.Template, Input.AccentColor, Input.Footer);
+            Navigation.NavigateTo("/settings/forms?saved=true");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class StyleModel
+    {
+        public FormTemplate Template { get; set; }
+        public string? AccentColor { get; set; } = Company.DefaultAccentColor;
+
+        [StringLength(1000)]
+        public string? Footer { get; set; }
+    }
+}

@@ -1,0 +1,121 @@
+@page "/banking/deposits/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject DepositService Deposits
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Deposit · OpenBook</PageTitle>
+
+@if (_deposit is null)
+{
+    <div class="card"><p>That deposit doesn't exist. <a href="/banking">Back to banking</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Deposit of @Labels.Amount(_deposit.Total)</h1>
+        @if (_deposit.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a class="button secondary" href="/banking/@_deposit.BankAccountId">Register</a>
+        <a class="button secondary" href="/audit?entityId=@_deposit.Id">History</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_deposit.Date)</dd>
+            <dt>Deposited to</dt><dd>@_chart.FullName(_deposit.BankAccountId)</dd>
+            @if (_deposit.Memo is not null) { <dt>Memo</dt><dd>@_deposit.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_deposit.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    <table class="data" style="margin-top: 1rem">
+        <thead><tr><th>Item</th><th>From</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (var line in _deposit.Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr>
+                    <td>
+                        <a href="@(line.Kind == DepositedKind.Payment ? $"/sales/payments/{line.SourceId}" : $"/sales/receipts/{line.SourceId}")">
+                            @(line.Kind == DepositedKind.Payment ? "Customer payment" : "Sales receipt")
+                        </a>
+                    </td>
+                    <td class="muted">@_chart.FullName(line.FromAccountId)</td>
+                    <td class="num">@Labels.Amount(line.Amount)</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_deposit.Total)</td></tr></tfoot>
+    </table>
+
+    @if (_deposit.Status == DocumentStatus.Posted)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this deposit</h2>
+            <p class="muted">Voiding puts the payments back in undeposited funds, ready to deposit again. A reconciled deposit can't be voided.</p>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void deposit</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private BankDeposit? _deposit;
+    private ChartOfAccounts _chart = new([]);
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _deposit = await Deposits.GetAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Deposits.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/banking/deposits/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the deposit is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

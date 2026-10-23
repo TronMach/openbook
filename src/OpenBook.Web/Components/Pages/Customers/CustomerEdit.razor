@@ -17,8 +17,15 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@(_customer?.DisplayName ?? "New customer")</h1>
+        @if (_customer is not null)
+        {
+            <a class="button secondary" href="/customers/@_customer.Id/statement">Statement</a>
+            <a class="button secondary" href="/audit?entityId=@_customer.Id">History</a>
+        }
         @if (_customer is { IsActive: true })
         {
+            <a class="button secondary" href="/sales/estimates/new?customer=@_customer.Id">New estimate</a>
+            <a class="button secondary" href="/sales/credit-memos/new?customer=@_customer.Id">Credit memo</a>
             <a class="button secondary" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
             <a class="button" href="/sales/invoices/new?customer=@_customer.Id">New invoice</a>
         }
@@ -125,6 +132,18 @@
                     </InputSelect>
                 </div>
                 <div class="field">
+                    <label for="discount">Early payment discount <span class="muted">(optional)</span></label>
+                    <div class="inline">
+                        <InputNumber id="discount" class="short" @bind-Value="Input.EarlyPaymentDiscountPercent" step="0.01" min="0" />
+                        <span>% if paid within</span>
+                        <InputNumber class="short" aria-label="Discount days" @bind-Value="Input.EarlyPaymentDiscountDays" min="0" />
+                        <span>days</span>
+                    </div>
+                    <span class="hint">For terms like "2% 10, Net 30". Offered when you receive a payment in time.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
                     <label for="notes">Notes <span class="muted">(private)</span></label>
                     <InputText id="notes" @bind-Value="Input.Notes" />
                 </div>
@@ -179,6 +198,8 @@
                 BillingAddress = _customer.BillingAddress,
                 ShippingAddress = _customer.ShippingAddress,
                 PaymentTermsDays = _customer.PaymentTermsDays,
+                EarlyPaymentDiscountPercent = _customer.EarlyPaymentDiscountPercent,
+                EarlyPaymentDiscountDays = _customer.EarlyPaymentDiscountDays,
                 Notes = _customer.Notes,
             };
     }
@@ -188,7 +209,8 @@
         try
         {
             var details = new CustomerDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone,
-                Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes);
+                Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
+                Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
         }
@@ -236,6 +258,10 @@
         public string? ShippingAddress { get; set; }
 
         public int PaymentTermsDays { get; set; } = 30;
+
+        public decimal? EarlyPaymentDiscountPercent { get; set; }
+
+        public int? EarlyPaymentDiscountDays { get; set; }
 
         [StringLength(2000)]
         public string? Notes { get; set; }

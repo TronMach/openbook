@@ -1,0 +1,29 @@
+@* One row of aging buckets: current, 1–30, 31–60, 61–90, over 90 days past due, and the total. *@
+
+<table class="data aging" style="margin-top: 1rem">
+    <thead>
+        <tr>
+            <th class="num">Current</th>
+            <th class="num">1–30 days</th>
+            <th class="num">31–60 days</th>
+            <th class="num">61–90 days</th>
+            <th class="num">Over 90 days</th>
+            <th class="num">Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="num">@Labels.Amount(Buckets.Current)</td>
+            <td class="num">@Labels.Amount(Buckets.Days1To30)</td>
+            <td class="num">@Labels.Amount(Buckets.Days31To60)</td>
+            <td class="num">@Labels.Amount(Buckets.Days61To90)</td>
+            <td class="num">@Labels.Amount(Buckets.Over90)</td>
+            <td class="num"><strong>@Labels.Amount(Buckets.Total)</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired]
+    public AgingBuckets Buckets { get; set; } = AgingBuckets.Zero;
+}

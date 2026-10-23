@@ -12,7 +12,7 @@ Feature counts from the PDF: **35 MVP**, **73 V1**, **~110 LATER**.
 | API | ASP.NET Core Minimal APIs | V1 requires "everything the UI can do" over REST; UI and API call the same application layer from day one |
 | Data | EF Core 10 — SQLite (MVP), PostgreSQL (V1) | Keep provider-neutral from the start: no SQLite-only SQL, migrations per provider |
 | Money | `decimal` everywhere + a `Money` value object | Exact math; ban `double`/`float` in Domain via an analyzer |
-| PDFs | QuestPDF | Invoices, statements, checks, reports |
+| PDFs | PDFsharp-MigraDoc 6.2.4 (MIT, pinned: 6.5+ is AGPL) | Invoices, statements, checks, reports |
 | Spreadsheets | ClosedXML | XLSX export |
 | Testing | xUnit + Verify (snapshot reports) + property tests (FsCheck/CsCheck) for ledger invariants | |
 
@@ -72,7 +72,7 @@ tests/
 |---|---|---|---|
 | V1.1 | Ledger hardening | Full immutable audit log UI, period close with password override, year-end close (retained earnings), recurring & reversing JEs, opening balances wizard, CoA templates (sole prop, LLC, S-corp, nonprofit) | M–L |
 | V1.2 | Banking pro | OFX/QFX/QBO import, bank feed review queue (match/categorize/exclude), bank rules, duplicate detection, undo reconciliation, check printing | L |
-| V1.3 | A/R complete | Estimates → invoice, credit memos & refunds, payment terms, recurring invoices, QuestPDF invoice templates, SMTP email, customer statements, undeposited funds, discounts, A/R aging | L |
+| V1.3 | A/R complete | Estimates → invoice, credit memos & refunds, payment terms, recurring invoices, PDF invoice templates, SMTP email, customer statements, undeposited funds, discounts, A/R aging | L |
 | V1.4 | A/P complete | Vendor credits, recurring bills, attachments on any transaction, 1099 flagging, A/P aging | M |
 | V1.5 | Sales tax | Rates, codes, combined groups, taxable items/customers, exemption certificates, liability report, tax payments | M–L |
 | V1.6 | Inventory | Inventory / non-inventory / service items, FIFO cost layers, valuation report, quantity adjustments, reorder points | L |
@@ -84,6 +84,8 @@ Suggested order: V1.1 → V1.3 → V1.4 → V1.2 → V1.5 → V1.7 → V1.6 → 
 Sales tax must land before inventory, since both change how invoice lines post. Multi-user goes late so the API surface is stable before it's exposed.
 
 **V1.1 status (2026-10-22): complete.** Closing date with an optional closing password: changes dated in a closed period (posting, voiding, any document) are refused or need the password, and each override is audited; reopening or changing the password needs the current one. Year-end close moves the closing date to the fiscal year end (no closing entries; prior years' income shows on a "Retained Earnings" account when the chart has one). Reversing entries ("reverse on" date). Recurring journal entries (weekly to yearly, end date or count, month-end safe, catch-up, manual or automatic posting by an hourly background job as "system"). Opening balances wizard (difference to Opening Balance Equity). Starter charts for sole proprietor/LLC, partnership, corporation and nonprofit, offered on the empty chart of accounts after setup. Audit log page with filters, per-record history and field-level changes. API for all of it. 303 tests.
+
+**V1.3 status (2026-10-23): complete.** Estimates (edit until invoiced, accept/decline, expiry) that become invoices; discount lines (percent of the items above, or an amount) posting to Discounts Given; payment terms with early payment discounts ("2% 10, Net 30") taken at Receive payment; payments larger than what's applied leave customer credit; credit memos; applying credit to invoices (no posting); refunds of credit memos and unapplied payments; Undeposited Funds and Make deposit; recurring invoices created on a schedule, manually or by the hourly job, optionally emailed; customer statements (balance forward, running balance, aging); A/R aging summary and detail as of any date; PDF invoices, estimates, credit memos, receipts and statements (MigraDoc) in Classic, Modern or Compact style with accent color and footer; SMTP email through MailKit (or save to a folder) with the PDF attached and every send audited. Cash basis covers discounts, unapplied payments and credit memo refunds. API for all of it. 341 tests.
 
 ## Phase 3 — LATER (pick by audience)
 

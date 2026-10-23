@@ -9,7 +9,11 @@ using OpenBook.Domain.Common;
 namespace OpenBook.Infrastructure.Persistence;
 
 /// <summary>Where the company file lives and where safety copies go.</summary>
-public sealed record OpenBookStorage(string ConnectionString, string BackupDirectory);
+public sealed record OpenBookStorage(string ConnectionString, string BackupDirectory)
+{
+    /// <summary>Where "save to folder" email delivery writes messages: a "mail" folder beside the backups folder.</summary>
+    public string MailDirectory => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(BackupDirectory)) ?? ".", "mail");
+}
 
 /// <summary>
 /// Backups are plain SQLite files made with SQLite's online backup API, so they're consistent

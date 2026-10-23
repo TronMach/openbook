@@ -99,13 +99,16 @@ public class SalesTests
     public void Payments_list_each_invoice_once_with_positive_amounts()
     {
         var invoice = Guid.NewGuid();
-        CustomerPayment Create(params (Guid, decimal)[] apps) =>
-            CustomerPayment.Create(Guid.NewGuid(), Guid.NewGuid(), Date, Guid.NewGuid(), Receivables, apps, Guid.NewGuid(), DateTimeOffset.UtcNow);
+        CustomerPayment Create(decimal amount, params (Guid Id, decimal Amount)[] apps) =>
+            CustomerPayment.Create(Guid.NewGuid(), Guid.NewGuid(), Date, amount, Guid.NewGuid(), Receivables,
+                apps.Select(a => new PaymentApplicationDraft(a.Id, a.Amount)).ToList(), Guid.NewGuid(), DateTimeOffset.UtcNow);
 
-        Assert.Equal(150m, Create((invoice, 100m), (Guid.NewGuid(), 50m)).Amount);
-        Assert.Equal("payment.duplicate_invoice", CodeOf(() => Create((invoice, 1m), (invoice, 2m))));
-        Assert.Equal("payment.amount_not_positive", CodeOf(() => Create((invoice, -1m))));
-        Assert.Equal("payment.no_invoices", CodeOf(() => Create((invoice, 0m))));
+        Assert.Equal(150m, Create(150m, (invoice, 100m), (Guid.NewGuid(), 50m)).AmountApplied);
+        Assert.Equal("payment.duplicate_invoice", CodeOf(() => Create(3m, (invoice, 1m), (invoice, 2m))));
+        Assert.Equal("payment.amount_not_positive", CodeOf(() => Create(1m, (invoice, -1m))));
+        Assert.Equal("payment.amount_not_positive", CodeOf(() => Create(0m, (invoice, 0m))));
+        Assert.Equal("payment.over_applied", CodeOf(() => Create(50m, (invoice, 60m))));
+        Assert.Equal(40m, Create(100m, (invoice, 60m)).Unapplied);
     }
 
     [Fact]

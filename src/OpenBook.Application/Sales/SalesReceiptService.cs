@@ -18,6 +18,7 @@ public sealed record CreateSalesReceiptCommand(
 public sealed class SalesReceiptService(
     ISalesStore store,
     SalesAccounts salesAccounts,
+    SalesLineBuilder lineBuilder,
     PostingEngine engine,
     IClock clock,
     ICurrentUser user)
@@ -49,8 +50,7 @@ public sealed class SalesReceiptService(
         if ((await store.ListReceiptNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
-        var items = await store.GetItemsAsync(command.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value).Distinct().ToList(), ct);
-        var lines = SalesLine.FromDrafts(command.Lines, items);
+        var lines = await lineBuilder.BuildAsync(command.Lines, ct);
 
         var id = Guid.CreateVersion7();
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
@@ -69,6 +69,8 @@ public sealed class SalesReceiptService(
         var receipt = await store.GetReceiptAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (receipt.Status == DocumentStatus.Voided)
             throw new DomainException("receipt.already_voided", $"Sales receipt {receipt.Number} is already voided.");
+        if (receipt.DepositId is not null)
+            throw new DomainException("receipt.deposited", $"Sales receipt {receipt.Number} is in a bank deposit. Void the deposit first.");
 
         var before = Snapshot(receipt);
         await engine.StageVoidAsync(receipt.JournalEntryId, reason, fromDocument: true, ct);
@@ -91,6 +93,7 @@ public sealed class SalesReceiptService(
         r.Reference,
         r.Memo,
         Status = r.Status.ToString(),
-        Lines = r.Lines.Select(l => new { l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
+        r.DepositId,
+        Lines = r.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount }),
     });
 }

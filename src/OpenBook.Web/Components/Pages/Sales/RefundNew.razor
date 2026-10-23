@@ -1,0 +1,144 @@
+@page "/sales/refunds/new"
+@using System.ComponentModel.DataAnnotations
+@inject CreditService Credits
+@inject CustomerService CustomerService
+@inject PaymentService Payments
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Refund · OpenBook</PageTitle>
+
+<div class="card narrow">
+    <h1>Refund to customer</h1>
+
+    @if (_credit is null)
+    {
+        <p>There's no unused credit to refund. <a href="/sales">Back to sales</a>.</p>
+        return;
+    }
+
+    <p class="muted">Pays credit back to @_customer?.DisplayName from @_credit.Label, which has @Labels.Amount(_credit.Available) left.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="refund" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+        <div class="field">
+            <label for="amount">Amount</label>
+            <InputNumber id="amount" @bind-Value="Input.Amount" step="0.01" min="0" />
+            <ValidationMessage For="() => Input.Amount" />
+        </div>
+        <div class="field">
+            <label for="account">Paid from</label>
+            <InputSelect id="account" @bind-Value="Input.PaymentAccountId">
+                @foreach (var a in _accounts)
+                {
+                    <option value="@a.Id">@a.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="row">
+            <div class="field">
+                <label for="date">Date</label>
+                <InputDate id="date" @bind-Value="Input.Date" />
+            </div>
+            <div class="field">
+                <label for="reference">Check no. / reference <span class="muted">(optional)</span></label>
+                <InputText id="reference" @bind-Value="Input.Reference" maxlength="30" />
+            </div>
+        </div>
+        <div class="field">
+            <label for="memo">Memo <span class="muted">(optional)</span></label>
+            <InputText id="memo" @bind-Value="Input.Memo" />
+        </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+        <div class="actions">
+            <button type="submit">Record refund</button>
+            <a href="@_backLink">Cancel</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private AvailableCredit? _credit;
+    private Customer? _customer;
+    private IReadOnlyList<Account> _accounts = [];
+    private string _backLink = "/sales";
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [SupplyParameterFromQuery(Name = "creditMemo")]
+    private Guid? CreditMemoId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "payment")]
+    private Guid? PaymentId { get; set; }
+
+    [SupplyParameterFromForm]
+    private RefundModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Guid? customerId = null;
+        if (CreditMemoId is { } memoId)
+        {
+            customerId = (await Credits.GetCreditMemoAsync(memoId))?.CustomerId;
+            _backLink = $"/sales/credit-memos/{memoId}";
+        }
+        else if (PaymentId is { } paymentId)
+        {
+            customerId = (await Payments.GetAsync(paymentId))?.CustomerId;
+            _backLink = $"/sales/payments/{paymentId}";
+        }
+
+        if (customerId is not { } id)
+            return;
+
+        var sourceId = CreditMemoId ?? PaymentId;
+        _customer = await CustomerService.GetAsync(id);
+        _credit = (await Credits.AvailableAsync(id)).FirstOrDefault(c => c.Id == sourceId);
+        _accounts = (await AccountService.GetChartAsync()).Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+        Input ??= new RefundModel { Amount = _credit?.Available, PaymentAccountId = _accounts.FirstOrDefault()?.Id ?? Guid.Empty };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_credit is null)
+            return;
+        try
+        {
+            ClosingOverride.Password = Input.ClosingPassword;
+            var refund = await Credits.RefundAsync(new RefundCreditCommand(
+                _credit.Kind, _credit.Id, Input.Date, Input.PaymentAccountId, Input.Amount ?? 0m, Input.Reference, Input.Memo));
+            Navigation.NavigateTo($"/sales/refunds/{refund.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class RefundModel
+    {
+        [Required(ErrorMessage = "Enter the amount refunded.")]
+        [Range(typeof(decimal), "0.01", "999999999999", ErrorMessage = "Enter an amount above zero.")]
+        public decimal? Amount { get; set; }
+
+        public Guid PaymentAccountId { get; set; }
+
+        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+        [StringLength(30)]
+        public string? Reference { get; set; }
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+
+        public string? ClosingPassword { get; set; }
+    }
+}

@@ -251,3 +251,11 @@ dl.changes { display: grid; grid-template-columns: max-content 1fr; gap: 0.15rem
 dl.changes dt { color: var(--muted); }
 dl.changes dd { margin: 0; overflow-wrap: anywhere; }
 dl.changes .before { text-decoration: line-through; color: var(--muted); }
+
+/* V1.3: receivables */
+table.aging-report tr.section-heading td { font-weight: 700; padding-top: 1rem; border-bottom: 1px solid var(--border); }
+table.aging-report tr.subtotal td { font-weight: 600; }
+table.aging-report tr.grand-total td { font-weight: 700; border-top: 2px solid var(--text); border-bottom: 3px double var(--text); }
+tr.discount-line td { background: var(--notice-bg); }
+.split-grid h2 { margin-top: 0; }
+input[type=color] { height: 2.4rem; padding: 0.15rem; max-width: 6rem; }

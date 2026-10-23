@@ -1,0 +1,73 @@
+@* The printable body of an estimate, credit memo or similar: who it's from and to, its lines and totals. *@
+@using OpenBook.Domain.Companies
+
+<div class="card">
+    <div class="split-grid">
+        <div>
+            <strong>@(Company.LegalName ?? Company.Name)</strong>
+            @if (Company.Address is not null) { <div style="white-space: pre-line">@Company.Address</div> }
+            @if (Company.Email is not null) { <div>@Company.Email</div> }
+            @if (Company.Phone is not null) { <div>@Company.Phone</div> }
+        </div>
+        <dl class="facts">
+            @foreach (var (label, value) in Facts)
+            {
+                <dt>@label</dt><dd>@value</dd>
+            }
+        </dl>
+    </div>
+    <div style="margin-top: 1rem">
+        <span class="muted">@(CustomerLabel)</span>
+        <div><a href="/customers/@Customer.Id">@Customer.DisplayName</a></div>
+        @if (Customer.CompanyName is not null && Customer.CompanyName != Customer.DisplayName) { <div>@Customer.CompanyName</div> }
+        @if (Customer.BillingAddress is not null) { <div style="white-space: pre-line">@Customer.BillingAddress</div> }
+    </div>
+
+    <table class="data" style="margin-top: 1rem">
+        <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (var line in Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr>
+                    <td>@line.Description</td>
+                    <td class="num">@(line.Kind == SalesLineKind.Item ? line.Quantity.ToString("0.####") : "")</td>
+                    <td class="num">@(line.Kind == SalesLineKind.Item ? line.Rate.ToString("#,##0.00##") : "")</td>
+                    <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            @foreach (var (label, amount) in Totals)
+            {
+                <tr><td colspan="3">@label</td><td class="num">@Labels.Amount(amount)</td></tr>
+            }
+        </tfoot>
+    </table>
+    @if (Memo is not null)
+    {
+        <p style="white-space: pre-line; margin-top: 1rem">@Memo</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Company Company { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Customer Customer { get; set; } = default!;
+
+    [Parameter]
+    public string CustomerLabel { get; set; } = "Bill to";
+
+    [Parameter]
+    public IReadOnlyList<(string Label, string Value)> Facts { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SalesLine> Lines { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<(string Label, decimal Amount)> Totals { get; set; } = [];
+
+    [Parameter]
+    public string? Memo { get; set; }
+}

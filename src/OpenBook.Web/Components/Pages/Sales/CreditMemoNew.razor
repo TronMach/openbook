@@ -1,0 +1,114 @@
+@page "/sales/credit-memos/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>New credit memo · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>New credit memo</h1>
+        <a class="button secondary" href="/sales?show=credits">Back to credit memos</a>
+    </div>
+    <p class="muted">For returns and allowances: reduces income and what the customer owes. Apply the credit to an invoice afterwards, or refund it.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_customers.Count == 0 || _items.Count == 0))
+    {
+        <div class="card"><p>Credit memos need a customer and at least one product or service.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" @bind="_customerId">
+                        <option value="">Choose a customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="number">Credit memo number</label>
+                    <input id="number" @bind="_number" maxlength="20" />
+                    <span class="hint">Shares the invoice number sequence.</span>
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to customer <span class="muted">(optional)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save credit memo</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private Guid? _customerId;
+    private string? _number;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _memo;
+    private List<SalesLineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
+
+    private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_customers, _items, _number) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync(),
+            await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
+        _customerId = PresetCustomer;
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo);
+            var credit = await Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command), _closingPassword);
+            Navigation.NavigateTo($"/sales/credit-memos/{credit.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

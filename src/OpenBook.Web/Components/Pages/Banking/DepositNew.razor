@@ -1,0 +1,148 @@
+@page "/banking/deposits/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Make deposit · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Make deposit</h1>
+        <a class="button secondary" href="/banking">Back to banking</a>
+    </div>
+    <p class="muted">
+        Payments and sales receipts recorded to Undeposited Funds wait here. Pick the ones you took to the bank together,
+        so the deposit matches the single amount on your bank statement.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _items.Count == 0)
+    {
+        <div class="card"><p>Nothing is waiting to be deposited.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="bank">Deposit to</label>
+                    <select id="bank" @bind="_bankAccountId">
+                        @foreach (var a in _banks)
+                        {
+                            <option value="@a.Id">@a.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" @bind="_memo" maxlength="1000" />
+                </div>
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data entry">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" aria-label="Select all" checked="@(_items.All(i => i.Selected))" @onchange="SelectAll" /></th>
+                        <th>Date</th><th>Received from</th><th>Reference</th><th>Held in</th><th class="num">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _items)
+                    {
+                        <tr @key="(row.Item.Kind, row.Item.Id)">
+                            <td><input type="checkbox" aria-label="Deposit @row.Item.Label" @bind="row.Selected" /></td>
+                            <td>@Labels.Date(row.Item.Date)</td>
+                            <td>
+                                <a href="@(row.Item.Kind == DepositedKind.Payment ? $"/sales/payments/{row.Item.Id}" : $"/sales/receipts/{row.Item.Id}")" target="_blank">@row.Item.Label</a>
+                            </td>
+                            <td>@row.Item.Reference</td>
+                            <td class="muted">@_chart.FullName(row.Item.AccountId)</td>
+                            <td class="num">@Labels.Amount(row.Item.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr><td colspan="5">Deposit total (@_items.Count(i => i.Selected) selected)</td><td class="num">@Labels.Amount(Total)</td></tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+        <div class="actions">
+            <button type="button" @onclick="SaveAsync" disabled="@(Total <= 0m || _bankAccountId == Guid.Empty || _busy)">Save deposit</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Row> _items = [];
+    private List<Account> _banks = [];
+    private ChartOfAccounts _chart = new([]);
+    private Guid _bankAccountId;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _memo;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    private decimal Total => _items.Where(i => i.Selected).Sum(i => i.Item.Amount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (items, chart) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<DepositService>().UndepositedAsync(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync()));
+        _chart = chart;
+        _items = items.Select(i => new Row(i)).ToList();
+        _banks = chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
+        _bankAccountId = _banks.FirstOrDefault()?.Id ?? Guid.Empty;
+        _loaded = true;
+    }
+
+    private void SelectAll(ChangeEventArgs e)
+    {
+        var selected = e.Value is true;
+        foreach (var row in _items)
+            row.Selected = selected;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new MakeDepositCommand(_bankAccountId, _date, _items.Where(i => i.Selected).Select(i => (i.Item.Kind, i.Item.Id)).ToList(), _memo);
+            var deposit = await Ops.RunAsync<DepositService, BankDeposit>(s => s.DepositAsync(command), _closingPassword);
+            Navigation.NavigateTo($"/banking/deposits/{deposit.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class Row(UndepositedItem item)
+    {
+        public UndepositedItem Item { get; } = item;
+        public bool Selected { get; set; }
+    }
+}

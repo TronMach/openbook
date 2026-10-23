@@ -1,0 +1,148 @@
+@page "/sales/estimates/{Id:guid}"
+@inject EstimateService Estimates
+@inject CustomerService CustomerService
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Estimate @(_estimate?.Number) · OpenBook</PageTitle>
+
+@if (_estimate is null || _customer is null || _company is null)
+{
+    <div class="card"><p>That estimate doesn't exist. <a href="/sales?show=estimates">Back to estimates</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    @{
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var open = _estimate.Status is EstimateStatus.Pending or EstimateStatus.Accepted;
+    }
+    <div class="toolbar">
+        <h1>Estimate @_estimate.Number</h1>
+        <span class="badge @(_estimate.Status == EstimateStatus.Accepted ? "ok" : _estimate.IsExpired(today) || _estimate.Status == EstimateStatus.Declined ? "warn" : null)">
+            @(_estimate.IsExpired(today) ? "Expired" : Labels.For(_estimate.Status))
+        </span>
+        <a class="button secondary" href="/sales?show=estimates">Back to estimates</a>
+        <a class="button secondary" href="/api/sales/estimates/@_estimate.Id/pdf" target="_blank">PDF</a>
+        <a class="button secondary" href="/sales/email/estimates/@_estimate.Id">Email</a>
+        <a class="button secondary" href="/audit?entityId=@_estimate.Id">History</a>
+        @if (_estimate.Status != EstimateStatus.Closed)
+        {
+            <a class="button secondary" href="/sales/estimates/@_estimate.Id/edit">Edit</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error no-print" role="alert">@_error</div>
+    }
+    @if (_estimate.InvoiceId is { } invoiceId)
+    {
+        <div class="alert notice no-print" role="status">Invoiced: <a href="/sales/invoices/@invoiceId">see the invoice</a>.</div>
+    }
+    @if (_estimate.LastEmailedAt is { } emailed)
+    {
+        <p class="muted no-print">Emailed @emailed.ToLocalTime().ToString("g").</p>
+    }
+
+    <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Prepared for" Facts="Facts" Lines="_estimate.Lines"
+                   Totals="Totals" Memo="@_estimate.Memo" />
+
+    @if (open)
+    {
+        <div class="card no-print" style="margin-top: 1.5rem">
+            <h2>Turn into an invoice</h2>
+            <p class="muted">Creates an invoice with these lines and prices, dated today unless you choose another date, and closes the estimate.</p>
+            <form method="post" @formname="convert" @onsubmit="ConvertAsync" class="inline">
+                <AntiforgeryToken />
+                <label for="invoice-date">Invoice date</label>
+                <input id="invoice-date" type="date" name="InvoiceDate" value="@today.ToString("yyyy-MM-dd")" />
+                <button type="submit">Create invoice</button>
+            </form>
+            <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="ClosingPassword" />
+        </div>
+    }
+    @if (_estimate.Status != EstimateStatus.Closed)
+    {
+        <form method="post" @formname="status" @onsubmit="SetStatusAsync" class="no-print actions">
+            <AntiforgeryToken />
+            <span class="muted">Mark as</span>
+            @foreach (var status in new[] { EstimateStatus.Pending, EstimateStatus.Accepted, EstimateStatus.Declined }.Where(s => s != _estimate.Status))
+            {
+                <button type="submit" class="secondary" name="NewStatus" value="@status">@Labels.For(status)</button>
+            }
+        </form>
+    }
+</div>
+
+@code {
+    private Estimate? _estimate;
+    private Customer? _customer;
+    private OpenBook.Domain.Companies.Company? _company;
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "convert")]
+    private DateOnly? InvoiceDate { get; set; }
+
+    [SupplyParameterFromForm(FormName = "convert")]
+    private string? ClosingPassword { get; set; }
+
+    [SupplyParameterFromForm(FormName = "status")]
+    private EstimateStatus? NewStatus { get; set; }
+
+    private List<(string, decimal)> Totals => [("Total", _estimate!.Total)];
+
+    private List<(string, string)> Facts
+    {
+        get
+        {
+            var facts = new List<(string, string)> { ("Estimate", _estimate!.Number), ("Date", Labels.Date(_estimate.Date)) };
+            if (_estimate.ExpirationDate is { } expires)
+                facts.Add(("Valid until", Labels.Date(expires)));
+            return facts;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _estimate = await Estimates.GetAsync(Id);
+        if (_estimate is null)
+            return;
+        _customer = await CustomerService.GetAsync(_estimate.CustomerId);
+        _company = await Settings.GetAsync();
+    }
+
+    private async Task ConvertAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = ClosingPassword;
+            var invoice = await Estimates.ConvertToInvoiceAsync(Id, InvoiceDate ?? DateOnly.FromDateTime(DateTime.Today));
+            Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private async Task SetStatusAsync()
+    {
+        try
+        {
+            if (NewStatus is { } status)
+                await Estimates.SetStatusAsync(Id, status);
+            Navigation.NavigateTo($"/sales/estimates/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

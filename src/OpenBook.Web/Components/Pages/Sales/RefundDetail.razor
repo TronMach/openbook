@@ -1,0 +1,120 @@
+@page "/sales/refunds/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject CreditService Credits
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Refund · OpenBook</PageTitle>
+
+@if (_refund is null)
+{
+    <div class="card"><p>That refund doesn't exist. <a href="/sales">Back to sales</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Refund to @_customer?.DisplayName</h1>
+        @if (_refund.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a class="button secondary" href="/customers/@_refund.CustomerId">Customer</a>
+        <a class="button secondary" href="/audit?entityId=@_refund.Id">History</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_refund.Date)</dd>
+            <dt>Amount</dt><dd>@Labels.Amount(_refund.Amount)</dd>
+            <dt>Paid from</dt><dd>@_chart.FullName(_refund.PaymentAccountId)</dd>
+            <dt>Refunded credit</dt>
+            <dd>
+                @if (_refund.CreditMemoId is { } memoId)
+                {
+                    <a href="/sales/credit-memos/@memoId">Credit memo</a>
+                }
+                else if (_refund.CustomerPaymentId is { } paymentId)
+                {
+                    <a href="/sales/payments/@paymentId">Unapplied payment</a>
+                }
+            </dd>
+            @if (_refund.Reference is not null) { <dt>Reference</dt><dd>@_refund.Reference</dd> }
+            @if (_refund.Memo is not null) { <dt>Memo</dt><dd>@_refund.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_refund.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    @if (_refund.Status == DocumentStatus.Posted)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this refund</h2>
+            <p class="muted">Voiding reverses the payment out and gives the customer their credit back.</p>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void refund</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private CustomerRefund? _refund;
+    private Customer? _customer;
+    private ChartOfAccounts _chart = new([]);
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _refund = await Credits.GetRefundAsync(Id);
+        if (_refund is null)
+            return;
+        _customer = await CustomerService.GetAsync(_refund.CustomerId);
+        _chart = await AccountService.GetChartAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Credits.VoidRefundAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/sales/refunds/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the refund is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

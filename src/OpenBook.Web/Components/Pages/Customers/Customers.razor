@@ -47,7 +47,7 @@
                             </td>
                             <td>@s.Customer.Email</td>
                             <td>@s.Customer.Phone</td>
-                            <td class="muted">@Labels.Terms(s.Customer.PaymentTermsDays)</td>
+                            <td class="muted">@s.Customer.Terms.Label</td>
                             <td class="num">@(s.OpenInvoices == 0 ? "" : s.OpenInvoices)</td>
                             <td class="num @(s.Overdue > 0m ? "out-of-balance" : null)">@Labels.AmountOrBlank(s.Overdue)</td>
                             <td class="num">@Labels.AmountOrBlank(s.Balance)</td>

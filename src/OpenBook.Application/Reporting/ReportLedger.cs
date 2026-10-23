@@ -8,14 +8,18 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Reporting;
 
 /// <summary>
-/// The lines every report is built from, for one basis. Accrual: the ledger as posted. Cash: invoices and
-/// bills (and the payments' own A/R and A/P postings) are left out; instead each payment is recognized on
-/// its date as income or expense, split across the paid documents' accounts in proportion to their lines.
+/// The lines every report is built from, for one basis. Accrual: the ledger as posted. Cash: invoices,
+/// credit memos and bills (and the payments' own A/R and A/P postings) are left out; instead each payment is
+/// recognized on its date as income or expense, split across the paid documents' accounts in proportion to
+/// their lines. Credit applied to an invoice moves no cash, so it's recognized nowhere; credit applied later
+/// from an unapplied payment counts on the payment's date. A refund of a credit memo reverses income on the
+/// refund date; a refund of an unapplied payment just reverses that cash.
 /// </summary>
 public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases)
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
-    private static readonly HashSet<string> AccrualDocuments = [Invoice.Source, Bill.Source, CustomerPayment.Source, BillPayment.Source];
+    private static readonly HashSet<string> AccrualDocuments =
+        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, Bill.Source, CustomerPayment.Source, BillPayment.Source];
 
     /// <param name="from">Null for "since the beginning".</param>
     public async Task<IReadOnlyList<LedgerLine>> LinesAsync(ReportBasis basis, DateOnly? from, DateOnly to, CancellationToken ct = default)
@@ -35,17 +39,43 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             foreach (var payment in customerPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
-                var memo = lines.FirstOrDefault(l => l.JournalEntryId == payment.JournalEntryId)?.EntryMemo;
-                cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.DepositAccountId, payment.Amount, memo, CustomerPayment.Source, payment.Id));
+                var entryLines = lines.Where(l => l.JournalEntryId == payment.JournalEntryId).ToList();
+                var memo = entryLines.FirstOrDefault()?.EntryMemo;
+                if (payment.Amount != 0m)
+                    cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.DepositAccountId, payment.Amount, memo, CustomerPayment.Source, payment.Id));
+                // Early payment discounts: the entry's lines on accounts other than the deposit and A/R accounts.
+                cash.AddRange(entryLines.Where(l => l.AccountId != payment.DepositAccountId && l.AccountId != payment.ReceivableAccountId));
                 foreach (var application in payment.Applications)
                 {
-                    var invoiceLines = invoices[application.InvoiceId].Lines
-                        .Where(l => l.IncomeAccountId is not null && l.Amount != 0m)
-                        .Select(l => (l.IncomeAccountId!.Value, l.Amount))
-                        .ToList();
-                    foreach (var (accountId, share) in Allocate(application.Amount, invoiceLines))
+                    foreach (var (accountId, share) in Allocate(application.Settled, IncomeLines(invoices[application.InvoiceId].Lines)))
                         cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, -share, memo, CustomerPayment.Source, payment.Id));
                 }
+
+                // Money not applied to invoices is still the customer's (or refunded): it stays in A/R.
+                var unapplied = payment.Amount - payment.AmountApplied;
+                if (unapplied != 0m)
+                    cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.ReceivableAccountId, -unapplied, memo, CustomerPayment.Source, payment.Id));
+            }
+        }
+
+        var refunds = (await sales.ListRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date)).ToList();
+        if (refunds.Count > 0)
+        {
+            var credits = (await sales.ListCreditMemosAsync(null, ct)).ToDictionary(c => c.Id);
+            foreach (var refund in refunds)
+            {
+                if (refund.CreditMemoId is not { } creditId)
+                {
+                    // A refund of unapplied payment money: as posted (A/R against the bank).
+                    cash.AddRange(lines.Where(l => l.JournalEntryId == refund.JournalEntryId));
+                    continue;
+                }
+
+                var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
+                var memo = lines.FirstOrDefault(l => l.JournalEntryId == refund.JournalEntryId)?.EntryMemo;
+                cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.PaymentAccountId, -refund.Amount, memo, CustomerRefund.Source, refund.Id));
+                foreach (var (accountId, share) in Allocate(refund.Amount, IncomeLines(credits[creditId].Lines)))
+                    cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, share, memo, CustomerRefund.Source, refund.Id));
             }
         }
 
@@ -69,6 +99,11 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 
         return cash.OrderBy(l => l.Date).ThenBy(l => l.EntryNumber).ToList();
     }
+
+    private static List<(Guid AccountId, decimal Amount)> IncomeLines(IEnumerable<SalesLine> lines) => lines
+        .Where(l => l.IncomeAccountId is not null && l.Amount != 0m)
+        .Select(l => (l.IncomeAccountId!.Value, l.Amount))
+        .ToList();
 
     /// <summary>
     /// Splits <paramref name="amount"/> across accounts in proportion to the document's line amounts, in cents,

@@ -82,6 +82,19 @@ public static class Labels
     public static (string Increase, string Decrease) BalanceColumns(AccountType type) =>
         type == AccountType.CreditCard ? ("Charge", "Payment") : ("Deposit", "Payment");
 
+    public static string For(OpenBook.Domain.Sales.EstimateStatus status) => status switch
+    {
+        OpenBook.Domain.Sales.EstimateStatus.Closed => "Invoiced",
+        _ => status.ToString(),
+    };
+
+    public static string For(OpenBook.Domain.Companies.FormTemplate template) => template switch
+    {
+        OpenBook.Domain.Companies.FormTemplate.Modern => "Modern (colored band)",
+        OpenBook.Domain.Companies.FormTemplate.Compact => "Compact (smaller type)",
+        _ => "Classic",
+    };
+
     public static string For(ItemType type) => type == ItemType.Service ? "Service" : "Non-inventory product";
 
     public static string Terms(int days) => days == 0 ? "Due on receipt" : $"Net {days}";

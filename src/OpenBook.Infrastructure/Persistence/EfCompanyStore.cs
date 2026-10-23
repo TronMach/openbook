@@ -17,7 +17,11 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
     public Task<User?> FindUserAsync(string normalizedUsername, CancellationToken ct) =>
         db.Users.SingleOrDefaultAsync(u => u.Username == normalizedUsername, ct);
 
+    public Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct) => db.EmailConfigurations.SingleOrDefaultAsync(ct);
+
     public void Add(Company company) => db.Companies.Add(company);
+
+    public void Add(EmailSettings settings) => db.EmailConfigurations.Add(settings);
 
     public void Add(User user) => db.Users.Add(user);
 

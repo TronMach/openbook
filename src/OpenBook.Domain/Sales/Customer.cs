@@ -23,6 +23,13 @@ public sealed class Customer
     /// <summary>Days after the invoice date that payment is due; 0 means due on receipt.</summary>
     public int PaymentTermsDays { get; private set; }
 
+    /// <summary>Percent off for paying within <see cref="EarlyPaymentDiscountDays"/>; 0 for none.</summary>
+    public decimal EarlyPaymentDiscountPercent { get; private set; }
+
+    public int EarlyPaymentDiscountDays { get; private set; }
+
+    public PaymentTerms Terms => new(PaymentTermsDays, EarlyPaymentDiscountPercent, EarlyPaymentDiscountDays);
+
     public string? Notes { get; private set; }
     public bool IsActive { get; private set; }
 
@@ -45,9 +52,10 @@ public sealed class Customer
         BillingAddress = Text.Optional(details.BillingAddress, 500, "customer.address_too_long", "Billing address");
         ShippingAddress = Text.Optional(details.ShippingAddress, 500, "customer.address_too_long", "Shipping address");
         Notes = Text.Optional(details.Notes, 2000, "customer.notes_too_long", "Notes");
-        if (details.PaymentTermsDays is < 0 or > MaxTermsDays)
-            throw new DomainException("customer.terms_invalid", $"Payment terms are 0 to {MaxTermsDays} days.");
-        PaymentTermsDays = details.PaymentTermsDays;
+        var terms = PaymentTerms.Valid(details.PaymentTermsDays, details.EarlyPaymentDiscountPercent, details.EarlyPaymentDiscountDays);
+        PaymentTermsDays = terms.DueDays;
+        EarlyPaymentDiscountPercent = terms.DiscountPercent;
+        EarlyPaymentDiscountDays = terms.DiscountDays;
     }
 
     public void Deactivate() => IsActive = false;
@@ -69,4 +77,37 @@ public sealed record CustomerDetails(
     string? BillingAddress = null,
     string? ShippingAddress = null,
     int PaymentTermsDays = 30,
-    string? Notes = null);
+    string? Notes = null,
+    decimal EarlyPaymentDiscountPercent = 0m,
+    int EarlyPaymentDiscountDays = 0);
+
+/// <summary>When payment is due, with an optional discount for paying early ("2% 10, Net 30").</summary>
+public sealed record PaymentTerms(int DueDays, decimal DiscountPercent = 0m, int DiscountDays = 0)
+{
+    /// <summary>The usual choices, for pick lists.</summary>
+    public static IReadOnlyList<PaymentTerms> Common { get; } =
+        [new(0), new(15), new(30), new(45), new(60), new(30, 1m, 10), new(30, 2m, 10)];
+
+    public bool HasDiscount => DiscountPercent > 0m;
+
+    public string Label =>
+        (HasDiscount ? $"{DiscountPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}% {DiscountDays}, " : "")
+        + (DueDays == 0 ? (HasDiscount ? "Net 0" : "Due on receipt") : $"Net {DueDays}");
+
+    public DateOnly DueDate(DateOnly invoiceDate) => invoiceDate.AddDays(DueDays);
+
+    public DateOnly? DiscountDate(DateOnly invoiceDate) => HasDiscount ? invoiceDate.AddDays(DiscountDays) : null;
+
+    public static PaymentTerms Valid(int dueDays, decimal discountPercent, int discountDays)
+    {
+        if (dueDays is < 0 or > Customer.MaxTermsDays)
+            throw new DomainException("customer.terms_invalid", $"Payment terms are 0 to {Customer.MaxTermsDays} days.");
+        if (discountPercent is < 0m or >= 100m || decimal.Round(discountPercent, 2) != discountPercent)
+            throw new DomainException("customer.discount_invalid", "The early payment discount is a percentage from 0 to 99.99.");
+        if (discountPercent == 0m)
+            return new PaymentTerms(dueDays);
+        if (discountDays < 0 || discountDays > dueDays)
+            throw new DomainException("customer.discount_days_invalid", "The discount period must end on or before the due date.");
+        return new PaymentTerms(dueDays, discountPercent, discountDays);
+    }
+}

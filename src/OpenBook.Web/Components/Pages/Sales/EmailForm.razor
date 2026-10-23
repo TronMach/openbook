@@ -1,0 +1,150 @@
+@page "/sales/email/{Kind}/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Forms
+@inject EmailService Email
+@inject NavigationManager Navigation
+
+<PageTitle>Email · OpenBook</PageTitle>
+
+<div class="card narrow">
+    <h1>Email @_what</h1>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_sent)
+    {
+        <div class="alert notice" role="status">Sent to @Input.To. <a href="@_backLink">Back</a></div>
+    }
+
+    @if (!_configured)
+    {
+        <p>Email isn't set up yet. <a href="/settings/email">Set it up in Settings</a>, then come back to send.</p>
+        <p><a href="@_pdfLink" target="_blank">Download the PDF</a> to send it yourself instead.</p>
+    }
+    else if (!_sent && _known)
+    {
+        <EditForm Model="Input" FormName="email" OnValidSubmit="SendAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label for="to">To</label>
+                <InputText id="to" type="email" @bind-Value="Input.To" />
+                <ValidationMessage For="() => Input.To" />
+            </div>
+            <div class="field">
+                <label for="subject">Subject</label>
+                <InputText id="subject" @bind-Value="Input.Subject" />
+            </div>
+            <div class="field">
+                <label for="body">Message</label>
+                <InputTextArea id="body" rows="8" @bind-Value="Input.Body" />
+                <span class="hint">The <a href="@_pdfLink" target="_blank">PDF</a> is attached.</span>
+            </div>
+            <div class="actions">
+                <button type="submit">Send</button>
+                <a href="@_backLink">Cancel</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    private string _what = "";
+    private string _backLink = "/sales";
+    private string _pdfLink = "";
+    private bool _configured;
+    private bool _known;
+    private bool _sent;
+    private string? _error;
+
+    [Parameter]
+    public string Kind { get; set; } = "";
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+
+    [SupplyParameterFromForm]
+    private EmailModel Input { get; set; } = default!;
+
+    private DateOnly StatementTo => To ?? DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly StatementFrom => From ?? StatementTo.AddMonths(-1).AddDays(1);
+
+    private FormKind? FormKindValue => Kind switch
+    {
+        "invoices" => FormKind.Invoice,
+        "estimates" => FormKind.Estimate,
+        "credit-memos" => FormKind.CreditMemo,
+        "receipts" => FormKind.SalesReceipt,
+        _ => null,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _configured = (await Email.GetSettingsAsync()).IsConfigured;
+        try
+        {
+            EmailDraft draft;
+            if (Kind == "statement")
+            {
+                var range = $"from={StatementFrom:yyyy-MM-dd}&to={StatementTo:yyyy-MM-dd}";
+                (_what, _backLink, _pdfLink) = ("statement", $"/customers/{Id}/statement?{range}", $"/api/sales/customers/{Id}/statement/pdf?{range}");
+                draft = await Email.DraftStatementAsync(Id, StatementTo);
+            }
+            else if (FormKindValue is { } kind)
+            {
+                (_what, _backLink, _pdfLink) = (Kind switch
+                {
+                    "invoices" => "invoice",
+                    "estimates" => "estimate",
+                    "credit-memos" => "credit memo",
+                    _ => "sales receipt",
+                }, $"/sales/{Kind}/{Id}", $"/api/sales/{Kind}/{Id}/pdf");
+                draft = await Email.DraftAsync(kind, Id);
+            }
+            else
+            {
+                return;
+            }
+
+            _known = true;
+            Input ??= new EmailModel { To = draft.To, Subject = draft.Subject, Body = draft.Body };
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        try
+        {
+            var message = new EmailDraft(Input.To, Input.Subject ?? "", Input.Body ?? "");
+            if (Kind == "statement")
+                await Email.SendStatementAsync(Id, StatementFrom, StatementTo, message);
+            else
+                await Email.SendFormAsync(FormKindValue!.Value, Id, message);
+            _sent = true;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class EmailModel
+    {
+        [Required(ErrorMessage = "Enter the address to send to.")]
+        public string To { get; set; } = "";
+
+        [StringLength(300)]
+        public string? Subject { get; set; }
+
+        [StringLength(20000)]
+        public string? Body { get; set; }
+    }
+}

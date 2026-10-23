@@ -1,0 +1,231 @@
+@page "/sales/recurring/new"
+@page "/sales/recurring/{Id:guid}"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New recurring invoice" : _name) · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New recurring invoice" : _name)</h1>
+        <a class="button secondary" href="/sales/recurring">Back to recurring invoices</a>
+        @if (Id is { } id)
+        {
+            <a class="button secondary" href="/audit?entityId=@id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+
+    @if (_notFound)
+    {
+        <div class="card"><p>That recurring invoice doesn't exist. <a href="/sales/recurring">Back to recurring invoices</a>.</p></div>
+    }
+    else if (_loaded && (_customers.Count == 0 || _items.Count == 0))
+    {
+        <div class="card"><p>Recurring invoices need a customer and at least one product or service.</p></div>
+    }
+    else if (_loaded)
+    {
+        @if (!_active)
+        {
+            <div class="alert notice" role="status">This recurring invoice is inactive, so no invoices are created from it.</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <input id="name" @bind="_name" maxlength="100" />
+                </div>
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" @bind="_customerId">
+                        <option value="">Choose a customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="interval">Repeat every</label>
+                    <div class="inline">
+                        <input id="interval" class="short" type="number" min="1" max="99" @bind="_interval" />
+                        <select aria-label="Frequency" @bind="_frequency">
+                            @foreach (var frequency in Enum.GetValues<RecurrenceFrequency>())
+                            {
+                                <option value="@frequency">@RecurrenceLabels.Unit(frequency, _interval)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="start">First invoice date</label>
+                    <input id="start" type="date" @bind="_startDate" />
+                </div>
+                <div class="field">
+                    <label for="end">End date <span class="muted">(optional)</span></label>
+                    <input id="end" type="date" @bind="_endDate" />
+                </div>
+                <div class="field">
+                    <label for="max">Times <span class="muted">(optional)</span></label>
+                    <input id="max" class="short" type="number" min="1" @bind="_maxOccurrences" />
+                </div>
+            </div>
+            <label class="check">
+                <input type="checkbox" @bind="_autoCreate" @bind:after="() => _autoEmail &= _autoCreate" />
+                <span>Create invoices automatically when due</span>
+            </label>
+            <label class="check">
+                <input type="checkbox" @bind="_autoEmail" disabled="@(!_autoCreate)" />
+                <span>Email each invoice to the customer when it's created</span>
+            </label>
+
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to customer <span class="muted">(optional, printed on each invoice)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save</button>
+                @if (Id is not null)
+                {
+                    <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>
+                }
+                @if (_created > 0)
+                {
+                    <span class="muted">@_created created so far. Changes apply to future invoices only.</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private bool _loaded;
+    private bool _notFound;
+    private bool _busy;
+    private bool _saved;
+    private string? _error;
+
+    private string _name = string.Empty;
+    private Guid? _customerId;
+    private string? _memo;
+    private int _interval = 1;
+    private RecurrenceFrequency _frequency = RecurrenceFrequency.Monthly;
+    private DateOnly _startDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _endDate;
+    private int? _maxOccurrences;
+    private bool _autoCreate;
+    private bool _autoEmail;
+    private bool _active = true;
+    private int _created;
+    private List<SalesLineModel> _lines = [new()];
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool CanSave => _customerId is not null && !string.IsNullOrWhiteSpace(_name) && SalesLineModel.Total(_lines) > 0m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        RecurringInvoice? template;
+        (_customers, _items, template) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync(),
+            Id is { } id ? await sp.GetRequiredService<RecurringInvoiceService>().GetAsync(id) : null));
+
+        if (Id is not null)
+        {
+            if (template is null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            Show(template);
+        }
+
+        _loaded = true;
+    }
+
+    private void Show(RecurringInvoice t)
+    {
+        _name = t.Name;
+        _customerId = t.CustomerId;
+        _memo = t.Memo;
+        _interval = t.Interval;
+        _frequency = t.Frequency;
+        _startDate = t.StartDate;
+        _endDate = t.EndDate;
+        _maxOccurrences = t.MaxOccurrences;
+        _autoCreate = t.AutoCreate;
+        _autoEmail = t.AutoEmail;
+        _active = t.IsActive;
+        _created = t.OccurrencesPosted;
+        _lines = t.Lines.OrderBy(l => l.LineNumber).Select(l => SalesLineModel.From(l.ToDraft())).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            var details = new RecurringInvoiceDetails(_name, _customerId!.Value, SalesLineModel.Drafts(_lines), _frequency, _startDate, _interval,
+                _endDate, _maxOccurrences, _autoCreate, _autoEmail, _memo);
+            if (Id is { } id)
+            {
+                Show(await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.UpdateAsync(id, details)));
+                _saved = true;
+            }
+            else
+            {
+                var created = await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.CreateAsync(details));
+                Navigation.NavigateTo($"/sales/recurring/{created.Id}");
+            }
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _active = (await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.SetActiveAsync(Id!.Value, !_active))).IsActive;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

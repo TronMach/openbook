@@ -6,12 +6,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.18.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.13" />
+    <!-- Pinned: 6.2.x is the last MIT release; 6.5+ is AGPL or commercial. -->
+    <PackageReference Include="PDFsharp-MigraDoc" Version="[6.2.4]" />
   </ItemGroup>
 
   <PropertyGroup>

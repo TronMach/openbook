@@ -21,6 +21,22 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
 {
     public Task<Company> GetAsync(CancellationToken ct = default) => store.GetRequiredCompanyAsync(ct);
 
+    /// <summary>How invoices, estimates and statements look.</summary>
+    public async Task<Company> UpdateFormStyleAsync(FormTemplate template, string? accentColor, string? footer, CancellationToken ct = default)
+    {
+        var company = await store.GetRequiredCompanyAsync(ct);
+        var before = System.Text.Json.JsonSerializer.Serialize(new { Template = company.FormTemplate.ToString(), company.FormAccentColor, company.FormFooter });
+        company.SetFormStyle(template, accentColor, footer);
+        var after = System.Text.Json.JsonSerializer.Serialize(new { Template = company.FormTemplate.ToString(), company.FormAccentColor, company.FormFooter });
+        if (before != after)
+        {
+            store.Add(OpenBook.Domain.Auditing.AuditRecord.Create(clock.UtcNow, user.Actor, OpenBook.Domain.Auditing.AuditAction.Updated, "form_style", company.Id, before, after));
+            await store.SaveChangesAsync(ct);
+        }
+
+        return company;
+    }
+
     public async Task<Company> UpdateAsync(UpdateCompanySettingsCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);

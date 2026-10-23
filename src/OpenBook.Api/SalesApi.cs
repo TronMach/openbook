@@ -18,10 +18,14 @@ public sealed record CustomerResponse(
     int PaymentTermsDays,
     string? Notes,
     bool IsActive,
-    decimal? Balance = null)
+    decimal? Balance = null,
+    decimal EarlyPaymentDiscountPercent = 0m,
+    int EarlyPaymentDiscountDays = 0,
+    string? Terms = null)
 {
     public static CustomerResponse From(Customer c, decimal? balance = null) =>
-        new(c.Id, c.DisplayName, c.CompanyName, c.Email, c.Phone, c.BillingAddress, c.ShippingAddress, c.PaymentTermsDays, c.Notes, c.IsActive, balance);
+        new(c.Id, c.DisplayName, c.CompanyName, c.Email, c.Phone, c.BillingAddress, c.ShippingAddress, c.PaymentTermsDays, c.Notes, c.IsActive, balance,
+            c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label);
 }
 
 public sealed record ItemResponse(Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive)
@@ -29,9 +33,9 @@ public sealed record ItemResponse(Guid Id, string Name, ItemType Type, string? D
     public static ItemResponse From(Item i) => new(i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive);
 }
 
-public sealed record SalesLineResponse(int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount)
+public sealed record SalesLineResponse(int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount, SalesLineKind Kind)
 {
-    public static SalesLineResponse From(SalesLine l) => new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount);
+    public static SalesLineResponse From(SalesLine l) => new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind);
 }
 
 public sealed record InvoiceResponse(
@@ -46,11 +50,17 @@ public sealed record InvoiceResponse(
     decimal Balance,
     DocumentStatus Status,
     Guid JournalEntryId,
-    IReadOnlyList<SalesLineResponse> Lines)
+    IReadOnlyList<SalesLineResponse> Lines,
+    DateOnly? EarlyPaymentDiscountDate,
+    decimal EarlyPaymentDiscountPercent,
+    Guid? EstimateId,
+    Guid? RecurringInvoiceId,
+    DateTimeOffset? LastEmailedAt)
 {
     public static InvoiceResponse From(Invoice i) => new(
         i.Id, i.Number, i.CustomerId, i.Date, i.DueDate, i.Memo, i.Total, i.AmountPaid, i.Balance, i.Status, i.JournalEntryId,
-        i.Lines.Select(SalesLineResponse.From).ToList());
+        i.Lines.Select(SalesLineResponse.From).ToList(), i.EarlyPaymentDiscountDate, i.EarlyPaymentDiscountPercent, i.EstimateId,
+        i.RecurringInvoiceId, i.LastEmailedAt);
 }
 
 public sealed record PaymentResponse(
@@ -63,12 +73,18 @@ public sealed record PaymentResponse(
     string? Memo,
     DocumentStatus Status,
     Guid JournalEntryId,
-    IReadOnlyList<ApplyToInvoice> Applications)
+    IReadOnlyList<PaymentApplicationResponse> Applications,
+    decimal Unapplied,
+    decimal AmountRefunded,
+    Guid? DepositId)
 {
     public static PaymentResponse From(CustomerPayment p) => new(
         p.Id, p.CustomerId, p.Date, p.Amount, p.DepositAccountId, p.Reference, p.Memo, p.Status, p.JournalEntryId,
-        p.Applications.Select(a => new ApplyToInvoice(a.InvoiceId, a.Amount)).ToList());
+        p.Applications.Select(a => new PaymentApplicationResponse(a.InvoiceId, a.Amount, a.Discount, a.AppliedOn)).ToList(),
+        p.Unapplied, p.AmountRefunded, p.DepositId);
 }
+
+public sealed record PaymentApplicationResponse(Guid InvoiceId, decimal Amount, decimal Discount, DateOnly AppliedOn);
 
 public sealed record SalesReceiptResponse(
     Guid Id,
@@ -81,11 +97,12 @@ public sealed record SalesReceiptResponse(
     decimal Total,
     DocumentStatus Status,
     Guid JournalEntryId,
-    IReadOnlyList<SalesLineResponse> Lines)
+    IReadOnlyList<SalesLineResponse> Lines,
+    Guid? DepositId)
 {
     public static SalesReceiptResponse From(SalesReceipt r) => new(
         r.Id, r.Number, r.CustomerId, r.Date, r.DepositAccountId, r.Reference, r.Memo, r.Total, r.Status, r.JournalEntryId,
-        r.Lines.Select(SalesLineResponse.From).ToList());
+        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId);
 }
 
 public sealed record SetActiveRequest(bool Active);

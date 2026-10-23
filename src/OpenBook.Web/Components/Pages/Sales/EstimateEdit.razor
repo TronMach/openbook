@@ -1,0 +1,143 @@
+@page "/sales/estimates/new"
+@page "/sales/estimates/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New estimate" : $"Estimate {_number}") · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New estimate" : $"Edit estimate {_number}")</h1>
+        <a class="button secondary" href="@(Id is { } id ? $"/sales/estimates/{id}" : "/sales?show=estimates")">Cancel</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_notEditable)
+    {
+        <div class="card"><p>That estimate doesn't exist or is already invoiced. <a href="/sales?show=estimates">Back to estimates</a>.</p></div>
+    }
+    else if (_loaded && (_customers.Count == 0 || _items.Count == 0))
+    {
+        <div class="card"><p>Estimates need a customer and at least one product or service. <a href="/customers/new">Add a customer</a> or <a href="/items/new">a product or service</a>.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" @bind="_customerId">
+                        <option value="">Choose a customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="number">Estimate number</label>
+                    <input id="number" @bind="_number" maxlength="20" disabled="@(Id is not null)" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="expires">Valid until <span class="muted">(optional)</span></label>
+                    <input id="expires" type="date" @bind="_expirationDate" />
+                </div>
+            </div>
+
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to customer <span class="muted">(optional, printed on the estimate)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save estimate</button>
+                <span class="muted">Estimates don't affect the books until you turn them into invoices.</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private Guid? _customerId;
+    private string? _number;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _expirationDate = DateOnly.FromDateTime(DateTime.Today).AddDays(30);
+    private string? _memo;
+    private List<SalesLineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _notEditable;
+    private bool _busy;
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
+
+    private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Estimate? estimate;
+        (_customers, _items, _number, estimate) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync(),
+            await sp.GetRequiredService<EstimateService>().SuggestNumberAsync(),
+            Id is { } id ? await sp.GetRequiredService<EstimateService>().GetAsync(id) : null));
+        _customerId = PresetCustomer;
+
+        if (Id is not null)
+        {
+            if (estimate is null || estimate.Status == EstimateStatus.Closed)
+            {
+                _notEditable = true;
+                return;
+            }
+
+            _customerId = estimate.CustomerId;
+            _number = estimate.Number;
+            _date = estimate.Date;
+            _expirationDate = estimate.ExpirationDate;
+            _memo = estimate.Memo;
+            _lines = estimate.Lines.OrderBy(l => l.LineNumber).Select(l => SalesLineModel.From(l.ToDraft())).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo);
+            var estimate = await Ops.RunAsync<EstimateService, Estimate>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            Navigation.NavigateTo($"/sales/estimates/{estimate.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

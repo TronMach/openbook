@@ -1,11 +1,16 @@
 @page "/banking"
 @inject BankingService BankingService
+@inject DepositService Deposits
 
 <PageTitle>Banking · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
         <h1>Banking</h1>
+        @if (_undeposited > 0)
+        {
+            <a class="button" href="/banking/deposits/new">Make deposit (@_undeposited waiting)</a>
+        }
         @if (_accounts.Count >= 2)
         {
             <a class="button secondary" href="/banking/transfer">Transfer</a>
@@ -69,5 +74,11 @@
 @code {
     private IReadOnlyList<BankAccountSummary> _accounts = [];
 
-    protected override async Task OnInitializedAsync() => _accounts = await BankingService.ListAccountsAsync();
+    private int _undeposited;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _accounts = await BankingService.ListAccountsAsync();
+        _undeposited = (await Deposits.UndepositedAsync()).Count;
+    }
 }

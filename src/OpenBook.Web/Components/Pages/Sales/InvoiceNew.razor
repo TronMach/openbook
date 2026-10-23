@@ -56,12 +56,12 @@
                     <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
                 </div>
                 <div class="field">
-                    <label for="due">Due date @(_customer is { } c2 ? $"({Labels.Terms(c2.PaymentTermsDays)})" : "")</label>
+                    <label for="due">Due date @(_customer is { } c2 ? $"({c2.Terms.Label})" : "")</label>
                     <input id="due" type="date" @bind="_dueDate" />
                 </div>
             </div>
 
-            <SalesLinesEditor Lines="_lines" Items="_items" />
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional, printed on the invoice)</span></label>

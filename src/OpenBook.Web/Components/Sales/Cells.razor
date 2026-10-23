@@ -1,0 +1,13 @@
+@* The six aging amounts as table cells, blank for zero. *@
+
+<td class="num">@Labels.AmountOrBlank(Buckets.Current)</td>
+<td class="num">@Labels.AmountOrBlank(Buckets.Days1To30)</td>
+<td class="num">@Labels.AmountOrBlank(Buckets.Days31To60)</td>
+<td class="num">@Labels.AmountOrBlank(Buckets.Days61To90)</td>
+<td class="num">@Labels.AmountOrBlank(Buckets.Over90)</td>
+<td class="num">@Labels.Amount(Buckets.Total)</td>
+
+@code {
+    [Parameter, EditorRequired]
+    public AgingBuckets Buckets { get; set; } = AgingBuckets.Zero;
+}

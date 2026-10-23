@@ -27,20 +27,70 @@ public interface ISalesStore
     Task<IReadOnlyList<string>> ListInvoiceNumbersAsync(CancellationToken ct);
 
     Task<CustomerPayment?> GetPaymentAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<CustomerPayment>> GetPaymentsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<CustomerPayment>> ListPaymentsAsync(Guid? customerId, CancellationToken ct);
 
     /// <summary>Payments (any status) applied to the invoice.</summary>
     Task<IReadOnlyList<CustomerPayment>> ListPaymentsForInvoiceAsync(Guid invoiceId, CancellationToken ct);
 
     Task<SalesReceipt?> GetReceiptAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<SalesReceipt>> GetReceiptsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
     Task<IReadOnlyList<SalesReceipt>> ListReceiptsAsync(CancellationToken ct);
     Task<IReadOnlyList<string>> ListReceiptNumbersAsync(CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<Estimate?> GetEstimateAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<Estimate>> ListEstimatesAsync(Guid? customerId, CancellationToken ct);
+
+    Task<IReadOnlyList<string>> ListEstimateNumbersAsync(CancellationToken ct);
+
+    /// <summary>Tracked, with lines and applications.</summary>
+    Task<CreditMemo?> GetCreditMemoAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<CreditMemo>> ListCreditMemosAsync(Guid? customerId, CancellationToken ct);
+
+    /// <summary>Credit memos (any status) applied to the invoice.</summary>
+    Task<IReadOnlyList<CreditMemo>> ListCreditMemosForInvoiceAsync(Guid invoiceId, CancellationToken ct);
+
+    /// <summary>Invoice and credit memo numbers share one sequence.</summary>
+    Task<IReadOnlyList<string>> ListCreditMemoNumbersAsync(CancellationToken ct);
+
+    Task<CustomerRefund?> GetRefundAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<CustomerRefund>> ListRefundsAsync(Guid? customerId, CancellationToken ct);
+
+    /// <summary>Tracked, ordered by name.</summary>
+    Task<IReadOnlyList<RecurringInvoice>> ListRecurringInvoicesAsync(CancellationToken ct);
+
+    Task<RecurringInvoice?> GetRecurringInvoiceAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<BankDeposit?> GetDepositAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<BankDeposit>> ListDepositsAsync(CancellationToken ct);
 
     void Add(Customer customer);
     void Add(Item item);
     void Add(Invoice invoice);
     void Add(CustomerPayment payment);
     void Add(SalesReceipt receipt);
+    void Add(Estimate estimate);
+    void Add(CreditMemo creditMemo);
+    void Add(CustomerRefund refund);
+    void Add(RecurringInvoice recurringInvoice);
+    void Add(BankDeposit deposit);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);
@@ -62,6 +112,43 @@ public sealed class SalesAccounts(AccountService accounts)
 
         var name = chart.FindByFullName("Accounts Receivable") is null ? "Accounts Receivable" : "Accounts Receivable (A/R)";
         return await accounts.CreateAsync(new CreateAccountCommand(name, AccountType.AccountsReceivable), ct);
+    }
+
+    public const string DiscountsAccountName = "Discounts Given";
+    public const string UndepositedFundsName = "Undeposited Funds";
+
+    /// <summary>
+    /// Where discount lines and early payment discounts post: an active income account named "Discounts
+    /// Given", created (and saved) on first use.
+    /// </summary>
+    public async Task<Account> GetOrCreateDiscountsAsync(CancellationToken ct)
+    {
+        var chart = await accounts.GetChartAsync(ct);
+        var existing = chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.Income && string.Equals(a.Name, DiscountsAccountName, StringComparison.OrdinalIgnoreCase));
+        return existing ?? await accounts.CreateAsync(new CreateAccountCommand(DiscountsAccountName, AccountType.Income,
+            Description: "Discounts on sales and early payment discounts; reduces income."), ct);
+    }
+
+    /// <summary>The active "Undeposited Funds" account, or null if the chart has none.</summary>
+    public async Task<Account?> FindUndepositedFundsAsync(CancellationToken ct) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, UndepositedFundsName, StringComparison.OrdinalIgnoreCase));
+
+    public async Task<Account> GetOrCreateUndepositedFundsAsync(CancellationToken ct) =>
+        await FindUndepositedFundsAsync(ct)
+        ?? await accounts.CreateAsync(new CreateAccountCommand(UndepositedFundsName, AccountType.OtherCurrentAsset,
+            Description: "Payments received but not yet deposited."), ct);
+
+    /// <summary>A bank or credit card account to pay a refund from.</summary>
+    public async Task<Account> GetPaymentAccountAsync(Guid id, CancellationToken ct)
+    {
+        var account = (await accounts.GetChartAsync(ct)).Get(id);
+        if (account.Type is not (AccountType.Bank or AccountType.CreditCard))
+            throw new DomainException("sales.payment_account_type", $"'{account.Name}' can't pay out money; choose a bank or credit card account.");
+        if (!account.IsActive)
+            throw new DomainException("sales.payment_account_inactive", $"'{account.Name}' is inactive.");
+        return account;
     }
 
     /// <summary>Money received goes to a bank account, or an asset like Undeposited Funds.</summary>

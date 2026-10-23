@@ -1,0 +1,196 @@
+@page "/settings/email"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Forms
+@using OpenBook.Domain.Companies
+@inject EmailService Email
+@inject NavigationManager Navigation
+
+<PageTitle>Email settings · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>Email</h1>
+        <a class="button secondary" href="/settings">Back to settings</a>
+    </div>
+    <p class="muted">
+        How invoices, estimates and statements are sent. Use your email provider's SMTP settings, or save messages to a
+        folder to try things out without sending anything. The password is stored encrypted, readable only on this computer.
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="email-settings" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+        <div class="field">
+            <label for="delivery">Sending</label>
+            <InputSelect id="delivery" @bind-Value="Input.Delivery">
+                <option value="@EmailDelivery.None">Off</option>
+                <option value="@EmailDelivery.Smtp">Send with an SMTP server</option>
+                <option value="@EmailDelivery.Folder">Save to a folder instead of sending (for testing)</option>
+            </InputSelect>
+        </div>
+        <fieldset>
+            <legend>SMTP server</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="host">Server</label>
+                    <InputText id="host" @bind-Value="Input.Host" placeholder="smtp.example.com" />
+                </div>
+                <div class="field">
+                    <label for="port">Port</label>
+                    <InputNumber id="port" class="short" @bind-Value="Input.Port" />
+                </div>
+                <div class="field">
+                    <label for="security">Security</label>
+                    <InputSelect id="security" @bind-Value="Input.Security">
+                        <option value="@SmtpSecurity.Auto">Automatic</option>
+                        <option value="@SmtpSecurity.StartTls">STARTTLS (port 587)</option>
+                        <option value="@SmtpSecurity.SslOnConnect">SSL/TLS (port 465)</option>
+                        <option value="@SmtpSecurity.None">None (not recommended)</option>
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="username">User name <span class="muted">(optional)</span></label>
+                    <InputText id="username" @bind-Value="Input.Username" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="password">Password @(_hasPassword ? "(saved; leave blank to keep it)" : "")</label>
+                    <InputText id="password" type="password" @bind-Value="Input.NewPassword" autocomplete="new-password" />
+                </div>
+            </div>
+            @if (_hasPassword)
+            {
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.ClearPassword" />
+                    <span>Forget the saved password</span>
+                </label>
+            }
+        </fieldset>
+        <fieldset>
+            <legend>Messages</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="from">From address</label>
+                    <InputText id="from" type="email" @bind-Value="Input.FromAddress" />
+                </div>
+                <div class="field">
+                    <label for="from-name">From name <span class="muted">(optional)</span></label>
+                    <InputText id="from-name" @bind-Value="Input.FromName" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="bcc">Send a copy to <span class="muted">(optional)</span></label>
+                <InputText id="bcc" type="email" @bind-Value="Input.BccAddress" />
+            </div>
+        </fieldset>
+        <button type="submit">Save</button>
+    </EditForm>
+
+    @if (_configured)
+    {
+        <form method="post" @formname="test" @onsubmit="TestAsync" class="inline" style="margin-top: 1.5rem">
+            <AntiforgeryToken />
+            <label for="test-to">Send a test message to</label>
+            <input id="test-to" name="TestTo" type="email" required />
+            <button type="submit" class="secondary">Send test</button>
+        </form>
+    }
+</div>
+
+@code {
+    private bool _hasPassword;
+    private bool _configured;
+    private string? _message;
+    private string? _error;
+
+    [SupplyParameterFromForm(FormName = "email-settings")]
+    private SettingsModel Input { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "test")]
+    private string? TestTo { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    private bool Saved { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Email.GetSettingsAsync();
+        _hasPassword = settings.ProtectedPassword is not null;
+        _configured = settings.IsConfigured;
+        Input ??= new SettingsModel
+        {
+            Delivery = settings.Delivery,
+            Host = settings.Host,
+            Port = settings.Port,
+            Security = settings.Security,
+            Username = settings.Username,
+            FromAddress = settings.FromAddress,
+            FromName = settings.FromName,
+            BccAddress = settings.BccAddress,
+        };
+        if (Saved)
+            _message = "Email settings saved.";
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await Email.SaveSettingsAsync(new EmailSettingsCommand(Input.Delivery, Input.Host, Input.Port ?? 587, Input.Security, Input.Username,
+                Input.NewPassword, Input.ClearPassword, Input.FromAddress, Input.FromName, Input.BccAddress));
+            Navigation.NavigateTo("/settings/email?saved=true");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task TestAsync()
+    {
+        try
+        {
+            await Email.SendTestAsync(TestTo ?? "");
+            _message = $"Test message sent to {TestTo}.";
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class SettingsModel
+    {
+        public EmailDelivery Delivery { get; set; }
+
+        [StringLength(255)]
+        public string? Host { get; set; }
+
+        public int? Port { get; set; } = 587;
+        public SmtpSecurity Security { get; set; }
+
+        [StringLength(320)]
+        public string? Username { get; set; }
+
+        public string? NewPassword { get; set; }
+        public bool ClearPassword { get; set; }
+
+        [StringLength(320)]
+        public string? FromAddress { get; set; }
+
+        [StringLength(200)]
+        public string? FromName { get; set; }
+
+        [StringLength(320)]
+        public string? BccAddress { get; set; }
+    }
+}

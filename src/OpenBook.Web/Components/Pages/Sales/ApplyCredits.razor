@@ -1,0 +1,240 @@
+@page "/sales/credits/apply"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Apply credit · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Apply credit</h1>
+        <a class="button secondary" href="/sales">Back to sales</a>
+    </div>
+    <p class="muted">
+        Uses a customer's credit memos and unapplied payments to pay their invoices. Nothing new is posted: the credit
+        and the invoices already sit in accounts receivable, so this only records which invoices are settled.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">Credit applied.</div>
+    }
+
+    @if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" value="@_customerId" @onchange="PickCustomerAsync">
+                        <option value="">Choose a customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="date">Apply on</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+        </div>
+
+        @if (_customerId is not null)
+        {
+            @if (_credits.Count == 0 || _invoices.Count == 0)
+            {
+                <div class="card"><p>@(_credits.Count == 0 ? "This customer has no unused credit." : "This customer has no unpaid invoices.")</p></div>
+            }
+            else
+            {
+                <div class="split-grid">
+                    <div>
+                        <h2>Credit</h2>
+                        <table class="data entry">
+                            <thead><tr><th>Credit</th><th>Date</th><th class="num">Available</th><th class="num">Use</th></tr></thead>
+                            <tbody>
+                                @foreach (var credit in _credits)
+                                {
+                                    <tr @key="credit.Credit.Id">
+                                        <td>
+                                            <a href="@(credit.Credit.Kind == CreditKind.CreditMemo ? $"/sales/credit-memos/{credit.Credit.Id}" : $"/sales/payments/{credit.Credit.Id}")" target="_blank">@credit.Credit.Label</a>
+                                        </td>
+                                        <td>@Labels.Date(credit.Credit.Date)</td>
+                                        <td class="num">@Labels.Amount(credit.Credit.Available)</td>
+                                        <td class="num">@Labels.AmountOrBlank(credit.Used)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h2>Invoices</h2>
+                        <table class="data entry">
+                            <thead><tr><th>Invoice</th><th>Due</th><th class="num">Balance</th><th class="num">Apply</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in _invoices)
+                                {
+                                    <tr @key="row.Invoice.Id">
+                                        <td><a href="/sales/invoices/@row.Invoice.Id" target="_blank">@row.Invoice.Number</a></td>
+                                        <td>@Labels.Date(row.Invoice.DueDate)</td>
+                                        <td class="num">@Labels.Amount(row.Invoice.Balance)</td>
+                                        <td><input class="amount" type="number" step="0.01" min="0" aria-label="Apply to invoice @row.Invoice.Number" @bind="row.Amount" @bind:after="Allocate" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3"><button type="button" class="link" @onclick="ApplyOldestFirst">Apply oldest first</button></td>
+                                    <td class="num">@Labels.Amount(_invoices.Sum(r => r.Amount ?? 0m))</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <p class="@(Problem is null ? "muted" : "out-of-balance")">@(Problem ?? "Credit is used oldest first.")</p>
+                <div class="actions">
+                    <button type="button" @onclick="SaveAsync" disabled="@(Problem is not null || _invoices.Sum(r => r.Amount ?? 0m) <= 0m || _busy)">Apply credit</button>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private Guid? _customerId;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private List<CreditRow> _credits = [];
+    private List<InvoiceRow> _invoices = [];
+    private bool _loaded;
+    private bool _busy;
+    private bool _saved;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
+
+    private string? Problem =>
+        _invoices.Any(r => (r.Amount ?? 0m) < 0m || (r.Amount ?? 0m) > r.Invoice.Balance) ? "An amount is more than the invoice's balance."
+        : _invoices.Sum(r => r.Amount ?? 0m) > _credits.Sum(c => c.Credit.Available) ? "That's more than the credit available."
+        : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await Ops.RunAsync(async sp =>
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList());
+        if (PresetCustomer is { } preset)
+            await LoadAsync(preset);
+        _loaded = true;
+    }
+
+    private Task PickCustomerAsync(ChangeEventArgs e) => LoadAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    private async Task LoadAsync(Guid? customerId)
+    {
+        _customerId = customerId;
+        _saved = false;
+        if (customerId is not { } id)
+        {
+            _credits = [];
+            _invoices = [];
+            return;
+        }
+
+        var (credits, invoices) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<CreditService>().AvailableAsync(id),
+            await sp.GetRequiredService<PaymentService>().OpenInvoicesAsync(id)));
+        _credits = credits.Select(c => new CreditRow(c)).ToList();
+        _invoices = invoices.Select(i => new InvoiceRow(i)).ToList();
+        if (_credits.Count > 0)
+            ApplyOldestFirst();
+    }
+
+    private void ApplyOldestFirst()
+    {
+        var remaining = _credits.Sum(c => c.Credit.Available);
+        foreach (var row in _invoices)
+        {
+            var amount = Math.Min(remaining, row.Invoice.Balance);
+            row.Amount = amount > 0m ? amount : null;
+            remaining -= amount;
+        }
+
+        Allocate();
+    }
+
+    /// <summary>Shows which credit pays for what: credits oldest first against the invoices in order.</summary>
+    private void Allocate()
+    {
+        var needed = _invoices.Sum(r => r.Amount ?? 0m);
+        foreach (var credit in _credits)
+        {
+            credit.Used = Math.Clamp(needed, 0m, credit.Credit.Available);
+            needed -= credit.Used;
+        }
+    }
+
+    /// <summary>Pairs credits with invoices in order: each invoice takes from the oldest credit with something left.</summary>
+    private List<ApplyCredit> Pairings()
+    {
+        var left = _credits.Select(c => (c.Credit, Left: c.Credit.Available)).ToList();
+        var result = new List<ApplyCredit>();
+        var index = 0;
+        foreach (var row in _invoices.Where(r => (r.Amount ?? 0m) > 0m))
+        {
+            var need = row.Amount!.Value;
+            while (need > 0m && index < left.Count)
+            {
+                var take = Math.Min(need, left[index].Left);
+                if (take > 0m)
+                    result.Add(new ApplyCredit(left[index].Credit.Kind, left[index].Credit.Id, row.Invoice.Id, take));
+                need -= take;
+                left[index] = (left[index].Credit, left[index].Left - take);
+                if (left[index].Left == 0m)
+                    index++;
+            }
+        }
+
+        return result;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var customerId = _customerId!.Value;
+            var applications = Pairings();
+            await Ops.RunAsync<CreditService, bool>(async s => { await s.ApplyAsync(customerId, _date, applications); return true; });
+            await LoadAsync(customerId);
+            _saved = true;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class CreditRow(AvailableCredit credit)
+    {
+        public AvailableCredit Credit { get; } = credit;
+        public decimal Used { get; set; }
+    }
+
+    private sealed class InvoiceRow(Invoice invoice)
+    {
+        public Invoice Invoice { get; } = invoice;
+        public decimal? Amount { get; set; }
+    }
+}

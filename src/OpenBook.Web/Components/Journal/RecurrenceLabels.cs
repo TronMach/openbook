@@ -20,12 +20,17 @@ public static class RecurrenceLabels
     public static string Schedule(RecurringEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        var every = entry.Interval == 1 ? $"Every {Unit(entry.Frequency, 1)}" : $"Every {entry.Interval} {Unit(entry.Frequency, entry.Interval)}";
-        var text = $"{every} from {Labels.Date(entry.StartDate)}";
-        if (entry.EndDate is { } end)
-            text += $" until {Labels.Date(end)}";
-        if (entry.MaxOccurrences is { } max)
-            text += max == 1 ? ", once" : $", {max} times";
+        return Schedule(entry.Frequency, entry.Interval, entry.StartDate, entry.EndDate, entry.MaxOccurrences);
+    }
+
+    public static string Schedule(RecurrenceFrequency frequency, int interval, DateOnly start, DateOnly? end, int? max)
+    {
+        var every = interval == 1 ? $"Every {Unit(frequency, 1)}" : $"Every {interval} {Unit(frequency, interval)}";
+        var text = $"{every} from {Labels.Date(start)}";
+        if (end is { } e)
+            text += $" until {Labels.Date(e)}";
+        if (max is { } m)
+            text += m == 1 ? ", once" : $", {m} times";
         return text;
     }
 }

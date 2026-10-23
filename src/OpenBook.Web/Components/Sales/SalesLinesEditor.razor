@@ -1,4 +1,4 @@
-@* Line grid for invoices and sales receipts. Picking an item fills its description and price. *@
+@* Line grid for invoices, sales receipts, estimates and credit memos. Picking an item fills its description and price. *@
 
 <div class="table-wrap">
     <table class="data entry">
@@ -13,26 +13,46 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var line in Lines)
+            @{
+                var amounts = SalesLineModel.Amounts(Lines);
+            }
+            @for (var i = 0; i < Lines.Count; i++)
             {
-                <tr @key="line">
-                    <td>
-                        <select value="@line.ItemId" aria-label="Product or service" @onchange="e => PickItem(line, e)">
-                            <option value="">(note only)</option>
-                            @foreach (var item in Items)
-                            {
-                                <option value="@item.Id">@item.Name</option>
-                            }
-                        </select>
-                    </td>
-                    <td><input @bind="line.Description" aria-label="Description" /></td>
-                    <td><input class="amount" type="number" step="any" aria-label="Quantity" @bind="line.Quantity" /></td>
-                    <td><input class="amount" type="number" step="any" aria-label="Rate" @bind="line.Rate" /></td>
-                    <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
+                var line = Lines[i];
+                var amount = amounts[i];
+                <tr @key="line" class="@(line.IsDiscount ? "discount-line" : null)">
+                    @if (line.IsDiscount)
+                    {
+                        <td>
+                            <select value="@line.Kind" aria-label="Discount type" @onchange="e => SetDiscountKind(line, e)">
+                                <option value="@SalesLineKind.DiscountPercent">Discount (percent)</option>
+                                <option value="@SalesLineKind.DiscountAmount">Discount (amount)</option>
+                            </select>
+                        </td>
+                        <td><input @bind="line.Description" aria-label="Description" placeholder="Discount" /></td>
+                        <td class="num muted">@(line.Kind == SalesLineKind.DiscountPercent ? "%" : "")</td>
+                        <td><input class="amount" type="number" step="any" min="0" aria-label="@(line.Kind == SalesLineKind.DiscountPercent ? "Percent off" : "Amount off")" @bind="line.Rate" @bind:after="Changed" /></td>
+                    }
+                    else
+                    {
+                        <td>
+                            <select value="@line.ItemId" aria-label="Product or service" @onchange="e => PickItem(line, e)">
+                                <option value="">(note only)</option>
+                                @foreach (var item in Items)
+                                {
+                                    <option value="@item.Id">@item.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td><input @bind="line.Description" aria-label="Description" /></td>
+                        <td><input class="amount" type="number" step="any" aria-label="Quantity" @bind="line.Quantity" @bind:after="Changed" /></td>
+                        <td><input class="amount" type="number" step="any" aria-label="Rate" @bind="line.Rate" @bind:after="Changed" /></td>
+                    }
+                    <td class="num">@Labels.AmountOrBlank(amount)</td>
                     <td>
                         @if (Lines.Count > 1)
                         {
-                            <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => Lines.Remove(line)">×</button>
+                            <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => RemoveAsync(line)">×</button>
                         }
                     </td>
                 </tr>
@@ -40,9 +60,12 @@
         </tbody>
         <tfoot>
             <tr>
-                <td><button type="button" class="secondary" @onclick="() => Lines.Add(new SalesLineModel())">Add line</button></td>
-                <td colspan="3" class="num">Total</td>
-                <td class="num">@Labels.Amount(SalesLineModel.Total(Lines))</td>
+                <td colspan="2">
+                    <button type="button" class="secondary" @onclick="() => AddAsync(new SalesLineModel())">Add line</button>
+                    <button type="button" class="secondary" @onclick="() => AddAsync(new SalesLineModel { Kind = SalesLineKind.DiscountPercent })">Add discount</button>
+                </td>
+                <td colspan="2" class="num">Total</td>
+                <td class="num">@Labels.Amount(amounts.Sum())</td>
                 <td></td>
             </tr>
         </tfoot>
@@ -56,7 +79,32 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<Item> Items { get; set; } = [];
 
-    private void PickItem(SalesLineModel line, ChangeEventArgs e)
+    /// <summary>Raised after an edit that changes the total, so the parent can re-render what depends on it.</summary>
+    [Parameter]
+    public EventCallback OnChange { get; set; }
+
+    private Task Changed() => OnChange.InvokeAsync();
+
+    private Task AddAsync(SalesLineModel line)
+    {
+        Lines.Add(line);
+        return Changed();
+    }
+
+    private Task RemoveAsync(SalesLineModel line)
+    {
+        Lines.Remove(line);
+        return Changed();
+    }
+
+    private Task SetDiscountKind(SalesLineModel line, ChangeEventArgs e)
+    {
+        if (Enum.TryParse<SalesLineKind>(e.Value as string, out var kind))
+            line.Kind = kind;
+        return Changed();
+    }
+
+    private Task PickItem(SalesLineModel line, ChangeEventArgs e)
     {
         line.ItemId = Guid.TryParse(e.Value as string, out var id) ? id : null;
         if (Items.FirstOrDefault(i => i.Id == line.ItemId) is { } item)
@@ -65,5 +113,7 @@
             line.Rate = item.Rate;
             line.Quantity ??= 1m;
         }
+
+        return Changed();
     }
 }

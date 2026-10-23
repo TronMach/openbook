@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Forms;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Companies;
 using OpenBook.Infrastructure;
@@ -24,6 +25,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     public ServiceProvider Services { get; private set; } = null!;
     public FixedClock Clock { get; } = new();
+
+    /// <summary>Every email "sent" in the test.</summary>
+    public RecordingEmailSender Mail { get; } = new();
     public string ConnectionString => _connectionString;
     public string BackupDirectory { get; } = Path.Combine(Path.GetTempPath(), $"openbook-tests-{Guid.NewGuid():N}");
     public User? Owner { get; private set; }
@@ -38,6 +42,8 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .AddOpenBookInfrastructure(_connectionString, BackupDirectory)
             .AddSingleton<IClock>(Clock)
             .AddSingleton<ICurrentUser, TestUser>()
+            .AddSingleton<ISecretProtector, TestSecrets>()
+            .AddSingleton<IEmailSender>(Mail)
             .BuildServiceProvider(validateScopes: true);
 
         await Services.MigrateOpenBookDatabaseAsync();
@@ -84,4 +90,29 @@ public sealed class FixedClock : IClock
 public sealed class TestUser : ICurrentUser
 {
     public string Actor => LedgerDatabase.OwnerUsername;
+}
+
+/// <summary>Marks secrets instead of encrypting them, so tests can see they were never stored in plain text.</summary>
+public sealed class TestSecrets : ISecretProtector
+{
+    public string Protect(string plaintext) => "protected:" + plaintext;
+
+    public string? Unprotect(string protectedText) =>
+        protectedText.StartsWith("protected:", StringComparison.Ordinal) ? protectedText["protected:".Length..] : null;
+}
+
+public sealed class RecordingEmailSender : IEmailSender
+{
+    public List<(EmailMessage Message, string? Password)> Sent { get; } = [];
+
+    /// <summary>Set to make the next sends fail, like an unreachable server.</summary>
+    public string? Failure { get; set; }
+
+    public Task SendAsync(OpenBook.Domain.Companies.EmailSettings settings, string? password, EmailMessage message, CancellationToken ct)
+    {
+        if (Failure is { } failure)
+            throw new IOException(failure);
+        Sent.Add((message, password));
+        return Task.CompletedTask;
+    }
 }

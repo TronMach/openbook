@@ -1,0 +1,174 @@
+@page "/sales/credit-memos/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject CreditService Credits
+@inject InvoiceService Invoices
+@inject CustomerService CustomerService
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Credit memo @(_credit?.Number) · OpenBook</PageTitle>
+
+@if (_credit is null || _customer is null || _company is null)
+{
+    <div class="card"><p>That credit memo doesn't exist. <a href="/sales?show=credits">Back to credit memos</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Credit memo @_credit.Number</h1>
+        @if (_credit.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        else
+        {
+            <span class="badge @(_credit.Balance > 0m ? "ok" : null)">@(_credit.Balance > 0m ? $"{Labels.Amount(_credit.Balance)} available" : "Used")</span>
+        }
+        <a class="button secondary" href="/sales?show=credits">Back to credit memos</a>
+        <a class="button secondary" href="/api/sales/credit-memos/@_credit.Id/pdf" target="_blank">PDF</a>
+        <a class="button secondary" href="/sales/email/credit-memos/@_credit.Id">Email</a>
+        <a class="button secondary" href="/audit?entityId=@_credit.Id">History</a>
+        @if (_credit.Balance > 0m)
+        {
+            <a class="button secondary" href="/sales/refunds/new?creditMemo=@_credit.Id">Refund</a>
+            <a class="button" href="/sales/credits/apply?customer=@_credit.CustomerId">Apply to invoices</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error no-print" role="alert">@_error</div>
+    }
+
+    <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Credit to" Facts="Facts" Lines="_credit.Lines" Totals="Totals" Memo="@_credit.Memo" />
+
+    @if (_credit.Applications.Count > 0)
+    {
+        <div class="no-print">
+            <h2>Applied to</h2>
+            <table class="data">
+                <thead><tr><th>Invoice</th><th>Applied on</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var a in _credit.Applications)
+                    {
+                        <tr>
+                            <td><a href="/sales/invoices/@a.InvoiceId">@(_invoiceNumbers.GetValueOrDefault(a.InvoiceId) ?? "Invoice")</a></td>
+                            <td>@Labels.Date(a.AppliedOn)</td>
+                            <td class="num">@Labels.Amount(a.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    @if (_refunds.Count > 0)
+    {
+        <div class="no-print">
+            <h2>Refunds</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th>Reference</th><th class="num">Amount</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _refunds)
+                    {
+                        <tr class="@(r.Status == DocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/sales/refunds/@r.Id">@Labels.Date(r.Date)</a></td>
+                            <td>@r.Reference</td>
+                            <td class="num">@Labels.Amount(r.Amount)</td>
+                            <td>@(r.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_credit.JournalEntryId">Journal entry</a></p>
+
+    @if (_credit.Status == DocumentStatus.Posted && _credit.AmountApplied == 0m && _credit.AmountRefunded == 0m)
+    {
+        <div class="card no-print">
+            <h2>Void this credit memo</h2>
+            <p class="muted">Voiding reverses its journal entry on the same date. Credit that's been applied or refunded can't be voided.</p>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void credit memo</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private CreditMemo? _credit;
+    private Customer? _customer;
+    private OpenBook.Domain.Companies.Company? _company;
+    private Dictionary<Guid, string> _invoiceNumbers = [];
+    private IReadOnlyList<CustomerRefund> _refunds = [];
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    private List<(string, string)> Facts => [("Credit memo", _credit!.Number), ("Date", Labels.Date(_credit.Date))];
+
+    private List<(string, decimal)> Totals
+    {
+        get
+        {
+            var totals = new List<(string, decimal)> { ("Total credit", _credit!.Total) };
+            if (_credit.AmountApplied > 0m)
+                totals.Add(("Applied to invoices", -_credit.AmountApplied));
+            if (_credit.AmountRefunded > 0m)
+                totals.Add(("Refunded", -_credit.AmountRefunded));
+            totals.Add(("Credit remaining", _credit.Balance));
+            return totals;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _credit = await Credits.GetCreditMemoAsync(Id);
+        if (_credit is null)
+            return;
+        _customer = await CustomerService.GetAsync(_credit.CustomerId);
+        _company = await Settings.GetAsync();
+        _invoiceNumbers = (await Invoices.ListAsync(_credit.CustomerId)).ToDictionary(i => i.Id, i => i.Number);
+        _refunds = (await Credits.ListRefundsAsync(_credit.CustomerId)).Where(r => r.CreditMemoId == _credit.Id).ToList();
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Credits.VoidCreditMemoAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/sales/credit-memos/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the credit memo is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

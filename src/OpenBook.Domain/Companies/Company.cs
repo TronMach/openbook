@@ -16,6 +16,14 @@ public enum BusinessType
 }
 
 /// <summary>The one company whose books live in this database. Created by the setup wizard.</summary>
+/// <summary>The look of printed and emailed sales forms.</summary>
+public enum FormTemplate
+{
+    Classic,
+    Modern,
+    Compact,
+}
+
 public sealed class Company
 {
     private Company() => Name = string.Empty;
@@ -47,6 +55,16 @@ public sealed class Company
     public string? Phone { get; private set; }
     public string? Address { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public FormTemplate FormTemplate { get; private set; }
+
+    /// <summary>Accent color for sales forms, as "#rrggbb".</summary>
+    public string FormAccentColor { get; private set; } = DefaultAccentColor;
+
+    /// <summary>Printed at the bottom of invoices and other forms, e.g. payment instructions.</summary>
+    public string? FormFooter { get; private set; }
+
+    public const string DefaultAccentColor = "#1f6f5c";
 
     public static Company Create(
         string name,
@@ -98,6 +116,18 @@ public sealed class Company
     }
 
     public void SetAccountNumbering(bool enabled) => UseAccountNumbers = enabled;
+
+    public void SetFormStyle(FormTemplate template, string? accentColor, string? footer)
+    {
+        if (!Enum.IsDefined(template))
+            throw new DomainException("company.template_invalid", "Unknown form template.");
+        var color = string.IsNullOrWhiteSpace(accentColor) ? DefaultAccentColor : accentColor.Trim().ToLowerInvariant();
+        if (color.Length != 7 || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
+            throw new DomainException("company.color_invalid", "Enter the accent color as #rrggbb.");
+        FormTemplate = template;
+        FormAccentColor = color;
+        FormFooter = Text.Optional(footer, 1000, "company.footer_too_long", "Footer");
+    }
 
     /// <param name="passwordHash">Null keeps the current password; use <see cref="ClearClosingPassword"/> to remove it.</param>
     public void SetClosingDate(DateOnly? closingDate, string? passwordHash)
