@@ -13,13 +13,29 @@ public sealed record PostJournalEntryCommand(
     string? Memo = null,
     string Source = JournalEntry.ManualSource,
     Guid? SourceId = null,
-    EntryBasis Basis = EntryBasis.Both);
+    EntryBasis Basis = EntryBasis.Both,
+    DateOnly? ReverseOn = null);
 
 /// <summary>
-/// The single way anything reaches the ledger. Validates against the chart of accounts,
-/// assigns entry numbers and writes the audit trail in the same save.
+/// The closing date password for this unit of work, if the user gave one. Hosts set it before calling a
+/// service (from a form field or the X-Closing-Password header); <see cref="PostingEngine"/> checks it.
 /// </summary>
-public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, IClock clock, ICurrentUser user)
+public sealed class ClosedPeriodOverride
+{
+    public string? Password { get; set; }
+}
+
+/// <summary>
+/// The single way anything reaches the ledger. Validates against the chart of accounts and the closing
+/// date, assigns entry numbers and writes the audit trail in the same save.
+/// </summary>
+public sealed class PostingEngine(
+    ILedgerStore store,
+    ICompanyStore companies,
+    IPasswordHasher hasher,
+    ClosedPeriodOverride closedPeriod,
+    IClock clock,
+    ICurrentUser user)
 {
     private const string EntityType = "journal_entry";
 
@@ -31,7 +47,7 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
     }
 
     /// <summary>
-    /// Voids a manual entry. Entries posted by documents (bank transactions, invoices, ...) are voided
+    /// Voids a journal entry (manual, recurring, opening balance or automatic reversal). Entries posted by documents (bank transactions, invoices, ...) are voided
     /// through the document, so the document's status stays in step.
     /// </summary>
     /// <returns>The reversing entry.</returns>
@@ -48,12 +64,17 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
 
+        if (command.ReverseOn is { } reverseOn && reverseOn <= command.Date)
+            throw new DomainException("journal.reverse_date", "The reversal date must be after the entry date.");
+
         await EnsurePostableAsync(command.Lines.Select(l => l.AccountId).ToHashSet(), ct);
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        EnsureOpen(company, command.Date, $"posting an entry dated {command.Date:yyyy-MM-dd}");
 
         var entry = JournalEntry.Post(
             await store.NextEntryNumberAsync(ct),
             command.Date,
-            (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency,
+            company.HomeCurrency,
             command.Lines,
             clock.UtcNow,
             command.Memo,
@@ -63,17 +84,39 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
 
         store.Add(entry);
         store.Add(Audit(AuditAction.Posted, entry.Id, before: null, after: Snapshot(entry)));
+
+        // A reversing entry: the mirror image, posted now for its later date (e.g. reversing an accrual next month).
+        if (command.ReverseOn is { } on)
+        {
+            EnsureOpen(company, on, $"posting a reversal dated {on:yyyy-MM-dd}");
+            var mirror = JournalEntry.Post(
+                await store.NextEntryNumberAsync(ct),
+                on,
+                company.HomeCurrency,
+                command.Lines.Select(l => new JournalLineDraft(l.AccountId, l.Credit, l.Debit, l.Memo)).ToList(),
+                clock.UtcNow,
+                $"Reversal of #{entry.Number}" + (entry.Memo is null ? string.Empty : $": {entry.Memo}"),
+                JournalEntry.AutoReversalSource,
+                entry.Id,
+                command.Basis);
+            store.Add(mirror);
+            store.Add(Audit(AuditAction.Posted, mirror.Id, before: null, after: Snapshot(mirror)));
+        }
+
         return entry;
     }
 
     internal async Task<JournalEntry> StageVoidAsync(Guid entryId, string reason, bool fromDocument, CancellationToken ct)
     {
         var entry = await store.GetEntryAsync(entryId, ct) ?? throw new EntityNotFoundException(EntityType, entryId);
-        if (!fromDocument && entry.Source != JournalEntry.ManualSource)
+        if (!fromDocument && !JournalEntry.IsJournalSource(entry.Source))
             throw new DomainException("journal.void_document", "This entry was posted by another transaction; void that transaction instead.");
         if (await store.IsInReconciliationAsync(entry.Id, ct))
             throw new DomainException("journal.reconciled",
                 "This transaction has been reconciled, or is ticked in a reconciliation in progress, so it can't be voided.");
+
+        // The reversal is dated the same day as the entry, so voiding changes that period.
+        EnsureOpen(await companies.GetRequiredCompanyAsync(ct), entry.Date, $"voiding entry #{entry.Number}");
 
         var before = Snapshot(entry);
         var reversal = entry.Void(await store.NextEntryNumberAsync(ct), reason, clock.UtcNow);
@@ -94,6 +137,29 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
         if (filter.Take is < 1 or > 500 || filter.Skip < 0)
             throw new DomainException("journal.page_invalid", "Pages hold 1 to 500 entries.");
         return store.ListEntriesAsync(filter, ct);
+    }
+
+    /// <summary>
+    /// Refuses changes dated on or before the closing date unless the closing password was given, and
+    /// records every override in the audit log.
+    /// </summary>
+    private void EnsureOpen(Domain.Companies.Company company, DateOnly date, string what)
+    {
+        if (!company.IsClosed(date))
+            return;
+
+        var closing = company.ClosingDate!.Value;
+        if (company.ClosingPasswordHash is null)
+            throw new DomainException("period.closed",
+                $"The books are closed through {closing:yyyy-MM-dd}. Move the closing date in Settings to change that period.");
+        if (string.IsNullOrEmpty(closedPeriod.Password))
+            throw new DomainException("period.password_required",
+                $"{date:yyyy-MM-dd} is on or before the closing date ({closing:yyyy-MM-dd}). Enter the closing date password to save it anyway.");
+        if (hasher.Verify(company.ClosingPasswordHash, closedPeriod.Password) == PasswordCheck.Failed)
+            throw new DomainException("period.wrong_password", "That closing date password is incorrect.");
+
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.ClosedPeriodOverride, "company", company.Id, null,
+            JsonSerializer.Serialize(new { ClosingDate = closing, Date = date, Change = what })));
     }
 
     private async Task EnsurePostableAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken ct)

@@ -96,6 +96,8 @@
                         </tfoot>
                     </table>
                 </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
                 <div class="actions">
                     <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save payment</button>
                     <a href="/sales">Cancel</a>
@@ -118,6 +120,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
 
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
@@ -179,12 +183,13 @@
                 _customerId!.Value, _date, _depositAccountId,
                 _rows.Where(r => (r.Amount ?? 0m) > 0m).Select(r => new ApplyToInvoice(r.Invoice.Id, r.Amount!.Value)).ToList(),
                 _reference, _memo);
-            var payment = await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ReceiveAsync(command));
+            var payment = await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ReceiveAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/payments/{payment.Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

@@ -53,6 +53,22 @@ public sealed class JournalEntry
 {
     public const string ManualSource = "manual";
 
+    /// <summary>The automatic mirror of an entry posted with a "reverse on" date; SourceId is the original.</summary>
+    public const string AutoReversalSource = "ledger.autoreverse";
+
+    /// <summary>Posted from a recurring template; SourceId is the template.</summary>
+    public const string RecurringSource = "ledger.recurring";
+
+    /// <summary>Posted by the opening balances wizard.</summary>
+    public const string OpeningBalanceSource = "ledger.opening";
+
+    /// <summary>
+    /// Entries with these sources are journal entries in their own right and are voided from the journal.
+    /// Any other source is a document (invoice, bill, ...) that must be voided through the document.
+    /// </summary>
+    public static bool IsJournalSource(string source) =>
+        source is ManualSource or AutoReversalSource or RecurringSource or OpeningBalanceSource;
+
     private readonly List<JournalLine> _lines = [];
 
     private JournalEntry() => Source = ManualSource;

@@ -244,6 +244,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("ClosingDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClosingPasswordHash")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -433,6 +440,63 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_JournalLines_AmountMinor_NonZero", "\"AmountMinor\" <> 0");
                         });
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Ledger.RecurringEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AutoPost")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Basis")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LastPostedEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("MaxOccurrences")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OccurrencesPosted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RecurringEntries", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
@@ -941,6 +1005,51 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany("Lines")
                         .HasForeignKey("JournalEntryId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Ledger.RecurringEntry", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Ledger.RecurringEntryLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("RecurringEntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Credit")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("CreditMinor");
+
+                            b1.Property<long>("Debit")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("DebitMinor");
+
+                            b1.Property<string>("Memo")
+                                .HasMaxLength(1000)
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("RecurringEntryId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("RecurringEntryLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("RecurringEntryId");
+                        });
+
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>

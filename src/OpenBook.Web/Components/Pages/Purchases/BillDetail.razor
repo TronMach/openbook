@@ -5,6 +5,7 @@
 @inject AccountService AccountService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Bill · OpenBook</PageTitle>
 
@@ -103,6 +104,7 @@
                         <InputText id="reason" @bind-Value="VoidInput.Reason" />
                         <ValidationMessage For="() => VoidInput.Reason" />
                     </div>
+                    <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                     <button type="submit" class="danger">Void bill</button>
                 </EditForm>
             }
@@ -117,6 +119,7 @@
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
     private string? _error;
+    private bool _needsClosingPassword;
 
     [Parameter]
     public Guid Id { get; set; }
@@ -140,12 +143,14 @@
     {
         try
         {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
             await Bills.VoidAsync(Id, VoidInput.Reason);
             Navigation.NavigateTo($"/purchases/bills/{Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
@@ -154,5 +159,7 @@
         [Required(ErrorMessage = "Say why the bill is being voided.")]
         [StringLength(500)]
         public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
     }
 }

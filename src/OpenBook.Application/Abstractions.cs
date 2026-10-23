@@ -30,7 +30,8 @@ public sealed record LedgerLine(
     EntryBasis Basis);
 
 /// <summary>Filter and page for listing journal entries, newest first.</summary>
-public sealed record JournalEntryFilter(DateOnly? From = null, DateOnly? To = null, int Skip = 0, int Take = 50);
+public sealed record JournalEntryFilter(
+    DateOnly? From = null, DateOnly? To = null, int Skip = 0, int Take = 50, string? Source = null, Guid? SourceId = null);
 
 /// <summary>Persistence for the ledger. Changes become visible only after <see cref="SaveChangesAsync"/>.</summary>
 public interface ILedgerStore
@@ -57,8 +58,17 @@ public interface ILedgerStore
     /// <summary>Every sealed ledger line dated within the range (inclusive), oldest first. Reports start here.</summary>
     Task<IReadOnlyList<LedgerLine>> GetLinesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
 
+    Task<IReadOnlyList<RecurringEntry>> ListRecurringAsync(CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<RecurringEntry?> GetRecurringAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Audit records matching the filters, newest first.</summary>
+    Task<IReadOnlyList<AuditRecord>> ListAuditAsync(string? entityType, Guid? entityId, string? actor, CancellationToken ct);
+
     void Add(Account account);
     void Add(JournalEntry entry);
+    void Add(RecurringEntry recurring);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

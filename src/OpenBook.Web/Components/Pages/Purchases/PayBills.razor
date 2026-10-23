@@ -98,6 +98,8 @@
                     </tfoot>
                 </table>
             </div>
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
             <div class="actions">
                 <button type="button" @onclick="PayAsync" disabled="@(!CanPay || _busy)">Pay @Labels.Amount(Total)</button>
                 @if (Invalid)
@@ -121,6 +123,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
 
     [SupplyParameterFromQuery(Name = "vendor")]
     private Guid? PresetVendor { get; set; }
@@ -180,13 +184,14 @@
         try
         {
             var command = new PayBillsCommand(_date, _accountId, Selected.Select(r => new ApplyToBill(r.Bill.Id, r.Amount!.Value)).ToList(), _reference);
-            _paid = (await Ops.RunAsync<BillPaymentService, IReadOnlyList<BillPayment>>(s => s.PayAsync(command))).ToList();
+            _paid = (await Ops.RunAsync<BillPaymentService, IReadOnlyList<BillPayment>>(s => s.PayAsync(command), _closingPassword)).ToList();
             await LoadAsync();
             await SetAccountAsync(_accountId);
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

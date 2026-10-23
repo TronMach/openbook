@@ -1,0 +1,40 @@
+Number,Account,Type,Description
+1000,Checking,Bank,Operating account
+1010,Savings,Bank,
+1100,Grants Receivable,Accounts Receivable,Awarded grants not yet received
+1150,Pledges Receivable,Other Current Asset,Promised donations not yet received
+1200,Undeposited Funds,Other Current Asset,Donations received but not yet deposited
+1300,Prepaid Expenses,Other Current Asset,
+1500,Equipment,Fixed Asset,
+1510,Equipment:Accumulated Depreciation,Fixed Asset,
+2000,Accounts Payable,Accounts Payable,
+2100,Organization Credit Card,Credit Card,
+2300,Payroll Liabilities,Other Current Liability,
+2400,Deferred Revenue,Other Current Liability,Payments received for future programs
+3000,Net Assets Without Donor Restrictions,Equity,
+3100,Net Assets With Donor Restrictions,Equity,
+3900,Retained Earnings,Equity,Prior years' change in net assets
+4000,Contributions,Income,Individual and corporate gifts
+4010,Contributions:Unrestricted,Income,
+4020,Contributions:Restricted,Income,
+4100,Grants,Income,
+4200,Program Service Revenue,Income,
+4300,Special Events,Income,
+4400,Membership Dues,Income,
+4500,In-kind Contributions,Income,
+5000,Program Expenses,Expense,
+5010,Program Expenses:Program Supplies,Expense,
+5020,Program Expenses:Program Staff,Expense,
+6000,Management and General,Expense,
+6010,Management and General:Salaries,Expense,
+6020,Management and General:Office Supplies,Expense,
+6030,Management and General:Rent,Expense,
+6040,Management and General:Insurance,Expense,
+6050,Management and General:Professional Fees,Expense,
+6100,Fundraising,Expense,
+6110,Fundraising:Events,Expense,
+6120,Fundraising:Marketing,Expense,
+6200,Bank Fees,Expense,
+6300,Depreciation,Expense,
+7000,Interest Income,Other Income,
+8000,Interest Expense,Other Expense,

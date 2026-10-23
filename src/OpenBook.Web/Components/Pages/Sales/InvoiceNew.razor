@@ -68,6 +68,9 @@
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
             </div>
 
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+
             <div class="actions">
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save invoice</button>
                 <a href="/sales">Cancel</a>
@@ -89,6 +92,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
 
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
@@ -131,12 +136,13 @@
         try
         {
             var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo);
-            var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command));
+            var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

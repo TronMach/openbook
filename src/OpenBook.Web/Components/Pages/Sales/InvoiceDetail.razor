@@ -4,6 +4,7 @@
 @inject CustomerService CustomerService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
 
@@ -125,6 +126,7 @@
                         <InputText id="reason" @bind-Value="VoidInput.Reason" />
                         <ValidationMessage For="() => VoidInput.Reason" />
                     </div>
+                    <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                     <button type="submit" class="danger">Void invoice</button>
                 </EditForm>
             }
@@ -138,6 +140,7 @@
     private OpenBook.Domain.Companies.Company? _company;
     private IReadOnlyList<CustomerPayment> _payments = [];
     private string? _error;
+    private bool _needsClosingPassword;
 
     [Parameter]
     public Guid Id { get; set; }
@@ -160,12 +163,14 @@
     {
         try
         {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
             await Invoices.VoidAsync(Id, VoidInput.Reason);
             Navigation.NavigateTo($"/sales/invoices/{Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
@@ -174,5 +179,7 @@
         [Required(ErrorMessage = "Say why the invoice is being voided.")]
         [StringLength(500)]
         public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
     }
 }

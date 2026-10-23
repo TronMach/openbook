@@ -19,6 +19,27 @@ public static class Links
         _ => $"/journal/{journalEntryId}",
     };
 
+    /// <summary>The page for something named in the audit log, or null when it has none.</summary>
+    public static string? ForAuditEntity(string entityType, Guid id) => entityType switch
+    {
+        "account" => $"/accounts/{id}",
+        "bank_transaction" => $"/banking/transactions/{id}",
+        "bill" => $"/purchases/bills/{id}",
+        "bill_payment" => $"/purchases/payments/{id}",
+        "customer" => $"/customers/{id}",
+        "invoice" => $"/sales/invoices/{id}",
+        "item" => $"/items/{id}",
+        "journal_entry" => $"/journal/{id}",
+        "payment" => $"/sales/payments/{id}",
+        "reconciliation" => $"/banking/reconciliations/{id}",
+        "recurring_entry" => $"/journal/recurring/{id}",
+        "sales_receipt" => $"/sales/receipts/{id}",
+        "vendor" => $"/vendors/{id}",
+        "company" => "/settings",
+        "closing_date" => "/settings/close-books",
+        _ => null,
+    };
+
     /// <summary>"invoice", "bank transaction", ... or null for a manual entry.</summary>
     public static string? DocumentName(string source) => source switch
     {
@@ -28,7 +49,7 @@ public static class Links
         Bill.Source => "bill",
         BillPayment.Source => "bill payment",
         BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource => "bank transaction",
-        JournalEntry.ManualSource => null,
+        _ when JournalEntry.IsJournalSource(source) => null,
         _ => "document",
     };
 }

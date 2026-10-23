@@ -98,6 +98,9 @@
                 <input id="memo" @bind="_memo" maxlength="1000" />
             </div>
 
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+
             <div class="actions">
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save bill</button>
                 <a href="/purchases">Cancel</a>
@@ -120,6 +123,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
 
     [SupplyParameterFromQuery(Name = "vendor")]
     private Guid? PresetVendor { get; set; }
@@ -171,12 +176,13 @@
         {
             var lines = Filled.Select(l => new BillLineDraft(l.AccountId!.Value, l.Amount!.Value, l.Description)).ToList();
             var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo);
-            var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command));
+            var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/purchases/bills/{bill.Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

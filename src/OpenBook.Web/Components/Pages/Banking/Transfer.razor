@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @inject BankingService BankingService
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Transfer · OpenBook</PageTitle>
 
@@ -55,6 +56,7 @@
             <label for="memo">Memo <span class="muted">(optional)</span></label>
             <InputText id="memo" @bind-Value="Input.Memo" />
         </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
         <div class="actions">
             <button type="submit">Transfer</button>
             <a href="/banking">Cancel</a>
@@ -65,6 +67,7 @@
 @code {
     private IReadOnlyList<BankAccountSummary> _accounts = [];
     private string? _error;
+    private bool _needsClosingPassword;
 
     [SupplyParameterFromQuery(Name = "from")]
     private Guid? From { get; set; }
@@ -82,12 +85,14 @@
     {
         try
         {
+            ClosingOverride.Password = Input.ClosingPassword;
             await BankingService.TransferAsync(new TransferCommand(Input.FromAccountId!.Value, Input.ToAccountId!.Value, Input.Date, Input.Amount!.Value, Input.Memo));
             Navigation.NavigateTo($"/banking/{Input.FromAccountId}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
@@ -107,5 +112,7 @@
 
         [StringLength(1000)]
         public string? Memo { get; set; }
+
+        public string? ClosingPassword { get; set; }
     }
 }

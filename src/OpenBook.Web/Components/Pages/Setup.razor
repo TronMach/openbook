@@ -137,7 +137,8 @@
 
             State.MarkSetUp();
             await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp));
-            Navigation.NavigateTo("/");
+            // A new company has no accounts; that page offers starter charts.
+            Navigation.NavigateTo("/accounts");
         }
         catch (DomainException ex)
         {

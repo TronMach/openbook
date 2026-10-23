@@ -4,6 +4,7 @@
 @inject AccountService AccountService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Journal entry @(_entry?.Number) · OpenBook</PageTitle>
 
@@ -16,6 +17,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Journal entry @_entry.Number</h1>
+        <a class="button secondary" href="/audit?entityId=@_entry.Id">History</a>
         <a class="button secondary" href="/journal">Back to journal</a>
         <a class="button" href="/journal/new">New entry</a>
     </div>
@@ -87,7 +89,26 @@
         </table>
     </div>
 
-    @if (_entry.Source != JournalEntry.ManualSource && _entry.SourceId is { } documentId)
+    @if (_entry.Source == JournalEntry.AutoReversalSource && _entry.SourceId is { } reversedId)
+    {
+        <div class="alert notice" role="status">This entry automatically reverses an accrual. <a href="/journal/@reversedId">See the original</a>.</div>
+    }
+    @if (_autoReversal is { } autoReversal)
+    {
+        <div class="alert notice" role="status">
+            Reversed automatically on @Labels.Date(autoReversal.Date) by <a href="/journal/@autoReversal.Id">entry @autoReversal.Number</a>.
+        </div>
+    }
+    @if (_entry.Source == JournalEntry.RecurringSource && _entry.SourceId is { } templateId)
+    {
+        <div class="alert notice" role="status">Posted from a <a href="/journal/recurring/@templateId">recurring entry</a>.</div>
+    }
+    @if (_entry.Source == JournalEntry.OpeningBalanceSource)
+    {
+        <div class="alert notice" role="status">Opening balances. <a href="/journal/opening-balances">Enter more opening balances</a>.</div>
+    }
+
+    @if (!JournalEntry.IsJournalSource(_entry.Source) && _entry.SourceId is { } documentId)
     {
         <p class="muted" style="margin-top: 1rem">
             Posted by a <a href="@Links.ForEntry(_entry.Source, documentId, _entry.Id)">@Links.DocumentName(_entry.Source)</a>. To correct it, void it there.
@@ -105,6 +126,7 @@
                     <InputText id="reason" @bind-Value="VoidInput.Reason" />
                     <ValidationMessage For="() => VoidInput.Reason" />
                 </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void entry</button>
             </EditForm>
         </div>
@@ -114,9 +136,11 @@
 @code {
     private JournalEntry? _entry;
     private Guid? _reversalId;
+    private JournalEntry? _autoReversal;
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
     private string? _error;
+    private bool _needsClosingPassword;
 
     [Parameter]
     public Guid Id { get; set; }
@@ -132,18 +156,25 @@
         _entry = await Engine.GetAsync(Id);
         if (_entry?.Status == JournalEntryStatus.Voided)
             _reversalId = await Engine.FindReversalIdAsync(_entry.Id);
+        if (_entry is not null && JournalEntry.IsJournalSource(_entry.Source) && _entry.Source != JournalEntry.AutoReversalSource)
+        {
+            var (reversals, _) = await Engine.ListAsync(new JournalEntryFilter(Take: 1, Source: JournalEntry.AutoReversalSource, SourceId: _entry.Id));
+            _autoReversal = reversals.FirstOrDefault();
+        }
     }
 
     private async Task VoidAsync()
     {
         try
         {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
             await Engine.VoidAsync(Id, VoidInput.Reason);
             Navigation.NavigateTo($"/journal/{Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
@@ -152,5 +183,7 @@
         [Required(ErrorMessage = "Say why the entry is being voided.")]
         [StringLength(500)]
         public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
     }
 }

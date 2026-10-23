@@ -104,6 +104,9 @@
                 </table>
             </div>
 
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+
             <div class="actions">
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save</button>
                 <a href="/banking/@AccountId">Cancel</a>
@@ -121,6 +124,8 @@
     private BankTransactionKind _kind;
     private string _title = "Bank transaction";
     private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
     private bool _busy;
 
     private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
@@ -175,12 +180,13 @@
         {
             var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo)).ToList();
             var saved = await Ops.RunAsync<BankingService, BankTransaction>(s =>
-                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null)));
+                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null)), _closingPassword);
             Navigation.NavigateTo($"/banking/transactions/{saved.Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

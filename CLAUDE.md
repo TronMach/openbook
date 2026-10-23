@@ -78,7 +78,19 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 ## Reporting (M5)
 
 - Every report reads lines from `ReportLedger.LinesAsync(basis, from, to)`, never from the store directly, so all reports agree. Accrual = ledger as posted (entry basis permitting). Cash = entries whose basis allows cash, minus everything sourced from invoices, bills, customer payments and bill payments; plus, for each posted payment in range, derived lines on the payment date: the deposit/payment account for the full amount, and the paid documents' accounts allocated in proportion to their lines (`ReportLedger.Allocate`, rounding cent on the last line). A new accrual document type must be added to `AccrualDocuments` and given a derivation.
-- `FinancialReports`: P&L sections by account type; balance sheet with computed "Retained earnings" (net income before the fiscal year containing the as-of date) and "Net income" (since its start) until year-end close (V1.1); general ledger with opening and running balances in each account's natural sign. Rows link to the general ledger for drill-down.
+- `FinancialReports`: P&L sections by account type; balance sheet with "Retained earnings" (net income before the fiscal year containing the as-of date; merged into a top-level, childless Equity account named "Retained Earnings" if there is one, else a computed row) and computed "Net income" (since its start); general ledger with opening and running balances in each account's natural sign. Rows link to the general ledger for drill-down.
 - `TrialBalanceQuery` also runs on `ReportLedger`. `DateRanges` has the period presets (calendar month/quarter, fiscal year).
 - `SearchService` searches in memory across names, numbers, references, memos and amounts (`StatementValues.TryParseAmount`), max 20 hits per kind.
 - Report pages share `Components/Reports` (`ReportFilter`, `ReportQuery`, `ReportSectionRows`); they're static GET forms so every report has a shareable, printable URL.
+
+## Ledger hardening (V1.1)
+
+- Closing date and password live on `Company`. `PostingEngine` checks every staged entry and void against it (`EnsureOpen`): `period.closed` without a password, `period.password_required` / `period.wrong_password` with one. The password comes from the scoped `ClosedPeriodOverride` (API: `X-Closing-Password` header; interactive pages: `Operations.RunAsync(..., closingPassword)`; static forms: set it before calling the service). Each override writes an `AuditAction.ClosedPeriodOverride` record on the company. Show `ClosedPeriodPassword` on any form that posts, once `ClosedPeriod.NeedsPassword(ex)`.
+- `CloseBooksService`: moving the closing date earlier, clearing it, or changing/removing the password needs the current closing password; closing more doesn't. Year-end close only moves the closing date; nothing is posted.
+- Journal-sourced entries (`JournalEntry.IsJournalSource`: manual, auto-reversal, recurring, opening balance) are voided from the journal page; anything else from its document.
+- `ReverseOn` posts a mirror entry (`AutoReversalSource`, `SourceId` = original). Recurring templates (`RecurringEntry`) compute each date from `StartDate` and the occurrence index, so month ends don't drift; `RecurringEntryService.PostDueAsync` saves each occurrence separately and stops a template at its first error. `RecurringPostingService` (Web) runs it hourly for auto-post templates as actor "system".
+- `JournalEntryFilter` can filter by `Source`/`SourceId`; use it rather than scanning entries.
+- Opening balances post against "Opening Balance Equity" (created on first use); A/R and A/P are excluded (enter open invoices/bills instead).
+- Starter charts are embedded CSVs in `Application/Accounts/Templates`, imported through `ChartImportService`; each has a top-level "Retained Earnings" equity account.
+- `AuditLogQuery` filters in memory and diffs top-level JSON fields (null = absent). `Links.ForAuditEntity` maps an entity type to its page; add new entity types there.
+- `JournalLinesEditor` (Components/Journal) is the shared debit/credit grid; the parent owns the `JournalLineModel` list and checks it with `JournalLines`.

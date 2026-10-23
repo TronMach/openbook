@@ -1,0 +1,119 @@
+@page "/journal/recurring"
+@inject RecurringEntryService Recurring
+
+<PageTitle>Recurring entries · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Recurring entries</h1>
+        <a class="button secondary" href="/journal">Back to journal</a>
+        <a class="button" href="/journal/recurring/new">New recurring entry</a>
+    </div>
+    <p class="muted">
+        Journal entries that repeat on a schedule, such as monthly depreciation or rent. Ones set to post automatically
+        are posted when they fall due; the rest wait here until you post them.
+    </p>
+
+    @foreach (var result in _results)
+    {
+        <div class="alert @(result.Error is null ? "notice" : "error")" role="status">
+            <strong>@result.Template.Name</strong>:
+            @if (result.Posted.Count > 0)
+            {
+                <text>posted @result.Posted.Count @(result.Posted.Count == 1 ? "entry" : "entries"):</text>
+                @foreach (var (entry, i) in result.Posted.Select((e, i) => (e, i)))
+                {
+                    @(i == 0 ? " " : ", ")<a href="/journal/@entry.Id">#@entry.Number</a>
+                }
+                <text>.</text>
+            }
+            @if (result.Error is not null)
+            {
+                <text> Stopped: @result.Error</text>
+            }
+        </div>
+    }
+
+    @if (_templates.Count == 0)
+    {
+        <div class="card"><p>No recurring entries yet. <a href="/journal/recurring/new">Set one up</a>.</p></div>
+    }
+    else
+    {
+        @if (_dueCount > 0)
+        {
+            <form class="card" method="post" @formname="post-due" @onsubmit="PostDueAsync">
+                <AntiforgeryToken />
+                <p>@_dueCount recurring @(_dueCount == 1 ? "entry is" : "entries are") due.</p>
+                <button type="submit">Post due entries</button>
+            </form>
+        }
+
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Schedule</th>
+                        <th class="num">Amount</th>
+                        <th>Next</th>
+                        <th class="num">Posted</th>
+                        <th>Posting</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var template in _templates)
+                    {
+                        <tr class="@(template.IsActive ? null : "inactive")">
+                            <td><a href="/journal/recurring/@template.Id">@template.Name</a></td>
+                            <td>@RecurrenceLabels.Schedule(template)</td>
+                            <td class="num">@Labels.Amount(template.Lines.Sum(l => l.Debit))</td>
+                            <td>
+                                @if (!template.IsActive)
+                                {
+                                    <span class="muted">Inactive</span>
+                                }
+                                else if (template.NextDate is { } next)
+                                {
+                                    @Labels.Date(next)
+                                    @if (next <= Today)
+                                    {
+                                        <span class="badge">Due</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="muted">Finished</span>
+                                }
+                            </td>
+                            <td class="num">@template.OccurrencesPosted</td>
+                            <td>@(template.AutoPost ? "Automatic" : "Manual")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RecurringEntry> _templates = [];
+    private IReadOnlyList<RecurringPostResult> _results = [];
+    private int _dueCount;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _templates = await Recurring.ListAsync();
+        _dueCount = _templates.Count(t => t.IsDue(Today));
+    }
+
+    private async Task PostDueAsync()
+    {
+        _results = await Recurring.PostDueAsync(Today, autoPostOnly: false);
+        await LoadAsync();
+    }
+}

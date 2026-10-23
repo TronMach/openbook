@@ -1,0 +1,150 @@
+@page "/journal/opening-balances"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Opening balances · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Opening balances</h1>
+        <a class="button secondary" href="/journal">Back to journal</a>
+    </div>
+    <p class="muted">
+        Starting balances for the accounts you bring over, as of the day before you start using OpenBook; take
+        them from your last balance sheet. Whatever doesn't balance goes to "@OpeningBalanceService.EquityAccountName".
+        Enter unpaid invoices and bills individually instead, so they can be paid.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_existing.Count > 0)
+    {
+        <div class="alert notice" role="status">
+            Opening balances already posted:
+            @foreach (var (entry, i) in _existing.Select((e, i) => (e, i)))
+            {
+                @(i == 0 ? " " : ", ")<a href="/journal/@entry.Id">#@entry.Number (@Labels.Date(entry.Date))</a>
+            }.
+            Posting again adds to them; to start over, void the entry first.
+        </div>
+    }
+
+    @if (_loaded && _rows.Count == 0)
+    {
+        <div class="card"><p>There are no balance sheet accounts yet. <a href="/accounts">Set up the chart of accounts</a> first.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="field">
+                <label for="as-of">As of</label>
+                <input id="as-of" type="date" @bind="_asOf" />
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th>Type</th>
+                            <th class="num">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr @key="row.Account.Id">
+                                <td>@Labels.AccountName(_chart, row.Account.Id, _useNumbers)</td>
+                                <td class="muted">@Labels.For(row.Account.Type)</td>
+                                <td><input class="amount" type="number" step="0.01" aria-label="Balance for @row.Account.Name" @bind="row.Balance" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2">@OpeningBalanceService.EquityAccountName</td>
+                            <td class="num">@Labels.Amount(EquityAmount)</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <p class="hint">
+                Enter each balance as it appears on the balance sheet: money in the bank, the value of an asset, or the amount owed on a
+                loan or card. Use a minus sign for an overdrawn account or a contra account such as accumulated depreciation.
+            </p>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="PostAsync" disabled="@(_busy || !_rows.Any(r => r.Balance is { } b && b != 0m))">Post opening balances</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Row> _rows = [];
+    private IReadOnlyList<JournalEntry> _existing = [];
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private DateOnly _asOf;
+
+    /// <summary>Assets less liabilities and other equity entered: what "Opening Balance Equity" will show.</summary>
+    private decimal EquityAmount => _rows.Sum(r => (r.Balance ?? 0m) * r.Account.Type.ClassOf() switch
+    {
+        AccountClass.Asset => 1m,
+        _ => -1m,
+    });
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (chart, company, eligible, existing) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            await sp.GetRequiredService<CompanySettingsService>().GetAsync(),
+            await sp.GetRequiredService<OpeningBalanceService>().EligibleAccountsAsync(),
+            await sp.GetRequiredService<OpeningBalanceService>().ExistingAsync()));
+        _chart = chart;
+        _useNumbers = company.UseAccountNumbers;
+        _rows = eligible.Select(a => new Row(a)).ToList();
+        _existing = existing;
+        // The day before the current fiscal year: the usual point to start from.
+        _asOf = company.FiscalYearStart(DateOnly.FromDateTime(DateTime.Today)).AddDays(-1);
+        _loaded = true;
+    }
+
+    private async Task PostAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var balances = _rows.Where(r => r.Balance is { } b && b != 0m).Select(r => new OpeningBalance(r.Account.Id, r.Balance!.Value)).ToList();
+            var entry = await Ops.RunAsync<OpeningBalanceService, JournalEntry>(s => s.PostAsync(_asOf, balances), _closingPassword);
+            Navigation.NavigateTo($"/journal/{entry.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class Row(Account account)
+    {
+        public Account Account { get; } = account;
+        public decimal? Balance { get; set; }
+    }
+}

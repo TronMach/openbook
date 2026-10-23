@@ -34,7 +34,8 @@ public sealed record ChartImportResponse(int New, int Existing, int Errors, bool
 
 public sealed record JournalLineRequest(Guid AccountId, decimal Debit, decimal Credit, string? Memo = null);
 
-public sealed record PostJournalEntryRequest(DateOnly Date, IReadOnlyList<JournalLineRequest> Lines, string? Memo = null, EntryBasis Basis = EntryBasis.Both);
+public sealed record PostJournalEntryRequest(
+    DateOnly Date, IReadOnlyList<JournalLineRequest> Lines, string? Memo = null, EntryBasis Basis = EntryBasis.Both, DateOnly? ReverseOn = null);
 
 public sealed record VoidJournalEntryRequest(string Reason);
 

@@ -7,6 +7,9 @@ public enum AuditAction
     Posted,
     Voided,
     Restored,
+
+    /// <summary>A change dated in a closed period, allowed with the closing date password.</summary>
+    ClosedPeriodOverride,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

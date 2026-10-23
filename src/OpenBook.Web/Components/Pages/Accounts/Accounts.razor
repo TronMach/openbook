@@ -1,6 +1,7 @@
 @page "/accounts"
 @inject AccountService AccountService
 @inject CompanySettingsService Settings
+@inject ChartTemplates Templates
 
 <PageTitle>Chart of accounts · OpenBook</PageTitle>
 
@@ -14,10 +15,34 @@
         <a class="button" href="/accounts/new">New account</a>
     </div>
 
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is { } imported)
+    {
+        <div class="alert notice" role="status">Added @imported accounts. Rename, renumber or deactivate any you don't need.</div>
+    }
+
     @if (_rows.Count == 0)
     {
         <div class="card">
-            <p>No accounts yet. <a href="/accounts/new">Add one</a>, or <a href="/accounts/import">import a chart of accounts</a> from a CSV file. The import page has a starter chart you can download and edit.</p>
+            <h2>Start with a chart of accounts</h2>
+            <p class="muted">Pick a starter chart to begin with; you can change it afterwards. Or <a href="/accounts/new">add accounts one by one</a>, or <a href="/accounts/import">import your own from a CSV file</a>.</p>
+            <form method="post" @formname="template" @onsubmit="ApplyTemplateAsync">
+                <AntiforgeryToken />
+                <div class="choices">
+                    @foreach (var template in ChartTemplates.All)
+                    {
+                        var recommended = template.Key == _recommended;
+                        <div class="choice @(recommended ? "recommended" : null)">
+                            <h3>@template.Name @if (recommended) { <span class="badge">Recommended</span> }</h3>
+                            <p class="muted">@template.Description</p>
+                            <button type="submit" name="TemplateKey" value="@template.Key" class="@(recommended ? null : "secondary")">Use this chart</button>
+                        </div>
+                    }
+                </div>
+            </form>
         </div>
     }
     else
@@ -67,9 +92,37 @@
     [SupplyParameterFromQuery]
     private bool ShowInactive { get; set; }
 
+    private string? _recommended;
+    private string? _error;
+    private int? _imported;
+
+    [SupplyParameterFromForm(FormName = "template")]
+    private string? TemplateKey { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
-        _rows = (await AccountService.GetChartAsync()).Ordered(includeInactive: ShowInactive).ToList();
+        var company = await Settings.GetAsync();
+        _useNumbers = company.UseAccountNumbers;
+        _recommended = ChartTemplates.ForBusinessType(company.BusinessType).Key;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _rows = (await AccountService.GetChartAsync()).Ordered(includeInactive: ShowInactive).ToList();
+
+    private async Task ApplyTemplateAsync()
+    {
+        try
+        {
+            if (_rows.Count > 0 || string.IsNullOrEmpty(TemplateKey))
+                return;
+            var result = await Templates.ApplyAsync(TemplateKey);
+            _imported = result.NewCount;
+            _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+            await LoadAsync();
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
     }
 }

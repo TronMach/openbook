@@ -25,6 +25,7 @@ public static class OpenBookApi
         api.MapSalesApi();
         api.MapPurchasesApi();
         api.MapReportsApi();
+        api.MapLedgerToolsApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.GetAsync(ct)));
@@ -77,7 +78,7 @@ public static class OpenBookApi
         api.MapPost("/journal-entries", async (PostJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
         {
             var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo)).ToList();
-            var entry = await engine.PostAsync(new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis), ct);
+            var entry = await engine.PostAsync(new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis, ReverseOn: request.ReverseOn), ct);
             return Results.Created($"/api/journal-entries/{entry.Id}", JournalEntryResponse.From(entry));
         });
 
@@ -95,6 +96,10 @@ public static class OpenBookApi
 
     private static async ValueTask<object?> MapDomainErrors(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
+        // Changes dated in a closed period need the closing date password, sent as a header.
+        if (context.HttpContext.Request.Headers.TryGetValue("X-Closing-Password", out var closingPassword))
+            context.HttpContext.RequestServices.GetRequiredService<ClosedPeriodOverride>().Password = closingPassword.ToString();
+
         try
         {
             return await next(context);

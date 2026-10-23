@@ -1,0 +1,199 @@
+@page "/audit"
+@using OpenBook.Application.Auditing
+@using OpenBook.Domain.Auditing
+@inject AuditLogQuery Audit
+
+<PageTitle>Audit log · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Audit log</h1>
+    </div>
+    <p class="muted">Every change to the books, who made it and when. The log can't be edited or deleted.</p>
+
+    <form class="card filters" method="get" action="/audit" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="entity-type">Type</label>
+                <select id="entity-type" name="entityType">
+                    <option value="">Everything</option>
+                    @foreach (var type in _page.EntityTypes)
+                    {
+                        <option value="@type" selected="@(type == EntityType)">@TypeName(type)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="actor">User</label>
+                <select id="actor" name="actor">
+                    <option value="">Anyone</option>
+                    @foreach (var actor in _page.Actors)
+                    {
+                        <option value="@actor" selected="@(actor == Actor)">@actor</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="from">From</label>
+                <input id="from" name="from" type="date" value="@From?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label for="to">To</label>
+                <input id="to" name="to" type="date" value="@To?.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+        @if (EntityId is { } entityId)
+        {
+            <input type="hidden" name="entityId" value="@entityId" />
+            <p class="muted">Showing the history of one record. <a href="/audit">Show everything</a>.</p>
+        }
+        <div class="actions">
+            <button type="submit">Filter</button>
+        </div>
+    </form>
+
+    @if (_page.Total == 0)
+    {
+        <div class="card"><p>No changes match.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data audit">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>User</th>
+                        <th>Change</th>
+                        <th>Record</th>
+                        <th>Fields</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in _page.Entries)
+                    {
+                        var record = entry.Record;
+                        var link = Links.ForAuditEntity(record.EntityType, record.EntityId);
+                        <tr>
+                            <td class="nowrap">@record.OccurredAt.ToLocalTime().ToString("g")</td>
+                            <td>@record.Actor</td>
+                            <td>@ActionName(record.Action)</td>
+                            <td>
+                                @if (link is not null)
+                                {
+                                    <a href="@link">@TypeName(record.EntityType)</a>
+                                }
+                                else
+                                {
+                                    @TypeName(record.EntityType)
+                                }
+                                @if (EntityId is null && record.EntityType is not ("company" or "closing_date"))
+                                {
+                                    <a class="muted" href="/audit?entityId=@record.EntityId" title="History of this record"> · history</a>
+                                }
+                            </td>
+                            <td>
+                                @if (entry.Changes.Count > 0)
+                                {
+                                    <dl class="changes">
+                                        @foreach (var change in entry.Changes.Take(MaxFields))
+                                        {
+                                            <dt>@change.Field</dt>
+                                            <dd>
+                                                @if (record.Before is not null)
+                                                {
+                                                    <span class="before">@Show(change.Before)</span>
+                                                    <span class="muted"> → </span>
+                                                }
+                                                <span class="after">@Show(change.After)</span>
+                                            </dd>
+                                        }
+                                    </dl>
+                                    @if (entry.Changes.Count > MaxFields)
+                                    {
+                                        <span class="muted">and @(entry.Changes.Count - MaxFields) more</span>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pager">
+            <span class="muted">@(Skip + 1)–@(Skip + _page.Entries.Count) of @_page.Total</span>
+            @if (Skip > 0)
+            {
+                <a class="button secondary" href="@PageLink(Math.Max(0, Skip - PageSize))">Newer</a>
+            }
+            @if (Skip + PageSize < _page.Total)
+            {
+                <a class="button secondary" href="@PageLink(Skip + PageSize)">Older</a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const int PageSize = 100;
+    private const int MaxFields = 12;
+    private AuditPage _page = new([], 0, [], []);
+
+    [SupplyParameterFromQuery] private string? EntityType { get; set; }
+    [SupplyParameterFromQuery] private Guid? EntityId { get; set; }
+    [SupplyParameterFromQuery] private string? Actor { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+    [SupplyParameterFromQuery] private int Skip { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Skip = Math.Max(0, Skip);
+        _page = await Audit.QueryAsync(new AuditFilter(
+            string.IsNullOrEmpty(EntityType) ? null : EntityType,
+            EntityId,
+            string.IsNullOrEmpty(Actor) ? null : Actor,
+            From,
+            To,
+            Skip,
+            PageSize));
+    }
+
+    private string PageLink(int skip)
+    {
+        var query = new Dictionary<string, object?>
+        {
+            ["entityType"] = EntityType,
+            ["entityId"] = EntityId,
+            ["actor"] = Actor,
+            ["from"] = From?.ToString("yyyy-MM-dd"),
+            ["to"] = To?.ToString("yyyy-MM-dd"),
+            ["skip"] = skip,
+        };
+        return "/audit?" + string.Join("&", query.Where(q => q.Value is not null and not "")
+            .Select(q => $"{q.Key}={Uri.EscapeDataString(Convert.ToString(q.Value, System.Globalization.CultureInfo.InvariantCulture)!)}"));
+    }
+
+    private static string TypeName(string entityType) => entityType switch
+    {
+        "closing_date" => "Closing date",
+        "journal_entry" => "Journal entry",
+        "payment" => "Customer payment",
+        _ => char.ToUpperInvariant(entityType[0]) + entityType[1..].Replace('_', ' '),
+    };
+
+    private static string ActionName(AuditAction action) => action switch
+    {
+        AuditAction.ClosedPeriodOverride => "Closed-period change",
+        _ => action.ToString(),
+    };
+
+    /// <summary>JSON values as plain text: strings unquoted, absent values as a dash.</summary>
+    private static string Show(string? json) => json switch
+    {
+        null or "null" => "—",
+        ['"', .. var inner, '"'] => System.Text.RegularExpressions.Regex.Unescape(inner),
+        _ => json.Length > 200 ? json[..200] + "…" : json,
+    };
+}

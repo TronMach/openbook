@@ -1,0 +1,88 @@
+@* Debit/credit lines for a journal entry or recurring template. The parent owns the list and checks it with JournalLines. *@
+
+<div class="table-wrap">
+    <table class="data entry">
+        <thead>
+            <tr>
+                <th>Account</th>
+                <th class="num">Debit</th>
+                <th class="num">Credit</th>
+                <th>Line memo</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var line in Lines)
+            {
+                <tr @key="line">
+                    <td>
+                        <select @bind="line.AccountId" @bind:after="Changed.InvokeAsync" aria-label="Account">
+                            <option value="">Choose an account…</option>
+                            @foreach (var group in Accounts.GroupBy(a => a.Type.ClassOf()))
+                            {
+                                <optgroup label="@Labels.For(group.Key)">
+                                    @foreach (var account in group)
+                                    {
+                                        <option value="@account.Id">@Labels.AccountName(Chart, account.Id, UseNumbers)</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </td>
+                    <td><input class="amount" type="number" min="0" step="0.01" aria-label="Debit" @bind="line.Debit" @bind:after="() => { line.Credit = line.Debit > 0 ? null : line.Credit; return Changed.InvokeAsync(); }" /></td>
+                    <td><input class="amount" type="number" min="0" step="0.01" aria-label="Credit" @bind="line.Credit" @bind:after="() => { line.Debit = line.Credit > 0 ? null : line.Debit; return Changed.InvokeAsync(); }" /></td>
+                    <td><input @bind="line.Memo" aria-label="Line memo" /></td>
+                    <td>
+                        @if (Lines.Count > 2)
+                        {
+                            <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => RemoveAsync(line)">×</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>
+                    <button type="button" class="secondary" @onclick="AddLine">Add line</button>
+                </td>
+                <td class="num">@Labels.Amount(TotalDebits)</td>
+                <td class="num">@Labels.Amount(TotalCredits)</td>
+                <td colspan="2" class="@(IsBalanced ? "muted" : "out-of-balance")">
+                    @(IsBalanced ? "Balanced" : $"Out of balance by {Labels.Amount(Math.Abs(TotalDebits - TotalCredits))}")
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<JournalLineModel> Lines { get; set; } = [];
+
+    /// <summary>Active accounts in chart order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Account> Accounts { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public ChartOfAccounts Chart { get; set; } = default!;
+
+    [Parameter]
+    public bool UseNumbers { get; set; }
+
+    /// <summary>Raised after an edit that can change whether the lines are complete, so the parent re-renders.</summary>
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private decimal TotalDebits => JournalLines.Debits(Lines);
+    private decimal TotalCredits => JournalLines.Credits(Lines);
+    private bool IsBalanced => JournalLines.IsBalanced(Lines);
+
+    private void AddLine() => Lines.Add(new JournalLineModel());
+
+    private Task RemoveAsync(JournalLineModel line)
+    {
+        Lines.Remove(line);
+        return Changed.InvokeAsync();
+    }
+}

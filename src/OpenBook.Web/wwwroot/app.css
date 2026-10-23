@@ -234,3 +234,20 @@ table.statement td:last-child { width: 10rem; }
 .topbar .search { margin: 0; }
 .topbar .search input { width: 10rem; padding: 0.3rem 0.5rem; }
 .search-group h2 { margin-top: 1.5rem; }
+
+/* V1.1: close books, audit log, recurring entries, chart templates */
+.nowrap { white-space: nowrap; }
+.inline { display: flex; gap: 0.5rem; align-items: center; }
+input.short { width: 5.5rem; }
+ul.links { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.closing-password { margin-top: 1rem; max-width: 28rem; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; margin-top: 1rem; }
+.choice { border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.choice.recommended { border-color: var(--accent); }
+.choice h3 { margin: 0; font-size: 1rem; }
+.choice p { margin: 0; flex: 1; }
+.choice button { align-self: flex-start; }
+dl.changes { display: grid; grid-template-columns: max-content 1fr; gap: 0.15rem 0.75rem; margin: 0; font-size: 0.875rem; }
+dl.changes dt { color: var(--muted); }
+dl.changes dd { margin: 0; overflow-wrap: anywhere; }
+dl.changes .before { text-decoration: line-through; color: var(--muted); }

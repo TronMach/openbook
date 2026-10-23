@@ -5,6 +5,7 @@
 @inject AccountService AccountService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Sales receipt @(_receipt?.Number) · OpenBook</PageTitle>
 
@@ -79,6 +80,7 @@
                     <InputText id="reason" @bind-Value="VoidInput.Reason" />
                     <ValidationMessage For="() => VoidInput.Reason" />
                 </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void sales receipt</button>
             </EditForm>
         </div>
@@ -91,6 +93,7 @@
     private OpenBook.Domain.Companies.Company? _company;
     private ChartOfAccounts _chart = new([]);
     private string? _error;
+    private bool _needsClosingPassword;
 
     [Parameter]
     public Guid Id { get; set; }
@@ -113,12 +116,14 @@
     {
         try
         {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
             await Receipts.VoidAsync(Id, VoidInput.Reason);
             Navigation.NavigateTo($"/sales/receipts/{Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
@@ -127,5 +132,7 @@
         [Required(ErrorMessage = "Say why the sales receipt is being voided.")]
         [StringLength(500)]
         public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
     }
 }

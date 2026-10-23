@@ -35,6 +35,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<SalesReceipt> SalesReceipts => Set<SalesReceipt>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
+    public DbSet<RecurringEntry> RecurringEntries => Set<RecurringEntry>();
     public DbSet<Bill> Bills => Set<Bill>();
     public DbSet<BillPayment> BillPayments => Set<BillPayment>();
 
@@ -163,6 +164,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Phone).HasMaxLength(50);
             b.Property(c => c.Address).HasMaxLength(1000);
             b.Property(c => c.DefaultReportBasis).HasConversion<string>().HasMaxLength(20);
+            b.Property(c => c.ClosingPasswordHash).HasMaxLength(500);
         });
 
         modelBuilder.Entity<BankTransaction>(b =>
@@ -208,6 +210,28 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             // A ledger line is ticked in at most one reconciliation.
             b.HasIndex(l => l.JournalLineId).IsUnique();
             b.HasOne<JournalLine>().WithMany().HasForeignKey(l => l.JournalLineId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RecurringEntry>(b =>
+        {
+            b.ToTable("RecurringEntries");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(100);
+            b.Property(r => r.Memo).HasMaxLength(1000);
+            b.Property(r => r.Basis).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.Frequency).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(r => r.NextDate);
+            b.OwnsMany(r => r.Lines, l =>
+            {
+                l.ToTable("RecurringEntryLines");
+                l.WithOwner().HasForeignKey("RecurringEntryId");
+                l.HasKey("RecurringEntryId", nameof(RecurringEntryLine.LineNumber));
+                l.Property(x => x.Debit).HasColumnName("DebitMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Credit).HasColumnName("CreditMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Memo).HasMaxLength(1000);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         ConfigureSales(modelBuilder);

@@ -40,6 +40,7 @@ public static class WebSecurity
         services.AddScoped<ICurrentUser, WebCurrentUser>();
         services.AddScoped<Operations>();
         services.AddSingleton<SetupState>();
+        services.AddHostedService<RecurringPostingService>();
         return services;
     }
 

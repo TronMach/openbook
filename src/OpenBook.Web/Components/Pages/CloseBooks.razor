@@ -1,0 +1,196 @@
+@page "/settings/close-books"
+@using System.ComponentModel.DataAnnotations
+@inject CloseBooksService Closing
+@inject ClosedPeriodOverride ClosingOverride
+@inject NavigationManager Navigation
+
+<PageTitle>Close the books · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Close the books</h1>
+        <a class="button secondary" href="/settings">Back to settings</a>
+        <a class="button secondary" href="/audit?entityType=closing_date">History</a>
+    </div>
+
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <h2>Closing date</h2>
+        <p class="muted">
+            @if (_status.ClosingDate is { } closing)
+            {
+                <text>The books are closed through <strong>@Labels.Date(closing)</strong>. </text>
+                @(_status.HasPassword
+                    ? "Changes dated on or before then need the closing date password, and each one is recorded in the audit log."
+                    : "With no closing date password, nothing dated on or before then can be changed.")
+            }
+            else
+            {
+                <text>No closing date is set, so every period is open.</text>
+            }
+        </p>
+
+        <EditForm Model="Input" FormName="closing" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="closing-date">Close the books through</label>
+                    <InputDate id="closing-date" @bind-Value="Input.ClosingDate" />
+                    <span class="hint">Leave empty to reopen every period.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="new-password">@(_status.HasPassword ? "New closing date password" : "Closing date password") <span class="muted">(optional)</span></label>
+                    <InputText id="new-password" type="password" @bind-Value="Input.NewPassword" autocomplete="new-password" />
+                    <span class="hint">Lets someone change a closed period after entering it. At least 6 characters; keep it separate from sign-in passwords.</span>
+                    <ValidationMessage For="() => Input.NewPassword" />
+                </div>
+                <div class="field">
+                    <label for="confirm-password">Confirm password</label>
+                    <InputText id="confirm-password" type="password" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" />
+                    <ValidationMessage For="() => Input.ConfirmPassword" />
+                </div>
+            </div>
+            @if (_status.HasPassword)
+            {
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.RemovePassword" />
+                    <span>Remove the closing date password, so closed periods can't be changed at all</span>
+                </label>
+                <div class="field">
+                    <label for="current-password">Current closing date password</label>
+                    <InputText id="current-password" type="password" @bind-Value="Input.CurrentPassword" autocomplete="off" />
+                    <span class="hint">Needed to move the closing date earlier or to change or remove the password.</span>
+                </div>
+            }
+            <button type="submit">Save</button>
+        </EditForm>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Fiscal years</h2>
+        <p class="muted">
+            Closing a year moves the closing date to its last day. No entries are posted: the balance sheet carries
+            each past year's net income into retained earnings automatically.
+        </p>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Fiscal year</th>
+                        <th class="num">Net income (accrual)</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var year in _years)
+                    {
+                        <tr>
+                            <td>
+                                <a href="/reports/profit-and-loss?preset=Custom&from=@year.Start.ToString("yyyy-MM-dd")&to=@year.End.ToString("yyyy-MM-dd")&basis=Accrual">
+                                    @Labels.Date(year.Start) – @Labels.Date(year.End)
+                                </a>
+                            </td>
+                            <td class="num">@Labels.Amount(year.NetIncome)</td>
+                            <td>@(year.IsClosed ? "Closed" : year.End >= Today ? "Current" : "Open")</td>
+                            <td>
+                                @if (!year.IsClosed && year.End < Today)
+                                {
+                                    <form method="post" @formname="@($"close-{year.End:yyyyMMdd}")" @onsubmit="() => CloseYearAsync(year.End)">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary">Close year</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ClosingStatus _status = new(null, false);
+    private IReadOnlyList<FiscalYearSummary> _years = [];
+    private string? _message;
+    private string? _error;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    [SupplyParameterFromForm(FormName = "closing")]
+    private ClosingModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    private string? Saved { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        Input ??= new() { ClosingDate = _status.ClosingDate };
+        _message ??= Saved switch
+        {
+            "closing" => "Closing date saved.",
+            { Length: > 0 } year => $"Closed the books through {year}.",
+            _ => null,
+        };
+    }
+
+    private async Task LoadAsync()
+    {
+        _status = await Closing.GetAsync();
+        _years = await Closing.FiscalYearsAsync(Today);
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = Input.CurrentPassword;
+            await Closing.SetAsync(Input.ClosingDate, Input.NewPassword, Input.RemovePassword);
+            Navigation.NavigateTo("/settings/close-books?saved=closing");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CloseYearAsync(DateOnly end)
+    {
+        try
+        {
+            await Closing.CloseYearAsync(end);
+            Navigation.NavigateTo($"/settings/close-books?saved={end:yyyy-MM-dd}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class ClosingModel
+    {
+        public DateOnly? ClosingDate { get; set; }
+
+        [StringLength(128, MinimumLength = 6, ErrorMessage = "Use at least 6 characters.")]
+        public string? NewPassword { get; set; }
+
+        [Compare(nameof(NewPassword), ErrorMessage = "The passwords don't match.")]
+        public string? ConfirmPassword { get; set; }
+
+        public bool RemovePassword { get; set; }
+
+        public string? CurrentPassword { get; set; }
+    }
+}

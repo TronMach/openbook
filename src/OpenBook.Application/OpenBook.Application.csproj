@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <EmbeddedResource Include="Accounts/Templates/*.csv" />
     <ProjectReference Include="..\OpenBook.Domain\OpenBook.Domain.csproj" />
   </ItemGroup>
 

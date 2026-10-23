@@ -67,6 +67,9 @@
                 <input id="memo" @bind="_memo" maxlength="1000" />
             </div>
 
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+
             <div class="actions">
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save sales receipt</button>
                 <a href="/sales?show=receipts">Cancel</a>
@@ -90,6 +93,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
 
     private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty && !string.IsNullOrWhiteSpace(_number);
 
@@ -115,12 +120,13 @@
         try
         {
             var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo);
-            var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command));
+            var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

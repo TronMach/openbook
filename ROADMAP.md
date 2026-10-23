@@ -83,6 +83,8 @@ tests/
 Suggested order: V1.1 → V1.3 → V1.4 → V1.2 → V1.5 → V1.7 → V1.6 → V1.8 → V1.9.
 Sales tax must land before inventory, since both change how invoice lines post. Multi-user goes late so the API surface is stable before it's exposed.
 
+**V1.1 status (2026-10-22): complete.** Closing date with an optional closing password: changes dated in a closed period (posting, voiding, any document) are refused or need the password, and each override is audited; reopening or changing the password needs the current one. Year-end close moves the closing date to the fiscal year end (no closing entries; prior years' income shows on a "Retained Earnings" account when the chart has one). Reversing entries ("reverse on" date). Recurring journal entries (weekly to yearly, end date or count, month-end safe, catch-up, manual or automatic posting by an hourly background job as "system"). Opening balances wizard (difference to Opening Balance Equity). Starter charts for sole proprietor/LLC, partnership, corporation and nonprofit, offered on the empty chart of accounts after setup. Audit log page with filters, per-record history and field-level changes. API for all of it. 303 tests.
+
 ## Phase 3 — LATER (pick by audience)
 
 | # | Module | Notes |

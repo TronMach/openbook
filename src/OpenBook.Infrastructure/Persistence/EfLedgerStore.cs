@@ -31,6 +31,10 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             query = query.Where(e => e.Date >= from);
         if (filter.To is { } to)
             query = query.Where(e => e.Date <= to);
+        if (filter.Source is { } source)
+            query = query.Where(e => e.Source == source);
+        if (filter.SourceId is { } sourceId)
+            query = query.Where(e => e.SourceId == sourceId);
 
         var total = await query.CountAsync(ct);
         var entries = await query
@@ -74,7 +78,24 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             .AsNoTracking()
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<RecurringEntry>> ListRecurringAsync(CancellationToken ct) =>
+        (await db.RecurringEntries.ToListAsync(ct)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    public Task<RecurringEntry?> GetRecurringAsync(Guid id, CancellationToken ct) =>
+        db.RecurringEntries.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    // Ordered by the sequential id: SQLite can't ORDER BY the DateTimeOffset timestamp.
+    public async Task<IReadOnlyList<AuditRecord>> ListAuditAsync(string? entityType, Guid? entityId, string? actor, CancellationToken ct) =>
+        await db.AuditRecords.AsNoTracking()
+            .Where(r => (entityType == null || r.EntityType == entityType)
+                && (entityId == null || r.EntityId == entityId)
+                && (actor == null || r.Actor == actor))
+            .OrderByDescending(r => r.Id)
+            .ToListAsync(ct);
+
     public void Add(Account account) => db.Accounts.Add(account);
+
+    public void Add(RecurringEntry recurring) => db.RecurringEntries.Add(recurring);
 
     public void Add(JournalEntry entry) => db.JournalEntries.Add(entry);
 

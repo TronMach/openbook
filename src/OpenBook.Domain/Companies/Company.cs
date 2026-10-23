@@ -37,6 +37,12 @@ public sealed class Company
     /// <summary>The basis reports open with; each report can still switch.</summary>
     public ReportBasis DefaultReportBasis { get; private set; }
 
+    /// <summary>The books are closed on and before this date: nothing dated then can be posted or voided without the closing password.</summary>
+    public DateOnly? ClosingDate { get; private set; }
+
+    /// <summary>Hash of the password that allows changes on or before <see cref="ClosingDate"/>; null means none can be made.</summary>
+    public string? ClosingPasswordHash { get; private set; }
+
     public string? Email { get; private set; }
     public string? Phone { get; private set; }
     public string? Address { get; private set; }
@@ -92,6 +98,20 @@ public sealed class Company
     }
 
     public void SetAccountNumbering(bool enabled) => UseAccountNumbers = enabled;
+
+    /// <param name="passwordHash">Null keeps the current password; use <see cref="ClearClosingPassword"/> to remove it.</param>
+    public void SetClosingDate(DateOnly? closingDate, string? passwordHash)
+    {
+        ClosingDate = closingDate;
+        if (passwordHash is not null)
+            ClosingPasswordHash = passwordHash;
+        if (closingDate is null)
+            ClosingPasswordHash = null;
+    }
+
+    public void ClearClosingPassword() => ClosingPasswordHash = null;
+
+    public bool IsClosed(DateOnly date) => ClosingDate is { } closing && date <= closing;
 
     public void SetDefaultReportBasis(ReportBasis basis) =>
         DefaultReportBasis = Enum.IsDefined(basis)

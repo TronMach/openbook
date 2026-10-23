@@ -27,8 +27,8 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
     }
 
     /// <summary>
-    /// Year-end closing entries arrive in V1.1, so equity shows two computed lines: net income before the
-    /// current fiscal year ("retained earnings") and net income since it started.
+    /// No closing entries are posted at year end, so equity shows net income before the current fiscal year
+    /// ("retained earnings") and net income since it started, both computed.
     /// </summary>
     public async Task<BalanceSheet> BalanceSheetAsync(DateOnly asOf, ReportBasis? basis = null, CancellationToken ct = default)
     {
@@ -47,7 +47,19 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
 
         var equity = BuildSection("Equity", chart, amounts, [AccountType.Equity]);
         var equityRows = equity.Rows.ToList();
-        equityRows.Add(new ReportRow(null, "Retained earnings", 1, retained, RowKind.Computed));
+
+        // With a top-level "Retained Earnings" account (as in the starter charts), prior years' income shows
+        // on it, combined with anything posted to it directly; otherwise as a computed line.
+        var retainedAccount = chart.Ordered(includeInactive: false).Select(x => x.Account).FirstOrDefault(a =>
+            a.Type == AccountType.Equity && a.ParentId is null && string.Equals(a.Name, "Retained Earnings", StringComparison.OrdinalIgnoreCase)
+            && !chart.ChildrenOf(a.Id).Any());
+        var retainedRow = retainedAccount is null ? -1 : equityRows.FindIndex(r => r.AccountId == retainedAccount.Id);
+        if (retainedRow >= 0)
+            equityRows[retainedRow] = equityRows[retainedRow] with { Amount = (equityRows[retainedRow].Amount ?? 0m) + retained };
+        else if (retainedAccount is not null)
+            equityRows.Add(new ReportRow(retainedAccount.Id, retainedAccount.Name, 1, retained, RowKind.Account));
+        else
+            equityRows.Add(new ReportRow(null, "Retained earnings", 1, retained, RowKind.Computed));
         equityRows.Add(new ReportRow(null, "Net income", 1, thisYear, RowKind.Computed));
 
         return new BalanceSheet(
