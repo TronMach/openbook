@@ -90,7 +90,7 @@
     @if (_entry.Source != JournalEntry.ManualSource && _entry.SourceId is { } documentId)
     {
         <p class="muted" style="margin-top: 1rem">
-            Posted by a <a href="/banking/transactions/@documentId">bank transaction</a>. To correct it, void it there.
+            Posted by a <a href="@Links.ForEntry(_entry.Source, documentId, _entry.Id)">@Links.DocumentName(_entry.Source)</a>. To correct it, void it there.
         </p>
     }
     else if (_entry.Status == JournalEntryStatus.Posted && _entry.Kind == JournalEntryKind.Standard)

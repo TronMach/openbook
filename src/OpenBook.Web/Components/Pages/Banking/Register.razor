@@ -148,8 +148,7 @@
 
     private string Description(RegisterLine line) => BankingRules.Describe(_chart, AccountId, line.Line, line.Document);
 
-    private static string Link(RegisterLine line) =>
-        line.Document is { } doc ? $"/banking/transactions/{doc.Id}" : $"/journal/{line.Line.JournalEntryId}";
+    private static string Link(RegisterLine line) => Links.ForEntry(line.Line.Source, line.Line.SourceId, line.Line.JournalEntryId);
 
     private string Counterparts(RegisterLine line) => line.OtherAccountIds.Count switch
     {

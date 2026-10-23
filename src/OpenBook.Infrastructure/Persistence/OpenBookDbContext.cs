@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
@@ -6,6 +7,7 @@ using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Sales;
 
 namespace OpenBook.Infrastructure.Persistence;
 
@@ -26,8 +28,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
     public DbSet<Reconciliation> Reconciliations => Set<Reconciliation>();
 
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Item> Items => Set<Item>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
+    public DbSet<SalesReceipt> SalesReceipts => Set<SalesReceipt>();
+
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
+
+    /// <summary>Unit prices and quantities: integer ten-thousandths (4 decimal places).</summary>
+    private static readonly ValueConverter<decimal, long> TenThousandths = new(value => (long)(value * 10000m), stored => stored / 10000m);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -194,6 +205,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<JournalLine>().WithMany().HasForeignKey(l => l.JournalLineId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        ConfigureSales(modelBuilder);
+
         modelBuilder.Entity<User>(b =>
         {
             b.ToTable("Users");
@@ -202,6 +215,114 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(u => u.Username).IsUnique();
             b.Property(u => u.PasswordHash).HasMaxLength(500);
             b.Property(u => u.SecurityStamp).HasMaxLength(64);
+        });
+    }
+
+    private static void ConfigureSales(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Customer>(b =>
+        {
+            b.ToTable("Customers");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.DisplayName).HasMaxLength(200);
+            b.HasIndex(c => c.DisplayName).IsUnique();
+            b.Property(c => c.CompanyName).HasMaxLength(200);
+            b.Property(c => c.Email).HasMaxLength(320);
+            b.Property(c => c.Phone).HasMaxLength(50);
+            b.Property(c => c.BillingAddress).HasMaxLength(500);
+            b.Property(c => c.ShippingAddress).HasMaxLength(500);
+            b.Property(c => c.Notes).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<Item>(b =>
+        {
+            b.ToTable("Items");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Name).HasMaxLength(100);
+            b.HasIndex(i => i.Name).IsUnique();
+            b.Property(i => i.Type).HasConversion<string>().HasMaxLength(20);
+            b.Property(i => i.Description).HasMaxLength(1000);
+            b.Property(i => i.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
+            b.HasOne<Account>().WithMany().HasForeignKey(i => i.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        void SalesLines<TOwner>(OwnedNavigationBuilder<TOwner, SalesLine> l, string table, string ownerKey)
+            where TOwner : class
+        {
+            l.ToTable(table);
+            l.WithOwner().HasForeignKey(ownerKey);
+            l.HasKey(ownerKey, nameof(SalesLine.LineNumber));
+            l.Property(x => x.Description).HasMaxLength(1000);
+            l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+            l.Property(x => x.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
+            l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            l.HasOne<Account>().WithMany().HasForeignKey(x => x.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
+        }
+
+        modelBuilder.Entity<Invoice>(b =>
+        {
+            b.ToTable("Invoices");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Number).HasMaxLength(20);
+            b.HasIndex(i => i.Number).IsUnique();
+            b.HasIndex(i => new { i.CustomerId, i.Date });
+            b.Property(i => i.Memo).HasMaxLength(1000);
+            b.Property(i => i.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
+            b.Property(i => i.AmountPaid).HasColumnName("AmountPaidMinor").HasConversion(MinorUnits);
+            b.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(i => i.Balance);
+            b.Ignore(i => i.IsOpen);
+            b.HasIndex(i => i.JournalEntryId).IsUnique();
+            b.HasOne<Customer>().WithMany().HasForeignKey(i => i.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(i => i.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(i => i.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(i => i.Lines, l => SalesLines(l, "InvoiceLines", "InvoiceId"));
+            b.Navigation(i => i.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<SalesReceipt>(b =>
+        {
+            b.ToTable("SalesReceipts");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Number).HasMaxLength(20);
+            b.HasIndex(r => r.Number).IsUnique();
+            b.Property(r => r.Reference).HasMaxLength(30);
+            b.Property(r => r.Memo).HasMaxLength(1000);
+            b.Property(r => r.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(r => r.JournalEntryId).IsUnique();
+            b.HasOne<Customer>().WithMany().HasForeignKey(r => r.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(r => r.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Lines, l => SalesLines(l, "SalesReceiptLines", "SalesReceiptId"));
+            b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<CustomerPayment>(b =>
+        {
+            b.ToTable("CustomerPayments");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(p => p.Reference).HasMaxLength(30);
+            b.Property(p => p.Memo).HasMaxLength(1000);
+            b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(p => new { p.CustomerId, p.Date });
+            b.HasIndex(p => p.JournalEntryId).IsUnique();
+            b.HasOne<Customer>().WithMany().HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(p => p.Applications, a =>
+            {
+                a.ToTable("PaymentApplications");
+                a.WithOwner().HasForeignKey("CustomerPaymentId");
+                a.HasKey("CustomerPaymentId", nameof(PaymentApplication.InvoiceId));
+                a.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                a.HasIndex(x => x.InvoiceId);
+                a.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(p => p.Applications).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
     }
 }

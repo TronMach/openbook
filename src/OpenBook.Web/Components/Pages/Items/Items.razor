@@ -1,0 +1,59 @@
+@page "/items"
+@inject ItemService ItemService
+@inject AccountService AccountService
+
+<PageTitle>Products and services · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Products and services</h1>
+        <a class="button secondary" href="@(ShowInactive ? "/items" : "/items?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
+        <a class="button secondary" href="/items/import">Import CSV</a>
+        <a class="button" href="/items/new">New item</a>
+    </div>
+
+    @if (_items.Count == 0)
+    {
+        <div class="card"><p>Nothing yet. <a href="/items/new">Add a product or service</a> or <a href="/items/import">import a list</a>.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Name</th><th>Type</th><th>Description</th><th class="num">Price</th><th>Income account</th></tr></thead>
+                <tbody>
+                    @foreach (var item in _items)
+                    {
+                        <tr class="@(item.IsActive ? null : "inactive")">
+                            <td>
+                                <a href="/items/@item.Id">@item.Name</a>
+                                @if (!item.IsActive)
+                                {
+                                    <span class="badge">Inactive</span>
+                                }
+                            </td>
+                            <td class="muted">@Labels.For(item.Type)</td>
+                            <td class="muted">@item.Description</td>
+                            <td class="num">@item.Rate.ToString("#,##0.00##")</td>
+                            <td class="muted">@(_chart.Find(item.IncomeAccountId) is not null ? _chart.FullName(item.IncomeAccountId) : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Item> _items = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        _items = await ItemService.ListAsync(ShowInactive);
+    }
+}

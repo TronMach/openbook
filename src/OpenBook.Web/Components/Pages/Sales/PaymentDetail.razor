@@ -1,0 +1,122 @@
+@page "/sales/payments/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject PaymentService Payments
+@inject InvoiceService Invoices
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+
+<PageTitle>Payment · OpenBook</PageTitle>
+
+@if (_payment is null)
+{
+    <div class="card"><p>That payment doesn't exist. <a href="/sales?show=payments">Back to payments</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Payment from @_customer?.DisplayName</h1>
+        @if (_payment.Status == SalesDocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a class="button secondary" href="/sales?show=payments">Back to payments</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Customer</dt><dd><a href="/customers/@_payment.CustomerId">@_customer?.DisplayName</a></dd>
+            <dt>Date</dt><dd>@Labels.Date(_payment.Date)</dd>
+            <dt>Amount</dt><dd>@Labels.Amount(_payment.Amount)</dd>
+            <dt>Deposited to</dt><dd>@_chart.FullName(_payment.DepositAccountId)</dd>
+            @if (_payment.Reference is not null) { <dt>Reference</dt><dd>@_payment.Reference</dd> }
+            @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_payment.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    <h2>Applied to</h2>
+    <table class="data">
+        <thead><tr><th>Invoice</th><th>Date</th><th class="num">Invoice total</th><th class="num">Applied</th></tr></thead>
+        <tbody>
+            @foreach (var a in _payment.Applications)
+            {
+                var invoice = _invoices.GetValueOrDefault(a.InvoiceId);
+                <tr>
+                    <td><a href="/sales/invoices/@a.InvoiceId">@invoice?.Number</a></td>
+                    <td>@(invoice is null ? "" : Labels.Date(invoice.Date))</td>
+                    <td class="num">@(invoice is null ? "" : Labels.Amount(invoice.Total))</td>
+                    <td class="num">@Labels.Amount(a.Amount)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_payment.Status == SalesDocumentStatus.Posted)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this payment</h2>
+            <p class="muted">Voiding reverses the deposit and reopens the invoices it paid. Payments already reconciled at the bank can't be voided.</p>
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <button type="submit" class="danger">Void payment</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private CustomerPayment? _payment;
+    private Customer? _customer;
+    private Dictionary<Guid, Invoice> _invoices = [];
+    private ChartOfAccounts _chart = new([]);
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _payment = await Payments.GetAsync(Id);
+        if (_payment is null)
+            return;
+        _customer = await CustomerService.GetAsync(_payment.CustomerId);
+        _chart = await AccountService.GetChartAsync();
+        _invoices = (await Invoices.ListAsync(_payment.CustomerId)).ToDictionary(i => i.Id);
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            await Payments.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/sales/payments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the payment is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

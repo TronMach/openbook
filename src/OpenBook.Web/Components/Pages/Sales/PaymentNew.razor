@@ -1,0 +1,200 @@
+@page "/sales/payments/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Receive payment · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Receive payment</h1>
+        <a class="button secondary" href="/sales">Back to sales</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" value="@_customerId" @onchange="PickCustomerAsync">
+                        <option value="">Choose a customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Customer.Id">@c.Customer.DisplayName (@Labels.Amount(c.Balance) open)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="amount">Amount received</label>
+                    <input id="amount" type="number" step="0.01" min="0" value="@AmountText" @onchange="AutoApply" disabled="@(_rows.Count == 0)" />
+                    <span class="hint">Applied to the oldest invoices first. Adjust the amounts below if needed.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Payment date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="deposit">Deposit to</label>
+                    <select id="deposit" @bind="_depositAccountId">
+                        @foreach (var a in _depositAccounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" @bind="_memo" maxlength="1000" />
+                </div>
+            </div>
+        </div>
+
+        @if (_customerId is not null)
+        {
+            @if (_rows.Count == 0)
+            {
+                <div class="card"><p>This customer has no unpaid invoices.</p></div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data entry">
+                        <thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th class="num">Open balance</th><th class="num">Payment</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var row in _rows)
+                            {
+                                <tr @key="row.Invoice.Id">
+                                    <td><a href="/sales/invoices/@row.Invoice.Id" target="_blank">@row.Invoice.Number</a></td>
+                                    <td>@Labels.Date(row.Invoice.Date)</td>
+                                    <td class="@(row.Invoice.IsOverdue(DateOnly.FromDateTime(DateTime.Today)) ? "out-of-balance" : null)">@Labels.Date(row.Invoice.DueDate)</td>
+                                    <td class="num">@Labels.Amount(row.Invoice.Balance)</td>
+                                    <td><input class="amount" type="number" step="0.01" min="0" aria-label="Payment for invoice @row.Invoice.Number" @bind="row.Amount" /></td>
+                                    <td><button type="button" class="link" @onclick="() => row.Amount = row.Invoice.Balance">Pay in full</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4">Total payment</td>
+                                <td class="num">@Labels.Amount(Total)</td>
+                                <td class="@(Invalid ? "out-of-balance" : "muted")">@(Invalid ? "A payment is more than the invoice's balance." : "")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div class="actions">
+                    <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save payment</button>
+                    <a href="/sales">Cancel</a>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _depositAccounts = [];
+    private Guid? _customerId;
+    private Guid _depositAccountId;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _reference;
+    private string? _memo;
+    private List<RowModel> _rows = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
+
+    private decimal Total => _rows.Sum(r => r.Amount ?? 0m);
+    private bool Invalid => _rows.Any(r => (r.Amount ?? 0m) < 0m || (r.Amount ?? 0m) > r.Invoice.Balance);
+    private bool CanSave => Total > 0m && !Invalid && _depositAccountId != Guid.Empty;
+    private string AmountText => Total == 0m ? string.Empty : Total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_customers, _chart) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<CustomerService>().ListAsync(_date),
+            await sp.GetRequiredService<AccountService>().GetChartAsync()));
+        _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
+            .OrderBy(a => a.Type != AccountType.Bank)
+            .ToList();
+        _depositAccountId = _depositAccounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        if (PresetCustomer is { } preset)
+            await LoadInvoicesAsync(preset);
+        _loaded = true;
+    }
+
+    private Task PickCustomerAsync(ChangeEventArgs e) => LoadInvoicesAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    private async Task LoadInvoicesAsync(Guid? customerId)
+    {
+        _customerId = customerId;
+        _rows = customerId is { } id
+            ? (await Ops.RunAsync<PaymentService, IReadOnlyList<Invoice>>(s => s.OpenInvoicesAsync(id))).Select(i => new RowModel(i)).ToList()
+            : [];
+    }
+
+    private void AutoApply(ChangeEventArgs e)
+    {
+        if (!decimal.TryParse(e.Value as string, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var remaining))
+            return;
+        foreach (var row in _rows)
+        {
+            var amount = Math.Min(remaining, row.Invoice.Balance);
+            row.Amount = amount > 0m ? amount : null;
+            remaining -= amount;
+        }
+
+        if (remaining > 0m)
+            _error = $"That's {Labels.Amount(remaining)} more than this customer owes. Credits for overpayments arrive in a later version.";
+        else
+            _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new ReceivePaymentCommand(
+                _customerId!.Value, _date, _depositAccountId,
+                _rows.Where(r => (r.Amount ?? 0m) > 0m).Select(r => new ApplyToInvoice(r.Invoice.Id, r.Amount!.Value)).ToList(),
+                _reference, _memo);
+            var payment = await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ReceiveAsync(command));
+            Navigation.NavigateTo($"/sales/payments/{payment.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class RowModel(Invoice invoice)
+    {
+        public Invoice Invoice { get; } = invoice;
+        public decimal? Amount { get; set; }
+    }
+}

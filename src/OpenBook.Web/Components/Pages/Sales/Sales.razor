@@ -1,0 +1,125 @@
+@page "/sales"
+@inject InvoiceService Invoices
+@inject PaymentService Payments
+@inject SalesReceiptService Receipts
+@inject CustomerService CustomerService
+
+<PageTitle>Sales · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Sales</h1>
+        <a class="button secondary" href="/customers">Customers</a>
+        <a class="button secondary" href="/items">Products and services</a>
+        <a class="button secondary" href="/sales/receipts/new">Sales receipt</a>
+        <a class="button secondary" href="/sales/payments/new">Receive payment</a>
+        <a class="button" href="/sales/invoices/new">New invoice</a>
+    </div>
+
+    <div class="summary-bar">
+        <div><span class="label">Unpaid invoices</span><span class="value">@Labels.Amount(_invoices.Sum(i => i.Balance))</span></div>
+        <div><span class="label">Overdue</span><span class="value @(Overdue > 0m ? "off" : null)">@Labels.Amount(Overdue)</span></div>
+        <div><span class="label">Paid in the last 30 days</span><span class="value">@Labels.Amount(_payments.Where(p => p.Status == SalesDocumentStatus.Posted && p.Date > _today.AddDays(-30)).Sum(p => p.Amount))</span></div>
+    </div>
+
+    <nav class="toolbar" aria-label="Show">
+        @foreach (var (key, label) in Tabs)
+        {
+            <a class="button @(Show == key ? null : "secondary")" href="/sales?show=@key">@label</a>
+        }
+    </nav>
+
+    @switch (Show)
+    {
+        case "payments":
+            <table class="data">
+                <thead><tr><th>Date</th><th>Customer</th><th>Ref</th><th class="num">Invoices</th><th class="num">Amount</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _payments)
+                    {
+                        <tr class="@(p.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                            <td>@Customer(p.CustomerId)</td>
+                            <td>@p.Reference</td>
+                            <td class="num">@p.Applications.Count</td>
+                            <td class="num">@Labels.Amount(p.Amount)</td>
+                            <td>@(p.Status == SalesDocumentStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            break;
+        case "receipts":
+            <table class="data">
+                <thead><tr><th>Date</th><th>No.</th><th>Customer</th><th class="num">Total</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _receipts)
+                    {
+                        <tr class="@(r.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                            <td>@Labels.Date(r.Date)</td>
+                            <td><a href="/sales/receipts/@r.Id">@r.Number</a></td>
+                            <td>@(r.CustomerId is { } c ? Customer(c) : "")</td>
+                            <td class="num">@Labels.Amount(r.Total)</td>
+                            <td>@(r.Status == SalesDocumentStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            break;
+        default:
+            var shown = Show == "all-invoices" ? _invoices : _invoices.Where(i => i.IsOpen).ToList();
+            @if (shown.Count == 0)
+            {
+                <div class="card"><p>@(Show == "all-invoices" ? "No invoices yet." : "Nothing unpaid.") <a href="/sales/invoices/new">Create an invoice</a>.</p></div>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>No.</th><th>Customer</th><th>Date</th><th>Due</th><th>Status</th><th class="num">Total</th><th class="num">Balance</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in shown)
+                        {
+                            var status = Labels.Status(i, _today);
+                            <tr class="@(i.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                                <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
+                                <td>@Customer(i.CustomerId)</td>
+                                <td>@Labels.Date(i.Date)</td>
+                                <td>@Labels.Date(i.DueDate)</td>
+                                <td><span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span></td>
+                                <td class="num">@Labels.Amount(i.Total)</td>
+                                <td class="num">@Labels.Amount(i.Balance)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            break;
+    }
+</div>
+
+@code {
+    private static readonly (string Key, string Label)[] Tabs =
+        [("open", "Unpaid invoices"), ("all-invoices", "All invoices"), ("payments", "Payments"), ("receipts", "Sales receipts")];
+
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<Invoice> _invoices = [];
+    private IReadOnlyList<CustomerPayment> _payments = [];
+    private IReadOnlyList<SalesReceipt> _receipts = [];
+    private Dictionary<Guid, string> _customers = [];
+
+    [SupplyParameterFromQuery]
+    private string? Show { get; set; }
+
+    private decimal Overdue => _invoices.Where(i => i.IsOverdue(_today)).Sum(i => i.Balance);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Show ??= "open";
+        _invoices = await Invoices.ListAsync();
+        _payments = await Payments.ListAsync();
+        _receipts = await Receipts.ListAsync();
+        _customers = (await CustomerService.ListAsync(_today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.Customer.DisplayName);
+    }
+
+    private string Customer(Guid id) => _customers.GetValueOrDefault(id, "(unknown)");
+}

@@ -1,0 +1,146 @@
+@page "/sales/invoices/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>New invoice · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>New invoice</h1>
+        <a class="button secondary" href="/sales">Back to sales</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_customers.Count == 0 || _items.Count == 0))
+    {
+        <div class="card">
+            <p>
+                Invoices need a customer and at least one product or service.
+                @if (_customers.Count == 0) { <a href="/customers/new">Add a customer</a> }
+                @if (_customers.Count == 0 && _items.Count == 0) { <span> and </span> }
+                @if (_items.Count == 0) { <a href="/items/new">add a product or service</a> }.
+            </p>
+        </div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" value="@_customerId" @onchange="PickCustomer">
+                        <option value="">Choose a customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </select>
+                    @if (_customer?.BillingAddress is { } address)
+                    {
+                        <span class="hint" style="white-space: pre-line">@address</span>
+                    }
+                </div>
+                <div class="field">
+                    <label for="number">Invoice number</label>
+                    <input id="number" @bind="_number" maxlength="20" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Invoice date</label>
+                    <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
+                </div>
+                <div class="field">
+                    <label for="due">Due date @(_customer is { } c2 ? $"({Labels.Terms(c2.PaymentTermsDays)})" : "")</label>
+                    <input id="due" type="date" @bind="_dueDate" />
+                </div>
+            </div>
+
+            <SalesLinesEditor Lines="_lines" Items="_items" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to customer <span class="muted">(optional, printed on the invoice)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save invoice</button>
+                <a href="/sales">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private Customer? _customer;
+    private Guid? _customerId;
+    private string? _number;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _dueDate = DateOnly.FromDateTime(DateTime.Today);
+    private string? _memo;
+    private List<SalesLineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
+
+    private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_customers, _items, _number) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync(),
+            await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
+        if (PresetCustomer is { } preset)
+            SetCustomer(preset);
+        _loaded = true;
+    }
+
+    private void PickCustomer(ChangeEventArgs e) => SetCustomer(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    private void SetCustomer(Guid? id)
+    {
+        _customerId = id;
+        _customer = _customers.FirstOrDefault(c => c.Id == id);
+        if (_customer is not null)
+            _dueDate = _customer.DueDateFor(_date);
+    }
+
+    private void ChangeDate(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
+            return;
+        _date = date;
+        _dueDate = _customer?.DueDateFor(date) ?? (_dueDate < date ? date : _dueDate);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo);
+            var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command));
+            Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

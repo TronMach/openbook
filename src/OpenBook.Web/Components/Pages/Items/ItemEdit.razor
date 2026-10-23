@@ -1,0 +1,145 @@
+@page "/items/new"
+@page "/items/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject ItemService ItemService
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_item?.Name ?? "New product or service") · OpenBook</PageTitle>
+
+@if (Id is not null && _item is null)
+{
+    <div class="card"><p>That item doesn't exist. <a href="/items">Back to products and services</a>.</p></div>
+    return;
+}
+
+<div class="card">
+    <h1>@(_item is null ? "New product or service" : "Edit product or service")</h1>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_item is { IsActive: false })
+    {
+        <div class="alert notice" role="status">This item is inactive and can't be used on new sales.</div>
+    }
+    @if (_incomeAccounts.Count == 0)
+    {
+        <div class="alert error" role="alert">There are no income accounts yet. <a href="/accounts/new">Add one</a> first.</div>
+    }
+
+    <EditForm Model="Input" FormName="item" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+        <div class="row">
+            <div class="field">
+                <label for="name">Name</label>
+                <InputText id="name" @bind-Value="Input.Name" />
+                <ValidationMessage For="() => Input.Name" />
+            </div>
+            <div class="field">
+                <label for="type">Type</label>
+                <InputSelect id="type" @bind-Value="Input.Type">
+                    @foreach (var type in Enum.GetValues<ItemType>())
+                    {
+                        <option value="@type">@Labels.For(type)</option>
+                    }
+                </InputSelect>
+            </div>
+        </div>
+        <div class="field">
+            <label for="description">Description on sales forms <span class="muted">(optional)</span></label>
+            <InputText id="description" @bind-Value="Input.Description" />
+        </div>
+        <div class="row">
+            <div class="field">
+                <label for="rate">Price</label>
+                <InputNumber id="rate" step="any" @bind-Value="Input.Rate" />
+                <span class="hint">Up to 4 decimal places; line totals round to the cent.</span>
+            </div>
+            <div class="field">
+                <label for="account">Income account</label>
+                <InputSelect id="account" @bind-Value="Input.IncomeAccountId">
+                    <option value="">Choose…</option>
+                    @foreach (var account in _incomeAccounts)
+                    {
+                        <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Input.IncomeAccountId" />
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit">@(_item is null ? "Create" : "Save changes")</button>
+            <a href="/items">Cancel</a>
+        </div>
+    </EditForm>
+
+    @if (_item is not null)
+    {
+        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync" style="margin-top: 1rem">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">@(_item.IsActive ? "Make inactive" : "Make active")</button>
+        </form>
+    }
+</div>
+
+@code {
+    private Item? _item;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _incomeAccounts = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "item")]
+    private ItemModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        _incomeAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
+        _item = Id is { } id ? await ItemService.GetAsync(id) : null;
+        Input ??= _item is null
+            ? new ItemModel { IncomeAccountId = _incomeAccounts.FirstOrDefault()?.Id }
+            : new ItemModel { Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description);
+            _ = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
+            Navigation.NavigateTo("/items");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        await ItemService.SetActiveAsync(_item!.Id, !_item.IsActive);
+        Navigation.NavigateTo($"/items/{_item.Id}");
+    }
+
+    private sealed class ItemModel
+    {
+        [Required(ErrorMessage = "Enter a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        public ItemType Type { get; set; } = ItemType.Service;
+
+        [StringLength(1000)]
+        public string? Description { get; set; }
+
+        public decimal? Rate { get; set; }
+
+        [Required(ErrorMessage = "Choose an income account.")]
+        public Guid? IncomeAccountId { get; set; }
+    }
+}

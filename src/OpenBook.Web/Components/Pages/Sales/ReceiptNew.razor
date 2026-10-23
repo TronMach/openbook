@@ -1,0 +1,130 @@
+@page "/sales/receipts/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>New sales receipt · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>New sales receipt</h1>
+        <a class="button secondary" href="/sales?show=receipts">Back to sales receipts</a>
+    </div>
+    <p class="muted">For sales paid on the spot. To bill now and be paid later, <a href="/sales/invoices/new">create an invoice</a> instead.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _items.Count == 0)
+    {
+        <div class="card"><p>Add a <a href="/items/new">product or service</a> first.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer <span class="muted">(optional)</span></label>
+                    <select id="customer" @bind="_customerId">
+                        <option value="">No customer</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="number">Receipt number</label>
+                    <input id="number" @bind="_number" maxlength="20" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="deposit">Deposit to</label>
+                    <select id="deposit" @bind="_depositAccountId">
+                        @foreach (var a in _depositAccounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
+                <input id="reference" @bind="_reference" maxlength="30" />
+            </div>
+
+            <SalesLinesEditor Lines="_lines" Items="_items" />
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save sales receipt</button>
+                <a href="/sales?show=receipts">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _depositAccounts = [];
+    private Guid? _customerId;
+    private Guid _depositAccountId;
+    private string? _number;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _reference;
+    private string? _memo;
+    private List<SalesLineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty && !string.IsNullOrWhiteSpace(_number);
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_customers, _items, _chart, _number) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            await sp.GetRequiredService<SalesReceiptService>().SuggestNumberAsync()));
+        _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
+            .OrderBy(a => a.Type != AccountType.Bank)
+            .ToList();
+        _depositAccountId = _depositAccounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo);
+            var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command));
+            Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

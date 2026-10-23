@@ -3,6 +3,7 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Sales;
 
 namespace OpenBook.Application;
 
@@ -17,6 +18,14 @@ public static class DependencyInjection
         services.AddScoped<BankingService>();
         services.AddScoped<BankImportService>();
         services.AddScoped<ReconciliationService>();
+        services.AddScoped<SalesAccounts>();
+        services.AddScoped<CustomerService>();
+        services.AddScoped<ItemService>();
+        services.AddScoped<InvoiceService>();
+        services.AddScoped<PaymentService>();
+        services.AddScoped<SalesReceiptService>();
+        services.AddScoped<CustomerImportService>();
+        services.AddScoped<ItemImportService>();
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();
         services.AddScoped<AuthService>();

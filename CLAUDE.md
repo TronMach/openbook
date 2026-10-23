@@ -56,3 +56,13 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Services that create several entries in one save use `PostingEngine.StageAsync` / `StageVoidAsync` (internal) and save once; `NextEntryNumberAsync` counts staged entries. Mutate documents only after the staged call succeeds, so a refusal leaves nothing changed in memory.
 - Reconciliation state lives in `Reconciliations` / `ReconciliationLines` referencing ledger lines; the ledger itself is never touched. One in progress per account, ticks saved as made. Voiding is blocked for any entry with a ticked or reconciled line. Voided entries and their reversals are left out of worksheets and reports.
 - Statement CSV import: `BankImportService` (headers matched loosely; one signed amount column or money-out/money-in columns) with `StatementValues` for dates and amounts. It refuses to guess on ambiguous amounts ("1.005") and flags ambiguous date orders. Possible duplicates = same date, signed amount and payee as an existing posted transaction.
+
+## Sales (M3)
+
+- `Customer` and `Item` (products and services; `Service` or `NonInventory`, each with a default price and income account) are deactivated, never deleted. Names are unique ignoring case. Customers with unpaid invoices can't be deactivated.
+- `Invoice`, `CustomerPayment` and `SalesReceipt` are documents posting one journal entry each (`Source = sales.*`), voided never edited. Lines (`SalesLine`) need an item when they have an amount; item-less lines are notes. Rates and quantities allow 4 decimals (stored as ten-thousandths); line amounts round half away from zero to the cent. `SalesLine.Postings` credits each income account with its lines' sum (debits it if a discount makes it negative).
+- Invoices post to the first active A/R account; one is created and saved on first use if none exists. Payments are fully applied to the customer's invoices (no unapplied credits until V1.3) and deposit to a Bank or Other current asset account. Invoice `AmountPaid` is kept in step by payment create/void. An invoice with payments applied can't be voided.
+- Document services check everything before `StageAsync` and mutate documents/invoices only after staging succeeds.
+- Customer and item CSV imports (`SalesImports.cs`) follow the chart import pattern (preview, all-or-nothing, existing names skipped). `CsvColumns` is the shared header matcher.
+- SQLite can't `ORDER BY` a `DateTimeOffset`; order such results in memory.
+- `Web/Components/Links.cs` maps a journal entry's source to its document page; use it wherever a ledger line links somewhere.

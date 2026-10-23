@@ -22,6 +22,7 @@ public static class OpenBookApi
     {
         var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter(MapDomainErrors);
         api.MapBankingApi();
+        api.MapSalesApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.GetAsync(ct)));

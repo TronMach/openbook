@@ -1,0 +1,70 @@
+@page "/customers"
+@inject CustomerService CustomerService
+
+<PageTitle>Customers · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Customers</h1>
+        <a class="button secondary" href="@(ShowInactive ? "/customers" : "/customers?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
+        <a class="button secondary" href="/customers/import">Import CSV</a>
+        <a class="button" href="/customers/new">New customer</a>
+    </div>
+
+    @if (_customers.Count == 0)
+    {
+        <div class="card"><p>No customers yet. <a href="/customers/new">Add one</a> or <a href="/customers/import">import a list</a>.</p></div>
+    }
+    else
+    {
+        <div class="summary-bar">
+            <div><span class="label">Owed to you</span><span class="value">@Labels.Amount(_customers.Sum(c => c.Balance))</span></div>
+            <div><span class="label">Overdue</span><span class="value @(_customers.Sum(c => c.Overdue) > 0m ? "off" : null)">@Labels.Amount(_customers.Sum(c => c.Overdue))</span></div>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Terms</th>
+                        <th class="num">Open invoices</th>
+                        <th class="num">Overdue</th>
+                        <th class="num">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _customers)
+                    {
+                        <tr class="@(s.Customer.IsActive ? null : "inactive")">
+                            <td>
+                                <a href="/customers/@s.Customer.Id">@s.Customer.DisplayName</a>
+                                @if (!s.Customer.IsActive)
+                                {
+                                    <span class="badge">Inactive</span>
+                                }
+                            </td>
+                            <td>@s.Customer.Email</td>
+                            <td>@s.Customer.Phone</td>
+                            <td class="muted">@Labels.Terms(s.Customer.PaymentTermsDays)</td>
+                            <td class="num">@(s.OpenInvoices == 0 ? "" : s.OpenInvoices)</td>
+                            <td class="num @(s.Overdue > 0m ? "out-of-balance" : null)">@Labels.AmountOrBlank(s.Overdue)</td>
+                            <td class="num">@Labels.AmountOrBlank(s.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _customers = [];
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today), ShowInactive);
+}

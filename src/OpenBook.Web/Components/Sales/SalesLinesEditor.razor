@@ -1,0 +1,69 @@
+@* Line grid for invoices and sales receipts. Picking an item fills its description and price. *@
+
+<div class="table-wrap">
+    <table class="data entry">
+        <thead>
+            <tr>
+                <th>Product or service</th>
+                <th>Description</th>
+                <th class="num">Qty</th>
+                <th class="num">Rate</th>
+                <th class="num">Amount</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var line in Lines)
+            {
+                <tr @key="line">
+                    <td>
+                        <select value="@line.ItemId" aria-label="Product or service" @onchange="e => PickItem(line, e)">
+                            <option value="">(note only)</option>
+                            @foreach (var item in Items)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </td>
+                    <td><input @bind="line.Description" aria-label="Description" /></td>
+                    <td><input class="amount" type="number" step="any" aria-label="Quantity" @bind="line.Quantity" /></td>
+                    <td><input class="amount" type="number" step="any" aria-label="Rate" @bind="line.Rate" /></td>
+                    <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
+                    <td>
+                        @if (Lines.Count > 1)
+                        {
+                            <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => Lines.Remove(line)">×</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td><button type="button" class="secondary" @onclick="() => Lines.Add(new SalesLineModel())">Add line</button></td>
+                <td colspan="3" class="num">Total</td>
+                <td class="num">@Labels.Amount(SalesLineModel.Total(Lines))</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<SalesLineModel> Lines { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Item> Items { get; set; } = [];
+
+    private void PickItem(SalesLineModel line, ChangeEventArgs e)
+    {
+        line.ItemId = Guid.TryParse(e.Value as string, out var id) ? id : null;
+        if (Items.FirstOrDefault(i => i.Id == line.ItemId) is { } item)
+        {
+            line.Description = item.Description ?? item.Name;
+            line.Rate = item.Rate;
+            line.Quantity ??= 1m;
+        }
+    }
+}

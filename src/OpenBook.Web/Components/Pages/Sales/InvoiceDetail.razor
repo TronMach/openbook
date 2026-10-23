@@ -1,0 +1,178 @@
+@page "/sales/invoices/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject InvoiceService Invoices
+@inject CustomerService CustomerService
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+
+<PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
+
+@if (_invoice is null || _customer is null || _company is null)
+{
+    <div class="card"><p>That invoice doesn't exist. <a href="/sales">Back to sales</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    @{
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var status = Labels.Status(_invoice, today);
+    }
+    <div class="toolbar">
+        <h1>Invoice @_invoice.Number</h1>
+        <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
+        <a class="button secondary" href="/sales">Back to sales</a>
+        <button type="button" class="secondary" onclick="window.print()">Print</button>
+        @if (_invoice.IsOpen)
+        {
+            <a class="button" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error no-print" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <div class="split-grid">
+            <div>
+                <strong>@(_company.LegalName ?? _company.Name)</strong>
+                @if (_company.Address is not null) { <div style="white-space: pre-line">@_company.Address</div> }
+                @if (_company.Email is not null) { <div>@_company.Email</div> }
+                @if (_company.Phone is not null) { <div>@_company.Phone</div> }
+            </div>
+            <dl class="facts">
+                <dt>Invoice</dt><dd>@_invoice.Number</dd>
+                <dt>Date</dt><dd>@Labels.Date(_invoice.Date)</dd>
+                <dt>Due</dt><dd>@Labels.Date(_invoice.DueDate)</dd>
+                <dt>Terms</dt><dd>@Labels.Terms(_invoice.DueDate.DayNumber - _invoice.Date.DayNumber)</dd>
+            </dl>
+        </div>
+        <div style="margin-top: 1rem">
+            <span class="muted">Bill to</span>
+            <div><a href="/customers/@_customer.Id">@_customer.DisplayName</a></div>
+            @if (_customer.CompanyName is not null && _customer.CompanyName != _customer.DisplayName) { <div>@_customer.CompanyName</div> }
+            @if (_customer.BillingAddress is not null) { <div style="white-space: pre-line">@_customer.BillingAddress</div> }
+        </div>
+
+        <table class="data" style="margin-top: 1rem">
+            <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+                @foreach (var line in _invoice.Lines.OrderBy(l => l.LineNumber))
+                {
+                    <tr>
+                        <td>@line.Description</td>
+                        <td class="num">@(line.ItemId is null ? "" : line.Quantity.ToString("0.####"))</td>
+                        <td class="num">@(line.ItemId is null ? "" : line.Rate.ToString("#,##0.00##"))</td>
+                        <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="3">Total</td><td class="num">@Labels.Amount(_invoice.Total)</td></tr>
+                @if (_invoice.AmountPaid > 0m)
+                {
+                    <tr><td colspan="3">Paid</td><td class="num">-@Labels.Amount(_invoice.AmountPaid)</td></tr>
+                }
+                <tr><td colspan="3">Balance due</td><td class="num">@Labels.Amount(_invoice.Balance)</td></tr>
+            </tfoot>
+        </table>
+        @if (_invoice.Memo is not null)
+        {
+            <p style="white-space: pre-line; margin-top: 1rem">@_invoice.Memo</p>
+        }
+    </div>
+
+    @if (_payments.Count > 0)
+    {
+        <div class="no-print">
+            <h2>Payments</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th>Ref</th><th class="num">Applied to this invoice</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _payments)
+                    {
+                        <tr class="@(p.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                            <td>@p.Reference</td>
+                            <td class="num">@Labels.Amount(p.Applications.Single(a => a.InvoiceId == _invoice.Id).Amount)</td>
+                            <td>@(p.Status == SalesDocumentStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">Journal entry</a></p>
+
+    @if (_invoice.Status == SalesDocumentStatus.Posted)
+    {
+        <div class="card no-print">
+            <h2>Void this invoice</h2>
+            <p class="muted">
+                @(_invoice.AmountPaid > 0m
+                    ? "This invoice has payments applied. Void those payments first."
+                    : "Voiding reverses its journal entry on the same date and removes it from the customer's balance.")
+            </p>
+            @if (_invoice.AmountPaid == 0m)
+            {
+                <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                    <DataAnnotationsValidator />
+                    <div class="field">
+                        <label for="reason">Reason</label>
+                        <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                        <ValidationMessage For="() => VoidInput.Reason" />
+                    </div>
+                    <button type="submit" class="danger">Void invoice</button>
+                </EditForm>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Invoice? _invoice;
+    private Customer? _customer;
+    private OpenBook.Domain.Companies.Company? _company;
+    private IReadOnlyList<CustomerPayment> _payments = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _invoice = await Invoices.GetAsync(Id);
+        if (_invoice is null)
+            return;
+        _customer = await CustomerService.GetAsync(_invoice.CustomerId);
+        _company = await Settings.GetAsync();
+        _payments = await Invoices.ListPaymentsAsync(Id);
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            await Invoices.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/sales/invoices/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the invoice is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

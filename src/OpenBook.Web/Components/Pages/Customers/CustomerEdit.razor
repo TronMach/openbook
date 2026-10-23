@@ -1,0 +1,243 @@
+@page "/customers/new"
+@page "/customers/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject CustomerService CustomerService
+@inject InvoiceService Invoices
+@inject PaymentService Payments
+@inject NavigationManager Navigation
+
+<PageTitle>@(_customer?.DisplayName ?? "New customer") · OpenBook</PageTitle>
+
+@if (Id is not null && _customer is null)
+{
+    <div class="card"><p>That customer doesn't exist. <a href="/customers">Back to customers</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(_customer?.DisplayName ?? "New customer")</h1>
+        @if (_customer is { IsActive: true })
+        {
+            <a class="button secondary" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
+            <a class="button" href="/sales/invoices/new?customer=@_customer.Id">New invoice</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_customer is { IsActive: false })
+    {
+        <div class="alert notice" role="status">This customer is inactive and can't be used on new sales.</div>
+    }
+
+    @if (_customer is not null && _invoices.Count + _payments.Count > 0)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        <div class="summary-bar">
+            <div><span class="label">Balance</span><span class="value">@Labels.Amount(_invoices.Sum(i => i.Balance))</span></div>
+            <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_invoices.Where(i => i.IsOverdue(today)).Sum(i => i.Balance))</span></div>
+        </div>
+        <div class="split-grid">
+            <div>
+                <h2>Invoices</h2>
+                <table class="data">
+                    <thead><tr><th>No.</th><th>Date</th><th>Due</th><th>Status</th><th class="num">Balance</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _invoices)
+                        {
+                            <tr class="@(i.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                                <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
+                                <td>@Labels.Date(i.Date)</td>
+                                <td>@Labels.Date(i.DueDate)</td>
+                                <td>@Labels.Status(i, today)</td>
+                                <td class="num">@Labels.Amount(i.Balance)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h2>Payments</h2>
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Ref</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _payments)
+                        {
+                            <tr class="@(p.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                                <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                                <td>@p.Reference @(p.Status == SalesDocumentStatus.Voided ? "(voided)" : "")</td>
+                                <td class="num">@Labels.Amount(p.Amount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Details</h2>
+        <EditForm Model="Input" FormName="customer" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Display name</label>
+                    <InputText id="name" @bind-Value="Input.DisplayName" />
+                    <ValidationMessage For="() => Input.DisplayName" />
+                </div>
+                <div class="field">
+                    <label for="company">Company <span class="muted">(optional)</span></label>
+                    <InputText id="company" @bind-Value="Input.CompanyName" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="email">Email <span class="muted">(optional)</span></label>
+                    <InputText id="email" type="email" @bind-Value="Input.Email" />
+                    <ValidationMessage For="() => Input.Email" />
+                </div>
+                <div class="field">
+                    <label for="phone">Phone <span class="muted">(optional)</span></label>
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="billing">Billing address <span class="muted">(optional)</span></label>
+                    <InputTextArea id="billing" rows="3" @bind-Value="Input.BillingAddress" />
+                </div>
+                <div class="field">
+                    <label for="shipping">Shipping address <span class="muted">(optional)</span></label>
+                    <InputTextArea id="shipping" rows="3" @bind-Value="Input.ShippingAddress" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="terms">Payment terms</label>
+                    <InputSelect id="terms" @bind-Value="Input.PaymentTermsDays">
+                        @foreach (var days in TermChoices(Input.PaymentTermsDays))
+                        {
+                            <option value="@days">@Labels.Terms(days)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="notes">Notes <span class="muted">(private)</span></label>
+                    <InputText id="notes" @bind-Value="Input.Notes" />
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit">@(_customer is null ? "Create customer" : "Save changes")</button>
+                <a href="/customers">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+
+    @if (_customer is not null)
+    {
+        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync" class="no-print">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">@(_customer.IsActive ? "Make inactive" : "Make active")</button>
+        </form>
+    }
+</div>
+
+@code {
+    private Customer? _customer;
+    private IReadOnlyList<Invoice> _invoices = [];
+    private IReadOnlyList<CustomerPayment> _payments = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "customer")]
+    private CustomerModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is { } id)
+        {
+            _customer = await CustomerService.GetAsync(id);
+            if (_customer is null)
+                return;
+            _invoices = await Invoices.ListAsync(id);
+            _payments = await Payments.ListAsync(id);
+        }
+
+        Input ??= _customer is null
+            ? new CustomerModel()
+            : new CustomerModel
+            {
+                DisplayName = _customer.DisplayName,
+                CompanyName = _customer.CompanyName,
+                Email = _customer.Email,
+                Phone = _customer.Phone,
+                BillingAddress = _customer.BillingAddress,
+                ShippingAddress = _customer.ShippingAddress,
+                PaymentTermsDays = _customer.PaymentTermsDays,
+                Notes = _customer.Notes,
+            };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new CustomerDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone,
+                Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes);
+            var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
+            Navigation.NavigateTo($"/customers/{saved.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        try
+        {
+            await CustomerService.SetActiveAsync(_customer!.Id, !_customer.IsActive);
+            Navigation.NavigateTo($"/customers/{_customer.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static IEnumerable<int> TermChoices(int current) => new[] { 0, 7, 10, 15, 30, 45, 60, 90, current }.Distinct().Order();
+
+    private sealed class CustomerModel
+    {
+        [Required(ErrorMessage = "Enter the customer's name.")]
+        [StringLength(200)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [StringLength(200)]
+        public string? CompanyName { get; set; }
+
+        // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
+        [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
+        public string? Email { get; set; }
+
+        [StringLength(50)]
+        public string? Phone { get; set; }
+
+        [StringLength(500)]
+        public string? BillingAddress { get; set; }
+
+        [StringLength(500)]
+        public string? ShippingAddress { get; set; }
+
+        public int PaymentTermsDays { get; set; } = 30;
+
+        [StringLength(2000)]
+        public string? Notes { get; set; }
+    }
+}

@@ -4,6 +4,7 @@ using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Sales;
 
 namespace OpenBook.Web.Components;
 
@@ -78,6 +79,20 @@ public static class Labels
     /// <summary>Register column headings: what raises the balance, and what lowers it.</summary>
     public static (string Increase, string Decrease) BalanceColumns(AccountType type) =>
         type == AccountType.CreditCard ? ("Charge", "Payment") : ("Deposit", "Payment");
+
+    public static string For(ItemType type) => type == ItemType.Service ? "Service" : "Non-inventory product";
+
+    public static string Terms(int days) => days == 0 ? "Due on receipt" : $"Net {days}";
+
+    /// <summary>Paid, Partially paid, Overdue, Open or Voided.</summary>
+    public static string Status(Invoice invoice, DateOnly today) => invoice switch
+    {
+        { Status: SalesDocumentStatus.Voided } => "Voided",
+        { Balance: 0m } => "Paid",
+        _ when invoice.IsOverdue(today) => "Overdue",
+        { AmountPaid: > 0m } => "Partially paid",
+        _ => "Open",
+    };
 
     public static string Month(int month) => CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month);
 

@@ -58,6 +58,8 @@ tests/
 
 **M2 status (2026-10-22): complete.** Banking overview and per-account register with running balance and C/R marks; checks/payments, deposits, card charges/credits with split lines (negative lines for discounts) and check-number suggestion; transfers (incl. paying a card); void; statement CSV import with column/date/sign detection, per-row categories and duplicate flagging; statement reconciliation (resumable, any entry on the account, void protection) with a printable report that ties register balance = statement + uncleared. API for all of it. 204 tests.
 
+**M3 status (2026-10-22): complete.** Customers (contact, billing/shipping, terms, balances) and products & services with income accounts; invoices with item lines, note lines, 4-decimal prices, due dates from terms, printable view; receive payment across several invoices with oldest-first auto-apply and partial payments; sales receipts with optional customer; void for all three (invoice blocked while paid); A/R auto-created when missing; CSV import for customers and items with preview; sales hub with unpaid/overdue totals; API for all of it. 231 tests.
+
 **Exit criteria:** a sole proprietor can set up a company, run a year of invoicing, bills and banking, reconcile, and get a correct P&L and balance sheet, all on one SQLite file they can back up.
 
 ## Phase 2 — V1 (what most small businesses expect)
