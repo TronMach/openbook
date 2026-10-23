@@ -1,0 +1,73 @@
+@using OpenBook.Application.Reporting
+@* Any report table: heading, rows with drill-down links, note. Exports render the same table. *@
+
+<div class="report-heading">
+    <h1>@Table.Title</h1>
+    @foreach (var subtitle in Table.Subtitles)
+    {
+        <p>@subtitle</p>
+    }
+</div>
+
+<div class="table-wrap">
+    <table class="data report-table @(Table.Columns.Count <= 2 ? "statement" : null)">
+        <thead>
+            <tr>
+                @foreach (var column in Table.Columns)
+                {
+                    <th class="@(column.IsNumeric || column.Format == ColumnFormat.Date ? "num" : null)">@column.Header</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (Table.Rows.Count == 0)
+            {
+                <tr><td colspan="@Table.Columns.Count" class="muted">Nothing to show for these settings.</td></tr>
+            }
+            @foreach (var row in Table.Rows)
+            {
+                <tr class="@RowClass(row.Style)">
+                    @for (var i = 0; i < Table.Columns.Count; i++)
+                    {
+                        var cell = i < row.Cells.Count ? row.Cells[i] : ReportCell.Empty;
+                        var column = Table.Columns[i];
+                        var text = ReportLinks.Cell(cell.Value, column.Format);
+                        var href = text.Length > 0 ? ReportLinks.Href(cell.Link, Table.Basis) : null;
+                        <td class="@CellClass(i, row.Depth, column)">
+                            @if (href is not null)
+                            {
+                                <a href="@href">@text</a>
+                            }
+                            else
+                            {
+                                @text
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (Table.Note is { } note)
+{
+    <p class="hint">@note</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ReportTable Table { get; set; } = null!;
+
+    private static string? RowClass(ReportRowStyle style) => style switch
+    {
+        ReportRowStyle.Section => "section-heading",
+        ReportRowStyle.Subtotal => "subtotal",
+        ReportRowStyle.Total => "grand-total",
+        _ => null,
+    };
+
+    private static string? CellClass(int index, int depth, ReportColumn column) =>
+        index == 0 ? (depth > 0 ? $"indent-{Math.Min(depth + 1, 5)}" : null)
+        : column.IsNumeric || column.Format == ColumnFormat.Date ? "num" : null;
+}

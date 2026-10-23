@@ -20,10 +20,11 @@ public sealed record AccountResponse(
     AccountClass Class,
     Guid? ParentId,
     string? Description,
-    bool IsActive)
+    bool IsActive,
+    string? TaxLine)
 {
     public static AccountResponse From(Account a, ChartOfAccounts chart) =>
-        new(a.Id, a.Number, a.Name, chart.FullName(a.Id), chart.Depth(a.Id), a.Type, a.Type.ClassOf(), a.ParentId, a.Description, a.IsActive);
+        new(a.Id, a.Number, a.Name, chart.FullName(a.Id), chart.Depth(a.Id), a.Type, a.Type.ClassOf(), a.ParentId, a.Description, a.IsActive, a.TaxLineKey);
 }
 
 public sealed record ChartImportResponse(int New, int Existing, int Errors, bool Imported, IReadOnlyList<ChartImportRow> Rows)

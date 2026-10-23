@@ -1,0 +1,95 @@
+@page "/reports/tax-lines"
+@using OpenBook.Application.Reporting
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>Tax lines · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Tax lines</h1>
+        <a href="/reports/tax-summary">Tax summary</a>
+    </div>
+    <p class="muted">
+        Assign each income and expense account to a line of @TaxLines.Describe(_form), the return for a
+        @Labels.For(_businessType).ToLowerInvariant() (<a href="/settings">change the business type</a>). The tax summary then totals
+        your books by line. A subaccount left blank goes on its parent's line. Line numbers follow the 2025 forms: check them against
+        the year you're filing.
+    </p>
+
+    @if (Saved is { } saved)
+    {
+        <div class="alert notice" role="status">@(saved == 1 ? "1 account" : $"{saved} accounts") updated.</div>
+    }
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_accounts.Count == 0)
+    {
+        <div class="card"><p>There are no income or expense accounts yet. <a href="/accounts">Set up the chart of accounts</a>.</p></div>
+    }
+    else
+    {
+        <form method="post" action="/reports/tax-lines" data-enhance="false">
+            <AntiforgeryToken />
+            <table class="data">
+                <thead><tr><th>Account</th><th>Type</th><th>Tax line</th></tr></thead>
+                <tbody>
+                    @foreach (var (account, depth) in _accounts)
+                    {
+                        var current = TaxLines.Find(account.TaxLineKey);
+                        <tr class="@(account.IsActive ? null : "inactive")">
+                            <td class="indent-@(Math.Min(depth, 5))"><label for="line-@account.Id">@Labels.AccountName(_chart, account.Id, _useNumbers)</label></td>
+                            <td class="muted">@Labels.For(account.Type)</td>
+                            <td>
+                                <select id="line-@account.Id" name="line:@account.Id">
+                                    <option value="">@(depth > 1 ? "(parent's line)" : "(none)")</option>
+                                    @if (current is not null && current.Form != _form && current.Key != TaxLines.NonDeductibleKey)
+                                    {
+                                        <option value="@current.Key" selected>@TaxLines.Describe(current.Form) @current.Label</option>
+                                    }
+                                    @foreach (var line in _lines.Where(l => l.IsIncome == IncomeAccount(account) || l.Key == current?.Key))
+                                    {
+                                        <option value="@line.Key" selected="@(line.Key == current?.Key)">@line.Label</option>
+                                    }
+                                </select>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="actions">
+                <button type="submit">Save tax lines</button>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    private ChartOfAccounts _chart = new([]);
+    private List<(Account Account, int Depth)> _accounts = [];
+    private IReadOnlyList<TaxLine> _lines = [];
+    private TaxForm _form;
+    private OpenBook.Domain.Companies.BusinessType _businessType;
+    private bool _useNumbers;
+
+    [SupplyParameterFromQuery] private int? Saved { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private static bool IncomeAccount(Account account) => account.Type.ClassOf() == AccountClass.Income;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        _businessType = company.BusinessType;
+        _useNumbers = company.UseAccountNumbers;
+        _form = TaxLines.FormFor(company.BusinessType);
+        _lines = TaxLines.For(_form);
+        _chart = await AccountService.GetChartAsync();
+        _accounts = _chart.Ordered()
+            .Where(x => !x.Account.Type.IsBalanceSheet() && (x.Account.IsActive || x.Account.TaxLineKey is not null))
+            .ToList();
+    }
+}

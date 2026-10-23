@@ -1,0 +1,150 @@
+@page "/reports/budgets"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Reporting
+@inject BudgetService BudgetService
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+
+<PageTitle>Budgets · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Budgets</h1>
+        <a href="/reports/budget-vs-actual">Budget vs. actual</a>
+    </div>
+    <p class="muted">A budget sets monthly amounts for income and expense accounts over one fiscal year. Budgets post nothing to the books.</p>
+
+    @if (_budgets.Count == 0)
+    {
+        <div class="card"><p>No budgets yet. Create one below.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Name</th><th>Fiscal year</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Net</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var b in _budgets)
+                {
+                    var (income, expenses) = Totals(b);
+                    <tr>
+                        <td><a href="/reports/budgets/@b.Id">@b.Name</a></td>
+                        <td>@Comparisons.Describe(b.FiscalYearStart, b.FiscalYearEnd)</td>
+                        <td class="num">@Labels.Amount(income)</td>
+                        <td class="num">@Labels.Amount(expenses)</td>
+                        <td class="num">@Labels.Amount(income - expenses)</td>
+                        <td class="num"><a href="/reports/budget-vs-actual?budgetId=@b.Id">Compare with actual</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card">
+        <h2>New budget</h2>
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+        <EditForm Model="Input" FormName="new-budget" OnValidSubmit="CreateAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="year">Fiscal year starting in</label>
+                    <InputNumber id="year" @bind-Value="Input.Year" />
+                    <span class="hint">Your fiscal year starts in @Labels.Month(_fiscalMonth).</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="seed">Start from</label>
+                    <InputSelect id="seed" @bind-Value="Input.Seed">
+                        <option value="@BudgetSeed.Blank">Blank</option>
+                        <option value="@BudgetSeed.PriorYearActuals">Last year's actual amounts, month by month</option>
+                        @if (_budgets.Count > 0)
+                        {
+                            <option value="@BudgetSeed.CopyBudget">A copy of another budget</option>
+                        }
+                    </InputSelect>
+                </div>
+                @if (_budgets.Count > 0)
+                {
+                    <div class="field">
+                        <label for="copy">Budget to copy</label>
+                        <InputSelect id="copy" @bind-Value="Input.CopyFrom">
+                            @foreach (var b in _budgets)
+                            {
+                                <option value="@b.Id">@b.Name</option>
+                            }
+                        </InputSelect>
+                        <span class="hint">Used only when starting from a copy.</span>
+                    </div>
+                }
+            </div>
+            <div class="actions">
+                <button type="submit">Create budget</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Budget> _budgets = [];
+    private Dictionary<Guid, AccountType> _types = [];
+    private int _fiscalMonth = 1;
+    private string? _error;
+
+    [SupplyParameterFromForm(FormName = "new-budget")]
+    private BudgetModel Input { get; set; } = default!;
+
+    [Inject] private AccountService Accounts { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        _fiscalMonth = company.FiscalYearStartMonth;
+        _budgets = await BudgetService.ListAsync();
+        _types = (await Accounts.ListAsync()).ToDictionary(a => a.Id, a => a.Type);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        Input ??= new BudgetModel { Year = company.FiscalYearStart(today).Year, CopyFrom = _budgets.FirstOrDefault()?.Id };
+    }
+
+    private (decimal Income, decimal Expenses) Totals(Budget b)
+    {
+        var lines = b.Lines.Where(l => _types.ContainsKey(l.AccountId)).ToList();
+        return (lines.Where(l => _types[l.AccountId].ClassOf() == AccountClass.Income).Sum(l => l.Amount),
+                lines.Where(l => _types[l.AccountId].ClassOf() == AccountClass.Expense).Sum(l => l.Amount));
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            var budget = await BudgetService.CreateAsync(new CreateBudgetCommand(Input.Name, Input.Year, Input.Seed, Input.CopyFrom));
+            Navigation.NavigateTo($"/reports/budgets/{budget.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class BudgetModel
+    {
+        [Required(ErrorMessage = "Enter a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        [Range(2000, 2100, ErrorMessage = "Choose a year between 2000 and 2100.")]
+        public int Year { get; set; }
+
+        public BudgetSeed Seed { get; set; }
+
+        public Guid? CopyFrom { get; set; }
+    }
+}

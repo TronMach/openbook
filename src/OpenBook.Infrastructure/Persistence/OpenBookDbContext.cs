@@ -9,6 +9,7 @@ using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
+using OpenBook.Domain.Reporting;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
 
@@ -57,6 +58,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<TaxRate> TaxRates => Set<TaxRate>();
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
     public DbSet<SalesTaxPayment> SalesTaxPayments => Set<SalesTaxPayment>();
+    public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
@@ -117,6 +120,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(a => a.Number).HasMaxLength(20);
             b.Property(a => a.Description).HasMaxLength(500);
             b.Property(a => a.Type).HasConversion<string>().HasMaxLength(30);
+            b.Property(a => a.TaxLineKey).HasMaxLength(40);
             b.HasIndex(a => a.Number).IsUnique();
             b.HasOne<Account>().WithMany().HasForeignKey(a => a.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -248,6 +252,36 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<BankTransaction>().WithMany().HasForeignKey(i => i.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(i => i.MatchedJournalEntryId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<BankRule>().WithMany().HasForeignKey(i => i.RuleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Budget>(b =>
+        {
+            b.ToTable("Budgets");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).HasMaxLength(100);
+            b.HasIndex(x => x.Name).IsUnique();
+            b.Ignore(x => x.FiscalYearEnd);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("BudgetLines");
+                l.WithOwner().HasForeignKey("BudgetId");
+                l.HasKey("BudgetId", nameof(BudgetLine.AccountId), nameof(BudgetLine.Period));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasIndex(x => x.AccountId);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<SavedReport>(b =>
+        {
+            b.ToTable("SavedReports");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).HasMaxLength(100);
+            b.HasIndex(x => x.Name).IsUnique();
+            b.Property(x => x.ReportKey).HasMaxLength(40);
+            b.Property(x => x.Query).HasMaxLength(SavedReport.MaxQueryLength);
+            b.Property(x => x.CreatedBy).HasMaxLength(100);
         });
 
         modelBuilder.Entity<TaxAgency>(b =>

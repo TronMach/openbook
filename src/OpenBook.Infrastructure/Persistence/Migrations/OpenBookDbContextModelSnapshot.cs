@@ -42,6 +42,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TaxLineKey")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1116,6 +1120,68 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("VendorId", "Date");
 
                     b.ToTable("VendorRefunds", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("FiscalYearStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Budgets", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.SavedReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Query")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReportKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("SavedReports", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.BankDeposit", b =>
@@ -2392,6 +2458,42 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Reporting.BudgetLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("BudgetId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Period")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("BudgetId", "AccountId", "Period");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("BudgetLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("BudgetId");
+                        });
+
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.BankDeposit", b =>

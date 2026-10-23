@@ -85,6 +85,9 @@ public sealed partial class Account
     public Guid? ParentId { get; private set; }
     public bool IsActive { get; private set; }
 
+    /// <summary>The <see cref="TaxLines"/> key of the return line this account's total goes on. Profit and loss accounts only.</summary>
+    public string? TaxLineKey { get; private set; }
+
     public static Account Create(string name, AccountType type, string? number = null, Guid? parentId = null, string? description = null) =>
         new()
         {
@@ -104,7 +107,28 @@ public sealed partial class Account
         Description = NormalizeDescription(description);
     }
 
-    public void ChangeType(AccountType type) => Type = ValidType(type);
+    public void ChangeType(AccountType type)
+    {
+        Type = ValidType(type);
+        if (type.IsBalanceSheet())
+            TaxLineKey = null;
+    }
+
+    /// <param name="key">Null or empty to clear.</param>
+    public void SetTaxLine(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            TaxLineKey = null;
+            return;
+        }
+
+        if (TaxLines.Find(key.Trim()) is not { } line)
+            throw new DomainException("account.tax_line_invalid", $"Unknown tax line '{key}'.");
+        if (Type.IsBalanceSheet())
+            throw new DomainException("account.tax_line_balance_sheet", "Only income and expense accounts go on tax lines.");
+        TaxLineKey = line.Key;
+    }
 
     public void MoveTo(Guid? parentId)
     {

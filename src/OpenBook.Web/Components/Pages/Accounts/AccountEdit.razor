@@ -72,6 +72,21 @@
             <label for="description">Description <span class="muted">(optional)</span></label>
             <InputText id="description" @bind-Value="Input.Description" />
         </div>
+        <div class="field">
+            <label for="tax-line">Tax line <span class="muted">(optional)</span></label>
+            <InputSelect id="tax-line" @bind-Value="Input.TaxLine">
+                <option value="">(none)</option>
+                @if (TaxLines.Find(Input.TaxLine) is { } other && other.Form != _taxForm && other.Key != TaxLines.NonDeductibleKey)
+                {
+                    <option value="@other.Key">@TaxLines.Describe(other.Form) @other.Label</option>
+                }
+                @foreach (var line in TaxLines.For(_taxForm))
+                {
+                    <option value="@line.Key">@line.Label</option>
+                }
+            </InputSelect>
+            <span class="hint">Where this account's total goes on @TaxLines.Describe(_taxForm), for the <a href="/reports/tax-summary">tax summary</a>. Income and expense accounts only.</span>
+        </div>
         <div class="actions">
             <button type="submit">@(_account is null ? "Create account" : "Save changes")</button>
             <a href="/accounts">Cancel</a>
@@ -100,6 +115,7 @@
     private ChartOfAccounts _chart = new([]);
     private List<(Account Account, int Depth)> _parents = [];
     private bool _useNumbers;
+    private TaxForm _taxForm;
     private string? _error;
 
     [Parameter]
@@ -110,7 +126,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+        var company = await Settings.GetAsync();
+        _useNumbers = company.UseAccountNumbers;
+        _taxForm = TaxLines.FormFor(company.BusinessType);
         _chart = await AccountService.GetChartAsync();
         _account = Id is { } id ? _chart.Find(id) : null;
 
@@ -127,6 +145,7 @@
                 Type = _account.Type,
                 ParentId = _account.ParentId,
                 Description = _account.Description,
+                TaxLine = _account.TaxLineKey,
             };
     }
 
@@ -134,10 +153,17 @@
     {
         try
         {
-            if (_account is null)
-                await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description));
-            else
-                await AccountService.UpdateAsync(new UpdateAccountCommand(_account.Id, Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description));
+            if (!string.IsNullOrEmpty(Input.TaxLine) && Input.Type.IsBalanceSheet())
+            {
+                _error = "Only income and expense accounts go on tax lines.";
+                return;
+            }
+
+            var saved = _account is null
+                ? await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description))
+                : await AccountService.UpdateAsync(new UpdateAccountCommand(_account.Id, Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description));
+            if (!saved.Type.IsBalanceSheet())
+                await AccountService.MapTaxLinesAsync(new Dictionary<Guid, string?> { [saved.Id] = Input.TaxLine });
             Navigation.NavigateTo("/accounts");
         }
         catch (DomainException ex)
@@ -181,5 +207,7 @@
         public Guid? ParentId { get; set; }
 
         public string? Description { get; set; }
+
+        public string? TaxLine { get; set; }
     }
 }

@@ -73,6 +73,31 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
         return await SetActiveAsync(account, active: true, ct);
     }
 
+    /// <summary>
+    /// Sets the tax line of each listed account (null or empty clears it) in one save. Accounts not listed are
+    /// left alone; only changed ones are audited.
+    /// </summary>
+    public async Task<int> MapTaxLinesAsync(IReadOnlyDictionary<Guid, string?> taxLines, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(taxLines);
+        var chart = await GetChartAsync(ct);
+        var changed = 0;
+        foreach (var (id, key) in taxLines)
+        {
+            var account = chart.Get(id);
+            var before = Snapshot(account);
+            account.SetTaxLine(key);
+            if (Snapshot(account) == before)
+                continue;
+            store.Add(Audit(AuditAction.Updated, account, before));
+            changed++;
+        }
+
+        if (changed > 0)
+            await store.SaveChangesAsync(ct);
+        return changed;
+    }
+
     internal AuditRecord Audit(AuditAction action, Account account, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, account.Id, before, Snapshot(account));
 
@@ -100,5 +125,6 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
         a.ParentId,
         a.Description,
         a.IsActive,
+        TaxLine = a.TaxLineKey,
     });
 }

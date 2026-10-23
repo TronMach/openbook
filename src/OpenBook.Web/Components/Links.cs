@@ -55,6 +55,8 @@ public static class Links
         "tax_rate" => $"/sales-tax/rates/{id}",
         "tax_code" => $"/sales-tax/codes/{id}",
         "sales_tax_payment" => $"/sales-tax/payments/{id}",
+        "budget" => $"/reports/budgets/{id}",
+        "saved_report" => "/reports",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
         "company" => "/settings",

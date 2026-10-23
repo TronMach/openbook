@@ -31,10 +31,12 @@ public static class DependencyInjection
         services.AddScoped<IPurchasesStore, EfPurchasesStore>();
         services.AddScoped<OpenBook.Application.SalesTax.ISalesTaxStore, EfSalesTaxStore>();
         services.AddScoped<OpenBook.Application.Attachments.IAttachmentStore, EfAttachmentStore>();
+        services.AddScoped<OpenBook.Application.Reporting.IReportingStore, EfReportingStore>();
         services.AddScoped<IBackupService, SqliteBackupService>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();
+        services.AddSingleton<OpenBook.Application.Reporting.IReportExporter, ReportExporter>();
         services.AddSingleton<IEmailSender, MailKitEmailSender>();
         return services;
     }

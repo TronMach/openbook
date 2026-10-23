@@ -27,6 +27,11 @@ public static class DependencyInjection
         services.AddScoped<AuditLogQuery>();
         services.AddScoped<ReportLedger>();
         services.AddScoped<FinancialReports>();
+        services.AddScoped<StatementReports>();
+        services.AddScoped<ActivityReports>();
+        services.AddScoped<ReportCatalog>();
+        services.AddScoped<BudgetService>();
+        services.AddScoped<SavedReportService>();
         services.AddScoped<SearchService>();
         services.AddScoped<AccountService>();
         services.AddScoped<ChartImportService>();

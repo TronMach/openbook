@@ -1,0 +1,123 @@
+@page "/reports/budgets/{Id:guid}"
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Reporting
+@inject BudgetService BudgetService
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>@(_budget?.Name ?? "Budget") · OpenBook</PageTitle>
+
+@if (_budget is null)
+{
+    <div class="card"><p>That budget doesn't exist. <a href="/reports/budgets">All budgets</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@_budget.Name</h1>
+        <a href="/reports/budget-vs-actual?budgetId=@_budget.Id">Budget vs. actual</a>
+        <a href="/reports/budgets">All budgets</a>
+    </div>
+    <p class="muted">
+        @Comparisons.Describe(_budget.FiscalYearStart, _budget.FiscalYearEnd). Enter income and expenses as positive amounts.
+        To spread a yearly figure evenly, type it under "Spread a year" and save: it replaces that row's months.
+    </p>
+
+    @if (Saved)
+    {
+        <div class="alert notice" role="status">Budget saved.</div>
+    }
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <form method="post" action="/reports/budgets/@_budget.Id" data-enhance="false">
+        <AntiforgeryToken />
+        <div class="field">
+            <label for="name">Name</label>
+            <input id="name" name="name" value="@_budget.Name" maxlength="100" required />
+        </div>
+        <div class="table-wrap">
+            <table class="data budget-grid">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        @for (var m = 1; m <= Budget.Periods; m++)
+                        {
+                            <th class="num">@_budget.PeriodStart(m).ToString("MMM yy")</th>
+                        }
+                        <th class="num">Total</th>
+                        <th class="num">Spread a year</th>
+                    </tr>
+                </thead>
+                @foreach (var group in _accounts.GroupBy(a => a.Account.Type.ClassOf()))
+                {
+                    <tbody>
+                        <tr class="section-heading"><td colspan="15">@Labels.For(group.Key)</td></tr>
+                        @foreach (var (account, depth) in group)
+                        {
+                            <tr>
+                                <td class="indent-@(Math.Min(depth, 5))">@Labels.AccountName(_chart, account.Id, _useNumbers)</td>
+                                @for (var m = 1; m <= Budget.Periods; m++)
+                                {
+                                    var amount = _budget.AmountFor(account.Id, m);
+                                    <td><input class="num" name="a:@account.Id:@m" value="@(amount == 0m ? "" : amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" inputmode="decimal" aria-label="@account.Name, @_budget.PeriodStart(m).ToString("MMMM yyyy")" /></td>
+                                }
+                                <td class="num">@Labels.AmountOrBlank(_budget.Lines.Where(l => l.AccountId == account.Id).Sum(l => l.Amount))</td>
+                                <td><input class="num" name="annual:@account.Id" inputmode="decimal" aria-label="@account.Name, whole year" /></td>
+                            </tr>
+                        }
+                        <tr class="subtotal">
+                            <td>Total @Labels.For(group.Key).ToLowerInvariant()</td>
+                            @for (var m = 1; m <= Budget.Periods; m++)
+                            {
+                                var month = m;
+                                <td class="num">@Labels.AmountOrBlank(group.Sum(a => _budget.AmountFor(a.Account.Id, month)))</td>
+                            }
+                            <td class="num">@Labels.Amount(group.Sum(a => _budget.Lines.Where(l => l.AccountId == a.Account.Id).Sum(l => l.Amount)))</td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                }
+            </table>
+        </div>
+        <div class="actions">
+            <button type="submit">Save budget</button>
+        </div>
+    </form>
+
+    <div class="card">
+        <h2>Delete budget</h2>
+        <p class="muted">Deleting a budget removes its amounts. Your books aren't affected.</p>
+        <form method="post" action="/reports/budgets/@_budget.Id/delete" data-enhance="false" onsubmit="return confirm('Delete this budget?')">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">Delete budget</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private Budget? _budget;
+    private ChartOfAccounts _chart = new([]);
+    private List<(Account Account, int Depth)> _accounts = [];
+    private bool _useNumbers;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private bool Saved { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _budget = await BudgetService.GetAsync(Id);
+        if (_budget is null)
+            return;
+        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+        _chart = await AccountService.GetChartAsync();
+        var used = _budget.Lines.Select(l => l.AccountId).ToHashSet();
+        _accounts = _chart.Ordered()
+            .Where(x => !x.Account.Type.IsBalanceSheet() && (x.Account.IsActive || used.Contains(x.Account.Id)))
+            .ToList();
+    }
+}

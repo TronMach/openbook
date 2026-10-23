@@ -270,3 +270,23 @@ table.feed td.feed-actions { min-width: 26rem; }
 table.feed .feed-actions .inline { flex-wrap: wrap; margin: 0.15rem 0; }
 table.feed .feed-actions select { max-width: 16rem; }
 input.short-text { width: 9rem; }
+
+/* ---- V1.7: report tables, exports, budgets ---- */
+.report-list h3 { color: var(--accent); margin-top: 0; }
+.report-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1rem; }
+.report-actions .button { padding: 0.3rem 0.7rem; }
+.report-actions form { margin: 0 0 0 auto; }
+.report-actions input { width: 14rem; }
+table.report-table { margin: 0 auto; }
+table.report-table th.num, table.report-table td.num { white-space: nowrap; }
+table.report-table tr.section-heading td { font-weight: 700; padding-top: 1rem; border-bottom: 1px solid var(--border); }
+table.report-table tr.subtotal td { font-weight: 600; }
+table.report-table tr.subtotal td.num:not(:empty) { border-top: 1px solid var(--border); }
+table.report-table tr.grand-total td { font-weight: 700; }
+table.report-table tr.grand-total td.num:not(:empty) { border-top: 2px solid var(--text); border-bottom: 3px double var(--text); }
+table.budget-grid input { width: 6.5rem; padding: 0.25rem 0.35rem; text-align: right; }
+table.budget-grid td { padding: 0.2rem 0.25rem; }
+table.budget-grid td:first-child { min-width: 13rem; }
+@media print {
+    .report-actions { display: none !important; }
+}

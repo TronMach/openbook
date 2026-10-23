@@ -25,6 +25,8 @@
         </form>
     </div>
 
+    <ReportActions Key="trial-balance" />
+
     <p class="muted">
         @_companyName · @Labels.For(_report.Basis) · as of @Labels.Date(_report.AsOf) · @_report.TotalDebits.Currency
         @if (!_report.IsBalanced)

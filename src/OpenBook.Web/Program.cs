@@ -53,6 +53,7 @@ app.MapOpenBookApi();
 app.MapAccountEndpoints();
 app.MapAttachmentEndpoints();
 app.MapCheckEndpoints();
+app.MapReportEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

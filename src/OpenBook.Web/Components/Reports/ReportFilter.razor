@@ -22,7 +22,7 @@
             <input id="to" name="to" type="date" value="@Query.Range.To.ToString("yyyy-MM-dd")" onchange="this.form.preset.value='Custom'" />
         </div>
     }
-    else
+    else if (ShowDates)
     {
         <div class="field">
             <label for="as-of">As of</label>
@@ -62,6 +62,10 @@
 
     [Parameter]
     public bool ShowBasis { get; set; } = true;
+
+    /// <summary>False for reports with neither a period nor an as-of date (they bring their own fields).</summary>
+    [Parameter]
+    public bool ShowDates { get; set; } = true;
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }

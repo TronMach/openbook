@@ -12,13 +12,19 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
     {
         var reportBasis = basis ?? (await companies.GetRequiredCompanyAsync(ct)).DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var amounts = Sum(await ledger.LinesAsync(reportBasis, from, to, ct));
+        return BuildProfitAndLoss(from, to, reportBasis, chart, Sum(await ledger.LinesAsync(reportBasis, from, to, ct)));
+    }
 
-        ReportSection Section(string title, AccountType type) => BuildSection(title, chart, amounts, [type]);
+    /// <param name="amounts">Debit-positive amount per account.</param>
+    /// <param name="show">Accounts to list even with no amount, so several columns get the same rows.</param>
+    internal static ProfitAndLoss BuildProfitAndLoss(
+        DateOnly from, DateOnly to, ReportBasis basis, ChartOfAccounts chart, IReadOnlyDictionary<Guid, decimal> amounts, IReadOnlySet<Guid>? show = null)
+    {
+        ReportSection Section(string title, AccountType type) => BuildSection(title, chart, amounts, [type], show);
         return new ProfitAndLoss(
             from,
             to,
-            reportBasis,
+            basis,
             Section("Income", AccountType.Income),
             Section("Cost of goods sold", AccountType.CostOfGoodsSold),
             Section("Expenses", AccountType.Expense),
@@ -35,17 +41,22 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(reportBasis, null, asOf, ct);
-        var amounts = Sum(lines);
+        return BuildBalanceSheet(asOf, reportBasis, company.FiscalYearStart(asOf), chart, await ledger.LinesAsync(reportBasis, null, asOf, ct));
+    }
 
-        var fiscalStart = company.FiscalYearStart(asOf);
+    /// <param name="lines">Every line up to <paramref name="asOf"/>.</param>
+    /// <param name="show">Accounts to list even with no balance, so several columns get the same rows.</param>
+    internal static BalanceSheet BuildBalanceSheet(
+        DateOnly asOf, ReportBasis basis, DateOnly fiscalStart, ChartOfAccounts chart, IReadOnlyList<LedgerLine> lines, IReadOnlySet<Guid>? show = null)
+    {
+        var amounts = Sum(lines);
         var types = chart.All.ToDictionary(a => a.Id, a => a.Type);
         decimal NetIncome(IEnumerable<LedgerLine> ls) =>
             -ls.Where(l => types.TryGetValue(l.AccountId, out var t) && !t.IsBalanceSheet()).Sum(l => l.Amount);
         var retained = NetIncome(lines.Where(l => l.Date < fiscalStart));
         var thisYear = NetIncome(lines.Where(l => l.Date >= fiscalStart));
 
-        var equity = BuildSection("Equity", chart, amounts, [AccountType.Equity]);
+        var equity = BuildSection("Equity", chart, amounts, [AccountType.Equity], show);
         var equityRows = equity.Rows.ToList();
 
         // With a top-level "Retained Earnings" account (as in the starter charts), prior years' income shows
@@ -64,12 +75,12 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
 
         return new BalanceSheet(
             asOf,
-            reportBasis,
-            BuildSection("Current assets", chart, amounts, [AccountType.Bank, AccountType.AccountsReceivable, AccountType.OtherCurrentAsset]),
-            BuildSection("Fixed assets", chart, amounts, [AccountType.FixedAsset]),
-            BuildSection("Other assets", chart, amounts, [AccountType.OtherAsset]),
-            BuildSection("Current liabilities", chart, amounts, [AccountType.AccountsPayable, AccountType.CreditCard, AccountType.OtherCurrentLiability]),
-            BuildSection("Long-term liabilities", chart, amounts, [AccountType.LongTermLiability]),
+            basis,
+            BuildSection("Current assets", chart, amounts, [AccountType.Bank, AccountType.AccountsReceivable, AccountType.OtherCurrentAsset], show),
+            BuildSection("Fixed assets", chart, amounts, [AccountType.FixedAsset], show),
+            BuildSection("Other assets", chart, amounts, [AccountType.OtherAsset], show),
+            BuildSection("Current liabilities", chart, amounts, [AccountType.AccountsPayable, AccountType.CreditCard, AccountType.OtherCurrentLiability], show),
+            BuildSection("Long-term liabilities", chart, amounts, [AccountType.LongTermLiability], show),
             new ReportSection("Equity", equityRows, equity.Total + retained + thisYear));
     }
 
@@ -106,21 +117,23 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
         return new GeneralLedger(from, to, reportBasis, result);
     }
 
-    private static Dictionary<Guid, decimal> Sum(IEnumerable<LedgerLine> lines) =>
+    internal static Dictionary<Guid, decimal> Sum(IEnumerable<LedgerLine> lines) =>
         lines.GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
 
     /// <summary>
     /// Rows for the accounts of <paramref name="types"/>, in chart order: an account appears when it or a
-    /// subaccount has an amount; a parent with active subaccounts also gets a "Total ..." row.
+    /// subaccount has an amount (or is in <paramref name="show"/>); a parent with active subaccounts also gets a "Total ..." row.
     /// Amounts are in the section's natural sign.
     /// </summary>
-    private static ReportSection BuildSection(string title, ChartOfAccounts chart, Dictionary<Guid, decimal> amounts, AccountType[] types)
+    private static ReportSection BuildSection(
+        string title, ChartOfAccounts chart, IReadOnlyDictionary<Guid, decimal> amounts, AccountType[] types, IReadOnlySet<Guid>? show)
     {
         var rows = new List<ReportRow>();
 
         decimal Natural(Account a) => (a.Type.IsDebitNormal() ? 1m : -1m) * amounts.GetValueOrDefault(a.Id);
         decimal SubtreeTotal(Account a) => Natural(a) + chart.ChildrenOf(a.Id).Sum(SubtreeTotal);
-        bool HasActivity(Account a) => amounts.GetValueOrDefault(a.Id) != 0m || chart.ChildrenOf(a.Id).Any(HasActivity);
+        bool HasActivity(Account a) =>
+            amounts.GetValueOrDefault(a.Id) != 0m || show?.Contains(a.Id) == true || chart.ChildrenOf(a.Id).Any(HasActivity);
 
         void Add(Account account, int depth)
         {
@@ -147,6 +160,6 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
         return new ReportSection(title, rows, roots.Sum(SubtreeTotal));
     }
 
-    private static IEnumerable<Guid> Subtree(ChartOfAccounts chart, Guid id) =>
+    internal static IEnumerable<Guid> Subtree(ChartOfAccounts chart, Guid id) =>
         chart.ChildrenOf(id).SelectMany(c => Subtree(chart, c.Id)).Prepend(id);
 }

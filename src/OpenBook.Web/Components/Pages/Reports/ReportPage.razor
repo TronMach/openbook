@@ -1,0 +1,163 @@
+@page "/reports/{Key}"
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Reporting
+@inject ReportCatalog Catalog
+@inject CompanySettingsService Settings
+@inject BudgetService Budgets
+@inject NavigationManager Navigation
+@* Any catalog report without a page of its own: the filter comes from the report's inputs. *@
+
+@if (_definition is null)
+{
+    <PageTitle>Report not found · OpenBook</PageTitle>
+    <div class="card"><p>There's no such report. <a href="/reports">See all reports</a>.</p></div>
+    return;
+}
+
+<PageTitle>@_definition.Title · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <ReportFilter Action="@_definition.Path" Query="@(Has(ReportInputs.Period) ? _query : null)" AsOf="_asOf" Basis="_basis"
+                      ShowBasis="Has(ReportInputs.Basis)" ShowDates="Has(ReportInputs.AsOf)">
+            @if (Has(ReportInputs.Compare) && _definition.Comparisons is { } comparisons)
+            {
+                <div class="field">
+                    <label for="compare">Compare</label>
+                    <select id="compare" name="compare">
+                        @foreach (var c in comparisons)
+                        {
+                            <option value="@c" selected="@(c == _compare)">@CompareLabel(c, Has(ReportInputs.AsOf))</option>
+                        }
+                    </select>
+                </div>
+            }
+            @if (Has(ReportInputs.Detail))
+            {
+                <div class="field">
+                    <label for="detail">Show</label>
+                    <select id="detail" name="detail">
+                        <option value="false" selected="@(!_parameters.GetFlag("detail"))">Summary</option>
+                        <option value="true" selected="@_parameters.GetFlag("detail")">Each document</option>
+                    </select>
+                </div>
+            }
+            @if (Has(ReportInputs.Year))
+            {
+                <div class="field">
+                    <label for="year">Tax year</label>
+                    <input id="year" name="year" type="number" min="2000" max="2100" value="@_year" />
+                </div>
+            }
+            @if (Has(ReportInputs.Budget))
+            {
+                <div class="field">
+                    <label for="budget">Budget</label>
+                    <select id="budget" name="budgetId">
+                        @foreach (var b in _budgets)
+                        {
+                            <option value="@b.Id" selected="@(b.Id == _budget?.Id)">@b.Name (@b.FiscalYearStart.ToString("MMM yyyy"))</option>
+                        }
+                    </select>
+                </div>
+                @if (_budget is not null)
+                {
+                    <div class="field">
+                        <label for="from-month">From</label>
+                        <select id="from-month" name="fromMonth">
+                            @for (var m = 1; m <= Budget.Periods; m++)
+                            {
+                                <option value="@m" selected="@(m == (_parameters.GetNumber("fromMonth") ?? 1))">@_budget.PeriodStart(m).ToString("MMM yyyy")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="to-month">To</label>
+                        <select id="to-month" name="toMonth">
+                            @for (var m = 1; m <= Budget.Periods; m++)
+                            {
+                                <option value="@m" selected="@(m == (_parameters.GetNumber("toMonth") ?? Budget.Periods))">@_budget.PeriodStart(m).ToString("MMM yyyy")</option>
+                            }
+                        </select>
+                    </div>
+                }
+            }
+        </ReportFilter>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+        @if (Has(ReportInputs.Budget) && _budgets.Count == 0)
+        {
+            <p><a class="button" href="/reports/budgets">Create a budget</a></p>
+        }
+    }
+    else if (_table is not null)
+    {
+        <ReportActions Key="@_definition.Key" />
+        <ReportTableView Table="_table" />
+    }
+</div>
+
+@code {
+    private ReportDefinition? _definition;
+    private ReportParameters _parameters = ReportParameters.Parse(null);
+    private ReportQuery _query = null!;
+    private DateOnly _asOf;
+    private ReportBasis _basis;
+    private Comparison _compare;
+    private int _year;
+    private IReadOnlyList<Budget> _budgets = [];
+    private Budget? _budget;
+    private ReportTable? _table;
+    private string? _error;
+
+    [Parameter]
+    public string Key { get; set; } = string.Empty;
+
+    private bool Has(ReportInputs input) => _definition is not null && _definition.Inputs.HasFlag(input);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _definition = ReportCatalog.Find(Key);
+        if (_definition is null)
+            return;
+
+        var company = await Settings.GetAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _parameters = ReportParameters.Parse(new Uri(Navigation.Uri).Query);
+        var (preset, range) = _parameters.Period(company, _definition.DefaultPreset, today);
+        _basis = _parameters.Basis(company);
+        _query = new ReportQuery(preset, range, _basis);
+        _asOf = _parameters.GetDate("asOf") ?? today;
+        _compare = _parameters.GetEnum<Comparison>("compare") ?? Comparison.None;
+        _year = _parameters.GetNumber("year") ?? today.Year - 1;
+        if (Has(ReportInputs.Budget))
+        {
+            _budgets = await Budgets.ListAsync();
+            var id = _parameters.GetId("budgetId");
+            _budget = _budgets.FirstOrDefault(b => b.Id == id)
+                ?? _budgets.FirstOrDefault(b => b.FiscalYearStart <= today && today <= b.FiscalYearEnd)
+                ?? _budgets.FirstOrDefault();
+        }
+
+        try
+        {
+            _table = await Catalog.RunAsync(_definition.Key, _parameters);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string CompareLabel(Comparison comparison, bool asOf) => comparison switch
+    {
+        Comparison.PreviousPeriod => asOf ? "A month earlier" : "Previous period",
+        Comparison.PreviousYear => asOf ? "A year earlier" : "Same period last year",
+        Comparison.Months => "By month",
+        Comparison.Quarters => "By quarter",
+        _ => "No comparison",
+    };
+}

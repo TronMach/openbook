@@ -1,51 +1,82 @@
 @page "/reports"
+@using OpenBook.Application.Reporting
+@inject SavedReportService SavedReports
 
 <PageTitle>Reports · OpenBook</PageTitle>
 
 <div class="wide">
     <h1>Reports</h1>
-    <p class="muted">Every report can run on an accrual or cash basis. Cash basis counts invoices and bills when they're paid.</p>
+    <p class="muted">
+        Most reports run on an accrual or cash basis (cash counts invoices and bills when they're paid). Every report can be
+        exported as CSV, Excel or PDF, and saved with its settings to run again.
+    </p>
 
-    <div class="report-list">
-        <a class="card" href="/reports/profit-and-loss">
-            <h2>Profit and loss</h2>
-            <p class="muted">Income and expenses over a period, and the net income they leave.</p>
-        </a>
-        <a class="card" href="/reports/balance-sheet">
-            <h2>Balance sheet</h2>
-            <p class="muted">What the business owns and owes on a date, and the owner's equity.</p>
-        </a>
-        <a class="card" href="/reports/trial-balance">
-            <h2>Trial balance</h2>
-            <p class="muted">Every account's debit or credit balance on a date. Debits always equal credits.</p>
-        </a>
-        <a class="card" href="/reports/general-ledger">
-            <h2>General ledger</h2>
-            <p class="muted">Every transaction in each account, with opening and running balances.</p>
-        </a>
-        <a class="card" href="/reports/journal">
-            <h2>Journal</h2>
-            <p class="muted">Each journal entry in a period with all its debits and credits.</p>
-        </a>
-        <a class="card" href="/reports/ar-aging">
-            <h2>A/R aging</h2>
-            <p class="muted">What each customer owes, by how long past due. Summary or invoice by invoice.</p>
-        </a>
-        <a class="card" href="/reports/ap-aging">
-            <h2>A/P aging</h2>
-            <p class="muted">What you owe each vendor, by how long past due. Summary or bill by bill.</p>
-        </a>
-        <a class="card" href="/reports/1099">
-            <h2>1099 summary</h2>
-            <p class="muted">What you paid each 1099 vendor in a year, and who needs a form.</p>
-        </a>
-        <a class="card" href="/reports/sales-tax">
-            <h2>Sales tax liability</h2>
-            <p class="muted">Taxable, non-taxable and exempt sales and the tax charged, by agency and rate, with what you owe.</p>
-        </a>
-        <a class="card" href="/journal">
-            <h2>Transaction list</h2>
-            <p class="muted">All transactions, newest first, filtered by date.</p>
-        </a>
-    </div>
+    @if (_saved.Count > 0)
+    {
+        <h2>Saved reports</h2>
+        <table class="data">
+            <thead><tr><th>Name</th><th>Report</th><th>Saved by</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var report in _saved)
+                {
+                    var definition = ReportCatalog.Find(report.ReportKey);
+                    <tr>
+                        <td><a href="@Href(report)">@report.Name</a></td>
+                        <td>@(definition?.Title ?? report.ReportKey)</td>
+                        <td class="muted">@report.CreatedBy, @Labels.Date(DateOnly.FromDateTime(report.CreatedAt.LocalDateTime))</td>
+                        <td class="num">
+                            <form method="post" action="/reports/saved/@report.Id/delete" class="inline-form" data-enhance="false">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @foreach (var group in ReportCatalog.All.GroupBy(d => d.Group))
+    {
+        <h2>@group.Key</h2>
+        <div class="report-list">
+            @foreach (var report in group)
+            {
+                <a class="card" href="@report.Path">
+                    <h3>@report.Title</h3>
+                    <p class="muted">@report.Description</p>
+                </a>
+            }
+            @if (group.Key == "Accountant")
+            {
+                <a class="card" href="/journal">
+                    <h3>Transaction list</h3>
+                    <p class="muted">All transactions, newest first, filtered by date.</p>
+                </a>
+            }
+            @if (group.Key == "Taxes")
+            {
+                <a class="card" href="/reports/tax-lines">
+                    <h3>Tax lines</h3>
+                    <p class="muted">Assign income and expense accounts to the lines of your tax return.</p>
+                </a>
+            }
+            @if (group.Key == "Budgets")
+            {
+                <a class="card" href="/reports/budgets">
+                    <h3>Budgets</h3>
+                    <p class="muted">Plan income and expenses by month for a fiscal year.</p>
+                </a>
+            }
+        </div>
+    }
 </div>
+
+@code {
+    private IReadOnlyList<OpenBook.Domain.Reporting.SavedReport> _saved = [];
+
+    protected override async Task OnInitializedAsync() => _saved = await SavedReports.ListAsync();
+
+    private static string Href(OpenBook.Domain.Reporting.SavedReport report) =>
+        (ReportCatalog.Find(report.ReportKey)?.Path ?? "/reports") + (report.Query.Length > 0 ? "?" + report.Query : "");
+}
