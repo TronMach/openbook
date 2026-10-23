@@ -1,0 +1,68 @@
+@using OpenBook.Application.Reporting
+@* GET form shared by the reports. Editing a date switches the period to Custom. *@
+
+<form method="get" action="@Action" data-enhance="false" class="no-print">
+    @if (Query is not null)
+    {
+        <div class="field">
+            <label for="preset">Period</label>
+            <select id="preset" name="preset">
+                @foreach (var preset in Enum.GetValues<DatePreset>())
+                {
+                    <option value="@preset" selected="@(preset == Query.Preset)">@ReportQuery.Label(preset)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="from">From</label>
+            <input id="from" name="from" type="date" value="@Query.Range.From?.ToString("yyyy-MM-dd")" onchange="this.form.preset.value='Custom'" />
+        </div>
+        <div class="field">
+            <label for="to">To</label>
+            <input id="to" name="to" type="date" value="@Query.Range.To.ToString("yyyy-MM-dd")" onchange="this.form.preset.value='Custom'" />
+        </div>
+    }
+    else
+    {
+        <div class="field">
+            <label for="as-of">As of</label>
+            <input id="as-of" name="asOf" type="date" value="@AsOf.ToString("yyyy-MM-dd")" />
+        </div>
+    }
+    @if (ShowBasis)
+    {
+        <div class="field">
+            <label for="basis">Basis</label>
+            <select id="basis" name="basis">
+                @foreach (var basis in Enum.GetValues<ReportBasis>())
+                {
+                    <option value="@basis" selected="@(basis == Basis)">@Labels.For(basis)</option>
+                }
+            </select>
+        </div>
+    }
+    @ChildContent
+    <button type="submit" class="secondary">Run report</button>
+    <button type="button" class="secondary" onclick="window.print()">Print</button>
+</form>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Action { get; set; } = string.Empty;
+
+    /// <summary>For period reports; leave null for as-of reports.</summary>
+    [Parameter]
+    public ReportQuery? Query { get; set; }
+
+    [Parameter]
+    public DateOnly AsOf { get; set; }
+
+    [Parameter]
+    public ReportBasis Basis { get; set; }
+
+    [Parameter]
+    public bool ShowBasis { get; set; } = true;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

@@ -61,7 +61,7 @@
                             {
                                 <td>@line.Number</td>
                             }
-                            <td>@line.FullName</td>
+                            <td><a href="/reports/general-ledger?accountId=@line.AccountId&preset=Custom&from=1900-01-01&to=@_report.AsOf.ToString("yyyy-MM-dd")&basis=@_report.Basis">@line.FullName</a></td>
                             <td class="muted">@Labels.For(line.Type)</td>
                             <td class="num">@Labels.AmountOrBlank(line.Debit.Amount)</td>
                             <td class="num">@Labels.AmountOrBlank(line.Credit.Amount)</td>

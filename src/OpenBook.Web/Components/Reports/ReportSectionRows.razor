@@ -1,0 +1,30 @@
+@using OpenBook.Application.Reporting
+@* A section of a financial statement: heading, account rows (linking to the general ledger), total. *@
+
+<tr class="section-heading"><td colspan="2">@Section.Title</td></tr>
+@foreach (var row in Section.Rows)
+{
+    <tr class="@(row.Kind == RowKind.AccountTotal ? "subtotal" : null)">
+        <td class="indent-@(Math.Min(row.Depth + 1, 5))">
+            @if (row.AccountId is { } id && row.Kind == RowKind.Account)
+            {
+                <a href="/reports/general-ledger?accountId=@id&@LinkQuery">@row.Label</a>
+            }
+            else
+            {
+                @row.Label
+            }
+        </td>
+        <td class="num">@(row.Amount is { } amount ? Labels.Amount(amount) : "")</td>
+    </tr>
+}
+<tr class="subtotal"><td>Total @Section.Title.ToLowerInvariant()</td><td class="num">@Labels.Amount(Section.Total)</td></tr>
+
+@code {
+    [Parameter, EditorRequired]
+    public ReportSection Section { get; set; } = null!;
+
+    /// <summary>Period and basis to carry into the general ledger links.</summary>
+    [Parameter, EditorRequired]
+    public string LinkQuery { get; set; } = string.Empty;
+}

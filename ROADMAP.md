@@ -62,6 +62,8 @@ tests/
 
 **M4 status (2026-10-22): complete.** Vendors (terms, account number, default category, balances); bills with category lines, vendor bill numbers and due dates from terms; Pay bills across vendors with partial payments, one numbered check per vendor, from bank or card; expenses as vendor-linked spend transactions; void for bills (blocked while paid) and bill payments (blocked once reconciled); A/P auto-created; vendor CSV import; purchases hub with unpaid/overdue/due-soon totals; API for all of it. 251 tests. **MVP feature set is now complete except M5 reports.**
 
+**M5 status (2026-10-22): complete — the MVP is feature-complete.** Profit and loss, balance sheet (computed retained earnings and current-year net income), trial balance, general ledger detail with drill-down from every statement, journal report, transaction list; period presets that follow the fiscal year; accrual or cash basis everywhere, with cash basis recognizing invoices and bills when paid (allocated across their lines); global search by name, number, reference, memo or amount; API for all of it. 272 tests.
+
 **Exit criteria:** a sole proprietor can set up a company, run a year of invoicing, bills and banking, reconcile, and get a correct P&L and balance sheet, all on one SQLite file they can back up.
 
 ## Phase 2 — V1 (what most small businesses expect)

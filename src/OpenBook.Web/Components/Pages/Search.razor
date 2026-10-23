@@ -1,0 +1,92 @@
+@page "/search"
+@using OpenBook.Application.Search
+@inject SearchService SearchService
+
+<PageTitle>Search · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Search</h1>
+        <form method="get" action="/search" data-enhance="false">
+            <div class="field">
+                <label for="q" class="muted">Name, number, memo or amount</label>
+                <input id="q" name="q" value="@Q" autofocus />
+            </div>
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    @if (_results is null || _results.Query.Length < 2)
+    {
+        <p class="muted">Type at least two characters. Search finds customers, vendors, products, accounts, invoices, bills, payments, bank transactions and journal entries, by name, number, reference, memo or amount.</p>
+    }
+    else if (_results.Hits.Count == 0)
+    {
+        <div class="card"><p>Nothing matches "@_results.Query".</p></div>
+    }
+    else
+    {
+        @foreach (var group in _results.Hits.GroupBy(h => h.Kind))
+        {
+            <div class="search-group">
+                <h2>@Heading(group.Key) <span class="badge">@group.Count()</span></h2>
+                <table class="data">
+                    <tbody>
+                        @foreach (var hit in group)
+                        {
+                            <tr>
+                                <td><a href="@Link(hit)">@hit.Title</a></td>
+                                <td class="muted">@hit.Detail</td>
+                                <td>@(hit.Date is { } d ? Labels.Date(d) : "")</td>
+                                <td class="num">@(hit.Amount is { } a ? Labels.Amount(a) : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (_results.Truncated)
+        {
+            <p class="muted">Some groups show only their first @SearchService.MaxPerKind matches. Search for something more specific to narrow them.</p>
+        }
+    }
+</div>
+
+@code {
+    private SearchResults? _results;
+
+    [SupplyParameterFromQuery]
+    private string? Q { get; set; }
+
+    protected override async Task OnInitializedAsync() => _results = await SearchService.SearchAsync(Q);
+
+    private static string Heading(SearchKind kind) => kind switch
+    {
+        SearchKind.Customer => "Customers",
+        SearchKind.Vendor => "Vendors",
+        SearchKind.Item => "Products and services",
+        SearchKind.Account => "Accounts",
+        SearchKind.Invoice => "Invoices",
+        SearchKind.Bill => "Bills",
+        SearchKind.SalesReceipt => "Sales receipts",
+        SearchKind.CustomerPayment => "Customer payments",
+        SearchKind.BillPayment => "Bill payments",
+        SearchKind.BankTransaction => "Bank transactions",
+        _ => "Journal entries",
+    };
+
+    private static string Link(SearchHit hit) => hit.Kind switch
+    {
+        SearchKind.Customer => $"/customers/{hit.Id}",
+        SearchKind.Vendor => $"/vendors/{hit.Id}",
+        SearchKind.Item => $"/items/{hit.Id}",
+        SearchKind.Account => $"/accounts/{hit.Id}",
+        SearchKind.Invoice => $"/sales/invoices/{hit.Id}",
+        SearchKind.Bill => $"/purchases/bills/{hit.Id}",
+        SearchKind.SalesReceipt => $"/sales/receipts/{hit.Id}",
+        SearchKind.CustomerPayment => $"/sales/payments/{hit.Id}",
+        SearchKind.BillPayment => $"/purchases/payments/{hit.Id}",
+        SearchKind.BankTransaction => $"/banking/transactions/{hit.Id}",
+        _ => $"/journal/{hit.Id}",
+    };
+}

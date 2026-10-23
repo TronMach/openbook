@@ -1,0 +1,98 @@
+@page "/reports/general-ledger"
+@using OpenBook.Application.Reporting
+@inject FinancialReports Reports
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>General ledger · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <ReportFilter Action="/reports/general-ledger" Query="_query" Basis="_query.Basis">
+            <div class="field">
+                <label for="account">Account</label>
+                <select id="account" name="accountId">
+                    <option value="">All accounts</option>
+                    @foreach (var (account, _) in _chart.Ordered())
+                    {
+                        <option value="@account.Id" selected="@(account.Id == AccountId)">@Labels.AccountName(_chart, account.Id, _useNumbers)</option>
+                    }
+                </select>
+            </div>
+        </ReportFilter>
+    </div>
+
+    <div class="report-heading">
+        <h1>General ledger</h1>
+        <p>@_companyName</p>
+        <p>@_query.Describe() · @Labels.For(_report.Basis)</p>
+    </div>
+
+    @if (_report.Accounts.Count == 0)
+    {
+        <div class="card"><p>No activity in this period.</p></div>
+    }
+
+    @foreach (var account in _report.Accounts)
+    {
+        <h2 style="margin-top: 1.5rem">@Labels.AccountName(_chart, account.Account.Id, _useNumbers)</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr><th>Date</th><th>Type</th><th class="num">No.</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
+                </thead>
+                <tbody>
+                    @if (_query.Range.From is { } from)
+                    {
+                        <tr class="muted"><td>@Labels.Date(from)</td><td colspan="5">Opening balance</td><td class="num">@Labels.Amount(account.OpeningBalance)</td></tr>
+                    }
+                    @foreach (var line in account.Lines)
+                    {
+                        <tr>
+                            <td>@Labels.Date(line.Line.Date)</td>
+                            <td class="muted">@(Links.DocumentName(line.Line.Source) ?? "Journal entry")</td>
+                            <td class="num"><a href="@Links.ForEntry(line.Line.Source, line.Line.SourceId, line.Line.JournalEntryId)">@line.Line.EntryNumber</a></td>
+                            <td>@(line.Line.EntryMemo ?? line.Line.LineMemo)</td>
+                            <td class="num">@Labels.AmountOrBlank(line.Debit)</td>
+                            <td class="num">@Labels.AmountOrBlank(line.Credit)</td>
+                            <td class="num">@Labels.Amount(line.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4">Total for @account.FullName</td>
+                        <td class="num">@Labels.Amount(account.TotalDebits)</td>
+                        <td class="num">@Labels.Amount(account.TotalCredits)</td>
+                        <td class="num">@Labels.Amount(account.ClosingBalance)</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+    <p class="muted">Balances are shown in each account's normal direction: debits for assets and expenses, credits for the rest.</p>
+</div>
+
+@code {
+    private GeneralLedger _report = null!;
+    private ReportQuery _query = null!;
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private string? _companyName;
+
+    [SupplyParameterFromQuery] private string? Preset { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+    [SupplyParameterFromQuery] private string? Basis { get; set; }
+    [SupplyParameterFromQuery] private Guid? AccountId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        _companyName = company.Name;
+        _useNumbers = company.UseAccountNumbers;
+        _chart = await AccountService.GetChartAsync();
+        _query = ReportQuery.From(company, Preset, From, To, Basis, DatePreset.ThisMonth);
+        _report = await Reports.GeneralLedgerAsync(_query.Range.From, _query.Range.To, _query.Basis, AccountId);
+    }
+}

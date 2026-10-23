@@ -1,4 +1,6 @@
+using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Reporting;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
@@ -12,8 +14,8 @@ public sealed record TrialBalance(DateOnly AsOf, ReportBasis Basis, IReadOnlyLis
     public bool IsBalanced => TotalDebits == TotalCredits;
 }
 
-/// <summary>Trial balance in chart order. Full reporting (P&amp;L, balance sheet) arrives in M5.</summary>
-public sealed class TrialBalanceQuery(ILedgerStore store, ICompanyStore companies)
+/// <summary>Every account's balance as of a date, in chart order, on either basis.</summary>
+public sealed class TrialBalanceQuery(ReportLedger ledger, AccountService accounts, ICompanyStore companies)
 {
     /// <param name="basis">Defaults to the company's default report basis.</param>
     public async Task<TrialBalance> RunAsync(DateOnly asOf, ReportBasis? basis = null, CancellationToken ct = default)
@@ -22,8 +24,10 @@ public sealed class TrialBalanceQuery(ILedgerStore store, ICompanyStore companie
         var reportBasis = basis ?? company.DefaultReportBasis;
         var currency = company.HomeCurrency;
 
-        var balances = (await store.GetBalancesAsync(asOf, reportBasis, ct)).ToDictionary(b => b.AccountId, b => b.Balance);
-        var chart = new ChartOfAccounts(await store.ListAccountsAsync(ct));
+        var balances = (await ledger.LinesAsync(reportBasis, null, asOf, ct))
+            .GroupBy(l => l.AccountId)
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+        var chart = await accounts.GetChartAsync(ct);
 
         var lines = chart.Ordered()
             .Where(x => balances.GetValueOrDefault(x.Account.Id) != 0m)

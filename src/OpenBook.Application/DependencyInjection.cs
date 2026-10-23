@@ -4,6 +4,8 @@ using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
+using OpenBook.Application.Reporting;
+using OpenBook.Application.Search;
 using OpenBook.Application.Sales;
 
 namespace OpenBook.Application;
@@ -14,6 +16,9 @@ public static class DependencyInjection
     {
         services.AddScoped<PostingEngine>();
         services.AddScoped<TrialBalanceQuery>();
+        services.AddScoped<ReportLedger>();
+        services.AddScoped<FinancialReports>();
+        services.AddScoped<SearchService>();
         services.AddScoped<AccountService>();
         services.AddScoped<ChartImportService>();
         services.AddScoped<BankingService>();

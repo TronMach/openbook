@@ -1,0 +1,95 @@
+@page "/reports/journal"
+@using OpenBook.Application.Reporting
+@inject PostingEngine Engine
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>Journal · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <ReportFilter Action="/reports/journal" Query="_query" Basis="_query.Basis" ShowBasis="false" />
+    </div>
+
+    <div class="report-heading">
+        <h1>Journal</h1>
+        <p>@_companyName</p>
+        <p>@_query.Describe() · every entry as posted</p>
+    </div>
+
+    @if (_total > _entries.Count)
+    {
+        <div class="alert notice no-print" role="status">Showing the first @_entries.Count of @_total entries. Choose a shorter period to see them all.</div>
+    }
+
+    @if (_entries.Count == 0)
+    {
+        <div class="card"><p>No entries in this period.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Date</th><th class="num">No.</th><th>Type</th><th>Account</th><th>Memo</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+                @foreach (var entry in _entries)
+                {
+                    var first = true;
+                    <tbody>
+                        @foreach (var line in entry.Lines.OrderBy(l => l.LineNumber))
+                        {
+                            <tr class="@(entry.Status == JournalEntryStatus.Voided || entry.Kind == JournalEntryKind.Reversal ? "inactive" : null)">
+                                <td>@(first ? Labels.Date(entry.Date) : "")</td>
+                                <td class="num">
+                                    @if (first)
+                                    {
+                                        <a href="@Links.ForEntry(entry.Source, entry.SourceId, entry.Id)">@entry.Number</a>
+                                    }
+                                </td>
+                                <td class="muted">@(first ? Links.DocumentName(entry.Source) ?? "Journal entry" : "")</td>
+                                <td>@Labels.AccountName(_chart, line.AccountId, _useNumbers)</td>
+                                <td>@(first ? entry.Memo : line.Memo)</td>
+                                <td class="num">@Labels.AmountOrBlank(line.Debit)</td>
+                                <td class="num">@Labels.AmountOrBlank(line.Credit)</td>
+                            </tr>
+                            first = false;
+                        }
+                    </tbody>
+                }
+                <tfoot>
+                    <tr>
+                        <td colspan="5">Total</td>
+                        <td class="num">@Labels.Amount(_entries.Sum(e => e.TotalDebits.Amount))</td>
+                        <td class="num">@Labels.Amount(_entries.Sum(e => e.TotalCredits.Amount))</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private const int MaxEntries = 500;
+
+    private IReadOnlyList<JournalEntry> _entries = [];
+    private int _total;
+    private ReportQuery _query = null!;
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private string? _companyName;
+
+    [SupplyParameterFromQuery] private string? Preset { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+    [SupplyParameterFromQuery] private string? Basis { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        _companyName = company.Name;
+        _useNumbers = company.UseAccountNumbers;
+        _chart = await AccountService.GetChartAsync();
+        _query = ReportQuery.From(company, Preset, From, To, Basis, DatePreset.ThisMonth);
+        (var entries, _total) = await Engine.ListAsync(new JournalEntryFilter(_query.Range.From, _query.Range.To, 0, MaxEntries));
+        _entries = entries.OrderBy(e => e.Date).ThenBy(e => e.Number).ToList();
+    }
+}

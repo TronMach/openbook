@@ -37,6 +37,9 @@ public interface IBankingStore
     Task<IReadOnlyList<BankTransaction>> ListTransactionsAsync(Guid accountId, DateOnly fromDate, DateOnly toDate, CancellationToken ct);
     Task<IReadOnlyList<string>> ListSpendReferencesAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>Every bank transaction, untracked.</summary>
+    Task<IReadOnlyList<BankTransaction>> ListAllTransactionsAsync(CancellationToken ct);
+
     /// <summary>All reconciliations for the account with their lines, tracked.</summary>
     Task<IReadOnlyList<Reconciliation>> ListReconciliationsAsync(Guid accountId, CancellationToken ct);
 

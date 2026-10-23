@@ -46,7 +46,7 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - `AccountType` is QuickBooks' list (Bank, AccountsReceivable, …); `AccountClass` groups them for statements. Pick the narrowest type; M2–M4 key off Bank/CreditCard/AR/AP.
 - Rules spanning accounts live in `ChartOfAccounts` (subaccount = parent's type, max 5 levels, unique sibling names and numbers, no cycles, class change blocked once posted). Full names use `Parent:Child`. Accounts are deactivated, never deleted.
 - CSV import (`ChartImportService`, parser in `Application/Import/Csv.cs`) matches headers loosely and is all-or-nothing. The starter chart at `Web/wwwroot/samples/chart-of-accounts.csv` is covered by a test.
-- `ReportBasis` (Accrual/Cash) per report, default from company settings. `EntryBasis` on each entry (Both / AccrualOnly / CashOnly) decides inclusion. Payment-driven cash basis for invoices/bills comes with M3/M4.
+- `ReportBasis` (Accrual/Cash) per report, default from company settings. `EntryBasis` on each entry (Both / AccrualOnly / CashOnly) decides inclusion. Cash basis for invoices and bills is payment-driven; see Reporting below.
 - Dev preview: `.claude/launch.json` → `openbook-web` on port 5188, data in `src/OpenBook.Web/openbook.dev.db`.
 
 ## Banking (M2)
@@ -74,3 +74,11 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - `BillPaymentService.PayAsync` takes any open bills across vendors and writes one `BillPayment` per vendor (and per A/P account) in one save, vendors in name order; numeric check numbers count up from the first. Paid from a Bank or Credit card account. The vendor's account number is the default memo.
 - Expenses (paid immediately) are `BankTransaction` spends with an optional `VendorId`; the payee defaults to the vendor's name. Check-number suggestions count both expense and bill-payment references.
 - `DocumentStatus` (Posted/Voided) is shared by sales and purchase documents; `Text.Optional` lives in Domain.Common.
+
+## Reporting (M5)
+
+- Every report reads lines from `ReportLedger.LinesAsync(basis, from, to)`, never from the store directly, so all reports agree. Accrual = ledger as posted (entry basis permitting). Cash = entries whose basis allows cash, minus everything sourced from invoices, bills, customer payments and bill payments; plus, for each posted payment in range, derived lines on the payment date: the deposit/payment account for the full amount, and the paid documents' accounts allocated in proportion to their lines (`ReportLedger.Allocate`, rounding cent on the last line). A new accrual document type must be added to `AccrualDocuments` and given a derivation.
+- `FinancialReports`: P&L sections by account type; balance sheet with computed "Retained earnings" (net income before the fiscal year containing the as-of date) and "Net income" (since its start) until year-end close (V1.1); general ledger with opening and running balances in each account's natural sign. Rows link to the general ledger for drill-down.
+- `TrialBalanceQuery` also runs on `ReportLedger`. `DateRanges` has the period presets (calendar month/quarter, fiscal year).
+- `SearchService` searches in memory across names, numbers, references, memos and amounts (`StatementValues.TryParseAmount`), max 20 hits per kind.
+- Report pages share `Components/Reports` (`ReportFilter`, `ReportQuery`, `ReportSectionRows`); they're static GET forms so every report has a shareable, printable URL.

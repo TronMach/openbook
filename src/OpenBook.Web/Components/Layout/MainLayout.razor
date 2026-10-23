@@ -11,10 +11,13 @@
                 <NavLink href="/sales">Sales</NavLink>
                 <NavLink href="/purchases">Purchases</NavLink>
                 <NavLink href="/journal">Journal</NavLink>
-                <NavLink href="/reports/trial-balance">Trial balance</NavLink>
+                <NavLink href="/reports">Reports</NavLink>
                 <NavLink href="/settings">Settings</NavLink>
                 <NavLink href="/backup">Backup</NavLink>
             </nav>
+            <form class="search" method="get" action="/search" data-enhance="false" role="search">
+                <input name="q" type="search" placeholder="Search…" aria-label="Search" />
+            </form>
             <a class="muted" href="/account/password" title="Change password">@context.User.Identity?.Name</a>
             <form method="post" action="/logout">
                 <AntiforgeryToken />

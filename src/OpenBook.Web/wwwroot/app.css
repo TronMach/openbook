@@ -89,7 +89,7 @@ a { color: var(--accent); }
 }
 
 .topbar .brand { font-weight: 700; color: var(--text); text-decoration: none; }
-.topbar nav { display: flex; gap: 1rem; flex: 1; flex-wrap: wrap; }
+.topbar nav { display: flex; gap: 0.85rem; flex: 1; flex-wrap: wrap; }
 .topbar nav a { text-decoration: none; color: var(--muted); }
 .topbar nav a.active { color: var(--text); font-weight: 600; }
 .topbar form { margin: 0; }
@@ -217,3 +217,20 @@ table.data tr.cleared td { background: color-mix(in srgb, var(--accent) 8%, tran
     .card, table.data { background: #fff; border-color: #ccc; }
     .page:has(> .wide) { max-width: none; }
 }
+
+/* ---- M5: financial statements, search ---- */
+table.statement { max-width: 760px; margin: 0 auto; }
+table.statement tr.section-heading td { font-weight: 700; padding-top: 1rem; border-bottom: 1px solid var(--border); }
+table.statement tr.subtotal td { font-weight: 600; }
+table.statement tr.grand-total td { font-weight: 700; border-top: 2px solid var(--text); border-bottom: 3px double var(--text); }
+table.statement td:last-child { width: 10rem; }
+.report-heading { text-align: center; margin-bottom: 1rem; }
+.report-heading h1 { margin: 0; }
+.report-heading p { margin: 0.2rem 0 0; color: var(--muted); }
+.report-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.report-list a.card { display: block; text-decoration: none; color: inherit; margin: 0; }
+.report-list a.card:hover { border-color: var(--accent); }
+.report-list h2 { color: var(--accent); }
+.topbar .search { margin: 0; }
+.topbar .search input { width: 10rem; padding: 0.3rem 0.5rem; }
+.search-group h2 { margin-top: 1.5rem; }

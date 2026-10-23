@@ -24,6 +24,7 @@ public static class OpenBookApi
         api.MapBankingApi();
         api.MapSalesApi();
         api.MapPurchasesApi();
+        api.MapReportsApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.GetAsync(ct)));

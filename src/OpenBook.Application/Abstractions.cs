@@ -15,8 +15,19 @@ public interface ICurrentUser
     string Actor { get; }
 }
 
-/// <summary>Net ledger balance of one account, positive for a debit balance.</summary>
-public sealed record AccountBalance(Guid AccountId, decimal Balance);
+/// <summary>One sealed ledger line with its entry's details. <see cref="Amount"/> is debit-positive.</summary>
+public sealed record LedgerLine(
+    Guid JournalLineId,
+    Guid JournalEntryId,
+    long EntryNumber,
+    DateOnly Date,
+    Guid AccountId,
+    decimal Amount,
+    string? LineMemo,
+    string? EntryMemo,
+    string Source,
+    Guid? SourceId,
+    EntryBasis Basis);
 
 /// <summary>Filter and page for listing journal entries, newest first.</summary>
 public sealed record JournalEntryFilter(DateOnly? From = null, DateOnly? To = null, int Skip = 0, int Take = 50);
@@ -42,7 +53,9 @@ public interface ILedgerStore
     Task<(IReadOnlyList<JournalEntry> Entries, int Total)> ListEntriesAsync(JournalEntryFilter filter, CancellationToken ct);
 
     Task<long> NextEntryNumberAsync(CancellationToken ct);
-    Task<IReadOnlyList<AccountBalance>> GetBalancesAsync(DateOnly asOf, ReportBasis basis, CancellationToken ct);
+
+    /// <summary>Every sealed ledger line dated within the range (inclusive), oldest first. Reports start here.</summary>
+    Task<IReadOnlyList<LedgerLine>> GetLinesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
 
     void Add(Account account);
     void Add(JournalEntry entry);

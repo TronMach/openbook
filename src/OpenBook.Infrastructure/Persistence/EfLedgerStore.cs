@@ -64,22 +64,15 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
         await db.BankTransactions.AnyAsync(t => t.AccountId == accountId || t.TransferAccountId == accountId, ct)
         || await db.Reconciliations.AnyAsync(r => r.AccountId == accountId, ct);
 
-    public async Task<IReadOnlyList<AccountBalance>> GetBalancesAsync(DateOnly asOf, ReportBasis basis, CancellationToken ct)
-    {
-        var basisOnly = (basis == ReportBasis.Cash ? EntryBasis.CashOnly : EntryBasis.AccrualOnly).ToString();
-        var both = nameof(EntryBasis.Both);
-
-        // Summed as integer minor units in SQL, so the totals are exact.
-        var rows = await db.Database.SqlQuery<BalanceRow>($"""
-            SELECT l."AccountId" AS "AccountId", SUM(l."AmountMinor") AS "BalanceMinor"
-            FROM "JournalLines" l
-            JOIN "JournalEntries" e ON e."Id" = l."JournalEntryId"
-            WHERE e."IsSealed" = 1 AND e."Date" <= {asOf} AND e."Basis" IN ({both}, {basisOnly})
-            GROUP BY l."AccountId"
-            """).ToListAsync(ct);
-
-        return rows.Select(r => new AccountBalance(r.AccountId, r.BalanceMinor / 100m)).ToList();
-    }
+    public async Task<IReadOnlyList<LedgerLine>> GetLinesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
+        await (
+            from l in db.Set<JournalLine>()
+            join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            where e.Date <= toDate && (fromDate == null || e.Date >= fromDate)
+            orderby e.Date, e.Number, l.LineNumber
+            select new LedgerLine(l.Id, e.Id, e.Number, e.Date, l.AccountId, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Basis))
+            .AsNoTracking()
+            .ToListAsync(ct);
 
     public void Add(Account account) => db.Accounts.Add(account);
 
@@ -88,6 +81,4 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
-
-    private sealed record BalanceRow(Guid AccountId, long BalanceMinor);
 }
