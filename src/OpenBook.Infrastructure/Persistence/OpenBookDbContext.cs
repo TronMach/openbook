@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
+using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
@@ -21,6 +23,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
+    public DbSet<Reconciliation> Reconciliations => Set<Reconciliation>();
+
+    /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
+    private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -110,7 +117,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             // Stored as integer minor units so SUMs in SQL are exact on every provider.
             b.Property(l => l.Amount)
                 .HasColumnName("AmountMinor")
-                .HasConversion(amount => (long)(amount * 100m), minor => minor / 100m);
+                .HasConversion(MinorUnits);
             b.Property(l => l.Memo).HasMaxLength(1000);
             b.Ignore(l => l.Debit);
             b.Ignore(l => l.Credit);
@@ -141,6 +148,50 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Phone).HasMaxLength(50);
             b.Property(c => c.Address).HasMaxLength(1000);
             b.Property(c => c.DefaultReportBasis).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<BankTransaction>(b =>
+        {
+            b.ToTable("BankTransactions");
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(t => t.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(t => t.Payee).HasMaxLength(200);
+            b.Property(t => t.Reference).HasMaxLength(30);
+            b.Property(t => t.Memo).HasMaxLength(1000);
+            b.Ignore(t => t.SignedAmount);
+            b.HasIndex(t => new { t.AccountId, t.Date });
+            b.HasIndex(t => t.JournalEntryId).IsUnique();
+            b.HasIndex(t => t.ImportBatchId);
+            b.HasOne<Account>().WithMany().HasForeignKey(t => t.AccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(t => t.TransferAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(t => t.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Reconciliation>(b =>
+        {
+            b.ToTable("Reconciliations");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.StatementEndingBalance).HasColumnName("StatementEndingBalanceMinor").HasConversion(MinorUnits);
+            b.Property(r => r.BeginningBalance).HasColumnName("BeginningBalanceMinor").HasConversion(MinorUnits);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.StartedBy).HasMaxLength(200);
+            b.Property(r => r.CompletedBy).HasMaxLength(200);
+            b.HasIndex(r => new { r.AccountId, r.StatementDate });
+            b.HasOne<Account>().WithMany().HasForeignKey(r => r.AccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasMany(r => r.Lines).WithOne().HasForeignKey("ReconciliationId").OnDelete(DeleteBehavior.Cascade);
+            b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<ReconciliationLine>(b =>
+        {
+            b.ToTable("ReconciliationLines");
+            b.Property<Guid>("ReconciliationId");
+            b.HasKey("ReconciliationId", nameof(ReconciliationLine.JournalLineId));
+            // A ledger line is ticked in at most one reconciliation.
+            b.HasIndex(l => l.JournalLineId).IsUnique();
+            b.HasOne<JournalLine>().WithMany().HasForeignKey(l => l.JournalLineId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<User>(b =>

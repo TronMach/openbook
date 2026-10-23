@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
 
@@ -13,6 +14,9 @@ public static class DependencyInjection
         services.AddScoped<TrialBalanceQuery>();
         services.AddScoped<AccountService>();
         services.AddScoped<ChartImportService>();
+        services.AddScoped<BankingService>();
+        services.AddScoped<BankImportService>();
+        services.AddScoped<ReconciliationService>();
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();
         services.AddScoped<AuthService>();

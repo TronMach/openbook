@@ -39,6 +39,11 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
 
         var chart = await GetChartAsync(ct);
         var account = chart.Get(command.Id);
+        if (command.Type != account.Type && Domain.Banking.BankTransaction.IsBankingAccount(account.Type)
+            && await store.HasBankingRecordsAsync(account.Id, ct))
+            throw new Domain.Common.DomainException("account.type_banking",
+                "This account has bank transactions or reconciliations, so its type can't change.");
+
         var hasPostings = command.Type != account.Type && await store.HasPostingsAsync(account.Id, ct);
         chart.EnsureCanUpdate(account, command.Name, command.Number, command.Type, command.ParentId, hasPostings);
 

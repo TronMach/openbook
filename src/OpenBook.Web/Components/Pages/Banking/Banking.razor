@@ -1,0 +1,73 @@
+@page "/banking"
+@inject BankingService BankingService
+
+<PageTitle>Banking · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Banking</h1>
+        @if (_accounts.Count >= 2)
+        {
+            <a class="button secondary" href="/banking/transfer">Transfer</a>
+        }
+    </div>
+
+    @if (_accounts.Count == 0)
+    {
+        <div class="card">
+            <p>
+                No bank or credit card accounts yet. <a href="/accounts/new">Add an account</a> with type
+                <strong>Bank</strong> or <strong>Credit card</strong>, and it will appear here.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th class="num">Balance in books</th>
+                        <th class="num">Reconciled balance</th>
+                        <th>Reconciled through</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var summary in _accounts)
+                    {
+                        var account = summary.Account;
+                        <tr>
+                            <td><a href="/banking/@account.Id">@summary.FullName</a></td>
+                            <td class="muted">@Labels.For(account.Type)</td>
+                            <td class="num">@Labels.Amount(summary.Balance)</td>
+                            <td class="num">@Labels.Amount(summary.ReconciledBalance)</td>
+                            <td>
+                                @(summary.LastReconciledDate is { } d ? Labels.Date(d) : "Never")
+                                @if (summary.ReconciliationInProgressId is not null)
+                                {
+                                    <span class="badge">In progress</span>
+                                }
+                            </td>
+                            <td>
+                                <a href="/banking/@account.Id/record/spend">@Labels.For(BankTransactionKind.Spend, account.Type)</a> ·
+                                <a href="/banking/@account.Id/record/receive">@Labels.For(BankTransactionKind.Receive, account.Type)</a> ·
+                                <a href="/banking/@account.Id/import">Import</a> ·
+                                <a href="/banking/@account.Id/reconcile">Reconcile</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted">Credit card balances show what's owed. Balances include every posted transaction, reconciled or not.</p>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<BankAccountSummary> _accounts = [];
+
+    protected override async Task OnInitializedAsync() => _accounts = await BankingService.ListAccountsAsync();
+}

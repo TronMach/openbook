@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpenBook.Application;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
+using OpenBook.Domain.Banking;
 using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Infrastructure.Persistence;
@@ -43,8 +44,25 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
         return (entries, total);
     }
 
-    public async Task<long> NextEntryNumberAsync(CancellationToken ct) =>
-        (await db.JournalEntries.IgnoreQueryFilters().MaxAsync(e => (long?)e.Number, ct) ?? 0) + 1;
+    // Counts entries added but not yet saved, so one save can hold several (an import, a void).
+    public async Task<long> NextEntryNumberAsync(CancellationToken ct)
+    {
+        var saved = await db.JournalEntries.IgnoreQueryFilters().MaxAsync(e => (long?)e.Number, ct) ?? 0;
+        var staged = db.ChangeTracker.Entries<JournalEntry>()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity.Number)
+            .DefaultIfEmpty(0)
+            .Max();
+        return Math.Max(saved, staged) + 1;
+    }
+
+    public Task<bool> IsInReconciliationAsync(Guid entryId, CancellationToken ct) =>
+        db.Set<ReconciliationLine>().AnyAsync(
+            r => db.Set<JournalLine>().Any(l => l.Id == r.JournalLineId && EF.Property<Guid>(l, "JournalEntryId") == entryId), ct);
+
+    public async Task<bool> HasBankingRecordsAsync(Guid accountId, CancellationToken ct) =>
+        await db.BankTransactions.AnyAsync(t => t.AccountId == accountId || t.TransferAccountId == accountId, ct)
+        || await db.Reconciliations.AnyAsync(r => r.AccountId == accountId, ct);
 
     public async Task<IReadOnlyList<AccountBalance>> GetBalancesAsync(DateOnly asOf, ReportBasis basis, CancellationToken ct)
     {

@@ -1,6 +1,7 @@
 using System.Globalization;
 using OpenBook.Application.Accounts;
 using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Banking;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 
@@ -64,6 +65,19 @@ public static class Labels
         ImportRowStatus.Exists => "Already exists",
         _ => "Error",
     };
+
+    public static string For(BankTransactionKind kind, AccountType accountType) => (kind, accountType) switch
+    {
+        (BankTransactionKind.Spend, AccountType.CreditCard) => "Card charge",
+        (BankTransactionKind.Spend, _) => "Check / payment",
+        (BankTransactionKind.Receive, AccountType.CreditCard) => "Card credit",
+        (BankTransactionKind.Receive, _) => "Deposit",
+        _ => "Transfer",
+    };
+
+    /// <summary>Register column headings: what raises the balance, and what lowers it.</summary>
+    public static (string Increase, string Decrease) BalanceColumns(AccountType type) =>
+        type == AccountType.CreditCard ? ("Charge", "Payment") : ("Deposit", "Payment");
 
     public static string Month(int month) => CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month);
 

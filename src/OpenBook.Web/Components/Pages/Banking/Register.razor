@@ -1,0 +1,160 @@
+@page "/banking/{AccountId:guid}"
+@inject BankingService BankingService
+@inject ReconciliationService Reconciliations
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+
+<PageTitle>@(_register?.FullName ?? "Register") · OpenBook</PageTitle>
+
+@if (_register is null)
+{
+    <div class="card"><p>@_error <a href="/banking">Back to banking</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@_register.FullName</h1>
+        <a class="button secondary" href="/banking/@AccountId/import">Import CSV</a>
+        <a class="button secondary" href="/banking/@AccountId/reconcile">Reconcile</a>
+        <a class="button secondary" href="/banking/transfer?from=@AccountId">Transfer</a>
+        <a class="button secondary" href="/banking/@AccountId/record/receive">@Labels.For(BankTransactionKind.Receive, _register.Account.Type)</a>
+        <a class="button" href="/banking/@AccountId/record/spend">@Labels.For(BankTransactionKind.Spend, _register.Account.Type)</a>
+    </div>
+
+    <div class="summary-bar">
+        <div><span class="label">@(_register.Account.Type == AccountType.CreditCard ? "Owed" : "Balance in books")</span><span class="value">@Labels.Amount(_register.Balance)</span></div>
+        <div><span class="label">Transactions</span><span class="value">@_register.TotalLines</span></div>
+    </div>
+
+    @if (_register.Lines.Count == 0)
+    {
+        <div class="card"><p>No transactions yet.</p></div>
+    }
+    else
+    {
+        var (increase, decrease) = Labels.BalanceColumns(_register.Account.Type);
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Ref</th>
+                        <th>Payee / description</th>
+                        <th>Account</th>
+                        <th class="num">@decrease</th>
+                        <th class="num">@increase</th>
+                        <th class="check" title="C = cleared in a reconciliation in progress, R = reconciled">✓</th>
+                        <th class="num">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _register.Lines)
+                    {
+                        var voided = line.Line.IsVoidPair;
+                        <tr class="@(voided ? "inactive" : null)">
+                            <td>@Labels.Date(line.Line.Date)</td>
+                            <td>@line.Document?.Reference</td>
+                            <td>
+                                <a href="@Link(line)">@Description(line)</a>
+                                @if (line.Line.EntryStatus == JournalEntryStatus.Voided)
+                                {
+                                    <span class="badge">Voided</span>
+                                }
+                                else if (line.Line.EntryKind == JournalEntryKind.Reversal)
+                                {
+                                    <span class="badge">Void reversal</span>
+                                }
+                            </td>
+                            <td class="muted">@Counterparts(line)</td>
+                            <td class="num">@Labels.AmountOrBlank(Math.Max(-line.NaturalAmount, 0m))</td>
+                            <td class="num">@Labels.AmountOrBlank(Math.Max(line.NaturalAmount, 0m))</td>
+                            <td class="check status-mark">@(line.Clearing switch { LineClearing.Reconciled => "R", LineClearing.Cleared => "C", _ => "" })</td>
+                            <td class="num">@Labels.Amount(line.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_register.TotalLines > _register.Lines.Count)
+        {
+            <p class="muted">Showing the newest @_register.Lines.Count of @_register.TotalLines transactions.</p>
+        }
+    }
+
+    @if (_history.Count > 0)
+    {
+        <h2 style="margin-top: 2rem">Reconciliations</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Statement date</th>
+                        <th class="num">Ending balance</th>
+                        <th>Status</th>
+                        <th>Finished</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _history)
+                    {
+                        <tr>
+                            <td>
+                                @if (r.Status == ReconciliationStatus.Completed)
+                                {
+                                    <a href="/banking/reconciliations/@r.Id">@Labels.Date(r.StatementDate)</a>
+                                }
+                                else
+                                {
+                                    <a href="/banking/@AccountId/reconcile">@Labels.Date(r.StatementDate)</a>
+                                }
+                            </td>
+                            <td class="num">@Labels.Amount(r.StatementEndingBalance)</td>
+                            <td>@(r.Status == ReconciliationStatus.Completed ? "Reconciled" : "In progress")</td>
+                            <td>@r.CompletedAt?.ToLocalTime().ToString("g") @r.CompletedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private AccountRegister? _register;
+    private IReadOnlyList<Reconciliation> _history = [];
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private string? _error;
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _chart = await AccountService.GetChartAsync();
+            BankingRules.EnsureBankingAccount(_chart.Get(AccountId));
+            _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+            _register = await BankingService.GetRegisterAsync(AccountId);
+            _history = await Reconciliations.ListAsync(AccountId);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private string Description(RegisterLine line) => BankingRules.Describe(_chart, AccountId, line.Line, line.Document);
+
+    private static string Link(RegisterLine line) =>
+        line.Document is { } doc ? $"/banking/transactions/{doc.Id}" : $"/journal/{line.Line.JournalEntryId}";
+
+    private string Counterparts(RegisterLine line) => line.OtherAccountIds.Count switch
+    {
+        0 => string.Empty,
+        1 => Labels.AccountName(_chart, line.OtherAccountIds[0], _useNumbers),
+        _ => "Split",
+    };
+}

@@ -197,3 +197,23 @@ table.entry .remove { background: none; border: 0; color: var(--muted); font-siz
 
 .import-summary { display: flex; gap: 1.25rem; flex-wrap: wrap; margin: 0.75rem 0; }
 pre.sample { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; overflow-x: auto; font-size: 0.85rem; }
+
+/* ---- M2: banking, reconciliation ---- */
+.summary-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.summary-bar > div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; }
+.summary-bar .label { display: block; font-size: 0.8rem; color: var(--muted); }
+.summary-bar .value { font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.summary-bar .value.zero { color: var(--accent); }
+.summary-bar .value.off { color: var(--danger); }
+table.data td.check, table.data th.check { width: 2rem; text-align: center; }
+table.data tr.cleared td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.status-mark { font-weight: 700; color: var(--muted); }
+.split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 860px) { .split-grid { grid-template-columns: 1fr; } }
+
+@media print {
+    .topbar, .toolbar a, .toolbar form, .toolbar button, .no-print { display: none !important; }
+    body { background: #fff; color: #000; }
+    .card, table.data { background: #fff; border-color: #ccc; }
+    .page:has(> .wide) { max-width: none; }
+}

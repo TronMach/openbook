@@ -56,6 +56,8 @@ tests/
 
 **M1 status (2026-10-22): complete.** QuickBooks account types, chart hierarchy (5 levels) with optional numbering, add/edit/deactivate, CSV import with preview and a starter chart, journal list/entry/detail/void screens, company settings (fiscal year, numbering, default basis), accrual/cash report basis with per-entry basis, trial balance page, API for all of it. 147 tests.
 
+**M2 status (2026-10-22): complete.** Banking overview and per-account register with running balance and C/R marks; checks/payments, deposits, card charges/credits with split lines (negative lines for discounts) and check-number suggestion; transfers (incl. paying a card); void; statement CSV import with column/date/sign detection, per-row categories and duplicate flagging; statement reconciliation (resumable, any entry on the account, void protection) with a printable report that ties register balance = statement + uncleared. API for all of it. 204 tests.
+
 **Exit criteria:** a sole proprietor can set up a company, run a year of invoicing, bills and banking, reconcile, and get a correct P&L and balance sheet, all on one SQLite file they can back up.
 
 ## Phase 2 — V1 (what most small businesses expect)

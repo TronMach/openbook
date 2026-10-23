@@ -1,0 +1,180 @@
+@page "/banking/{AccountId:guid}/record/{KindName}"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@_title · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@_title</h1>
+        <a class="button secondary" href="/banking/@AccountId">Back to register</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_account is not null)
+    {
+        <div class="card">
+            <p class="muted">@(_kind == BankTransactionKind.Spend ? "From" : "Into") <strong>@_accountName</strong></p>
+            <div class="row">
+                <div class="field">
+                    <label for="payee">@(_kind == BankTransactionKind.Spend ? "Payee" : "Received from") <span class="muted">(optional)</span></label>
+                    <input id="payee" @bind="_payee" maxlength="200" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="reference">@(IsCheck ? "Check number" : "Reference") <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" @bind="_memo" maxlength="1000" />
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th class="num">Amount</th>
+                            <th>Line memo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr @key="line">
+                                <td>
+                                    <select @bind="line.AccountId" aria-label="Category">
+                                        <option value="">Choose a category…</option>
+                                        @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
+                                        {
+                                            <optgroup label="@Labels.For(group.Key)">
+                                                @foreach (var category in group)
+                                                {
+                                                    <option value="@category.Id">@Labels.AccountName(_chart, category.Id, _useNumbers)</option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" /></td>
+                                <td><input @bind="line.Memo" aria-label="Line memo" /></td>
+                                <td>
+                                    @if (_lines.Count > 1)
+                                    {
+                                        <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => _lines.Remove(line)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><button type="button" class="secondary" @onclick="() => _lines.Add(new LineModel())">Add line</button></td>
+                            <td class="num">@Labels.Amount(Total)</td>
+                            <td colspan="2" class="muted">A negative line reduces the total, e.g. a discount.</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save</button>
+                <a href="/banking/@AccountId">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private Account? _account;
+    private string? _accountName;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private BankTransactionKind _kind;
+    private string _title = "Bank transaction";
+    private string? _error;
+    private bool _busy;
+
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _payee;
+    private string? _reference;
+    private string? _memo;
+    private List<LineModel> _lines = [new()];
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    [Parameter]
+    public string KindName { get; set; } = string.Empty;
+
+    private bool IsCheck => _kind == BankTransactionKind.Spend && _account?.Type == AccountType.Bank;
+    private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
+    private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
+    private bool CanSave => Total > 0m && Filled.Any() && Filled.All(l => l.AccountId is not null && (l.Amount ?? 0m) != 0m);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _kind = KindName.Equals("receive", StringComparison.OrdinalIgnoreCase) ? BankTransactionKind.Receive : BankTransactionKind.Spend;
+        try
+        {
+            (_chart, _useNumbers, var suggestion) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
+                await sp.GetRequiredService<BankingService>().SuggestCheckNumberAsync(AccountId)));
+            _account = _chart.Get(AccountId);
+            BankingRules.EnsureBankingAccount(_account);
+            _accountName = _chart.FullName(AccountId);
+            _title = Labels.For(_kind, _account.Type);
+            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != AccountId).ToList();
+            if (IsCheck)
+                _reference ??= suggestion;
+        }
+        catch (DomainException ex)
+        {
+            _account = null;
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo)).ToList();
+            var saved = await Ops.RunAsync<BankingService, BankTransaction>(s =>
+                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo)));
+            Navigation.NavigateTo($"/banking/transactions/{saved.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class LineModel
+    {
+        public Guid? AccountId { get; set; }
+        public decimal? Amount { get; set; }
+        public string? Memo { get; set; }
+    }
+}

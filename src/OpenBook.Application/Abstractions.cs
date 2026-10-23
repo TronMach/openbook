@@ -32,6 +32,12 @@ public interface ILedgerStore
     Task<JournalEntry?> GetEntryAsync(Guid id, CancellationToken ct);
     Task<Guid?> FindReversalIdAsync(Guid originalEntryId, CancellationToken ct);
 
+    /// <summary>Whether any of the entry's lines is ticked in a reconciliation, finished or not.</summary>
+    Task<bool> IsInReconciliationAsync(Guid entryId, CancellationToken ct);
+
+    /// <summary>Whether the account has bank transactions or reconciliations.</summary>
+    Task<bool> HasBankingRecordsAsync(Guid accountId, CancellationToken ct);
+
     /// <summary>Entries with their lines, untracked, plus the total matching the filter.</summary>
     Task<(IReadOnlyList<JournalEntry> Entries, int Total)> ListEntriesAsync(JournalEntryFilter filter, CancellationToken ct);
 

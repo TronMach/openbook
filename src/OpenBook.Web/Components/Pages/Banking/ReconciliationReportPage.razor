@@ -1,0 +1,119 @@
+@page "/banking/reconciliations/{Id:guid}"
+@inject ReconciliationService Reconciliations
+@inject CompanySettingsService Settings
+
+<PageTitle>Reconciliation report · OpenBook</PageTitle>
+
+@if (_report is null)
+{
+    <div class="card"><p>@_error <a href="/banking">Back to banking</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    @{
+        var r = _report.Reconciliation;
+        var card = _report.Account.Type == AccountType.CreditCard;
+        var (increase, decrease) = card ? ("Charges", "Payments and credits") : ("Deposits and other credits", "Checks and payments");
+    }
+    <div class="toolbar">
+        <h1>Reconciliation report</h1>
+        <a class="button secondary" href="/banking/@_report.Account.Id">Back to register</a>
+        <button type="button" class="secondary" onclick="window.print()">Print</button>
+    </div>
+
+    <p class="muted">
+        @_companyName · @_report.AccountName · statement ending @Labels.Date(r.StatementDate) ·
+        reconciled @r.CompletedAt?.ToLocalTime().ToString("g") by @r.CompletedBy
+    </p>
+
+    <div class="card">
+        <h2>Summary</h2>
+        <table class="data">
+            <tbody>
+                <tr><td>Beginning balance</td><td class="num">@Labels.Amount(r.BeginningBalance)</td></tr>
+                <tr><td>@increase cleared (@_report.Cleared.Count(i => i.NaturalAmount > 0m))</td><td class="num">@Labels.Amount(_report.ClearedIncreases)</td></tr>
+                <tr><td>@decrease cleared (@_report.Cleared.Count(i => i.NaturalAmount < 0m))</td><td class="num">@Labels.Amount(_report.ClearedDecreases)</td></tr>
+            </tbody>
+            <tfoot>
+                <tr><td>Statement ending balance</td><td class="num">@Labels.Amount(r.StatementEndingBalance)</td></tr>
+            </tfoot>
+        </table>
+        <table class="data" style="margin-top: 1rem">
+            <tbody>
+                <tr><td>Uncleared transactions as of @Labels.Date(r.StatementDate) (@_report.Outstanding.Count)</td><td class="num">@Labels.Amount(_report.OutstandingTotal)</td></tr>
+            </tbody>
+            <tfoot>
+                <tr><td>Balance in books as of @Labels.Date(r.StatementDate)</td><td class="num">@Labels.Amount(_report.RegisterBalance)</td></tr>
+            </tfoot>
+        </table>
+    </div>
+
+    @ItemTable("Cleared transactions", _report.Cleared)
+    @ItemTable($"Uncleared transactions as of {Labels.Date(r.StatementDate)}", _report.Outstanding)
+</div>
+
+@code {
+    private ReconciliationReport? _report;
+    private string? _companyName;
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private static RenderFragment ItemTable(string title, IReadOnlyList<ReconcileItem> items) => __builder =>
+    {
+        <h2 style="margin-top: 1.5rem">@title</h2>
+        @if (items.Count == 0)
+        {
+            <p class="muted">None.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th class="num">Entry</th>
+                            <th>Ref</th>
+                            <th>Description</th>
+                            <th class="num">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                <td>@Labels.Date(item.Line.Date)</td>
+                                <td class="num"><a href="/journal/@item.Line.JournalEntryId">@item.Line.EntryNumber</a></td>
+                                <td>@item.Reference</td>
+                                <td>@item.Description</td>
+                                <td class="num">@Labels.Amount(item.NaturalAmount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4">Total</td>
+                            <td class="num">@Labels.Amount(items.Sum(i => i.NaturalAmount))</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _companyName = (await Settings.GetAsync()).Name;
+            _report = await Reconciliations.GetReportAsync(Id);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

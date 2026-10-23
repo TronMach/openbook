@@ -1,0 +1,111 @@
+@page "/banking/transfer"
+@using System.ComponentModel.DataAnnotations
+@inject BankingService BankingService
+@inject NavigationManager Navigation
+
+<PageTitle>Transfer · OpenBook</PageTitle>
+
+<div class="card">
+    <h1>Transfer</h1>
+    <p class="muted">Move money between bank accounts, or pay a credit card from a bank account.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="transfer" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+        <div class="row">
+            <div class="field">
+                <label for="from">From</label>
+                <InputSelect id="from" @bind-Value="Input.FromAccountId">
+                    <option value="">Choose an account…</option>
+                    @foreach (var a in _accounts)
+                    {
+                        <option value="@a.Account.Id">@a.FullName (@Labels.Amount(a.Balance))</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Input.FromAccountId" />
+            </div>
+            <div class="field">
+                <label for="to">To</label>
+                <InputSelect id="to" @bind-Value="Input.ToAccountId">
+                    <option value="">Choose an account…</option>
+                    @foreach (var a in _accounts)
+                    {
+                        <option value="@a.Account.Id">@a.FullName (@Labels.Amount(a.Balance))</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Input.ToAccountId" />
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <label for="amount">Amount</label>
+                <InputNumber id="amount" step="0.01" min="0.01" @bind-Value="Input.Amount" />
+                <ValidationMessage For="() => Input.Amount" />
+            </div>
+            <div class="field">
+                <label for="date">Date</label>
+                <InputDate id="date" @bind-Value="Input.Date" />
+            </div>
+        </div>
+        <div class="field">
+            <label for="memo">Memo <span class="muted">(optional)</span></label>
+            <InputText id="memo" @bind-Value="Input.Memo" />
+        </div>
+        <div class="actions">
+            <button type="submit">Transfer</button>
+            <a href="/banking">Cancel</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private IReadOnlyList<BankAccountSummary> _accounts = [];
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "from")]
+    private Guid? From { get; set; }
+
+    [SupplyParameterFromForm]
+    private TransferModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _accounts = await BankingService.ListAccountsAsync();
+        Input ??= new TransferModel { FromAccountId = From };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await BankingService.TransferAsync(new TransferCommand(Input.FromAccountId!.Value, Input.ToAccountId!.Value, Input.Date, Input.Amount!.Value, Input.Memo));
+            Navigation.NavigateTo($"/banking/{Input.FromAccountId}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class TransferModel
+    {
+        [Required(ErrorMessage = "Choose the account the money leaves.")]
+        public Guid? FromAccountId { get; set; }
+
+        [Required(ErrorMessage = "Choose the account the money goes to.")]
+        public Guid? ToAccountId { get; set; }
+
+        [Required(ErrorMessage = "Enter an amount.")]
+        [Range(typeof(decimal), "0.01", "999999999999", ErrorMessage = "Enter an amount above zero.")]
+        public decimal? Amount { get; set; }
+
+        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+    }
+}

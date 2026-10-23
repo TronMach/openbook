@@ -48,3 +48,11 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - CSV import (`ChartImportService`, parser in `Application/Import/Csv.cs`) matches headers loosely and is all-or-nothing. The starter chart at `Web/wwwroot/samples/chart-of-accounts.csv` is covered by a test.
 - `ReportBasis` (Accrual/Cash) per report, default from company settings. `EntryBasis` on each entry (Both / AccrualOnly / CashOnly) decides inclusion. Payment-driven cash basis for invoices/bills comes with M3/M4.
 - Dev preview: `.claude/launch.json` → `openbook-web` on port 5188, data in `src/OpenBook.Web/openbook.dev.db`.
+
+## Banking (M2)
+
+- Bank and credit card accounts are accounts of type `Bank` / `CreditCard`. Amounts in banking code are in the account's natural sign (`BankingRules.Natural`): positive = money in the bank, or owed on a card.
+- `BankTransaction` is a document (Spend / Receive / Transfer, with payee and check number) that posts one journal entry with `Source = bank.*` and `SourceId` = the document id. Categories are the entry's lines. Documents are voided, never edited; the journal page refuses to void entries posted by documents.
+- Services that create several entries in one save use `PostingEngine.StageAsync` / `StageVoidAsync` (internal) and save once; `NextEntryNumberAsync` counts staged entries. Mutate documents only after the staged call succeeds, so a refusal leaves nothing changed in memory.
+- Reconciliation state lives in `Reconciliations` / `ReconciliationLines` referencing ledger lines; the ledger itself is never touched. One in progress per account, ticks saved as made. Voiding is blocked for any entry with a ticked or reconciled line. Voided entries and their reversals are left out of worksheets and reports.
+- Statement CSV import: `BankImportService` (headers matched loosely; one signed amount column or money-out/money-in columns) with `StatementValues` for dates and amounts. It refuses to guess on ambiguous amounts ("1.005") and flags ambiguous date orders. Possible duplicates = same date, signed amount and payee as an existing posted transaction.

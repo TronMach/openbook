@@ -1,0 +1,245 @@
+@page "/banking/{AccountId:guid}/reconcile"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Reconcile · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Reconcile @_accountName</h1>
+        <a class="button secondary" href="/banking/@AccountId">@(_worksheet is null ? "Back to register" : "Finish later")</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _account is not null && _worksheet is null)
+    {
+        <div class="card">
+            <h2>Start from your statement</h2>
+            <p class="muted">
+                @(_lastStatementDate is { } last
+                    ? $"Last reconciled through {Labels.Date(last)}, ending at {Labels.Amount(_beginning)}."
+                    : "This account hasn't been reconciled before, so the beginning balance is zero.")
+                Enter the closing date and ending balance shown on the statement@(_account.Type == AccountType.CreditCard ? " (the amount owed)" : "").
+            </p>
+            <div class="row">
+                <div class="field">
+                    <label for="statement-date">Statement ending date</label>
+                    <input id="statement-date" type="date" @bind="_statementDate" />
+                </div>
+                <div class="field">
+                    <label for="statement-balance">Statement ending balance</label>
+                    <input id="statement-balance" type="number" step="0.01" @bind="_statementBalance" />
+                </div>
+            </div>
+            <button type="button" @onclick="StartAsync" disabled="@(_statementBalance is null || _busy)">Start reconciling</button>
+        </div>
+    }
+
+    @if (_worksheet is { } w)
+    {
+        var difference = w.Difference;
+        var (increase, decrease) = _account!.Type == AccountType.CreditCard
+            ? ("Charges", "Payments and credits")
+            : ("Deposits and other credits", "Checks and payments");
+
+        <div class="summary-bar">
+            <div><span class="label">Beginning balance</span><span class="value">@Labels.Amount(w.Reconciliation.BeginningBalance)</span></div>
+            <div><span class="label">Cleared (net)</span><span class="value">@Labels.Amount(w.ClearedTotal)</span></div>
+            <div><span class="label">Statement ending balance</span><span class="value">@Labels.Amount(w.Reconciliation.StatementEndingBalance)</span></div>
+            <div><span class="label">Difference</span><span class="value @(difference == 0m ? "zero" : "off")">@Labels.Amount(difference)</span></div>
+        </div>
+
+        <details class="card no-print">
+            <summary>Statement: @Labels.Date(w.Reconciliation.StatementDate), ending @Labels.Amount(w.Reconciliation.StatementEndingBalance). Change</summary>
+            <div class="row" style="margin-top: 0.75rem">
+                <div class="field">
+                    <label for="edit-date">Statement ending date</label>
+                    <input id="edit-date" type="date" @bind="_statementDate" />
+                </div>
+                <div class="field">
+                    <label for="edit-balance">Statement ending balance</label>
+                    <input id="edit-balance" type="number" step="0.01" @bind="_statementBalance" />
+                </div>
+            </div>
+            <button type="button" class="secondary" @onclick="UpdateStatementAsync" disabled="@(_statementBalance is null || _busy)">Update statement</button>
+        </details>
+
+        <div class="split-grid">
+            @ItemTable(decrease, w.Items.Where(i => i.NaturalAmount < 0m).ToList())
+            @ItemTable(increase, w.Items.Where(i => i.NaturalAmount > 0m).ToList())
+        </div>
+
+        <div class="actions">
+            <button type="button" @onclick="FinishAsync" disabled="@(difference != 0m || _busy)">Finish reconciliation</button>
+            @if (difference != 0m)
+            {
+                <span class="muted">Tick the transactions that appear on the statement until the difference is zero. Your ticks are saved as you go.</span>
+            }
+            <span style="flex: 1"></span>
+            @if (_confirmCancel)
+            {
+                <span>Discard this reconciliation and its ticks?</span>
+                <button type="button" class="danger" @onclick="CancelAsync">Discard</button>
+                <button type="button" class="secondary" @onclick="() => _confirmCancel = false">Keep</button>
+            }
+            else
+            {
+                <button type="button" class="link" @onclick="() => _confirmCancel = true">Cancel reconciliation</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Account? _account;
+    private string? _accountName;
+    private ReconciliationWorksheet? _worksheet;
+    private DateOnly? _lastStatementDate;
+    private decimal _beginning;
+    private DateOnly _statementDate = DateOnly.FromDateTime(DateTime.Today);
+    private decimal? _statementBalance;
+    private bool _loaded;
+    private bool _busy;
+    private bool _confirmCancel;
+    private string? _error;
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    private RenderFragment ItemTable(string title, List<ReconcileItem> items) => __builder =>
+    {
+        <div>
+            <h2>@title</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th class="check">
+                                <input type="checkbox" aria-label="Tick all @title" checked="@(items.Count > 0 && items.All(i => i.Cleared))"
+                                       disabled="@(items.Count == 0 || _busy)" @onchange="e => SetClearedAsync(items, e.Value is true)" />
+                            </th>
+                            <th>Date</th>
+                            <th>Ref</th>
+                            <th>Description</th>
+                            <th class="num">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (items.Count == 0)
+                        {
+                            <tr><td colspan="5" class="muted">None up to the statement date.</td></tr>
+                        }
+                        @foreach (var item in items)
+                        {
+                            <tr class="@(item.Cleared ? "cleared" : null)" @key="item.Line.JournalLineId">
+                                <td class="check">
+                                    <input type="checkbox" aria-label="Cleared: @item.Description" checked="@item.Cleared" disabled="@_busy"
+                                           @onchange="e => SetClearedAsync([item], e.Value is true)" />
+                                </td>
+                                <td>@Labels.Date(item.Line.Date)</td>
+                                <td>@item.Reference</td>
+                                <td>@item.Description</td>
+                                <td class="num">@Labels.Amount(Math.Abs(item.NaturalAmount))</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4">Ticked: @items.Count(i => i.Cleared) of @items.Count</td>
+                            <td class="num">@Labels.Amount(Math.Abs(items.Where(i => i.Cleared).Sum(i => i.NaturalAmount)))</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var (chart, history, summary) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                await sp.GetRequiredService<ReconciliationService>().ListAsync(AccountId),
+                (await sp.GetRequiredService<BankingService>().ListAccountsAsync()).FirstOrDefault(a => a.Account.Id == AccountId)));
+            _account = chart.Get(AccountId);
+            BankingRules.EnsureBankingAccount(_account);
+            _accountName = chart.FullName(AccountId);
+            _lastStatementDate = summary?.LastReconciledDate;
+            _beginning = summary?.ReconciledBalance ?? 0m;
+
+            var inProgress = history.FirstOrDefault(r => r.Status == ReconciliationStatus.InProgress);
+            _worksheet = inProgress is null
+                ? null
+                : await Ops.RunAsync<ReconciliationService, ReconciliationWorksheet>(s => s.GetWorksheetAsync(inProgress.Id));
+            if (_worksheet is not null)
+            {
+                _statementDate = _worksheet.Reconciliation.StatementDate;
+                _statementBalance = _worksheet.Reconciliation.StatementEndingBalance;
+            }
+        }
+        catch (DomainException ex)
+        {
+            _account = null;
+            _error = ex.Message;
+        }
+
+        _loaded = true;
+    }
+
+    private Task StartAsync() => Run(async () =>
+    {
+        var started = await Ops.RunAsync<ReconciliationService, Reconciliation>(s => s.StartAsync(AccountId, _statementDate, _statementBalance!.Value));
+        _worksheet = await Ops.RunAsync<ReconciliationService, ReconciliationWorksheet>(s => s.GetWorksheetAsync(started.Id));
+    });
+
+    private Task UpdateStatementAsync() => Run(async () =>
+        _worksheet = await Ops.RunAsync<ReconciliationService, ReconciliationWorksheet>(s =>
+            s.UpdateStatementAsync(_worksheet!.Reconciliation.Id, _statementDate, _statementBalance!.Value)));
+
+    private Task SetClearedAsync(IReadOnlyCollection<ReconcileItem> items, bool cleared) => Run(async () =>
+        _worksheet = await Ops.RunAsync<ReconciliationService, ReconciliationWorksheet>(s =>
+            s.SetClearedAsync(_worksheet!.Reconciliation.Id, items.Select(i => i.Line.JournalLineId).ToList(), cleared)));
+
+    private Task FinishAsync() => Run(async () =>
+    {
+        var id = _worksheet!.Reconciliation.Id;
+        await Ops.RunAsync<ReconciliationService, Reconciliation>(s => s.CompleteAsync(id));
+        Navigation.NavigateTo($"/banking/reconciliations/{id}");
+    });
+
+    private Task CancelAsync() => Run(async () =>
+    {
+        var id = _worksheet!.Reconciliation.Id;
+        await Ops.RunAsync<ReconciliationService, bool>(async s => { await s.CancelAsync(id); return true; });
+        _worksheet = null;
+        _confirmCancel = false;
+        _statementBalance = null;
+        await LoadAsync();
+    });
+
+    private async Task Run(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

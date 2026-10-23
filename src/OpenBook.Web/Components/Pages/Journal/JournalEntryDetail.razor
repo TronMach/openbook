@@ -87,7 +87,13 @@
         </table>
     </div>
 
-    @if (_entry.Status == JournalEntryStatus.Posted && _entry.Kind == JournalEntryKind.Standard)
+    @if (_entry.Source != JournalEntry.ManualSource && _entry.SourceId is { } documentId)
+    {
+        <p class="muted" style="margin-top: 1rem">
+            Posted by a <a href="/banking/transactions/@documentId">bank transaction</a>. To correct it, void it there.
+        </p>
+    }
+    else if (_entry.Status == JournalEntryStatus.Posted && _entry.Kind == JournalEntryKind.Standard)
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this entry</h2>

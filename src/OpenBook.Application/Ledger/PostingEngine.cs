@@ -25,6 +25,26 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
 
     public async Task<JournalEntry> PostAsync(PostJournalEntryCommand command, CancellationToken ct = default)
     {
+        var entry = await StageAsync(command, ct);
+        await store.SaveChangesAsync(ct);
+        return entry;
+    }
+
+    /// <summary>
+    /// Voids a manual entry. Entries posted by documents (bank transactions, invoices, ...) are voided
+    /// through the document, so the document's status stays in step.
+    /// </summary>
+    /// <returns>The reversing entry.</returns>
+    public async Task<JournalEntry> VoidAsync(Guid entryId, string reason, CancellationToken ct = default)
+    {
+        var reversal = await StageVoidAsync(entryId, reason, fromDocument: false, ct);
+        await store.SaveChangesAsync(ct);
+        return reversal;
+    }
+
+    /// <summary>Validates and adds an entry without saving, so a document and its entry save together.</summary>
+    internal async Task<JournalEntry> StageAsync(PostJournalEntryCommand command, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
 
@@ -43,22 +63,24 @@ public sealed class PostingEngine(ILedgerStore store, ICompanyStore companies, I
 
         store.Add(entry);
         store.Add(Audit(AuditAction.Posted, entry.Id, before: null, after: Snapshot(entry)));
-        await store.SaveChangesAsync(ct);
         return entry;
     }
 
-    /// <returns>The reversing entry.</returns>
-    public async Task<JournalEntry> VoidAsync(Guid entryId, string reason, CancellationToken ct = default)
+    internal async Task<JournalEntry> StageVoidAsync(Guid entryId, string reason, bool fromDocument, CancellationToken ct)
     {
         var entry = await store.GetEntryAsync(entryId, ct) ?? throw new EntityNotFoundException(EntityType, entryId);
-        var before = Snapshot(entry);
+        if (!fromDocument && entry.Source != JournalEntry.ManualSource)
+            throw new DomainException("journal.void_document", "This entry was posted by another transaction; void that transaction instead.");
+        if (await store.IsInReconciliationAsync(entry.Id, ct))
+            throw new DomainException("journal.reconciled",
+                "This transaction has been reconciled, or is ticked in a reconciliation in progress, so it can't be voided.");
 
+        var before = Snapshot(entry);
         var reversal = entry.Void(await store.NextEntryNumberAsync(ct), reason, clock.UtcNow);
 
         store.Add(reversal);
         store.Add(Audit(AuditAction.Voided, entry.Id, before, Snapshot(entry)));
         store.Add(Audit(AuditAction.Posted, reversal.Id, before: null, after: Snapshot(reversal)));
-        await store.SaveChangesAsync(ct);
         return reversal;
     }
 

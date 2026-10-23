@@ -1,0 +1,310 @@
+@page "/banking/{AccountId:guid}/import"
+@rendermode InteractiveServer
+@using OpenBook.Application.Import
+@inject Operations Ops
+
+<PageTitle>Import transactions · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import transactions</h1>
+        <a class="button secondary" href="/banking/@AccountId">Back to register</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is { } count)
+    {
+        <div class="alert notice" role="status">Imported @count transaction(s). <a href="/banking/@AccountId">View the register</a>.</div>
+    }
+
+    @if (_account is not null)
+    {
+        <div class="card">
+            <p>
+                Into <strong>@_accountName</strong>. Download a CSV of transactions from your bank's website and upload it here.
+                OpenBook looks for a <strong>date</strong> column and either one <strong>amount</strong> column or separate
+                money-out and money-in columns; payee/description, check number and memo are used when present.
+                Transactions that look like ones already in OpenBook are flagged and left unticked.
+            </p>
+            <div class="field">
+                <label for="file">CSV file</label>
+                <InputFile id="file" accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+            </div>
+        </div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        <div class="card">
+            <h2>Check how the file was read</h2>
+            <p class="muted">@string.Join(" · ", _preview.ColumnsUsed)</p>
+            <div class="row">
+                <div class="field">
+                    <label for="date-order">Dates are written</label>
+                    <select id="date-order" value="@_preview.DateOrder" @onchange="ChangeDateOrderAsync">
+                        <option value="@DateOrder.YearFirst">Year first (2026-10-31)</option>
+                        <option value="@DateOrder.MonthFirst">Month first (10/31/2026)</option>
+                        <option value="@DateOrder.DayFirst">Day first (31/10/2026)</option>
+                    </select>
+                    @if (_preview.DateOrderAmbiguous)
+                    {
+                        <span class="hint out-of-balance">Every date in this file fits both month-first and day-first. Check the dates below.</span>
+                    }
+                </div>
+                @if (!_preview.HasDebitCreditColumns)
+                {
+                    <div class="field">
+                        <label for="sign">In the amount column</label>
+                        <select id="sign" value="@_options.AmountSign" @onchange="ChangeSignAsync">
+                            <option value="@AmountSign.PositiveIsMoneyIn">Positive amounts are money in</option>
+                            <option value="@AmountSign.PositiveIsMoneyOut">Positive amounts are money out</option>
+                        </select>
+                    </div>
+                }
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="default-out">Category for money out</label>
+                    <select id="default-out" value="@_defaultOut" @onchange="e => ApplyDefault(e, moneyIn: false)">
+                        <option value="">Choose…</option>
+                        @CategoryOptions
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="default-in">Category for money in</label>
+                    <select id="default-in" value="@_defaultIn" @onchange="e => ApplyDefault(e, moneyIn: true)">
+                        <option value="">Choose…</option>
+                        @CategoryOptions
+                    </select>
+                </div>
+            </div>
+            <p class="hint muted">These fill every row still on its default; change individual rows below. Rules that categorize automatically come in a later version.</p>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data entry">
+                <thead>
+                    <tr>
+                        <th class="check"><input type="checkbox" aria-label="Import all valid rows" checked="@_rows.Where(r => r.Row.IsValid).All(r => r.Include)" @onchange="ToggleAll" /></th>
+                        <th>Date</th>
+                        <th>Payee / description</th>
+                        <th>Ref</th>
+                        <th class="num">Money out</th>
+                        <th class="num">Money in</th>
+                        <th>Category</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _rows)
+                    {
+                        var row = item.Row;
+                        <tr class="@(row.IsValid ? null : "inactive")">
+                            <td class="check">
+                                @if (row.IsValid)
+                                {
+                                    <input type="checkbox" aria-label="Import line @row.Line" @bind="item.Include" />
+                                }
+                            </td>
+                            <td>@(row.Date is { } d ? Labels.Date(d) : "")</td>
+                            <td>
+                                @row.Payee
+                                @if (row.PossibleDuplicate)
+                                {
+                                    <span class="badge warn" title="Same date, amount and payee as a transaction already in OpenBook">Possible duplicate</span>
+                                }
+                                @if (row.Error is not null)
+                                {
+                                    <div class="out-of-balance">Line @row.Line: @row.Error</div>
+                                }
+                            </td>
+                            <td>@row.Reference</td>
+                            <td class="num">@(row.Amount < 0m ? Labels.Amount(-row.Amount.Value) : "")</td>
+                            <td class="num">@(row.Amount > 0m ? Labels.Amount(row.Amount.Value) : "")</td>
+                            <td>
+                                @if (row.IsValid)
+                                {
+                                    <select @bind="item.CategoryId" aria-label="Category for line @row.Line">
+                                        <option value="">Choose…</option>
+                                        @CategoryOptions
+                                    </select>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="actions">
+            <button type="button" @onclick="ImportAsync" disabled="@(!CanImport || _busy)">Import @Selected.Count() transaction(s)</button>
+            @if (Selected.Any(r => r.CategoryId is null))
+            {
+                <span class="muted">Every ticked row needs a category.</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+
+    private Account? _account;
+    private string? _accountName;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+
+    private string? _csv;
+    private BankImportOptions _options = new();
+    private BankImportPreview? _preview;
+    private List<RowModel> _rows = [];
+    private Guid? _defaultOut;
+    private Guid? _defaultIn;
+    private int? _imported;
+    private string? _error;
+    private bool _busy;
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    private IEnumerable<RowModel> Selected => _rows.Where(r => r.Include && r.Row.IsValid);
+    private bool CanImport => Selected.Any() && Selected.All(r => r.CategoryId is not null);
+
+    private RenderFragment CategoryOptions => __builder =>
+    {
+        foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
+        {
+            <optgroup label="@Labels.For(group.Key)">
+                @foreach (var category in group)
+                {
+                    <option value="@category.Id">@Labels.AccountName(_chart, category.Id, _useNumbers)</option>
+                }
+            </optgroup>
+        }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (_chart, _useNumbers) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
+            _account = _chart.Get(AccountId);
+            BankingRules.EnsureBankingAccount(_account);
+            _accountName = _chart.FullName(AccountId);
+            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != AccountId).ToList();
+        }
+        catch (DomainException ex)
+        {
+            _account = null;
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _imported = null;
+        if (e.File.Size > MaxFileBytes)
+        {
+            _error = "That file is larger than 5 MB. Export a shorter date range.";
+            return;
+        }
+
+        await using var stream = e.File.OpenReadStream(MaxFileBytes);
+        using var reader = new StreamReader(stream);
+        _csv = await reader.ReadToEndAsync();
+        _options = new BankImportOptions();
+        await PreviewAsync();
+    }
+
+    private async Task ChangeDateOrderAsync(ChangeEventArgs e)
+    {
+        _options = _options with { DateOrder = Enum.Parse<DateOrder>((string)e.Value!) };
+        await PreviewAsync();
+    }
+
+    private async Task ChangeSignAsync(ChangeEventArgs e)
+    {
+        _options = _options with { AmountSign = Enum.Parse<AmountSign>((string)e.Value!) };
+        await PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (_csv is null)
+            return;
+        _busy = true;
+        try
+        {
+            _preview = await Ops.RunAsync<BankImportService, BankImportPreview>(s => s.PreviewAsync(AccountId, _csv, _options));
+            _rows = _preview.Rows.Select(r => new RowModel(r)
+            {
+                Include = r.IsValid && !r.PossibleDuplicate,
+                CategoryId = r.Amount > 0m ? _defaultIn : _defaultOut,
+            }).ToList();
+        }
+        catch (DomainException ex)
+        {
+            _preview = null;
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ApplyDefault(ChangeEventArgs e, bool moneyIn)
+    {
+        Guid? value = Guid.TryParse(e.Value as string, out var id) ? id : null;
+        var previous = moneyIn ? _defaultIn : _defaultOut;
+        foreach (var row in _rows.Where(r => (r.Row.Amount > 0m) == moneyIn && r.CategoryId == previous))
+            row.CategoryId = value;
+        if (moneyIn)
+            _defaultIn = value;
+        else
+            _defaultOut = value;
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        var include = e.Value is true;
+        foreach (var row in _rows.Where(r => r.Row.IsValid))
+            row.Include = include;
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var commands = Selected
+                .Select(r => new ImportBankRowCommand(r.Row.Date!.Value, r.Row.Amount!.Value, r.CategoryId!.Value, r.Row.Payee, r.Row.Reference, r.Row.Memo))
+                .ToList();
+            _imported = await Ops.RunAsync<BankImportService, int>(s => s.ImportAsync(AccountId, commands));
+            _preview = null;
+            _rows = [];
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class RowModel(BankImportRow row)
+    {
+        public BankImportRow Row { get; } = row;
+        public bool Include { get; set; }
+        public Guid? CategoryId { get; set; }
+    }
+}
