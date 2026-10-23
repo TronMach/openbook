@@ -1,0 +1,67 @@
+@page "/banking/rules"
+@inject BankRuleService Rules
+@inject AccountService AccountService
+@inject VendorService VendorService
+
+<PageTitle>Bank rules · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Bank rules</h1>
+        <a class="button secondary" href="/banking">Back to banking</a>
+        <a class="button" href="/banking/rules/new">New rule</a>
+    </div>
+    <p class="muted">
+        When an imported line's payee or memo contains a rule's text, the review queue fills in the rule's category, payee and
+        vendor. Rules set to add automatically skip the queue. The first rule that fits, in this order, wins.
+    </p>
+
+    @if (_rules.Count == 0)
+    {
+        <div class="card"><p>No rules yet. <a href="/banking/rules/new">Make one</a>, or use "Rule…" on a line in the review queue.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Order</th><th>Name</th><th>When</th><th>Category</th><th>Payee / vendor</th><th>Then</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _rules)
+                    {
+                        <tr class="@(r.IsActive ? null : "inactive")">
+                            <td class="num">@r.Priority</td>
+                            <td><a href="/banking/rules/@r.Id">@r.Name</a></td>
+                            <td>
+                                Contains "@r.Contains" · @Labels.For(r.Direction)
+                                @if (r.MinAmount is not null || r.MaxAmount is not null)
+                                {
+                                    <span> · @(r.MinAmount is { } min ? Labels.Amount(min) : "0") to @(r.MaxAmount is { } max ? Labels.Amount(max) : "any")</span>
+                                }
+                                @if (r.AccountId is { } account)
+                                {
+                                    <span class="muted"> · @_chart.FullName(account) only</span>
+                                }
+                            </td>
+                            <td>@_chart.FullName(r.CategoryAccountId)</td>
+                            <td>@(r.VendorId is { } v ? _vendors.GetValueOrDefault(v) : r.Payee)</td>
+                            <td>@(!r.IsActive ? "Inactive" : r.AutoAdd ? "Add automatically" : "Suggest")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<BankRule> _rules = [];
+    private ChartOfAccounts _chart = new([]);
+    private Dictionary<Guid, string> _vendors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rules = await Rules.ListAsync();
+        _chart = await AccountService.GetChartAsync();
+        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+    }
+}

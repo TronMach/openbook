@@ -48,6 +48,7 @@ public static class Links
         "vendor_credit" => $"/purchases/vendor-credits/{id}",
         "vendor_refund" => $"/purchases/vendor-refunds/{id}",
         "recurring_bill" => $"/purchases/recurring/{id}",
+        "bank_rule" => $"/banking/rules/{id}",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
         "company" => "/settings",

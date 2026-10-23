@@ -1,6 +1,7 @@
 @page "/banking"
 @inject BankingService BankingService
 @inject DepositService Deposits
+@inject BankFeedService Feed
 
 <PageTitle>Banking · OpenBook</PageTitle>
 
@@ -11,6 +12,8 @@
         {
             <a class="button" href="/banking/deposits/new">Make deposit (@_undeposited waiting)</a>
         }
+        <a class="button secondary" href="/banking/rules">Bank rules</a>
+        <a class="button secondary" href="/banking/checks">Print checks</a>
         @if (_accounts.Count >= 2)
         {
             <a class="button secondary" href="/banking/transfer">Transfer</a>
@@ -45,7 +48,13 @@
                     {
                         var account = summary.Account;
                         <tr>
-                            <td><a href="/banking/@account.Id">@summary.FullName</a></td>
+                            <td>
+                                <a href="/banking/@account.Id">@summary.FullName</a>
+                                @if (_pending.GetValueOrDefault(account.Id) is > 0 and var pending)
+                                {
+                                    <a class="badge warn" href="/banking/@account.Id/feed">@pending to review</a>
+                                }
+                            </td>
                             <td class="muted">@Labels.For(account.Type)</td>
                             <td class="num">@Labels.Amount(summary.Balance)</td>
                             <td class="num">@Labels.Amount(summary.ReconciledBalance)</td>
@@ -60,6 +69,7 @@
                                 <a href="/banking/@account.Id/record/spend">@Labels.For(BankTransactionKind.Spend, account.Type)</a> ·
                                 <a href="/banking/@account.Id/record/receive">@Labels.For(BankTransactionKind.Receive, account.Type)</a> ·
                                 <a href="/banking/@account.Id/import">Import</a> ·
+                                <a href="/banking/@account.Id/feed">Review</a> ·
                                 <a href="/banking/@account.Id/reconcile">Reconcile</a>
                             </td>
                         </tr>
@@ -75,10 +85,13 @@
     private IReadOnlyList<BankAccountSummary> _accounts = [];
 
     private int _undeposited;
+    private readonly Dictionary<Guid, int> _pending = [];
 
     protected override async Task OnInitializedAsync()
     {
         _accounts = await BankingService.ListAccountsAsync();
         _undeposited = (await Deposits.UndepositedAsync()).Count;
+        foreach (var summary in _accounts)
+            _pending[summary.Account.Id] = await Feed.PendingCountAsync(summary.Account.Id);
     }
 }

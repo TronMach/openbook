@@ -65,6 +65,9 @@ public sealed class BankTransaction
 
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>When the check was last printed; null if never.</summary>
+    public DateTimeOffset? PrintedAt { get; private set; }
+
     /// <summary>Signed from the account holder's view: positive is money in.</summary>
     public decimal SignedAmount => Kind == BankTransactionKind.Spend ? -Amount : Amount;
 
@@ -160,6 +163,8 @@ public sealed class BankTransaction
             VendorId = vendorId,
         };
     }
+
+    public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
     public void MarkVoided()
     {

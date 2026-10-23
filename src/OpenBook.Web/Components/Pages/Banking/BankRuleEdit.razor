@@ -1,0 +1,243 @@
+@page "/banking/rules/new"
+@page "/banking/rules/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject BankRuleService Rules
+@inject AccountService AccountService
+@inject VendorService VendorService
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New bank rule" : "Bank rule") · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New bank rule" : _rule?.Name ?? "Bank rule")</h1>
+        <a class="button secondary" href="/banking/rules">Back to rules</a>
+        @if (Id is { } id)
+        {
+            <a class="button secondary" href="/audit?entityId=@id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (Id is not null && _rule is null)
+    {
+        <p>That rule doesn't exist. <a href="/banking/rules">Back to rules</a>.</p>
+    }
+    else
+    {
+        <EditForm Model="Input" FormName="rule" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="priority">Order</label>
+                    <InputNumber id="priority" class="short" @bind-Value="Input.Priority" />
+                    <span class="hint">Lower numbers are tried first.</span>
+                </div>
+            </div>
+            <fieldset>
+                <legend>When a line</legend>
+                <div class="row">
+                    <div class="field">
+                        <label for="contains">Has this in its payee or memo</label>
+                        <InputText id="contains" @bind-Value="Input.Contains" />
+                        <ValidationMessage For="() => Input.Contains" />
+                    </div>
+                    <div class="field">
+                        <label for="direction">And is</label>
+                        <InputSelect id="direction" @bind-Value="Input.Direction">
+                            @foreach (var d in Enum.GetValues<RuleDirection>())
+                            {
+                                <option value="@d">@Labels.For(d)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="account">On</label>
+                        <InputSelect id="account" @bind-Value="Input.AccountId">
+                            <option value="">Any bank or card account</option>
+                            @foreach (var a in _banks)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="min">Amount from <span class="muted">(optional)</span></label>
+                        <InputNumber id="min" @bind-Value="Input.MinAmount" step="0.01" />
+                    </div>
+                    <div class="field">
+                        <label for="max">to <span class="muted">(optional)</span></label>
+                        <InputNumber id="max" @bind-Value="Input.MaxAmount" step="0.01" />
+                    </div>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Then</legend>
+                <div class="row">
+                    <div class="field">
+                        <label for="category">Category</label>
+                        <InputSelect id="category" @bind-Value="Input.CategoryAccountId">
+                            <option value="">Choose…</option>
+                            @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
+                            {
+                                <optgroup label="@Labels.For(group.Key)">
+                                    @foreach (var a in group)
+                                    {
+                                        <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                    }
+                                </optgroup>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => Input.CategoryAccountId" />
+                    </div>
+                    <div class="field">
+                        <label for="payee">Payee <span class="muted">(optional; replaces the bank's text)</span></label>
+                        <InputText id="payee" @bind-Value="Input.Payee" />
+                    </div>
+                    <div class="field">
+                        <label for="vendor">Vendor <span class="muted">(money out only)</span></label>
+                        <InputSelect id="vendor" @bind-Value="Input.VendorId">
+                            <option value="">None</option>
+                            @foreach (var v in _vendors)
+                            {
+                                <option value="@v.Id">@v.DisplayName</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.AutoAdd" />
+                    <span>Add matching lines to the books automatically (no review)</span>
+                </label>
+            </fieldset>
+            <div class="actions">
+                <button type="submit">Save rule</button>
+            </div>
+        </EditForm>
+
+        @if (_rule is not null)
+        {
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_rule.IsActive ? "Turn off this rule" : "Turn on this rule")</button>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private BankRule? _rule;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _banks = [];
+    private List<Account> _categories = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "contains")] private string? PresetContains { get; set; }
+    [SupplyParameterFromQuery(Name = "account")] private Guid? PresetAccount { get; set; }
+    // Blazor only binds simple types from the query string, so the direction arrives as text.
+    [SupplyParameterFromQuery(Name = "direction")] private string? PresetDirection { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] private Guid? PresetCategory { get; set; }
+
+    [SupplyParameterFromForm(FormName = "rule")]
+    private RuleModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _banks = active.Where(a => BankTransaction.IsBankingAccount(a.Type)).ToList();
+        _categories = active.Where(a => a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable))
+            .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income)).ToList();
+        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(v => v.Vendor).ToList();
+
+        if (Id is { } id)
+        {
+            _rule = await Rules.GetAsync(id);
+            if (_rule is null)
+                return;
+            Input ??= new RuleModel
+            {
+                Name = _rule.Name, Priority = _rule.Priority, Contains = _rule.Contains, Direction = _rule.Direction, AccountId = _rule.AccountId,
+                MinAmount = _rule.MinAmount, MaxAmount = _rule.MaxAmount, CategoryAccountId = _rule.CategoryAccountId, Payee = _rule.Payee,
+                VendorId = _rule.VendorId, AutoAdd = _rule.AutoAdd,
+            };
+        }
+        else
+        {
+            Input ??= new RuleModel
+            {
+                Name = PresetContains is { Length: > 0 } text ? text.Length > 60 ? text[..60] : text : "",
+                Contains = PresetContains ?? "",
+                AccountId = PresetAccount,
+                Direction = Enum.TryParse<RuleDirection>(PresetDirection, true, out var direction) ? direction : RuleDirection.Any,
+                CategoryAccountId = PresetCategory,
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new BankRuleDetails(Input.Name, Input.Contains, Input.CategoryAccountId ?? Guid.Empty, Input.Direction, Input.AccountId,
+                Input.MinAmount, Input.MaxAmount, Input.Payee, Input.VendorId, Input.AutoAdd, Input.Priority ?? 100);
+            if (Id is { } id)
+                await Rules.UpdateAsync(id, details);
+            else
+                await Rules.CreateAsync(details);
+            Navigation.NavigateTo("/banking/rules");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        await Rules.SetActiveAsync(_rule!.Id, !_rule.IsActive);
+        Navigation.NavigateTo($"/banking/rules/{_rule.Id}");
+    }
+
+    private sealed class RuleModel
+    {
+        [Required(ErrorMessage = "Give the rule a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        public int? Priority { get; set; } = 100;
+
+        [Required(ErrorMessage = "Enter the text to look for.")]
+        [StringLength(200)]
+        public string Contains { get; set; } = "";
+
+        public RuleDirection Direction { get; set; }
+        public Guid? AccountId { get; set; }
+        public decimal? MinAmount { get; set; }
+        public decimal? MaxAmount { get; set; }
+
+        [Required(ErrorMessage = "Choose a category.")]
+        public Guid? CategoryAccountId { get; set; }
+
+        [StringLength(200)]
+        public string? Payee { get; set; }
+
+        public Guid? VendorId { get; set; }
+        public bool AutoAdd { get; set; }
+    }
+}

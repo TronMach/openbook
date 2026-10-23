@@ -52,6 +52,7 @@ app.MapStaticAssets();
 app.MapOpenBookApi();
 app.MapAccountEndpoints();
 app.MapAttachmentEndpoints();
+app.MapCheckEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

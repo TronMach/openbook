@@ -43,7 +43,12 @@ public sealed class BillPayment
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>When the check was last printed; null if never.</summary>
+    public DateTimeOffset? PrintedAt { get; private set; }
+
     public IReadOnlyList<BillPaymentApplication> Applications => _applications;
+
+    public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
     public static BillPayment Create(
         Guid id,

@@ -104,6 +104,19 @@ public static class Labels
         _ => "1099-NEC box 1: Nonemployee compensation",
     };
 
+    public static string For(BankFeedStatus status) => status switch
+    {
+        BankFeedStatus.Pending => "For review",
+        _ => status.ToString(),
+    };
+
+    public static string For(RuleDirection direction) => direction switch
+    {
+        RuleDirection.MoneyIn => "Money in",
+        RuleDirection.MoneyOut => "Money out",
+        _ => "Money in or out",
+    };
+
     public static string For(ItemType type) => type == ItemType.Service ? "Service" : "Non-inventory product";
 
     public static string Terms(int days) => days == 0 ? "Due on receipt" : $"Net {days}";

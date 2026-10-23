@@ -264,3 +264,9 @@ input[type=color] { height: 2.4rem; padding: 0.15rem; max-width: 6rem; }
 .attachments ul.files { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: 0.4rem; }
 .attachments ul.files li { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; }
 .inline-form { display: inline; margin: 0; }
+
+/* V1.2: bank feed */
+table.feed td.feed-actions { min-width: 26rem; }
+table.feed .feed-actions .inline { flex-wrap: wrap; margin: 0.15rem 0; }
+table.feed .feed-actions select { max-width: 16rem; }
+input.short-text { width: 9rem; }

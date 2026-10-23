@@ -40,11 +40,27 @@ public sealed record StatementForm(
     string Currency,
     FormStyle Style);
 
+/// <summary>One check: the check itself plus two stubs (yours and the payee's), voucher style.</summary>
+/// <param name="StubLines">What it pays for, e.g. each bill a bill payment covers.</param>
+public sealed record CheckForm(
+    FormParty Company,
+    string BankAccountName,
+    string? Number,
+    DateOnly Date,
+    FormParty Payee,
+    decimal Amount,
+    string AmountInWords,
+    string? Memo,
+    IReadOnlyList<(string Description, decimal Amount)> StubLines);
+
 /// <summary>Renders forms to PDF. Implemented with MigraDoc in Infrastructure.</summary>
 public interface IFormRenderer
 {
     byte[] Render(SalesForm form);
     byte[] Render(StatementForm form);
+
+    /// <summary>One check per Letter page, on standard voucher check stock (check at the top).</summary>
+    byte[] Render(IReadOnlyList<CheckForm> checks);
 }
 
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);

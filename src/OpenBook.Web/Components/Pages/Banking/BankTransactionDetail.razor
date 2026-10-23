@@ -19,6 +19,11 @@
     <div class="toolbar">
         <h1>@_title</h1>
         <a class="button secondary" href="/banking/@_transaction.AccountId">Back to register</a>
+        <a class="button secondary" href="/audit?entityId=@_transaction.Id">History</a>
+        @if (_transaction is { Kind: BankTransactionKind.Spend, Status: BankTransactionStatus.Posted } && _chart.Find(_transaction.AccountId)?.Type == AccountType.Bank)
+        {
+            <PrintCheckButton Kind="CheckKind.Expense" Id="_transaction.Id" PrintedAt="_transaction.PrintedAt" />
+        }
     </div>
 
     @if (_error is not null)

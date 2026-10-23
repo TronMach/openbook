@@ -17,6 +17,8 @@ public sealed record BankImportOptions(DateOrder? DateOrder = null, AmountSign A
 
 /// <param name="Amount">Positive is money in (deposit, card credit); negative is money out.</param>
 /// <param name="PossibleDuplicate">A transaction with the same date, amount and payee is already on the account.</param>
+/// <param name="FitId">The bank's transaction id, from OFX files.</param>
+/// <param name="AlreadyImported">The same line is already in the bank feed: importing again skips it.</param>
 public sealed record BankImportRow(
     int Line,
     DateOnly? Date,
@@ -25,7 +27,9 @@ public sealed record BankImportRow(
     string? Reference,
     string? Memo,
     bool PossibleDuplicate,
-    string? Error)
+    string? Error,
+    string? FitId = null,
+    bool AlreadyImported = false)
 {
     public bool IsValid => Error is null;
 }
@@ -177,7 +181,7 @@ public sealed class BankImportService(IBankingStore bank, AccountService account
         return rows.Count;
     }
 
-    private async Task<List<BankImportRow>> FlagDuplicatesAsync(Guid accountId, List<BankImportRow> rows, CancellationToken ct)
+    internal async Task<List<BankImportRow>> FlagDuplicatesAsync(Guid accountId, List<BankImportRow> rows, CancellationToken ct)
     {
         var dated = rows.Where(r => r.Date is not null).ToList();
         if (dated.Count == 0)

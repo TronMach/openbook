@@ -1,0 +1,290 @@
+@page "/banking/{AccountId:guid}/feed"
+@rendermode InteractiveServer
+@inject Operations Ops
+
+<PageTitle>Bank feed · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Review @_accountName</h1>
+        <a class="button secondary" href="/banking/@AccountId">Register</a>
+        <a class="button secondary" href="/banking/rules">Bank rules</a>
+        <a class="button" href="/banking/@AccountId/import">Import a statement</a>
+    </div>
+    <p class="muted">
+        Each imported line waits here until you <strong>add</strong> it as a new transaction, <strong>match</strong> it to one already
+        recorded (a deposit, a check, a bill payment), or <strong>exclude</strong> it. Bank rules fill in categories for lines that look alike.
+    </p>
+
+    <nav class="toolbar" aria-label="Show">
+        @foreach (var status in Enum.GetValues<BankFeedStatus>())
+        {
+            <button type="button" class="@(status == _status ? null : "secondary")" @onclick="() => ShowAsync(status)">@Labels.For(status)</button>
+        }
+    </nav>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+
+    @if (_loaded && _rows.Count == 0)
+    {
+        <div class="card"><p>@(_status == BankFeedStatus.Pending ? "Nothing to review." : $"Nothing {Labels.For(_status).ToLowerInvariant()}.") <a href="/banking/@AccountId/import">Import a statement</a>.</p></div>
+    }
+    else if (_loaded && _status == BankFeedStatus.Pending)
+    {
+        @if (_rows.Count(r => r.CategoryId is not null && r.Matches.Count == 0) is var ready and > 0)
+        {
+            <div class="actions">
+                <button type="button" class="secondary" @onclick="AddAllReadyAsync" disabled="@_busy">Add the @ready with a category and no match</button>
+            </div>
+        }
+        <div class="table-wrap">
+            <table class="data entry feed">
+                <thead>
+                    <tr><th>Date</th><th>Description</th><th class="num">Money out</th><th class="num">Money in</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        var item = row.Item;
+                        <tr @key="item.Id">
+                            <td class="nowrap">@Labels.Date(item.Date)</td>
+                            <td>
+                                <div>@(item.Payee ?? item.Memo ?? "(no description)")</div>
+                                @if (item.Payee is not null && item.Memo is not null)
+                                {
+                                    <div class="muted">@item.Memo</div>
+                                }
+                                @if (item.Reference is not null)
+                                {
+                                    <div class="muted">Ref @item.Reference</div>
+                                }
+                                @if (row.RuleName is not null)
+                                {
+                                    <span class="badge ok" title="Suggested by a bank rule">Rule: @row.RuleName</span>
+                                }
+                            </td>
+                            <td class="num">@(item.Amount < 0m ? Labels.Amount(-item.Amount) : "")</td>
+                            <td class="num">@(item.Amount > 0m ? Labels.Amount(item.Amount) : "")</td>
+                            <td class="feed-actions">
+                                @if (row.Matches.Count > 0)
+                                {
+                                    <div class="inline">
+                                        <select aria-label="Match to" @bind="row.MatchEntryId">
+                                            @foreach (var m in row.Matches)
+                                            {
+                                                <option value="@m.JournalEntryId">@Labels.Date(m.Date) · @m.Description · #@m.EntryNumber</option>
+                                            }
+                                        </select>
+                                        <button type="button" @onclick="() => MatchAsync(row)" disabled="@_busy">Match</button>
+                                    </div>
+                                    <div class="muted">or add it as a new transaction:</div>
+                                }
+                                <div class="inline">
+                                    <select aria-label="Category" @bind="row.CategoryId">
+                                        <option value="">Category…</option>
+                                        @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
+                                        {
+                                            <optgroup label="@Labels.For(group.Key)">
+                                                @foreach (var a in group)
+                                                {
+                                                    <option value="@a.Id">@Labels.AccountName(_chart, a.Id, _useNumbers)</option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    </select>
+                                    @if (!item.IsMoneyIn)
+                                    {
+                                        <select aria-label="Vendor" @bind="row.VendorId">
+                                            <option value="">No vendor</option>
+                                            @foreach (var v in _vendors)
+                                            {
+                                                <option value="@v.Id">@v.DisplayName</option>
+                                            }
+                                        </select>
+                                    }
+                                    <input aria-label="Payee" placeholder="Payee" @bind="row.Payee" class="short-text" />
+                                    <button type="button" class="secondary" @onclick="() => AddAsync(row)" disabled="@(row.CategoryId is null || _busy)">Add</button>
+                                    <button type="button" class="link" @onclick="() => ExcludeAsync(row)" disabled="@_busy">Exclude</button>
+                                    <a class="link" href="@RuleLink(row)" target="_blank" title="Make a rule for lines like this">Rule…</a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (_loaded)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Result</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        var item = row.Item;
+                        <tr @key="item.Id">
+                            <td>@Labels.Date(item.Date)</td>
+                            <td>@(item.Payee ?? item.Memo)</td>
+                            <td class="num">@Labels.Amount(item.Amount)</td>
+                            <td>
+                                @if (item.BankTransactionId is { } transactionId)
+                                {
+                                    <a href="/banking/transactions/@transactionId">Transaction</a>
+                                }
+                                else if (item.MatchedJournalEntryId is { } entryId)
+                                {
+                                    <a href="/journal/@entryId">Matched entry</a>
+                                }
+                                @if (item.ResolvedBy is not null)
+                                {
+                                    <span class="muted"> · @item.ResolvedBy</span>
+                                }
+                            </td>
+                            <td><button type="button" class="link" @onclick="() => ReopenAsync(row)" disabled="@_busy">@(item.Status == BankFeedStatus.Added ? "Undo (voids the transaction)" : "Undo")</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private string? _accountName;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private bool _useNumbers;
+    private BankFeedStatus _status = BankFeedStatus.Pending;
+    private List<Row> _rows = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private string? _message;
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_chart, _useNumbers, _vendors) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(v => v.Vendor).ToList()));
+        _accountName = _chart.FullName(AccountId);
+        _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Id != AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable))
+            .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income))
+            .ToList();
+        await LoadAsync();
+    }
+
+    private async Task ShowAsync(BankFeedStatus status)
+    {
+        _status = status;
+        _message = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var review = await Ops.RunAsync<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(AccountId, _status));
+        _rows = review.Select(r => new Row(r.Item, r.Matches)
+        {
+            CategoryId = r.Suggestion?.CategoryAccountId,
+            VendorId = r.Suggestion?.VendorId,
+            Payee = r.Suggestion?.Payee,
+            RuleName = r.Suggestion?.Rule.Name,
+            MatchEntryId = r.Matches.FirstOrDefault()?.JournalEntryId,
+        }).ToList();
+        _loaded = true;
+    }
+
+    private Task AddAsync(Row row) => RunAsync(async () =>
+    {
+        var command = new AddFeedItemCommand(row.CategoryId!.Value, row.Payee, row.VendorId);
+        await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command));
+        _message = $"Added {Labels.Amount(Math.Abs(row.Item.Amount))} {(row.Item.IsMoneyIn ? "from" : "to")} {row.Payee ?? row.Item.Payee}.";
+    });
+
+    private Task MatchAsync(Row row) => RunAsync(async () =>
+    {
+        var entryId = row.MatchEntryId!.Value;
+        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.MatchAsync(row.Item.Id, entryId); return true; });
+        _message = "Matched.";
+    });
+
+    private Task ExcludeAsync(Row row) => RunAsync(async () =>
+    {
+        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.ExcludeAsync(row.Item.Id); return true; });
+        _message = "Excluded. It's under Excluded if you need it back.";
+    });
+
+    private Task ReopenAsync(Row row) => RunAsync(async () =>
+    {
+        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.ReopenAsync(row.Item.Id); return true; });
+        _message = "Back in the review queue.";
+    });
+
+    private Task AddAllReadyAsync() => RunAsync(async () =>
+    {
+        var added = 0;
+        foreach (var row in _rows.Where(r => r.CategoryId is not null && r.Matches.Count == 0).ToList())
+        {
+            var command = new AddFeedItemCommand(row.CategoryId!.Value, row.Payee, row.VendorId);
+            await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command));
+            added++;
+        }
+
+        _message = $"Added {added} {(added == 1 ? "transaction" : "transactions")}.";
+    });
+
+    /// <summary>Runs an action, then reloads the queue; a refusal shows as an error and stops there.</summary>
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await action();
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            await LoadAsync();
+            _busy = false;
+        }
+    }
+
+    private string RuleLink(Row row)
+    {
+        var text = row.Item.Payee ?? row.Item.Memo ?? "";
+        var query = $"contains={Uri.EscapeDataString(text)}&account={AccountId}&direction={(row.Item.IsMoneyIn ? RuleDirection.MoneyIn : RuleDirection.MoneyOut)}";
+        if (row.CategoryId is { } category)
+            query += $"&category={category}";
+        return $"/banking/rules/new?{query}";
+    }
+
+    private sealed class Row(BankFeedItem item, IReadOnlyList<FeedMatch> matches)
+    {
+        public BankFeedItem Item { get; } = item;
+        public IReadOnlyList<FeedMatch> Matches { get; } = matches;
+        public Guid? CategoryId { get; set; }
+        public Guid? VendorId { get; set; }
+        public string? Payee { get; set; }
+        public string? RuleName { get; set; }
+        public Guid? MatchEntryId { get; set; }
+    }
+}

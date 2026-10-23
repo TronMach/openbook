@@ -29,6 +29,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<User> Users => Set<User>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
     public DbSet<Reconciliation> Reconciliations => Set<Reconciliation>();
+    public DbSet<BankFeedItem> BankFeedItems => Set<BankFeedItem>();
+    public DbSet<BankRule> BankRules => Set<BankRule>();
 
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Item> Items => Set<Item>();
@@ -55,6 +57,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
 
     /// <summary>Unit prices and quantities: integer ten-thousandths (4 decimal places).</summary>
+    private static readonly ValueConverter<decimal?, long?> NullableMinorUnits =
+        new(amount => amount == null ? null : (long)(amount.Value * 100m), minor => minor == null ? null : minor.Value / 100m);
+
     private static readonly ValueConverter<decimal, long> TenThousandths = new(value => (long)(value * 10000m), stored => stored / 10000m);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
@@ -216,6 +221,43 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(t => t.AccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(t => t.TransferAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(t => t.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BankFeedItem>(b =>
+        {
+            b.ToTable("BankFeedItems");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(i => i.Payee).HasMaxLength(200);
+            b.Property(i => i.Reference).HasMaxLength(30);
+            b.Property(i => i.Memo).HasMaxLength(1000);
+            b.Property(i => i.FitId).HasMaxLength(255);
+            b.Property(i => i.DedupeKey).HasMaxLength(600);
+            b.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(i => i.ResolvedBy).HasMaxLength(100);
+            b.Ignore(i => i.IsMoneyIn);
+            // The same statement line can't be queued twice for an account.
+            b.HasIndex(i => new { i.AccountId, i.DedupeKey }).IsUnique();
+            b.HasIndex(i => new { i.AccountId, i.Status });
+            b.HasOne<Account>().WithMany().HasForeignKey(i => i.AccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<BankTransaction>().WithMany().HasForeignKey(i => i.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(i => i.MatchedJournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<BankRule>().WithMany().HasForeignKey(i => i.RuleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BankRule>(b =>
+        {
+            b.ToTable("BankRules");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(100);
+            b.Property(r => r.Contains).HasMaxLength(200);
+            b.Property(r => r.Payee).HasMaxLength(200);
+            b.Property(r => r.Direction).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.MinAmount).HasColumnName("MinAmountMinor").HasConversion(NullableMinorUnits);
+            b.Property(r => r.MaxAmount).HasColumnName("MaxAmountMinor").HasConversion(NullableMinorUnits);
+            b.HasOne<Account>().WithMany().HasForeignKey(r => r.AccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(r => r.CategoryAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(r => r.VendorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Reconciliation>(b =>

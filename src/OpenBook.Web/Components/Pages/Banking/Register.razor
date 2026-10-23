@@ -15,7 +15,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@_register.FullName</h1>
-        <a class="button secondary" href="/banking/@AccountId/import">Import CSV</a>
+        <a class="button secondary" href="/banking/@AccountId/import">Import</a>
+        <a class="button secondary" href="/banking/@AccountId/feed">Review</a>
         <a class="button secondary" href="/banking/@AccountId/reconcile">Reconcile</a>
         <a class="button secondary" href="/banking/transfer?from=@AccountId">Transfer</a>
         <a class="button secondary" href="/banking/@AccountId/record/receive">@Labels.For(BankTransactionKind.Receive, _register.Account.Type)</a>

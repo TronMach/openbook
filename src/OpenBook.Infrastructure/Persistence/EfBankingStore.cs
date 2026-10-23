@@ -65,6 +65,19 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
 
     public void Add(BankTransaction transaction) => db.BankTransactions.Add(transaction);
 
+    public void Add(BankFeedItem item) => db.BankFeedItems.Add(item);
+
+    public void Add(BankRule rule) => db.BankRules.Add(rule);
+
+    public async Task<IReadOnlyList<BankFeedItem>> ListFeedItemsAsync(Guid accountId, CancellationToken ct) =>
+        await db.BankFeedItems.Where(i => i.AccountId == accountId).ToListAsync(ct);
+
+    public Task<BankFeedItem?> GetFeedItemAsync(Guid id, CancellationToken ct) => db.BankFeedItems.SingleOrDefaultAsync(i => i.Id == id, ct);
+
+    public async Task<IReadOnlyList<BankRule>> ListRulesAsync(CancellationToken ct) => await db.BankRules.ToListAsync(ct);
+
+    public Task<BankRule?> GetRuleAsync(Guid id, CancellationToken ct) => db.BankRules.SingleOrDefaultAsync(r => r.Id == id, ct);
+
     public void Add(Reconciliation reconciliation) => db.Reconciliations.Add(reconciliation);
 
     public void Remove(Reconciliation reconciliation) => db.Reconciliations.Remove(reconciliation);

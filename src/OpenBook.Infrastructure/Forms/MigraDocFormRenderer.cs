@@ -1,5 +1,6 @@
 using System.Globalization;
 using MigraDoc.DocumentObjectModel;
+using MigraDoc.DocumentObjectModel.Shapes;
 using MigraDoc.DocumentObjectModel.Tables;
 using MigraDoc.Rendering;
 using OpenBook.Application.Forms;
@@ -76,6 +77,104 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         row.Cells[form.Aging.Count].Format.Font.Bold = true;
 
         return Pdf(document);
+    }
+
+    /// <summary>
+    /// Standard voucher checks (Letter, check in the top third, two stubs below). The stock is pre-printed with
+    /// the bank details, MICR line and signature line, so only the variable parts are printed, at fixed spots.
+    /// </summary>
+    public byte[] Render(IReadOnlyList<CheckForm> checks)
+    {
+        ArgumentNullException.ThrowIfNull(checks);
+        var document = new Document();
+        var normal = document.Styles[StyleNames.Normal]!;
+        normal.Font.Name = SystemFontResolver.FamilyName;
+        normal.Font.Size = 10;
+
+        foreach (var check in checks)
+        {
+            var section = document.AddSection();
+            section.PageSetup = document.DefaultPageSetup.Clone();
+            section.PageSetup.PageWidth = Unit.FromInch(8.5);
+            section.PageSetup.PageHeight = Unit.FromInch(11);
+            (section.PageSetup.TopMargin, section.PageSetup.BottomMargin, section.PageSetup.LeftMargin, section.PageSetup.RightMargin) = (0, 0, 0, 0);
+
+            // The check.
+            Frame(section, 0.5, 0.35, 4.0, 0.9, f =>
+            {
+                f.AddParagraph(check.Company.Name).Format.Font.Bold = true;
+                foreach (var line in PartyLines(check.Company with { Email = null }))
+                    f.AddParagraph(line).Format.Font.Size = 8.5;
+            });
+            Frame(section, 6.2, 0.35, 1.8, 0.3, f => Right(f.AddParagraph(check.Number ?? "")).Format.Font.Bold = true);
+            Frame(section, 6.2, 1.0, 1.8, 0.3, f => Right(f.AddParagraph(D(check.Date))));
+            Frame(section, 0.5, 1.45, 5.5, 0.3, f =>
+            {
+                var p = f.AddParagraph();
+                p.AddFormattedText("PAY TO THE ORDER OF  ", new Font { Size = 7.5 });
+                p.AddFormattedText(check.Payee.Name, TextFormat.Bold);
+            });
+            Frame(section, 6.2, 1.45, 1.8, 0.3, f => Right(f.AddParagraph($"**{Amount(check.Amount)}")).Format.Font.Bold = true);
+            Frame(section, 0.5, 1.85, 7.5, 0.3, f => f.AddParagraph($"{check.AmountInWords} {new string('*', Math.Max(3, 70 - check.AmountInWords.Length))} DOLLARS"));
+            Frame(section, 0.9, 2.25, 4.0, 0.8, f =>
+            {
+                f.AddParagraph(check.Payee.Name);
+                foreach (var line in PartyLines(check.Payee with { Email = null, Phone = null }))
+                    f.AddParagraph(line);
+            });
+            if (!string.IsNullOrWhiteSpace(check.Memo))
+                Frame(section, 0.5, 3.05, 4.0, 0.3, f => f.AddParagraph($"MEMO  {check.Memo}").Format.Font.Size = 8.5);
+
+            // Two stubs: one for the payee, one for your records.
+            foreach (var top in new[] { 3.85, 7.5 })
+            {
+                Frame(section, 0.5, top, 7.5, 3.2, f =>
+                {
+                    var head = f.AddParagraph();
+                    head.Format.Font.Bold = true;
+                    head.AddText(string.Join(" · ", new[] { check.Payee.Name, D(check.Date), check.Number is { } n ? $"Check {n}" : null }.Where(x => !string.IsNullOrEmpty(x))));
+                    var table = f.AddTable();
+                    table.AddColumn(Unit.FromInch(5.5));
+                    table.AddColumn(Unit.FromInch(2.0));
+                    (table.TopPadding, table.BottomPadding) = (Unit.FromPoint(2), Unit.FromPoint(2));
+                    foreach (var (description, amount) in check.StubLines.Take(10))
+                    {
+                        var row = table.AddRow();
+                        row.Cells[0].AddParagraph(description);
+                        Right(row.Cells[1].AddParagraph(Amount(amount)));
+                    }
+
+                    var total = table.AddRow();
+                    total.Borders.Top.Width = 0.75;
+                    total.Cells[0].AddParagraph(check.BankAccountName).Format.Font.Size = 8.5;
+                    var sum = Right(total.Cells[1].AddParagraph(Amount(check.Amount)));
+                    sum.Format.Font.Bold = true;
+                    if (!string.IsNullOrWhiteSpace(check.Memo))
+                        f.AddParagraph($"Memo: {check.Memo}").Format.Font.Size = 8.5;
+                });
+            }
+        }
+
+        return Pdf(document);
+    }
+
+    private static void Frame(Section section, double left, double top, double width, double height, Action<TextFrame> fill)
+    {
+        var frame = section.AddTextFrame();
+        frame.RelativeHorizontal = RelativeHorizontal.Page;
+        frame.RelativeVertical = RelativeVertical.Page;
+        frame.Left = Unit.FromInch(left);
+        frame.Top = Unit.FromInch(top);
+        frame.Width = Unit.FromInch(width);
+        frame.Height = Unit.FromInch(height);
+        frame.WrapFormat.Style = WrapStyle.None;
+        fill(frame);
+    }
+
+    private static Paragraph Right(Paragraph paragraph)
+    {
+        paragraph.Format.Alignment = ParagraphAlignment.Right;
+        return paragraph;
     }
 
     private static (Document Document, Section Section) NewDocument(Look look, string? footer)

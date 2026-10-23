@@ -1,0 +1,97 @@
+@page "/banking/checks"
+@inject CheckService CheckService
+@inject AccountService AccountService
+
+<PageTitle>Print checks · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Print checks</h1>
+        <a class="button secondary" href="/banking">Back to banking</a>
+    </div>
+    <p class="muted">
+        Payments from bank accounts, printed on standard voucher check stock (check at the top, two stubs below). Load the stock
+        face up; print at 100% ("actual size"), not "fit to page". The bank details, MICR line and signature line come pre-printed.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@(Error == "check.none" ? "Choose at least one check." : "Those checks couldn't be printed.")</div>
+    }
+
+    <form class="card filters" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="account">Account</label>
+                <select id="account" name="account">
+                    <option value="">All bank accounts</option>
+                    @foreach (var a in _banks)
+                    {
+                        <option value="@a.Id" selected="@(a.Id == Account)">@_chart.FullName(a.Id)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="show">Show</label>
+                <select id="show" name="all">
+                    <option value="false" selected="@(!All)">Not printed yet</option>
+                    <option value="true" selected="@All">All checks</option>
+                </select>
+            </div>
+        </div>
+        <div class="actions"><button type="submit" class="secondary">Show</button></div>
+    </form>
+
+    @if (_checks.Count == 0)
+    {
+        <div class="card"><p>@(All ? "No payments from bank accounts yet." : "Every check has been printed.")</p></div>
+    }
+    else
+    {
+        <form method="post" action="/checks/print" target="_blank" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="check"></th><th>Date</th><th>No.</th><th>Payee</th><th>Account</th><th class="num">Amount</th><th>Printed</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _checks)
+                        {
+                            <tr>
+                                <td class="check"><input type="checkbox" name="check" value="@($"{c.Kind}:{c.Id}")" checked="@(c.PrintedAt is null)" aria-label="Print check to @c.Payee" /></td>
+                                <td>@Labels.Date(c.Date)</td>
+                                <td>@c.Number</td>
+                                <td>
+                                    <a href="@(c.Kind == CheckKind.BillPayment ? $"/purchases/payments/{c.Id}" : $"/banking/transactions/{c.Id}")">@c.Payee</a>
+                                </td>
+                                <td class="muted">@_chart.FullName(c.AccountId)</td>
+                                <td class="num">@Labels.Amount(c.Amount)</td>
+                                <td class="muted">@(c.PrintedAt is { } p ? p.ToLocalTime().ToString("d") : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="actions">
+                <button type="submit">Print selected</button>
+                <span class="muted">Opens the PDF in a new tab. Reload this page afterwards to see them marked as printed.</span>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<PrintableCheck> _checks = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _banks = [];
+
+    [SupplyParameterFromQuery] private Guid? Account { get; set; }
+    [SupplyParameterFromQuery] private bool All { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
+        _checks = await CheckService.ListAsync(Account, unprintedOnly: !All);
+    }
+}

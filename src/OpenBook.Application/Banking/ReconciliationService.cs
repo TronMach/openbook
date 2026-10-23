@@ -138,6 +138,29 @@ public sealed class ReconciliationService(IBankingStore bank, AccountService acc
         return reconciliation;
     }
 
+    /// <summary>
+    /// Undo: reopens the account's latest finished reconciliation, ticks kept, for correcting. Earlier ones
+    /// can't be undone, since each starts from the one before it.
+    /// </summary>
+    public async Task<Reconciliation> UndoAsync(Guid reconciliationId, CancellationToken ct = default)
+    {
+        var reconciliation = await bank.GetReconciliationAsync(reconciliationId, ct)
+            ?? throw new EntityNotFoundException(EntityType, reconciliationId);
+        var all = await bank.ListReconciliationsAsync(reconciliation.AccountId, ct);
+        if (all.Any(r => r.Status == ReconciliationStatus.InProgress))
+            throw new DomainException("reconcile.in_progress", "Finish or cancel the reconciliation in progress first.");
+        var latest = all.Where(r => r.Status == ReconciliationStatus.Completed)
+            .OrderByDescending(r => r.StatementDate).ThenByDescending(r => r.CompletedAt?.UtcDateTime).FirstOrDefault();
+        if (latest?.Id != reconciliation.Id)
+            throw new DomainException("reconcile.not_latest", "Only the latest reconciliation can be undone. Undo the later ones first.");
+
+        var before = Snapshot(reconciliation);
+        reconciliation.Reopen();
+        bank.Add(Audit(AuditAction.Updated, reconciliation, before));
+        await bank.SaveChangesAsync(ct);
+        return reconciliation;
+    }
+
     public async Task CancelAsync(Guid reconciliationId, CancellationToken ct = default)
     {
         var reconciliation = await bank.GetReconciliationAsync(reconciliationId, ct)

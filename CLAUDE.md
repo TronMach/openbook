@@ -116,3 +116,14 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Vendors have `Track1099`, `TaxId` (normalized EIN/SSN) and `Form1099Box`. The tax ID is never shown or returned in full: use `MaskedTaxId`; in `VendorDetails` a null `TaxId` keeps the saved one and "" clears it.
 - Attachments (`Domain/Attachments`): metadata in `Attachments`, bytes in `AttachmentContents` (cascade delete), in the company file. The content type comes from the extension (`Attachment.AllowedTypes`: no HTML/SVG/scripts); only images and PDFs are served inline, always with `X-Content-Type-Options: nosniff` and a sandboxing CSP. Uploads go through the web form endpoint `/attachments` (antiforgery), not the cookie API. `AttachmentService.EntityTypes` lists what can take files, and `EfAttachmentStore.ExistsAsync` must know each type. Adding/removing writes `Attached`/`Detached` audit records on the owning record. Put `<Attachments EntityType=… EntityId=… />` on new detail pages.
 - `BillLinesEditor`/`BillLineModel` (Components/Purchases) is the shared category grid for bills, vendor credits and recurring bills.
+
+## Banking pro (V1.2)
+
+- Statement files: `Ofx.Parse` (Application/Import) reads OFX/QFX/QBO, SGML or XML, with a regex tag scan (no XML parser). `BankFeedService.PreviewAsync` takes OFX or CSV; nothing posts at import.
+- `BankFeedItem` is the review queue (Pending / Added / Matched / Excluded). `DedupeKey` is unique per account: `fit:<FITID>`, else a text key of date, amount, payee and reference with `#n` for the nth identical line in one file. Re-importing skips known keys.
+- Add stages a `BankTransaction` through `BankingService`; Match links an existing ledger line of the same holder-view amount within 7 days; Reopen (undo) voids the transaction for an added line.
+- `BankRule`: first active rule in `Priority` order whose text is in payee or memo (plus direction, amount range, account) wins. AutoAdd rules post at import; others only suggest. A vendor only goes on money-out rules.
+- `ReconciliationService.UndoAsync` reopens only the latest completed reconciliation of an account, and only when none is in progress; ticks are kept.
+- Checks: `CheckService` lists bank (not card) spends and bill payments; printing renders `CheckForm`s (voucher layout, absolutely positioned MigraDoc frames, `AmountInWords.ForCheck`) and sets `PrintedAt` with an audit record. Printing goes through the web form endpoint `/checks/print` (antiforgery), which binds `IFormCollection`: minimal APIs on .NET 10 can't bind a `string[]` form parameter.
+- Blazor `[SupplyParameterFromQuery]` can't bind enums: take a string and `Enum.TryParse`.
+- Audit entity types: bank_rule, bank_feed_item, bank_feed_import.

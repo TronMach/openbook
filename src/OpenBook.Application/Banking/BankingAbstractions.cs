@@ -45,7 +45,19 @@ public interface IBankingStore
 
     Task<Reconciliation?> GetReconciliationAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Every feed line for the account, any status, tracked.</summary>
+    Task<IReadOnlyList<BankFeedItem>> ListFeedItemsAsync(Guid accountId, CancellationToken ct);
+
+    Task<BankFeedItem?> GetFeedItemAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Every bank rule, tracked.</summary>
+    Task<IReadOnlyList<BankRule>> ListRulesAsync(CancellationToken ct);
+
+    Task<BankRule?> GetRuleAsync(Guid id, CancellationToken ct);
+
     void Add(BankTransaction transaction);
+    void Add(BankFeedItem item);
+    void Add(BankRule rule);
     void Add(Reconciliation reconciliation);
     void Remove(Reconciliation reconciliation);
     void Add(AuditRecord record);

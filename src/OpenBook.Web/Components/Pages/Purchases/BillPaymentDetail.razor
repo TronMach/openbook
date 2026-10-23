@@ -23,6 +23,11 @@
             <span class="badge">Voided</span>
         }
         <a class="button secondary" href="/purchases?show=payments">Back to bill payments</a>
+        <a class="button secondary" href="/audit?entityId=@_payment.Id">History</a>
+        @if (_payment.Status == DocumentStatus.Posted && _chart.Find(_payment.PaymentAccountId)?.Type == AccountType.Bank)
+        {
+            <PrintCheckButton Kind="CheckKind.BillPayment" Id="_payment.Id" PrintedAt="_payment.PrintedAt" />
+        }
     </div>
 
     @if (_error is not null)

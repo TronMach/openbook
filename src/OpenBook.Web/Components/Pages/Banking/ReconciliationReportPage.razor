@@ -1,6 +1,7 @@
 @page "/banking/reconciliations/{Id:guid}"
 @inject ReconciliationService Reconciliations
 @inject CompanySettingsService Settings
+@inject NavigationManager Navigation
 
 <PageTitle>Reconciliation report · OpenBook</PageTitle>
 
@@ -20,7 +21,18 @@
         <h1>Reconciliation report</h1>
         <a class="button secondary" href="/banking/@_report.Account.Id">Back to register</a>
         <button type="button" class="secondary" onclick="window.print()">Print</button>
+        @if (_isLatest)
+        {
+            <form method="post" @formname="undo" @onsubmit="UndoAsync" class="inline-form">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary" onclick="return confirm('Reopen this reconciliation for changes? Its ticks are kept; you finish it again afterwards.')">Undo reconciliation</button>
+            </form>
+        }
     </div>
+    @if (_error is not null)
+    {
+        <div class="alert error no-print" role="alert">@_error</div>
+    }
 
     <p class="muted">
         @_companyName · @_report.AccountName · statement ending @Labels.Date(r.StatementDate) ·
@@ -57,6 +69,7 @@
     private ReconciliationReport? _report;
     private string? _companyName;
     private string? _error;
+    private bool _isLatest;
 
     [Parameter]
     public Guid Id { get; set; }
@@ -110,6 +123,23 @@
         {
             _companyName = (await Settings.GetAsync()).Name;
             _report = await Reconciliations.GetReportAsync(Id);
+            var reconciliations = await Reconciliations.ListAsync(_report.Account.Id);
+            _isLatest = !reconciliations.Any(r => r.Status == ReconciliationStatus.InProgress)
+                && reconciliations.Where(r => r.Status == ReconciliationStatus.Completed)
+                    .OrderByDescending(r => r.StatementDate).ThenByDescending(r => r.CompletedAt?.UtcDateTime).FirstOrDefault()?.Id == Id;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        try
+        {
+            var reopened = await Reconciliations.UndoAsync(Id);
+            Navigation.NavigateTo($"/banking/{reopened.AccountId}/reconcile");
         }
         catch (DomainException ex)
         {

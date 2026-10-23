@@ -91,6 +91,19 @@ public sealed class Reconciliation
         CompletedBy = actor;
     }
 
+    /// <summary>
+    /// Undo: takes a finished reconciliation back to in progress, with its ticks kept, so it can be corrected.
+    /// Only the latest one for an account (the caller checks), since later ones start from its ending balance.
+    /// </summary>
+    public void Reopen()
+    {
+        if (Status != ReconciliationStatus.Completed)
+            throw new DomainException("reconcile.not_completed", "Only a finished reconciliation can be undone.");
+        Status = ReconciliationStatus.InProgress;
+        CompletedAt = null;
+        CompletedBy = null;
+    }
+
     private void SetStatement(DateOnly statementDate, decimal statementEndingBalance, DateOnly? previousStatementDate)
     {
         if (statementDate == default)

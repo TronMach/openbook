@@ -89,6 +89,8 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 **V1.4 status (2026-10-23): complete.** Vendor credits (the mirror of a bill) applied to bills without posting, with refunds received from the vendor; recurring bills entered manually or by the hourly job; attachments on any document, customer or vendor (stored in the company file so backups include them; PDFs, images, text, CSV and Office files up to 10 MB; risky types refused; served with nosniff and a sandboxing content policy); vendors tracked for 1099s with a masked tax ID and form box; 1099 summary by year ($600 through 2025, $2,000 from 2026, editable for later years; card payments left out as 1099-K); A/P aging summary and detail as of any date. Cash basis covers vendor refunds. API for all of it. 363 tests.
 
+**V1.2 status (2026-10-23): complete.** OFX, QFX and QBO statement import (SGML and XML) alongside CSV; imported lines go to a review queue per account where each is added as a new transaction, matched to one already recorded (same amount within 7 days), or excluded, and any decision can be undone (an added line's transaction is voided). Duplicate detection by the bank's transaction id, or by date, amount, payee and reference for CSV, so re-importing a file adds nothing. Bank rules (text in payee or memo, direction, amount range, account) suggest a category, payee and vendor, or add lines automatically. Undo the latest reconciliation (reopens it with its ticks). Check printing on voucher stock for expenses and bill payments, with the amount in words and printed status. API for all of it. 391 tests.
+
 ## Phase 3 — LATER (pick by audience)
 
 | # | Module | Notes |
