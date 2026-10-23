@@ -19,7 +19,7 @@
     <div class="summary-bar">
         <div><span class="label">Unpaid invoices</span><span class="value">@Labels.Amount(_invoices.Sum(i => i.Balance))</span></div>
         <div><span class="label">Overdue</span><span class="value @(Overdue > 0m ? "off" : null)">@Labels.Amount(Overdue)</span></div>
-        <div><span class="label">Paid in the last 30 days</span><span class="value">@Labels.Amount(_payments.Where(p => p.Status == SalesDocumentStatus.Posted && p.Date > _today.AddDays(-30)).Sum(p => p.Amount))</span></div>
+        <div><span class="label">Paid in the last 30 days</span><span class="value">@Labels.Amount(_payments.Where(p => p.Status == DocumentStatus.Posted && p.Date > _today.AddDays(-30)).Sum(p => p.Amount))</span></div>
     </div>
 
     <nav class="toolbar" aria-label="Show">
@@ -37,13 +37,13 @@
                 <tbody>
                     @foreach (var p in _payments)
                     {
-                        <tr class="@(p.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                        <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
                             <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
                             <td>@Customer(p.CustomerId)</td>
                             <td>@p.Reference</td>
                             <td class="num">@p.Applications.Count</td>
                             <td class="num">@Labels.Amount(p.Amount)</td>
-                            <td>@(p.Status == SalesDocumentStatus.Voided ? "Voided" : "")</td>
+                            <td>@(p.Status == DocumentStatus.Voided ? "Voided" : "")</td>
                         </tr>
                     }
                 </tbody>
@@ -55,12 +55,12 @@
                 <tbody>
                     @foreach (var r in _receipts)
                     {
-                        <tr class="@(r.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                        <tr class="@(r.Status == DocumentStatus.Voided ? "inactive" : null)">
                             <td>@Labels.Date(r.Date)</td>
                             <td><a href="/sales/receipts/@r.Id">@r.Number</a></td>
                             <td>@(r.CustomerId is { } c ? Customer(c) : "")</td>
                             <td class="num">@Labels.Amount(r.Total)</td>
-                            <td>@(r.Status == SalesDocumentStatus.Voided ? "Voided" : "")</td>
+                            <td>@(r.Status == DocumentStatus.Voided ? "Voided" : "")</td>
                         </tr>
                     }
                 </tbody>
@@ -80,7 +80,7 @@
                         @foreach (var i in shown)
                         {
                             var status = Labels.Status(i, _today);
-                            <tr class="@(i.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                            <tr class="@(i.Status == DocumentStatus.Voided ? "inactive" : null)">
                                 <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
                                 <td>@Customer(i.CustomerId)</td>
                                 <td>@Labels.Date(i.Date)</td>

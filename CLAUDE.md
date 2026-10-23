@@ -66,3 +66,11 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Customer and item CSV imports (`SalesImports.cs`) follow the chart import pattern (preview, all-or-nothing, existing names skipped). `CsvColumns` is the shared header matcher.
 - SQLite can't `ORDER BY` a `DateTimeOffset`; order such results in memory.
 - `Web/Components/Links.cs` maps a journal entry's source to its document page; use it wherever a ledger line links somewhere.
+
+## Purchases (M4)
+
+- `Vendor` mirrors `Customer` (plus your account number with them and a default expense category that pre-fills bills and expenses). Vendors with unpaid bills can't be deactivated.
+- `Bill` lines are category lines (account, description, amount; negative = credit), not items; any active account except A/R and A/P. Bills post Dr categories / Cr the first A/P account (created and saved on first use). Bill numbers are the vendor's, unique per vendor. A bill with payments can't be voided.
+- `BillPaymentService.PayAsync` takes any open bills across vendors and writes one `BillPayment` per vendor (and per A/P account) in one save, vendors in name order; numeric check numbers count up from the first. Paid from a Bank or Credit card account. The vendor's account number is the default memo.
+- Expenses (paid immediately) are `BankTransaction` spends with an optional `VendorId`; the payee defaults to the vendor's name. Check-number suggestions count both expense and bill-payment references.
+- `DocumentStatus` (Posted/Voided) is shared by sales and purchase documents; `Text.Optional` lives in Domain.Common.

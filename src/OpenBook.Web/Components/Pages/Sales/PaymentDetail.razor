@@ -17,7 +17,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Payment from @_customer?.DisplayName</h1>
-        @if (_payment.Status == SalesDocumentStatus.Voided)
+        @if (_payment.Status == DocumentStatus.Voided)
         {
             <span class="badge">Voided</span>
         }
@@ -58,7 +58,7 @@
         </tbody>
     </table>
 
-    @if (_payment.Status == SalesDocumentStatus.Posted)
+    @if (_payment.Status == DocumentStatus.Posted)
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this payment</h2>

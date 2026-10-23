@@ -1,0 +1,111 @@
+@page "/vendors/import"
+@rendermode InteractiveServer
+@inject Operations Ops
+
+<PageTitle>Import vendors · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import vendors</h1>
+        <a class="button secondary" href="/vendors">Back to vendors</a>
+    </div>
+
+    <div class="card">
+        <p>
+            Upload a CSV with a header row. A <strong>name</strong> column ("Vendor" or "Name") is required. Company, email,
+            phone, address (one column, or street / city / state / zip / country), account number, terms ("Net 30"),
+            default expense account (full name or number) and notes are used when present. Vendors already in OpenBook
+            are skipped; nothing is imported unless every row is valid.
+        </p>
+        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">Imported @_imported.NewCount vendor(s). <a href="/vendors">View vendors</a>.</div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        <div class="import-summary">
+            <span><span class="badge ok">@_preview.NewCount</span> new</span>
+            <span><span class="badge">@_preview.ExistingCount</span> already exist</span>
+            <span><span class="badge @(_preview.ErrorCount > 0 ? "warn" : null)">@_preview.ErrorCount</span> with errors</span>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Line</th><th>Status</th><th>Name</th><th>Email</th><th>Terms</th><th>Default category</th><th>Note</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _preview.Rows)
+                    {
+                        <tr class="@(row.Status == ImportRowStatus.Exists ? "inactive" : null)">
+                            <td class="num">@row.Line</td>
+                            <td><span class="badge @(row.Status switch { ImportRowStatus.New => "ok", ImportRowStatus.Error => "warn", _ => null })">@Labels.For(row.Status)</span></td>
+                            <td>@row.Details?.DisplayName</td>
+                            <td>@row.Details?.Email</td>
+                            <td>@(row.Details is { } d ? Labels.Terms(d.PaymentTermsDays) : null)</td>
+                            <td>@row.ExpenseAccountName</td>
+                            <td class="out-of-balance">@row.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="actions">
+            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">Import @_preview.NewCount vendor(s)</button>
+        </div>
+    }
+</div>
+
+@code {
+    private string? _csv;
+    private ImportResult<VendorImportRow>? _preview;
+    private ImportResult<VendorImportRow>? _imported;
+    private string? _error;
+    private bool _busy;
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _imported = null;
+        _preview = null;
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _csv = await reader.ReadToEndAsync();
+            _preview = await Ops.RunAsync<VendorImportService, ImportResult<VendorImportRow>>(s => s.PreviewAsync(_csv));
+        }
+        catch (Exception ex) when (ex is DomainException or IOException)
+        {
+            _error = ex is DomainException ? ex.Message : "That file is larger than 5 MB.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _imported = await Ops.RunAsync<VendorImportService, ImportResult<VendorImportRow>>(s => s.ImportAsync(_csv!));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

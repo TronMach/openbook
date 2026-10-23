@@ -25,7 +25,7 @@ public sealed class SalesReceipt
 
     public string? Memo { get; private set; }
     public decimal Total { get; private set; }
-    public SalesDocumentStatus Status { get; private set; }
+    public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -53,7 +53,7 @@ public sealed class SalesReceipt
             DepositAccountId = depositAccountId,
             Reference = Text.Optional(reference, 30, "receipt.reference_too_long", "Reference"),
             Memo = Text.Optional(memo, 1000, "receipt.memo_too_long", "Memo"),
-            Status = SalesDocumentStatus.Posted,
+            Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
         };
@@ -66,8 +66,8 @@ public sealed class SalesReceipt
 
     public void Void()
     {
-        if (Status == SalesDocumentStatus.Voided)
+        if (Status == DocumentStatus.Voided)
             throw new DomainException("receipt.already_voided", $"Sales receipt {Number} is already voided.");
-        Status = SalesDocumentStatus.Voided;
+        Status = DocumentStatus.Voided;
     }
 }

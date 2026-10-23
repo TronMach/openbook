@@ -1,0 +1,193 @@
+@page "/purchases/bills/new"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>New bill · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>New bill</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _vendors.Count == 0)
+    {
+        <div class="card"><p>Bills need a vendor. <a href="/vendors/new">Add one</a> first.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="vendor">Vendor</label>
+                    <select id="vendor" value="@_vendor?.Id" @onchange="PickVendor">
+                        <option value="">Choose a vendor…</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="reference">Bill no. <span class="muted">(the vendor's invoice number, optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Bill date</label>
+                    <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
+                </div>
+                <div class="field">
+                    <label for="due">Due date @(_vendor is { } v2 ? $"({Labels.Terms(v2.PaymentTermsDays)})" : "")</label>
+                    <input id="due" type="date" @bind="_dueDate" />
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead><tr><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr @key="line">
+                                <td>
+                                    <select @bind="line.AccountId" aria-label="Category">
+                                        <option value="">Choose a category…</option>
+                                        @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
+                                        {
+                                            <optgroup label="@Labels.For(group.Key)">
+                                                @foreach (var a in group)
+                                                {
+                                                    <option value="@a.Id">@Labels.AccountName(_chart, a.Id, _useNumbers)</option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input @bind="line.Description" aria-label="Description" /></td>
+                                <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" /></td>
+                                <td>
+                                    @if (_lines.Count > 1)
+                                    {
+                                        <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => _lines.Remove(line)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><button type="button" class="secondary" @onclick="() => _lines.Add(new LineModel())">Add line</button></td>
+                            <td class="num">Total</td>
+                            <td class="num">@Labels.Amount(Total)</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save bill</button>
+                <a href="/purchases">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Vendor> _vendors = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private Vendor? _vendor;
+    private string? _reference;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _dueDate = DateOnly.FromDateTime(DateTime.Today);
+    private string? _memo;
+    private List<LineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "vendor")]
+    private Guid? PresetVendor { get; set; }
+
+    private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
+    private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
+    private bool CanSave => _vendor is not null && Total > 0m && Filled.All(l => l.AccountId is not null && (l.Amount ?? 0m) != 0m);
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_vendors, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
+        _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is not (AccountType.AccountsPayable or AccountType.AccountsReceivable))
+            .OrderBy(a => a.Type.ClassOf() != AccountClass.Expense)
+            .ToList();
+        if (PresetVendor is { } preset)
+            SetVendor(preset);
+        _loaded = true;
+    }
+
+    private void PickVendor(ChangeEventArgs e) => SetVendor(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    private void SetVendor(Guid? id)
+    {
+        _vendor = _vendors.FirstOrDefault(v => v.Id == id);
+        if (_vendor is null)
+            return;
+        _dueDate = _vendor.DueDateFor(_date);
+        if (_vendor.DefaultExpenseAccountId is { } category && _lines[0].AccountId is null)
+            _lines[0].AccountId = category;
+    }
+
+    private void ChangeDate(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
+            return;
+        _date = date;
+        _dueDate = _vendor?.DueDateFor(date) ?? (_dueDate < date ? date : _dueDate);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var lines = Filled.Select(l => new BillLineDraft(l.AccountId!.Value, l.Amount!.Value, l.Description)).ToList();
+            var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo);
+            var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command));
+            Navigation.NavigateTo($"/purchases/bills/{bill.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class LineModel
+    {
+        public Guid? AccountId { get; set; }
+        public string? Description { get; set; }
+        public decimal? Amount { get; set; }
+    }
+}

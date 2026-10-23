@@ -1,0 +1,67 @@
+using OpenBook.Application.Accounts;
+using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Auditing;
+using OpenBook.Domain.Banking;
+using OpenBook.Domain.Common;
+using OpenBook.Domain.Purchases;
+
+namespace OpenBook.Application.Purchases;
+
+public interface IPurchasesStore
+{
+    Task<IReadOnlyList<Vendor>> ListVendorsAsync(CancellationToken ct);
+    Task<Vendor?> GetVendorAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<Bill?> GetBillAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<IReadOnlyList<Bill>> GetBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct);
+
+    Task<BillPayment?> GetPaymentAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid? vendorId, CancellationToken ct);
+    Task<IReadOnlyList<BillPayment>> ListPaymentsForBillAsync(Guid billId, CancellationToken ct);
+
+    /// <summary>Spend bank transactions (checks, payments, card charges), optionally for one vendor; newest first.</summary>
+    Task<IReadOnlyList<BankTransaction>> ListExpensesAsync(Guid? vendorId, CancellationToken ct);
+
+    void Add(Vendor vendor);
+    void Add(Bill bill);
+    void Add(BillPayment payment);
+    void Add(AuditRecord record);
+
+    Task SaveChangesAsync(CancellationToken ct);
+}
+
+/// <summary>The accounts purchases post to: payables, and what bills are paid from.</summary>
+public sealed class PurchaseAccounts(AccountService accounts)
+{
+    /// <summary>
+    /// The first active A/P account in chart order. If there is none, "Accounts Payable" is created and saved
+    /// right away, as QuickBooks does: the posting engine looks accounts up in the database.
+    /// </summary>
+    public async Task<Account> GetOrCreatePayablesAsync(CancellationToken ct)
+    {
+        var chart = await accounts.GetChartAsync(ct);
+        var existing = chart.Ordered(includeInactive: false).Select(x => x.Account).FirstOrDefault(a => a.Type == AccountType.AccountsPayable);
+        if (existing is not null)
+            return existing;
+
+        var name = chart.FindByFullName("Accounts Payable") is null ? "Accounts Payable" : "Accounts Payable (A/P)";
+        return await accounts.CreateAsync(new CreateAccountCommand(name, AccountType.AccountsPayable), ct);
+    }
+
+    /// <summary>Bills are paid from a bank account or charged to a credit card.</summary>
+    public async Task<Account> GetPaymentAccountAsync(Guid id, CancellationToken ct)
+    {
+        var account = (await accounts.GetChartAsync(ct)).Get(id);
+        if (!BankTransaction.IsBankingAccount(account.Type))
+            throw new DomainException("purchases.payment_account_type", $"'{account.Name}' isn't a bank or credit card account.");
+        if (!account.IsActive)
+            throw new DomainException("purchases.payment_account_inactive", $"'{account.Name}' is inactive.");
+        return account;
+    }
+}

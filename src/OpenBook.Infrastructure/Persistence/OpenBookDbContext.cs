@@ -7,6 +7,7 @@ using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Infrastructure.Persistence;
@@ -33,6 +34,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<SalesReceipt> SalesReceipts => Set<SalesReceipt>();
+    public DbSet<Vendor> Vendors => Set<Vendor>();
+    public DbSet<Bill> Bills => Set<Bill>();
+    public DbSet<BillPayment> BillPayments => Set<BillPayment>();
 
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
@@ -175,6 +179,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(t => new { t.AccountId, t.Date });
             b.HasIndex(t => t.JournalEntryId).IsUnique();
             b.HasIndex(t => t.ImportBatchId);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(t => t.VendorId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(t => t.AccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(t => t.TransferAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(t => t.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
@@ -206,6 +211,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         });
 
         ConfigureSales(modelBuilder);
+        ConfigurePurchases(modelBuilder);
 
         modelBuilder.Entity<User>(b =>
         {
@@ -321,6 +327,79 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 a.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
                 a.HasIndex(x => x.InvoiceId);
                 a.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(p => p.Applications).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+    }
+
+    private static void ConfigurePurchases(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Vendor>(b =>
+        {
+            b.ToTable("Vendors");
+            b.HasKey(v => v.Id);
+            b.Property(v => v.DisplayName).HasMaxLength(200);
+            b.HasIndex(v => v.DisplayName).IsUnique();
+            b.Property(v => v.CompanyName).HasMaxLength(200);
+            b.Property(v => v.Email).HasMaxLength(320);
+            b.Property(v => v.Phone).HasMaxLength(50);
+            b.Property(v => v.Address).HasMaxLength(500);
+            b.Property(v => v.AccountNumber).HasMaxLength(50);
+            b.Property(v => v.Notes).HasMaxLength(2000);
+            b.HasOne<Account>().WithMany().HasForeignKey(v => v.DefaultExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Bill>(b =>
+        {
+            b.ToTable("Bills");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Reference).HasMaxLength(30);
+            b.HasIndex(x => new { x.VendorId, x.Date });
+            b.Property(x => x.Memo).HasMaxLength(1000);
+            b.Property(x => x.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
+            b.Property(x => x.AmountPaid).HasColumnName("AmountPaidMinor").HasConversion(MinorUnits);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(x => x.Balance);
+            b.Ignore(x => x.IsOpen);
+            b.HasIndex(x => x.JournalEntryId).IsUnique();
+            b.HasOne<Vendor>().WithMany().HasForeignKey(x => x.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(x => x.PayableAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("BillLines");
+                l.WithOwner().HasForeignKey("BillId");
+                l.HasKey("BillId", nameof(BillLine.LineNumber));
+                l.Property(x => x.Description).HasMaxLength(1000);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<BillPayment>(b =>
+        {
+            b.ToTable("BillPayments");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(p => p.Reference).HasMaxLength(30);
+            b.Property(p => p.Memo).HasMaxLength(1000);
+            b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(p => new { p.VendorId, p.Date });
+            b.HasIndex(p => new { p.PaymentAccountId, p.Reference });
+            b.HasIndex(p => p.JournalEntryId).IsUnique();
+            b.HasOne<Vendor>().WithMany().HasForeignKey(p => p.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.PaymentAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.PayableAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(p => p.Applications, a =>
+            {
+                a.ToTable("BillPaymentApplications");
+                a.WithOwner().HasForeignKey("BillPaymentId");
+                a.HasKey("BillPaymentId", nameof(BillPaymentApplication.BillId));
+                a.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                a.HasIndex(x => x.BillId);
+                a.HasOne<Bill>().WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(p => p.Applications).UsePropertyAccessMode(PropertyAccessMode.Field);
         });

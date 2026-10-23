@@ -93,11 +93,11 @@
                 <tbody>
                     @foreach (var p in _payments)
                     {
-                        <tr class="@(p.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                        <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
                             <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
                             <td>@p.Reference</td>
                             <td class="num">@Labels.Amount(p.Applications.Single(a => a.InvoiceId == _invoice.Id).Amount)</td>
-                            <td>@(p.Status == SalesDocumentStatus.Voided ? "Voided" : "")</td>
+                            <td>@(p.Status == DocumentStatus.Voided ? "Voided" : "")</td>
                         </tr>
                     }
                 </tbody>
@@ -107,7 +107,7 @@
 
     <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">Journal entry</a></p>
 
-    @if (_invoice.Status == SalesDocumentStatus.Posted)
+    @if (_invoice.Status == DocumentStatus.Posted)
     {
         <div class="card no-print">
             <h2>Void this invoice</h2>

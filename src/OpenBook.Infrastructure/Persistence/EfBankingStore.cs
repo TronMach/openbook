@@ -41,11 +41,18 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
             .Where(t => t.AccountId == accountId && t.Date >= fromDate && t.Date <= toDate)
             .ToListAsync(ct);
 
+    // Checks are written both as expenses and as bill payments; both count toward the next number.
     public async Task<IReadOnlyList<string>> ListSpendReferencesAsync(Guid accountId, CancellationToken ct) =>
-        await db.BankTransactions
-            .Where(t => t.AccountId == accountId && t.Kind == BankTransactionKind.Spend && t.Reference != null)
-            .Select(t => t.Reference!)
-            .ToListAsync(ct);
+        [
+            .. await db.BankTransactions
+                .Where(t => t.AccountId == accountId && t.Kind == BankTransactionKind.Spend && t.Reference != null)
+                .Select(t => t.Reference!)
+                .ToListAsync(ct),
+            .. await db.BillPayments
+                .Where(p => p.PaymentAccountId == accountId && p.Reference != null)
+                .Select(p => p.Reference!)
+                .ToListAsync(ct),
+        ];
 
     public async Task<IReadOnlyList<Reconciliation>> ListReconciliationsAsync(Guid accountId, CancellationToken ct) =>
         await db.Reconciliations.Include(r => r.Lines).Where(r => r.AccountId == accountId).ToListAsync(ct);

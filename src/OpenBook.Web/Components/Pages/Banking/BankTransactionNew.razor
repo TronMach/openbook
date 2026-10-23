@@ -20,6 +20,20 @@
     {
         <div class="card">
             <p class="muted">@(_kind == BankTransactionKind.Spend ? "From" : "Into") <strong>@_accountName</strong></p>
+            @if (_kind == BankTransactionKind.Spend && _vendors.Count > 0)
+            {
+                <div class="field">
+                    <label for="vendor">Vendor <span class="muted">(optional)</span></label>
+                    <select id="vendor" value="@_vendorId" @onchange="PickVendor">
+                        <option value="">None</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </select>
+                    <span class="hint">Shows the expense on the vendor's page and fills in their default category.</span>
+                </div>
+            }
             <div class="row">
                 <div class="field">
                     <label for="payee">@(_kind == BankTransactionKind.Spend ? "Payee" : "Received from") <span class="muted">(optional)</span></label>
@@ -111,6 +125,8 @@
 
     private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
     private string? _payee;
+    private Guid? _vendorId;
+    private IReadOnlyList<Vendor> _vendors = [];
     private string? _reference;
     private string? _memo;
     private List<LineModel> _lines = [new()];
@@ -131,10 +147,11 @@
         _kind = KindName.Equals("receive", StringComparison.OrdinalIgnoreCase) ? BankTransactionKind.Receive : BankTransactionKind.Spend;
         try
         {
-            (_chart, _useNumbers, var suggestion) = await Ops.RunAsync(async sp => (
+            (_chart, _useNumbers, var suggestion, _vendors) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<AccountService>().GetChartAsync(),
                 (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
-                await sp.GetRequiredService<BankingService>().SuggestCheckNumberAsync(AccountId)));
+                await sp.GetRequiredService<BankingService>().SuggestCheckNumberAsync(AccountId),
+                (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(v => v.Vendor).ToList()));
             _account = _chart.Get(AccountId);
             BankingRules.EnsureBankingAccount(_account);
             _accountName = _chart.FullName(AccountId);
@@ -158,7 +175,7 @@
         {
             var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo)).ToList();
             var saved = await Ops.RunAsync<BankingService, BankTransaction>(s =>
-                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo)));
+                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null)));
             Navigation.NavigateTo($"/banking/transactions/{saved.Id}");
         }
         catch (DomainException ex)
@@ -169,6 +186,17 @@
         {
             _busy = false;
         }
+    }
+
+    private void PickVendor(ChangeEventArgs e)
+    {
+        var previous = _vendors.FirstOrDefault(v => v.Id == _vendorId);
+        _vendorId = Guid.TryParse(e.Value as string, out var id) ? id : null;
+        var vendor = _vendors.FirstOrDefault(v => v.Id == _vendorId);
+        if (string.IsNullOrWhiteSpace(_payee) || _payee == previous?.DisplayName)
+            _payee = vendor?.DisplayName;
+        if (vendor?.DefaultExpenseAccountId is { } category && _lines[0].AccountId is null)
+            _lines[0].AccountId = category;
     }
 
     private sealed class LineModel

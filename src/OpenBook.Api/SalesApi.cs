@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Sales;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Api;
@@ -43,7 +44,7 @@ public sealed record InvoiceResponse(
     decimal Total,
     decimal AmountPaid,
     decimal Balance,
-    SalesDocumentStatus Status,
+    DocumentStatus Status,
     Guid JournalEntryId,
     IReadOnlyList<SalesLineResponse> Lines)
 {
@@ -60,7 +61,7 @@ public sealed record PaymentResponse(
     Guid DepositAccountId,
     string? Reference,
     string? Memo,
-    SalesDocumentStatus Status,
+    DocumentStatus Status,
     Guid JournalEntryId,
     IReadOnlyList<ApplyToInvoice> Applications)
 {
@@ -78,7 +79,7 @@ public sealed record SalesReceiptResponse(
     string? Reference,
     string? Memo,
     decimal Total,
-    SalesDocumentStatus Status,
+    DocumentStatus Status,
     Guid JournalEntryId,
     IReadOnlyList<SalesLineResponse> Lines)
 {

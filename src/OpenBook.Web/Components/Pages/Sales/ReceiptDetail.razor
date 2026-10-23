@@ -17,7 +17,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Sales receipt @_receipt.Number</h1>
-        @if (_receipt.Status == SalesDocumentStatus.Voided)
+        @if (_receipt.Status == DocumentStatus.Voided)
         {
             <span class="badge">Voided</span>
         }
@@ -67,7 +67,7 @@
 
     <p class="muted no-print"><a href="/journal/@_receipt.JournalEntryId">Journal entry</a></p>
 
-    @if (_receipt.Status == SalesDocumentStatus.Posted)
+    @if (_receipt.Status == DocumentStatus.Posted)
     {
         <div class="card no-print">
             <h2>Void this sales receipt</h2>

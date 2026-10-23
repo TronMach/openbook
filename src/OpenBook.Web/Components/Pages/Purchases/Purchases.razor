@@ -1,0 +1,137 @@
+@page "/purchases"
+@inject BillService Bills
+@inject BillPaymentService Payments
+@inject IPurchasesStore PurchasesStore
+@inject VendorService VendorService
+@inject BankingService BankingService
+
+<PageTitle>Purchases · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Purchases</h1>
+        <a class="button secondary" href="/vendors">Vendors</a>
+        <a class="button secondary" href="/purchases/pay-bills">Pay bills</a>
+        <a class="button" href="/purchases/bills/new">New bill</a>
+    </div>
+
+    <div class="summary-bar">
+        <div><span class="label">Unpaid bills</span><span class="value">@Labels.Amount(_bills.Sum(b => b.Balance))</span></div>
+        <div><span class="label">Overdue</span><span class="value @(Overdue > 0m ? "off" : null)">@Labels.Amount(Overdue)</span></div>
+        <div><span class="label">Due in the next 7 days</span><span class="value">@Labels.Amount(_bills.Where(b => b.IsOpen && !b.IsOverdue(_today) && b.DueDate <= _today.AddDays(7)).Sum(b => b.Balance))</span></div>
+    </div>
+
+    @if (_bankAccounts.Count > 0)
+    {
+        <p class="muted">
+            Paid on the spot? Record an expense from
+            @foreach (var (account, i) in _bankAccounts.Select((a, i) => (a, i)))
+            {
+                @(i > 0 ? ", " : "")<a href="/banking/@account.Account.Id/record/spend">@account.FullName</a>
+            }.
+        </p>
+    }
+
+    <nav class="toolbar" aria-label="Show">
+        @foreach (var (key, label) in Tabs)
+        {
+            <a class="button @(Show == key ? null : "secondary")" href="/purchases?show=@key">@label</a>
+        }
+    </nav>
+
+    @switch (Show)
+    {
+        case "payments":
+            <table class="data">
+                <thead><tr><th>Date</th><th>Vendor</th><th>Ref</th><th class="num">Bills</th><th class="num">Amount</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _payments)
+                    {
+                        <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/purchases/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                            <td>@Vendor(p.VendorId)</td>
+                            <td>@p.Reference</td>
+                            <td class="num">@p.Applications.Count</td>
+                            <td class="num">@Labels.Amount(p.Amount)</td>
+                            <td>@(p.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            break;
+        case "expenses":
+            <table class="data">
+                <thead><tr><th>Date</th><th>Payee</th><th>Ref</th><th class="num">Amount</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var e in _expenses)
+                    {
+                        <tr class="@(e.Status == BankTransactionStatus.Voided ? "inactive" : null)">
+                            <td><a href="/banking/transactions/@e.Id">@Labels.Date(e.Date)</a></td>
+                            <td>@(e.VendorId is { } v ? Vendor(v) : e.Payee)</td>
+                            <td>@e.Reference</td>
+                            <td class="num">@Labels.Amount(e.Amount)</td>
+                            <td>@(e.Status == BankTransactionStatus.Voided ? "Voided" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            break;
+        default:
+            var shown = Show == "all-bills" ? _bills : _bills.Where(b => b.IsOpen).OrderBy(b => b.DueDate).ToList();
+            @if (shown.Count == 0)
+            {
+                <div class="card"><p>@(Show == "all-bills" ? "No bills yet." : "Nothing unpaid.") <a href="/purchases/bills/new">Enter a bill</a>.</p></div>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>Vendor</th><th>Bill no.</th><th>Date</th><th>Due</th><th>Status</th><th class="num">Total</th><th class="num">Balance</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in shown)
+                        {
+                            var status = Labels.Status(b, _today);
+                            <tr class="@(b.Status == DocumentStatus.Voided ? "inactive" : null)">
+                                <td>@Vendor(b.VendorId)</td>
+                                <td><a href="/purchases/bills/@b.Id">@(b.Reference ?? "(no number)")</a></td>
+                                <td>@Labels.Date(b.Date)</td>
+                                <td>@Labels.Date(b.DueDate)</td>
+                                <td><span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span></td>
+                                <td class="num">@Labels.Amount(b.Total)</td>
+                                <td class="num">@Labels.Amount(b.Balance)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            break;
+    }
+</div>
+
+@code {
+    private static readonly (string Key, string Label)[] Tabs =
+        [("open", "Unpaid bills"), ("all-bills", "All bills"), ("payments", "Bill payments"), ("expenses", "Expenses")];
+
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<Bill> _bills = [];
+    private IReadOnlyList<BillPayment> _payments = [];
+    private IReadOnlyList<BankTransaction> _expenses = [];
+    private IReadOnlyList<BankAccountSummary> _bankAccounts = [];
+    private Dictionary<Guid, string> _vendors = [];
+
+    [SupplyParameterFromQuery]
+    private string? Show { get; set; }
+
+    private decimal Overdue => _bills.Where(b => b.IsOverdue(_today)).Sum(b => b.Balance);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Show ??= "open";
+        _bills = await Bills.ListAsync();
+        _payments = await Payments.ListAsync();
+        _expenses = await PurchasesStore.ListExpensesAsync(null, default);
+        _bankAccounts = await BankingService.ListAccountsAsync();
+        _vendors = (await VendorService.ListAsync(_today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+    }
+
+    private string Vendor(Guid id) => _vendors.GetValueOrDefault(id, "(unknown)");
+}

@@ -1,0 +1,158 @@
+@page "/purchases/bills/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject BillService Bills
+@inject VendorService VendorService
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+@inject NavigationManager Navigation
+
+<PageTitle>Bill · OpenBook</PageTitle>
+
+@if (_bill is null || _vendor is null)
+{
+    <div class="card"><p>That bill doesn't exist. <a href="/purchases">Back to purchases</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    @{
+        var status = Labels.Status(_bill, DateOnly.FromDateTime(DateTime.Today));
+    }
+    <div class="toolbar">
+        <h1>Bill from @_vendor.DisplayName</h1>
+        <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+        @if (_bill.IsOpen)
+        {
+            <a class="button" href="/purchases/pay-bills?vendor=@_vendor.Id">Pay bills</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Vendor</dt><dd><a href="/vendors/@_vendor.Id">@_vendor.DisplayName</a></dd>
+            @if (_bill.Reference is not null) { <dt>Bill no.</dt><dd>@_bill.Reference</dd> }
+            <dt>Date</dt><dd>@Labels.Date(_bill.Date)</dd>
+            <dt>Due</dt><dd>@Labels.Date(_bill.DueDate)</dd>
+            @if (_bill.Memo is not null) { <dt>Memo</dt><dd>@_bill.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_bill.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    <table class="data">
+        <thead><tr><th>Category</th><th>Description</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+            @foreach (var line in _bill.Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr>
+                    <td>@Labels.AccountName(_chart, line.AccountId, _useNumbers)</td>
+                    <td>@line.Description</td>
+                    <td class="num">@Labels.Amount(line.Amount)</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_bill.Total)</td></tr>
+            @if (_bill.AmountPaid > 0m)
+            {
+                <tr><td colspan="2">Paid</td><td class="num">-@Labels.Amount(_bill.AmountPaid)</td></tr>
+            }
+            <tr><td colspan="2">Balance due</td><td class="num">@Labels.Amount(_bill.Balance)</td></tr>
+        </tfoot>
+    </table>
+
+    @if (_payments.Count > 0)
+    {
+        <h2 style="margin-top: 1.5rem">Payments</h2>
+        <table class="data">
+            <thead><tr><th>Date</th><th>Ref</th><th class="num">Applied to this bill</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _payments)
+                {
+                    <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/purchases/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                        <td>@p.Reference</td>
+                        <td class="num">@Labels.Amount(p.Applications.Single(a => a.BillId == _bill.Id).Amount)</td>
+                        <td>@(p.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_bill.Status == DocumentStatus.Posted)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this bill</h2>
+            <p class="muted">
+                @(_bill.AmountPaid > 0m
+                    ? "This bill has payments applied. Void those payments first."
+                    : "Voiding reverses its journal entry on the same date and removes it from what you owe.")
+            </p>
+            @if (_bill.AmountPaid == 0m)
+            {
+                <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                    <DataAnnotationsValidator />
+                    <div class="field">
+                        <label for="reason">Reason</label>
+                        <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                        <ValidationMessage For="() => VoidInput.Reason" />
+                    </div>
+                    <button type="submit" class="danger">Void bill</button>
+                </EditForm>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Bill? _bill;
+    private Vendor? _vendor;
+    private IReadOnlyList<BillPayment> _payments = [];
+    private ChartOfAccounts _chart = new([]);
+    private bool _useNumbers;
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _bill = await Bills.GetAsync(Id);
+        if (_bill is null)
+            return;
+        _vendor = await VendorService.GetAsync(_bill.VendorId);
+        _payments = await Bills.ListPaymentsAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+        _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            await Bills.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/purchases/bills/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why the bill is being voided.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,62 @@
+@page "/vendors"
+@inject VendorService VendorService
+
+<PageTitle>Vendors · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Vendors</h1>
+        <a class="button secondary" href="@(ShowInactive ? "/vendors" : "/vendors?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
+        <a class="button secondary" href="/vendors/import">Import CSV</a>
+        <a class="button" href="/vendors/new">New vendor</a>
+    </div>
+
+    @if (_vendors.Count == 0)
+    {
+        <div class="card"><p>No vendors yet. <a href="/vendors/new">Add one</a> or <a href="/vendors/import">import a list</a>.</p></div>
+    }
+    else
+    {
+        <div class="summary-bar">
+            <div><span class="label">You owe</span><span class="value">@Labels.Amount(_vendors.Sum(v => v.Balance))</span></div>
+            <div><span class="label">Overdue</span><span class="value @(_vendors.Sum(v => v.Overdue) > 0m ? "off" : null)">@Labels.Amount(_vendors.Sum(v => v.Overdue))</span></div>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr><th>Vendor</th><th>Email</th><th>Phone</th><th>Terms</th><th class="num">Open bills</th><th class="num">Overdue</th><th class="num">Balance</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _vendors)
+                    {
+                        <tr class="@(s.Vendor.IsActive ? null : "inactive")">
+                            <td>
+                                <a href="/vendors/@s.Vendor.Id">@s.Vendor.DisplayName</a>
+                                @if (!s.Vendor.IsActive)
+                                {
+                                    <span class="badge">Inactive</span>
+                                }
+                            </td>
+                            <td>@s.Vendor.Email</td>
+                            <td>@s.Vendor.Phone</td>
+                            <td class="muted">@Labels.Terms(s.Vendor.PaymentTermsDays)</td>
+                            <td class="num">@(s.OpenBills == 0 ? "" : s.OpenBills)</td>
+                            <td class="num @(s.Overdue > 0m ? "out-of-balance" : null)">@Labels.AmountOrBlank(s.Overdue)</td>
+                            <td class="num">@Labels.AmountOrBlank(s.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<VendorSummary> _vendors = [];
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _vendors = await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), ShowInactive);
+}

@@ -1,0 +1,205 @@
+@page "/purchases/pay-bills"
+@rendermode InteractiveServer
+@inject Operations Ops
+
+<PageTitle>Pay bills · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Pay bills</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_paid.Count > 0)
+    {
+        <div class="alert notice" role="status">
+            Paid @_paid.Count vendor(s):
+            @foreach (var (p, i) in _paid.Select((p, i) => (p, i)))
+            {
+                @(i > 0 ? ", " : "")<a href="/purchases/payments/@p.Id">@Vendor(p.VendorId) @Labels.Amount(p.Amount)@(p.Reference is null ? "" : $" (#{p.Reference})")</a>
+            }.
+        </div>
+    }
+
+    @if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="account">Pay from</label>
+                    <select id="account" value="@_accountId" @onchange="PickAccountAsync">
+                        @foreach (var a in _accounts)
+                        {
+                            <option value="@a.Account.Id">@a.FullName (@Labels.Amount(a.Balance))</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="date">Payment date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="reference">@(IsBank ? "First check number" : "Reference") <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                    <span class="hint">One payment is written per vendor; numeric check numbers count up from this one.</span>
+                </div>
+                <div class="field">
+                    <label for="vendor-filter">Show bills from</label>
+                    <select id="vendor-filter" @bind="_vendorFilter">
+                        <option value="">All vendors</option>
+                        @foreach (var v in _rows.Select(r => r.Bill.VendorId).Distinct().OrderBy(Vendor))
+                        {
+                            <option value="@v">@Vendor(v)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        @if (_rows.Count == 0)
+        {
+            <div class="card"><p>No unpaid bills. <a href="/purchases/bills/new">Enter a bill</a>.</p></div>
+        }
+        else
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th class="check"><input type="checkbox" aria-label="Pay every shown bill in full" checked="@(Shown.Any() && Shown.All(r => r.Selected))" @onchange="ToggleAll" /></th>
+                            <th>Vendor</th><th>Bill no.</th><th>Due</th><th class="num">Open balance</th><th class="num">Payment</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Shown)
+                        {
+                            <tr @key="row.Bill.Id" class="@(row.Selected ? "cleared" : null)">
+                                <td class="check"><input type="checkbox" aria-label="Pay bill @row.Bill.Reference" checked="@row.Selected" @onchange="e => Toggle(row, e.Value is true)" /></td>
+                                <td>@Vendor(row.Bill.VendorId)</td>
+                                <td><a href="/purchases/bills/@row.Bill.Id" target="_blank">@(row.Bill.Reference ?? "(no number)")</a></td>
+                                <td class="@(row.Bill.IsOverdue(today) ? "out-of-balance" : null)">@Labels.Date(row.Bill.DueDate)</td>
+                                <td class="num">@Labels.Amount(row.Bill.Balance)</td>
+                                <td><input class="amount" type="number" step="0.01" min="0" aria-label="Payment for bill @row.Bill.Reference" @bind="row.Amount" @bind:after="() => row.Selected = (row.Amount ?? 0m) > 0m" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="5">@Selected.Select(r => r.Bill.VendorId).Distinct().Count() vendor(s), @Selected.Count() bill(s)</td>
+                            <td class="num">@Labels.Amount(Total)</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="actions">
+                <button type="button" @onclick="PayAsync" disabled="@(!CanPay || _busy)">Pay @Labels.Amount(Total)</button>
+                @if (Invalid)
+                {
+                    <span class="out-of-balance">A payment is more than the bill's balance.</span>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<BankAccountSummary> _accounts = [];
+    private Dictionary<Guid, string> _vendors = [];
+    private List<RowModel> _rows = [];
+    private List<BillPayment> _paid = [];
+    private Guid _accountId;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private string? _reference;
+    private Guid? _vendorFilter;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "vendor")]
+    private Guid? PresetVendor { get; set; }
+
+    private bool IsBank => _accounts.FirstOrDefault(a => a.Account.Id == _accountId)?.Account.Type == AccountType.Bank;
+    private IEnumerable<RowModel> Shown => _rows.Where(r => _vendorFilter is null || r.Bill.VendorId == _vendorFilter);
+    private IEnumerable<RowModel> Selected => _rows.Where(r => r.Selected && (r.Amount ?? 0m) > 0m);
+    private decimal Total => Selected.Sum(r => r.Amount ?? 0m);
+    private bool Invalid => _rows.Any(r => (r.Amount ?? 0m) < 0m || (r.Amount ?? 0m) > r.Bill.Balance);
+    private bool CanPay => Total > 0m && !Invalid && _accountId != Guid.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _vendorFilter = PresetVendor;
+        await LoadAsync();
+        _loaded = true;
+    }
+
+    private async Task LoadAsync()
+    {
+        var (accounts, vendors, bills) = await Ops.RunAsync(async sp => (
+            await sp.GetRequiredService<BankingService>().ListAccountsAsync(),
+            await sp.GetRequiredService<VendorService>().ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true),
+            await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync()));
+        _accounts = accounts.OrderBy(a => a.Account.Type != AccountType.Bank).ToList();
+        _vendors = vendors.ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _rows = bills.Select(b => new RowModel(b)).ToList();
+        if (_accountId == Guid.Empty && _accounts.Count > 0)
+            await SetAccountAsync(_accounts[0].Account.Id);
+    }
+
+    private Task PickAccountAsync(ChangeEventArgs e) =>
+        Guid.TryParse(e.Value as string, out var id) ? SetAccountAsync(id) : Task.CompletedTask;
+
+    private async Task SetAccountAsync(Guid id)
+    {
+        _accountId = id;
+        _reference = IsBank ? await Ops.RunAsync<BankingService, string?>(s => s.SuggestCheckNumberAsync(id)) : null;
+    }
+
+    private static void Toggle(RowModel row, bool selected)
+    {
+        row.Selected = selected;
+        row.Amount = selected ? row.Amount ?? row.Bill.Balance : null;
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        foreach (var row in Shown.ToList())
+            Toggle(row, e.Value is true);
+    }
+
+    private async Task PayAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new PayBillsCommand(_date, _accountId, Selected.Select(r => new ApplyToBill(r.Bill.Id, r.Amount!.Value)).ToList(), _reference);
+            _paid = (await Ops.RunAsync<BillPaymentService, IReadOnlyList<BillPayment>>(s => s.PayAsync(command))).ToList();
+            await LoadAsync();
+            await SetAccountAsync(_accountId);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string Vendor(Guid id) => _vendors.GetValueOrDefault(id, "(unknown)");
+
+    private sealed class RowModel(Bill bill)
+    {
+        public Bill Bill { get; } = bill;
+        public bool Selected { get; set; }
+        public decimal? Amount { get; set; }
+    }
+}

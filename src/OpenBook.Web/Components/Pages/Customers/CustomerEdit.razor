@@ -48,7 +48,7 @@
                     <tbody>
                         @foreach (var i in _invoices)
                         {
-                            <tr class="@(i.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                            <tr class="@(i.Status == DocumentStatus.Voided ? "inactive" : null)">
                                 <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
                                 <td>@Labels.Date(i.Date)</td>
                                 <td>@Labels.Date(i.DueDate)</td>
@@ -66,9 +66,9 @@
                     <tbody>
                         @foreach (var p in _payments)
                         {
-                            <tr class="@(p.Status == SalesDocumentStatus.Voided ? "inactive" : null)">
+                            <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
                                 <td><a href="/sales/payments/@p.Id">@Labels.Date(p.Date)</a></td>
-                                <td>@p.Reference @(p.Status == SalesDocumentStatus.Voided ? "(voided)" : "")</td>
+                                <td>@p.Reference @(p.Status == DocumentStatus.Voided ? "(voided)" : "")</td>
                                 <td class="num">@Labels.Amount(p.Amount)</td>
                             </tr>
                         }

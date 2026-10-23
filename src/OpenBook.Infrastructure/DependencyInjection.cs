@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Infrastructure.Persistence;
 using OpenBook.Infrastructure.Security;
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<ICompanyStore, EfCompanyStore>();
         services.AddScoped<IBankingStore, EfBankingStore>();
         services.AddScoped<ISalesStore, EfSalesStore>();
+        services.AddScoped<IPurchasesStore, EfPurchasesStore>();
         services.AddScoped<IBackupService, SqliteBackupService>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();

@@ -68,7 +68,7 @@ public sealed class PaymentService(
         foreach (var application in applications)
         {
             var invoice = invoices[application.InvoiceId];
-            if (invoice.Status != SalesDocumentStatus.Posted)
+            if (invoice.Status != DocumentStatus.Posted)
                 throw new DomainException("invoice.voided", $"Invoice {invoice.Number} is voided.");
             if (application.Amount > invoice.Balance)
                 throw new DomainException("payment.exceeds_balance", $"Invoice {invoice.Number} has only {invoice.Balance:N2} left to pay.");
@@ -101,7 +101,7 @@ public sealed class PaymentService(
     public async Task<CustomerPayment> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var payment = await store.GetPaymentAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
-        if (payment.Status == SalesDocumentStatus.Voided)
+        if (payment.Status == DocumentStatus.Voided)
             throw new DomainException("payment.already_voided", "This payment is already voided.");
 
         var before = Snapshot(payment);

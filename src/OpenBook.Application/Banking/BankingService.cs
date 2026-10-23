@@ -17,7 +17,8 @@ public sealed record RecordBankTransactionCommand(
     IReadOnlyCollection<BankSplit> Splits,
     string? Payee = null,
     string? Reference = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? VendorId = null);
 
 public sealed record TransferCommand(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
@@ -52,6 +53,7 @@ public sealed record AccountRegister(Account Account, string FullName, decimal B
 /// <summary>Checks, deposits, card charges and transfers: each a document that posts one journal entry.</summary>
 public sealed class BankingService(
     IBankingStore bank,
+    Purchases.IPurchasesStore purchases,
     ILedgerStore ledger,
     AccountService accounts,
     PostingEngine engine,
@@ -185,9 +187,20 @@ public sealed class BankingService(
             ?? throw new EntityNotFoundException("account", command.AccountId);
         BankingRules.EnsureBankingAccount(account);
 
+        // An expense can name a vendor; the payee defaults to their name.
+        var payee = command.Payee;
+        if (command.VendorId is { } vendorId)
+        {
+            var vendor = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+            if (!vendor.IsActive)
+                throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
+            if (string.IsNullOrWhiteSpace(payee))
+                payee = vendor.DisplayName;
+        }
+
         var postings = BankTransaction.SplitPostings(command.Kind, account.Id, command.Splits);
         var id = Guid.CreateVersion7();
-        var entryMemo = string.Join(" · ", new[] { command.Payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
+        var entryMemo = string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
             postings,
@@ -204,10 +217,11 @@ public sealed class BankingService(
             command.Splits.Sum(s => s.Amount),
             entry.Id,
             clock.UtcNow,
-            command.Payee,
+            payee,
             command.Reference,
             command.Memo,
-            importBatchId);
+            importBatchId,
+            command.VendorId);
         bank.Add(transaction);
         bank.Add(Audit(AuditAction.Created, transaction, before: null));
         return transaction;
@@ -229,5 +243,6 @@ public sealed class BankingService(
         Status = t.Status.ToString(),
         t.JournalEntryId,
         t.ImportBatchId,
+        t.VendorId,
     });
 }

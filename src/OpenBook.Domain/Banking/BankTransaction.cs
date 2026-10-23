@@ -46,6 +46,9 @@ public sealed class BankTransaction
     public DateOnly Date { get; private set; }
     public string? Payee { get; private set; }
 
+    /// <summary>For an expense (spend), the vendor paid; <see cref="Payee"/> holds their name as printed.</summary>
+    public Guid? VendorId { get; private set; }
+
     /// <summary>Check number or other reference from the bank.</summary>
     public string? Reference { get; private set; }
 
@@ -127,12 +130,15 @@ public sealed class BankTransaction
         string? payee = null,
         string? reference = null,
         string? memo = null,
-        Guid? importBatchId = null)
+        Guid? importBatchId = null,
+        Guid? vendorId = null)
     {
         if (!Enum.IsDefined(kind))
             throw new DomainException("bank.kind_invalid", $"Unknown bank transaction kind {kind}.");
         if (amount <= 0m)
             throw new DomainException("bank.total_not_positive", "The amount must be more than zero.");
+        if (vendorId is not null && kind != BankTransactionKind.Spend)
+            throw new DomainException("bank.vendor_on_spend_only", "Only payments and charges can name a vendor.");
         if ((kind == BankTransactionKind.Transfer) != (transferAccountId is not null))
             throw new DomainException("bank.transfer_account", "Only transfers have a destination account.");
 
@@ -151,6 +157,7 @@ public sealed class BankTransaction
             Reference = Text(reference, 30, "reference"),
             Memo = Text(memo, 1000, "memo"),
             ImportBatchId = importBatchId,
+            VendorId = vendorId,
         };
     }
 

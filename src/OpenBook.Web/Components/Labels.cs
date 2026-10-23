@@ -2,8 +2,10 @@ using System.Globalization;
 using OpenBook.Application.Accounts;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Web.Components;
@@ -87,9 +89,19 @@ public static class Labels
     /// <summary>Paid, Partially paid, Overdue, Open or Voided.</summary>
     public static string Status(Invoice invoice, DateOnly today) => invoice switch
     {
-        { Status: SalesDocumentStatus.Voided } => "Voided",
+        { Status: DocumentStatus.Voided } => "Voided",
         { Balance: 0m } => "Paid",
         _ when invoice.IsOverdue(today) => "Overdue",
+        { AmountPaid: > 0m } => "Partially paid",
+        _ => "Open",
+    };
+
+    /// <summary>Paid, Partially paid, Overdue, Open or Voided.</summary>
+    public static string Status(Bill bill, DateOnly today) => bill switch
+    {
+        { Status: DocumentStatus.Voided } => "Voided",
+        { Balance: 0m } => "Paid",
+        _ when bill.IsOverdue(today) => "Overdue",
         { AmountPaid: > 0m } => "Partially paid",
         _ => "Open",
     };

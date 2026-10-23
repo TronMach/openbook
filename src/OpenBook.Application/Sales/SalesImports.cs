@@ -117,7 +117,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
         throw new DomainException("import.terms_invalid", $"Couldn't read the terms '{text}'. Use e.g. \"Net 30\" or \"Due on receipt\".");
     }
 
-    private static string? Address(string? street, string? street2, string? city, string? state, string? zip, string? country)
+    internal static string? Address(string? street, string? street2, string? city, string? state, string? zip, string? country)
     {
         var cityLine = string.Join(" ", new[] { string.Join(", ", new[] { city, state }.Where(s => s is not null)), zip }.Where(s => !string.IsNullOrEmpty(s)));
         var lines = new[] { street, street2, cityLine, country }.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();

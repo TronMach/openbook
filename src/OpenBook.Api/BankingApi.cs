@@ -16,7 +16,8 @@ public sealed record RecordBankTransactionRequest(
     IReadOnlyList<BankSplitRequest> Splits,
     string? Payee = null,
     string? Reference = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? VendorId = null);
 
 public sealed record TransferRequest(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
@@ -31,10 +32,11 @@ public sealed record BankTransactionResponse(
     string? Reference,
     string? Memo,
     BankTransactionStatus Status,
-    Guid JournalEntryId)
+    Guid JournalEntryId,
+    Guid? VendorId)
 {
     public static BankTransactionResponse From(BankTransaction t) =>
-        new(t.Id, t.Kind, t.AccountId, t.TransferAccountId, t.Date, t.Amount, t.Payee, t.Reference, t.Memo, t.Status, t.JournalEntryId);
+        new(t.Id, t.Kind, t.AccountId, t.TransferAccountId, t.Date, t.Amount, t.Payee, t.Reference, t.Memo, t.Status, t.JournalEntryId, t.VendorId);
 }
 
 public sealed record BankAccountResponse(Guid Id, string FullName, string Type, decimal Balance, decimal ReconciledBalance, DateOnly? LastReconciledDate, Guid? ReconciliationInProgressId)
@@ -131,7 +133,7 @@ internal static class BankingApi
         {
             var t = await s.RecordAsync(new RecordBankTransactionCommand(
                 r.Kind, r.AccountId, r.Date, (r.Splits ?? []).Select(x => new BankSplit(x.AccountId, x.Amount, x.Memo)).ToList(),
-                r.Payee, r.Reference, r.Memo), ct);
+                r.Payee, r.Reference, r.Memo, r.VendorId), ct);
             return Results.Created($"/api/banking/transactions/{t.Id}", BankTransactionResponse.From(t));
         });
 

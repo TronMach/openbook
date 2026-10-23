@@ -67,7 +67,7 @@ public sealed class SalesReceiptService(
     public async Task<SalesReceipt> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var receipt = await store.GetReceiptAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
-        if (receipt.Status == SalesDocumentStatus.Voided)
+        if (receipt.Status == DocumentStatus.Voided)
             throw new DomainException("receipt.already_voided", $"Sales receipt {receipt.Number} is already voided.");
 
         var before = Snapshot(receipt);

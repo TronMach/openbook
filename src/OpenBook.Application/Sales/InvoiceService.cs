@@ -69,7 +69,7 @@ public sealed class InvoiceService(
     public async Task<Invoice> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var invoice = await store.GetInvoiceAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
-        if (invoice.Status == SalesDocumentStatus.Voided)
+        if (invoice.Status == DocumentStatus.Voided)
             throw new DomainException("invoice.already_voided", $"Invoice {invoice.Number} is already voided.");
         if (invoice.AmountPaid > 0m)
             throw new DomainException("invoice.has_payments", $"Invoice {invoice.Number} has payments applied. Void those payments first.");

@@ -1,5 +1,6 @@
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Web.Components;
@@ -12,6 +13,8 @@ public static class Links
         (Invoice.Source, { } id) => $"/sales/invoices/{id}",
         (CustomerPayment.Source, { } id) => $"/sales/payments/{id}",
         (SalesReceipt.Source, { } id) => $"/sales/receipts/{id}",
+        (Bill.Source, { } id) => $"/purchases/bills/{id}",
+        (BillPayment.Source, { } id) => $"/purchases/payments/{id}",
         (BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource, { } id) => $"/banking/transactions/{id}",
         _ => $"/journal/{journalEntryId}",
     };
@@ -22,6 +25,8 @@ public static class Links
         Invoice.Source => "invoice",
         CustomerPayment.Source => "customer payment",
         SalesReceipt.Source => "sales receipt",
+        Bill.Source => "bill",
+        BillPayment.Source => "bill payment",
         BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource => "bank transaction",
         JournalEntry.ManualSource => null,
         _ => "document",

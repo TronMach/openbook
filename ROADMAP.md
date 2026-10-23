@@ -60,6 +60,8 @@ tests/
 
 **M3 status (2026-10-22): complete.** Customers (contact, billing/shipping, terms, balances) and products & services with income accounts; invoices with item lines, note lines, 4-decimal prices, due dates from terms, printable view; receive payment across several invoices with oldest-first auto-apply and partial payments; sales receipts with optional customer; void for all three (invoice blocked while paid); A/R auto-created when missing; CSV import for customers and items with preview; sales hub with unpaid/overdue totals; API for all of it. 231 tests.
 
+**M4 status (2026-10-22): complete.** Vendors (terms, account number, default category, balances); bills with category lines, vendor bill numbers and due dates from terms; Pay bills across vendors with partial payments, one numbered check per vendor, from bank or card; expenses as vendor-linked spend transactions; void for bills (blocked while paid) and bill payments (blocked once reconciled); A/P auto-created; vendor CSV import; purchases hub with unpaid/overdue/due-soon totals; API for all of it. 251 tests. **MVP feature set is now complete except M5 reports.**
+
 **Exit criteria:** a sole proprietor can set up a company, run a year of invoicing, bills and banking, reconcile, and get a correct P&L and balance sheet, all on one SQLite file they can back up.
 
 ## Phase 2 — V1 (what most small businesses expect)

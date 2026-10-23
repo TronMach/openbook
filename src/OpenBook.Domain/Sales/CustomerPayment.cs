@@ -43,7 +43,7 @@ public sealed class CustomerPayment
     public string? Reference { get; private set; }
 
     public string? Memo { get; private set; }
-    public SalesDocumentStatus Status { get; private set; }
+    public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -83,7 +83,7 @@ public sealed class CustomerPayment
             ReceivableAccountId = receivableAccountId,
             Reference = Text.Optional(reference, 30, "payment.reference_too_long", "Reference"),
             Memo = Text.Optional(memo, 1000, "payment.memo_too_long", "Memo"),
-            Status = SalesDocumentStatus.Posted,
+            Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
         };
@@ -93,8 +93,8 @@ public sealed class CustomerPayment
 
     public void Void()
     {
-        if (Status == SalesDocumentStatus.Voided)
+        if (Status == DocumentStatus.Voided)
             throw new DomainException("payment.already_voided", "This payment is already voided.");
-        Status = SalesDocumentStatus.Voided;
+        Status = DocumentStatus.Voided;
     }
 }

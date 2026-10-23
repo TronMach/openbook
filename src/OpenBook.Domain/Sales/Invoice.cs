@@ -2,12 +2,6 @@ using OpenBook.Domain.Common;
 
 namespace OpenBook.Domain.Sales;
 
-public enum SalesDocumentStatus
-{
-    Posted,
-    Voided,
-}
-
 /// <summary>
 /// A bill to a customer: debits accounts receivable and credits income. Payments reduce its balance.
 /// Never edited; voided (once no payments are applied) by reversing its entry.
@@ -32,14 +26,14 @@ public sealed class Invoice
 
     public decimal Total { get; private set; }
     public decimal AmountPaid { get; private set; }
-    public SalesDocumentStatus Status { get; private set; }
+    public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<SalesLine> Lines => _lines;
 
-    public decimal Balance => Status == SalesDocumentStatus.Voided ? 0m : Total - AmountPaid;
-    public bool IsOpen => Status == SalesDocumentStatus.Posted && Balance > 0m;
+    public decimal Balance => Status == DocumentStatus.Voided ? 0m : Total - AmountPaid;
+    public bool IsOpen => Status == DocumentStatus.Posted && Balance > 0m;
     public bool IsOverdue(DateOnly today) => IsOpen && DueDate < today;
 
     public static Invoice Create(
@@ -66,7 +60,7 @@ public sealed class Invoice
             Date = date,
             DueDate = dueDate,
             Memo = Text.Optional(memo, 1000, "invoice.memo_too_long", "Message"),
-            Status = SalesDocumentStatus.Posted,
+            Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
         };
@@ -79,7 +73,7 @@ public sealed class Invoice
 
     public void ApplyPayment(decimal amount)
     {
-        if (Status != SalesDocumentStatus.Posted)
+        if (Status != DocumentStatus.Posted)
             throw new DomainException("invoice.voided", $"Invoice {Number} is voided.");
         if (amount <= 0m)
             throw new DomainException("payment.amount_not_positive", "Payment amounts must be more than zero.");
@@ -97,11 +91,11 @@ public sealed class Invoice
 
     public void Void()
     {
-        if (Status == SalesDocumentStatus.Voided)
+        if (Status == DocumentStatus.Voided)
             throw new DomainException("invoice.already_voided", $"Invoice {Number} is already voided.");
         if (AmountPaid > 0m)
             throw new DomainException("invoice.has_payments", $"Invoice {Number} has payments applied. Void those payments first.");
-        Status = SalesDocumentStatus.Voided;
+        Status = DocumentStatus.Voided;
     }
 
     public static string NormalizeNumber(string? number) =>
