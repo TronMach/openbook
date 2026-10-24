@@ -1,3 +1,4 @@
+@using OpenBook.Domain.Companies
 @inherits LayoutComponentBase
 
 <AuthorizeView>
@@ -13,13 +14,19 @@
                 <NavLink href="/inventory">Inventory</NavLink>
                 <NavLink href="/journal">Journal</NavLink>
                 <NavLink href="/reports">Reports</NavLink>
-                <NavLink href="/settings">Settings</NavLink>
-                <NavLink href="/backup">Backup</NavLink>
+                @if (context.User.Can(UserRole.Accountant))
+                {
+                    <NavLink href="/settings">Settings</NavLink>
+                }
+                @if (context.User.Can(UserRole.Admin))
+                {
+                    <NavLink href="/backup">Backup</NavLink>
+                }
             </nav>
             <form class="search" method="get" action="/search" data-enhance="false" role="search">
                 <input name="q" type="search" placeholder="Search…" aria-label="Search" />
             </form>
-            <a class="muted" href="/account/password" title="Change password">@context.User.Identity?.Name</a>
+            <a class="muted" href="/account/password" title="Change password · @AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)">@context.User.Identity?.Name</a>
             <form method="post" action="/logout">
                 <AntiforgeryToken />
                 <button type="submit" class="link">Sign out</button>

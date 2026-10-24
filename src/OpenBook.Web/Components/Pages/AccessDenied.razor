@@ -1,0 +1,28 @@
+@page "/access-denied"
+@using OpenBook.Domain.Companies
+
+<PageTitle>Not allowed · OpenBook</PageTitle>
+
+<div class="card">
+    <h1>You don't have access to that</h1>
+    <p>
+        That needs the <strong>@(Enum.TryParse<UserRole>(Needed, out var role) ? AccessMiddleware.Describe(role) : "admin")</strong> role or higher,
+        and you're signed in as <strong>@AccessMiddleware.Describe(AccessRules.RoleOf(_user) ?? UserRole.ViewOnly)</strong>.
+        Ask an admin to change your role if you need it.
+    </p>
+    <p><a href="/">Back to the home page</a></p>
+</div>
+
+@code {
+    private System.Security.Claims.ClaimsPrincipal _user = new();
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [SupplyParameterFromQuery] private string? Needed { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+            _user = (await AuthState).User;
+    }
+}

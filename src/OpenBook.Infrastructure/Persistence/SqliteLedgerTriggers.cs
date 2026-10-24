@@ -13,7 +13,7 @@ namespace OpenBook.Infrastructure.Persistence;
 /// frozen there so that older migrations never change. To change a trigger, add a migration that drops
 /// and recreates it. Beware EF Core's SQLite table rebuilds (column type changes, drops): a rebuild of
 /// JournalEntries, JournalLines or AuditRecords silently loses its triggers. MigrationTests catch that.
-/// The PostgreSQL provider (V1.8) needs equivalents, ideally a deferred constraint trigger.
+/// The PostgreSQL equivalents live in OpenBook.Infrastructure.Postgres (InitialPostgres.Triggers.cs), with the same names.
 /// </summary>
 public static class SqliteLedgerTriggers
 {

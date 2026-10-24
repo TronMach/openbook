@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenBook.Api\OpenBook.Api.csproj" />
     <ProjectReference Include="..\OpenBook.Infrastructure\OpenBook.Infrastructure.csproj" />
+    <ProjectReference Include="..\OpenBook.Infrastructure.Postgres\OpenBook.Infrastructure.Postgres.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

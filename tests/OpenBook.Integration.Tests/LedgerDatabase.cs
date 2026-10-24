@@ -28,6 +28,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     /// <summary>Every email "sent" in the test.</summary>
     public RecordingEmailSender Mail { get; } = new();
+
+    /// <summary>Every webhook request "sent" in the test.</summary>
+    public RecordingWebhookSender Webhooks { get; } = new();
     public string ConnectionString => _connectionString;
     public string BackupDirectory { get; } = Path.Combine(Path.GetTempPath(), $"openbook-tests-{Guid.NewGuid():N}");
     public User? Owner { get; private set; }
@@ -44,6 +47,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .AddSingleton<ICurrentUser, TestUser>()
             .AddSingleton<ISecretProtector, TestSecrets>()
             .AddSingleton<IEmailSender>(Mail)
+            .AddSingleton<OpenBook.Application.Webhooks.IWebhookSender>(Webhooks)
             .BuildServiceProvider(validateScopes: true);
 
         await Services.MigrateOpenBookDatabaseAsync();
@@ -99,6 +103,20 @@ public sealed class TestSecrets : ISecretProtector
 
     public string? Unprotect(string protectedText) =>
         protectedText.StartsWith("protected:", StringComparison.Ordinal) ? protectedText["protected:".Length..] : null;
+}
+
+public sealed class RecordingWebhookSender : OpenBook.Application.Webhooks.IWebhookSender
+{
+    public List<(string Url, string Body, IReadOnlyDictionary<string, string> Headers)> Sent { get; } = [];
+
+    /// <summary>The status code the receiver answers with; null for no response.</summary>
+    public int? Status { get; set; } = 200;
+
+    public Task<OpenBook.Application.Webhooks.WebhookResponse> SendAsync(string url, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
+    {
+        Sent.Add((url, body, headers));
+        return Task.FromResult(new OpenBook.Application.Webhooks.WebhookResponse(Status, Status is null ? "Connection refused" : null));
+    }
 }
 
 public sealed class RecordingEmailSender : IEmailSender

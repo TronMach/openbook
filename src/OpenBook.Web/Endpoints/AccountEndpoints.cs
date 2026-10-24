@@ -25,7 +25,16 @@ public static class AccountEndpoints
 
         app.MapGet("/backup/download", async (IBackupService backups, CancellationToken ct) =>
         {
-            var file = await backups.CreateAsync(ct);
+            BackupFile file;
+            try
+            {
+                file = await backups.CreateAsync(ct);
+            }
+            catch (DomainException ex)
+            {
+                return BackToBackupPage(ex.Code);
+            }
+
             var stream = new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.Delete, 81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
             return Results.File(stream, "application/vnd.sqlite3", file.FileName);
         }).RequireAuthorization();

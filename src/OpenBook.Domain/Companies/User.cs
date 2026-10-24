@@ -2,9 +2,25 @@ using OpenBook.Domain.Common;
 
 namespace OpenBook.Domain.Companies;
 
+/// <summary>What a user may do. Each role includes everything the ones before it can.</summary>
+public enum UserRole
+{
+    /// <summary>Reads everything: lists, documents, reports and exports. Changes nothing (except their own password, API keys and saved reports).</summary>
+    ViewOnly,
+
+    /// <summary>Day-to-day work: customers, vendors, items, sales, purchases, banking, inventory and sales tax.</summary>
+    Standard,
+
+    /// <summary>Also the books themselves: chart of accounts, journal entries, closing date, company settings, budgets, tax lines and the audit log.</summary>
+    Accountant,
+
+    /// <summary>Also users, backup and restore, email settings and webhooks.</summary>
+    Admin,
+}
+
 /// <summary>
-/// A person who can sign in. MVP has a single owner; roles arrive in V1.8.
-/// Password hashing happens outside the domain; this class only stores the hash.
+/// A person who can sign in, with a <see cref="UserRole"/>. Users are deactivated, never deleted, so the audit
+/// log's actors stay meaningful. Password hashing happens outside the domain; this class only stores the hash.
 /// </summary>
 public sealed class User
 {
@@ -35,7 +51,12 @@ public sealed class User
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? LastLoginAt { get; private set; }
 
-    public static User Create(string username, string passwordHash, DateTimeOffset createdAt) =>
+    public UserRole Role { get; private set; }
+
+    /// <summary>Inactive users can't sign in, and their API keys stop working.</summary>
+    public bool IsActive { get; private set; }
+
+    public static User Create(string username, string passwordHash, DateTimeOffset createdAt, UserRole role = UserRole.Admin) =>
         new()
         {
             Id = Guid.CreateVersion7(),
@@ -43,7 +64,31 @@ public sealed class User
             PasswordHash = passwordHash,
             SecurityStamp = NewStamp(),
             CreatedAt = createdAt.ToUniversalTime(),
+            Role = ValidRole(role),
+            IsActive = true,
         };
+
+    /// <summary>Ends the user's sessions, so they sign in again with the new role.</summary>
+    public void ChangeRole(UserRole role)
+    {
+        if (ValidRole(role) == Role)
+            return;
+        Role = role;
+        SecurityStamp = NewStamp();
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+        SecurityStamp = NewStamp();
+    }
+
+    public void Reactivate() => IsActive = true;
+
+    public bool Can(UserRole needed) => IsActive && Role >= needed;
+
+    private static UserRole ValidRole(UserRole role) =>
+        Enum.IsDefined(role) ? role : throw new DomainException("user.role_invalid", $"Unknown role {role}.");
 
     public static string NormalizeUsername(string username)
     {

@@ -434,6 +434,52 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("ReconciliationLines", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.ApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hint")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ApiKeys", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -570,6 +616,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<int>("FailedLoginCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset?>("LastLoginAt")
                         .HasColumnType("TEXT");
 
@@ -579,6 +628,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SecurityStamp")
@@ -2090,6 +2144,99 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("TaxRates", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("AuditRecordId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("LastStatusCode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("SubscriptionId", "CreatedAt");
+
+                    b.ToTable("WebhookDeliveries", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Cursor")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Events")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProtectedSecret")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WebhookSubscriptions", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Accounts.Account", b =>
                 {
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
@@ -2196,6 +2343,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany("Lines")
                         .HasForeignKey("ReconciliationId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Companies.ApiKey", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Companies.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -3451,6 +3607,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Webhooks.WebhookSubscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

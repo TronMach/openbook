@@ -1,0 +1,36 @@
+# OpenBook with PostgreSQL, for several users on a server:  docker compose up -d   then open http://localhost:8080
+# Change the passwords below. Put a TLS reverse proxy (Caddy, nginx, Traefik) in front for anything beyond a LAN;
+# ASPNETCORE_FORWARDEDHEADERS_ENABLED makes the app trust its X-Forwarded-* headers.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openbook
+      POSTGRES_USER: openbook
+      POSTGRES_PASSWORD: change-me
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openbook -d openbook"]
+      interval: 5s
+      retries: 10
+
+  openbook:
+    build: .
+    image: openbook:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__OpenBook: "Host=db;Database=openbook;Username=openbook;Password=change-me"
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    volumes:
+      - app-data:/data
+
+volumes:
+  db-data:
+  app-data:

@@ -12,6 +12,7 @@ using OpenBook.Application.Reporting;
 using OpenBook.Application.Search;
 using OpenBook.Application.Sales;
 using OpenBook.Application.SalesTax;
+using OpenBook.Application.Webhooks;
 
 namespace OpenBook.Application;
 
@@ -78,6 +79,10 @@ public static class DependencyInjection
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();
         services.AddScoped<AuthService>();
+        services.AddScoped<UserService>();
+        services.AddScoped<ApiKeyService>();
+        services.AddScoped<WebhookService>();
+        services.AddScoped<WebhookDispatcher>();
         return services;
     }
 }

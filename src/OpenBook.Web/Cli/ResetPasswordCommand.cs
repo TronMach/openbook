@@ -21,12 +21,13 @@ public static class ResetPasswordCommand
         // The username is the first bare word after the command; "--key=value" arguments are configuration.
         var username = args.Skip(1).FirstOrDefault(a => !a.StartsWith('-'));
 
-        var dataSource = Path.GetFullPath(new SqliteConnectionStringBuilder(services.GetRequiredService<OpenBookStorage>().ConnectionString).DataSource);
+        var storage = services.GetRequiredService<OpenBookStorage>();
         Console.WriteLine("OpenBook password reset");
-        Console.WriteLine($"Company file: {dataSource}");
+        var dataSource = storage.Provider == DatabaseProvider.Sqlite ? Path.GetFullPath(new SqliteConnectionStringBuilder(storage.ConnectionString).DataSource) : null;
+        Console.WriteLine(dataSource is null ? "Company database: PostgreSQL" : $"Company file: {dataSource}");
 
         // Don't let a typo in the path or working folder silently create a new, empty company file.
-        if (!File.Exists(dataSource))
+        if (dataSource is not null && !File.Exists(dataSource))
         {
             Console.Error.WriteLine("No company file there. Run this from the folder you start OpenBook from, or pass --ConnectionStrings:OpenBook=\"Data Source=<path>\".");
             return 1;

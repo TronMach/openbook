@@ -8,11 +8,15 @@ Open-source QuickBooks alternative in .NET 10. Plan and milestones: `ROADMAP.md`
 - Test: `dotnet test` (Domain.Tests = pure unit; Integration.Tests = migrated in-memory SQLite incl. triggers)
 - Run: `dotnet run --project src/OpenBook.Web` (migrates `openbook.db` on startup; API under `/api`)
 - Reset a forgotten password: `dotnet run --project src/OpenBook.Web -- reset-password [username]` (same config as the web app; prompts twice, reads lines when stdin is piped; refuses if the company file is missing rather than creating one)
-- New migration: `dotnet ef migrations add <Name> -p src/OpenBook.Infrastructure -s src/OpenBook.Infrastructure -o Persistence/Migrations`
+- Encrypt / decrypt the SQLite company file in place (OpenBook stopped, key from `OpenBook:EncryptionKey`): `dotnet run --project src/OpenBook.Web -- encrypt-database` / `decrypt-database`
+- New migration (SQLite): `dotnet ef migrations add <Name> -p src/OpenBook.Infrastructure -s src/OpenBook.Infrastructure -o Persistence/Migrations`
+- New migration (PostgreSQL), every time a SQLite one is added: `dotnet ef migrations add <Name> -p src/OpenBook.Infrastructure.Postgres -s src/OpenBook.Infrastructure.Postgres -o Migrations`
+- PostgreSQL tests run only with `OPENBOOK_TEST_POSTGRES` set (a server connection string allowed to create databases); otherwise they're skipped.
+- Docker: `docker build -t openbook .` (SQLite in `/data`), or `docker compose up -d` (with PostgreSQL). `/healthz` for probes.
 
 ## Layout
 
-Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastructure (EF Core) → Api (minimal API endpoints, class library) → Web (Blazor host, maps the API).
+Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastructure (EF Core; SQLite migrations) → Infrastructure.Postgres (PostgreSQL migrations only) → Api (minimal API endpoints, class library) → Web (Blazor host, maps the API).
 
 ## Ledger rules (do not bypass)
 
@@ -162,3 +166,16 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Cash basis keeps the inventory cost lines of invoices and credit memos as posted (`ReportLedger`): COGS is recognized when stock is sold.
 - `EfInventoryStore.ListMovementsAsync` includes unsaved added movements, so several documents in one save see each other's stock.
 - Reports: `inventory-valuation` (as of a date, summary or layers, with a tie-out row to the asset accounts) and `inventory-stock` (reorder status) in `ReportCatalog`, built by `InventoryReports`.
+
+## Multi-user and server (V1.8)
+
+- `UserRole` (ViewOnly < Standard < Accountant < Admin) on `User`, plus `IsActive`; users are deactivated, never deleted. Changing a role or deactivating rotates the security stamp, so sessions end. `UserService` keeps at least one active admin and refuses changes to yourself. Inactive users sign in like a wrong password.
+- Access is decided in one place: `Web/Security/AccessRules.Required(path, method)` (first matching prefix rule; reads need ViewOnly, changes and "write pages" — `new`, `edit`, `import`, `apply`, `pay`, `reconcile`, `feed`, recurring editors, … — need Standard), enforced by `AccessMiddleware` for pages, form endpoints and the API (403 JSON for `/api`, `/access-denied` redirect otherwise). A new page or endpoint that changes the books or settings needs a rule; add a case to `ApiAccessTests.Access_rules_map_paths_to_roles`. Hide nav links with `User.Can(role)`.
+- The role is a claim in the cookie; cookies without one (from before V1.8) are rejected so people sign in again.
+- API keys (`ApiKey`, `ApiKeyService`): `Authorization: Bearer obk_…`, SHA-256 hash stored, shown once, act as their user with the user's role, revoked not deleted, last use recorded at most once a minute. The default auth scheme is a policy scheme picking the bearer handler (`ApiKeyAuthenticationHandler`) or the cookie.
+- OpenAPI at `/api/openapi/v1.json` (anonymous; Microsoft.AspNetCore.OpenApi). `/api/me`, `/api/users`, `/api/api-keys`, `/api/webhooks`, `/api/backup` cover what the new pages do.
+- Webhooks are fed by the audit log: `WebhookDispatcher` (run every 5 s by `WebhookDispatchService`) turns audit records after each subscription's `Cursor` into `WebhookDelivery` rows (event type `{entity_type}.{action_snake}`, payload with before/after snapshots, fixed at creation), then posts due ones via `IWebhookSender` (`HttpWebhookSender`: 10 s timeout, no redirects) with `OpenBook-Signature: t=…,v1=HMAC-SHA256(secret, "t.body")` (`WebhookSignature`). Retries back off 1 m → 12 h, 6 attempts, then Failed (redeliver by hand). Secrets are stored with `ISecretProtector`. Anything audited is an event, so keep audit snapshots free of secrets.
+- Encryption at rest: SQLite runs on SQLCipher (`SQLitePCLRaw.bundle_e_sqlcipher` 2.1.11 with `Microsoft.EntityFrameworkCore.Sqlite.Core`). `OpenBook:EncryptionKey` becomes the connection's `Password`; backups and safety copies use the same key, and restore only accepts backups with that key. `SqliteEncryption` converts files with `sqlcipher_export` (triggers included).
+- PostgreSQL: `OpenBook:Database=Postgres` (or a connection string starting `Host=`). Migrations live in `OpenBook.Infrastructure.Postgres` (`InitialPostgres` creates the whole current schema; ledger triggers as PL/pgSQL functions in `InitialPostgres.Triggers.cs`, same names and messages, plus a TRUNCATE guard on AuditRecords). Every schema change needs a migration in both projects, and trigger changes in both dialects. In-app backup/restore is SQLite-only (`UnsupportedBackupService` says to use pg_dump). Store `DateTimeOffset`s in UTC (Npgsql rejects other offsets). The Postgres path has not been run against a server in this repo's history yet: run the skipped `PostgresTests` before relying on it.
+- Containers: Data Protection keys go to `OpenBook:DataProtectionKeys` (Docker: `/data/keys`) so cookies and stored secrets survive restarts. The image installs DejaVu fonts for PDFs and runs as the non-root `app` user.
+- Audit entity types: api_key, webhook (users were already `user`).

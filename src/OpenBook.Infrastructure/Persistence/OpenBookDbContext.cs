@@ -13,6 +13,7 @@ using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Reporting;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
+using OpenBook.Domain.Webhooks;
 
 namespace OpenBook.Infrastructure.Persistence;
 
@@ -30,6 +31,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
     public DbSet<Reconciliation> Reconciliations => Set<Reconciliation>();
     public DbSet<BankFeedItem> BankFeedItems => Set<BankFeedItem>();
@@ -424,6 +428,41 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(u => u.Username).IsUnique();
             b.Property(u => u.PasswordHash).HasMaxLength(500);
             b.Property(u => u.SecurityStamp).HasMaxLength(64);
+            b.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<ApiKey>(b =>
+        {
+            b.ToTable("ApiKeys");
+            b.HasKey(k => k.Id);
+            b.Property(k => k.Name).HasMaxLength(100);
+            b.Property(k => k.TokenHash).HasMaxLength(64);
+            b.HasIndex(k => k.TokenHash).IsUnique();
+            b.Property(k => k.Hint).HasMaxLength(20);
+            b.HasIndex(k => k.UserId);
+            b.HasOne<User>().WithMany().HasForeignKey(k => k.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WebhookSubscription>(b =>
+        {
+            b.ToTable("WebhookSubscriptions");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Url).HasMaxLength(500);
+            b.Property(s => s.Description).HasMaxLength(200);
+            b.Property(s => s.Events).HasMaxLength(2000);
+            b.Property(s => s.ProtectedSecret).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<WebhookDelivery>(b =>
+        {
+            b.ToTable("WebhookDeliveries");
+            b.HasKey(d => d.Id);
+            b.Property(d => d.EventType).HasMaxLength(100);
+            b.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.LastError).HasMaxLength(500);
+            b.HasIndex(d => new { d.Status, d.NextAttemptAt });
+            b.HasIndex(d => new { d.SubscriptionId, d.CreatedAt });
+            b.HasOne<WebhookSubscription>().WithMany().HasForeignKey(d => d.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

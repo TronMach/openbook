@@ -1,0 +1,161 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using OpenBook.Application.Companies;
+using OpenBook.Domain.Companies;
+using OpenBook.Web.Security;
+
+namespace OpenBook.Integration.Tests;
+
+/// <summary>The whole web app on a temporary company file: API keys, role checks, OpenAPI and the health probe.</summary>
+public sealed class ApiAccessTests : IAsyncLifetime
+{
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), $"openbook-api-{Guid.NewGuid():N}");
+    private WebApplicationFactory<Program> _app = null!;
+    private readonly Dictionary<UserRole, string> _tokens = [];
+
+    public async Task InitializeAsync()
+    {
+        Directory.CreateDirectory(_folder);
+        _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("ConnectionStrings:OpenBook", $"Data Source={Path.Combine(_folder, "api.db")}");
+            b.UseSetting("OpenBook:DataProtectionKeys", Path.Combine(_folder, "keys"));
+            b.UseEnvironment("Development");
+        });
+        _ = _app.Server; // starts the host, which migrates the database
+
+        await using var scope = _app.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var owner = await sp.GetRequiredService<CompanySetupService>().SetUpAsync(
+            new SetUpCompanyCommand("Api Co", BusinessType.SoleProprietorship, "USD", 1, "owner", "correct horse battery"));
+        _tokens[UserRole.Admin] = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(owner.Id, "admin")).Token;
+        foreach (var role in new[] { UserRole.ViewOnly, UserRole.Standard, UserRole.Accountant })
+        {
+            var user = await sp.GetRequiredService<UserService>().CreateAsync(role.ToString().ToLowerInvariant(), "a long password", role);
+            _tokens[role] = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(user.Id, "test")).Token;
+        }
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _app.DisposeAsync();
+        SqliteConnection.ClearAllPools();
+        Directory.Delete(_folder, recursive: true);
+    }
+
+    private HttpClient Client(UserRole? role)
+    {
+        var client = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        if (role is { } r)
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _tokens[r]);
+        return client;
+    }
+
+    [Fact]
+    public async Task Requests_without_a_valid_key_are_refused()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Client(null).GetAsync("/api/customers")).StatusCode);
+
+        var bad = Client(null);
+        bad.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "obk_not-a-real-key");
+        var response = await bad.GetAsync("/api/customers");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", response.Headers.WwwAuthenticate.Single().Scheme);
+    }
+
+    [Theory]
+    [InlineData(UserRole.ViewOnly, HttpStatusCode.OK, HttpStatusCode.Forbidden)]
+    [InlineData(UserRole.Standard, HttpStatusCode.OK, HttpStatusCode.Created)]
+    public async Task Reading_needs_any_role_and_changing_needs_standard(UserRole role, HttpStatusCode read, HttpStatusCode write)
+    {
+        var client = Client(role);
+        Assert.Equal(read, (await client.GetAsync("/api/customers")).StatusCode);
+        var created = await client.PostAsJsonAsync("/api/customers", new { displayName = $"Customer of {role}" });
+        Assert.Equal(write, created.StatusCode);
+    }
+
+    [Fact]
+    public async Task The_books_need_an_accountant_and_people_need_an_admin()
+    {
+        var entry = new { date = "2026-10-01", lines = Array.Empty<object>() };
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client(UserRole.Standard).PostAsJsonAsync("/api/journal-entries", entry)).StatusCode);
+        // An accountant gets past the role check to validation (no lines).
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client(UserRole.Accountant).PostAsJsonAsync("/api/journal-entries", entry)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client(UserRole.Accountant).GetAsync("/api/users")).StatusCode);
+        var users = await Client(UserRole.Admin).GetFromJsonAsync<List<Dictionary<string, object>>>("/api/users");
+        Assert.Equal(4, users!.Count);
+
+        var me = await Client(UserRole.Standard).GetFromJsonAsync<Dictionary<string, object>>("/api/me");
+        Assert.Equal("standard", me!["username"].ToString());
+    }
+
+    [Fact]
+    public async Task Everyone_manages_their_own_api_keys()
+    {
+        var client = Client(UserRole.ViewOnly);
+        var created = await client.PostAsJsonAsync("/api/api-keys", new { name = "Script" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var body = await created.Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var token = body!["token"].GetString()!;
+
+        var other = Client(null);
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.OK, (await other.GetAsync("/api/me")).StatusCode);
+        Assert.Equal(2, (await client.GetFromJsonAsync<List<object>>("/api/api-keys"))!.Count);
+
+        var id = body["key"].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/api-keys/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await other.GetAsync("/api/me")).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_openapi_description_and_health_probe_are_public()
+    {
+        var spec = await Client(null).GetStringAsync("/api/openapi/v1.json");
+        Assert.Contains("OpenBook API", spec, StringComparison.Ordinal);
+        Assert.Contains("\"bearer\"", spec, StringComparison.Ordinal);
+        Assert.Contains("/api/sales/invoices", spec, StringComparison.Ordinal);
+        Assert.Equal("\"ok\"", await Client(null).GetStringAsync("/healthz"));
+    }
+
+    [Theory]
+    [InlineData("/sales/invoices/new", "GET", UserRole.Standard)]
+    [InlineData("/sales/invoices/0190a7a2-0000-7000-8000-000000000000", "GET", UserRole.ViewOnly)]
+    [InlineData("/sales/invoices/0190a7a2-0000-7000-8000-000000000000", "POST", UserRole.Standard)]
+    [InlineData("/sales/recurring/0190a7a2-0000-7000-8000-000000000000", "GET", UserRole.Standard)]
+    [InlineData("/journal", "GET", UserRole.ViewOnly)]
+    [InlineData("/journal/new", "GET", UserRole.Accountant)]
+    [InlineData("/accounts", "POST", UserRole.Accountant)]
+    [InlineData("/settings", "GET", UserRole.Accountant)]
+    [InlineData("/settings/api-keys", "POST", UserRole.ViewOnly)]
+    [InlineData("/settings/users", "GET", UserRole.Admin)]
+    [InlineData("/backup/download", "GET", UserRole.Admin)]
+    [InlineData("/reports/profit-and-loss", "GET", UserRole.ViewOnly)]
+    [InlineData("/reports/saved", "POST", UserRole.ViewOnly)]
+    [InlineData("/reports/budgets/0190a7a2-0000-7000-8000-000000000000", "POST", UserRole.Accountant)]
+    [InlineData("/api/sales/invoices", "GET", UserRole.ViewOnly)]
+    [InlineData("/api/sales/invoices", "POST", UserRole.Standard)]
+    [InlineData("/api/accounts", "GET", UserRole.ViewOnly)]
+    [InlineData("/api/accounts", "POST", UserRole.Accountant)]
+    [InlineData("/api/webhooks", "GET", UserRole.Admin)]
+    [InlineData("/api/backup", "GET", UserRole.Admin)]
+    public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
+        Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
+
+    [Fact]
+    public async Task Pages_send_users_without_the_role_to_the_access_denied_page()
+    {
+        // Sign in as the view-only user with the real form flow is long; the middleware is shared, so an API
+        // key on a page request shows the same behaviour.
+        var response = await Client(UserRole.ViewOnly).GetAsync("/settings/users");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/access-denied?needed=Admin", response.Headers.Location!.OriginalString);
+    }
+}

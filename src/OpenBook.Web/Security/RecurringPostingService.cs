@@ -72,7 +72,7 @@ internal sealed partial class RecurringPostingService(
                     LogStopped(result.Template.Name, result.Error);
             }
         }
-        catch (Exception ex) when (ex is DomainException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        catch (Exception ex) when (ex is DomainException or InvalidOperationException or System.Data.Common.DbException)
         {
             // A restore can swap the company file mid-run; the next tick tries again.
             LogFailed(ex);

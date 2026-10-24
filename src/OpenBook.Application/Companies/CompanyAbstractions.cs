@@ -29,9 +29,16 @@ public interface ICompanyStore
     /// <summary>Tracked; null until email is first set up.</summary>
     Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct);
 
+    /// <summary>Tracked; every user's when <paramref name="userId"/> is null.</summary>
+    Task<IReadOnlyList<ApiKey>> ListApiKeysAsync(Guid? userId, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<ApiKey?> FindApiKeyAsync(string tokenHash, CancellationToken ct);
+
     void Add(Company company);
     void Add(EmailSettings settings);
     void Add(User user);
+    void Add(ApiKey key);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

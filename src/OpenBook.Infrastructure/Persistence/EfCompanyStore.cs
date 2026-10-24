@@ -25,6 +25,13 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
 
     public void Add(User user) => db.Users.Add(user);
 
+    public void Add(ApiKey key) => db.ApiKeys.Add(key);
+
+    public async Task<IReadOnlyList<ApiKey>> ListApiKeysAsync(Guid? userId, CancellationToken ct) =>
+        (await db.ApiKeys.Where(k => userId == null || k.UserId == userId).ToListAsync(ct)).OrderByDescending(k => k.CreatedAt).ToList();
+
+    public Task<ApiKey?> FindApiKeyAsync(string tokenHash, CancellationToken ct) => db.ApiKeys.SingleOrDefaultAsync(k => k.TokenHash == tokenHash, ct);
+
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

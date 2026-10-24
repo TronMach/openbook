@@ -1,0 +1,221 @@
+@page "/settings/webhooks"
+@page "/settings/webhooks/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Webhooks
+@using OpenBook.Domain.Webhooks
+@inject WebhookService Webhooks
+@inject NavigationManager Navigation
+
+<PageTitle>Webhooks · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(_selected is null ? "Webhooks" : "Webhook")</h1>
+        @if (_selected is not null)
+        {
+            <a href="/settings/webhooks">All webhooks</a>
+        }
+    </div>
+
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_selected is null)
+    {
+        <p class="muted">
+            A webhook posts a JSON event to your address whenever something changes: anything that's in the audit log, such as
+            <code>invoice.created</code>, <code>bill.voided</code> or <code>customer.updated</code>. Each request carries an
+            <code>OpenBook-Signature</code> header (<code>t=…,v1=…</code>, HMAC-SHA256 of <code>t.body</code> with the signing secret) so you can check it came
+            from here. Failed deliveries are retried for about 15 hours.
+        </p>
+        @if (_list.Count > 0)
+        {
+            <table class="data">
+                <thead><tr><th>Address</th><th>Events</th><th>Description</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var w in _list)
+                    {
+                        <tr class="@(w.IsActive ? null : "inactive")">
+                            <td><a href="/settings/webhooks/@w.Id">@w.Url</a></td>
+                            <td><code>@w.Events</code></td>
+                            <td>@w.Description</td>
+                            <td>@(w.IsActive ? "Active" : "Off")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+    else
+    {
+        <div class="card">
+            <dl class="facts">
+                <dt>Status</dt><dd>@(_selected.IsActive ? "Active" : "Off")</dd>
+                <dt>Signing secret</dt><dd><code class="secret">@Webhooks.RevealSecret(_selected)</code></dd>
+            </dl>
+            <div class="actions">
+                <form method="post" @formname="ping" @onsubmit="PingAsync" class="inline"><AntiforgeryToken /><button type="submit" class="secondary">Send a test event</button></form>
+                <form method="post" @formname="toggle" @onsubmit="ToggleAsync" class="inline"><AntiforgeryToken /><button type="submit" class="secondary">@(_selected.IsActive ? "Turn off" : "Turn on")</button></form>
+                <form method="post" @formname="rotate" @onsubmit="RotateAsync" class="inline"><AntiforgeryToken /><button type="submit" class="secondary">New signing secret</button></form>
+            </div>
+        </div>
+
+        <h2>Recent deliveries</h2>
+        @if (_deliveries.Count == 0)
+        {
+            <p class="muted">None yet. Events are sent within a few seconds of each change.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Created</th><th>Event</th><th>Status</th><th class="num">Attempts</th><th>Last result</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var d in _deliveries)
+                    {
+                        <tr>
+                            <td>@d.CreatedAt.LocalDateTime.ToString("g")</td>
+                            <td><code>@d.EventType</code></td>
+                            <td><span class="badge @(d.Status switch { WebhookDeliveryStatus.Succeeded => "ok", WebhookDeliveryStatus.Failed => "warn", _ => "" })">@d.Status</span></td>
+                            <td class="num">@d.Attempts</td>
+                            <td class="muted">@(d.LastStatusCode?.ToString() ?? "") @d.LastError</td>
+                            <td>
+                                @if (d.Status != WebhookDeliveryStatus.Pending)
+                                {
+                                    <form method="post" @formname="@($"redeliver-{d.Id}")" @onsubmit="() => RedeliverAsync(d.Id)" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link">Send again</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+
+    <div class="card">
+        <h2>@(_selected is null ? "Add a webhook" : "Edit")</h2>
+        <EditForm Model="Input" FormName="webhook" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label for="url">Address</label>
+                <InputText id="url" @bind-Value="Input.Url" placeholder="https://example.com/openbook-events" />
+                <ValidationMessage For="() => Input.Url" />
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="events">Events</label>
+                    <InputText id="events" @bind-Value="Input.Events" placeholder="*" />
+                    <span class="hint">Comma-separated: <code>*</code> for everything, or <code>invoice.*</code>, <code>*.voided</code>, <code>payment.created</code>.</span>
+                </div>
+                <div class="field">
+                    <label for="description">Description <span class="muted">(optional)</span></label>
+                    <InputText id="description" @bind-Value="Input.Description" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit">@(_selected is null ? "Add webhook" : "Save")</button></div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<WebhookSubscription> _list = [];
+    private WebhookSubscription? _selected;
+    private IReadOnlyList<WebhookDelivery> _deliveries = [];
+    private string? _message;
+    private string? _error;
+
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    [SupplyParameterFromForm(FormName = "webhook")]
+    private WebhookModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _message = Done;
+        if (Id is { } id)
+        {
+            _selected = await Webhooks.GetAsync(id);
+            if (_selected is null)
+            {
+                Navigation.NavigateTo("/settings/webhooks");
+                return;
+            }
+
+            _deliveries = await Webhooks.DeliveriesAsync(id);
+        }
+        else
+        {
+            _list = await Webhooks.ListAsync();
+        }
+
+        Input ??= _selected is null ? new WebhookModel() : new WebhookModel { Url = _selected.Url, Events = _selected.Events, Description = _selected.Description };
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        if (_selected is null)
+        {
+            var created = await Webhooks.CreateAsync(Input.Url, Input.Events, Input.Description);
+            return ($"/settings/webhooks/{created.Subscription.Id}", "Webhook added. Use the signing secret below to check requests.");
+        }
+
+        await Webhooks.UpdateAsync(_selected.Id, Input.Url, Input.Events, Input.Description);
+        return ($"/settings/webhooks/{_selected.Id}", "Saved.");
+    });
+
+    private Task PingAsync() => RunAsync(async () =>
+    {
+        await Webhooks.PingAsync(_selected!.Id);
+        return ($"/settings/webhooks/{_selected.Id}", "Test event queued; it's sent within a few seconds.");
+    });
+
+    private Task ToggleAsync() => RunAsync(async () =>
+    {
+        var w = await Webhooks.SetActiveAsync(_selected!.Id, !_selected.IsActive);
+        return ($"/settings/webhooks/{w.Id}", w.IsActive ? "Turned on." : "Turned off.");
+    });
+
+    private Task RotateAsync() => RunAsync(async () =>
+    {
+        await Webhooks.RotateSecretAsync(_selected!.Id);
+        return ($"/settings/webhooks/{_selected.Id}", "New signing secret made; update your receiver.");
+    });
+
+    private Task RedeliverAsync(Guid deliveryId) => RunAsync(async () =>
+    {
+        await Webhooks.RedeliverAsync(deliveryId);
+        return ($"/settings/webhooks/{_selected!.Id}", "Queued to send again.");
+    });
+
+    private async Task RunAsync(Func<Task<(string Url, string Message)>> action)
+    {
+        try
+        {
+            var (url, message) = await action();
+            Navigation.NavigateTo($"{url}?done={Uri.EscapeDataString(message)}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class WebhookModel
+    {
+        [Required(ErrorMessage = "Enter the address to send events to.")]
+        public string Url { get; set; } = string.Empty;
+
+        public string? Events { get; set; }
+
+        public string? Description { get; set; }
+    }
+}

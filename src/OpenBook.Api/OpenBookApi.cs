@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.OpenApi;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -15,11 +16,35 @@ namespace OpenBook.Api;
 /// <summary>REST surface over the application layer. The Blazor UI calls the same services directly.</summary>
 public static class OpenBookApi
 {
-    public static IServiceCollection AddOpenBookApi(this IServiceCollection services) =>
+    public static IServiceCollection AddOpenBookApi(this IServiceCollection services)
+    {
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        services.AddOpenApi(o => o.AddDocumentTransformer((document, _, _) =>
+        {
+            document.Info = new OpenApiInfo
+            {
+                Title = "OpenBook API",
+                Version = "v1",
+                Description = "Everything the app can do. Authenticate with an API key (Settings › API keys) as `Authorization: Bearer obk_…`; " +
+                    "it acts as its user with the user's role. Errors are 400 with a stable `code`, 403 when the role doesn't allow it.",
+            };
+            document.Components ??= new OpenApiComponents();
+            document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+            document.Components.SecuritySchemes["apiKey"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                Description = "An OpenBook API key.",
+            };
+            return Task.CompletedTask;
+        }));
+        return services;
+    }
 
     public static IEndpointRouteBuilder MapOpenBookApi(this IEndpointRouteBuilder app)
     {
+        // The OpenAPI description itself is public: it describes endpoints, not data.
+        app.MapOpenApi("/api/openapi/{documentName}.json").AllowAnonymous();
         var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter(MapDomainErrors);
         api.MapBankingApi();
         api.MapSalesApi();
@@ -31,6 +56,7 @@ public static class OpenBookApi
         api.MapBankFeedApi();
         api.MapSalesTaxApi();
         api.MapInventoryApi();
+        api.MapAccessApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.GetAsync(ct)));

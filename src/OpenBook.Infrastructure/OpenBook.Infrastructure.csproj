@@ -12,7 +12,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="10.0.13" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- SQLCipher instead of plain SQLite, for encryption at rest (BSD-style licence; without a key it behaves like SQLite). -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.13" />
     <!-- Pinned: 6.2.x is the last MIT release; 6.5+ is AGPL or commercial. -->
     <PackageReference Include="PDFsharp-MigraDoc" Version="[6.2.4]" />

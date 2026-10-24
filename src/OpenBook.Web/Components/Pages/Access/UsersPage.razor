@@ -1,0 +1,174 @@
+@page "/settings/users"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>Users · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Users</h1>
+        <a href="/settings">Company settings</a>
+    </div>
+    <p class="muted">
+        <strong>View-only</strong> users read everything and change nothing. <strong>Standard</strong> users do the day-to-day work: sales, purchases,
+        banking, inventory and sales tax. <strong>Accountants</strong> also keep the books: chart of accounts, journal entries, closing date,
+        company settings, budgets and the audit log. <strong>Admins</strong> also manage users, backups, email and webhooks.
+        Changing someone's role or making them inactive signs them out. Users are never deleted, so the audit log keeps its names.
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <table class="data">
+        <thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th></th><th></th></tr></thead>
+        <tbody>
+            @foreach (var user in _users)
+            {
+                <tr class="@(user.IsActive ? null : "inactive")">
+                    <td>@user.Username @(user.IsActive ? "" : "(inactive)")</td>
+                    <td>
+                        <form method="post" @formname="@($"role-{user.Id}")" @onsubmit="() => ChangeRoleAsync(user.Id)" class="inline">
+                            <AntiforgeryToken />
+                            <select name="Role" aria-label="Role for @user.Username" @onchange="e => _role = e.Value as string">
+                                @foreach (var role in Enum.GetValues<UserRole>().Reverse())
+                                {
+                                    <option value="@role" selected="@(role == user.Role)">@AccessMiddleware.Describe(role)</option>
+                                }
+                            </select>
+                            <button type="submit" class="secondary">Change</button>
+                        </form>
+                    </td>
+                    <td class="muted">@(user.LastLoginAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.LocalDateTime)) : "never")</td>
+                    <td>
+                        <form method="post" @formname="@($"active-{user.Id}")" @onsubmit="() => ToggleAsync(user.Id, !user.IsActive)" class="inline">
+                            <AntiforgeryToken />
+                            <button type="submit" class="link">@(user.IsActive ? "Make inactive" : "Make active")</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" @formname="@($"reset-{user.Id}")" @onsubmit="() => ResetAsync(user.Id)" class="inline">
+                            <AntiforgeryToken />
+                            <input type="password" name="NewPassword" autocomplete="new-password" placeholder="New password" aria-label="New password for @user.Username" />
+                            <button type="submit" class="link">Reset password</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="card">
+        <h2>Add a user</h2>
+        <EditForm Model="Input" FormName="new-user" OnValidSubmit="CreateAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="username">Username</label>
+                    <InputText id="username" @bind-Value="Input.Username" autocomplete="off" />
+                    <ValidationMessage For="() => Input.Username" />
+                </div>
+                <div class="field">
+                    <label for="role">Role</label>
+                    <InputSelect id="role" @bind-Value="Input.Role">
+                        @foreach (var role in Enum.GetValues<UserRole>().Reverse())
+                        {
+                            <option value="@role">@AccessMiddleware.Describe(role)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="password">Starting password</label>
+                    <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="new-password" />
+                    <ValidationMessage For="() => Input.Password" />
+                    <span class="hint">At least @User.MinPasswordLength characters. Ask them to change it after signing in.</span>
+                </div>
+            </div>
+            <div class="actions"><button type="submit">Add user</button></div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<User> _users = [];
+    private string? _role;
+    private string? _message;
+    private string? _error;
+
+    [SupplyParameterFromForm(FormName = "new-user")]
+    private NewUserModel Input { get; set; } = default!;
+
+    [SupplyParameterFromForm(Name = "Role")]
+    private string? PostedRole { get; set; }
+
+    [SupplyParameterFromForm(Name = "NewPassword")]
+    private string? PostedPassword { get; set; }
+
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new NewUserModel();
+        _message = Done;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _users = await UserService.ListAsync();
+
+    private Task CreateAsync() => RunAsync(async () =>
+    {
+        var user = await UserService.CreateAsync(Input.Username, Input.Password, Input.Role);
+        return $"Added {user.Username}.";
+    });
+
+    private Task ChangeRoleAsync(Guid id) => RunAsync(async () =>
+    {
+        var role = Enum.TryParse<UserRole>(PostedRole ?? _role, out var r) ? r : throw new DomainException("user.role_invalid", "Choose a role.");
+        var user = await UserService.ChangeRoleAsync(id, role);
+        return $"{user.Username} is now {AccessMiddleware.Describe(user.Role)}.";
+    });
+
+    private Task ToggleAsync(Guid id, bool active) => RunAsync(async () =>
+    {
+        var user = await UserService.SetActiveAsync(id, active);
+        return $"{user.Username} is {(user.IsActive ? "active" : "inactive")}.";
+    });
+
+    private Task ResetAsync(Guid id) => RunAsync(async () =>
+    {
+        var user = await UserService.ResetPasswordAsync(id, PostedPassword ?? string.Empty);
+        return $"{user.Username}'s password was reset and their sessions ended.";
+    });
+
+    private async Task RunAsync(Func<Task<string>> action)
+    {
+        try
+        {
+            var message = await action();
+            Navigation.NavigateTo($"/settings/users?done={Uri.EscapeDataString(message)}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            await LoadAsync();
+        }
+    }
+
+    private sealed class NewUserModel
+    {
+        [Required(ErrorMessage = "Enter a username.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Enter a starting password.")]
+        public string Password { get; set; } = string.Empty;
+
+        public UserRole Role { get; set; } = UserRole.Standard;
+    }
+}

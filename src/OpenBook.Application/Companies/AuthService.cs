@@ -13,7 +13,7 @@ public enum SignInStatus
 }
 
 /// <summary>What a sign-in cookie needs to carry.</summary>
-public sealed record AuthenticatedUser(Guid Id, string Username, string SecurityStamp);
+public sealed record AuthenticatedUser(Guid Id, string Username, string SecurityStamp, UserRole Role);
 
 public sealed record SignInResult(SignInStatus Status, AuthenticatedUser? User = null, DateTimeOffset? LockedUntil = null);
 
@@ -41,6 +41,13 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
             return new SignInResult(SignInStatus.InvalidCredentials);
         }
 
+        // An inactive user gets the same answer as a wrong password, after the same work.
+        if (!user.IsActive)
+        {
+            hasher.Verify(_dummyHash.Value, password ?? string.Empty);
+            return new SignInResult(SignInStatus.InvalidCredentials);
+        }
+
         if (!await CheckPasswordAsync(user, password, ct))
         {
             return user.IsLockedOut(clock.UtcNow)
@@ -50,7 +57,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
 
         user.RecordSuccessfulLogin(clock.UtcNow);
         await store.SaveChangesAsync(ct);
-        return new SignInResult(SignInStatus.Succeeded, new AuthenticatedUser(user.Id, user.Username, user.SecurityStamp));
+        return new SignInResult(SignInStatus.Succeeded, Authenticated(user));
     }
 
     /// <summary>Re-confirms the signed-in user's password before a destructive action. Failures count toward lockout.</summary>
@@ -60,9 +67,11 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         return await CheckPasswordAsync(user, password, ct);
     }
 
-    /// <summary>False once the user is gone or their credentials changed after the cookie was issued.</summary>
+    /// <summary>False once the user is gone or inactive, or their credentials or role changed after the cookie was issued.</summary>
     public async Task<bool> IsSessionValidAsync(Guid userId, string securityStamp, CancellationToken ct = default) =>
-        await store.GetUserAsync(userId, ct) is { } user && user.SecurityStamp == securityStamp;
+        await store.GetUserAsync(userId, ct) is { IsActive: true } user && user.SecurityStamp == securityStamp;
+
+    internal static AuthenticatedUser Authenticated(User user) => new(user.Id, user.Username, user.SecurityStamp, user.Role);
 
     /// <returns>The user with a new security stamp, for re-issuing the caller's cookie.</returns>
     public async Task<AuthenticatedUser> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken ct = default)
@@ -76,7 +85,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         store.Add(AuditRecord.Create(clock.UtcNow, user.Username, AuditAction.Updated, "user", user.Id, null,
             JsonSerializer.Serialize(new { Changed = "password" })));
         await store.SaveChangesAsync(ct);
-        return new AuthenticatedUser(user.Id, user.Username, user.SecurityStamp);
+        return Authenticated(user);
     }
 
     /// <summary>

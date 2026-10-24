@@ -9,16 +9,31 @@ using OpenBook.Domain.Common;
 namespace OpenBook.Infrastructure.Persistence;
 
 /// <summary>Where the company file lives and where safety copies go.</summary>
-public sealed record OpenBookStorage(string ConnectionString, string BackupDirectory)
+/// <param name="ConnectionString">Includes the encryption key (as Password) when the file is encrypted.</param>
+/// <param name="Encrypted">The company file is encrypted with SQLCipher; backups and safety copies are encrypted with the same key.</param>
+public sealed record OpenBookStorage(string ConnectionString, string BackupDirectory, bool Encrypted = false, DatabaseProvider Provider = DatabaseProvider.Sqlite)
 {
     /// <summary>Where "save to folder" email delivery writes messages: a "mail" folder beside the backups folder.</summary>
     public string MailDirectory => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(BackupDirectory)) ?? ".", "mail");
 }
 
+/// <summary>PostgreSQL has its own tools for this (pg_dump, point-in-time recovery), which do it better than an app can.</summary>
+internal sealed class UnsupportedBackupService : IBackupService
+{
+    private static DomainException NotHere() => new(
+        "backup.not_supported",
+        "This company is in PostgreSQL. Back it up with pg_dump (or your server's backups) and restore with pg_restore.");
+
+    public Task<BackupFile> CreateAsync(CancellationToken ct) => throw NotHere();
+
+    public Task<string> RestoreAsync(string backupPath, string originalFileName, CancellationToken ct) => throw NotHere();
+}
+
 /// <summary>
-/// Backups are plain SQLite files made with SQLite's online backup API, so they're consistent
-/// while the app is running and open in any SQLite tool. Restore validates the file, keeps a
-/// safety copy of the current data, then copies the backup over the live database in place.
+/// Backups are SQLite files made with SQLite's online backup API, so they're consistent while the app is
+/// running and open in any SQLite tool (SQLCipher-aware, with the key, when the company file is encrypted).
+/// Restore validates the file, keeps a safety copy of the current data, then copies the backup over the
+/// live database in place. An encrypted company restores only backups encrypted with the same key.
 /// </summary>
 internal sealed class SqliteBackupService(
     OpenBookStorage storage,
@@ -100,7 +115,9 @@ internal sealed class SqliteBackupService(
         }
         catch (SqliteException)
         {
-            throw Invalid("backup.invalid_file", "This file is not an OpenBook backup.");
+            throw storage.Encrypted
+                ? Invalid("backup.invalid_file", "This file can't be read: it's not an OpenBook backup, or it's encrypted with a different key (or not at all).")
+                : Invalid("backup.invalid_file", "This file is not an OpenBook backup.");
         }
     }
 
@@ -113,12 +130,13 @@ internal sealed class SqliteBackupService(
         source.BackupDatabase(destination);
     }
 
-    // No pooling, so the file handle is released as soon as the connection closes.
-    private static string FileConnectionString(string path, bool readOnly) => new SqliteConnectionStringBuilder
+    // No pooling, so the file handle is released as soon as the connection closes. Same key as the company file.
+    private string FileConnectionString(string path, bool readOnly) => new SqliteConnectionStringBuilder
     {
         DataSource = path,
         Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate,
         Pooling = false,
+        Password = new SqliteConnectionStringBuilder(storage.ConnectionString).Password,
     }.ToString();
 
     private static async Task<T?> ScalarAsync<T>(SqliteConnection connection, string sql, CancellationToken ct)

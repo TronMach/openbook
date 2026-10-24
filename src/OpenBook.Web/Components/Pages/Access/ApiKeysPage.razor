@@ -1,0 +1,134 @@
+@page "/settings/api-keys"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject ApiKeyService Keys
+@inject NavigationManager Navigation
+
+<PageTitle>API keys · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>API keys</h1>
+    <p class="muted">
+        An API key lets a program use the <a href="/api/openapi/v1.json">OpenBook API</a> as you, with your role. Send it as
+        <code>Authorization: Bearer obk_…</code>. Keep keys secret; revoke one as soon as it's not needed or might have leaked.
+    </p>
+
+    @if (_created is not null)
+    {
+        <div class="alert notice" role="status">
+            <p>Your new key "@_created.Key.Name". Copy it now: it won't be shown again.</p>
+            <p><code class="secret">@_created.Token</code></p>
+        </div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_keys.Count == 0)
+    {
+        <p class="muted">You have no API keys.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Expires</th><th>Last used</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var key in _keys)
+                {
+                    var usable = key.IsUsable(DateTimeOffset.UtcNow);
+                    <tr class="@(usable ? null : "inactive")">
+                        <td>@key.Name</td>
+                        <td><code>@key.Hint</code></td>
+                        <td>@Day(key.CreatedAt)</td>
+                        <td>@(key.ExpiresAt is { } e ? Day(e) : "never")</td>
+                        <td>@(key.LastUsedAt is { } u ? Day(u) : "never")</td>
+                        <td>
+                            @if (key.RevokedAt is not null)
+                            {
+                                <span class="badge">Revoked</span>
+                            }
+                            else
+                            {
+                                <form method="post" @formname="@($"revoke-{key.Id}")" @onsubmit="() => RevokeAsync(key.Id)" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="link">Revoke</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card">
+        <h2>Create a key</h2>
+        <EditForm Model="Input" FormName="new-key" OnValidSubmit="CreateAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" placeholder="What will use it, e.g. Shop sync" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="expires">Expires <span class="muted">(optional)</span></label>
+                    <InputDate id="expires" @bind-Value="Input.ExpiresOn" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit">Create key</button></div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<ApiKey> _keys = [];
+    private CreatedApiKey? _created;
+    private string? _error;
+    private Guid _userId;
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "new-key")]
+    private KeyModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new KeyModel();
+        _userId = (await AuthState).User.GetUserId();
+        _keys = await Keys.ListAsync(_userId);
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            // Shown on this response only; never stored or put in a URL.
+            _created = await Keys.CreateAsync(_userId, Input.Name, Input.ExpiresOn);
+            Input = new KeyModel();
+            _keys = await Keys.ListAsync(_userId);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task RevokeAsync(Guid id)
+    {
+        await Keys.RevokeAsync(id, _userId);
+        Navigation.NavigateTo("/settings/api-keys");
+    }
+
+    private static string Day(DateTimeOffset at) => Labels.Date(DateOnly.FromDateTime(at.LocalDateTime));
+
+    private sealed class KeyModel
+    {
+        [Required(ErrorMessage = "Give the key a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        public DateOnly? ExpiresOn { get; set; }
+    }
+}

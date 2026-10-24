@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Endpoints;
 using Microsoft.AspNetCore.Components.Server.Circuits;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenBook.Application;
 using OpenBook.Application.Companies;
@@ -14,10 +15,23 @@ namespace OpenBook.Web.Security;
 public static class WebSecurity
 {
     private const string StampClaim = "openbook:stamp";
+    private const string SelectorScheme = "OpenBook";
 
-    public static IServiceCollection AddOpenBookWebSecurity(this IServiceCollection services)
+    /// <param name="dataProtectionKeys">Where Data Protection keeps its keys (cookies, stored secrets); null for the user profile. Set it in containers.</param>
+    public static IServiceCollection AddOpenBookWebSecurity(this IServiceCollection services, string? dataProtectionKeys = null)
     {
-        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
+        var protection = services.AddDataProtection().SetApplicationName("OpenBook");
+        if (!string.IsNullOrWhiteSpace(dataProtectionKeys))
+            protection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeys));
+
+        // Bearer tokens (API keys) for programs; the sign-in cookie for everything else.
+        services.AddAuthentication(SelectorScheme)
+            .AddPolicyScheme(SelectorScheme, "Cookie or API key", o => o.ForwardDefaultSelector = ctx =>
+                ctx.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? ApiKeyAuthenticationHandler.SchemeName
+                    : CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null)
+            .AddCookie(o =>
         {
             o.Cookie.Name = "OpenBook.Auth";
             o.Cookie.HttpOnly = true;
@@ -42,18 +56,22 @@ public static class WebSecurity
         services.AddSingleton<OpenBook.Application.Forms.ISecretProtector, DataProtectionSecretProtector>();
         services.AddSingleton<SetupState>();
         services.AddHostedService<RecurringPostingService>();
+        services.AddHostedService<WebhookDispatchService>();
         return services;
     }
 
+    /// <summary>The claims for a signed-in user; the role is fixed for the session (changing it ends the session).</summary>
+    public static Claim[] Claims(AuthenticatedUser user) =>
+    [
+        new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new(ClaimTypes.Name, user.Username),
+        new(ClaimTypes.Role, user.Role.ToString()),
+        new(StampClaim, user.SecurityStamp),
+    ];
+
     public static Task SignInAsync(HttpContext http, AuthenticatedUser user)
     {
-        Claim[] claims =
-        [
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.Username),
-            new(StampClaim, user.SecurityStamp),
-        ];
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(Claims(user), CookieAuthenticationDefaults.AuthenticationScheme));
         return http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
     }
 
@@ -72,8 +90,10 @@ public static class WebSecurity
     private static async Task ValidateSessionAsync(CookieValidatePrincipalContext ctx)
     {
         var stamp = ctx.Principal?.FindFirstValue(StampClaim);
+        // A cookie from before roles existed has no role claim: sign in again to get one.
         var valid = Guid.TryParse(ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
             && stamp is not null
+            && ctx.Principal?.FindFirstValue(ClaimTypes.Role) is not null
             && await ctx.HttpContext.RequestServices.GetRequiredService<AuthService>().IsSessionValidAsync(userId, stamp, ctx.HttpContext.RequestAborted);
         if (!valid)
         {

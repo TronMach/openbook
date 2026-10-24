@@ -136,7 +136,7 @@
                 Input.Address), HttpContext.RequestAborted);
 
             State.MarkSetUp();
-            await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp));
+            await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp, owner.Role));
             // A new company has no accounts; that page offers starter charts.
             Navigation.NavigateTo("/accounts");
         }
