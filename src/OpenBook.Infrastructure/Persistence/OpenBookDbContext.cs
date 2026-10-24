@@ -9,6 +9,7 @@ using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Notes;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Reporting;
 using OpenBook.Domain.Sales;
@@ -32,6 +33,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<User> Users => Set<User>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<Note> Notes => Set<Note>();
     public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
@@ -429,6 +431,16 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(u => u.PasswordHash).HasMaxLength(500);
             b.Property(u => u.SecurityStamp).HasMaxLength(64);
             b.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Note>(b =>
+        {
+            b.ToTable("Notes");
+            b.HasKey(n => n.Id);
+            b.Property(n => n.EntityType).HasMaxLength(40);
+            b.Property(n => n.Text).HasMaxLength(Note.MaxLength);
+            b.Property(n => n.CreatedBy).HasMaxLength(100);
+            b.HasIndex(n => new { n.EntityType, n.EntityId });
         });
 
         modelBuilder.Entity<ApiKey>(b =>

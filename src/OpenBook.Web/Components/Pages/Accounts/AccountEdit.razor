@@ -15,6 +15,10 @@
 
 <div class="card">
     <h1>@(_account is null ? "New account" : "Edit account")</h1>
+    @if (_account is not null)
+    {
+        <p><a href="/accounts/@_account.Id/register">Open the register</a> <span class="muted">every transaction in this account, with a running balance</span></p>
+    }
 
     @if (_error is not null)
     {
@@ -108,6 +112,12 @@
             <button type="submit" class="secondary">@(_account.IsActive ? "Make inactive" : "Make active")</button>
         </form>
     </div>
+}
+
+
+@if (_account is not null)
+{
+    <Notes EntityType="account" EntityId="_account.Id" />
 }
 
 @code {

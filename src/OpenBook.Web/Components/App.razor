@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
+    @* The chosen theme, before first paint (shortcuts.js keeps it after navigation). *@
+    <script>
+        (function () { try { var t = localStorage.getItem('ob-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { } })();
+    </script>
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["OpenBook.Web.styles.css"]" />
     <ImportMap />
@@ -16,6 +20,7 @@
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["shortcuts.js"]"></script>
 </body>
 
 </html>

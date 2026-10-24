@@ -57,6 +57,7 @@ public static class OpenBookApi
         api.MapSalesTaxApi();
         api.MapInventoryApi();
         api.MapAccessApi();
+        api.MapPortabilityApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.GetAsync(ct)));

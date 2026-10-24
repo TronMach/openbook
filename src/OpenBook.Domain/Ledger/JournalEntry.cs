@@ -62,12 +62,15 @@ public sealed class JournalEntry
     /// <summary>Posted by the opening balances wizard.</summary>
     public const string OpeningBalanceSource = "ledger.opening";
 
+    /// <summary>Imported from a file (transaction CSV or QuickBooks IIF); SourceId is the import batch.</summary>
+    public const string ImportSource = "ledger.import";
+
     /// <summary>
     /// Entries with these sources are journal entries in their own right and are voided from the journal.
     /// Any other source is a document (invoice, bill, ...) that must be voided through the document.
     /// </summary>
     public static bool IsJournalSource(string source) =>
-        source is ManualSource or AutoReversalSource or RecurringSource or OpeningBalanceSource;
+        source is ManualSource or AutoReversalSource or RecurringSource or OpeningBalanceSource or ImportSource;
 
     private readonly List<JournalLine> _lines = [];
 

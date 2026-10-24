@@ -35,6 +35,8 @@ public static class AccessRules
         ("/api/settings/email", UserRole.Admin, UserRole.Admin),
         ("/backup", UserRole.Admin, UserRole.Admin),
         ("/api/backup", UserRole.Admin, UserRole.Admin),
+        ("/export", UserRole.Admin, UserRole.Admin),
+        ("/api/export", UserRole.Admin, UserRole.Admin),
 
         // Accountants: the books themselves.
         ("/audit", UserRole.Accountant, UserRole.Accountant),
@@ -53,6 +55,8 @@ public static class AccessRules
         ("/reports/tax-lines", UserRole.ViewOnly, UserRole.Accountant),
         ("/reports/budgets", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/budgets", UserRole.ViewOnly, UserRole.Accountant),
+        ("/import", UserRole.Accountant, UserRole.Accountant),
+        ("/api/import", UserRole.Accountant, UserRole.Accountant),
     ];
 
     /// <summary>Path segments of pages that exist to change something (forms, imports, interactive editors).</summary>

@@ -1,0 +1,221 @@
+@page "/accounts/{Id:guid}/register"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Companies
+@inject FinancialReports Reports
+@inject AccountService AccountService
+@inject CompanySettingsService Settings
+@inject PostingEngine Engine
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>@(_account?.Name ?? "Register") · OpenBook</PageTitle>
+
+@if (_account is null)
+{
+    <div class="card"><p>That account doesn't exist. <a href="/accounts">Back to the chart of accounts</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@Labels.AccountName(_chart, _account.Id, _useNumbers) register</h1>
+        @if (OpenBook.Domain.Banking.BankTransaction.IsBankingAccount(_account.Type))
+        {
+            <a class="button secondary" href="/banking/@_account.Id">Banking register</a>
+        }
+        <a class="button secondary" href="/accounts/@_account.Id">Account</a>
+        <form method="get" data-enhance="false" class="inline">
+            <label for="from" class="muted">From</label>
+            <input id="from" name="from" type="date" value="@_from.ToString("yyyy-MM-dd")" />
+            <label for="to" class="muted">to</label>
+            <input id="to" name="to" type="date" value="@_to.ToString("yyyy-MM-dd")" />
+            <button type="submit" class="secondary">Show</button>
+        </form>
+    </div>
+    <p class="muted">
+        @Labels.For(_account.Type) · amounts in the account's normal direction (@(_debitNormal ? "debits increase it" : "credits increase it")) · accrual basis.
+        @if (_hasSubaccounts)
+        {
+            <span>Subaccounts have registers of their own.</span>
+        }
+    </p>
+
+    @if (_canPost)
+    {
+        <div class="card quick-entry no-print">
+            <h2>Quick entry</h2>
+            @if (_message is not null)
+            {
+                <div class="alert notice" role="status">@_message</div>
+            }
+            @if (_error is not null)
+            {
+                <div class="alert error" role="alert">@_error</div>
+            }
+            <EditForm Model="Input" FormName="quick" OnValidSubmit="PostAsync" method="post" data-enhance="false">
+                <DataAnnotationsValidator />
+                <div class="row">
+                    <div class="field">
+                        <label for="q-date">Date</label>
+                        <InputDate id="q-date" @bind-Value="Input.Date" data-quick-first />
+                    </div>
+                    <div class="field grow">
+                        <label for="q-memo">Memo</label>
+                        <InputText id="q-memo" @bind-Value="Input.Memo" />
+                    </div>
+                    <div class="field">
+                        <label for="q-other">Other account</label>
+                        <InputSelect id="q-other" @bind-Value="Input.OtherAccountId">
+                            <option value="">Choose…</option>
+                            @foreach (var (account, _) in _chart.Ordered(includeInactive: false).Where(x => x.Account.Id != _account.Id))
+                            {
+                                <option value="@account.Id">@Labels.AccountName(_chart, account.Id, _useNumbers)</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => Input.OtherAccountId" />
+                    </div>
+                    <div class="field">
+                        <label for="q-increase">Increase</label>
+                        <InputNumber id="q-increase" class="amount" step="0.01" @bind-Value="Input.Increase" />
+                    </div>
+                    <div class="field">
+                        <label for="q-decrease">Decrease</label>
+                        <InputNumber id="q-decrease" class="amount" step="0.01" @bind-Value="Input.Decrease" />
+                    </div>
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+                <div class="actions">
+                    <button type="submit">Post <kbd>Enter</kbd></button>
+                    <span class="hint">Posts a journal entry between this account and the other one. Alt+Q jumps here from anywhere on the page.</span>
+                </div>
+            </EditForm>
+        </div>
+    }
+
+    <div class="table-wrap">
+        <table class="data register">
+            <thead>
+                <tr><th>Date</th><th class="num">No.</th><th>Type</th><th>Description</th><th class="num">Increase</th><th class="num">Decrease</th><th class="num">Balance</th></tr>
+            </thead>
+            <tbody>
+                <tr class="muted"><td>@Labels.Date(_from)</td><td></td><td></td><td>Opening balance</td><td></td><td></td><td class="num">@Labels.Amount(_opening)</td></tr>
+                @foreach (var line in _lines)
+                {
+                    var natural = _debitNormal ? line.Amount : -line.Amount;
+                    <tr>
+                        <td>@Labels.Date(line.Line.Date)</td>
+                        <td class="num"><a href="@Links.ForEntry(line.Line.Source, line.Line.SourceId, line.Line.JournalEntryId)">@line.Line.EntryNumber</a></td>
+                        <td class="muted">@(Links.DocumentName(line.Line.Source) ?? "Journal entry")</td>
+                        <td>@(line.Line.LineMemo ?? line.Line.EntryMemo)</td>
+                        <td class="num">@(natural > 0m ? Labels.Amount(natural) : "")</td>
+                        <td class="num">@(natural < 0m ? Labels.Amount(-natural) : "")</td>
+                        <td class="num">@Labels.Amount(line.Balance)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="6">Balance at @Labels.Date(_to)</td><td class="num">@Labels.Amount(_lines.Count == 0 ? _opening : _lines[^1].Balance)</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@code {
+    private Account? _account;
+    private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<GeneralLedgerLine> _lines = [];
+    private decimal _opening;
+    private DateOnly _from;
+    private DateOnly _to;
+    private bool _useNumbers;
+    private bool _debitNormal;
+    private bool _hasSubaccounts;
+    private bool _canPost;
+    private bool _needsClosingPassword;
+    private string? _message;
+    private string? _error;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+    [SupplyParameterFromQuery] private long? Posted { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [SupplyParameterFromForm(FormName = "quick")]
+    private QuickModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        _account = _chart.Find(Id);
+        if (_account is null)
+            return;
+
+        var company = await Settings.GetAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _useNumbers = company.UseAccountNumbers;
+        _debitNormal = _account.Type.IsDebitNormal();
+        _hasSubaccounts = _chart.ChildrenOf(_account.Id).Any();
+        _to = To ?? today;
+        _from = From ?? company.FiscalYearStart(_to);
+        _canPost = AuthState is not null && (await AuthState).User.Can(UserRole.Accountant);
+        _message = Posted is { } n ? $"Posted entry {n}." : null;
+        Input ??= new QuickModel { Date = today };
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var ledger = await Reports.GeneralLedgerAsync(_from, _to, ReportBasis.Accrual, _account!.Id);
+        var own = ledger.Accounts.FirstOrDefault(a => a.Account.Id == _account.Id);
+        _lines = own?.Lines ?? [];
+        _opening = own?.OpeningBalance ?? 0m;
+    }
+
+    private async Task PostAsync()
+    {
+        var increase = Input.Increase ?? 0m;
+        var decrease = Input.Decrease ?? 0m;
+        if ((increase == 0m) == (decrease == 0m) || increase < 0m || decrease < 0m)
+        {
+            _error = "Enter an amount in either Increase or Decrease.";
+            return;
+        }
+
+        // Increase means a debit for debit-normal accounts (assets, expenses) and a credit for the rest.
+        var amount = increase != 0m ? increase : -decrease;
+        var debitThis = _debitNormal ? amount > 0m : amount < 0m;
+        var value = Math.Abs(amount);
+        JournalLineDraft[] lines = debitThis
+            ? [JournalLineDraft.Dr(_account!.Id, value, Input.Memo), JournalLineDraft.Cr(Input.OtherAccountId!.Value, value, Input.Memo)]
+            : [JournalLineDraft.Cr(_account!.Id, value, Input.Memo), JournalLineDraft.Dr(Input.OtherAccountId!.Value, value, Input.Memo)];
+        try
+        {
+            ClosingOverride.Password = Input.ClosingPassword;
+            var entry = await Engine.PostAsync(new PostJournalEntryCommand(Input.Date, lines, Input.Memo));
+            Navigation.NavigateTo($"/accounts/{_account.Id}/register?from={_from:yyyy-MM-dd}&to={(_to < Input.Date ? Input.Date : _to):yyyy-MM-dd}&posted={entry.Number}#q-date");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+            await LoadAsync();
+        }
+    }
+
+    private sealed class QuickModel
+    {
+        public DateOnly Date { get; set; }
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+
+        [Required(ErrorMessage = "Choose the other account.")]
+        public Guid? OtherAccountId { get; set; }
+
+        public decimal? Increase { get; set; }
+        public decimal? Decrease { get; set; }
+        public string? ClosingPassword { get; set; }
+    }
+}

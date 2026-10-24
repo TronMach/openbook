@@ -201,6 +201,7 @@
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_vendor.IsActive ? "Make inactive" : "Make active")</button>
         </form>
+        <Notes EntityType="vendor" EntityId="_vendor.Id" />
     }
 </div>
 

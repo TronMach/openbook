@@ -58,6 +58,9 @@ public sealed class PostingEngine(
         return reversal;
     }
 
+    /// <summary>Saves everything staged, for callers that stage several entries without a document of their own.</summary>
+    internal Task SaveAsync(CancellationToken ct) => store.SaveChangesAsync(ct);
+
     /// <summary>Validates and adds an entry without saving, so a document and its entry save together.</summary>
     internal async Task<JournalEntry> StageAsync(PostJournalEntryCommand command, CancellationToken ct)
     {

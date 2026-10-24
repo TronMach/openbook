@@ -182,6 +182,12 @@
     </div>
 }
 
+
+@if (_item is not null)
+{
+    <Notes EntityType="item" EntityId="_item.Id" />
+}
+
 @code {
     private Item? _item;
     private ChartOfAccounts _chart = new([]);

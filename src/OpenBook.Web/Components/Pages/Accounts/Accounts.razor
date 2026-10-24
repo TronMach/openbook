@@ -58,6 +58,7 @@
                         <th>Name</th>
                         <th>Type</th>
                         <th>Description</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -77,6 +78,7 @@
                             </td>
                             <td>@Labels.For(account.Type)</td>
                             <td class="muted">@account.Description</td>
+                            <td><a href="/accounts/@account.Id/register">Register</a></td>
                         </tr>
                     }
                 </tbody>

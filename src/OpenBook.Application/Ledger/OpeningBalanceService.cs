@@ -66,7 +66,7 @@ public sealed class OpeningBalanceService(AccountService accounts, ILedgerStore 
         return await engine.PostAsync(new PostJournalEntryCommand(asOf, lines, "Opening balances", JournalEntry.OpeningBalanceSource), ct);
     }
 
-    private static bool IsEligible(Account account) =>
+    internal static bool IsEligible(Account account) =>
         account.Type.IsBalanceSheet()
         && account.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)
         && !string.Equals(account.Name, EquityAccountName, StringComparison.OrdinalIgnoreCase);

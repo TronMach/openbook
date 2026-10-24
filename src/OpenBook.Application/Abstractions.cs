@@ -73,3 +73,30 @@ public interface ILedgerStore
 
     Task SaveChangesAsync(CancellationToken ct);
 }
+
+/// <summary>
+/// A database transaction spanning several saves, for imports that create records through services (each of
+/// which saves) and must still be all-or-nothing. Saves inside it join it; nothing is kept unless it's committed.
+/// </summary>
+public interface IUnitOfWork
+{
+    Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct);
+}
+
+public interface IUnitOfWorkTransaction : IAsyncDisposable
+{
+    Task CommitAsync(CancellationToken ct);
+}
+
+/// <param name="Path">A temporary file the caller deletes after sending it.</param>
+public sealed record ExportFile(string Path, string FileName);
+
+/// <summary>
+/// Everything in the company as a ZIP of CSV files, one per table, plus README.md describing every file and
+/// column and the attachments as files. Implemented in Infrastructure from the database model, so new tables
+/// are included without changes here.
+/// </summary>
+public interface IDataExporter
+{
+    Task<ExportFile> ExportAsync(CancellationToken ct);
+}

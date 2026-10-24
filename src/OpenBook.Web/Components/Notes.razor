@@ -1,0 +1,78 @@
+@using OpenBook.Application.Notes
+@using OpenBook.Domain.Companies
+@inject NoteService NoteService
+@inject NavigationManager Navigation
+@* Notes on a record: a list and a form posting to /notes. Put it beside <Attachments> on record pages. *@
+
+<section class="card notes no-print" id="notes">
+    <h2>Notes</h2>
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_notes.Count == 0)
+    {
+        <p class="muted">No notes yet.</p>
+    }
+    else
+    {
+        <ul class="note-list">
+            @foreach (var note in _notes)
+            {
+                <li>
+                    <p class="note-text">@note.Text</p>
+                    <p class="muted note-meta">
+                        @note.CreatedBy · @note.CreatedAt.LocalDateTime.ToString("g")
+                        @if (_canWrite)
+                        {
+                            <form method="post" action="/notes/@note.Id/delete" class="inline-form" data-enhance="false">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="returnUrl" value="@_returnUrl" />
+                                <button type="submit" class="link">Remove</button>
+                            </form>
+                        }
+                    </p>
+                </li>
+            }
+        </ul>
+    }
+    @if (_canWrite)
+    {
+        <form method="post" action="/notes" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="entityType" value="@EntityType" />
+            <input type="hidden" name="entityId" value="@EntityId" />
+            <input type="hidden" name="returnUrl" value="@_returnUrl" />
+            <div class="field">
+                <label for="note-text">Add a note</label>
+                <textarea id="note-text" name="text" rows="3" maxlength="4000" required></textarea>
+                <span class="hint">Ctrl+Enter to save.</span>
+            </div>
+            <button type="submit" class="secondary">Add note</button>
+        </form>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<OpenBook.Domain.Notes.Note> _notes = [];
+    private string _returnUrl = "/";
+    private string? _error;
+    private bool _canWrite;
+
+    [Parameter, EditorRequired]
+    public string EntityType { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public Guid EntityId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var uri = new Uri(Navigation.Uri);
+        _returnUrl = uri.PathAndQuery.Split("noteError=")[0].TrimEnd('&', '?');
+        _error = System.Web.HttpUtility.ParseQueryString(uri.Query)["noteError"];
+        _canWrite = AuthState is not null && (await AuthState).User.Can(UserRole.Standard);
+        _notes = await NoteService.ListAsync(EntityType, EntityId);
+    }
+}

@@ -22,6 +22,12 @@ public enum AuditAction
 
     /// <summary>A planning record (budget, saved report) removed. Posted data is never deleted.</summary>
     Deleted,
+
+    /// <summary>A note added to the record.</summary>
+    NoteAdded,
+
+    /// <summary>A note removed from the record.</summary>
+    NoteRemoved,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

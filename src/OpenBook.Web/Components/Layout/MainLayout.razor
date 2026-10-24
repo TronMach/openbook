@@ -27,6 +27,7 @@
                 <input name="q" type="search" placeholder="Search…" aria-label="Search" />
             </form>
             <a class="muted" href="/account/password" title="Change password · @AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)">@context.User.Identity?.Name</a>
+            <button type="button" id="theme-toggle" class="link theme-toggle" aria-label="Theme">Theme: auto</button>
             <form method="post" action="/logout">
                 <AntiforgeryToken />
                 <button type="submit" class="link">Sign out</button>

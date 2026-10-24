@@ -5,8 +5,10 @@ using OpenBook.Application.Auditing;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
+using OpenBook.Application.Import;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Notes;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Search;
@@ -37,6 +39,8 @@ public static class DependencyInjection
         services.AddScoped<SearchService>();
         services.AddScoped<AccountService>();
         services.AddScoped<ChartImportService>();
+        services.AddScoped<JournalImportService>();
+        services.AddScoped<IifImportService>();
         services.AddScoped<ChartTemplates>();
         services.AddScoped<BankingService>();
         services.AddScoped<BankImportService>();
@@ -75,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<RecurringBillService>();
         services.AddScoped<PayablesService>();
         services.AddScoped<AttachmentService>();
+        services.AddScoped<NoteService>();
         services.AddScoped<VendorImportService>();
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();

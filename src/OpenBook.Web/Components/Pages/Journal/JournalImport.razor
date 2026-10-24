@@ -1,0 +1,226 @@
+@page "/journal/import"
+@rendermode InteractiveServer
+@using OpenBook.Application.Import
+@inject Operations Ops
+
+<PageTitle>Import transactions · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import transactions or opening balances</h1>
+        <a class="button secondary" href="/journal">Journal</a>
+        <a class="button secondary" href="/import/quickbooks">From QuickBooks (IIF)</a>
+    </div>
+
+    <div class="card">
+        <div class="row">
+            <div class="field">
+                <label for="mode">What's in the file</label>
+                <select id="mode" @bind="_mode" @bind:after="Reset" disabled="@_busy">
+                    <option value="entries">Journal entries (date, account, debit, credit)</option>
+                    <option value="balances">Opening balances (account, balance)</option>
+                </select>
+            </div>
+            @if (_mode == "balances")
+            {
+                <div class="field">
+                    <label for="as-of">Balances as of</label>
+                    <input id="as-of" type="date" @bind="_asOf" />
+                </div>
+            }
+        </div>
+
+        @if (_mode == "entries")
+        {
+            <p>
+                A CSV with a header row: <strong>date</strong>, <strong>account</strong> (full name like <code>Utilities:Electric</code>, or number),
+                and either <strong>debit</strong> and <strong>credit</strong> columns or one signed <strong>amount</strong> (positive = debit).
+                Optional: an <strong>entry</strong> number to group lines (otherwise lines group until they balance) and a <strong>memo</strong>.
+                Every entry must balance; nothing is imported unless every entry is valid. Entries can be voided from the journal like any other.
+            </p>
+            <details>
+                <summary>Example</summary>
+                <pre class="sample">Entry,Date,Account,Debit,Credit,Memo
+1,2026-01-31,Rent,1200.00,,January rent
+1,2026-01-31,Checking,,1200.00,
+2,2026-01-31,Checking,500.00,,Owner contribution
+2,2026-01-31,Owner's Equity,,500.00,</pre>
+            </details>
+        }
+        else
+        {
+            <p>
+                A CSV with an <strong>account</strong> column and a <strong>balance</strong> column (in the account's normal direction: positive for money in the bank
+                or owed on a card), or <strong>debit</strong> and <strong>credit</strong> columns. Balance sheet accounts only; enter open invoices and bills instead of
+                A/R and A/P. The difference goes to Opening Balance Equity, as with the <a href="/journal/opening-balances">opening balances wizard</a>.
+            </p>
+            <details>
+                <summary>Example</summary>
+                <pre class="sample">Account,Balance
+Checking,12500.00
+Visa,830.15
+Equipment,4200.00
+Bank Loan,9000.00</pre>
+            </details>
+        }
+
+        <div class="field" style="margin-top: 1rem">
+            <label for="file">CSV file</label>
+            <InputFile id="file" accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_done is not null)
+    {
+        <div class="alert notice" role="status">@_done <a href="/journal">View the journal</a>.</div>
+    }
+
+    @if (_entries is not null && _done is null)
+    {
+        <div class="card">
+            <h2>Preview of @_fileName</h2>
+            @foreach (var warning in _entries.Warnings)
+            {
+                <div class="alert notice" role="status">@warning</div>
+            }
+            <div class="import-summary">
+                <span><span class="badge ok">@(_entries.Entries.Count - _entries.ErrorCount)</span> ready</span>
+                <span><span class="badge @(_entries.ErrorCount > 0 ? "warn" : null)">@_entries.ErrorCount</span> with errors</span>
+            </div>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="num">Line</th><th>Entry</th><th>Date</th><th>Accounts</th><th class="num">Amount</th><th>Problem</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in _entries.Entries)
+                        {
+                            <tr>
+                                <td class="num">@e.Line</td>
+                                <td>@e.Key</td>
+                                <td>@(e.Date is { } d ? Labels.Date(d) : "")</td>
+                                <td>@string.Join(", ", e.Lines.Select(l => l.Account).Distinct())</td>
+                                <td class="num">@Labels.Amount(e.Total)</td>
+                                <td class="@(e.IsValid ? "muted" : "out-of-balance")">@e.Error</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="actions">
+                <button type="button" @onclick="ImportAsync" disabled="@(!_entries.CanImport || _busy)">Post @_entries.Entries.Count entr@(_entries.Entries.Count == 1 ? "y" : "ies")</button>
+            </div>
+        </div>
+    }
+
+    @if (_balances is not null && _done is null)
+    {
+        <div class="card">
+            <h2>Preview of @_fileName</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="num">Line</th><th>Account</th><th class="num">Balance</th><th>Problem</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _balances.Rows)
+                        {
+                            <tr>
+                                <td class="num">@r.Line</td>
+                                <td>@r.Account</td>
+                                <td class="num">@Labels.Amount(r.Balance)</td>
+                                <td class="@(r.Error is null ? "muted" : "out-of-balance")">@r.Error</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="actions">
+                <button type="button" @onclick="ImportAsync" disabled="@(!_balances.CanImport || _busy)">Post opening balances as of @Labels.Date(_asOf)</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+
+    private string _mode = "entries";
+    private DateOnly _asOf = new(DateTime.Today.Year - 1, 12, 31);
+    private string? _csv;
+    private string? _fileName;
+    private JournalImportResult? _entries;
+    private OpeningBalanceImportResult? _balances;
+    private string? _error;
+    private string? _done;
+    private bool _busy;
+
+    private void Reset()
+    {
+        _csv = null;
+        _entries = null;
+        _balances = null;
+        _error = null;
+        _done = null;
+    }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        Reset();
+        _busy = true;
+        try
+        {
+            if (e.File.Size > MaxFileBytes)
+            {
+                _error = "That file is larger than 5 MB. Split it into smaller files.";
+                return;
+            }
+
+            _fileName = e.File.Name;
+            await using var stream = e.File.OpenReadStream(MaxFileBytes);
+            using var reader = new StreamReader(stream);
+            _csv = await reader.ReadToEndAsync();
+            if (_mode == "entries")
+                _entries = await Ops.RunAsync<JournalImportService, JournalImportResult>(s => s.PreviewEntriesAsync(_csv));
+            else
+                _balances = await Ops.RunAsync<JournalImportService, OpeningBalanceImportResult>(s => s.PreviewBalancesAsync(_csv));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_csv is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (_mode == "entries")
+            {
+                var result = await Ops.RunAsync<JournalImportService, JournalImportResult>(s => s.ImportEntriesAsync(_csv));
+                _done = $"Posted {result.Entries.Count} journal entr{(result.Entries.Count == 1 ? "y" : "ies")}.";
+            }
+            else
+            {
+                var entry = await Ops.RunAsync<JournalImportService, JournalEntry>(s => s.ImportBalancesAsync(_csv, _asOf));
+                _done = $"Posted opening balances as entry {entry.Number}.";
+            }
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
