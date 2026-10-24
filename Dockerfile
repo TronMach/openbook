@@ -6,7 +6,8 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY Directory.Build.props OpenBook.slnx ./
+# .editorconfig marks EF migrations as generated code, which the analyzers (warnings as errors) skip.
+COPY .editorconfig Directory.Build.props OpenBook.slnx ./
 COPY src/OpenBook.Domain/OpenBook.Domain.csproj src/OpenBook.Domain/
 COPY src/OpenBook.Application/OpenBook.Application.csproj src/OpenBook.Application/
 COPY src/OpenBook.Infrastructure/OpenBook.Infrastructure.csproj src/OpenBook.Infrastructure/
@@ -18,9 +19,9 @@ COPY src/ src/
 RUN dotnet publish src/OpenBook.Web/OpenBook.Web.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-# PDF forms need a sans-serif font (see SystemFontResolver).
+# PDF forms need a sans-serif font (see SystemFontResolver); Npgsql loads the Kerberos (GSSAPI) library when it connects.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data && chown app:app /data
 WORKDIR /app
