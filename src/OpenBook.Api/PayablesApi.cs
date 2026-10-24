@@ -15,7 +15,7 @@ public sealed record VendorCreditResponse(
 {
     public static VendorCreditResponse From(VendorCredit c) => new(
         c.Id, c.VendorId, c.Reference, c.Date, c.Memo, c.Total, c.AmountApplied, c.AmountRefunded, c.Balance, c.Status, c.JournalEntryId,
-        c.Lines.Select(l => new BillLineDraft(l.AccountId, l.Amount, l.Description)).ToList());
+        c.Lines.Select(l => l.ToDraft()).ToList());
 }
 
 public sealed record VendorRefundResponse(

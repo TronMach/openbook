@@ -1,7 +1,9 @@
 using System.Text.Json;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
@@ -22,6 +24,7 @@ public sealed class SalesReceiptService(
     SalesAccounts salesAccounts,
     SalesLineBuilder lineBuilder,
     PostingEngine engine,
+    InventoryService inventory,
     IClock clock,
     ICurrentUser user)
 {
@@ -53,11 +56,13 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
+        var stock = await inventory.PlanSaleAsync(lines, command.Date, ct);
 
         var id = Guid.CreateVersion7();
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, SalesLine.Postings(deposit.Id, lines, memo), memo, SalesReceipt.Source, id), ct);
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(deposit.Id, lines, memo), .. stock.Postings], memo, SalesReceipt.Source, id), ct);
+        inventory.Apply(stock, InventorySources.SalesReceipt, id);
 
         var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption);
         store.Add(receipt);
@@ -74,8 +79,10 @@ public sealed class SalesReceiptService(
         if (receipt.DepositId is not null)
             throw new DomainException("receipt.deposited", $"Sales receipt {receipt.Number} is in a bank deposit. Void the deposit first.");
 
+        var stock = await inventory.PlanReversalAsync(InventorySources.SalesReceipt, receipt.Id, receipt.Date, $"sales receipt {receipt.Number}", ct);
         var before = Snapshot(receipt);
         await engine.StageVoidAsync(receipt.JournalEntryId, reason, fromDocument: true, ct);
+        inventory.Apply(stock, InventorySources.SalesReceipt, receipt.Id);
         receipt.Void();
         store.Add(Audit(AuditAction.Voided, receipt, before));
         await store.SaveChangesAsync(ct);

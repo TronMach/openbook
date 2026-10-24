@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.SalesTax.ISalesTaxStore, EfSalesTaxStore>();
         services.AddScoped<OpenBook.Application.Attachments.IAttachmentStore, EfAttachmentStore>();
         services.AddScoped<OpenBook.Application.Reporting.IReportingStore, EfReportingStore>();
+        services.AddScoped<OpenBook.Application.Inventory.IInventoryStore, EfInventoryStore>();
         services.AddScoped<IBackupService, SqliteBackupService>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();

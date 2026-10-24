@@ -36,6 +36,7 @@ internal sealed class EfAttachmentStore(OpenBookDbContext db) : IAttachmentStore
         "reconciliation" => db.Reconciliations.AnyAsync(x => x.Id == entityId, ct),
         "customer" => db.Customers.AnyAsync(x => x.Id == entityId, ct),
         "vendor" => db.Vendors.AnyAsync(x => x.Id == entityId, ct),
+        "inventory_adjustment" => db.InventoryAdjustments.AnyAsync(x => x.Id == entityId, ct),
         _ => Task.FromResult(false),
     };
 

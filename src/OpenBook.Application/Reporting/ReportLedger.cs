@@ -13,7 +13,8 @@ namespace OpenBook.Application.Reporting;
 /// recognized on its date as income or expense, split across the paid documents' accounts in proportion to
 /// their lines. Credit applied to an invoice moves no cash, so it's recognized nowhere; credit applied later
 /// from an unapplied payment counts on the payment's date. A refund of a credit memo reverses income on the
-/// refund date; a refund of an unapplied payment just reverses that cash.
+/// refund date; a refund of an unapplied payment just reverses that cash. The inventory cost lines on invoices
+/// and credit memos (cost of goods sold against the inventory asset) are kept as posted: stock leaves when it's sold.
 /// </summary>
 public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases)
 {
@@ -28,7 +29,12 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         if (basis == ReportBasis.Accrual)
             return lines.Where(l => l.Basis.AppliesTo(ReportBasis.Accrual)).ToList();
 
-        var cash = lines.Where(l => l.Basis.AppliesTo(ReportBasis.Cash) && !AccrualDocuments.Contains(l.Source)).ToList();
+        var stockAccounts = (await sales.ListItemsAsync(ct))
+            .Where(i => i.IsInventory)
+            .SelectMany(i => new[] { i.InventoryAssetAccountId!.Value, i.CostAccountId!.Value })
+            .ToHashSet();
+        var cash = lines.Where(l => l.Basis.AppliesTo(ReportBasis.Cash)
+            && (!AccrualDocuments.Contains(l.Source) || l.Source is Invoice.Source or CreditMemo.Source && stockAccounts.Contains(l.AccountId))).ToList();
         var entryNumbers = lines.GroupBy(l => l.JournalEntryId).ToDictionary(g => g.Key, g => g.First().EntryNumber);
         bool InRange(DateOnly d) => d <= to && (from is null || d >= from);
 

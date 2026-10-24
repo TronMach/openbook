@@ -30,6 +30,7 @@ public static class OpenBookApi
         api.MapPayablesApi();
         api.MapBankFeedApi();
         api.MapSalesTaxApi();
+        api.MapInventoryApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.GetAsync(ct)));

@@ -1,7 +1,9 @@
 using System.Text.Json;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
@@ -25,6 +27,7 @@ public sealed class InvoiceService(
     SalesAccounts salesAccounts,
     SalesLineBuilder lineBuilder,
     PostingEngine engine,
+    InventoryService inventory,
     IClock clock,
     ICurrentUser user)
 {
@@ -75,11 +78,13 @@ public sealed class InvoiceService(
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
+        var stock = await inventory.PlanSaleAsync(lines, command.Date, ct);
 
         var id = Guid.CreateVersion7();
         var memo = $"Invoice {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, SalesLine.Postings(receivables.Id, lines, memo), memo, Invoice.Source, id), ct);
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, Invoice.Source, id), ct);
+        inventory.Apply(stock, InventorySources.Invoice, id);
 
         var terms = customer.Terms;
         var invoice = Invoice.Create(
@@ -107,8 +112,10 @@ public sealed class InvoiceService(
         if (invoice.AmountPaid > 0m)
             throw new DomainException("invoice.has_payments", $"Invoice {invoice.Number} has payments or credits applied. Void or remove those first.");
 
+        var stock = await inventory.PlanReversalAsync(InventorySources.Invoice, invoice.Id, invoice.Date, $"invoice {invoice.Number}", ct);
         var before = Snapshot(invoice);
         await engine.StageVoidAsync(invoice.JournalEntryId, reason, fromDocument: true, ct);
+        inventory.Apply(stock, InventorySources.Invoice, invoice.Id);
         invoice.Void();
         store.Add(Audit(AuditAction.Voided, invoice, before));
 

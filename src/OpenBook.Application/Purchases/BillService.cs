@@ -1,8 +1,10 @@
 using System.Text.Json;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
@@ -22,6 +24,7 @@ public sealed class BillService(
     PurchaseAccounts purchaseAccounts,
     AccountService accounts,
     PostingEngine engine,
+    InventoryService inventory,
     IClock clock,
     ICurrentUser user)
 {
@@ -51,7 +54,8 @@ public sealed class BillService(
                 .Any(b => b.Status == DocumentStatus.Posted && string.Equals(b.Reference, reference, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException("bill.reference_taken", $"There's already a bill {reference} from {vendor.DisplayName}.");
 
-        var lines = Bill.LinesFrom(command.Lines);
+        var (drafts, stock) = await inventory.PlanPurchaseAsync(command.Lines ?? [], command.Date, ct);
+        var lines = Bill.LinesFrom(drafts);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
             Bill.EnsureCategoryAccount(chart.Get(accountId));
@@ -60,6 +64,7 @@ public sealed class BillService(
         var id = Guid.CreateVersion7();
         var memo = reference is null ? $"Bill · {vendor.DisplayName}" : $"Bill {reference} · {vendor.DisplayName}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Bill.Postings(payables.Id, lines, memo), memo, Bill.Source, id), ct);
+        inventory.Apply(stock, InventorySources.Bill, id);
 
         var bill = Bill.Create(id, vendor.Id, payables.Id, command.Date, command.DueDate ?? vendor.DueDateFor(command.Date),
             lines, entry.Id, clock.UtcNow, reference, command.Memo, recurringBillId);
@@ -77,8 +82,10 @@ public sealed class BillService(
         if (bill.AmountPaid > 0m)
             throw new DomainException("bill.has_payments", "This bill has payments or credits applied. Void or remove those first.");
 
+        var stock = await inventory.PlanReversalAsync(InventorySources.Bill, bill.Id, bill.Date, "this bill", ct);
         var before = Snapshot(bill);
         await engine.StageVoidAsync(bill.JournalEntryId, reason, fromDocument: true, ct);
+        inventory.Apply(stock, InventorySources.Bill, bill.Id);
         bill.Void();
         store.Add(Audit(AuditAction.Voided, bill, before));
         await store.SaveChangesAsync(ct);
@@ -98,6 +105,6 @@ public sealed class BillService(
         b.AmountPaid,
         Status = b.Status.ToString(),
         b.Memo,
-        Lines = b.Lines.Select(l => new { l.AccountId, l.Description, l.Amount }),
+        Lines = b.Lines.Select(l => new { l.AccountId, l.Description, l.Amount, l.ItemId, l.Quantity }),
     });
 }

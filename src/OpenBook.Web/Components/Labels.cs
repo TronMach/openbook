@@ -118,7 +118,15 @@ public static class Labels
         _ => "Money in or out",
     };
 
-    public static string For(ItemType type) => type == ItemType.Service ? "Service" : "Non-inventory product";
+    public static string For(ItemType type) => type switch
+    {
+        ItemType.Service => "Service",
+        ItemType.Inventory => "Inventory product",
+        _ => "Non-inventory product",
+    };
+
+    /// <summary>A quantity: up to 4 decimals, no trailing zeros.</summary>
+    public static string Quantity(decimal quantity) => quantity.ToString("#,0.####", CultureInfo.CurrentCulture);
 
     public static string Terms(int days) => days == 0 ? "Due on receipt" : $"Net {days}";
 

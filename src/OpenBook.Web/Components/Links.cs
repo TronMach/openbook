@@ -22,6 +22,7 @@ public static class Links
         (VendorCredit.Source, { } id) => $"/purchases/vendor-credits/{id}",
         (VendorRefund.Source, { } id) => $"/purchases/vendor-refunds/{id}",
         (SalesTaxPayment.Source, { } id) => $"/sales-tax/payments/{id}",
+        (OpenBook.Domain.Inventory.InventoryAdjustment.Source, { } id) => $"/inventory/adjustments/{id}",
         (BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource, { } id) => $"/banking/transactions/{id}",
         _ => $"/journal/{journalEntryId}",
     };
@@ -56,6 +57,7 @@ public static class Links
         "tax_code" => $"/sales-tax/codes/{id}",
         "sales_tax_payment" => $"/sales-tax/payments/{id}",
         "budget" => $"/reports/budgets/{id}",
+        "inventory_adjustment" => $"/inventory/adjustments/{id}",
         "saved_report" => "/reports",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
@@ -78,6 +80,7 @@ public static class Links
         VendorCredit.Source => "vendor credit",
         VendorRefund.Source => "vendor refund",
         SalesTaxPayment.Source => "sales tax payment",
+        OpenBook.Domain.Inventory.InventoryAdjustment.Source => "inventory adjustment",
         BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource => "bank transaction",
         _ when JournalEntry.IsJournalSource(source) => null,
         _ => "document",

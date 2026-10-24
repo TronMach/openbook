@@ -32,9 +32,12 @@ public sealed record CustomerResponse(
             c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label, c.TaxCodeId, c.ExemptionCertificate, c.ExemptionReason, c.ExemptionExpiresOn);
 }
 
-public sealed record ItemResponse(Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive, bool Taxable = true)
+public sealed record ItemResponse(
+    Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive, bool Taxable = true,
+    Guid? InventoryAssetAccountId = null, Guid? CostAccountId = null, decimal? ReorderPoint = null, decimal PurchaseCost = 0m)
 {
-    public static ItemResponse From(Item i) => new(i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable);
+    public static ItemResponse From(Item i) => new(
+        i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost);
 }
 
 /// <param name="Rate">For a tax line, the percentage charged.</param>

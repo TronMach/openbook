@@ -1,8 +1,11 @@
 @page "/items/new"
 @page "/items/{Id:guid}"
 @using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
 @inject ItemService ItemService
 @inject AccountService AccountService
+@inject InventoryService Inventory
 @inject NavigationManager Navigation
 
 <PageTitle>@(_item?.Name ?? "New product or service") · OpenBook</PageTitle>
@@ -73,6 +76,48 @@
             <InputCheckbox @bind-Value="Input.Taxable" />
             <span>Taxable: charge sales tax on it where the customer or document has a tax code</span>
         </label>
+        <fieldset>
+            <legend>Inventory products only</legend>
+            <p class="hint">Stock and its FIFO cost are tracked: bills add stock, sales take it out at cost. Leave the accounts on "Default" to use Inventory Asset and Cost of Goods Sold.</p>
+            <div class="row">
+                <div class="field">
+                    <label for="asset">Inventory asset account</label>
+                    <InputSelect id="asset" @bind-Value="Input.InventoryAssetAccountId" disabled="@_assetLocked">
+                        <option value="">Default (Inventory Asset)</option>
+                        @foreach (var account in _assetAccounts)
+                        {
+                            <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                        }
+                    </InputSelect>
+                    @if (_assetLocked)
+                    {
+                        <span class="hint">Fixed once stock has moved.</span>
+                    }
+                </div>
+                <div class="field">
+                    <label for="cost-account">Cost of goods sold account</label>
+                    <InputSelect id="cost-account" @bind-Value="Input.CostAccountId">
+                        <option value="">Default (Cost of Goods Sold)</option>
+                        @foreach (var account in _costAccounts)
+                        {
+                            <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="purchase-cost">Purchase cost</label>
+                    <InputNumber id="purchase-cost" step="any" @bind-Value="Input.PurchaseCost" />
+                    <span class="hint">Default unit cost for stock added by adjustments.</span>
+                </div>
+                <div class="field">
+                    <label for="reorder">Reorder point <span class="muted">(optional)</span></label>
+                    <InputNumber id="reorder" step="any" @bind-Value="Input.ReorderPoint" />
+                    <span class="hint">Flagged for reordering at or below this quantity.</span>
+                </div>
+            </div>
+        </fieldset>
         <div class="actions">
             <button type="submit">@(_item is null ? "Create" : "Save changes")</button>
             <a href="/items">Cancel</a>
@@ -88,10 +133,64 @@
     }
 </div>
 
+@if (_item is { IsInventory: true } && _stock is not null)
+{
+    <div class="card">
+        <div class="toolbar">
+            <h2>Stock</h2>
+            <a href="/inventory/adjustments/new?item=@_item.Id">Adjust quantity</a>
+            <a href="/reports/inventory-valuation?detail=true">Valuation</a>
+        </div>
+        <p>
+            <strong>@Labels.Quantity(_stock.Quantity)</strong> on hand, worth @Labels.Amount(_stock.Value)
+            @if (_stock.AverageCost is { } average)
+            {
+                <span class="muted"> (@Labels.Amount(average) each on average)</span>
+            }
+            @if (_stock.NeedsReorder)
+            {
+                <span class="badge warn">Reorder</span>
+            }
+        </p>
+        @if (_movements.Count == 0)
+        {
+            <p class="muted">No stock yet. Enter a bill with this item, or <a href="/inventory/adjustments/new?item=@_item.Id">add starting stock</a>.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th>From</th><th class="num">Quantity</th><th class="num">Cost</th><th class="num">On hand</th></tr></thead>
+                    <tbody>
+                        @{ var running = 0m; }
+                        @foreach (var group in Grouped())
+                        {
+                            var first = group[0];
+                            running += group.Sum(m => m.Quantity);
+                            <tr class="@(first.ReversalOf is null ? null : "inactive")">
+                                <td>@Labels.Date(first.Date)</td>
+                                <td><a href="@Links.ForAuditEntity(first.SourceType, first.SourceId)">@SourceName(first)</a></td>
+                                <td class="num">@Labels.Quantity(group.Sum(m => m.Quantity))</td>
+                                <td class="num">@Labels.Amount(group.Sum(m => m.Cost))</td>
+                                <td class="num">@Labels.Quantity(running)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
 @code {
     private Item? _item;
     private ChartOfAccounts _chart = new([]);
     private List<Account> _incomeAccounts = [];
+    private List<Account> _assetAccounts = [];
+    private List<Account> _costAccounts = [];
+    private StockLevel? _stock;
+    private IReadOnlyList<InventoryMovement> _movements = [];
+    private bool _assetLocked;
     private string? _error;
 
     [Parameter]
@@ -104,17 +203,49 @@
     {
         _chart = await AccountService.GetChartAsync();
         _incomeAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
+        _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
+        _costAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
         _item = Id is { } id ? await ItemService.GetAsync(id) : null;
+        if (_item is { IsInventory: true })
+        {
+            _stock = await Inventory.StockForAsync(_item.Id);
+            _movements = await Inventory.MovementsAsync(_item.Id);
+            _assetLocked = _movements.Count > 0;
+        }
+
         Input ??= _item is null
             ? new ItemModel { IncomeAccountId = _incomeAccounts.FirstOrDefault()?.Id, Taxable = true }
-            : new ItemModel { Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable };
+            : new ItemModel
+            {
+                Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
+                InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
+            };
     }
+
+    /// <summary>One row per document (a sale can take from several layers), in order.</summary>
+    private List<List<InventoryMovement>> Grouped() => _movements
+        .GroupBy(m => (m.Date, m.SourceType, m.SourceId, Reversal: m.ReversalOf is not null))
+        .Select(g => g.ToList())
+        .ToList();
+
+    private static string SourceName(InventoryMovement m) => (m.SourceType, m.ReversalOf is null) switch
+    {
+        (InventorySources.Bill, true) => "Bill",
+        (InventorySources.Invoice, true) => "Invoice",
+        (InventorySources.SalesReceipt, true) => "Sales receipt",
+        (InventorySources.CreditMemo, true) => "Credit memo (return)",
+        (InventorySources.Adjustment, true) => "Adjustment",
+        _ => "Voided",
+    };
 
     private async Task SaveAsync()
     {
         try
         {
-            var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable);
+            // A disabled select doesn't post, so a locked asset account keeps the saved one.
+            var asset = _assetLocked ? _item!.InventoryAssetAccountId : Input.InventoryAssetAccountId;
+            var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
+                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m);
             _ = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             Navigation.NavigateTo("/items");
         }
@@ -147,5 +278,13 @@
         public Guid? IncomeAccountId { get; set; }
 
         public bool Taxable { get; set; }
+
+        public Guid? InventoryAssetAccountId { get; set; }
+
+        public Guid? CostAccountId { get; set; }
+
+        public decimal? ReorderPoint { get; set; }
+
+        public decimal? PurchaseCost { get; set; }
     }
 }

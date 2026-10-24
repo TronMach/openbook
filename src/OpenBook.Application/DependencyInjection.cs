@@ -5,6 +5,7 @@ using OpenBook.Application.Auditing;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
@@ -53,6 +54,10 @@ public static class DependencyInjection
         services.AddScoped<EmailService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<ItemService>();
+        services.AddScoped<InventoryAccounts>();
+        services.AddScoped<InventoryService>();
+        services.AddScoped<InventoryAdjustmentService>();
+        services.AddScoped<InventoryReports>();
         services.AddScoped<InvoiceService>();
         services.AddScoped<PaymentService>();
         services.AddScoped<SalesReceiptService>();

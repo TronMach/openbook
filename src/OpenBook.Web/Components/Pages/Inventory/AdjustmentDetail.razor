@@ -1,0 +1,125 @@
+@page "/inventory/adjustments/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject InventoryAdjustmentService Adjustments
+@inject ItemService Items
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Inventory adjustment · OpenBook</PageTitle>
+
+@if (_adjustment is null)
+{
+    <div class="card"><p>That adjustment doesn't exist. <a href="/inventory">Back to inventory</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Inventory adjustment @_adjustment.Reference</h1>
+        @if (_adjustment.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a href="/inventory">Inventory</a>
+    </div>
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_adjustment.Date)</dd>
+            <dt>Adjustment account</dt><dd>@_chart.FullName(_adjustment.AdjustmentAccountId)</dd>
+            @if (_adjustment.Memo is { } memo)
+            {
+                <dt>Memo</dt><dd>@memo</dd>
+            }
+            <dt>Journal entry</dt><dd><a href="/journal/@_adjustment.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    <table class="data">
+        <thead><tr><th>Item</th><th class="num">Quantity change</th><th class="num">Value change</th></tr></thead>
+        <tbody>
+            @foreach (var line in _adjustment.Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr>
+                    <td><a href="/items/@line.ItemId">@(_items.GetValueOrDefault(line.ItemId)?.Name ?? "Item")</a></td>
+                    <td class="num">@Labels.Quantity(line.QuantityChange)</td>
+                    <td class="num">@Labels.Amount(line.ValueChange)</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_adjustment.ValueChange)</td></tr>
+        </tfoot>
+    </table>
+
+    <Attachments EntityType="inventory_adjustment" EntityId="_adjustment.Id" />
+
+    @if (_adjustment.Status == DocumentStatus.Posted)
+    {
+        <div class="card">
+            <h2>Void this adjustment</h2>
+            <p class="muted">Voiding puts the quantities back and reverses the entry. Stock it added can't be taken back once some of it has been sold or adjusted.</p>
+            @if (_error is not null)
+            {
+                <div class="alert error" role="alert">@_error</div>
+            }
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void adjustment</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private InventoryAdjustment? _adjustment;
+    private Dictionary<Guid, Item> _items = [];
+    private ChartOfAccounts _chart = new([]);
+    private bool _needsClosingPassword;
+    private string? _error;
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _adjustment = await Adjustments.GetAsync(Id);
+        _items = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id);
+        _chart = await AccountService.GetChartAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Adjustments.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/inventory/adjustments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why it's being voided.")]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

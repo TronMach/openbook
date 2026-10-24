@@ -1,6 +1,7 @@
 @page "/items"
 @inject ItemService ItemService
 @inject AccountService AccountService
+@inject OpenBook.Application.Inventory.InventoryService Inventory
 
 <PageTitle>Products and services · OpenBook</PageTitle>
 
@@ -8,6 +9,7 @@
     <div class="toolbar">
         <h1>Products and services</h1>
         <a class="button secondary" href="@(ShowInactive ? "/items" : "/items?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
+        <a class="button secondary" href="/inventory">Inventory</a>
         <a class="button secondary" href="/items/import">Import CSV</a>
         <a class="button" href="/items/new">New item</a>
     </div>
@@ -20,7 +22,7 @@
     {
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Name</th><th>Type</th><th>Description</th><th class="num">Price</th><th>Income account</th></tr></thead>
+                <thead><tr><th>Name</th><th>Type</th><th>Description</th><th class="num">Price</th><th class="num">On hand</th><th>Income account</th></tr></thead>
                 <tbody>
                     @foreach (var item in _items)
                     {
@@ -35,6 +37,16 @@
                             <td class="muted">@Labels.For(item.Type)</td>
                             <td class="muted">@item.Description</td>
                             <td class="num">@item.Rate.ToString("#,##0.00##")</td>
+                            <td class="num">
+                                @if (_stock.TryGetValue(item.Id, out var level))
+                                {
+                                    @Labels.Quantity(level.Quantity)
+                                    @if (level.NeedsReorder)
+                                    {
+                                        <span class="badge warn">Reorder</span>
+                                    }
+                                }
+                            </td>
                             <td class="muted">@(_chart.Find(item.IncomeAccountId) is not null ? _chart.FullName(item.IncomeAccountId) : "")</td>
                         </tr>
                     }
@@ -47,6 +59,7 @@
 @code {
     private IReadOnlyList<Item> _items = [];
     private ChartOfAccounts _chart = new([]);
+    private Dictionary<Guid, OpenBook.Application.Inventory.StockLevel> _stock = [];
 
     [SupplyParameterFromQuery]
     private bool ShowInactive { get; set; }
@@ -55,5 +68,6 @@
     {
         _chart = await AccountService.GetChartAsync();
         _items = await ItemService.ListAsync(ShowInactive);
+        _stock = (await Inventory.StockAsync()).ToDictionary(s => s.Item.Id);
     }
 }

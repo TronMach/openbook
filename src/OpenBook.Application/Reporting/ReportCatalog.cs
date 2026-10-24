@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
@@ -138,6 +139,10 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Expenses and vendors", ReportInputs.AsOf),
         new("ap-aging", "A/P aging", "What you owe each vendor, by how long past due. Summary or bill by bill.",
             "Expenses and vendors", ReportInputs.AsOf | ReportInputs.Detail),
+        new("inventory-valuation", "Inventory valuation", "Quantity on hand and FIFO cost of each inventory item on a date. Summary or layer by layer.",
+            "Inventory", ReportInputs.AsOf | ReportInputs.Detail),
+        new("inventory-stock", "Inventory stock status", "What's on hand against each item's reorder point, with what to reorder first.",
+            "Inventory", ReportInputs.None),
         new("1099", "1099 summary", "What you paid each 1099 vendor in a year, and who needs a form.",
             "Taxes", ReportInputs.Year | ReportInputs.Threshold),
         new("1099-detail", "1099 detail", "Each payment behind the 1099 summary, by vendor.",
@@ -179,6 +184,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "expenses-by-vendor" => await Get<ActivityReports>().ExpensesByVendorAsync(from, range.To, basis, ct),
             "unpaid-bills" => await Get<ActivityReports>().UnpaidBillsAsync(asOf, ct),
             "ap-aging" => PayablesAging(company, await Get<PayablesService>().AgingAsync(asOf, ct), p.GetFlag("detail")),
+            "inventory-valuation" => await Get<InventoryReports>().ValuationAsync(asOf, p.GetFlag("detail"), ct),
+            "inventory-stock" => await Get<InventoryReports>().StockStatusAsync(ct),
             "1099" => Summary1099(company, await Get<PayablesService>().Report1099Async(p.GetNumber("year") ?? today.Year - 1, p.GetAmount("threshold"), ct)),
             "1099-detail" => await Get<ActivityReports>().Detail1099Async(p.GetNumber("year") ?? today.Year - 1, ct),
             "sales-tax" => SalesTax(company, await Get<SalesTaxReports>().LiabilityAsync(from, range.To, ct)),
@@ -425,6 +432,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Purchases.VendorCredit.Source => "Vendor credit",
         Domain.Purchases.VendorRefund.Source => "Vendor refund",
         Domain.SalesTax.SalesTaxPayment.Source => "Sales tax payment",
+        Domain.Inventory.InventoryAdjustment.Source => "Inventory adjustment",
         Domain.Banking.BankTransaction.SpendSource => "Expense",
         Domain.Banking.BankTransaction.ReceiveSource => "Deposit",
         Domain.Banking.BankTransaction.TransferSource => "Transfer",

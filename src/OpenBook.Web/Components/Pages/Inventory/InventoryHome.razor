@@ -1,0 +1,93 @@
+@page "/inventory"
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject InventoryService Inventory
+@inject InventoryAdjustmentService Adjustments
+
+<PageTitle>Inventory · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Inventory</h1>
+        <a class="button secondary" href="/reports/inventory-valuation">Valuation</a>
+        <a class="button secondary" href="/reports/inventory-stock">Stock status</a>
+        <a class="button secondary" href="/items/new">New item</a>
+        <a class="button" href="/inventory/adjustments/new">Adjust quantities</a>
+    </div>
+    <p class="muted">
+        Inventory products are counted and costed first in, first out: bills add stock at what you paid, sales take the oldest
+        stock's cost into cost of goods sold, and credit memos put returns back. Adjust quantities for counts, damage or starting stock.
+    </p>
+
+    @if (_stock.Count == 0)
+    {
+        <div class="card"><p>No inventory products yet. <a href="/items/new">Add one</a> with the type "Inventory product".</p></div>
+    }
+    else
+    {
+        @if (_stock.Count(s => s.NeedsReorder) is > 0 and var low)
+        {
+            <div class="alert notice" role="status">@(low == 1 ? "1 item is" : $"{low} items are") at or below the reorder point.</div>
+        }
+        <table class="data">
+            <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder point</th><th class="num">Average cost</th><th class="num">Asset value</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _stock)
+                {
+                    <tr class="@(s.Item.IsActive ? null : "inactive")">
+                        <td><a href="/items/@s.Item.Id">@s.Item.Name</a></td>
+                        <td class="num">@Labels.Quantity(s.Quantity)</td>
+                        <td class="num">@(s.Item.ReorderPoint is { } point ? Labels.Quantity(point) : "")</td>
+                        <td class="num">@(s.AverageCost is { } average ? Labels.Amount(average) : "")</td>
+                        <td class="num">@Labels.Amount(s.Value)</td>
+                        <td>
+                            @if (s.NeedsReorder)
+                            {
+                                <span class="badge warn">Reorder</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_stock.Sum(s => s.Value))</td><td></td></tr>
+            </tfoot>
+        </table>
+    }
+
+    <h2>Quantity adjustments</h2>
+    @if (_adjustments.Count == 0)
+    {
+        <p class="muted">None yet.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Reference</th><th>Memo</th><th class="num">Items</th><th class="num">Value change</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var a in _adjustments.Take(50))
+                {
+                    <tr class="@(a.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/inventory/adjustments/@a.Id">@Labels.Date(a.Date)</a></td>
+                        <td>@a.Reference</td>
+                        <td class="muted">@a.Memo</td>
+                        <td class="num">@a.Lines.Count</td>
+                        <td class="num">@Labels.Amount(a.ValueChange)</td>
+                        <td>@(a.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<StockLevel> _stock = [];
+    private IReadOnlyList<InventoryAdjustment> _adjustments = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stock = (await Inventory.StockAsync()).Where(s => s.Item.IsActive || s.Quantity != 0m).ToList();
+        _adjustments = await Adjustments.ListAsync();
+    }
+}

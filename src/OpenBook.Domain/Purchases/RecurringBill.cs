@@ -69,6 +69,8 @@ public sealed class RecurringBill
         Memo = Text.Optional(details.Memo, 1000, "bill.memo_too_long", "Memo");
         Frequency = Enum.IsDefined(details.Frequency) ? details.Frequency : throw new DomainException("recurring.frequency_invalid", "Unknown frequency.");
         Recurrence.Validate(details.Interval, details.StartDate, details.EndDate, details.MaxOccurrences);
+        if ((details.Lines ?? []).Any(l => l.ItemId is not null))
+            throw new DomainException("recurringbill.no_items", "Recurring bills are for categories only; enter inventory purchases on a bill.");
         var lines = Bill.LinesFrom(details.Lines ?? []);
 
         VendorId = details.VendorId;

@@ -61,6 +61,8 @@ public sealed class VendorCreditService(
         if (!vendor.IsActive)
             throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
 
+        if ((command.Lines ?? []).Any(l => l.ItemId is not null))
+            throw new DomainException("vendorcredit.no_items", "Vendor credits are for categories only. To send stock back, record a quantity adjustment.");
         var lines = Bill.LinesFrom(command.Lines ?? []);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())

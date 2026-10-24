@@ -58,7 +58,13 @@
             {
                 <tr>
                     <td>@Labels.AccountName(_chart, line.AccountId, _useNumbers)</td>
-                    <td>@line.Description</td>
+                    <td>
+                        @line.Description
+                        @if (line.ItemId is { } itemId && line.Quantity is { } quantity)
+                        {
+                            <span class="muted"> · <a href="/items/@itemId">@Labels.Quantity(quantity) received</a></span>
+                        }
+                    </td>
                     <td class="num">@Labels.Amount(line.Amount)</td>
                 </tr>
             }

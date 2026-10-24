@@ -1,7 +1,9 @@
 using System.Text.Json;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
 
@@ -48,6 +50,7 @@ public sealed class CreditService(
     SalesLineBuilder lineBuilder,
     InvoiceService invoices,
     PostingEngine engine,
+    InventoryService inventory,
     IClock clock,
     ICurrentUser user)
 {
@@ -87,10 +90,12 @@ public sealed class CreditService(
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
+        var stock = await inventory.PlanReturnAsync(lines, command.Date, ct);
         var id = Guid.CreateVersion7();
         var memo = $"Credit memo {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, CreditMemo.Postings(receivables.Id, lines, memo), memo, CreditMemo.Source, id), ct);
+            new PostJournalEntryCommand(command.Date, [.. CreditMemo.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, CreditMemo.Source, id), ct);
+        inventory.Apply(stock, InventorySources.CreditMemo, id);
 
         var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo, taxCodeId, exemption);
         store.Add(credit);
@@ -109,8 +114,10 @@ public sealed class CreditService(
         if (credit.AmountRefunded > 0m)
             throw new DomainException("creditmemo.refunded", $"Credit memo {credit.Number} was refunded. Void the refund first.");
 
+        var stock = await inventory.PlanReversalAsync(InventorySources.CreditMemo, credit.Id, credit.Date, $"credit memo {credit.Number}", ct);
         var before = Snapshot(credit);
         await engine.StageVoidAsync(credit.JournalEntryId, reason, fromDocument: true, ct);
+        inventory.Apply(stock, InventorySources.CreditMemo, credit.Id);
         credit.Void();
         store.Add(Audit(AuditAction.Voided, CreditMemoType, credit.Id, before, Snapshot(credit)));
         await store.SaveChangesAsync(ct);

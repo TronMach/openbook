@@ -46,7 +46,7 @@ public sealed record BillResponse(
 {
     public static BillResponse From(Bill b) => new(
         b.Id, b.VendorId, b.Reference, b.Date, b.DueDate, b.Memo, b.Total, b.AmountPaid, b.Balance, b.Status, b.JournalEntryId,
-        b.Lines.Select(l => new BillLineDraft(l.AccountId, l.Amount, l.Description)).ToList());
+        b.Lines.Select(l => l.ToDraft()).ToList());
 }
 
 public sealed record BillPaymentResponse(

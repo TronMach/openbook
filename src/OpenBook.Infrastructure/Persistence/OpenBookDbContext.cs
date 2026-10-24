@@ -7,6 +7,7 @@ using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Reporting;
@@ -59,6 +60,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
     public DbSet<SalesTaxPayment> SalesTaxPayments => Set<SalesTaxPayment>();
     public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
+    public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
@@ -69,6 +72,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         new(amount => amount == null ? null : (long)(amount.Value * 100m), minor => minor == null ? null : minor.Value / 100m);
 
     private static readonly ValueConverter<decimal, long> TenThousandths = new(value => (long)(value * 10000m), stored => stored / 10000m);
+
+    private static readonly ValueConverter<decimal?, long?> NullableTenThousandths =
+        new(value => value == null ? null : (long)(value.Value * 10000m), stored => stored == null ? null : stored.Value / 10000m);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -451,7 +457,49 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.Type).HasConversion<string>().HasMaxLength(20);
             b.Property(i => i.Description).HasMaxLength(1000);
             b.Property(i => i.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
+            b.Property(i => i.PurchaseCost).HasColumnName("PurchaseCostTenThousandths").HasConversion(TenThousandths);
+            b.Property(i => i.ReorderPoint).HasColumnName("ReorderPointTenThousandths").HasConversion(NullableTenThousandths);
+            b.Ignore(i => i.IsInventory);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(i => i.InventoryAssetAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(i => i.CostAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<InventoryMovement>(b =>
+        {
+            b.ToTable("InventoryMovements");
+            b.HasKey(m => m.Id);
+            b.Property(m => m.SourceType).HasMaxLength(40);
+            b.Property(m => m.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+            b.Property(m => m.Cost).HasColumnName("CostMinor").HasConversion(MinorUnits);
+            b.Ignore(m => m.IsReceipt);
+            b.HasIndex(m => new { m.ItemId, m.Date });
+            b.HasIndex(m => m.LayerId);
+            b.HasIndex(m => new { m.SourceType, m.SourceId });
+            b.HasOne<Item>().WithMany().HasForeignKey(m => m.ItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<InventoryAdjustment>(b =>
+        {
+            b.ToTable("InventoryAdjustments");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Reference).HasMaxLength(30);
+            b.Property(a => a.Memo).HasMaxLength(1000);
+            b.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(a => a.ValueChange);
+            b.HasIndex(a => a.JournalEntryId).IsUnique();
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.AdjustmentAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(a => a.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(a => a.Lines, l =>
+            {
+                l.ToTable("InventoryAdjustmentLines");
+                l.WithOwner().HasForeignKey("InventoryAdjustmentId");
+                l.HasKey("InventoryAdjustmentId", nameof(InventoryAdjustmentLine.LineNumber));
+                l.Property(x => x.QuantityChange).HasColumnName("QuantityChangeTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.ValueChange).HasColumnName("ValueChangeMinor").HasConversion(MinorUnits);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(a => a.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         void SalesLines<TOwner>(OwnedNavigationBuilder<TOwner, SalesLine> l, string table, string ownerKey)
@@ -681,7 +729,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.HasKey(ownerKey, nameof(BillLine.LineNumber));
             l.Property(x => x.Description).HasMaxLength(1000);
             l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(NullableTenThousandths);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         }
 
         modelBuilder.Entity<Vendor>(b =>

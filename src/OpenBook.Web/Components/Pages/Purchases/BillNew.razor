@@ -50,7 +50,7 @@
                 </div>
             </div>
 
-            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Items="_stockItems" Changed="StateHasChanged" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
@@ -72,6 +72,7 @@
     private IReadOnlyList<Vendor> _vendors = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _categories = [];
+    private IReadOnlyList<Item> _stockItems = [];
     private bool _useNumbers;
     private Vendor? _vendor;
     private string? _reference;
@@ -97,6 +98,8 @@
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
         _categories = BillLineModel.Categories(_chart);
+        _stockItems = await Ops.RunAsync(async sp =>
+            (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory).ToList());
         if (PresetVendor is { } preset)
             SetVendor(preset);
         _loaded = true;

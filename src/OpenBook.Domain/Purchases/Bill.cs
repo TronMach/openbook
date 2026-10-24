@@ -5,24 +5,34 @@ using OpenBook.Domain.Ledger;
 namespace OpenBook.Domain.Purchases;
 
 /// <summary>What a bill's line is for: an account (expense, asset, ...) and amount. A negative amount is a credit, e.g. a discount.</summary>
-public sealed record BillLineDraft(Guid AccountId, decimal Amount, string? Description = null);
+/// <param name="ItemId">An inventory item received: the line posts to its asset account and adds <paramref name="Quantity"/> to stock at the line's amount.</param>
+public sealed record BillLineDraft(Guid AccountId, decimal Amount, string? Description = null, Guid? ItemId = null, decimal? Quantity = null);
 
 public sealed class BillLine
 {
     private BillLine() { }
 
-    internal BillLine(int lineNumber, Guid accountId, decimal amount, string? description)
+    internal BillLine(int lineNumber, Guid accountId, decimal amount, string? description, Guid? itemId = null, decimal? quantity = null)
     {
         LineNumber = lineNumber;
         AccountId = accountId;
         Amount = amount;
         Description = description;
+        ItemId = itemId;
+        Quantity = quantity;
     }
 
     public int LineNumber { get; private set; }
     public Guid AccountId { get; private set; }
     public string? Description { get; private set; }
     public decimal Amount { get; private set; }
+
+    /// <summary>The inventory item received, with <see cref="Quantity"/>; null on a category line.</summary>
+    public Guid? ItemId { get; private set; }
+
+    public decimal? Quantity { get; private set; }
+
+    public BillLineDraft ToDraft() => new(AccountId, Amount, Description, ItemId, Quantity);
 }
 
 /// <summary>
@@ -90,7 +100,17 @@ public sealed class Bill
                 throw new DomainException("bill.line_zero", $"Line {index}: the amount can't be zero.");
             if (decimal.Round(draft.Amount, 2) != draft.Amount)
                 throw new DomainException("money.precision", $"Line {index}: amounts can have at most 2 decimal places.");
-            lines.Add(new BillLine(index, draft.AccountId, draft.Amount, Text.Optional(draft.Description, 1000, "bill.description_too_long", "Description")));
+            if (draft.ItemId is not null)
+            {
+                if (draft.Quantity is not { } q || q <= 0m || decimal.Round(q, Sales.SalesLine.Precision) != q)
+                    throw new DomainException("bill.line_quantity", $"Line {index}: enter the quantity received, more than zero with up to 4 decimal places.");
+                if (draft.Amount < 0m)
+                    throw new DomainException("bill.line_item_negative", $"Line {index}: an item line's amount can't be negative.");
+            }
+            else if (draft.Quantity is not null)
+                throw new DomainException("bill.line_quantity_without_item", $"Line {index}: a quantity needs an item.");
+            lines.Add(new BillLine(index, draft.AccountId, draft.Amount, Text.Optional(draft.Description, 1000, "bill.description_too_long", "Description"),
+                draft.ItemId, draft.Quantity));
         }
 
         if (lines.Sum(l => l.Amount) <= 0m)
