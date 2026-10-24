@@ -13,14 +13,22 @@ namespace OpenBook.Integration.Tests;
 
 /// <summary>
 /// A fresh, fully migrated in-memory SQLite database (triggers included) per test,
-/// with a company already set up unless the test opts out.
+/// with a company already set up unless the test opts out. With OPENBOOK_TEST_ALL_ON_POSTGRES=1 (and
+/// OPENBOOK_TEST_POSTGRES set, see <see cref="PostgresFactAttribute"/>) each test gets a new PostgreSQL database
+/// instead, so the whole suite runs on that provider; tests of SQLite-only features are then expected to fail.
 /// </summary>
 public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 {
     public const string OwnerUsername = "owner";
     public const string OwnerPassword = "correct horse battery";
 
-    private readonly string _connectionString = $"Data Source=file:openbook-{Guid.NewGuid():N}?mode=memory&cache=shared";
+    public static bool OnPostgres =>
+        Environment.GetEnvironmentVariable("OPENBOOK_TEST_ALL_ON_POSTGRES") == "1" && PostgresFactAttribute.ConnectionString is { Length: > 0 };
+
+    private readonly string _postgresDatabase = $"openbook_test_{Guid.NewGuid():N}";
+    private readonly string _connectionString = OnPostgres
+        ? string.Empty
+        : $"Data Source=file:openbook-{Guid.NewGuid():N}?mode=memory&cache=shared";
     private SqliteConnection? _keepAlive;
 
     public ServiceProvider Services { get; private set; } = null!;
@@ -37,12 +45,22 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _keepAlive = new SqliteConnection(_connectionString);
-        await _keepAlive.OpenAsync();
+        var connectionString = _connectionString;
+        var provider = DatabaseProvider.Sqlite;
+        if (OnPostgres)
+        {
+            connectionString = new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Database = _postgresDatabase }.ToString();
+            provider = DatabaseProvider.Postgres;
+        }
+        else
+        {
+            _keepAlive = new SqliteConnection(_connectionString);
+            await _keepAlive.OpenAsync();
+        }
 
         Services = new ServiceCollection()
             .AddOpenBookApplication()
-            .AddOpenBookInfrastructure(_connectionString, BackupDirectory)
+            .AddOpenBookInfrastructure(connectionString, BackupDirectory, provider: provider)
             .AddSingleton<IClock>(Clock)
             .AddSingleton<ICurrentUser, TestUser>()
             .AddSingleton<ISecretProtector, TestSecrets>()
@@ -62,6 +80,14 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
         if (_keepAlive is not null)
             await _keepAlive.DisposeAsync();
         SqliteConnection.ClearAllPools();
+        if (OnPostgres)
+        {
+            Npgsql.NpgsqlConnection.ClearAllPools();
+            await using var admin = new Npgsql.NpgsqlConnection(PostgresFactAttribute.ConnectionString);
+            await admin.OpenAsync();
+            await using var drop = new Npgsql.NpgsqlCommand($"""DROP DATABASE IF EXISTS "{_postgresDatabase}" WITH (FORCE);""", admin);
+            await drop.ExecuteNonQueryAsync();
+        }
         if (Directory.Exists(BackupDirectory))
             Directory.Delete(BackupDirectory, recursive: true);
     }

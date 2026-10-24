@@ -86,7 +86,7 @@ public sealed class ReportingAndSettingsTests : IAsyncLifetime
     {
         await Post(new DateOnly(2026, 3, 31), 40m, _expense, _payable, EntryBasis.AccrualOnly);
 
-        var ex = await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(() =>
+        var ex = await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() =>
             _db.InDb(db => db.Database.ExecuteSqlRawAsync("""UPDATE "JournalEntries" SET "Basis" = 'Both';""")));
         Assert.Contains("immutable", ex.Message, StringComparison.Ordinal);
     }

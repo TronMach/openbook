@@ -65,7 +65,7 @@ public sealed class BackupTests : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Backup_file_name_uses_company_and_time()
     {
         var file = await _db.InScope(sp => sp.GetRequiredService<IBackupService>().CreateAsync(CancellationToken.None));
@@ -74,7 +74,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Equal("test-co-20260131-090000.openbook.db", file.FileName);
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Restore_replaces_data_keeps_a_safety_copy_and_audits()
     {
         await Post(100m);
@@ -102,7 +102,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Equal(LedgerDatabase.OwnerUsername, restored.Actor);
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Restored_data_keeps_its_safeguards()
     {
         await Post(100m);
@@ -113,7 +113,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Contains("cannot be deleted", ex.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Rejects_a_file_that_is_not_a_database()
     {
         var path = Path.Combine(Path.GetTempPath(), $"openbook-garbage-{Guid.NewGuid():N}.db");
@@ -123,7 +123,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Equal("backup.invalid_file", await RestoreRejected(path));
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Rejects_a_database_that_is_not_openbook()
     {
         var path = Path.Combine(Path.GetTempPath(), $"openbook-other-{Guid.NewGuid():N}.db");
@@ -133,7 +133,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Equal("backup.invalid_file", await RestoreRejected(path));
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Rejects_a_backup_without_a_company()
     {
         var empty = new LedgerDatabase(setUpCompany: false);
@@ -148,7 +148,7 @@ public sealed class BackupTests : IAsyncLifetime
         }
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Rejects_a_backup_from_a_newer_version()
     {
         var path = await CreateBackup();
@@ -157,7 +157,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Equal("backup.newer_version", await RestoreRejected(path));
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Rejects_a_backup_whose_safeguards_were_removed()
     {
         var path = await CreateBackup();
@@ -166,7 +166,7 @@ public sealed class BackupTests : IAsyncLifetime
         Assert.Equal("backup.missing_safeguards", await RestoreRejected(path));
     }
 
-    [Fact]
+    [SqliteFact]
     public async Task Rejects_a_backup_with_unbalanced_entries_even_if_triggers_were_put_back()
     {
         await Post(100m);

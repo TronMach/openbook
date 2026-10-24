@@ -32,9 +32,10 @@ public sealed class DatabaseInvariantTests : IAsyncLifetime
 
     private static string Id(Guid id) => id.ToString().ToUpperInvariant();
 
+    // Any provider's error (SqliteException, PostgresException): the message says which safeguard fired.
     private async Task<string> Rejected(string sql)
     {
-        var ex = await Assert.ThrowsAsync<SqliteException>(() => _db.InDb(db => db.Database.ExecuteSqlRawAsync(sql)));
+        var ex = await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() => _db.InDb(db => db.Database.ExecuteSqlRawAsync(sql)));
         return ex.Message;
     }
 
@@ -43,12 +44,12 @@ public sealed class DatabaseInvariantTests : IAsyncLifetime
     {
         var entryId = Id(Guid.NewGuid());
         var message = await Rejected($"""
-            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed")
-                VALUES ('{entryId}', 99, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', 0);
+            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed","Basis")
+                VALUES ('{entryId}', 99, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', FALSE, 'Both');
             INSERT INTO "JournalLines" ("Id","LineNumber","AccountId","AmountMinor","JournalEntryId")
                 VALUES ('{Id(Guid.NewGuid())}', 1, '{Id(_cash.Id)}', 1000, '{entryId}'),
                        ('{Id(Guid.NewGuid())}', 2, '{Id(_sales.Id)}', -999, '{entryId}');
-            UPDATE "JournalEntries" SET "IsSealed" = 1 WHERE "Id" = '{entryId}';
+            UPDATE "JournalEntries" SET "IsSealed" = TRUE WHERE "Id" = '{entryId}';
             """);
 
         Assert.Contains("does not balance", message, StringComparison.Ordinal);
@@ -59,9 +60,9 @@ public sealed class DatabaseInvariantTests : IAsyncLifetime
     {
         var entryId = Id(Guid.NewGuid());
         var message = await Rejected($"""
-            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed")
-                VALUES ('{entryId}', 99, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', 0);
-            UPDATE "JournalEntries" SET "IsSealed" = 1 WHERE "Id" = '{entryId}';
+            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed","Basis")
+                VALUES ('{entryId}', 99, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', FALSE, 'Both');
+            UPDATE "JournalEntries" SET "IsSealed" = TRUE WHERE "Id" = '{entryId}';
             """);
 
         Assert.Contains("at least two lines", message, StringComparison.Ordinal);
@@ -100,12 +101,12 @@ public sealed class DatabaseInvariantTests : IAsyncLifetime
 
     [Fact]
     public async Task Zero_amount_line_violates_check_constraint() =>
-        Assert.Contains("CHECK", await Rejected($"""
-            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed")
-                VALUES ('{Id(Guid.NewGuid())}', 98, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', 0);
+        Assert.Contains("check", await Rejected($"""
+            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed","Basis")
+                VALUES ('{Id(Guid.NewGuid())}', 98, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', FALSE, 'Both');
             INSERT INTO "JournalLines" ("Id","LineNumber","AccountId","AmountMinor","JournalEntryId")
                 VALUES ('{Id(Guid.NewGuid())}', 1, '{Id(_cash.Id)}', 0, (SELECT "Id" FROM "JournalEntries" WHERE "Number" = 98));
-            """), StringComparison.Ordinal);
+            """), StringComparison.OrdinalIgnoreCase);
 
     [Fact]
     public async Task Audit_records_cannot_be_edited_or_deleted()

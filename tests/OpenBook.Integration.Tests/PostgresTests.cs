@@ -29,6 +29,16 @@ public sealed class PostgresFactAttribute : FactAttribute
     }
 }
 
+/// <summary>A test of a SQLite-only feature (file backups, encryption), skipped when the suite runs on PostgreSQL.</summary>
+public sealed class SqliteFactAttribute : FactAttribute
+{
+    public SqliteFactAttribute()
+    {
+        if (LedgerDatabase.OnPostgres)
+            Skip = "SQLite-only feature; the suite is running on PostgreSQL.";
+    }
+}
+
 public sealed class PostgresTests : IAsyncLifetime
 {
     private readonly string _database = $"openbook_test_{Guid.NewGuid():N}";
