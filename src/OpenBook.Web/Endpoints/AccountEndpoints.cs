@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using OpenBook.Application.Companies;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Web.Security;
 
 namespace OpenBook.Web.Endpoints;
@@ -40,6 +41,41 @@ public static class AccountEndpoints
         }).RequireAuthorization();
 
         // Form-bound, so the antiforgery token from the page is validated automatically.
+        app.MapPost("/backup/schedule", async (IFormCollection form, ScheduledBackupService schedules, CancellationToken ct) =>
+        {
+            try
+            {
+                var details = new BackupScheduleDetails(
+                    form["enabled"] == "true",
+                    Enum.TryParse<BackupFrequency>(form["frequency"], out var frequency) ? frequency : BackupFrequency.Daily,
+                    Enum.TryParse<DayOfWeek>(form["weekday"], out var weekday) ? weekday : DayOfWeek.Sunday,
+                    int.TryParse(form["hour"], System.Globalization.CultureInfo.InvariantCulture, out var hour) ? hour : 2,
+                    Enum.TryParse<BackupDestination>(form["destination"], out var destination) ? destination : BackupDestination.Folder,
+                    form["folderPath"], form["serviceUrl"], form["region"], form["bucket"], form["prefix"], form["accessKeyId"],
+                    int.TryParse(form["keep"], System.Globalization.CultureInfo.InvariantCulture, out var keep) ? keep : BackupSchedule.DefaultKeep);
+                var secret = form["secretKey"].ToString();
+                await schedules.UpdateAsync(details, secret.Length == 0 ? null : secret, ct);
+                return Results.Redirect("/backup?scheduled=saved");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/backup?scheduleError={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/backup/schedule/run", async (IFormCollection form, ScheduledBackupService schedules, CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await schedules.RunNowAsync(ct);
+                return Results.Redirect(result.Succeeded ? "/backup?scheduled=ran" : $"/backup?scheduleError={Uri.EscapeDataString(result.Error ?? "The backup failed.")}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/backup?scheduleError={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/backup/restore", async (
             IFormFile? file,
             [FromForm] string? password,

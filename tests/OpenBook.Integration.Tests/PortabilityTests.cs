@@ -5,6 +5,7 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Attachments;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Import;
+using OpenBook.Application.Import.Migration;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Notes;
 using OpenBook.Application.Purchases;
@@ -165,11 +166,11 @@ public sealed class PortabilityTests : IAsyncLifetime
     {
         var preview = await Run(sp => sp.GetRequiredService<IifImportService>().PreviewAsync(Sample));
         Assert.Equal(0, preview.ErrorCount);
-        Assert.Equal(4, preview.Count(IifKind.Account, IifRowStatus.New));
-        Assert.Equal(1, preview.Count(IifKind.Account, IifRowStatus.Exists)); // Rent
-        Assert.Equal(1, preview.Count(IifKind.Account, IifRowStatus.Skipped)); // non-posting
-        Assert.Equal((1, 1), (preview.Count(IifKind.Item, IifRowStatus.New), preview.Count(IifKind.Item, IifRowStatus.Skipped)));
-        Assert.Equal((2, 1), (preview.Count(IifKind.Transaction, IifRowStatus.New), preview.Count(IifKind.Transaction, IifRowStatus.Skipped)));
+        Assert.Equal(4, preview.Count(MigrationKind.Account, MigrationRowStatus.New));
+        Assert.Equal(1, preview.Count(MigrationKind.Account, MigrationRowStatus.Exists)); // Rent
+        Assert.Equal(1, preview.Count(MigrationKind.Account, MigrationRowStatus.Skipped)); // non-posting
+        Assert.Equal((1, 1), (preview.Count(MigrationKind.Item, MigrationRowStatus.New), preview.Count(MigrationKind.Item, MigrationRowStatus.Skipped)));
+        Assert.Equal((2, 1), (preview.Count(MigrationKind.Transaction, MigrationRowStatus.New), preview.Count(MigrationKind.Transaction, MigrationRowStatus.Skipped)));
         Assert.Contains(preview.Warnings, w => w.Contains("CLASS", StringComparison.Ordinal));
 
         await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(Sample));
@@ -190,8 +191,8 @@ public sealed class PortabilityTests : IAsyncLifetime
 
         // Importing the same file again: everything already exists except the transactions.
         var again = await Run(sp => sp.GetRequiredService<IifImportService>().PreviewAsync(Sample));
-        Assert.Equal(0, again.Count(IifKind.Account, IifRowStatus.New));
-        Assert.Equal(1, again.Count(IifKind.Customer, IifRowStatus.Exists));
+        Assert.Equal(0, again.Count(MigrationKind.Account, MigrationRowStatus.New));
+        Assert.Equal(1, again.Count(MigrationKind.Customer, MigrationRowStatus.Exists));
     }
 
     [Fact]
@@ -208,10 +209,10 @@ public sealed class PortabilityTests : IAsyncLifetime
             "SPL|GENERAL JOURNAL|13/45/2026|Rent|-9",
             "ENDTRNS");
         var preview = await Run(sp => sp.GetRequiredService<IifImportService>().PreviewAsync(bad));
-        var errors = preview.Rows.Where(r => r.Status == IifRowStatus.Error).ToList();
+        var errors = preview.Rows.Where(r => r.Status == MigrationRowStatus.Error).ToList();
         Assert.Contains(errors, r => r.Name == "Orphan:Child" && r.Message!.Contains("parent", StringComparison.Ordinal));
         Assert.Contains(errors, r => r.Name == "Odd" && r.Message!.Contains("WEIRD", StringComparison.Ordinal));
-        Assert.Contains(errors, r => r.Kind == IifKind.Transaction && r.Message!.Contains("can't be read", StringComparison.Ordinal) && r.Message.Contains("don't balance", StringComparison.Ordinal));
+        Assert.Contains(errors, r => r.Kind == MigrationKind.Transaction && r.Message!.Contains("can't be read", StringComparison.Ordinal) && r.Message.Contains("don't balance", StringComparison.Ordinal));
 
         await Assert.ThrowsAsync<DomainException>(() => Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(bad)));
         Assert.Null((await Run(sp => sp.GetRequiredService<AccountService>().GetChartAsync())).FindByFullName("Savings"));

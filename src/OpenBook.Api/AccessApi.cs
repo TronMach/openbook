@@ -100,6 +100,24 @@ internal static class AccessApi
             var stream = new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.Delete, 81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
             return Results.File(stream, "application/vnd.sqlite3", file.FileName);
         });
+
+        // Scheduled backups: the settings (the secret key is write-only) and running them now.
+        api.MapGet("/backup/schedule", async (ScheduledBackupService s, CancellationToken ct) => ScheduleResponse.From(await s.GetAsync(ct)));
+        api.MapPut("/backup/schedule", async (BackupScheduleRequest r, ScheduledBackupService s, CancellationToken ct) =>
+            ScheduleResponse.From(await s.UpdateAsync(r.Details, r.SecretKey, ct)));
+        api.MapPost("/backup/schedule/run", (ScheduledBackupService s, CancellationToken ct) => s.RunNowAsync(ct));
+    }
+
+    public sealed record BackupScheduleRequest(BackupScheduleDetails Details, string? SecretKey = null);
+
+    public sealed record ScheduleResponse(
+        bool Enabled, Domain.Companies.BackupFrequency Frequency, DayOfWeek Weekday, int Hour, Domain.Companies.BackupDestination Destination,
+        string? FolderPath, string? ServiceUrl, string? Region, string? Bucket, string? Prefix, string? AccessKeyId, bool HasSecretKey, int Keep,
+        DateTimeOffset? LastAttemptAt, DateTimeOffset? LastSuccessAt, string? LastFileName, string? LastError)
+    {
+        public static ScheduleResponse From(Domain.Companies.BackupSchedule s) => new(
+            s.Enabled, s.Frequency, s.Weekday, s.Hour, s.Destination, s.FolderPath, s.ServiceUrl, s.Region, s.Bucket, s.Prefix, s.AccessKeyId,
+            s.ProtectedSecretKey is not null, s.Keep, s.LastAttemptAt, s.LastSuccessAt, s.LastFileName, s.LastError);
     }
 
     private static Guid UserId(ClaimsPrincipal principal) =>

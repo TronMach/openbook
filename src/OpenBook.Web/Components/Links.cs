@@ -62,6 +62,7 @@ public static class Links
         "price_level" => $"/pricing/levels/{id}",
         "price_rule" => $"/pricing/rules/{id}",
         "segment" => $"/segments/{id}",
+        "backup_schedule" => "/backup",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
         "company" => "/settings",

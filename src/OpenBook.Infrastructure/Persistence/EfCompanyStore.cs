@@ -23,6 +23,10 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
 
     public void Add(EmailSettings settings) => db.EmailConfigurations.Add(settings);
 
+    public Task<BackupSchedule?> GetBackupScheduleAsync(CancellationToken ct) => db.BackupSchedules.SingleOrDefaultAsync(ct);
+
+    public void Add(BackupSchedule schedule) => db.BackupSchedules.Add(schedule);
+
     public void Add(User user) => db.Users.Add(user);
 
     public void Add(ApiKey key) => db.ApiKeys.Add(key);

@@ -1,5 +1,7 @@
 @page "/backup"
 @using OpenBook.Web.Endpoints
+@using OpenBook.Domain.Companies
+@inject ScheduledBackupService Schedules
 
 <PageTitle>Backup &amp; restore · OpenBook</PageTitle>
 
@@ -12,6 +14,128 @@
         SQLite database, so any SQLite tool can open it. Keep copies somewhere other than this computer.
     </p>
     <a class="button" href="/backup/download">Download backup</a>
+</div>
+
+<div class="card">
+    <h2>Scheduled backups</h2>
+    <p class="muted">
+        Backs up automatically to a folder (a network share, an attached drive, or a folder your cloud storage syncs) or to S3-compatible
+        storage (Amazon S3, Backblaze B2, Cloudflare R2, Wasabi, MinIO), keeping the newest ones. Times are the server's.
+    </p>
+    @if (ScheduleError is not null)
+    {
+        <div class="alert error" role="alert">@ScheduleError</div>
+    }
+    else if (Scheduled is not null)
+    {
+        <div class="alert success" role="status">@(Scheduled == "ran" ? "Backup made." : "Saved.")</div>
+    }
+    @if (_schedule.LastAttemptAt is { } last)
+    {
+        <p>
+            Last run @last.ToLocalTime().ToString("g") ·
+            @if (_schedule.LastError is { } failure)
+            {
+                <span class="out-of-balance">failed: @failure</span>
+            }
+            else if (_schedule.LastFileName is { } name)
+            {
+                <span>saved @name</span>
+            }
+        </p>
+    }
+
+    <form method="post" action="/backup/schedule">
+        <AntiforgeryToken />
+        <label class="check"><input type="checkbox" name="enabled" value="true" checked="@_schedule.Enabled" /> <span>Back up automatically</span></label>
+        <div class="row">
+            <div class="field">
+                <label for="frequency">How often</label>
+                <select id="frequency" name="frequency">
+                    <option value="Daily" selected="@(_schedule.Frequency == BackupFrequency.Daily)">Every day</option>
+                    <option value="Weekly" selected="@(_schedule.Frequency == BackupFrequency.Weekly)">Every week</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="weekday">On (weekly)</label>
+                <select id="weekday" name="weekday">
+                    @foreach (var day in Enum.GetValues<DayOfWeek>())
+                    {
+                        <option value="@day" selected="@(_schedule.Weekday == day)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetDayName(day)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="hour">From</label>
+                <select id="hour" name="hour">
+                    @for (var h = 0; h < 24; h++)
+                    {
+                        <option value="@h" selected="@(_schedule.Hour == h)">@($"{h:00}:00")</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="keep">Keep the newest</label>
+                <input id="keep" name="keep" type="number" min="1" max="365" value="@_schedule.Keep" />
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <label for="destination">Save to</label>
+                <select id="destination" name="destination">
+                    <option value="Folder" selected="@(_schedule.Destination == BackupDestination.Folder)">A folder on the server</option>
+                    <option value="S3" selected="@(_schedule.Destination == BackupDestination.S3)">S3-compatible storage</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="folder">Folder (full path)</label>
+                <input id="folder" name="folderPath" value="@_schedule.FolderPath" placeholder="D:\Backups\OpenBook or /mnt/backups" />
+            </div>
+        </div>
+        <fieldset>
+            <legend>S3-compatible storage</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="serviceUrl">Service URL</label>
+                    <input id="serviceUrl" name="serviceUrl" value="@_schedule.ServiceUrl" placeholder="https://s3.us-east-1.amazonaws.com" />
+                </div>
+                <div class="field">
+                    <label for="region">Region</label>
+                    <input id="region" name="region" value="@_schedule.Region" placeholder="us-east-1 (auto for R2)" />
+                </div>
+                <div class="field">
+                    <label for="bucket">Bucket</label>
+                    <input id="bucket" name="bucket" value="@_schedule.Bucket" />
+                </div>
+                <div class="field">
+                    <label for="prefix">Folder in the bucket</label>
+                    <input id="prefix" name="prefix" value="@_schedule.Prefix" placeholder="openbook/" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="accessKeyId">Access key ID</label>
+                    <input id="accessKeyId" name="accessKeyId" value="@_schedule.AccessKeyId" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="secretKey">Secret access key</label>
+                    <input id="secretKey" name="secretKey" type="password" autocomplete="new-password"
+                           placeholder="@(_schedule.ProtectedSecretKey is null ? "" : "Saved; leave blank to keep it")" />
+                </div>
+            </div>
+            <span class="hint">Use a key that can only put, list and delete objects in this bucket. It's stored encrypted.</span>
+        </fieldset>
+        <div class="actions">
+            <button type="submit">Save schedule</button>
+        </div>
+    </form>
+    @if (_schedule.LastAttemptAt is not null || _schedule.FolderPath is not null || _schedule.Bucket is not null)
+    {
+        <form method="post" action="/backup/schedule/run" style="margin-top: 0.75rem">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">Back up now</button>
+        </form>
+    }
 </div>
 
 <div class="card">
@@ -56,8 +180,18 @@
 </div>
 
 @code {
+    private BackupSchedule _schedule = BackupSchedule.Default();
+
     [SupplyParameterFromQuery]
     private string? Error { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? ScheduleError { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Scheduled { get; set; }
+
+    protected override async Task OnInitializedAsync() => _schedule = await Schedules.GetAsync();
 
     private static string Message(string code) => code switch
     {

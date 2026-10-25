@@ -1,0 +1,220 @@
+@page "/import/migrate"
+@page "/import/quickbooks"
+@rendermode InteractiveServer
+@using OpenBook.Application.Import.Migration
+@inject Operations Ops
+
+<PageTitle>Move in from another program · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Move in from another program</h1>
+        <a class="button secondary" href="/journal/import">CSV import</a>
+    </div>
+
+    <div class="card">
+        <p>
+            Choose where your books are now and upload its export. OpenBook previews everything first, leaves anything it already has (same name) as it is,
+            and imports nothing unless every row is valid. Transactions come in as journal entries, one each, so balances and reports are right; they don't
+            become invoices or bills, so A/R and A/P aging won't list them.
+        </p>
+        <div class="row" style="margin-top: 1rem">
+            <div class="field">
+                <label for="source">From</label>
+                <select id="source" value="@_source" @onchange="PickSource" disabled="@_busy">
+                    @foreach (var source in Enum.GetValues<MigrationSource>())
+                    {
+                        <option value="@source">@MigrationReaders.Describe(source)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="file">Export file</label>
+                <InputFile id="file" accept="@Accept" OnChange="LoadAsync" disabled="@_busy" />
+            </div>
+        </div>
+        <p class="hint">@Help</p>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">
+            Imported @_imported.NewCount record(s): @Summary(_imported). <a href="/accounts">Chart of accounts</a> · <a href="/journal">Journal</a>
+        </div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        <div class="card">
+            <h2>Preview of @_fileName</h2>
+            @foreach (var warning in _preview.Warnings)
+            {
+                <div class="alert notice" role="status">@warning</div>
+            }
+            <table class="data">
+                <thead><tr><th></th><th class="num">New</th><th class="num">Already in OpenBook</th><th class="num">Skipped</th><th class="num">Errors</th></tr></thead>
+                <tbody>
+                    @foreach (var kind in Enum.GetValues<MigrationKind>())
+                    {
+                        <tr>
+                            <td>@Plural(kind)</td>
+                            <td class="num">@_preview.Count(kind, MigrationRowStatus.New)</td>
+                            <td class="num">@_preview.Count(kind, MigrationRowStatus.Exists)</td>
+                            <td class="num">@_preview.Count(kind, MigrationRowStatus.Skipped)</td>
+                            <td class="num">@_preview.Count(kind, MigrationRowStatus.Error)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="table-wrap" style="margin-top: 1rem">
+                <table class="data">
+                    <thead><tr><th class="num">Row</th><th>Kind</th><th>Name</th><th>Detail</th><th>Status</th><th>Note</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _preview.Rows.OrderBy(r => r.Status != MigrationRowStatus.Error).ThenBy(r => r.Line))
+                        {
+                            <tr class="@(row.Status is MigrationRowStatus.Exists or MigrationRowStatus.Skipped ? "inactive" : null)">
+                                <td class="num">@row.Line</td>
+                                <td>@row.Kind</td>
+                                <td>@row.Name</td>
+                                <td class="muted">@row.Detail</td>
+                                <td><span class="badge @(row.Status switch { MigrationRowStatus.New => "ok", MigrationRowStatus.Error => "warn", _ => null })">@row.Status</span></td>
+                                <td class="@(row.Status == MigrationRowStatus.Error ? "out-of-balance" : "muted")">@row.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">Import @_preview.NewCount record(s)</button>
+                @if (_preview.ErrorCount > 0)
+                {
+                    <span class="muted">Fix the rows with errors (shown first) and upload the file again.</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxFileBytes = MigrationImportService.MaxBytes;
+
+    private byte[]? _content;
+    private string? _fileName;
+    private MigrationSource _source = MigrationSource.QuickBooksIif;
+
+    [SupplyParameterFromQuery(Name = "from")]
+    private string? From { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (Enum.TryParse<MigrationSource>(From, ignoreCase: true, out var source))
+            _source = source;
+    }
+
+    private void PickSource(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<MigrationSource>(e.Value as string, out var source))
+            _source = source;
+        _preview = null;
+        _imported = null;
+        _content = null;
+        _error = null;
+    }
+
+    private string Accept => _source switch
+    {
+        MigrationSource.QuickBooksIif => ".iif,text/plain",
+        MigrationSource.QuickBooksQbxml => ".xml,.qbxml,text/xml",
+        MigrationSource.QuickBooksOnline => ".json,application/json",
+        MigrationSource.GnuCash => ".gnucash,.xml,.gz",
+        _ => ".csv,text/csv",
+    };
+
+    private string Help => _source switch
+    {
+        MigrationSource.QuickBooksIif => "QuickBooks Desktop: File › Utilities › Export › Lists to IIF Files (transactions as exported by QuickBooks or another tool). Reads accounts, customers, vendors, products and services, and transactions; estimates and orders are skipped.",
+        MigrationSource.QuickBooksQbxml => "QuickBooks Desktop SDK responses (qbXML) from a query tool: accounts, customers, vendors, items and journal entries. Jobs and other transaction types are listed but not imported.",
+        MigrationSource.QuickBooksOnline => "QuickBooks Online API query responses saved as JSON (for example from the API Explorer): Account, Customer, Vendor, Item and JournalEntry. Journal lines find their accounts by id, so include the accounts.",
+        MigrationSource.GnuCash => "GnuCash: File › Save As, XML format (compressed is fine). Reads the account tree and every transaction in the books' currency; an account whose type differs from its parent's starts a new top-level account.",
+        MigrationSource.Xero => "Xero: export the chart of accounts, contacts or manual journals as CSV, one file at a time; OpenBook tells which by its columns. Journal lines find accounts by code (the account number).",
+        MigrationSource.Wave => "Wave: Settings › Data export › Export accounting transactions (CSV). Reads accounts, customers, vendors and every transaction, grouped by Transaction ID.",
+        _ => "FreshBooks: Clients › Export (CSV). Reads clients as customers; bring balances in with opening balances or a journal entry CSV.",
+    };
+    private MigrationResult? _preview;
+    private MigrationResult? _imported;
+    private string? _error;
+    private bool _busy;
+
+    private static string Plural(MigrationKind kind) => kind switch
+    {
+        MigrationKind.Account => "Accounts",
+        MigrationKind.Customer => "Customers",
+        MigrationKind.Vendor => "Vendors",
+        MigrationKind.Item => "Products and services",
+        _ => "Transactions",
+    };
+
+    private static string Summary(MigrationResult result) => string.Join(", ",
+        Enum.GetValues<MigrationKind>().Select(k => (k, n: result.Count(k, MigrationRowStatus.New))).Where(x => x.n > 0).Select(x => $"{x.n} {Plural(x.k).ToLowerInvariant()}"));
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _preview = null;
+        _imported = null;
+        _busy = true;
+        try
+        {
+            if (e.File.Size > MaxFileBytes)
+            {
+                _error = "That file is larger than 20 MB. Export lists and transactions separately.";
+                return;
+            }
+
+            _fileName = e.File.Name;
+            await using var stream = e.File.OpenReadStream(MaxFileBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _content = buffer.ToArray();
+            var source = _source;
+            var content = _content;
+            _preview = await Ops.RunAsync<MigrationImportService, MigrationResult>(s => s.PreviewAsync(source, content));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_content is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var source = _source;
+            var content = _content;
+            _imported = await Ops.RunAsync<MigrationImportService, MigrationResult>(s => s.ImportAsync(source, content));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

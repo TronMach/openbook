@@ -1,66 +1,19 @@
 using System.Globalization;
-using OpenBook.Application.Accounts;
-using OpenBook.Application.Companies;
-using OpenBook.Application.Ledger;
-using OpenBook.Application.Purchases;
-using OpenBook.Application.Sales;
+using OpenBook.Application.Import.Migration;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
-using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Import;
 
-public enum IifKind
-{
-    Account,
-    Customer,
-    Vendor,
-    Item,
-    Transaction,
-}
-
-public enum IifRowStatus
-{
-    New,
-
-    /// <summary>Already in OpenBook (same name); left as it is.</summary>
-    Exists,
-
-    /// <summary>Something OpenBook doesn't import, such as an estimate or a non-posting account.</summary>
-    Skipped,
-
-    Error,
-}
-
-public sealed record IifRow(IifKind Kind, int Line, string Name, string? Detail, IifRowStatus Status, string? Message = null);
-
-public sealed record IifImportResult(IReadOnlyList<IifRow> Rows, IReadOnlyList<string> Warnings)
-{
-    public int Count(IifKind kind, IifRowStatus status) => Rows.Count(r => r.Kind == kind && r.Status == status);
-    public int NewCount => Rows.Count(r => r.Status == IifRowStatus.New);
-    public int ErrorCount => Rows.Count(r => r.Status == IifRowStatus.Error);
-    public bool CanImport => ErrorCount == 0 && NewCount > 0;
-}
-
 /// <summary>
 /// QuickBooks Desktop IIF files (tab-separated, "!" header rows): the chart of accounts (ACCNT), customers (CUST),
-/// vendors (VEND), products and services (INVITEM) and transactions (TRNS/SPL/ENDTRNS). Transactions come in as
-/// journal entries (source "ledger.import"), one per TRNS, with positive amounts as debits; they don't become
-/// invoices or bills, so A/R and A/P aging won't list them. Names that already exist are left alone. The whole
-/// file imports in one database transaction, or nothing does.
+/// vendors (VEND), products and services (INVITEM) and transactions (TRNS/SPL/ENDTRNS), imported through
+/// <see cref="MigrationImportService"/>. Non-posting accounts, estimates and orders are skipped; inventory parts come in
+/// as non-inventory products.
 /// </summary>
-public sealed class IifImportService(
-    AccountService accounts,
-    CustomerService customers,
-    VendorService vendors,
-    ItemService items,
-    ISalesStore sales,
-    IPurchasesStore purchases,
-    PostingEngine engine,
-    ICompanyStore companies,
-    IUnitOfWork unitOfWork)
+public sealed class IifImportService(MigrationImportService migration)
 {
     public const int MaxLines = 50_000;
 
@@ -75,274 +28,68 @@ public sealed class IifImportService(
 
     private static readonly HashSet<string> NonPostingTransactions = new(StringComparer.OrdinalIgnoreCase) { "ESTIMATE", "PURCHORD", "SALESORD" };
 
-    public async Task<IifImportResult> PreviewAsync(string iif, CancellationToken ct = default) => (await PlanAsync(iif, ct)).Result;
+    public Task<MigrationResult> PreviewAsync(string iif, CancellationToken ct = default) => migration.PreviewAsync(Read(iif), ct);
 
-    public async Task<IifImportResult> ImportAsync(string iif, CancellationToken ct = default)
-    {
-        var plan = await PlanAsync(iif, ct);
-        if (plan.Result.ErrorCount > 0)
-            throw new DomainException("import.has_errors", $"{plan.Result.ErrorCount} row(s) have errors. Fix them and import again; nothing was imported.");
-        if (plan.Result.NewCount == 0)
-            throw new DomainException("import.nothing_new", "Everything in this file is already in OpenBook.");
+    public Task<MigrationResult> ImportAsync(string iif, CancellationToken ct = default) => migration.ImportAsync(Read(iif), ct);
 
-        await using var transaction = await unitOfWork.BeginAsync(ct);
-
-        // Parents before children; each new account is saved so the next can refer to it.
-        foreach (var a in plan.Accounts.OrderBy(a => a.FullName.Count(c => c == Account.PathSeparator)))
-        {
-            var chart = await accounts.GetChartAsync(ct);
-            var cut = a.FullName.LastIndexOf(Account.PathSeparator);
-            var parent = cut < 0 ? null : chart.FindByFullName(a.FullName[..cut]);
-            await accounts.CreateAsync(new CreateAccountCommand(a.FullName[(cut + 1)..], a.Type, a.Number, parent?.Id, a.Description), ct);
-        }
-
-        foreach (var c in plan.Customers)
-            await customers.CreateAsync(c, ct);
-        foreach (var v in plan.Vendors)
-            await vendors.CreateAsync(v, ct);
-
-        var final = await accounts.GetChartAsync(ct);
-        foreach (var (details, incomeAccount) in plan.Items)
-            await items.CreateAsync(details with { IncomeAccountId = final.FindByFullName(incomeAccount)!.Id }, ct);
-
-        var batch = Guid.CreateVersion7();
-        foreach (var t in plan.Transactions)
-        {
-            var lines = t.Lines.Select(l => l.Amount > 0m
-                ? JournalLineDraft.Dr(final.FindByFullName(l.Account)!.Id, l.Amount, l.Memo)
-                : JournalLineDraft.Cr(final.FindByFullName(l.Account)!.Id, -l.Amount, l.Memo)).ToList();
-            await engine.StageAsync(new PostJournalEntryCommand(t.Date, lines, t.Memo, JournalEntry.ImportSource, batch), ct);
-        }
-
-        if (plan.Transactions.Count > 0)
-            await engine.SaveAsync(ct);
-        await transaction.CommitAsync(ct);
-        return plan.Result;
-    }
-
-    private sealed record PlannedAccount(string FullName, AccountType Type, string? Number, string? Description);
-
-    private sealed record PlannedLine(string Account, decimal Amount, string? Memo);
-
-    private sealed record PlannedTransaction(DateOnly Date, string? Memo, IReadOnlyList<PlannedLine> Lines);
-
-    private sealed record Plan(
-        IifImportResult Result,
-        List<PlannedAccount> Accounts,
-        List<CustomerDetails> Customers,
-        List<VendorDetails> Vendors,
-        List<(ItemDetails Details, string IncomeAccount)> Items,
-        List<PlannedTransaction> Transactions);
-
-    private async Task<Plan> PlanAsync(string iif, CancellationToken ct)
+    /// <summary>The file in OpenBook's terms; <see cref="MigrationImportService"/> checks it against the books.</summary>
+    public static MigrationData Read(string iif)
     {
         var (records, transactions, warnings) = Parse(iif);
-        var rows = new List<IifRow>();
-        var chart = await accounts.GetChartAsync(ct);
-        var company = await companies.GetRequiredCompanyAsync(ct);
+        var data = new MigrationData();
+        data.Warnings.AddRange(warnings);
 
-        // Accounts: what the file adds, so later rows can refer to them.
-        var plannedAccounts = new List<PlannedAccount>();
-        var types = new Dictionary<string, AccountType?>(StringComparer.OrdinalIgnoreCase); // null = non-posting
         foreach (var r in records.Where(r => r.Type == "ACCNT"))
         {
-            var name = r.Get("NAME") ?? string.Empty;
             var typeCode = r.Get("ACCNTTYPE") ?? string.Empty;
-            if (string.Equals(typeCode, "NONPOSTING", StringComparison.OrdinalIgnoreCase))
-            {
-                types[name] = null;
-                rows.Add(new IifRow(IifKind.Account, r.Line, name, typeCode, IifRowStatus.Skipped, "Non-posting accounts (estimates, orders) aren't part of the books."));
-                continue;
-            }
-
-            var existing = chart.FindByFullName(name);
-            if (existing is not null)
-            {
-                types[name] = existing.Type;
-                rows.Add(new IifRow(IifKind.Account, r.Line, name, existing.Type.Describe(), IifRowStatus.Exists));
-                continue;
-            }
-
-            var error = AccountTypes.TryGetValue(typeCode, out var type) ? ValidateAccountName(name) : $"Unknown account type '{typeCode}'.";
-            var number = r.Get("ACCNUM");
-            if (error is null && number is not null)
-                error = Try(() => Account.NormalizeNumber(number)) ?? (chart.All.Any(a => string.Equals(a.Number, number, StringComparison.OrdinalIgnoreCase)) || plannedAccounts.Any(p => p.Number == number)
-                    ? $"Account number {number} is already used." : null);
-            var cut = name.LastIndexOf(Account.PathSeparator);
-            if (error is null && cut >= 0)
-            {
-                var parentName = name[..cut];
-                var parentType = chart.FindByFullName(parentName)?.Type ?? plannedAccounts.FirstOrDefault(p => string.Equals(p.FullName, parentName, StringComparison.OrdinalIgnoreCase))?.Type;
-                error = parentType is null ? $"Its parent '{parentName}' isn't in the file (before it) or the chart."
-                    : parentType != type ? $"A subaccount must have its parent's type ({parentType.Value.Describe()})." : null;
-            }
-
-            if (error is null && plannedAccounts.Any(p => string.Equals(p.FullName, name, StringComparison.OrdinalIgnoreCase)))
-                error = "This account appears twice.";
-            if (error is null)
-            {
-                plannedAccounts.Add(new PlannedAccount(name, type, number, r.Get("DESC")));
-                types[name] = type;
-            }
-
-            rows.Add(new IifRow(IifKind.Account, r.Line, name, AccountTypes.TryGetValue(typeCode, out var t) ? t.Describe() : typeCode,
-                error is null ? IifRowStatus.New : IifRowStatus.Error, error));
+            var skip = string.Equals(typeCode, "NONPOSTING", StringComparison.OrdinalIgnoreCase) ? "Non-posting accounts (estimates, orders) aren't part of the books." : null;
+            data.Accounts.Add(new SourceAccount(r.Line, r.Get("NAME") ?? string.Empty, typeCode,
+                AccountTypes.TryGetValue(typeCode, out var type) ? type : null, r.Get("ACCNUM"), r.Get("DESC"), skip));
         }
 
-        AccountType? TypeOf(string name) => types.TryGetValue(name, out var t) ? t : chart.FindByFullName(name)?.Type;
-        bool Known(string name) => types.ContainsKey(name) || chart.FindByFullName(name) is not null;
-
-        // Customers and vendors: new names only.
-        var existingCustomers = (await sales.ListCustomersAsync(ct)).Select(c => c.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var plannedCustomers = new List<CustomerDetails>();
         foreach (var r in records.Where(r => r.Type == "CUST"))
-        {
-            var name = r.Get("NAME") ?? string.Empty;
-            if (existingCustomers.Contains(name) || plannedCustomers.Any(c => string.Equals(c.DisplayName, name, StringComparison.OrdinalIgnoreCase)))
-            {
-                rows.Add(new IifRow(IifKind.Customer, r.Line, name, null, IifRowStatus.Exists));
-                continue;
-            }
+            data.Customers.Add(new SourceCustomer(r.Line, new CustomerDetails(r.Get("NAME") ?? string.Empty, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR"))));
 
-            var details = new CustomerDetails(name, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR"));
-            var error = Try(() => Customer.NormalizeName(name));
-            if (error is null)
-                plannedCustomers.Add(details);
-            rows.Add(new IifRow(IifKind.Customer, r.Line, name, details.CompanyName, error is null ? IifRowStatus.New : IifRowStatus.Error, error));
-        }
-
-        var existingVendors = (await purchases.ListVendorsAsync(ct)).Select(v => v.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var plannedVendors = new List<VendorDetails>();
         foreach (var r in records.Where(r => r.Type == "VEND"))
-        {
-            var name = r.Get("NAME") ?? string.Empty;
-            if (existingVendors.Contains(name) || plannedVendors.Any(v => string.Equals(v.DisplayName, name, StringComparison.OrdinalIgnoreCase)))
-            {
-                rows.Add(new IifRow(IifKind.Vendor, r.Line, name, null, IifRowStatus.Exists));
-                continue;
-            }
+            data.Vendors.Add(new SourceVendor(r.Line, new VendorDetails(r.Get("NAME") ?? string.Empty, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("ADDR"),
+                AccountNumber: r.Get("ACCNUM"), Track1099: string.Equals(r.Get("1099"), "Y", StringComparison.OrdinalIgnoreCase))));
 
-            var details = new VendorDetails(name, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("ADDR"),
-                AccountNumber: r.Get("ACCNUM"), Track1099: string.Equals(r.Get("1099"), "Y", StringComparison.OrdinalIgnoreCase));
-            var error = Try(() => Vendor.NormalizeName(name));
-            if (error is null)
-                plannedVendors.Add(details);
-            rows.Add(new IifRow(IifKind.Vendor, r.Line, name, details.CompanyName, error is null ? IifRowStatus.New : IifRowStatus.Error, error));
-        }
-
-        // Products and services: service and non-inventory kinds; inventory parts come in as non-inventory.
-        var existingItems = (await sales.ListItemsAsync(ct)).Select(i => i.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var plannedItems = new List<(ItemDetails, string)>();
         foreach (var r in records.Where(r => r.Type == "INVITEM"))
         {
-            var name = r.Get("NAME") ?? string.Empty;
             var kind = (r.Get("INVITEMTYPE") ?? "SERV").ToUpperInvariant();
-            if (existingItems.Contains(name) || plannedItems.Any(i => string.Equals(i.Item1.Name, name, StringComparison.OrdinalIgnoreCase)))
-            {
-                rows.Add(new IifRow(IifKind.Item, r.Line, name, kind, IifRowStatus.Exists));
-                continue;
-            }
-
             ItemType? type = kind switch
             {
                 "SERV" => ItemType.Service,
                 "PART" or "OTHC" or "INVENTORY" or "INVENTORYPART" or "NONINV" => ItemType.NonInventory,
                 _ => null,
             };
-            if (type is null)
-            {
-                rows.Add(new IifRow(IifKind.Item, r.Line, name, kind, IifRowStatus.Skipped, "Discounts, subtotals, groups, payments and tax items aren't imported."));
-                continue;
-            }
-
-            var income = r.Get("ACCNT") ?? string.Empty;
-            var error = Try(() => Item.NormalizeName(name))
-                ?? (!Known(income) ? $"Its income account '{income}' isn't in the file or the chart."
-                    : TypeOf(income)?.ClassOf() != AccountClass.Income ? $"'{income}' isn't an income account." : null);
+            var note = type is null ? "Discounts, subtotals, groups, payments and tax items aren't imported."
+                : kind.StartsWith("INVENTORY", StringComparison.Ordinal) ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
             var rate = StatementValues.TryParseAmount(r.Get("PRICE") ?? "0", out var price) ? Math.Abs(price) : 0m;
-            if (error is null)
-                plannedItems.Add((new ItemDetails(name, type.Value, Guid.Empty, rate, r.Get("DESC")), income));
-            var note = kind.StartsWith("INVENTORY", StringComparison.Ordinal) ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
-            rows.Add(new IifRow(IifKind.Item, r.Line, name, kind, error is null ? IifRowStatus.New : IifRowStatus.Error, error ?? note));
+            data.Items.Add(new SourceItem(r.Line, r.Get("NAME") ?? string.Empty, kind, type, r.Get("ACCNT"), rate, r.Get("DESC"), note));
         }
 
-        // Transactions: one journal entry each.
-        var plannedTransactions = new List<PlannedTransaction>();
         foreach (var t in transactions)
         {
             var type = t.Trns.Get("TRNSTYPE") ?? "GENERAL JOURNAL";
             var label = $"{type} {t.Trns.Get("DOCNUM")}".Trim();
             var dateText = t.Trns.Get("DATE");
-            var all = t.Splits.Prepend(t.Trns).ToList();
-            var amount = all.Where(x => StatementValues.TryParseAmount(x.Get("AMOUNT"), out var a) && a > 0m).Sum(x => StatementValues.TryParseAmount(x.Get("AMOUNT"), out var a) ? a : 0m);
-            var detail = $"{dateText} · {amount.ToString("N2", CultureInfo.CurrentCulture)}";
-
-            if (NonPostingTransactions.Contains(type) || all.Any(x => types.TryGetValue(x.Get("ACCNT") ?? string.Empty, out var at) && at is null))
-            {
-                rows.Add(new IifRow(IifKind.Transaction, t.Line, label, detail, IifRowStatus.Skipped, "Estimates and orders don't post to the books."));
-                continue;
-            }
-
             var errors = new List<string>();
-            if (!TryParseDate(dateText, out var date))
-                errors.Add($"the date '{dateText}' can't be read");
-            else if (company.IsClosed(date))
-                errors.Add($"{date:yyyy-MM-dd} is on or before the closing date");
-
-            var lines = new List<PlannedLine>();
-            foreach (var x in all)
+            var lines = new List<SourceLine>();
+            foreach (var x in t.Splits.Prepend(t.Trns))
             {
-                var account = x.Get("ACCNT") ?? string.Empty;
-                if (!Known(account))
-                    errors.Add($"no account '{account}' in the file or the chart");
                 if (!StatementValues.TryParseAmount(x.Get("AMOUNT") ?? "0", out var value))
                     errors.Add($"line {x.Line}: the amount can't be read");
-                else if (value != 0m)
-                    lines.Add(new PlannedLine(account, value, x.Get("MEMO") ?? x.Get("NAME")));
+                else
+                    lines.Add(new SourceLine(x.Get("ACCNT") ?? string.Empty, value, x.Get("MEMO") ?? x.Get("NAME")));
             }
 
-            if (lines.Count < 2)
-                errors.Add("it needs at least two lines with amounts");
-            if (lines.Sum(l => l.Amount) != 0m)
-                errors.Add($"its lines don't balance (off by {Math.Abs(lines.Sum(l => l.Amount)).ToString("N2", CultureInfo.CurrentCulture)})");
-
             var memo = string.Join(" · ", new[] { label, t.Trns.Get("NAME"), t.Trns.Get("MEMO") }.Where(s => !string.IsNullOrWhiteSpace(s)));
-            if (errors.Count == 0)
-                plannedTransactions.Add(new PlannedTransaction(date, memo.Length > 1000 ? memo[..1000] : memo, lines));
-            rows.Add(new IifRow(IifKind.Transaction, t.Line, label, detail, errors.Count == 0 ? IifRowStatus.New : IifRowStatus.Error,
-                errors.Count == 0 ? null : string.Join("; ", errors.Distinct())));
+            data.Transactions.Add(new SourceTransaction(t.Line, label, dateText, TryParseDate(dateText, out var date) ? date : null, memo, lines,
+                NonPostingTransactions.Contains(type) ? "Estimates and orders don't post to the books." : null, errors));
         }
 
-        if (plannedTransactions.Any(t => t.Lines.Any(l => TypeOf(l.Account) is AccountType.AccountsReceivable or AccountType.AccountsPayable)))
-            warnings.Add("Some transactions post to A/R or A/P. They come in as journal entries, so they change balances but won't appear as open invoices or bills in aging and statements.");
-
-        return new Plan(new IifImportResult(rows, warnings), plannedAccounts, plannedCustomers, plannedVendors, plannedItems, plannedTransactions);
-    }
-
-    private static string? ValidateAccountName(string fullName)
-    {
-        if (fullName.Length == 0)
-            return "An account needs a name.";
-        foreach (var part in fullName.Split(Account.PathSeparator))
-        {
-            if (Try(() => Account.NormalizeName(part)) is { } error)
-                return error;
-        }
-
-        return fullName.Count(c => c == Account.PathSeparator) >= 5 ? "Accounts can be at most 5 levels deep." : null;
-    }
-
-    private static string? Try(Action check)
-    {
-        try
-        {
-            check();
-            return null;
-        }
-        catch (DomainException ex)
-        {
-            return ex.Message;
-        }
+        return data;
     }
 
     private static bool TryParseDate(string? text, out DateOnly date) =>

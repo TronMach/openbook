@@ -54,6 +54,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
     public DbSet<BankDeposit> BankDeposits => Set<BankDeposit>();
     public DbSet<EmailSettings> EmailConfigurations => Set<EmailSettings>();
+    public DbSet<BackupSchedule> BackupSchedules => Set<BackupSchedule>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<RecurringEntry> RecurringEntries => Set<RecurringEntry>();
     public DbSet<Bill> Bills => Set<Bill>();
@@ -215,6 +216,25 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.FormFooter).HasMaxLength(1000);
             b.Property(c => c.PriceRounding).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.LocationLabel).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<BackupSchedule>(b =>
+        {
+            b.ToTable("BackupSchedules");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Id).ValueGeneratedNever();
+            b.Property(s => s.Frequency).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.Weekday).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.Destination).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.FolderPath).HasMaxLength(500);
+            b.Property(s => s.ServiceUrl).HasMaxLength(300);
+            b.Property(s => s.Region).HasMaxLength(50);
+            b.Property(s => s.Bucket).HasMaxLength(63);
+            b.Property(s => s.Prefix).HasMaxLength(200);
+            b.Property(s => s.AccessKeyId).HasMaxLength(128);
+            b.Property(s => s.ProtectedSecretKey).HasMaxLength(2000);
+            b.Property(s => s.LastFileName).HasMaxLength(200);
+            b.Property(s => s.LastError).HasMaxLength(1000);
         });
 
         modelBuilder.Entity<EmailSettings>(b =>

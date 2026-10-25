@@ -81,6 +81,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IDataExporter, DataExporter>();
         services.AddSingleton<OpenBook.Application.Webhooks.IWebhookSender, HttpWebhookSender>();
+        services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.FolderBackupTarget>();
+        services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.S3BackupTarget>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();

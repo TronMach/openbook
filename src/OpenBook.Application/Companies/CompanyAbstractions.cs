@@ -29,6 +29,9 @@ public interface ICompanyStore
     /// <summary>Tracked; null until email is first set up.</summary>
     Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct);
 
+    /// <summary>Tracked; null until scheduled backups are first set up.</summary>
+    Task<BackupSchedule?> GetBackupScheduleAsync(CancellationToken ct);
+
     /// <summary>Tracked; every user's when <paramref name="userId"/> is null.</summary>
     Task<IReadOnlyList<ApiKey>> ListApiKeysAsync(Guid? userId, CancellationToken ct);
 
@@ -37,6 +40,7 @@ public interface ICompanyStore
 
     void Add(Company company);
     void Add(EmailSettings settings);
+    void Add(BackupSchedule schedule);
     void Add(User user);
     void Add(ApiKey key);
     void Add(AuditRecord record);

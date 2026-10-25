@@ -56,6 +56,7 @@ public static class WebSecurity
         services.AddSingleton<OpenBook.Application.Forms.ISecretProtector, DataProtectionSecretProtector>();
         services.AddSingleton<SetupState>();
         services.AddHostedService<RecurringPostingService>();
+        services.AddHostedService<ScheduledBackupHostedService>();
         services.AddHostedService<WebhookDispatchService>();
         return services;
     }

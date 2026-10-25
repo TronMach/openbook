@@ -22,6 +22,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         ["ApiKeys"] = ["TokenHash"],
         ["WebhookSubscriptions"] = ["ProtectedSecret"],
         ["EmailSettings"] = ["ProtectedPassword"],
+        ["BackupSchedules"] = ["ProtectedSecretKey"],
         ["Vendors"] = ["TaxId"],
         ["AttachmentContents"] = ["Data"],
     };

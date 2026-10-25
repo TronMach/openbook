@@ -39,6 +39,19 @@ internal static class PortabilityApi
             return dryRun == true ? await s.PreviewAsync(text, ct) : await s.ImportAsync(text, ct);
         }).Accepts<string>("text/plain");
 
+        // Any supported program's export as the raw request body: source is a MigrationSource (QuickBooksIif, GnuCash, Xero...).
+        import.MapPost("/migrate/{source}", async (string source, HttpRequest request, bool? dryRun, Application.Import.Migration.MigrationImportService s, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<Application.Import.Migration.MigrationSource>(source, ignoreCase: true, out var from))
+                return Results.BadRequest(new { code = "import.source_unknown", message = $"Unknown source '{source}'. Use one of: {string.Join(", ", Enum.GetNames<Application.Import.Migration.MigrationSource>())}." });
+            using var buffer = new MemoryStream();
+            await request.Body.CopyToAsync(buffer, ct);
+            if (buffer.Length > Application.Import.Migration.MigrationImportService.MaxBytes)
+                return Results.BadRequest(new { code = "import.too_large", message = "The file is larger than 20 MB." });
+            var content = buffer.ToArray();
+            return Results.Ok(dryRun == true ? await s.PreviewAsync(from, content, ct) : await s.ImportAsync(from, content, ct));
+        }).Accepts<byte[]>("application/octet-stream");
+
         // A ZIP of every table as CSV, the attachments, and README.md documenting it all.
         api.MapGet("/export", async (IDataExporter exporter, CancellationToken ct) =>
         {
