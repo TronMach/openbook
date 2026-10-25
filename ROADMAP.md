@@ -116,7 +116,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | L7 | Security | Granular permissions, OIDC/SSO, 2FA, accountant invite |
 | L8 | Migration | QBO API / QBXML, GnuCash, Xero/Wave/FreshBooks, scheduled cloud backups |
 | L9 | Platform | Plugin system, PWA, offline sync, CLI, localization |
-| L10 | Payroll | Recommend the **"payroll journal import"** option first (import totals from Gusto/ADP). Full payroll needs yearly tax-table maintenance indefinitely |
+| L10 | Payroll — **on hold indefinitely (decided 2026-10-25)** | Not planned; don’t start without a new decision. If revived: recommend the **"payroll journal import"** option first (import totals from Gusto/ADP). Full payroll needs yearly tax-table maintenance indefinitely |
 | L11 | Industry editions | Nonprofit, contractor, retail, professional services, manufacturing, e-commerce, property management; each is a mini-product |
 | L12 | Advanced pricing | Price levels per customer (fixed percentage or per-item prices) as the baseline; price rules for promotions and exceptions (items, customers or levels, quantity range, date range, percent/amount/set price, priority, exclusive); quantity breaks per item; rounding; a defined order of application; list price and pricing source kept on every line; last price sold; price list and discounts-given reports. Researched from QuickBooks Enterprise Advanced Pricing, fixing its gaps (undocumented precedence, quantity breaks ignoring split lines) |
 
@@ -169,9 +169,9 @@ Per-feature assumptions, including tests, a build/test loop and normal debugging
 | | L7 Security | 10–20 M | |
 | | L8 Migration | 25–45 M | |
 | | L9 Platform | 30–60 M | |
-| | L10 Payroll (full) | 80–150 M | |
+| | L10 Payroll (full), on hold, not in subtotal | (80–150 M) | |
 | | L11 Industry editions | 60–150 M | |
-| | **LATER subtotal** | **~370–725 M** | **~4–7 M** |
+| | **LATER subtotal (without payroll)** | **~290–575 M** | **~4–7 M** |
 
 **Through V1: roughly 235–400 M total tokens, ~2.7 M output.**
 Everything in the PDF: roughly 0.6–1.1 B total, ~7–10 M output.
