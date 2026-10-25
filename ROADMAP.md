@@ -108,7 +108,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | # | Module | Notes |
 |---|---|---|
 | L1 | Segments | Classes, departments, tags, locations; budgets by segment |
-| L2 | Multi-currency & multi-entity | FX rates, realized/unrealized gain/loss, consolidation, intercompany. **Decide early whether you'll ever want this**: if yes, put a currency column on every amount in M0 even if it's always the home currency |
+| L2 | Multi-currency & multi-entity — **on hold indefinitely (decided 2026-10-25)** | Not planned; don’t start without a new decision. Journal entries record a currency (always the home currency), but documents, lines and reports assume one currency, so reviving it touches most modules. Scope if revived: FX rates, realized/unrealized gain/loss, consolidation, intercompany. **Decide early whether you'll ever want this**: if yes, put a currency column on every amount in M0 even if it's always the home currency |
 | L3 | A/R & A/P advanced | Late fees, reminders, Stripe/Square/PayPal links, customer portal, progress invoicing, sales orders, retainers, bad debt, sub-customers, POs with 3-way match, approvals, NACHA, billable expenses, receipt OCR |
 | L4 | Banking & inventory advanced | Plaid/SimpleFIN/GoCardless feeds, positive pay, petty cash; weighted average, kits, assemblies, warehouses/bins, lot/serial, barcodes, landed cost |
 | L5 | Projects & assets | Time tracking, timer, billable time, project budgets & profitability, mileage; fixed asset register, depreciation (SL, DB, MACRS), disposal, loan amortization |
@@ -161,7 +161,7 @@ Per-feature assumptions, including tests, a build/test loop and normal debugging
 | | V1.9 Portability & UX | 12–20 M | ~140 k |
 | | **V1 subtotal (+20%)** | **~165–280 M** | **~1.9 M** |
 | LATER | L1 Segments | 10–20 M | |
-| | L2 Multi-currency / entity | 40–80 M | |
+| | L2 Multi-currency / entity, on hold, not in subtotal | (40–80 M) | |
 | | L3 A/R & A/P advanced | 40–70 M | |
 | | L4 Banking & inventory advanced | 25–45 M | |
 | | L5 Projects & assets | 30–50 M | |
@@ -171,7 +171,7 @@ Per-feature assumptions, including tests, a build/test loop and normal debugging
 | | L9 Platform | 30–60 M | |
 | | L10 Payroll (full), on hold, not in subtotal | (80–150 M) | |
 | | L11 Industry editions | 60–150 M | |
-| | **LATER subtotal (without payroll)** | **~290–575 M** | **~4–7 M** |
+| | **LATER subtotal (without payroll and multi-currency)** | **~250–495 M** | **~4–7 M** |
 
 **Through V1: roughly 235–400 M total tokens, ~2.7 M output.**
 Everything in the PDF: roughly 0.6–1.1 B total, ~7–10 M output.
