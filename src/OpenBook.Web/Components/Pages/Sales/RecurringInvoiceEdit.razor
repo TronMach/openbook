@@ -48,13 +48,7 @@
                 </div>
                 <div class="field">
                     <label for="customer">Customer</label>
-                    <select id="customer" @bind="_customerId">
-                        <option value="">Choose a customer…</option>
-                        @foreach (var c in _customers)
-                        {
-                            <option value="@c.Id">@c.DisplayName</option>
-                        }
-                    </select>
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" @bind-Value="_customerId" Placeholder="Choose a customer…" />
                 </div>
             </div>
             <div class="row">

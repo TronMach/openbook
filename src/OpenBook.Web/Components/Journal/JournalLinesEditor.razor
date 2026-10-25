@@ -20,18 +20,7 @@
             {
                 <tr @key="line">
                     <td>
-                        <select @bind="line.AccountId" @bind:after="Changed.InvokeAsync" aria-label="Account">
-                            <option value="">Choose an account…</option>
-                            @foreach (var group in Accounts.GroupBy(a => a.Type.ClassOf()))
-                            {
-                                <optgroup label="@Labels.For(group.Key)">
-                                    @foreach (var account in group)
-                                    {
-                                        <option value="@account.Id">@Labels.AccountName(Chart, account.Id, UseNumbers)</option>
-                                    }
-                                </optgroup>
-                            }
-                        </select>
+                        <SearchSelect Options="AccountOptions" @bind-Value="line.AccountId" @bind-Value:after="Changed.InvokeAsync" Placeholder="Find an account…" AriaLabel="Account" />
                     </td>
                     <td><input class="amount" type="number" min="0" step="0.01" aria-label="Debit" @bind="line.Debit" @bind:after="() => { line.Credit = line.Debit > 0 ? null : line.Credit; return Changed.InvokeAsync(); }" /></td>
                     <td><input class="amount" type="number" min="0" step="0.01" aria-label="Credit" @bind="line.Credit" @bind:after="() => { line.Debit = line.Credit > 0 ? null : line.Debit; return Changed.InvokeAsync(); }" /></td>
@@ -65,6 +54,19 @@
 </div>
 
 @code {
+    private IReadOnlyList<Account>? _accountsFor;
+    private IReadOnlyList<PickerOption> _accountOptions = [];
+
+    private IReadOnlyList<PickerOption> AccountOptions
+    {
+        get
+        {
+            if (!ReferenceEquals(_accountsFor, Accounts))
+                (_accountsFor, _accountOptions) = (Accounts, PickerOptions.Accounts(Accounts, Chart, UseNumbers));
+            return _accountOptions;
+        }
+    }
+
 
     /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
     [Parameter]

@@ -48,13 +48,7 @@
                 </div>
                 <div class="field">
                     <label for="vendor">Vendor</label>
-                    <select id="vendor" @bind="_vendorId">
-                        <option value="">Choose a vendor…</option>
-                        @foreach (var v in _vendors)
-                        {
-                            <option value="@v.Id">@v.DisplayName</option>
-                        }
-                    </select>
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
                 </div>
             </div>
             <div class="row">

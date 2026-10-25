@@ -332,3 +332,18 @@ button.theme-toggle { font-size: 0.85rem; }
 .tag-picker { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
 .tag-option { display: inline-flex; gap: 0.35rem; align-items: center; font-weight: 400; }
 table.entry select[aria-label="Class"] { min-width: 8rem; }
+
+/* Search-as-you-type pickers (Components/Search/SearchSelect) */
+.search-select { position: relative; min-width: 12rem; }
+.search-select .search-input { width: 100%; }
+.search-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 2px); min-width: 16rem; max-height: 18rem; overflow-y: auto;
+    margin: 0; padding: 0.25rem 0; list-style: none; background: var(--surface, var(--bg)); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+.search-option { padding: 0.35rem 0.6rem; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-option:hover, .search-option.active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.search-option[aria-selected="true"] { font-weight: 600; }
+.search-group { padding: 0.4rem 0.6rem 0.15rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.search-empty { padding: 0.35rem 0.6rem; }
+table.entry .search-select { min-width: 14rem; }
+/* An open picker list must not be clipped by the scrolling line table around it. */
+.table-wrap:has(.search-list) { overflow: visible; }

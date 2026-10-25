@@ -24,13 +24,7 @@
                     @if (Items.Count > 0)
                     {
                         <td>
-                            <select @bind="line.ItemId" @bind:after="() => ItemChangedAsync(line)" aria-label="Inventory item">
-                                <option value="">(none)</option>
-                                @foreach (var item in Items)
-                                {
-                                    <option value="@item.Id">@item.Name</option>
-                                }
-                            </select>
+                            <SearchSelect Options="ItemOptions" @bind-Value="line.ItemId" @bind-Value:after="() => ItemChangedAsync(line)" EmptyText="(none)" Placeholder="Find an item…" AriaLabel="Inventory item" />
                         </td>
                         <td>
                             @if (line.ItemId is not null)
@@ -46,18 +40,7 @@
                         }
                         else
                         {
-                        <select @bind="line.AccountId" @bind:after="Changed.InvokeAsync" aria-label="Category">
-                            <option value="">Choose a category…</option>
-                            @foreach (var group in Categories.GroupBy(a => a.Type.ClassOf()))
-                            {
-                                <optgroup label="@Labels.For(group.Key)">
-                                    @foreach (var a in group)
-                                    {
-                                        <option value="@a.Id">@Labels.AccountName(Chart, a.Id, UseNumbers)</option>
-                                    }
-                                </optgroup>
-                            }
-                        </select>
+                        <SearchSelect Options="CategoryOptions" @bind-Value="line.AccountId" @bind-Value:after="Changed.InvokeAsync" Placeholder="Find a category…" AriaLabel="Category" />
                         }
                     </td>
                     <td><input @bind="line.Description" aria-label="Description" /></td>
@@ -92,6 +75,31 @@
 </div>
 
 @code {
+    private IReadOnlyList<Item>? _itemsFor;
+    private IReadOnlyList<PickerOption> _itemOptions = [];
+    private IReadOnlyList<Account>? _categoriesFor;
+    private IReadOnlyList<PickerOption> _categoryOptions = [];
+
+    private IReadOnlyList<PickerOption> ItemOptions
+    {
+        get
+        {
+            if (!ReferenceEquals(_itemsFor, Items))
+                (_itemsFor, _itemOptions) = (Items, PickerOptions.Items(Items));
+            return _itemOptions;
+        }
+    }
+
+    private IReadOnlyList<PickerOption> CategoryOptions
+    {
+        get
+        {
+            if (!ReferenceEquals(_categoriesFor, Categories))
+                (_categoriesFor, _categoryOptions) = (Categories, PickerOptions.Accounts(Categories, Chart, UseNumbers));
+            return _categoryOptions;
+        }
+    }
+
 
     /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
     [Parameter]

@@ -27,13 +27,7 @@
             <div class="row">
                 <div class="field">
                     <label for="vendor">Vendor</label>
-                    <select id="vendor" value="@_vendorId" @onchange="PickVendor">
-                        <option value="">Choose a vendor…</option>
-                        @foreach (var v in _vendors)
-                        {
-                            <option value="@v.Id">@v.DisplayName</option>
-                        }
-                    </select>
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" Value="_vendorId" OnChange="PickVendor" Placeholder="Choose a vendor…" />
                 </div>
                 <div class="field">
                     <label for="reference">Credit no. <span class="muted">(the vendor's, optional)</span></label>

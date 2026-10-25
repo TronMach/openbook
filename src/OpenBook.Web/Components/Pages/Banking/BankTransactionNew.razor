@@ -24,13 +24,7 @@
             {
                 <div class="field">
                     <label for="vendor">Vendor <span class="muted">(optional)</span></label>
-                    <select id="vendor" value="@_vendorId" @onchange="PickVendor">
-                        <option value="">None</option>
-                        @foreach (var v in _vendors)
-                        {
-                            <option value="@v.Id">@v.DisplayName</option>
-                        }
-                    </select>
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" Value="_vendorId" OnChange="PickVendor" EmptyText="None" Placeholder="Type a name or leave blank" />
                     <span class="hint">Shows the expense on the vendor's page and fills in their default category.</span>
                 </div>
             }
@@ -75,18 +69,7 @@
                         {
                             <tr @key="line">
                                 <td>
-                                    <select @bind="line.AccountId" aria-label="Category">
-                                        <option value="">Choose a category…</option>
-                                        @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
-                                        {
-                                            <optgroup label="@Labels.For(group.Key)">
-                                                @foreach (var category in group)
-                                                {
-                                                    <option value="@category.Id">@Labels.AccountName(_chart, category.Id, _useNumbers)</option>
-                                                }
-                                            </optgroup>
-                                        }
-                                    </select>
+                                    <SearchSelect Options="CategoryOptions" @bind-Value="line.AccountId" Placeholder="Find a category…" AriaLabel="Category" />
                                 </td>
                                 <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" /></td>
                                 <td><input @bind="line.Memo" aria-label="Line memo" /></td>
@@ -125,6 +108,19 @@
 </div>
 
 @code {
+    private List<Account>? _categoriesFor;
+    private IReadOnlyList<PickerOption> _categoryOptions = [];
+
+    private IReadOnlyList<PickerOption> CategoryOptions
+    {
+        get
+        {
+            if (!ReferenceEquals(_categoriesFor, _categories))
+                (_categoriesFor, _categoryOptions) = (_categories, PickerOptions.Accounts(_categories, _chart, _useNumbers));
+            return _categoryOptions;
+        }
+    }
+
     private Account? _account;
     private string? _accountName;
     private ChartOfAccounts _chart = new([]);

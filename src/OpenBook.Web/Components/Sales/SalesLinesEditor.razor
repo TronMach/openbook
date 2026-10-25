@@ -46,13 +46,7 @@
                     else
                     {
                         <td>
-                            <select value="@line.ItemId" aria-label="Product or service" @onchange="e => PickItem(line, e)">
-                                <option value="">(note only)</option>
-                                @foreach (var item in Items)
-                                {
-                                    <option value="@item.Id">@item.Name</option>
-                                }
-                            </select>
+                            <SearchSelect Options="ItemOptions" Value="line.ItemId" OnChange="e => PickItem(line, e)" EmptyText="(note only)" Placeholder="Find a product or service…" AriaLabel="Product or service" />
                         </td>
                         <td><input @bind="line.Description" aria-label="Description" /></td>
                         <td><input class="amount" type="number" step="any" aria-label="Quantity" @bind="line.Quantity" @bind:after="Changed" /></td>
@@ -135,6 +129,19 @@
 </div>
 
 @code {
+    private IReadOnlyList<Item>? _optionsFor;
+    private IReadOnlyList<PickerOption> _itemOptions = [];
+
+    private IReadOnlyList<PickerOption> ItemOptions
+    {
+        get
+        {
+            if (!ReferenceEquals(_optionsFor, Items))
+                (_optionsFor, _itemOptions) = (Items, PickerOptions.Items(Items));
+            return _itemOptions;
+        }
+    }
+
     [Parameter, EditorRequired]
     public List<SalesLineModel> Lines { get; set; } = [];
 

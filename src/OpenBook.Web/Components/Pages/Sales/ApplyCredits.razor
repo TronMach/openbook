@@ -30,13 +30,7 @@
             <div class="row">
                 <div class="field">
                     <label for="customer">Customer</label>
-                    <select id="customer" value="@_customerId" @onchange="PickCustomerAsync">
-                        <option value="">Choose a customer…</option>
-                        @foreach (var c in _customers)
-                        {
-                            <option value="@c.Id">@c.DisplayName</option>
-                        }
-                    </select>
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" Value="_customerId" OnChange="PickCustomerAsync" Placeholder="Choose a customer…" />
                 </div>
                 <div class="field">
                     <label for="date">Apply on</label>

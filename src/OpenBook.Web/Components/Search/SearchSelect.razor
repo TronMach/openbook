@@ -1,0 +1,158 @@
+@* A search-as-you-type picker for interactive forms (the ARIA combobox pattern): type part of a name to narrow the list,
+   arrow keys and Enter to choose (searchselect.js), Esc or Tab to leave. Leaving with an exact name typed chooses it;
+   anything else puts back the current choice. *@
+
+<div class="search-select @Class" @onfocusout="LeaveAsync">
+    <input id="@Id" class="search-input" type="text" role="combobox" autocomplete="off" spellcheck="false"
+           aria-autocomplete="list" aria-expanded="@(_open ? "true" : "false")" aria-controls="@_listId" aria-label="@AriaLabel"
+           placeholder="@Placeholder" value="@_text" disabled="@Disabled"
+           @oninput="Typed" @onfocus="Open" @onclick="Open" />
+    @if (_open)
+    {
+        <ul id="@_listId" class="search-list" role="listbox" aria-label="@(AriaLabel ?? Placeholder)">
+            @if (EmptyText is not null && _query.Length == 0)
+            {
+                <li id="@($"{_listId}-none")" role="option" class="search-option muted" aria-selected="@(Value is null ? "true" : "false")"
+                    @onmousedown="() => PickAsync(null)" @onmousedown:preventDefault>@EmptyText</li>
+            }
+            @{
+                string? group = null;
+                var index = 0;
+            }
+            @foreach (var option in _matches)
+            {
+                if (option.Group is not null && option.Group != group)
+                {
+                    group = option.Group;
+                    <li role="presentation" class="search-group">@group</li>
+                }
+                var first = index++ == 0 && _query.Length > 0;
+                <li id="@($"{_listId}-{option.Id:N}")" role="option" class="search-option@(first ? " active" : "")" aria-selected="@(option.Id == Value ? "true" : "false")"
+                    @onmousedown="() => PickAsync(option)" @onmousedown:preventDefault>
+                    <span>@option.Label</span>
+                    @if (option.Detail is not null)
+                    {
+                        <span class="muted"> · @option.Detail</span>
+                    }
+                </li>
+            }
+            @if (_matches.Count == 0)
+            {
+                <li role="presentation" class="search-empty muted">No matches for “@_query”</li>
+            }
+            else if (_matches.Count == PickerOptions.MaxShown)
+            {
+                <li role="presentation" class="search-empty muted">Type more to see other matches</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private readonly string _listId = $"search-{Guid.NewGuid():N}";
+    private bool _open;
+    private string _query = string.Empty;
+    private string _text = string.Empty;
+    private IReadOnlyList<PickerOption> _matches = [];
+    private Guid? _shownValue;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<PickerOption> Options { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    /// <summary>For pages whose handler takes the change event, like a select's: Value is the id, or "" for none.</summary>
+    [Parameter]
+    public EventCallback<ChangeEventArgs> OnChange { get; set; }
+
+    /// <summary>A first choice meaning "none" ("(note only)", "No customer"); null when one must be chosen.</summary>
+    [Parameter]
+    public string? EmptyText { get; set; }
+
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public string? AriaLabel { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Follow the parent's value unless the user is typing.
+        if (!_open || _shownValue != Value)
+        {
+            _shownValue = Value;
+            _text = Label(Value);
+        }
+
+        if (_open)
+            _matches = PickerOptions.Filter(Options, _query);
+    }
+
+    private string Label(Guid? id) => id is { } v ? Options.FirstOrDefault(o => o.Id == v)?.Label ?? string.Empty : string.Empty;
+
+    private void Open()
+    {
+        if (_open || Disabled)
+            return;
+        _open = true;
+        _query = string.Empty;
+        _matches = PickerOptions.Filter(Options, _query);
+    }
+
+    private void Typed(ChangeEventArgs e)
+    {
+        _text = e.Value as string ?? string.Empty;
+        _query = _text.Trim();
+        _open = true;
+        _matches = PickerOptions.Filter(Options, _query);
+    }
+
+    private async Task PickAsync(PickerOption? option)
+    {
+        _open = false;
+        _query = string.Empty;
+        _text = option?.Label ?? string.Empty;
+        _shownValue = option?.Id;
+        if (option?.Id == Value)
+            return;
+        await ValueChanged.InvokeAsync(option?.Id);
+        await OnChange.InvokeAsync(new ChangeEventArgs { Value = option?.Id.ToString() ?? string.Empty });
+    }
+
+    private async Task LeaveAsync()
+    {
+        if (!_open)
+            return;
+        var exact = _query.Length > 0
+            ? Options.FirstOrDefault(o => string.Equals(o.Label, _query, StringComparison.CurrentCultureIgnoreCase))
+            : null;
+        if (exact is not null)
+        {
+            await PickAsync(exact);
+            return;
+        }
+
+        if (_text.Length == 0 && EmptyText is not null && Value is not null)
+        {
+            await PickAsync(null);
+            return;
+        }
+
+        _open = false;
+        _query = string.Empty;
+        _text = Label(Value);
+    }
+}
