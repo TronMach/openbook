@@ -123,6 +123,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | L10 | Payroll — **on hold indefinitely (decided 2026-10-25)** | Not planned; don’t start without a new decision. If revived: recommend the **"payroll journal import"** option first (import totals from Gusto/ADP). Full payroll needs yearly tax-table maintenance indefinitely |
 | L11 | Industry editions | Nonprofit, contractor, retail, professional services, manufacturing, e-commerce, property management; each is a mini-product |
 | L12 | Advanced pricing | Price levels per customer (fixed percentage or per-item prices) as the baseline; price rules for promotions and exceptions (items, customers or levels, quantity range, date range, percent/amount/set price, priority, exclusive); quantity breaks per item; rounding; a defined order of application; list price and pricing source kept on every line; last price sold; price list and discounts-given reports. Researched from QuickBooks Enterprise Advanced Pricing, fixing its gaps (undocumented precedence, quantity breaks ignoring split lines) |
+| L13 | Desktop and Server editions | One codebase, two installs. **Desktop**: self-contained Windows/macOS installer, SQLite in the user's Documents, listens on localhost only, scheduled folder backups on by default, no database or port settings shown. **Server**: the Docker image and compose stack with PostgreSQL, admin docs for HTTPS behind a reverse proxy, Data Protection keys and pg_dump backups. **Upgrade path**: a command that copies a SQLite company file into PostgreSQL (ledger protections kept, balance and audit checked afterwards) so a business can move from Desktop to Server. Screens adapt to the edition (e.g. pg_dump guidance instead of SQLite backup buttons) |
 
 ---
 
@@ -175,7 +176,8 @@ Per-feature assumptions, including tests, a build/test loop and normal debugging
 | | L9 Platform | 30–60 M | |
 | | L10 Payroll (full), on hold, not in subtotal | (80–150 M) | |
 | | L11 Industry editions | 60–150 M | |
-| | **LATER subtotal (without payroll and multi-currency)** | **~250–495 M** | **~4–7 M** |
+| | L13 Desktop and Server editions | 15–30 M | |
+| | **LATER subtotal (without payroll and multi-currency)** | **~265–525 M** | **~4–7 M** |
 
 **Through V1: roughly 235–400 M total tokens, ~2.7 M output.**
 Everything in the PDF: roughly 0.6–1.1 B total, ~7–10 M output.
