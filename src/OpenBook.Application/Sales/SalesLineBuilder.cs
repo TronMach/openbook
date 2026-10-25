@@ -1,3 +1,4 @@
+using OpenBook.Application.Pricing;
 using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
@@ -9,10 +10,10 @@ namespace OpenBook.Application.Sales;
 public sealed record BuiltSalesLines(IReadOnlyList<SalesLine> Lines, Guid? TaxCodeId, string? TaxExemption);
 
 /// <summary>
-/// Turns line drafts into validated sales lines: looks up the items and, when needed, the discounts account;
-/// then adds the sales tax lines.
+/// Turns line drafts into validated sales lines: prices automatically priced lines for the customer, looks up the
+/// items and, when needed, the discounts account; then adds the sales tax lines.
 /// </summary>
-public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccounts, ISalesTaxStore taxes)
+public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccounts, ISalesTaxStore taxes, PricingService pricing)
 {
     /// <summary>Lines without sales tax.</summary>
     public async Task<IReadOnlyList<SalesLine>> BuildAsync(IReadOnlyList<SalesLineDraft> drafts, CancellationToken ct)
@@ -27,12 +28,16 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         return SalesLine.FromDrafts(drafts, items, discounts.Id);
     }
 
-    /// <summary>Lines with a tax line for each rate of the tax code (zero when the customer is exempt on <paramref name="date"/>).</summary>
+    /// <summary>
+    /// Lines priced for the customer on <paramref name="date"/> (drafts with <see cref="SalesLineDraft.AutoPrice"/>), with
+    /// a tax line for each rate of the tax code (zero when the customer is exempt on <paramref name="date"/>).
+    /// </summary>
     /// <param name="taxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no tax.</param>
     public async Task<BuiltSalesLines> BuildAsync(
         IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, CancellationToken ct)
     {
-        var lines = await BuildAsync(drafts, ct);
+        ArgumentNullException.ThrowIfNull(drafts);
+        var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
         var codeId = taxCodeId ?? customer?.TaxCodeId;
         if (codeId is not { } id || id == Guid.Empty)
             return new BuiltSalesLines(lines, null, null);
@@ -40,5 +45,22 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         var components = await SalesTaxService.ComponentsAsync(taxes, id, ct);
         var exemption = customer?.ExemptionOn(date);
         return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, exemption is not null)], id, exemption);
+    }
+
+    /// <summary>Automatic item lines get the quoted price and its source; quantity breaks see the item's total on the document.</summary>
+    private async Task<IReadOnlyList<SalesLineDraft>> PriceAsync(IReadOnlyList<SalesLineDraft> drafts, Customer? customer, DateOnly date, CancellationToken ct)
+    {
+        if (!drafts.Any(d => d.AutoPrice && d.Kind == SalesLineKind.Item && d.ItemId is not null))
+            return drafts;
+        var context = await pricing.ContextAsync(customer, ct);
+        var items = await store.GetItemsAsync(drafts.Where(d => d.ItemId is not null).Select(d => d.ItemId!.Value).Distinct().ToList(), ct);
+        var quantities = PricingContext.Quantities(drafts.Where(d => d.Kind == SalesLineKind.Item).Select(d => (d.ItemId, d.Quantity)));
+        return drafts.Select(d =>
+        {
+            if (!d.AutoPrice || d.Kind != SalesLineKind.Item || d.ItemId is not { } id || !items.TryGetValue(id, out var item))
+                return d;
+            var quote = context.Quote(item, date, quantities[id]);
+            return d with { Rate = quote.Price, PriceSource = quote.Source };
+        }).ToList();
     }
 }

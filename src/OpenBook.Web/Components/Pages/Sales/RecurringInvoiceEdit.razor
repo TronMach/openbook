@@ -92,7 +92,7 @@
                 <span>Email each invoice to the customer when it's created</span>
             </label>
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" />
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="DateOnly.FromDateTime(DateTime.Today)" />
             <p class="hint">Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</p>
 
             <div class="field" style="margin-top: 1rem">

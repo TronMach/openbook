@@ -5,6 +5,7 @@
 @inject InvoiceService Invoices
 @inject PaymentService Payments
 @inject SalesTaxService Taxes
+@inject PricingService Pricing
 @inject NavigationManager Navigation
 
 <PageTitle>@(_customer?.DisplayName ?? "New customer") · OpenBook</PageTitle>
@@ -143,6 +144,17 @@
                     <span class="hint">For terms like "2% 10, Net 30". Offered when you receive a payment in time.</span>
                 </div>
             </div>
+            <div class="field">
+                <label for="price-level">Price level</label>
+                <InputSelect id="price-level" @bind-Value="Input.PriceLevelId">
+                    <option value="">List prices</option>
+                    @foreach (var l in _levels.Where(l => l.IsActive || l.Id == Input.PriceLevelId))
+                    {
+                        <option value="@l.Id">@l.Name@(l.IsActive ? "" : " (inactive)")</option>
+                    }
+                </InputSelect>
+                <span class="hint">Their pricing baseline on new sales; <a href="/pricing">price rules</a> can add promotions on top.</span>
+            </div>
             <fieldset>
                 <legend>Sales tax</legend>
                 <div class="row">
@@ -214,6 +226,7 @@
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<TaxCode> _taxCodes = [];
+    private IReadOnlyList<PriceLevel> _levels = [];
     private string? _error;
 
     [Parameter]
@@ -225,6 +238,7 @@
     protected override async Task OnInitializedAsync()
     {
         _taxCodes = await Taxes.ListCodesAsync();
+        _levels = await Pricing.ListLevelsAsync();
         if (Id is { } id)
         {
             _customer = await CustomerService.GetAsync(id);
@@ -252,6 +266,7 @@
                 ExemptionCertificate = _customer.ExemptionCertificate,
                 ExemptionReason = _customer.ExemptionReason,
                 ExemptionExpiresOn = _customer.ExemptionExpiresOn,
+                PriceLevelId = _customer.PriceLevelId,
             };
     }
 
@@ -262,7 +277,7 @@
             var details = new CustomerDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone,
                 Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
                 Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
-                Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn);
+                Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
         }
@@ -325,5 +340,7 @@
 
         public ExemptionReason? ExemptionReason { get; set; }
         public DateOnly? ExemptionExpiresOn { get; set; }
+
+        public Guid? PriceLevelId { get; set; }
     }
 }

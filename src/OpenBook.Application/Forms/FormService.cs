@@ -25,15 +25,21 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
     public async Task<RenderedForm> RenderAsync(FormKind kind, Guid id, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var form = kind switch
-        {
-            FormKind.Invoice => await InvoiceAsync(company, id, ct),
-            FormKind.Estimate => await EstimateAsync(company, id, ct),
-            FormKind.CreditMemo => await CreditMemoAsync(company, id, ct),
-            _ => await ReceiptAsync(company, id, ct),
-        };
+        var form = await BuildAsync(company, kind, id, ct);
         return new RenderedForm(FileName(company, form.Form.Title, form.Form.Number), renderer.Render(form.Form), form.CustomerId, $"{form.Form.Title} {form.Form.Number}");
     }
+
+    /// <summary>The form's content, as <see cref="RenderAsync"/> prints it.</summary>
+    public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, CancellationToken ct = default) =>
+        (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, ct)).Form;
+
+    private async Task<(SalesForm Form, Guid CustomerId)> BuildAsync(Company company, FormKind kind, Guid id, CancellationToken ct) => kind switch
+    {
+        FormKind.Invoice => await InvoiceAsync(company, id, ct),
+        FormKind.Estimate => await EstimateAsync(company, id, ct),
+        FormKind.CreditMemo => await CreditMemoAsync(company, id, ct),
+        _ => await ReceiptAsync(company, id, ct),
+    };
 
     public async Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
@@ -71,6 +77,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         if (invoice.AmountPaid > 0m)
             totals.Add(new FormTotal("Paid and credited", -invoice.AmountPaid));
         totals.Add(new FormTotal("Balance due", invoice.Balance, Emphasis: true));
+        AddSavings(totals, invoice.Lines);
         var title = invoice.Status == DocumentStatus.Voided ? "Invoice (void)" : "Invoice";
         return (Form(company, customer, title, invoice.Number, facts, invoice.Lines, totals, invoice.Memo), customer.Id);
     }
@@ -82,8 +89,9 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         var facts = new List<(string, string)> { ("Date", D(estimate.Date)) };
         if (estimate.ExpirationDate is { } expires)
             facts.Add(("Valid until", D(expires)));
-        return (Form(company, customer, "Estimate", estimate.Number, facts, estimate.Lines,
-            [.. TaxTotals(estimate.Lines, estimate.TaxCodeId, estimate.TaxExemption), new FormTotal("Total", estimate.Total, Emphasis: true)], estimate.Memo), customer.Id);
+        List<FormTotal> totals = [.. TaxTotals(estimate.Lines, estimate.TaxCodeId, estimate.TaxExemption), new FormTotal("Total", estimate.Total, Emphasis: true)];
+        AddSavings(totals, estimate.Lines);
+        return (Form(company, customer, "Estimate", estimate.Number, facts, estimate.Lines, totals, estimate.Memo), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> CreditMemoAsync(Company company, Guid id, CancellationToken ct)
@@ -106,8 +114,10 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         if (receipt.Reference is not null)
             facts.Add(("Reference", receipt.Reference));
         var party = customer is null ? new FormParty("Cash sale") : CustomerParty(customer);
+        List<FormTotal> totals = [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)];
+        AddSavings(totals, receipt.Lines);
         var form = new SalesForm("Sales receipt", receipt.Number, CompanyParty(company), party, facts, Lines(receipt.Lines),
-            [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)], receipt.Memo, company.HomeCurrency.Code, Style(company));
+            totals, receipt.Memo, company.HomeCurrency.Code, Style(company));
         return (form, customer?.Id ?? Guid.Empty);
     }
 
@@ -115,6 +125,20 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         Company company, Customer customer, string title, string number, IReadOnlyList<(string, string)> facts,
         IEnumerable<SalesLine> lines, IReadOnlyList<FormTotal> totals, string? message) =>
         new(title, number, CompanyParty(company), CustomerParty(customer), facts, Lines(lines), totals, message, company.HomeCurrency.Code, Style(company));
+
+    /// <summary>
+    /// What price levels, quantity breaks and rules took off the list prices (manual prices don't count), rounded to the
+    /// cent; zero when nothing did.
+    /// </summary>
+    public static decimal Savings(IEnumerable<SalesLine> lines) =>
+        lines.Where(l => l.Kind == SalesLineKind.Item && l.PriceSource is not null && l.PriceSource != SalesLine.ManualPrice).Sum(l => l.Saved);
+
+    /// <summary>A "You saved" row under the totals when the customer's pricing saved them anything.</summary>
+    private static void AddSavings(List<FormTotal> totals, IEnumerable<SalesLine> lines)
+    {
+        if (Savings(lines) is var saved and > 0m)
+            totals.Add(new FormTotal("You saved", saved));
+    }
 
     /// <summary>Subtotal and one row per tax line, ahead of the total; nothing for an untaxed document.</summary>
     public static List<FormTotal> TaxTotals(IReadOnlyList<SalesLine> lines, Guid? taxCodeId, string? exemption)

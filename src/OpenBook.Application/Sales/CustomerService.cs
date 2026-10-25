@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBook.Application.Pricing;
 using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -8,7 +9,7 @@ namespace OpenBook.Application.Sales;
 
 public sealed record CustomerSummary(Customer Customer, decimal Balance, int OpenInvoices, decimal Overdue);
 
-public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IClock clock, ICurrentUser user)
+public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPricingStore pricing, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "customer";
 
@@ -35,6 +36,7 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, ICl
         ArgumentNullException.ThrowIfNull(details);
         await EnsureUniqueAsync(details.DisplayName, except: null, ct);
         await CheckTaxCodeAsync(details.TaxCodeId, current: null, ct);
+        await CheckPriceLevelAsync(details.PriceLevelId, current: null, ct);
         var customer = Customer.Create(details);
         store.Add(customer);
         store.Add(Audit(AuditAction.Created, customer, before: null));
@@ -48,6 +50,7 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, ICl
         var customer = await store.GetCustomerAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         await EnsureUniqueAsync(details.DisplayName, except: id, ct);
         await CheckTaxCodeAsync(details.TaxCodeId, customer.TaxCodeId, ct);
+        await CheckPriceLevelAsync(details.PriceLevelId, customer.PriceLevelId, ct);
         var before = Snapshot(customer);
         customer.Update(details);
         store.Add(Audit(AuditAction.Updated, customer, before));
@@ -83,6 +86,16 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, ICl
             throw new DomainException("customer.name_taken", $"There's already a customer named '{normalized}'.");
     }
 
+    /// <summary>A newly assigned price level must exist and be active; keeping an inactive one is allowed.</summary>
+    private async Task CheckPriceLevelAsync(Guid? levelId, Guid? current, CancellationToken ct)
+    {
+        if (levelId is not { } id || id == Guid.Empty || id == current)
+            return;
+        var level = await pricing.GetLevelAsync(id, ct) ?? throw new EntityNotFoundException("price_level", id);
+        if (!level.IsActive)
+            throw new DomainException("pricing.level_inactive", $"Price level '{level.Name}' is inactive.");
+    }
+
     /// <summary>A new default tax code must exist and be active; keeping an inactive one is allowed.</summary>
     private async Task CheckTaxCodeAsync(Guid? taxCodeId, Guid? current, CancellationToken ct)
     {
@@ -107,6 +120,7 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, ICl
         c.ExemptionCertificate,
         ExemptionReason = c.ExemptionReason?.ToString(),
         c.ExemptionExpiresOn,
+        c.PriceLevelId,
         c.IsActive,
     });
 }

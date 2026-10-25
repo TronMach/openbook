@@ -25,7 +25,12 @@ public enum SalesLineKind
 /// "Discounts Given" account.
 /// </summary>
 /// <param name="Taxable">Whether sales tax applies to an item line; null takes the item's setting.</param>
-public sealed record SalesLineDraft(Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null)
+/// <param name="AutoPrice">Item lines: ignore <paramref name="Rate"/> and charge the price the customer's level, the item's
+/// quantity breaks and the price rules give (see <c>Prices.Quote</c>). False keeps the rate as entered.</param>
+/// <param name="PriceSource">Set by the line builder for automatic prices, or kept when copying a line.</param>
+public sealed record SalesLineDraft(
+    Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null,
+    bool AutoPrice = false, string? PriceSource = null)
 {
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 }
@@ -53,6 +58,20 @@ public sealed class SalesLine
 
     /// <summary>Whether sales tax applies (item lines only).</summary>
     public bool Taxable { get; private set; }
+
+    /// <summary>Item lines: the item's own price when the line was created, before levels, breaks, rules or a manual change.</summary>
+    public decimal? ListRate { get; private set; }
+
+    /// <summary>
+    /// Item lines: what set the price when it isn't the list price: the levels, breaks and rules applied
+    /// ("Wholesale (-10%) + Spring sale (-5%)"), or "Manual price"; null at the list price.
+    /// </summary>
+    public string? PriceSource { get; private set; }
+
+    public const string ManualPrice = "Manual price";
+
+    /// <summary>What the customer saved against the list price, rounded to the cent; zero for lines without one.</summary>
+    public decimal Saved => ListRate is { } list ? decimal.Round(Quantity * list, 2, MidpointRounding.AwayFromZero) - Amount : 0m;
 
     /// <summary>The rate a tax line charges; its <see cref="Rate"/> is that rate's percentage when the line was created.</summary>
     public Guid? TaxRateId { get; private set; }
@@ -95,6 +114,9 @@ public sealed class SalesLine
             Amount = amount,
             IncomeAccountId = item?.IncomeAccountId,
             Taxable = item is not null && (draft.Taxable ?? item.Taxable),
+            ListRate = item?.Rate,
+            PriceSource = item is null ? null
+                : Text.Optional(draft.PriceSource, 200, "sales.price_source_too_long", "Price source") ?? (rate == item.Rate ? null : ManualPrice),
         };
     }
 
@@ -212,7 +234,8 @@ public sealed class SalesLine
     public SalesLineDraft ToDraft() =>
         Kind == SalesLineKind.Tax
             ? throw new InvalidOperationException("Tax lines are recalculated, not copied.")
-            : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null);
+            : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null,
+                PriceSource: PriceSource == ManualPrice ? null : PriceSource);
 
     /// <summary>The drafts for a document's lines, leaving out its tax lines.</summary>
     public static List<SalesLineDraft> Drafts(IEnumerable<SalesLine> lines) =>

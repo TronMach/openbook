@@ -1,0 +1,10 @@
+@* Under a saved line's rate: the list price and what changed it (level, breaks, rules or a manual price). *@
+@if (Line.PriceSource is not null && Line.ListRate is { } list && list != Line.Rate)
+{
+    <div class="price-note muted" title="@Line.PriceSource">List @Labels.Price(list) · @Line.PriceSource</div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public SalesLine Line { get; set; } = default!;
+}

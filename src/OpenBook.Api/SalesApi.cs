@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Pricing;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Api;
@@ -25,26 +26,31 @@ public sealed record CustomerResponse(
     Guid? TaxCodeId = null,
     string? ExemptionCertificate = null,
     ExemptionReason? ExemptionReason = null,
-    DateOnly? ExemptionExpiresOn = null)
+    DateOnly? ExemptionExpiresOn = null,
+    Guid? PriceLevelId = null)
 {
     public static CustomerResponse From(Customer c, decimal? balance = null) =>
         new(c.Id, c.DisplayName, c.CompanyName, c.Email, c.Phone, c.BillingAddress, c.ShippingAddress, c.PaymentTermsDays, c.Notes, c.IsActive, balance,
-            c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label, c.TaxCodeId, c.ExemptionCertificate, c.ExemptionReason, c.ExemptionExpiresOn);
+            c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label, c.TaxCodeId, c.ExemptionCertificate, c.ExemptionReason, c.ExemptionExpiresOn, c.PriceLevelId);
 }
 
 public sealed record ItemResponse(
     Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive, bool Taxable = true,
-    Guid? InventoryAssetAccountId = null, Guid? CostAccountId = null, decimal? ReorderPoint = null, decimal PurchaseCost = 0m)
+    Guid? InventoryAssetAccountId = null, Guid? CostAccountId = null, decimal? ReorderPoint = null, decimal PurchaseCost = 0m,
+    IReadOnlyList<QuantityBreakDto>? QuantityBreaks = null)
 {
     public static ItemResponse From(Item i) => new(
-        i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost);
+        i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost,
+        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList());
 }
 
 /// <param name="Rate">For a tax line, the percentage charged.</param>
 public sealed record SalesLineResponse(
-    int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount, SalesLineKind Kind, bool Taxable = false, Guid? TaxRateId = null)
+    int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount, SalesLineKind Kind, bool Taxable = false, Guid? TaxRateId = null,
+    decimal? ListRate = null, string? PriceSource = null)
 {
-    public static SalesLineResponse From(SalesLine l) => new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind, l.Taxable, l.TaxRateId);
+    public static SalesLineResponse From(SalesLine l) =>
+        new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind, l.Taxable, l.TaxRateId, l.ListRate, l.PriceSource);
 }
 
 public sealed record InvoiceResponse(

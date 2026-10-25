@@ -63,7 +63,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional, printed on the invoice)</span></label>

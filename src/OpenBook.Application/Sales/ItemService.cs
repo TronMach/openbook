@@ -111,5 +111,6 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         i.CostAccountId,
         i.ReorderPoint,
         i.PurchaseCost,
+        QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });
 }

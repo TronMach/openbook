@@ -556,6 +556,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("PriceRounding")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<bool>("UseAccountNumbers")
                         .HasColumnType("boolean");
 
@@ -947,6 +952,97 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("Notes", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceLevel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long>("Percent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PercentTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("PriceLevels", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Adjustment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Customers")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly?>("EndsOn")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsExclusive")
+                        .HasColumnType("boolean");
+
+                    b.Property<long?>("MaxQuantity")
+                        .HasColumnType("bigint")
+                        .HasColumnName("MaxQuantityTenThousandths");
+
+                    b.Property<long?>("MinQuantity")
+                        .HasColumnType("bigint")
+                        .HasColumnName("MinQuantityTenThousandths");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Rounding")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly?>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<long>("Value")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ValueTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("PriceRules", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
@@ -1531,6 +1627,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid?>("PriceLevelId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ShippingAddress")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -1542,6 +1641,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("DisplayName")
                         .IsUnique();
+
+                    b.HasIndex("PriceLevelId");
 
                     b.HasIndex("TaxCodeId");
 
@@ -2529,6 +2630,64 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceLevel", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Pricing.PriceLevelItem", "Items", b1 =>
+                        {
+                            b1.Property<Guid>("PriceLevelId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("ItemId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Price")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PriceTenThousandths");
+
+                            b1.HasKey("PriceLevelId", "ItemId");
+
+                            b1.HasIndex("ItemId");
+
+                            b1.ToTable("PriceLevelItems", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Sales.Item", null)
+                                .WithMany()
+                                .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("PriceLevelId");
+                        });
+
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceRule", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Pricing.PriceRuleTarget", "Targets", b1 =>
+                        {
+                            b1.Property<Guid>("PriceRuleId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Kind")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<Guid>("TargetId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("PriceRuleId", "Kind", "TargetId");
+
+                            b1.ToTable("PriceRuleTargets", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("PriceRuleId");
+                        });
+
+                    b.Navigation("Targets");
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
                 {
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
@@ -3047,6 +3206,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)");
 
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
                             b1.Property<long>("Quantity")
                                 .HasColumnType("bigint")
                                 .HasColumnName("QuantityTenThousandths");
@@ -3097,6 +3264,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Sales.Customer", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Pricing.PriceLevel", null)
+                        .WithMany()
+                        .HasForeignKey("PriceLevelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
                         .WithMany()
                         .HasForeignKey("TaxCodeId")
@@ -3252,6 +3424,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)");
 
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
                             b1.Property<long>("Quantity")
                                 .HasColumnType("bigint")
                                 .HasColumnName("QuantityTenThousandths");
@@ -3363,6 +3543,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)");
 
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
                             b1.Property<long>("Quantity")
                                 .HasColumnType("bigint")
                                 .HasColumnName("QuantityTenThousandths");
@@ -3426,6 +3614,34 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany()
                         .HasForeignKey("InventoryAssetAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Pricing.QuantityBreak", "QuantityBreaks", b1 =>
+                        {
+                            b1.Property<Guid>("ItemId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("FromQuantity")
+                                .HasColumnType("bigint")
+                                .HasColumnName("FromQuantityTenThousandths");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<long>("Value")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ValueTenThousandths");
+
+                            b1.HasKey("ItemId", "FromQuantity");
+
+                            b1.ToTable("ItemQuantityBreaks", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ItemId");
+                        });
+
+                    b.Navigation("QuantityBreaks");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.RecurringInvoice", b =>
@@ -3543,6 +3759,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .IsRequired()
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)");
+
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
 
                             b1.Property<long>("Quantity")
                                 .HasColumnType("bigint")

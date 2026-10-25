@@ -4,6 +4,8 @@
 @inject ReportCatalog Catalog
 @inject CompanySettingsService Settings
 @inject BudgetService Budgets
+@inject CustomerService Customers
+@inject PricingService Pricing
 @inject NavigationManager Navigation
 @* Any catalog report without a page of its own: the filter comes from the report's inputs. *@
 
@@ -39,6 +41,29 @@
                     <select id="detail" name="detail">
                         <option value="false" selected="@(!_parameters.GetFlag("detail"))">Summary</option>
                         <option value="true" selected="@_parameters.GetFlag("detail")">Each document</option>
+                    </select>
+                </div>
+            }
+            @if (Has(ReportInputs.PriceFor))
+            {
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <select id="customer" name="customerId">
+                        <option value="">(any)</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id" selected="@(c.Id == _parameters.GetId("customerId"))">@c.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="level">or price level</label>
+                    <select id="level" name="levelId">
+                        <option value="">(none)</option>
+                        @foreach (var l in _levels)
+                        {
+                            <option value="@l.Id" selected="@(l.Id == _parameters.GetId("levelId"))">@l.Name</option>
+                        }
                     </select>
                 </div>
             }
@@ -110,6 +135,8 @@
     private int _year;
     private IReadOnlyList<Budget> _budgets = [];
     private Budget? _budget;
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<OpenBook.Domain.Pricing.PriceLevel> _levels = [];
     private ReportTable? _table;
     private string? _error;
 
@@ -133,6 +160,12 @@
         _asOf = _parameters.GetDate("asOf") ?? today;
         _compare = _parameters.GetEnum<Comparison>("compare") ?? Comparison.None;
         _year = _parameters.GetNumber("year") ?? today.Year - 1;
+        if (Has(ReportInputs.PriceFor))
+        {
+            _customers = (await Customers.ListAsync(today)).Select(c => c.Customer).ToList();
+            _levels = await Pricing.ListLevelsAsync();
+        }
+
         if (Has(ReportInputs.Budget))
         {
             _budgets = await Budgets.ListAsync();

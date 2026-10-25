@@ -549,6 +549,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PriceRounding")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("UseAccountNumbers")
                         .HasColumnType("INTEGER");
 
@@ -940,6 +945,97 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("Notes", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceLevel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Percent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PercentTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("PriceLevels", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Adjustment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Customers")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EndsOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsExclusive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("MaxQuantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("MaxQuantityTenThousandths");
+
+                    b.Property<long?>("MinQuantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("MinQuantityTenThousandths");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Rounding")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("StartsOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Value")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ValueTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("PriceRules", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
@@ -1524,6 +1620,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PriceLevelId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ShippingAddress")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -1535,6 +1634,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DisplayName")
                         .IsUnique();
+
+                    b.HasIndex("PriceLevelId");
 
                     b.HasIndex("TaxCodeId");
 
@@ -2518,6 +2619,64 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceLevel", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Pricing.PriceLevelItem", "Items", b1 =>
+                        {
+                            b1.Property<Guid>("PriceLevelId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("ItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Price")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PriceTenThousandths");
+
+                            b1.HasKey("PriceLevelId", "ItemId");
+
+                            b1.HasIndex("ItemId");
+
+                            b1.ToTable("PriceLevelItems", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Sales.Item", null)
+                                .WithMany()
+                                .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("PriceLevelId");
+                        });
+
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Pricing.PriceRule", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Pricing.PriceRuleTarget", "Targets", b1 =>
+                        {
+                            b1.Property<Guid>("PriceRuleId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Kind")
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("TargetId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("PriceRuleId", "Kind", "TargetId");
+
+                            b1.ToTable("PriceRuleTargets", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("PriceRuleId");
+                        });
+
+                    b.Navigation("Targets");
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
                 {
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
@@ -3026,6 +3185,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(20)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
                             b1.Property<long>("Quantity")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("QuantityTenThousandths");
@@ -3076,6 +3243,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Sales.Customer", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Pricing.PriceLevel", null)
+                        .WithMany()
+                        .HasForeignKey("PriceLevelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
                         .WithMany()
                         .HasForeignKey("TaxCodeId")
@@ -3229,6 +3401,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(20)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
                             b1.Property<long>("Quantity")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("QuantityTenThousandths");
@@ -3338,6 +3518,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(20)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
                             b1.Property<long>("Quantity")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("QuantityTenThousandths");
@@ -3401,6 +3589,34 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("InventoryAssetAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Pricing.QuantityBreak", "QuantityBreaks", b1 =>
+                        {
+                            b1.Property<Guid>("ItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("FromQuantity")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("FromQuantityTenThousandths");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Value")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("ValueTenThousandths");
+
+                            b1.HasKey("ItemId", "FromQuantity");
+
+                            b1.ToTable("ItemQuantityBreaks", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ItemId");
+                        });
+
+                    b.Navigation("QuantityBreaks");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.RecurringInvoice", b =>
@@ -3513,6 +3729,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<string>("Kind")
                                 .IsRequired()
                                 .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("ListRate")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("ListRateTenThousandths");
+
+                            b1.Property<string>("PriceSource")
+                                .HasMaxLength(200)
                                 .HasColumnType("TEXT");
 
                             b1.Property<long>("Quantity")

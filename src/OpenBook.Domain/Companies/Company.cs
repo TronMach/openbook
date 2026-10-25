@@ -1,5 +1,6 @@
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Pricing;
 
 namespace OpenBook.Domain.Companies;
 
@@ -63,6 +64,12 @@ public sealed class Company
 
     /// <summary>Printed at the bottom of invoices and other forms, e.g. payment instructions.</summary>
     public string? FormFooter { get; private set; }
+
+    /// <summary>How prices changed by levels, quantity breaks and rules are rounded, unless the deciding rule says otherwise.</summary>
+    public PriceRounding PriceRounding { get; private set; } = PriceRounding.Cent;
+
+    public void SetPriceRounding(PriceRounding rounding) =>
+        PriceRounding = Enum.IsDefined(rounding) ? rounding : throw new DomainException("company.rounding_invalid", "Unknown price rounding.");
 
     public const string DefaultAccentColor = "#1f6f5c";
 

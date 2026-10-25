@@ -67,6 +67,7 @@ app.MapAccountEndpoints();
 app.MapAttachmentEndpoints();
 app.MapCheckEndpoints();
 app.MapReportEndpoints();
+app.MapPricingEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

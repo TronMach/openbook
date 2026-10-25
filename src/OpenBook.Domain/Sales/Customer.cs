@@ -43,6 +43,9 @@ public sealed class Customer
     /// <summary>Last day the certificate is valid; null when it doesn't expire.</summary>
     public DateOnly? ExemptionExpiresOn { get; private set; }
 
+    /// <summary>The customer's pricing baseline (see <c>Domain.Pricing.PriceLevel</c>); null for list prices.</summary>
+    public Guid? PriceLevelId { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public static Customer Create(CustomerDetails details)
@@ -69,6 +72,7 @@ public sealed class Customer
         EarlyPaymentDiscountPercent = terms.DiscountPercent;
         EarlyPaymentDiscountDays = terms.DiscountDays;
         TaxCodeId = details.TaxCodeId == Guid.Empty ? null : details.TaxCodeId;
+        PriceLevelId = details.PriceLevelId == Guid.Empty ? null : details.PriceLevelId;
 
         ExemptionCertificate = Text.Optional(details.ExemptionCertificate, 50, "customer.exemption_too_long", "Exemption certificate");
         if (ExemptionCertificate is null)
@@ -123,7 +127,8 @@ public sealed record CustomerDetails(
     Guid? TaxCodeId = null,
     string? ExemptionCertificate = null,
     ExemptionReason? ExemptionReason = null,
-    DateOnly? ExemptionExpiresOn = null);
+    DateOnly? ExemptionExpiresOn = null,
+    Guid? PriceLevelId = null);
 
 /// <summary>Why a customer doesn't pay sales tax, as exemption certificates state it.</summary>
 public enum ExemptionReason

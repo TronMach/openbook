@@ -31,7 +31,10 @@
                 <tr>
                     <td>@line.Description</td>
                     <td class="num">@(line.Kind == SalesLineKind.Item ? line.Quantity.ToString("0.####") : "")</td>
-                    <td class="num">@(line.Kind == SalesLineKind.Item ? line.Rate.ToString("#,##0.00##") : "")</td>
+                    <td class="num">
+                        @(line.Kind == SalesLineKind.Item ? line.Rate.ToString("#,##0.00##") : "")
+                        <PriceNote Line="line" />
+                    </td>
                     <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
                 </tr>
             }
@@ -40,6 +43,10 @@
             @foreach (var (label, amount) in Totals)
             {
                 <tr><td colspan="3">@label</td><td class="num">@Labels.Amount(amount)</td></tr>
+            }
+            @if (OpenBook.Application.Forms.FormService.Savings(Lines) is var saved and > 0m)
+            {
+                <tr class="muted"><td colspan="3">You saved</td><td class="num">@Labels.Amount(saved)</td></tr>
             }
         </tfoot>
     </table>

@@ -1,0 +1,120 @@
+@page "/pricing"
+@inject PricingService Pricing
+@inject CustomerService Customers
+
+<PageTitle>Pricing · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Pricing</h1>
+        <a class="button secondary" href="/reports/price-list">Price list</a>
+        <a class="button secondary" href="/reports/discounts-given">Discounts given</a>
+        <a class="button secondary" href="/pricing/levels/new">New price level</a>
+        <a class="button" href="/pricing/rules/new">New price rule</a>
+    </div>
+    <p class="muted">
+        A customer's <strong>price level</strong> is their baseline (wholesale, retail, gold…). Items can have <strong>quantity breaks</strong>
+        (on the item's page). <strong>Price rules</strong> handle promotions and exceptions. On every automatically priced line they apply in that
+        order: the item's price, the level, the quantity break for the item's total quantity on the document, then the rules (lowest priority number
+        first; when an exclusive rule matches, only exclusive rules count and the lowest price wins), then rounding. Typing a price yourself keeps it.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <section class="card">
+        <div class="toolbar">
+            <h2>Price levels</h2>
+        </div>
+        @if (_levels.Count == 0)
+        {
+            <p class="muted">No price levels yet. <a href="/pricing/levels/new">Add one</a>, then choose it on a customer.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Level</th><th>Prices</th><th class="num">Customers</th></tr></thead>
+                <tbody>
+                    @foreach (var l in _levels)
+                    {
+                        <tr class="@(l.IsActive ? null : "inactive")">
+                            <td><a href="/pricing/levels/@l.Id">@l.Name</a>@(l.IsActive ? "" : " (inactive)")</td>
+                            <td>@(l.Kind == PriceLevelKind.FixedPercent ? $"{(l.Percent < 0 ? "" : "+")}{Labels.Percent(l.Percent)} on every item" : $"{l.Items.Count} item {(l.Items.Count == 1 ? "price" : "prices")}")</td>
+                            <td class="num">@_customerCounts.GetValueOrDefault(l.Id)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="card">
+        <div class="toolbar">
+            <h2>Price rules</h2>
+        </div>
+        @if (_rules.Count == 0)
+        {
+            <p class="muted">No price rules yet. <a href="/pricing/rules/new">Add one</a> for a sale, a customer's special price or a volume deal.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th class="num">Priority</th><th>Rule</th><th>Change</th><th>For</th><th>Dates</th><th>Quantity</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _rules)
+                    {
+                        <tr class="@(r.IsActive ? null : "inactive")">
+                            <td class="num">@r.Priority</td>
+                            <td><a href="/pricing/rules/@r.Id">@r.Name</a>@(r.IsExclusive ? " · exclusive" : "")@(r.IsActive ? "" : " (inactive)")</td>
+                            <td>@r.Describe()</td>
+                            <td>@(r.AllItems ? "All items" : $"{r.TargetIds(RuleTargetKind.Item).Count} {(r.TargetIds(RuleTargetKind.Item).Count == 1 ? "item" : "items")}") · @Labels.For(r.Customers)</td>
+                            <td>@(r.StartsOn is { } s ? Labels.Date(s) : "…") – @(r.EndsOn is { } e ? Labels.Date(e) : "…")</td>
+                            <td>@(r.MinQuantity is null && r.MaxQuantity is null ? "Any" : $"{(r.MinQuantity is { } mn ? Labels.Quantity(mn) : "0")} – {(r.MaxQuantity is { } mx ? Labels.Quantity(mx) : "…")}")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="card">
+        <h2>Rounding</h2>
+        <form method="post" action="/pricing/rounding" class="row">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="rounding">Round prices changed by levels, breaks and rules to</label>
+                <select id="rounding" name="rounding">
+                    @foreach (var r in Enum.GetValues<PriceRounding>())
+                    {
+                        <option value="@r" selected="@(r == _rounding)">@Labels.For(r)</option>
+                    }
+                </select>
+                <span class="hint">A rule can round its own prices differently. List prices are never rounded. Needs the accountant role.</span>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">Save rounding</button></div>
+        </form>
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<PriceLevel> _levels = [];
+    private IReadOnlyList<PriceRule> _rules = [];
+    private Dictionary<Guid, int> _customerCounts = [];
+    private PriceRounding _rounding;
+
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _levels = await Pricing.ListLevelsAsync();
+        _rules = await Pricing.ListRulesAsync();
+        _rounding = await Pricing.GetRoundingAsync();
+        _customerCounts = (await Customers.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: false))
+            .Where(c => c.Customer.PriceLevelId is not null)
+            .GroupBy(c => c.Customer.PriceLevelId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+}

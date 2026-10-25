@@ -18,6 +18,14 @@ public sealed class SalesLineModel
     /// <summary>Whether sales tax applies; null takes the item's setting.</summary>
     public bool? Taxable { get; set; }
 
+    /// <summary>The rate is the automatic price (level, breaks, rules); the server recalculates it on save. Typing a rate turns it off.</summary>
+    public bool AutoPrice { get; set; }
+
+    /// <summary>The item's own price and what changed it, as last quoted; for display.</summary>
+    public decimal? ListRate { get; set; }
+
+    public string? PriceSource { get; set; }
+
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 
     public bool IsBlank => !IsDiscount && ItemId is null && string.IsNullOrWhiteSpace(Description) && ItemAmount == 0m;
@@ -69,7 +77,8 @@ public sealed class SalesLineModel
     public static List<SalesLineDraft> Drafts(IEnumerable<SalesLineModel> lines) => lines
         .Where(l => !l.IsBlank)
         .Select(l => new SalesLineDraft(l.ItemId, l.Description, l.IsDiscount ? 1m : l.Quantity ?? 0m, l.Rate ?? 0m,
-            l.IsDiscount ? l.Kind : SalesLineKind.Item, l.IsDiscount || l.ItemId is null ? null : l.Taxable))
+            l.IsDiscount ? l.Kind : SalesLineKind.Item, l.IsDiscount || l.ItemId is null ? null : l.Taxable,
+            AutoPrice: l.AutoPrice && !l.IsDiscount && l.ItemId is not null, PriceSource: l.AutoPrice ? null : l.PriceSource))
         .ToList();
 
     public static SalesLineModel From(SalesLineDraft draft)
@@ -83,6 +92,7 @@ public sealed class SalesLineModel
             Quantity = draft.IsDiscount ? null : draft.Quantity,
             Rate = draft.Rate,
             Taxable = draft.Taxable,
+            PriceSource = draft.PriceSource,
         };
     }
 }

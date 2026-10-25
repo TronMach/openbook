@@ -10,6 +10,7 @@ using OpenBook.Domain.Companies;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Notes;
+using OpenBook.Domain.Pricing;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Reporting;
 using OpenBook.Domain.Sales;
@@ -69,6 +70,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
+    public DbSet<PriceLevel> PriceLevels => Set<PriceLevel>();
+    public DbSet<PriceRule> PriceRules => Set<PriceRule>();
 
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
@@ -206,6 +209,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.FormTemplate).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.FormAccentColor).HasMaxLength(7);
             b.Property(c => c.FormFooter).HasMaxLength(1000);
+            b.Property(c => c.PriceRounding).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<EmailSettings>(b =>
@@ -497,6 +501,49 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<TaxCode>().WithMany().HasForeignKey(c => c.TaxCodeId).OnDelete(DeleteBehavior.Restrict);
             b.Property(c => c.ExemptionCertificate).HasMaxLength(50);
             b.Property(c => c.ExemptionReason).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<PriceLevel>().WithMany().HasForeignKey(c => c.PriceLevelId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PriceLevel>(b =>
+        {
+            b.ToTable("PriceLevels");
+            b.HasKey(l => l.Id);
+            b.Property(l => l.Name).HasMaxLength(100);
+            b.HasIndex(l => l.Name).IsUnique();
+            b.Property(l => l.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(l => l.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+            b.OwnsMany(l => l.Items, i =>
+            {
+                i.ToTable("PriceLevelItems");
+                i.WithOwner().HasForeignKey("PriceLevelId");
+                i.HasKey("PriceLevelId", nameof(PriceLevelItem.ItemId));
+                i.Property(x => x.Price).HasColumnName("PriceTenThousandths").HasConversion(TenThousandths);
+                i.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(l => l.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<PriceRule>(b =>
+        {
+            b.ToTable("PriceRules");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(100);
+            b.HasIndex(r => r.Name).IsUnique();
+            b.Property(r => r.Customers).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.Adjustment).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.Rounding).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.Value).HasColumnName("ValueTenThousandths").HasConversion(TenThousandths);
+            b.Property(r => r.MinQuantity).HasColumnName("MinQuantityTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(r => r.MaxQuantity).HasColumnName("MaxQuantityTenThousandths").HasConversion(NullableTenThousandths);
+            b.Ignore(r => r.AllItems);
+            b.OwnsMany(r => r.Targets, t =>
+            {
+                t.ToTable("PriceRuleTargets");
+                t.WithOwner().HasForeignKey("PriceRuleId");
+                t.HasKey("PriceRuleId", nameof(PriceRuleTarget.Kind), nameof(PriceRuleTarget.TargetId));
+                t.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            });
+            b.Navigation(r => r.Targets).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<Item>(b =>
@@ -511,6 +558,16 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.PurchaseCost).HasColumnName("PurchaseCostTenThousandths").HasConversion(TenThousandths);
             b.Property(i => i.ReorderPoint).HasColumnName("ReorderPointTenThousandths").HasConversion(NullableTenThousandths);
             b.Ignore(i => i.IsInventory);
+            b.OwnsMany(i => i.QuantityBreaks, q =>
+            {
+                q.ToTable("ItemQuantityBreaks");
+                q.WithOwner().HasForeignKey("ItemId");
+                q.HasKey("ItemId", nameof(QuantityBreak.FromQuantity));
+                q.Property(x => x.FromQuantity).HasColumnName("FromQuantityTenThousandths").HasConversion(TenThousandths);
+                q.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+                q.Property(x => x.Value).HasColumnName("ValueTenThousandths").HasConversion(TenThousandths);
+            });
+            b.Navigation(i => i.QuantityBreaks).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.InventoryAssetAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.CostAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -564,6 +621,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
             l.Property(x => x.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
             l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            l.Property(x => x.ListRate).HasColumnName("ListRateTenThousandths").HasConversion(NullableTenThousandths);
+            l.Property(x => x.PriceSource).HasMaxLength(200);
+            l.Ignore(x => x.Saved);
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<TaxRate>().WithMany().HasForeignKey(x => x.TaxRateId).OnDelete(DeleteBehavior.Restrict);

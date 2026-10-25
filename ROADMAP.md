@@ -101,6 +101,8 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 **V1.9 status (2026-10-24): complete — Phase 2 (V1) is feature-complete.** Journal entry and opening balance CSV import with preview (accounts by name or number, debit/credit or signed amounts, entries grouped by number or by balancing, date order detected). QuickBooks Desktop IIF import of accounts, customers, vendors, products and services, and transactions (as journal entries), all-or-nothing in one transaction. Full data export: a ZIP of every table as CSV, every attachment, and a generated README documenting each file and column, with secrets left out. Notes on any record, audited. A register for any account with a keyboard quick-entry row. Keyboard shortcuts (search, go to, new, Ctrl+Enter to save, help with ?). Dark mode as a choice: follow the system, light or dark. API for imports, export and notes. 546 tests; the integration suite also passes on PostgreSQL.
 
+**L12 status (2026-10-24): core complete (items 1–10).** Price levels per customer (fixed percentage or per item prices, with CSV import and export) as the baseline; price rules for promotions and exceptions (items, customers or levels, date and quantity ranges, percent, amount or set price, priority, exclusive, active); quantity breaks per item counted across the whole document; rounding (none, cent, 5¢, 10¢, dollar, .99) as a company default with per rule overrides; one documented order of application in a single calculator used by the server and the live form preview; list price and pricing source kept on every line, with "you saved" on screens and PDFs; the last price charged shown on sales forms; manual prices always kept; audit, webhooks and a REST API; price list and discounts-given reports. 578 tests; the integration suite also passes on PostgreSQL. Not yet: price levels on purchases, customer-specific item catalogs, rule usage limits.
+
 ## Phase 3 — LATER (pick by audience)
 
 | # | Module | Notes |
@@ -116,6 +118,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | L9 | Platform | Plugin system, PWA, offline sync, CLI, localization |
 | L10 | Payroll | Recommend the **"payroll journal import"** option first (import totals from Gusto/ADP). Full payroll needs yearly tax-table maintenance indefinitely |
 | L11 | Industry editions | Nonprofit, contractor, retail, professional services, manufacturing, e-commerce, property management; each is a mini-product |
+| L12 | Advanced pricing | Price levels per customer (fixed percentage or per-item prices) as the baseline; price rules for promotions and exceptions (items, customers or levels, quantity range, date range, percent/amount/set price, priority, exclusive); quantity breaks per item; rounding; a defined order of application; list price and pricing source kept on every line; last price sold; price list and discounts-given reports. Researched from QuickBooks Enterprise Advanced Pricing, fixing its gaps (undocumented precedence, quantity breaks ignoring split lines) |
 
 ---
 

@@ -163,6 +163,8 @@ button, .button {
 button.secondary, .button.secondary { background: transparent; color: var(--accent); }
 button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.link { background: none; border: 0; color: var(--muted); padding: 0; font-weight: 400; }
+.price-note { font-size: 0.75rem; margin-top: 0.15rem; max-width: 16rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.price-note button.link { font-size: 0.75rem; text-decoration: underline; }
 
 .alert { padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 1rem; }
 .alert.error { background: var(--danger-bg); color: var(--danger); }

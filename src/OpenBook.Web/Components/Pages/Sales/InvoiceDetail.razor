@@ -85,7 +85,7 @@
                     <tr>
                         <td>@line.Description</td>
                         <td class="num">@(line.ItemId is null ? "" : line.Quantity.ToString("0.####"))</td>
-                        <td class="num">@(line.ItemId is null ? "" : line.Rate.ToString("#,##0.00##"))</td>
+                        <td class="num">@(line.ItemId is null ? "" : line.Rate.ToString("#,##0.00##"))<PriceNote Line="line" /></td>
                         <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
                     </tr>
                 }
@@ -101,6 +101,10 @@
                     <tr><td colspan="3">Paid and credited</td><td class="num">-@Labels.Amount(_invoice.AmountPaid)</td></tr>
                 }
                 <tr><td colspan="3">Balance due</td><td class="num">@Labels.Amount(_invoice.Balance)</td></tr>
+                @if (FormService.Savings(_invoice.Lines) is var saved and > 0m)
+                {
+                    <tr class="muted"><td colspan="3">You saved</td><td class="num">@Labels.Amount(saved)</td></tr>
+                }
             </tfoot>
         </table>
         @if (_invoice.Memo is not null)

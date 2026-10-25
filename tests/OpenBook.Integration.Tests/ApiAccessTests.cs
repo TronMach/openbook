@@ -155,8 +155,39 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/api/notes/invoice/0190a7a2-0000-7000-8000-000000000000", "GET", UserRole.ViewOnly)]
     [InlineData("/accounts/0190a7a2-0000-7000-8000-000000000000/register", "GET", UserRole.ViewOnly)]
     [InlineData("/accounts/0190a7a2-0000-7000-8000-000000000000/register", "POST", UserRole.Accountant)]
+    [InlineData("/pricing", "GET", UserRole.ViewOnly)]
+    [InlineData("/pricing/levels/new", "GET", UserRole.Standard)]
+    [InlineData("/pricing/levels/0190a7a2-0000-7000-8000-000000000000/prices", "POST", UserRole.Standard)]
+    [InlineData("/pricing/rounding", "POST", UserRole.Accountant)]
+    [InlineData("/api/pricing/rules", "POST", UserRole.Standard)]
+    [InlineData("/api/pricing/quote", "GET", UserRole.ViewOnly)]
+    [InlineData("/api/pricing/rounding", "PUT", UserRole.Accountant)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
+
+    [Fact]
+    public async Task Price_levels_and_rules_work_through_the_api()
+    {
+        var client = Client(UserRole.Standard);
+        var level = await (await client.PostAsJsonAsync("/api/pricing/levels", new { name = "Wholesale", kind = "FixedPercent", percent = -10 }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var account = await (await Client(UserRole.Accountant).PostAsJsonAsync("/api/accounts", new { name = "Sales", type = "Income" }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var item = await (await client.PostAsJsonAsync("/api/items", new { name = "Widget", type = "Service", incomeAccountId = account!["id"].GetGuid(), rate = 50 }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var customer = await (await client.PostAsJsonAsync("/api/customers", new { displayName = "Shop", priceLevelId = level!["id"].GetGuid() }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+
+        var rule = await client.PostAsJsonAsync("/api/pricing/rules", new { name = "Sale", adjustment = "Amount", value = -5, items = Array.Empty<Guid>() });
+        Assert.Equal(HttpStatusCode.Created, rule.StatusCode);
+        var quote = await client.GetFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>(
+            $"/api/pricing/quote?itemId={item!["id"].GetGuid()}&customerId={customer!["id"].GetGuid()}");
+        Assert.Equal(40m, quote!["price"].GetDecimal());
+        Assert.Equal("Wholesale (-10%) + Sale (-5)", quote["source"].GetString());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Client(UserRole.Accountant).PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
+    }
 
     [Fact]
     public async Task Pages_send_users_without_the_role_to_the_access_denied_page()

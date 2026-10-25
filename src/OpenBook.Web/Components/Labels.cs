@@ -126,6 +126,35 @@ public static class Labels
     };
 
     /// <summary>A quantity: up to 4 decimals, no trailing zeros.</summary>
+    public static string For(OpenBook.Domain.Pricing.PriceRounding rounding) => rounding switch
+    {
+        OpenBook.Domain.Pricing.PriceRounding.None => "No rounding (up to 4 decimals)",
+        OpenBook.Domain.Pricing.PriceRounding.Cent => "Nearest cent",
+        OpenBook.Domain.Pricing.PriceRounding.FiveCents => "Nearest 5 cents",
+        OpenBook.Domain.Pricing.PriceRounding.TenCents => "Nearest 10 cents",
+        OpenBook.Domain.Pricing.PriceRounding.Dollar => "Nearest dollar",
+        _ => "Nearest .99",
+    };
+
+    public static string For(OpenBook.Domain.Pricing.PriceAdjustment adjustment) => adjustment switch
+    {
+        OpenBook.Domain.Pricing.PriceAdjustment.Percent => "Change by percent",
+        OpenBook.Domain.Pricing.PriceAdjustment.Amount => "Change by amount",
+        _ => "Set the price",
+    };
+
+    public static string For(OpenBook.Domain.Pricing.RuleCustomers customers) => customers switch
+    {
+        OpenBook.Domain.Pricing.RuleCustomers.All => "All customers",
+        OpenBook.Domain.Pricing.RuleCustomers.Customers => "Chosen customers",
+        _ => "Customers with chosen price levels",
+    };
+
+    public static string For(OpenBook.Domain.Pricing.QuantityBreakKind kind) =>
+        kind == OpenBook.Domain.Pricing.QuantityBreakKind.PercentOff ? "Percent off" : "Unit price";
+
+    public static string Price(decimal price) => price.ToString("#,0.00##", CultureInfo.CurrentCulture);
+
     public static string Quantity(decimal quantity) => quantity.ToString("#,0.####", CultureInfo.CurrentCulture);
 
     public static string Terms(int days) => days == 0 ? "Due on receipt" : $"Net {days}";

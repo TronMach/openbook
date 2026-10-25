@@ -1,5 +1,6 @@
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Pricing;
 
 namespace OpenBook.Domain.Sales;
 
@@ -16,6 +17,8 @@ public enum ItemType
 /// <summary>A product or service with a default description, price and the income account its sales post to.</summary>
 public sealed class Item
 {
+    private readonly List<QuantityBreak> _quantityBreaks = [];
+
     private Item() => Name = string.Empty;
 
     public Guid Id { get; private set; }
@@ -48,6 +51,16 @@ public sealed class Item
     public decimal PurchaseCost { get; private set; }
 
     public bool IsInventory => Type == ItemType.Inventory;
+
+    /// <summary>Volume pricing on automatically priced lines, by the item's total quantity on the document; lowest first.</summary>
+    public IReadOnlyList<QuantityBreak> QuantityBreaks => _quantityBreaks;
+
+    public void SetQuantityBreaks(IEnumerable<(decimal FromQuantity, QuantityBreakKind Kind, decimal Value)> breaks)
+    {
+        var validated = Prices.Breaks(breaks);
+        _quantityBreaks.Clear();
+        _quantityBreaks.AddRange(validated);
+    }
 
     public static Item Create(ItemDetails details)
     {

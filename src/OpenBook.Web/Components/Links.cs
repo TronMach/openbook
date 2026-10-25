@@ -59,6 +59,8 @@ public static class Links
         "budget" => $"/reports/budgets/{id}",
         "inventory_adjustment" => $"/inventory/adjustments/{id}",
         "saved_report" => "/reports",
+        "price_level" => $"/pricing/levels/{id}",
+        "price_rule" => $"/pricing/rules/{id}",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
         "company" => "/settings",

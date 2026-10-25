@@ -67,6 +67,8 @@ public static class DependencyInjection
         services.AddScoped<PaymentService>();
         services.AddScoped<SalesReceiptService>();
         services.AddScoped<SalesTaxService>();
+        services.AddScoped<OpenBook.Application.Pricing.PricingService>();
+        services.AddScoped<OpenBook.Application.Pricing.PricingReports>();
         services.AddScoped<SalesTaxPaymentService>();
         services.AddScoped<SalesTaxReports>();
         services.AddScoped<CustomerImportService>();

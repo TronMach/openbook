@@ -1,4 +1,6 @@
-@* Line grid for invoices, sales receipts, estimates and credit memos. Picking an item fills its description, price and taxable setting. *@
+@* Line grid for invoices, sales receipts, estimates and credit memos. Picking an item fills its description, price and taxable setting.
+   With a date, prices come from Prices.Quote (the customer's level, quantity breaks, rules) as the server will charge them. *@
+@inject Operations Ops
 
 <div class="table-wrap">
     <table class="data entry">
@@ -50,7 +52,26 @@
                         </td>
                         <td><input @bind="line.Description" aria-label="Description" /></td>
                         <td><input class="amount" type="number" step="any" aria-label="Quantity" @bind="line.Quantity" @bind:after="Changed" /></td>
-                        <td><input class="amount" type="number" step="any" aria-label="Rate" @bind="line.Rate" @bind:after="Changed" /></td>
+                        <td>
+                            <input class="amount" type="number" step="any" aria-label="Rate" @bind="line.Rate" @bind:after="() => TypedRate(line)" />
+                            @if (line.ItemId is { } itemId)
+                            {
+                                <div class="price-note muted">
+                                    @if (line.AutoPrice && line.PriceSource is not null)
+                                    {
+                                        <span title="@line.PriceSource">List @Labels.Price(line.ListRate ?? 0m) · @line.PriceSource</span>
+                                    }
+                                    else if (!line.AutoPrice && _context is not null)
+                                    {
+                                        <button type="button" class="link" @onclick="() => UseAutoPrice(line)">Automatic price</button>
+                                    }
+                                    @if (_lastPrices.GetValueOrDefault(itemId) is { } last)
+                                    {
+                                        <span title="Last charged on @last.DocumentNumber"> · Last @Labels.Price(last.Rate) on @Labels.Date(last.Date)</span>
+                                    }
+                                </div>
+                            }
+                        </td>
                     }
                     <td class="num">@Labels.AmountOrBlank(amount)</td>
                     @if (Tax is not null)
@@ -124,7 +145,77 @@
     [Parameter]
     public bool Exempt { get; set; }
 
-    private Task Changed() => OnChange.InvokeAsync();
+    /// <summary>The document's customer; prices follow their level. Null prices at list (plus rules for all customers).</summary>
+    [Parameter]
+    public Guid? CustomerId { get; set; }
+
+    /// <summary>The document date, for rule date ranges. Null turns automatic pricing off (lines keep the item price).</summary>
+    [Parameter]
+    public DateOnly? Date { get; set; }
+
+    private PricingContext? _context;
+    private IReadOnlyDictionary<Guid, LastPrice> _lastPrices = new Dictionary<Guid, LastPrice>();
+    private Guid? _loadedFor;
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Date is null)
+        {
+            _context = null;
+            return;
+        }
+
+        if (!_loaded || _loadedFor != CustomerId)
+        {
+            (_loaded, _loadedFor) = (true, CustomerId);
+            (_context, _lastPrices) = await Ops.RunAsync(async sp =>
+            {
+                var pricing = sp.GetRequiredService<PricingService>();
+                var context = await pricing.ContextAsync(CustomerId);
+                IReadOnlyDictionary<Guid, LastPrice> last = CustomerId is { } id ? await pricing.LastPricesAsync(id) : new Dictionary<Guid, LastPrice>();
+                return (context, last);
+            });
+        }
+
+        Reprice();
+    }
+
+    /// <summary>Automatic lines get the quoted price for the item's total quantity on the document.</summary>
+    private void Reprice()
+    {
+        if (_context is null || Date is not { } date)
+            return;
+        var quantities = PricingContext.Quantities(Lines.Where(l => !l.IsDiscount).Select(l => (l.ItemId, l.Quantity ?? 0m)));
+        foreach (var line in Lines.Where(l => l.AutoPrice && !l.IsDiscount))
+        {
+            if (line.ItemId is not { } id || Items.FirstOrDefault(i => i.Id == id) is not { } item)
+                continue;
+            var quote = _context.Quote(item, date, quantities.GetValueOrDefault(id));
+            line.Rate = quote.Price;
+            line.ListRate = quote.ListPrice;
+            line.PriceSource = quote.Source;
+        }
+    }
+
+    private Task Changed()
+    {
+        Reprice();
+        return OnChange.InvokeAsync();
+    }
+
+    private Task TypedRate(SalesLineModel line)
+    {
+        line.AutoPrice = false;
+        line.PriceSource = null;
+        return Changed();
+    }
+
+    private Task UseAutoPrice(SalesLineModel line)
+    {
+        line.AutoPrice = true;
+        return Changed();
+    }
 
     private Task AddAsync(SalesLineModel line)
     {
@@ -154,6 +245,9 @@
             line.Rate = item.Rate;
             line.Quantity ??= 1m;
             line.Taxable = item.Taxable;
+            line.AutoPrice = _context is not null;
+            line.ListRate = item.Rate;
+            line.PriceSource = null;
         }
 
         return Changed();

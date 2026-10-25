@@ -1,0 +1,186 @@
+@page "/pricing/levels/new"
+@page "/pricing/levels/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject PricingService Pricing
+@inject ItemService Items
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New price level" : "Price level") · OpenBook</PageTitle>
+
+<div class="@(_level?.Kind == PriceLevelKind.PerItem ? "wide" : "card")">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New price level" : _level?.Name ?? "Price level")</h1>
+        <a class="button secondary" href="/pricing">Back to pricing</a>
+        @if (_level is not null)
+        {
+            <a class="button secondary" href="/reports/price-list?levelId=@_level.Id">Price list</a>
+            <a class="button secondary" href="/audit?entityId=@_level.Id">History</a>
+        }
+    </div>
+
+    @if ((_error ?? Error) is { } error)
+    {
+        <div class="alert error" role="alert">@error</div>
+    }
+    else if (Saved is not null)
+    {
+        <div class="alert success" role="status">Saved@(Saved != "1" ? $": {Saved} item prices imported" : "").</div>
+    }
+
+    @if (Id is not null && _level is null)
+    {
+        <p>That price level doesn't exist. <a href="/pricing">Back to pricing</a>.</p>
+    }
+    else
+    {
+        <EditForm Model="Input" FormName="level" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" placeholder="e.g. Wholesale" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="kind">Type</label>
+                    <InputSelect id="kind" @bind-Value="Input.Kind">
+                        <option value="@PriceLevelKind.FixedPercent">Fixed percentage on every item</option>
+                        <option value="@PriceLevelKind.PerItem">Per item prices</option>
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="percent">Percent change</label>
+                    <InputNumber id="percent" @bind-Value="Input.Percent" step="any" />
+                    <span class="hint">Fixed percentage levels: -10 for 10% off, 5 for 5% more.</span>
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit">Save price level</button>
+            </div>
+        </EditForm>
+
+        @if (_level is { Kind: PriceLevelKind.PerItem })
+        {
+            <section class="card">
+                <h2>Item prices</h2>
+                <p class="muted">Leave a price blank for the item's own price. Quantity breaks and rules still apply on top.</p>
+                <form method="post" action="/pricing/levels/@_level.Id/prices">
+                    <AntiforgeryToken />
+                    <div class="table-wrap">
+                        <table class="data entry">
+                            <thead><tr><th>Item</th><th class="num">List price</th><th class="num">Level price</th></tr></thead>
+                            <tbody>
+                                @foreach (var item in _items)
+                                {
+                                    <tr>
+                                        <td>@item.Name</td>
+                                        <td class="num">@Labels.Price(item.Rate)</td>
+                                        <td><input class="amount" name="p:@item.Id" aria-label="Level price for @item.Name" inputmode="decimal"
+                                                   value="@(_level.PriceFor(item.Id) is { } p ? p.ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture) : "")" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="actions"><button type="submit">Save item prices</button></div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>Import or export</h2>
+                <p class="muted">A CSV with an <strong>Item</strong> column (the item's name) and a <strong>Price</strong> column. Items not in the file keep their level price; any error and nothing changes.</p>
+                <form method="post" action="/pricing/levels/@_level.Id/import" enctype="multipart/form-data" class="row">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="file">CSV file</label>
+                        <input id="file" type="file" name="file" accept=".csv,text/csv" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit" class="secondary">Import prices</button>
+                        <a class="button secondary" href="/api/pricing/levels/@_level.Id/export">Export CSV</a>
+                    </div>
+                </form>
+            </section>
+        }
+
+        @if (_level is not null)
+        {
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_level.IsActive ? "Make inactive" : "Make active")</button>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private PriceLevel? _level;
+    private IReadOnlyList<Item> _items = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Saved { get; set; }
+
+    [SupplyParameterFromForm(FormName = "level")]
+    private LevelModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await Items.ListAsync();
+        if (Id is { } id)
+        {
+            _level = await Pricing.GetLevelAsync(id);
+            if (_level is null)
+                return;
+            Input ??= new LevelModel { Name = _level.Name, Kind = _level.Kind, Percent = _level.Percent };
+        }
+        else
+        {
+            Input ??= new LevelModel();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new PriceLevelDetails(Input.Name, Input.Kind, Input.Percent ?? 0m);
+            var level = Id is { } id ? await Pricing.UpdateLevelAsync(id, details) : await Pricing.CreateLevelAsync(details);
+            Navigation.NavigateTo(level.Kind == PriceLevelKind.PerItem ? $"/pricing/levels/{level.Id}?saved=1" : "/pricing");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Pricing.SetLevelActiveAsync(_level!.Id, !_level.IsActive);
+            Navigation.NavigateTo($"/pricing/levels/{_level.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class LevelModel
+    {
+        [Required(ErrorMessage = "Give the price level a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        public PriceLevelKind Kind { get; set; } = PriceLevelKind.FixedPercent;
+
+        public decimal? Percent { get; set; }
+    }
+}

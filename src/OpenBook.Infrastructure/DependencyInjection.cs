@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<ISalesStore, EfSalesStore>();
         services.AddScoped<IPurchasesStore, EfPurchasesStore>();
         services.AddScoped<OpenBook.Application.SalesTax.ISalesTaxStore, EfSalesTaxStore>();
+        services.AddScoped<OpenBook.Application.Pricing.IPricingStore, EfPricingStore>();
         services.AddScoped<OpenBook.Application.Attachments.IAttachmentStore, EfAttachmentStore>();
         services.AddScoped<OpenBook.Application.Reporting.IReportingStore, EfReportingStore>();
         services.AddScoped<OpenBook.Application.Inventory.IInventoryStore, EfInventoryStore>();

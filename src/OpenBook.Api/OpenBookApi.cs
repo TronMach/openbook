@@ -55,6 +55,7 @@ public static class OpenBookApi
         api.MapPayablesApi();
         api.MapBankFeedApi();
         api.MapSalesTaxApi();
+        api.MapPricingApi();
         api.MapInventoryApi();
         api.MapAccessApi();
         api.MapPortabilityApi();

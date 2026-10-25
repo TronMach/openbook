@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Pricing;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Application.SalesTax;
@@ -44,6 +45,9 @@ public enum ReportInputs
 
     /// <summary>detail: true for one row per document.</summary>
     Detail = 256,
+
+    /// <summary>customerId or levelId: whose prices.</summary>
+    PriceFor = 512,
 }
 
 public sealed record ReportDefinition(
@@ -127,6 +131,10 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Accountant", ReportInputs.Period, DatePreset.ThisMonth),
         new("sales-by-customer", "Sales by customer", "Income from each customer over a period. Ties to the profit and loss.",
             "Sales and customers", ReportInputs.Period | ReportInputs.Basis),
+        new("price-list", "Price list", "Each product and service's list price and what a customer or price level pays, with quantity breaks.",
+            "Sales and customers", ReportInputs.AsOf | ReportInputs.PriceFor),
+        new("discounts-given", "Discounts given", "What price levels, quantity breaks, rules and manual prices took off list prices, by what set the price.",
+            "Sales and customers", ReportInputs.Period | ReportInputs.Detail),
         new("sales-by-item", "Sales by product or service", "Quantity sold, amount and average price of each product and service.",
             "Sales and customers", ReportInputs.Period),
         new("open-invoices", "Open invoices", "Every unpaid invoice on a date, by customer, with what's still owed.",
@@ -179,6 +187,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "journal" => await JournalAsync(company, range, ct),
             "sales-by-customer" => await Get<ActivityReports>().SalesByCustomerAsync(from, range.To, basis, ct),
             "sales-by-item" => await Get<ActivityReports>().SalesByItemAsync(from, range.To, ct),
+            "price-list" => await Get<PricingReports>().PriceListAsync(p.GetId("customerId"), p.GetId("levelId"), asOf, ct),
+            "discounts-given" => await Get<PricingReports>().DiscountsGivenAsync(from, range.To, p.GetFlag("detail"), ct),
             "open-invoices" => await Get<ActivityReports>().OpenInvoicesAsync(asOf, ct),
             "ar-aging" => ReceivablesAging(company, await Get<ReceivablesService>().AgingAsync(asOf, ct), p.GetFlag("detail")),
             "expenses-by-vendor" => await Get<ActivityReports>().ExpensesByVendorAsync(from, range.To, basis, ct),

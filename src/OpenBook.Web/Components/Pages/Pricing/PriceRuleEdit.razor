@@ -1,0 +1,255 @@
+@page "/pricing/rules/new"
+@page "/pricing/rules/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject PricingService Pricing
+@inject ItemService Items
+@inject CustomerService Customers
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New price rule" : "Price rule") · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New price rule" : _rule?.Name ?? "Price rule")</h1>
+        <a class="button secondary" href="/pricing">Back to pricing</a>
+        @if (_rule is not null)
+        {
+            <a class="button secondary" href="/audit?entityId=@_rule.Id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (Id is not null && _rule is null)
+    {
+        <p>That price rule doesn't exist. <a href="/pricing">Back to pricing</a>.</p>
+    }
+    else
+    {
+        <p class="muted">
+            Rules apply after the customer's price level and the item's quantity break. Rules apply one after another, lowest priority number first.
+            If an <strong>exclusive</strong> rule matches, only exclusive rules count and the one giving the lowest price wins.
+        </p>
+        <EditForm Model="Input" FormName="rule" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" placeholder="e.g. Spring sale" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="priority">Priority</label>
+                    <InputNumber id="priority" @bind-Value="Input.Priority" />
+                    <span class="hint">Lower applies first.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="adjustment">Price change</label>
+                    <InputSelect id="adjustment" @bind-Value="Input.Adjustment">
+                        @foreach (var a in Enum.GetValues<PriceAdjustment>())
+                        {
+                            <option value="@a">@Labels.For(a)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="value">Value</label>
+                    <InputNumber id="value" @bind-Value="Input.Value" step="any" />
+                    <span class="hint">Percent: -15 for 15% off. Amount: -2 for 2.00 off each. Set price: the unit price.</span>
+                </div>
+                <div class="field">
+                    <label for="rounding">Rounding</label>
+                    <InputSelect id="rounding" @bind-Value="Input.Rounding">
+                        <option value="">Company default</option>
+                        @foreach (var r in Enum.GetValues<PriceRounding>())
+                        {
+                            <option value="@r.ToString()">@Labels.For(r)</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="field">
+                <label for="items">Items <span class="muted">(none chosen = every item)</span></label>
+                <InputSelect id="items" @bind-Value="Input.Items" size="6">
+                    @foreach (var item in _items)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </InputSelect>
+                <span class="hint">Ctrl-click to choose several.</span>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="customers">Applies to</label>
+                    <InputSelect id="customers" @bind-Value="Input.Customers">
+                        @foreach (var c in Enum.GetValues<RuleCustomers>())
+                        {
+                            <option value="@c">@Labels.For(c)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="customerIds">Customers</label>
+                    <InputSelect id="customerIds" @bind-Value="Input.CustomerIds" size="5">
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">@c.DisplayName</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="levelIds">Price levels</label>
+                    <InputSelect id="levelIds" @bind-Value="Input.LevelIds" size="5">
+                        @foreach (var l in _levels)
+                        {
+                            <option value="@l.Id">@l.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="starts">Starts</label>
+                    <InputDate id="starts" @bind-Value="Input.StartsOn" />
+                </div>
+                <div class="field">
+                    <label for="ends">Ends</label>
+                    <InputDate id="ends" @bind-Value="Input.EndsOn" />
+                </div>
+                <div class="field">
+                    <label for="minQty">Min quantity</label>
+                    <InputNumber id="minQty" @bind-Value="Input.MinQuantity" step="any" />
+                </div>
+                <div class="field">
+                    <label for="maxQty">Max quantity</label>
+                    <InputNumber id="maxQty" @bind-Value="Input.MaxQuantity" step="any" />
+                </div>
+            </div>
+            <span class="hint">Dates are the document date; quantities are the item's total on the document. Leave blank for no limit.</span>
+            <div class="field checkbox">
+                <label><InputCheckbox @bind-Value="Input.IsExclusive" /> Exclusive: don't combine with other rules</label>
+            </div>
+            <div class="actions">
+                <button type="submit">Save price rule</button>
+            </div>
+        </EditForm>
+
+        @if (_rule is not null)
+        {
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_rule.IsActive ? "Make inactive" : "Make active")</button>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private PriceRule? _rule;
+    private IReadOnlyList<Item> _items = [];
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<PriceLevel> _levels = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "rule")]
+    private RuleModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await Items.ListAsync();
+        _customers = (await Customers.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(c => c.Customer).ToList();
+        _levels = await Pricing.ListLevelsAsync(includeInactive: false);
+        if (Id is { } id)
+        {
+            _rule = await Pricing.GetRuleAsync(id);
+            if (_rule is null)
+                return;
+            var targets = _rule.Targets.Where(t => t.Kind != RuleTargetKind.Item).Select(t => t.TargetId).ToArray();
+            Input ??= new RuleModel
+            {
+                Name = _rule.Name,
+                Priority = _rule.Priority,
+                Adjustment = _rule.Adjustment,
+                Value = _rule.Value,
+                Rounding = _rule.Rounding?.ToString() ?? "",
+                Items = [.. _rule.TargetIds(RuleTargetKind.Item)],
+                Customers = _rule.Customers,
+                CustomerIds = _rule.Customers == RuleCustomers.Customers ? targets : [],
+                LevelIds = _rule.Customers == RuleCustomers.PriceLevels ? targets : [],
+                StartsOn = _rule.StartsOn,
+                EndsOn = _rule.EndsOn,
+                MinQuantity = _rule.MinQuantity,
+                MaxQuantity = _rule.MaxQuantity,
+                IsExclusive = _rule.IsExclusive,
+            };
+        }
+        else
+        {
+            Input ??= new RuleModel();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new PriceRuleDetails(
+                Input.Name, Input.Adjustment, Input.Value ?? 0m, Input.Items, Input.Customers,
+                Input.Customers == RuleCustomers.Customers ? Input.CustomerIds : Input.LevelIds,
+                Input.StartsOn, Input.EndsOn, Input.MinQuantity, Input.MaxQuantity, Input.Priority ?? 100, Input.IsExclusive,
+                Enum.TryParse<PriceRounding>(Input.Rounding, out var r) ? r : null);
+            if (Id is { } id)
+                await Pricing.UpdateRuleAsync(id, details);
+            else
+                await Pricing.CreateRuleAsync(details);
+            Navigation.NavigateTo("/pricing");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Pricing.SetRuleActiveAsync(_rule!.Id, !_rule.IsActive);
+            Navigation.NavigateTo($"/pricing/rules/{_rule.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class RuleModel
+    {
+        [Required(ErrorMessage = "Give the price rule a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        public int? Priority { get; set; } = 100;
+        public PriceAdjustment Adjustment { get; set; } = PriceAdjustment.Percent;
+        public decimal? Value { get; set; }
+        public string Rounding { get; set; } = "";
+        // A multi-select with nothing chosen posts nothing, which binds as null.
+        public Guid[] Items { get; set => field = value ?? []; } = [];
+        public RuleCustomers Customers { get; set; } = RuleCustomers.All;
+        public Guid[] CustomerIds { get; set => field = value ?? []; } = [];
+        public Guid[] LevelIds { get; set => field = value ?? []; } = [];
+        public DateOnly? StartsOn { get; set; }
+        public DateOnly? EndsOn { get; set; }
+        public decimal? MinQuantity { get; set; }
+        public decimal? MaxQuantity { get; set; }
+        public bool IsExclusive { get; set; }
+    }
+}

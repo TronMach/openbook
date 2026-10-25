@@ -133,6 +133,49 @@
     }
 </div>
 
+@if (_item is not null)
+{
+    <div class="card">
+        <div class="toolbar">
+            <h2>Quantity breaks</h2>
+            <a href="/pricing">Price levels and rules</a>
+        </div>
+        @if (BreakError is not null)
+        {
+            <div class="alert error" role="alert">@BreakError</div>
+        }
+        <p class="muted">
+            Volume pricing on automatically priced lines, by this item's total quantity on the document (all its lines together). Applied after
+            the customer's price level; a unit price break never raises the price.
+        </p>
+        <form method="post" action="/pricing/items/@_item.Id/breaks">
+            <AntiforgeryToken />
+            <table class="data entry">
+                <thead><tr><th class="num">From quantity</th><th>Break</th><th class="num">Percent off or unit price</th></tr></thead>
+                <tbody>
+                    @for (var n = 0; n < _item.QuantityBreaks.Count + 3; n++)
+                    {
+                        var b = n < _item.QuantityBreaks.Count ? _item.QuantityBreaks[n] : null;
+                        <tr>
+                            <td><input class="amount" name="from@(n)" aria-label="From quantity" inputmode="decimal" value="@(b?.FromQuantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" /></td>
+                            <td>
+                                <select name="kind@(n)" aria-label="Break type">
+                                    @foreach (var k in Enum.GetValues<QuantityBreakKind>())
+                                    {
+                                        <option value="@k" selected="@(b?.Kind == k)">@Labels.For(k)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input class="amount" name="value@(n)" aria-label="Percent off or unit price" inputmode="decimal" value="@(b?.Value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="actions"><button type="submit" class="secondary">Save quantity breaks</button></div>
+        </form>
+    </div>
+}
+
 @if (_item is { IsInventory: true } && _stock is not null)
 {
     <div class="card">
@@ -201,6 +244,9 @@
 
     [Parameter]
     public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? BreakError { get; set; }
 
     [SupplyParameterFromForm(FormName = "item")]
     private ItemModel Input { get; set; } = default!;
