@@ -5,6 +5,7 @@
 @inject BudgetService BudgetService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
+@inject OpenBook.Application.Segments.SegmentService Segments
 
 <PageTitle>Budgets · OpenBook</PageTitle>
 
@@ -85,6 +86,32 @@
                         <span class="hint">Used only when starting from a copy.</span>
                     </div>
                 }
+                @if (_classes.Count > 0)
+                {
+                    <div class="field">
+                        <label for="budget-class">For class</label>
+                        <InputSelect id="budget-class" @bind-Value="Input.ClassId">
+                            <option value="">(whole company)</option>
+                            @foreach (var c in _classes)
+                            {
+                                <option value="@c.Segment.Id">@c.FullName</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+                @if (_locations.Count > 0)
+                {
+                    <div class="field">
+                        <label for="budget-location">For @_locationLabel.ToLowerInvariant()</label>
+                        <InputSelect id="budget-location" @bind-Value="Input.LocationId">
+                            <option value="">(all)</option>
+                            @foreach (var l in _locations)
+                            {
+                                <option value="@l.Segment.Id">@l.FullName</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
             </div>
             <div class="actions">
                 <button type="submit">Create budget</button>
@@ -104,12 +131,19 @@
 
     [Inject] private AccountService Accounts { get; set; } = default!;
 
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _locations = [];
+    private string _locationLabel = "Location";
+
     protected override async Task OnInitializedAsync()
     {
         var company = await Settings.GetAsync();
         _fiscalMonth = company.FiscalYearStartMonth;
         _budgets = await BudgetService.ListAsync();
         _types = (await Accounts.ListAsync()).ToDictionary(a => a.Id, a => a.Type);
+        _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
+        _locations = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location, includeInactive: false);
+        _locationLabel = (await Segments.GetTrackingAsync()).LocationLabel;
         var today = DateOnly.FromDateTime(DateTime.Today);
         Input ??= new BudgetModel { Year = company.FiscalYearStart(today).Year, CopyFrom = _budgets.FirstOrDefault()?.Id };
     }
@@ -125,7 +159,7 @@
     {
         try
         {
-            var budget = await BudgetService.CreateAsync(new CreateBudgetCommand(Input.Name, Input.Year, Input.Seed, Input.CopyFrom));
+            var budget = await BudgetService.CreateAsync(new CreateBudgetCommand(Input.Name, Input.Year, Input.Seed, Input.CopyFrom, Input.ClassId, Input.LocationId));
             Navigation.NavigateTo($"/reports/budgets/{budget.Id}");
         }
         catch (DomainException ex)
@@ -146,5 +180,9 @@
         public BudgetSeed Seed { get; set; }
 
         public Guid? CopyFrom { get; set; }
+
+        public Guid? ClassId { get; set; }
+
+        public Guid? LocationId { get; set; }
     }
 }

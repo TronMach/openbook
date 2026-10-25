@@ -9,6 +9,7 @@ public sealed class JournalLineModel
     public decimal? Debit { get; set; }
     public decimal? Credit { get; set; }
     public string? Memo { get; set; }
+    public Guid? ClassId { get; set; }
 
     public static JournalLineModel From(JournalLineDraft draft) => new()
     {
@@ -16,6 +17,7 @@ public sealed class JournalLineModel
         Debit = draft.Debit > 0m ? draft.Debit : null,
         Credit = draft.Credit > 0m ? draft.Credit : null,
         Memo = draft.Memo,
+        ClassId = draft.ClassId,
     };
 }
 
@@ -38,5 +40,5 @@ public static class JournalLines
     }
 
     public static List<JournalLineDraft> Drafts(IEnumerable<JournalLineModel> lines) =>
-        Filled(lines).Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit ?? 0m, l.Credit ?? 0m, l.Memo)).ToList();
+        Filled(lines).Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit ?? 0m, l.Credit ?? 0m, l.Memo, l.ClassId)).ToList();
 }

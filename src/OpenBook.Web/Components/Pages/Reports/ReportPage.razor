@@ -44,6 +44,10 @@
                     </select>
                 </div>
             }
+            @if (Has(ReportInputs.Segments))
+            {
+                <SegmentFilterFields ClassId="@_parameters.Get("classId")" LocationId="@_parameters.Get("locationId")" TagId="@_parameters.Get("tagId")" />
+            }
             @if (Has(ReportInputs.PriceFor))
             {
                 <div class="field">

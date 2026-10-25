@@ -9,7 +9,12 @@
                     <th>Inventory item</th>
                     <th class="num">Qty</th>
                 }
-                <th>Category</th><th>Description</th><th class="num">Amount</th><th></th>
+                <th>Category</th><th>Description</th><th class="num">Amount</th>
+                @if (Classes is not null)
+                {
+                    <th>Class</th>
+                }
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -57,6 +62,10 @@
                     </td>
                     <td><input @bind="line.Description" aria-label="Description" /></td>
                     <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" @bind:after="Changed.InvokeAsync" /></td>
+                    @if (Classes is not null)
+                    {
+                        <td><ClassSelect Classes="Classes" Value="line.ClassId" ValueChanged="v => line.ClassId = v" /></td>
+                    }
                     <td>
                         @if (Lines.Count > 1)
                         {
@@ -76,13 +85,17 @@
                 <td><button type="button" class="secondary" @onclick="AddAsync">Add line</button></td>
                 <td class="num">Total</td>
                 <td class="num">@Labels.Amount(BillLineModel.Total(Lines))</td>
-                <td></td>
+                <td colspan="@(Classes is null ? 1 : 2)"></td>
             </tr>
         </tfoot>
     </table>
 </div>
 
 @code {
+
+    /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
+    [Parameter]
+    public IReadOnlyList<OpenBook.Application.Segments.SegmentChoice>? Classes { get; set; }
     [Parameter, EditorRequired]
     public List<BillLineModel> Lines { get; set; } = [];
 

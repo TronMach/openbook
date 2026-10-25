@@ -17,7 +17,9 @@ public sealed record CreateBillCommand(
     IReadOnlyList<BillLineDraft> Lines,
     DateOnly? DueDate = null,
     string? Reference = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed class BillService(
     IPurchasesStore store,
@@ -63,11 +65,13 @@ public sealed class BillService(
 
         var id = Guid.CreateVersion7();
         var memo = reference is null ? $"Bill · {vendor.DisplayName}" : $"Bill {reference} · {vendor.DisplayName}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Bill.Postings(payables.Id, lines, memo), memo, Bill.Source, id), ct);
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Bill.Postings(payables.Id, lines, memo), memo, Bill.Source, id,
+            LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.Bill, id);
 
         var bill = Bill.Create(id, vendor.Id, payables.Id, command.Date, command.DueDate ?? vendor.DueDateFor(command.Date),
             lines, entry.Id, clock.UtcNow, reference, command.Memo, recurringBillId);
+        bill.SetLocation(command.LocationId);
         store.Add(bill);
         store.Add(Audit(AuditAction.Created, bill, before: null));
         await store.SaveChangesAsync(ct);

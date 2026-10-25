@@ -8,6 +8,10 @@
                 <th class="num">Debit</th>
                 <th class="num">Credit</th>
                 <th>Line memo</th>
+                @if (Classes is not null)
+                {
+                    <th>Class</th>
+                }
                 <th></th>
             </tr>
         </thead>
@@ -32,6 +36,10 @@
                     <td><input class="amount" type="number" min="0" step="0.01" aria-label="Debit" @bind="line.Debit" @bind:after="() => { line.Credit = line.Debit > 0 ? null : line.Credit; return Changed.InvokeAsync(); }" /></td>
                     <td><input class="amount" type="number" min="0" step="0.01" aria-label="Credit" @bind="line.Credit" @bind:after="() => { line.Debit = line.Credit > 0 ? null : line.Debit; return Changed.InvokeAsync(); }" /></td>
                     <td><input @bind="line.Memo" aria-label="Line memo" /></td>
+                    @if (Classes is not null)
+                    {
+                        <td><ClassSelect Classes="Classes" Value="line.ClassId" ValueChanged="v => line.ClassId = v" /></td>
+                    }
                     <td>
                         @if (Lines.Count > 2)
                         {
@@ -48,7 +56,7 @@
                 </td>
                 <td class="num">@Labels.Amount(TotalDebits)</td>
                 <td class="num">@Labels.Amount(TotalCredits)</td>
-                <td colspan="2" class="@(IsBalanced ? "muted" : "out-of-balance")">
+                <td colspan="@(Classes is null ? 2 : 3)" class="@(IsBalanced ? "muted" : "out-of-balance")">
                     @(IsBalanced ? "Balanced" : $"Out of balance by {Labels.Amount(Math.Abs(TotalDebits - TotalCredits))}")
                 </td>
             </tr>
@@ -57,6 +65,10 @@
 </div>
 
 @code {
+
+    /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
+    [Parameter]
+    public IReadOnlyList<OpenBook.Application.Segments.SegmentChoice>? Classes { get; set; }
     [Parameter, EditorRequired]
     public List<JournalLineModel> Lines { get; set; } = [];
 

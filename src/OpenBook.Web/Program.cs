@@ -68,6 +68,7 @@ app.MapAttachmentEndpoints();
 app.MapCheckEndpoints();
 app.MapReportEndpoints();
 app.MapPricingEndpoints();
+app.MapSegmentEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

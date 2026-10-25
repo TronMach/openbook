@@ -16,7 +16,9 @@ public sealed record CreateCreditMemoCommand(
     IReadOnlyList<SalesLineDraft> Lines,
     string? Number = null,
     string? Memo = null,
-    Guid? TaxCodeId = null);
+    Guid? TaxCodeId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public enum CreditKind
 {
@@ -94,10 +96,12 @@ public sealed class CreditService(
         var id = Guid.CreateVersion7();
         var memo = $"Credit memo {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. CreditMemo.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, CreditMemo.Source, id), ct);
+            new PostJournalEntryCommand(command.Date, [.. CreditMemo.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, CreditMemo.Source, id,
+                LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.CreditMemo, id);
 
         var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo, taxCodeId, exemption);
+        credit.SetLocation(command.LocationId);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
         await store.SaveChangesAsync(ct);

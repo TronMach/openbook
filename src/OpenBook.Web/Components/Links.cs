@@ -61,6 +61,7 @@ public static class Links
         "saved_report" => "/reports",
         "price_level" => $"/pricing/levels/{id}",
         "price_rule" => $"/pricing/rules/{id}",
+        "segment" => $"/segments/{id}",
         "email_settings" => "/settings/email",
         "form_style" => "/settings/forms",
         "company" => "/settings",

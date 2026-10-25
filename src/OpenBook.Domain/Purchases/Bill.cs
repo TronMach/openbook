@@ -6,14 +6,16 @@ namespace OpenBook.Domain.Purchases;
 
 /// <summary>What a bill's line is for: an account (expense, asset, ...) and amount. A negative amount is a credit, e.g. a discount.</summary>
 /// <param name="ItemId">An inventory item received: the line posts to its asset account and adds <paramref name="Quantity"/> to stock at the line's amount.</param>
-public sealed record BillLineDraft(Guid AccountId, decimal Amount, string? Description = null, Guid? ItemId = null, decimal? Quantity = null);
+/// <param name="ClassId">The line's class (Domain.Segments); null for none.</param>
+public sealed record BillLineDraft(Guid AccountId, decimal Amount, string? Description = null, Guid? ItemId = null, decimal? Quantity = null, Guid? ClassId = null);
 
 public sealed class BillLine
 {
     private BillLine() { }
 
-    internal BillLine(int lineNumber, Guid accountId, decimal amount, string? description, Guid? itemId = null, decimal? quantity = null)
+    internal BillLine(int lineNumber, Guid accountId, decimal amount, string? description, Guid? itemId = null, decimal? quantity = null, Guid? classId = null)
     {
+        ClassId = classId == Guid.Empty ? null : classId;
         LineNumber = lineNumber;
         AccountId = accountId;
         Amount = amount;
@@ -32,7 +34,12 @@ public sealed class BillLine
 
     public decimal? Quantity { get; private set; }
 
-    public BillLineDraft ToDraft() => new(AccountId, Amount, Description, ItemId, Quantity);
+    public Guid? ClassId { get; private set; }
+
+    /// <summary>Reclassifying the document's entry changes its lines' class too, so cash basis follows.</summary>
+    public void SetClass(Guid? classId) => ClassId = classId == Guid.Empty ? null : classId;
+
+    public BillLineDraft ToDraft() => new(AccountId, Amount, Description, ItemId, Quantity, ClassId);
 }
 
 /// <summary>
@@ -67,6 +74,12 @@ public sealed class Bill
 
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
+
+    /// <summary>The location (department) of the whole transaction; its entry's lines carry it too.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
+    public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<BillLine> Lines => _lines;
@@ -110,7 +123,7 @@ public sealed class Bill
             else if (draft.Quantity is not null)
                 throw new DomainException("bill.line_quantity_without_item", $"Line {index}: a quantity needs an item.");
             lines.Add(new BillLine(index, draft.AccountId, draft.Amount, Text.Optional(draft.Description, 1000, "bill.description_too_long", "Description"),
-                draft.ItemId, draft.Quantity));
+                draft.ItemId, draft.Quantity, draft.ClassId));
         }
 
         if (lines.Sum(l => l.Amount) <= 0m)
@@ -124,8 +137,8 @@ public sealed class Bill
         ArgumentNullException.ThrowIfNull(lines);
         var drafts = new List<JournalLineDraft> { JournalLineDraft.Cr(payableAccountId, lines.Sum(l => l.Amount), memo) };
         drafts.AddRange(lines.Select(l => l.Amount > 0m
-            ? JournalLineDraft.Dr(l.AccountId, l.Amount, l.Description)
-            : JournalLineDraft.Cr(l.AccountId, -l.Amount, l.Description)));
+            ? JournalLineDraft.Dr(l.AccountId, l.Amount, l.Description, l.ClassId)
+            : JournalLineDraft.Cr(l.AccountId, -l.Amount, l.Description, l.ClassId)));
         return drafts;
     }
 

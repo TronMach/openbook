@@ -57,8 +57,9 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
+            <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional, printed on the estimate)</span></label>
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
@@ -109,8 +110,15 @@
 
     private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
 
+    private SegmentOptions _segments = SegmentOptions.None;
+
+    private Guid? _locationId;
+
+
     protected override async Task OnInitializedAsync()
     {
+
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         Estimate? estimate;
         _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _number, estimate) = await Ops.RunAsync(async sp => (
@@ -135,6 +143,7 @@
             _expirationDate = estimate.ExpirationDate;
             _memo = estimate.Memo;
             _lines = SalesLine.Drafts(estimate.Lines).Select(SalesLineModel.From).ToList();
+            _locationId = estimate.LocationId;
             _taxCodeId = estimate.TaxCodeId;
         }
 
@@ -147,7 +156,7 @@
         _error = null;
         try
         {
-            var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo, _taxCodeId ?? Guid.Empty);
+            var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId);
             var estimate = await Ops.RunAsync<EstimateService, Estimate>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
             Navigation.NavigateTo($"/sales/estimates/{estimate.Id}");
         }

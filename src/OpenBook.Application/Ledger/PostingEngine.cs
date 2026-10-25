@@ -4,9 +4,12 @@ using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Application.Ledger;
 
+/// <param name="LocationId">The transaction's location (Domain.Segments): every line of the entry carries it.</param>
+/// <param name="TagIds">Tags on the entry.</param>
 public sealed record PostJournalEntryCommand(
     DateOnly Date,
     IReadOnlyCollection<JournalLineDraft> Lines,
@@ -14,7 +17,9 @@ public sealed record PostJournalEntryCommand(
     string Source = JournalEntry.ManualSource,
     Guid? SourceId = null,
     EntryBasis Basis = EntryBasis.Both,
-    DateOnly? ReverseOn = null);
+    DateOnly? ReverseOn = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 /// <summary>
 /// The closing date password for this unit of work, if the user gave one. Hosts set it before calling a
@@ -71,6 +76,9 @@ public sealed class PostingEngine(
             throw new DomainException("journal.reverse_date", "The reversal date must be after the entry date.");
 
         await EnsurePostableAsync(command.Lines.Select(l => l.AccountId).ToHashSet(), ct);
+        var locationId = command.LocationId == Guid.Empty ? null : command.LocationId;
+        var tagIds = (command.TagIds ?? []).Where(t => t != Guid.Empty).Distinct().ToList();
+        await EnsureSegmentsAsync(command.Lines.Select(l => l.ClassId), locationId, tagIds, ct);
         var company = await companies.GetRequiredCompanyAsync(ct);
         EnsureOpen(company, command.Date, $"posting an entry dated {command.Date:yyyy-MM-dd}");
 
@@ -86,6 +94,7 @@ public sealed class PostingEngine(
             command.Basis);
 
         store.Add(entry);
+        AddSegments(entry, command.Lines.Select(l => l.ClassId).ToList(), locationId, tagIds);
         store.Add(Audit(AuditAction.Posted, entry.Id, before: null, after: Snapshot(entry)));
 
         // A reversing entry: the mirror image, posted now for its later date (e.g. reversing an accrual next month).
@@ -103,6 +112,7 @@ public sealed class PostingEngine(
                 entry.Id,
                 command.Basis);
             store.Add(mirror);
+            AddSegments(mirror, command.Lines.Select(l => l.ClassId).ToList(), locationId, tagIds);
             store.Add(Audit(AuditAction.Posted, mirror.Id, before: null, after: Snapshot(mirror)));
         }
 
@@ -125,9 +135,54 @@ public sealed class PostingEngine(
         var reversal = entry.Void(await store.NextEntryNumberAsync(ct), reason, clock.UtcNow);
 
         store.Add(reversal);
+
+        // The reversal carries the original's segments and tags, so reports by class, location or tag net to zero.
+        var lineIds = reversal.Lines.ToDictionary(l => l.LineNumber, l => l.Id);
+        var originalLines = entry.Lines.ToDictionary(l => l.Id, l => l.LineNumber);
+        foreach (var segment in await store.GetLineSegmentsAsync([entry.Id], ct))
+            store.Add(new LineSegment(lineIds[originalLines[segment.JournalLineId]], reversal.Id, segment.ClassId, segment.LocationId));
+        foreach (var tag in await store.GetEntryTagsAsync([entry.Id], ct))
+            store.Add(new EntryTag(reversal.Id, tag.TagId));
+
         store.Add(Audit(AuditAction.Voided, entry.Id, before, Snapshot(entry)));
         store.Add(Audit(AuditAction.Posted, reversal.Id, before: null, after: Snapshot(reversal)));
         return reversal;
+    }
+
+    /// <summary>Classes, the location and tags must exist, be the right kind and be active.</summary>
+    private async Task EnsureSegmentsAsync(IEnumerable<Guid?> classIds, Guid? locationId, IReadOnlyCollection<Guid> tagIds, CancellationToken ct)
+    {
+        var wanted = classIds.Where(c => c is not null && c != Guid.Empty).Select(c => (c!.Value, SegmentKind.Class))
+            .Concat(locationId is { } l ? [(l, SegmentKind.Location)] : [])
+            .Concat(tagIds.Select(t => (t, SegmentKind.Tag)))
+            .Distinct()
+            .ToList();
+        if (wanted.Count == 0)
+            return;
+
+        var segments = (await store.ListSegmentsAsync(ct)).ToDictionary(s => s.Id);
+        foreach (var (id, kind) in wanted)
+        {
+            var segment = segments.GetValueOrDefault(id) ?? throw new EntityNotFoundException("segment", id);
+            if (segment.Kind != kind)
+                throw new DomainException("segment.kind_mismatch", $"'{segment.Name}' isn't a {kind.ToString().ToLowerInvariant()}.");
+            if (!segment.IsActive)
+                throw new DomainException("segment.inactive", $"'{segment.Name}' is inactive.");
+        }
+    }
+
+    /// <summary>A segment row for each line with a class or location, and the entry's tags.</summary>
+    private void AddSegments(JournalEntry entry, List<Guid?> classIds, Guid? locationId, IReadOnlyCollection<Guid> tagIds)
+    {
+        foreach (var line in entry.Lines)
+        {
+            var classId = classIds[line.LineNumber - 1];
+            if (classId is not null && classId != Guid.Empty || locationId is not null)
+                store.Add(new LineSegment(line.Id, entry.Id, classId, locationId));
+        }
+
+        foreach (var tagId in tagIds)
+            store.Add(new EntryTag(entry.Id, tagId));
     }
 
     public Task<JournalEntry?> GetAsync(Guid entryId, CancellationToken ct = default) => store.GetEntryAsync(entryId, ct);
@@ -146,7 +201,7 @@ public sealed class PostingEngine(
     /// Refuses changes dated on or before the closing date unless the closing password was given, and
     /// records every override in the audit log.
     /// </summary>
-    private void EnsureOpen(Domain.Companies.Company company, DateOnly date, string what)
+    internal void EnsureOpen(Domain.Companies.Company company, DateOnly date, string what)
     {
         if (!company.IsClosed(date))
             return;

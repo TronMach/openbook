@@ -15,7 +15,9 @@ public sealed record CreateVendorCreditCommand(
     DateOnly Date,
     IReadOnlyList<BillLineDraft> Lines,
     string? Reference = null,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed record ApplyVendorCredit(Guid VendorCreditId, Guid BillId, decimal Amount);
 
@@ -73,9 +75,11 @@ public sealed class VendorCreditService(
         var reference = string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
         var memo = reference is null ? $"Vendor credit · {vendor.DisplayName}" : $"Vendor credit {reference} · {vendor.DisplayName}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, VendorCredit.Postings(payables.Id, lines, memo), memo, VendorCredit.Source, id), ct);
+            command.Date, VendorCredit.Postings(payables.Id, lines, memo), memo, VendorCredit.Source, id,
+            LocationId: command.LocationId, TagIds: command.TagIds), ct);
 
         var credit = VendorCredit.Create(id, vendor.Id, payables.Id, command.Date, lines, entry.Id, clock.UtcNow, reference, command.Memo);
+        credit.SetLocation(command.LocationId);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, EntityType, credit.Id, null, Snapshot(credit)));
         await store.SaveChangesAsync(ct);

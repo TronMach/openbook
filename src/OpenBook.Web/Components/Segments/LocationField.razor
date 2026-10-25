@@ -1,0 +1,28 @@
+@* The transaction's location (or department...) on an interactive form; nothing when the company doesn't track locations. *@
+@if (Options.Locations.Count > 0)
+{
+    <div class="field">
+        <label for="location">@Options.LocationLabel</label>
+        <select id="location" value="@Value" @onchange="PickAsync">
+            <option value="">(none)</option>
+            @foreach (var l in Options.Locations)
+            {
+                <option value="@l.Segment.Id">@(new string(' ', l.Depth * 3))@l.Segment.Name</option>
+            }
+        </select>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public SegmentOptions Options { get; set; } = SegmentOptions.None;
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    private Task PickAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+}

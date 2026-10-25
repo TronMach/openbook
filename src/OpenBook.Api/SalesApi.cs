@@ -47,10 +47,10 @@ public sealed record ItemResponse(
 /// <param name="Rate">For a tax line, the percentage charged.</param>
 public sealed record SalesLineResponse(
     int LineNumber, Guid? ItemId, string? Description, decimal Quantity, decimal Rate, decimal Amount, SalesLineKind Kind, bool Taxable = false, Guid? TaxRateId = null,
-    decimal? ListRate = null, string? PriceSource = null)
+    decimal? ListRate = null, string? PriceSource = null, Guid? ClassId = null)
 {
     public static SalesLineResponse From(SalesLine l) =>
-        new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind, l.Taxable, l.TaxRateId, l.ListRate, l.PriceSource);
+        new(l.LineNumber, l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Kind, l.Taxable, l.TaxRateId, l.ListRate, l.PriceSource, l.ClassId);
 }
 
 public sealed record InvoiceResponse(
@@ -74,12 +74,13 @@ public sealed record InvoiceResponse(
     Guid? TaxCodeId = null,
     string? TaxExemption = null,
     decimal Subtotal = 0m,
-    decimal TaxTotal = 0m)
+    decimal TaxTotal = 0m,
+    Guid? LocationId = null)
 {
     public static InvoiceResponse From(Invoice i) => new(
         i.Id, i.Number, i.CustomerId, i.Date, i.DueDate, i.Memo, i.Total, i.AmountPaid, i.Balance, i.Status, i.JournalEntryId,
         i.Lines.Select(SalesLineResponse.From).ToList(), i.EarlyPaymentDiscountDate, i.EarlyPaymentDiscountPercent, i.EstimateId,
-        i.RecurringInvoiceId, i.LastEmailedAt, i.TaxCodeId, i.TaxExemption, i.Subtotal, i.TaxTotal);
+        i.RecurringInvoiceId, i.LastEmailedAt, i.TaxCodeId, i.TaxExemption, i.Subtotal, i.TaxTotal, i.LocationId);
 }
 
 public sealed record PaymentResponse(
@@ -121,11 +122,12 @@ public sealed record SalesReceiptResponse(
     Guid? TaxCodeId = null,
     string? TaxExemption = null,
     decimal Subtotal = 0m,
-    decimal TaxTotal = 0m)
+    decimal TaxTotal = 0m,
+    Guid? LocationId = null)
 {
     public static SalesReceiptResponse From(SalesReceipt r) => new(
         r.Id, r.Number, r.CustomerId, r.Date, r.DepositAccountId, r.Reference, r.Memo, r.Total, r.Status, r.JournalEntryId,
-        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal);
+        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal, r.LocationId);
 }
 
 public sealed record SetActiveRequest(bool Active);

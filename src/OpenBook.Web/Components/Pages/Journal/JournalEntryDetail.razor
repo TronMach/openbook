@@ -132,6 +132,10 @@
         </div>
     }
 
+    @if (_entry.Kind != JournalEntryKind.Reversal)
+    {
+        <EntryTags EntryId="_entry.Id" />
+    }
     <Attachments EntityType="journal_entry" EntityId="_entry.Id" />
 
     <Notes EntityType="journal_entry" EntityId="_entry.Id" />

@@ -63,6 +63,18 @@ public sealed class Budget
 
     public void Rename(string name) => Name = NormalizeName(name);
 
+    /// <summary>A budget for one class (and its subclasses); null for the whole company.</summary>
+    public Guid? ClassId { get; private set; }
+
+    /// <summary>A budget for one location (and those under it); null for every location.</summary>
+    public Guid? LocationId { get; private set; }
+
+    public void SetSegments(Guid? classId, Guid? locationId)
+    {
+        ClassId = classId == Guid.Empty ? null : classId;
+        LocationId = locationId == Guid.Empty ? null : locationId;
+    }
+
     /// <summary>The first day of month <paramref name="period"/> (1–12).</summary>
     public DateOnly PeriodStart(int period) => FiscalYearStart.AddMonths(period - 1);
 

@@ -47,7 +47,7 @@ internal static class ReportsApi
             FinancialReports r, CompanySettingsService settings, CancellationToken ct) =>
         {
             var range = await Range(preset ?? DatePreset.ThisMonth, from, to, settings, ct);
-            var gl = await r.GeneralLedgerAsync(range.From, range.To, basis, accountId, ct);
+            var gl = await r.GeneralLedgerAsync(range.From, range.To, basis, accountId, ct: ct);
             return new
             {
                 gl.From,

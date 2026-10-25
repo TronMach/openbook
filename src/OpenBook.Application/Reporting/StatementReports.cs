@@ -5,6 +5,7 @@ using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Reporting;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Application.Reporting;
 
@@ -47,13 +48,15 @@ public sealed record TaxSummary(DateOnly From, DateOnly To, ReportBasis Basis, T
 /// <summary>Statements beyond <see cref="FinancialReports"/>: comparisons, cash flow, budget vs. actual and the tax summary.</summary>
 public sealed class StatementReports(ReportLedger ledger, AccountService accounts, ICompanyStore companies, IReportingStore store)
 {
-    public async Task<ReportTable> ProfitAndLossAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, Comparison comparison = Comparison.None, CancellationToken ct = default)
+    public async Task<ReportTable> ProfitAndLossAsync(
+        DateOnly from, DateOnly to, ReportBasis? basis = null, Comparison comparison = Comparison.None, SegmentFilter? filter = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
         var periods = Comparisons.Columns(from, to, comparison);
-        var lines = await ledger.LinesAsync(reportBasis, periods.Min(p => p.From), periods.Max(p => p.To), ct);
+        var lines = await ledger.LinesAsync(reportBasis, periods.Min(p => p.From), periods.Max(p => p.To), filter, ct);
+        var segments = await ledger.DescribeAsync(filter, ct);
 
         var amounts = periods.Select(p => FinancialReports.Sum(lines.Where(l => l.Date >= p.From && l.Date <= p.To))).ToList();
         var show = Active(amounts);
@@ -63,10 +66,49 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
 
         return new ReportTable(
             "Profit and loss",
-            [company.Name, $"{Comparisons.Describe(from, to)} · {Describe(reportBasis)}"],
+            [company.Name, $"{Comparisons.Describe(from, to)} · {Describe(reportBasis)}" + (segments is null ? "" : $" · {segments}")],
             StatementTables.Columns("", columns, derived),
             StatementTables.ProfitAndLoss(columns, derived),
             reportBasis);
+    }
+
+    /// <summary>
+    /// The profit and loss with a column for each class (or location) that has income or expenses in the period,
+    /// one for lines without one, and the total. Subsegments have columns of their own.
+    /// </summary>
+    public async Task<ReportTable> ProfitAndLossBySegmentAsync(DateOnly from, DateOnly to, SegmentKind kind, ReportBasis? basis = null, CancellationToken ct = default)
+    {
+        if (kind == SegmentKind.Tag)
+            throw new DomainException("report.segment_kind", "Tags filter reports; they don't split them.");
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var reportBasis = basis ?? company.DefaultReportBasis;
+        var chart = await accounts.GetChartAsync(ct);
+        var lines = (await ledger.LinesAsync(reportBasis, from, to, ct)).Where(l => !chart.Get(l.AccountId).Type.IsBalanceSheet()).ToList();
+        // Guid.Empty stands for lines without one.
+        Guid Of(LedgerLine l) => (kind == SegmentKind.Class ? l.ClassId : l.LocationId) ?? Guid.Empty;
+
+        var names = await ledger.SegmentNamesAsync(ct);
+        var groups = lines.GroupBy(Of).ToDictionary(g => g.Key, g => FinancialReports.Sum(g));
+        var keys = groups.Keys.Where(k => k != Guid.Empty).OrderBy(k => names.GetValueOrDefault(k), StringComparer.CurrentCultureIgnoreCase).ToList();
+        if (groups.ContainsKey(Guid.Empty))
+            keys.Add(Guid.Empty);
+        var total = FinancialReports.Sum(lines);
+        var show = Active([.. groups.Values, total]);
+        var columns = keys
+            .Select(k => new StatementColumn<ProfitAndLoss>(
+                k != Guid.Empty ? names.GetValueOrDefault(k) ?? "?" : SegmentRules.NotSpecified,
+                FinancialReports.BuildProfitAndLoss(from, to, reportBasis, chart, groups[k], show), from, to, Drill: false))
+            .Append(new StatementColumn<ProfitAndLoss>("Total", FinancialReports.BuildProfitAndLoss(from, to, reportBasis, chart, total, show), from, to))
+            .ToList();
+        var what = kind == SegmentKind.Class ? "class" : company.LocationLabel.ToLowerInvariant();
+
+        return new ReportTable(
+            $"Profit and loss by {what}",
+            [company.Name, $"{Comparisons.Describe(from, to)} · {Describe(reportBasis)}"],
+            StatementTables.Columns("", columns, []),
+            StatementTables.ProfitAndLoss(columns, []),
+            reportBasis,
+            $"Each column is the {what} on the line, including its own subsegments as columns of their own. Account names in the Total column open the general ledger.");
     }
 
     public async Task<ReportTable> BalanceSheetAsync(DateOnly asOf, ReportBasis? basis = null, Comparison comparison = Comparison.None, CancellationToken ct = default)
@@ -196,7 +238,9 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
         var from = budget.PeriodStart(fromPeriod);
         var to = budget.PeriodStart(toPeriod).AddMonths(1).AddDays(-1);
 
-        var actual = FinancialReports.Sum(await ledger.LinesAsync(reportBasis, from, to, ct));
+        var filter = new SegmentFilter(budget.ClassId, budget.LocationId);
+        var actual = FinancialReports.Sum(await ledger.LinesAsync(reportBasis, from, to, filter, ct));
+        var segments = await ledger.DescribeAsync(filter, ct);
         var budgeted = budget.Lines
             .Where(l => l.Period >= fromPeriod && l.Period <= toPeriod && chart.Find(l.AccountId) is not null)
             .GroupBy(l => l.AccountId)
@@ -211,7 +255,7 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
 
         return new ReportTable(
             "Budget vs. actual",
-            [company.Name, $"{budget.Name} · {Comparisons.Describe(from, to)} · {Describe(reportBasis)}"],
+            [company.Name, $"{budget.Name} · {Comparisons.Describe(from, to)} · {Describe(reportBasis)}" + (segments is null ? "" : $" · {segments}")],
             StatementTables.Columns("", columns, derived),
             StatementTables.ProfitAndLoss(columns, derived),
             reportBasis,

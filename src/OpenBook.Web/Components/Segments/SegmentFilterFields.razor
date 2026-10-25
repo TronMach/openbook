@@ -1,0 +1,68 @@
+@* Class, location and tag filters for static report forms (query parameters classId, locationId, tagId; "none" = without one). Hidden when there are no segments. *@
+@inject OpenBook.Application.Segments.SegmentService Segments
+
+@if (_classes.Count > 0)
+{
+    <div class="field">
+        <label for="classId">Class</label>
+        <select id="classId" name="classId">
+            <option value="">(all)</option>
+            <option value="none" selected="@(ClassId == "none")">Not specified</option>
+            @foreach (var c in _classes)
+            {
+                <option value="@c.Segment.Id" selected="@(ClassId == c.Segment.Id.ToString())">@c.FullName</option>
+            }
+        </select>
+    </div>
+}
+@if (_locations.Count > 0)
+{
+    <div class="field">
+        <label for="locationId">@_label</label>
+        <select id="locationId" name="locationId">
+            <option value="">(all)</option>
+            <option value="none" selected="@(LocationId == "none")">Not specified</option>
+            @foreach (var l in _locations)
+            {
+                <option value="@l.Segment.Id" selected="@(LocationId == l.Segment.Id.ToString())">@l.FullName</option>
+            }
+        </select>
+    </div>
+}
+@if (_tags.Count > 0)
+{
+    <div class="field">
+        <label for="tagId">Tag</label>
+        <select id="tagId" name="tagId">
+            <option value="">(any)</option>
+            @foreach (var t in _tags)
+            {
+                <option value="@t.Segment.Id" selected="@(TagId == t.Segment.Id.ToString())">@t.FullName</option>
+            }
+        </select>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _locations = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _tags = [];
+    private string _label = "Location";
+
+    [Parameter]
+    public string? ClassId { get; set; }
+
+    [Parameter]
+    public string? LocationId { get; set; }
+
+    [Parameter]
+    public string? TagId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class);
+        _locations = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location);
+        _tags = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Tag);
+        _label = (await Segments.GetTrackingAsync()).LocationLabel;
+    }
+}

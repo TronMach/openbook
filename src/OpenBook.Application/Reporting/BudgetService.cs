@@ -22,7 +22,10 @@ public enum BudgetSeed
 }
 
 /// <param name="FiscalYear">The calendar year the budget's fiscal year starts in.</param>
-public sealed record CreateBudgetCommand(string Name, int FiscalYear, BudgetSeed Seed = BudgetSeed.Blank, Guid? CopyFromBudgetId = null);
+/// <param name="ClassId">A budget for one class (with its subclasses); actuals and prior-year seeding follow it.</param>
+/// <param name="LocationId">A budget for one location (with those under it).</param>
+public sealed record CreateBudgetCommand(
+    string Name, int FiscalYear, BudgetSeed Seed = BudgetSeed.Blank, Guid? CopyFromBudgetId = null, Guid? ClassId = null, Guid? LocationId = null);
 
 /// <summary>Budgets for profit and loss accounts, by month of a fiscal year.</summary>
 public sealed class BudgetService(IReportingStore store, AccountService accounts, ICompanyStore companies, ReportLedger ledger, IClock clock, ICurrentUser user)
@@ -42,11 +45,12 @@ public sealed class BudgetService(IReportingStore store, AccountService accounts
         var company = await companies.GetRequiredCompanyAsync(ct);
         var budget = Budget.Create(command.Name, new DateOnly(command.FiscalYear, company.FiscalYearStartMonth, 1), clock.UtcNow);
         await EnsureUniqueAsync(budget.Name, null, ct);
+        budget.SetSegments(command.ClassId, command.LocationId);
 
         switch (command.Seed)
         {
             case BudgetSeed.PriorYearActuals:
-                budget.SetAmounts(await ActualsAsync(budget.FiscalYearStart.AddYears(-1), company.DefaultReportBasis, ct));
+                budget.SetAmounts(await ActualsAsync(budget.FiscalYearStart.AddYears(-1), company.DefaultReportBasis, new SegmentFilter(budget.ClassId, budget.LocationId), ct));
                 break;
             case BudgetSeed.CopyBudget:
                 var source = command.CopyFromBudgetId is { } id ? await store.GetBudgetAsync(id, ct) : null;
@@ -99,10 +103,10 @@ public sealed class BudgetService(IReportingStore store, AccountService accounts
     }
 
     /// <summary>Profit and loss amounts by month of the fiscal year starting <paramref name="start"/>, in natural sign.</summary>
-    private async Task<IReadOnlyList<BudgetAmount>> ActualsAsync(DateOnly start, ReportBasis basis, CancellationToken ct)
+    private async Task<IReadOnlyList<BudgetAmount>> ActualsAsync(DateOnly start, ReportBasis basis, SegmentFilter filter, CancellationToken ct)
     {
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(basis, start, start.AddYears(1).AddDays(-1), ct);
+        var lines = await ledger.LinesAsync(basis, start, start.AddYears(1).AddDays(-1), filter, ct);
         return lines
             .Where(l => chart.Find(l.AccountId) is { } a && !a.Type.IsBalanceSheet())
             .GroupBy(l => (l.AccountId, Period: (l.Date.Year - start.Year) * 12 + l.Date.Month - start.Month + 1))
@@ -121,6 +125,8 @@ public sealed class BudgetService(IReportingStore store, AccountService accounts
     {
         b.Name,
         b.FiscalYearStart,
+        b.ClassId,
+        b.LocationId,
         Amounts = b.Lines
             .GroupBy(l => l.AccountId)
             .OrderBy(g => g.Key)

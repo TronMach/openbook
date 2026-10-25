@@ -162,6 +162,14 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/api/pricing/rules", "POST", UserRole.Standard)]
     [InlineData("/api/pricing/quote", "GET", UserRole.ViewOnly)]
     [InlineData("/api/pricing/rounding", "PUT", UserRole.Accountant)]
+    [InlineData("/segments", "GET", UserRole.ViewOnly)]
+    [InlineData("/segments", "POST", UserRole.Standard)]
+    [InlineData("/segments/tags", "POST", UserRole.Standard)]
+    [InlineData("/segments/tracking", "POST", UserRole.Accountant)]
+    [InlineData("/segments/reclassify", "GET", UserRole.Accountant)]
+    [InlineData("/api/segments", "POST", UserRole.Standard)]
+    [InlineData("/api/segments/tracking", "PUT", UserRole.Accountant)]
+    [InlineData("/api/segments/reclassify", "POST", UserRole.Accountant)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
 
@@ -187,6 +195,22 @@ public sealed class ApiAccessTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Client(UserRole.Accountant).PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Classes_work_through_the_api()
+    {
+        var client = Client(UserRole.Standard);
+        var created = await client.PostAsJsonAsync("/api/segments", new { kind = "Class", name = "Retail" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var parent = (await created.Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>())!["id"].GetGuid();
+        await client.PostAsJsonAsync("/api/segments", new { kind = "Class", name = "Stores", parentId = parent });
+        var classes = await client.GetFromJsonAsync<List<Dictionary<string, System.Text.Json.JsonElement>>>("/api/segments?kind=Class");
+        Assert.Contains(classes!, c => c["fullName"].GetString() == "Retail:Stores");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/segments/tracking", new { classes = true, locations = false, locationLabel = "Store" })).StatusCode);
+        var tracking = await Client(UserRole.Accountant).PutAsJsonAsync("/api/segments/tracking", new { classes = true, locations = true, locationLabel = "Store" });
+        Assert.Equal(HttpStatusCode.OK, tracking.StatusCode);
     }
 
     [Fact]

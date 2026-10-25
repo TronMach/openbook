@@ -4,6 +4,7 @@ using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Infrastructure.Persistence;
 
@@ -72,9 +73,11 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
         await (
             from l in db.Set<JournalLine>()
             join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            from s in db.LineSegments.Where(s => s.JournalLineId == l.Id).DefaultIfEmpty()
             where e.Date <= toDate && (fromDate == null || e.Date >= fromDate)
             orderby e.Date, e.Number, l.LineNumber
-            select new LedgerLine(l.Id, e.Id, e.Number, e.Date, l.AccountId, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Basis))
+            select new LedgerLine(l.Id, e.Id, e.Number, e.Date, l.AccountId, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Basis,
+                s == null ? null : s.ClassId, s == null ? null : s.LocationId))
             .AsNoTracking()
             .ToListAsync(ct);
 
@@ -92,6 +95,32 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
                 && (actor == null || r.Actor == actor))
             .OrderByDescending(r => r.Id)
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Segment>> ListSegmentsAsync(CancellationToken ct) => await db.Segments.ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LineSegment>> GetLineSegmentsAsync(IReadOnlyCollection<Guid> entryIds, CancellationToken ct)
+    {
+        var saved = await db.LineSegments.Where(s => entryIds.Contains(s.JournalEntryId)).ToListAsync(ct);
+        var added = db.ChangeTracker.Entries<LineSegment>().Where(e => e.State == EntityState.Added && entryIds.Contains(e.Entity.JournalEntryId)).Select(e => e.Entity);
+        return [.. saved, .. added];
+    }
+
+    public async Task<IReadOnlyList<EntryTag>> GetEntryTagsAsync(IReadOnlyCollection<Guid>? entryIds, CancellationToken ct)
+    {
+        var saved = await db.EntryTags.Where(t => entryIds == null || entryIds.Contains(t.JournalEntryId)).ToListAsync(ct);
+        var added = db.ChangeTracker.Entries<EntryTag>().Where(e => e.State == EntityState.Added && (entryIds == null || entryIds.Contains(e.Entity.JournalEntryId))).Select(e => e.Entity);
+        return [.. saved.Where(t => db.Entry(t).State != EntityState.Deleted), .. added];
+    }
+
+    public void Add(Segment segment) => db.Segments.Add(segment);
+
+    public void Add(LineSegment segment) => db.LineSegments.Add(segment);
+
+    public void Add(EntryTag tag) => db.EntryTags.Add(tag);
+
+    public void Remove(LineSegment segment) => db.LineSegments.Remove(segment);
+
+    public void Remove(EntryTag tag) => db.EntryTags.Remove(tag);
 
     public void Add(Account account) => db.Accounts.Add(account);
 

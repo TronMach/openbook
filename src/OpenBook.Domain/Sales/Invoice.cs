@@ -57,6 +57,12 @@ public sealed class Invoice
 
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
+
+    /// <summary>The location (department) of the whole transaction; its entry's lines carry it too.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
+    public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<SalesLine> Lines => _lines;

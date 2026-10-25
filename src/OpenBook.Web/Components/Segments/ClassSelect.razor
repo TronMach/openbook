@@ -1,0 +1,22 @@
+@* A class picker for one line of an interactive form; subclasses are indented. *@
+<select value="@Value" aria-label="Class" @onchange="PickAsync">
+    <option value="">(none)</option>
+    @foreach (var c in Classes)
+    {
+        <option value="@c.Segment.Id">@(new string(' ', c.Depth * 3))@c.Segment.Name</option>
+    }
+</select>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> Classes { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    private Task PickAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+}

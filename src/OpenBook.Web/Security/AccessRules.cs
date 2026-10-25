@@ -57,6 +57,10 @@ public static class AccessRules
         ("/api/budgets", UserRole.ViewOnly, UserRole.Accountant),
         ("/import", UserRole.Accountant, UserRole.Accountant),
         ("/pricing/rounding", UserRole.Accountant, UserRole.Accountant),
+        ("/segments/tracking", UserRole.Accountant, UserRole.Accountant),
+        ("/segments/reclassify", UserRole.Accountant, UserRole.Accountant),
+        ("/api/segments/tracking", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/segments/reclassify", UserRole.Accountant, UserRole.Accountant),
         ("/api/pricing/rounding", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/import", UserRole.Accountant, UserRole.Accountant),
     ];

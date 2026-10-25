@@ -20,7 +20,9 @@ public sealed record CreateInvoiceCommand(
     string? Number = null,
     string? Memo = null,
     Guid? EstimateId = null,
-    Guid? TaxCodeId = null);
+    Guid? TaxCodeId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed class InvoiceService(
     ISalesStore store,
@@ -83,13 +85,15 @@ public sealed class InvoiceService(
         var id = Guid.CreateVersion7();
         var memo = $"Invoice {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, Invoice.Source, id), ct);
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, Invoice.Source, id,
+                LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.Invoice, id);
 
         var terms = customer.Terms;
         var invoice = Invoice.Create(
             id, number, customer.Id, receivables.Id, command.Date, command.DueDate ?? terms.DueDate(command.Date),
             lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId, taxCodeId, exemption);
+        invoice.SetLocation(command.LocationId);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
         if (estimate is not null)

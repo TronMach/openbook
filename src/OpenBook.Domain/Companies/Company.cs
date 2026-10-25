@@ -71,6 +71,24 @@ public sealed class Company
     public void SetPriceRounding(PriceRounding rounding) =>
         PriceRounding = Enum.IsDefined(rounding) ? rounding : throw new DomainException("company.rounding_invalid", "Unknown price rounding.");
 
+    /// <summary>Show a class on each line of sales, purchases, banking and journal forms.</summary>
+    public bool TrackClasses { get; private set; }
+
+    /// <summary>Show a location on each transaction; <see cref="LocationLabel"/> is what it's called.</summary>
+    public bool TrackLocations { get; private set; }
+
+    /// <summary>"Location", "Department", "Division", "Store", "Property"... Screens and reports use it.</summary>
+    public string LocationLabel { get; private set; } = DefaultLocationLabel;
+
+    public const string DefaultLocationLabel = "Location";
+
+    public void SetSegmentTracking(bool classes, bool locations, string? locationLabel)
+    {
+        TrackClasses = classes;
+        TrackLocations = locations;
+        LocationLabel = Text.Optional(locationLabel, 30, "company.location_label_too_long", "Location label") ?? DefaultLocationLabel;
+    }
+
     public const string DefaultAccentColor = "#1f6f5c";
 
     public static Company Create(

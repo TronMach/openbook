@@ -48,6 +48,9 @@ public enum ReportInputs
 
     /// <summary>customerId or levelId: whose prices.</summary>
     PriceFor = 512,
+
+    /// <summary>classId, locationId, tagId: only those lines ("none" for lines without a class or location).</summary>
+    Segments = 1024,
 }
 
 public sealed record ReportDefinition(
@@ -103,6 +106,13 @@ public sealed class ReportParameters
     }
 
     public ReportBasis Basis(Company company) => GetEnum<ReportBasis>("basis") ?? company.DefaultReportBasis;
+
+    /// <summary>classId, locationId and tagId; "none" for a class or location means lines without one.</summary>
+    public SegmentFilter Segments()
+    {
+        Guid? Segment(string name) => string.Equals(Get(name), "none", StringComparison.OrdinalIgnoreCase) ? Guid.Empty : GetId(name);
+        return new SegmentFilter(Segment("classId"), Segment("locationId"), GetId("tagId"));
+    }
 }
 
 /// <summary>
@@ -117,7 +127,11 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
     public static readonly IReadOnlyList<ReportDefinition> All =
     [
         new("profit-and-loss", "Profit and loss", "Income and expenses over a period and the net income they leave. Compare periods, months or quarters.",
-            "Financial statements", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Compare, Comparisons: PeriodComparisons),
+            "Financial statements", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Compare | ReportInputs.Segments, Comparisons: PeriodComparisons),
+        new("profit-and-loss-by-class", "Profit and loss by class", "Income and expenses with a column for each class, lines without one, and the total.",
+            "Financial statements", ReportInputs.Period | ReportInputs.Basis),
+        new("profit-and-loss-by-location", "Profit and loss by location", "Income and expenses with a column for each location (or department), and the total.",
+            "Financial statements", ReportInputs.Period | ReportInputs.Basis),
         new("balance-sheet", "Balance sheet", "What the business owns and owes on a date, and the owner's equity. Compare with a month or year earlier.",
             "Financial statements", ReportInputs.AsOf | ReportInputs.Basis | ReportInputs.Compare,
             Comparisons: [Comparison.None, Comparison.PreviousPeriod, Comparison.PreviousYear]),
@@ -126,11 +140,11 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("trial-balance", "Trial balance", "Every account's debit or credit balance on a date. Debits always equal credits.",
             "Accountant", ReportInputs.AsOf | ReportInputs.Basis),
         new("general-ledger", "General ledger", "Every transaction in each account, with opening and running balances.",
-            "Accountant", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Account, DatePreset.ThisMonth),
+            "Accountant", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Account | ReportInputs.Segments, DatePreset.ThisMonth),
         new("journal", "Journal", "Each journal entry in a period with all its debits and credits.",
             "Accountant", ReportInputs.Period, DatePreset.ThisMonth),
         new("sales-by-customer", "Sales by customer", "Income from each customer over a period. Ties to the profit and loss.",
-            "Sales and customers", ReportInputs.Period | ReportInputs.Basis),
+            "Sales and customers", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Segments),
         new("price-list", "Price list", "Each product and service's list price and what a customer or price level pays, with quantity breaks.",
             "Sales and customers", ReportInputs.AsOf | ReportInputs.PriceFor),
         new("discounts-given", "Discounts given", "What price levels, quantity breaks, rules and manual prices took off list prices, by what set the price.",
@@ -142,7 +156,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("ar-aging", "A/R aging", "What each customer owes, by how long past due. Summary or invoice by invoice.",
             "Sales and customers", ReportInputs.AsOf | ReportInputs.Detail),
         new("expenses-by-vendor", "Expenses by vendor", "What you spent with each vendor over a period. Ties to the profit and loss.",
-            "Expenses and vendors", ReportInputs.Period | ReportInputs.Basis),
+            "Expenses and vendors", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Segments),
         new("unpaid-bills", "Unpaid bills", "Every unpaid bill on a date, by vendor, with what's still owed.",
             "Expenses and vendors", ReportInputs.AsOf),
         new("ap-aging", "A/P aging", "What you owe each vendor, by how long past due. Summary or bill by bill.",
@@ -175,23 +189,26 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         var from = range.From ?? DateRanges.Beginning;
         var asOf = p.GetDate("asOf") ?? today;
         var basis = p.Basis(company);
+        var segments = definition.Inputs.HasFlag(ReportInputs.Segments) ? p.Segments() : null;
         T Get<T>() where T : notnull => services.GetRequiredService<T>();
 
         return definition.Key switch
         {
-            "profit-and-loss" => await Get<StatementReports>().ProfitAndLossAsync(from, range.To, basis, Compare(p, definition), ct),
+            "profit-and-loss" => await Get<StatementReports>().ProfitAndLossAsync(from, range.To, basis, Compare(p, definition), segments, ct),
+            "profit-and-loss-by-class" => await Get<StatementReports>().ProfitAndLossBySegmentAsync(from, range.To, Domain.Segments.SegmentKind.Class, basis, ct),
+            "profit-and-loss-by-location" => await Get<StatementReports>().ProfitAndLossBySegmentAsync(from, range.To, Domain.Segments.SegmentKind.Location, basis, ct),
             "balance-sheet" => await Get<StatementReports>().BalanceSheetAsync(asOf, basis, Compare(p, definition), ct),
             "cash-flow" => await Get<StatementReports>().CashFlowTableAsync(from, range.To, basis, ct),
             "trial-balance" => TrialBalance(company, await Get<TrialBalanceQuery>().RunAsync(asOf, basis, ct)),
-            "general-ledger" => GeneralLedger(company, range, await Get<FinancialReports>().GeneralLedgerAsync(range.From, range.To, basis, p.GetId("accountId"), ct)),
+            "general-ledger" => GeneralLedger(company, range, await Get<FinancialReports>().GeneralLedgerAsync(range.From, range.To, basis, p.GetId("accountId"), segments, ct)),
             "journal" => await JournalAsync(company, range, ct),
-            "sales-by-customer" => await Get<ActivityReports>().SalesByCustomerAsync(from, range.To, basis, ct),
+            "sales-by-customer" => await Get<ActivityReports>().SalesByCustomerAsync(from, range.To, basis, segments, ct),
             "sales-by-item" => await Get<ActivityReports>().SalesByItemAsync(from, range.To, ct),
             "price-list" => await Get<PricingReports>().PriceListAsync(p.GetId("customerId"), p.GetId("levelId"), asOf, ct),
             "discounts-given" => await Get<PricingReports>().DiscountsGivenAsync(from, range.To, p.GetFlag("detail"), ct),
             "open-invoices" => await Get<ActivityReports>().OpenInvoicesAsync(asOf, ct),
             "ar-aging" => ReceivablesAging(company, await Get<ReceivablesService>().AgingAsync(asOf, ct), p.GetFlag("detail")),
-            "expenses-by-vendor" => await Get<ActivityReports>().ExpensesByVendorAsync(from, range.To, basis, ct),
+            "expenses-by-vendor" => await Get<ActivityReports>().ExpensesByVendorAsync(from, range.To, basis, segments, ct),
             "unpaid-bills" => await Get<ActivityReports>().UnpaidBillsAsync(asOf, ct),
             "ap-aging" => PayablesAging(company, await Get<PayablesService>().AgingAsync(asOf, ct), p.GetFlag("detail")),
             "inventory-valuation" => await Get<InventoryReports>().ValuationAsync(asOf, p.GetFlag("detail"), ct),

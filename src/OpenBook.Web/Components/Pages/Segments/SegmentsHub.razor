@@ -1,0 +1,110 @@
+@page "/segments"
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Segments
+@inject SegmentService Segments
+
+<PageTitle>Classes, @_tracking.LocationLabel.ToLowerInvariant()s and tags · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Classes, @(_tracking.LocationLabel.ToLowerInvariant())s and tags</h1>
+        <a class="button secondary" href="/reports/profit-and-loss-by-class">P&amp;L by class</a>
+        <a class="button secondary" href="/reports/profit-and-loss-by-location">P&amp;L by @_tracking.LocationLabel.ToLowerInvariant()</a>
+        <a class="button" href="/segments/reclassify">Reclassify transactions</a>
+    </div>
+    <p class="muted">
+        Slice your books without adding accounts. A <strong>class</strong> goes on each line (a product line, fund or service type);
+        a <strong>@_tracking.LocationLabel.ToLowerInvariant()</strong> goes on the whole transaction (for example a store, region or department); <strong>tags</strong>
+        are labels for filtering, any number per transaction, added on its page. Reports filter by any of them, and the profit and loss can show a
+        column for each class or @_tracking.LocationLabel.ToLowerInvariant().
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <section class="card">
+        <h2>On transaction forms</h2>
+        <form method="post" action="/segments/tracking" class="row">
+            <AntiforgeryToken />
+            <div class="field checkbox">
+                <label><input type="checkbox" name="classes" value="true" checked="@_tracking.Classes" /> Track classes on each line</label>
+            </div>
+            <div class="field checkbox">
+                <label><input type="checkbox" name="locations" value="true" checked="@_tracking.Locations" /> Track a location on each transaction</label>
+            </div>
+            <div class="field">
+                <label for="label">Call locations</label>
+                <input id="label" name="label" value="@_tracking.LocationLabel" maxlength="30" list="location-labels" />
+                <datalist id="location-labels"><option value="Location" /><option value="Department" /><option value="Division" /><option value="Store" /><option value="Property" /></datalist>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">Save</button></div>
+        </form>
+        <p class="hint">Needs the accountant role. Turning tracking off only hides the fields; segments already on transactions stay.</p>
+    </section>
+
+    <div class="split-grid">
+        @foreach (var (kind, title, list) in new[] { (SegmentKind.Class, "Classes", _classes), (SegmentKind.Location, _tracking.LocationLabel + "s", _locations), (SegmentKind.Tag, "Tags", _tags) })
+        {
+            <section class="card">
+                <h2>@title</h2>
+                @if (list.Count == 0)
+                {
+                    <p class="muted">None yet.</p>
+                }
+                else
+                {
+                    <ul class="segment-tree">
+                        @foreach (var s in list)
+                        {
+                            <li class="@(s.Segment.IsActive ? null : "inactive")" style="padding-left: @(s.Depth * 1.25)rem">
+                                <a href="/segments/@s.Segment.Id">@s.Segment.Name</a>@(s.Segment.IsActive ? "" : " (inactive)")
+                            </li>
+                        }
+                    </ul>
+                }
+                <form method="post" action="/segments" class="row">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="kind" value="@kind" />
+                    <div class="field">
+                        <label for="name-@kind">New @(kind == SegmentKind.Location ? _tracking.LocationLabel.ToLowerInvariant() : kind.ToString().ToLowerInvariant())</label>
+                        <input id="name-@kind" name="name" maxlength="100" required />
+                    </div>
+                    @if (kind != SegmentKind.Tag && list.Any(s => s.Segment.IsActive))
+                    {
+                        <div class="field">
+                            <label for="parent-@kind">Under</label>
+                            <select id="parent-@kind" name="parentId">
+                                <option value="">(top level)</option>
+                                @foreach (var s in list.Where(s => s.Segment.IsActive))
+                                {
+                                    <option value="@s.Segment.Id">@s.FullName</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="actions"><button type="submit" class="secondary">Add</button></div>
+                </form>
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private SegmentTracking _tracking = new(false, false, "Location");
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private IReadOnlyList<SegmentChoice> _locations = [];
+    private IReadOnlyList<SegmentChoice> _tags = [];
+
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tracking = await Segments.GetTrackingAsync();
+        _classes = await Segments.ListAsync(SegmentKind.Class);
+        _locations = await Segments.ListAsync(SegmentKind.Location);
+        _tags = await Segments.ListAsync(SegmentKind.Tag);
+    }
+}

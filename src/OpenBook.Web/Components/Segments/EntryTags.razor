@@ -1,0 +1,34 @@
+@* Tags on a posted transaction (its journal entry), for static detail pages; posts to /segments/tags. *@
+@inject OpenBook.Application.Segments.SegmentService Segments
+@inject NavigationManager Navigation
+
+@if (_tags.Count > 0 || _current.Count > 0)
+{
+    <section class="card">
+        <h2>Tags</h2>
+        <form method="post" action="/segments/tags" class="tag-picker">
+            <AntiforgeryToken />
+            <input type="hidden" name="entryId" value="@EntryId" />
+            <input type="hidden" name="back" value="@Navigation.ToBaseRelativePath(Navigation.Uri)" />
+            @foreach (var tag in _tags.Where(t => t.Segment.IsActive || _current.Contains(t.Segment.Id)))
+            {
+                <label class="tag-option"><input type="checkbox" name="tagId" value="@tag.Segment.Id" checked="@_current.Contains(tag.Segment.Id)" /> @tag.FullName</label>
+            }
+            <button type="submit" class="secondary">Save tags</button>
+        </form>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _tags = [];
+    private IReadOnlyList<Guid> _current = [];
+
+    [Parameter, EditorRequired]
+    public Guid EntryId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _tags = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Tag);
+        _current = await Segments.GetTagsAsync(EntryId);
+    }
+}

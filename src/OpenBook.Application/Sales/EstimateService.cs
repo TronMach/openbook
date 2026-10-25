@@ -14,7 +14,8 @@ public sealed record SaveEstimateCommand(
     DateOnly? ExpirationDate = null,
     string? Number = null,
     string? Memo = null,
-    Guid? TaxCodeId = null);
+    Guid? TaxCodeId = null,
+    Guid? LocationId = null);
 
 /// <summary>Estimates: quotes that post nothing, and become invoices when accepted.</summary>
 public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, IClock clock, ICurrentUser user)
@@ -39,6 +40,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
         var estimate = Estimate.Create(
             Guid.CreateVersion7(), number, customer.Id, command.Date, command.ExpirationDate, lines, clock.UtcNow, command.Memo, taxCodeId, exemption);
+        estimate.SetLocation(command.LocationId);
         store.Add(estimate);
         store.Add(Audit(AuditAction.Created, estimate, before: null));
         await store.SaveChangesAsync(ct);
@@ -57,6 +59,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
 
         var before = Snapshot(estimate);
         estimate.Update(customer.Id, command.Date, command.ExpirationDate, lines, command.Memo, taxCodeId, exemption);
+        estimate.SetLocation(command.LocationId);
         store.Add(Audit(AuditAction.Updated, estimate, before));
         await store.SaveChangesAsync(ct);
         return estimate;
@@ -81,7 +84,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         return await invoices.CreateAsync(new CreateInvoiceCommand(
             estimate.CustomerId, invoiceDate, SalesLine.Drafts(estimate.Lines),
-            Memo: estimate.Memo, EstimateId: estimate.Id, TaxCodeId: estimate.TaxCodeId ?? Guid.Empty), ct);
+            Memo: estimate.Memo, EstimateId: estimate.Id, TaxCodeId: estimate.TaxCodeId ?? Guid.Empty, LocationId: estimate.LocationId), ct);
     }
 
     private async Task<Customer> ActiveCustomerAsync(Guid customerId, CancellationToken ct)

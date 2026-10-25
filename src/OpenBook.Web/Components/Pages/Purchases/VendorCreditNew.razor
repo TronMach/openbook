@@ -45,8 +45,9 @@
                 </div>
             </div>
 
-            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+            <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
+            <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
@@ -80,8 +81,15 @@
     [SupplyParameterFromQuery(Name = "vendor")]
     private Guid? PresetVendor { get; set; }
 
+    private SegmentOptions _segments = SegmentOptions.None;
+
+    private Guid? _locationId;
+
+
     protected override async Task OnInitializedAsync()
     {
+
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         (_vendors, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList(),
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
@@ -107,7 +115,7 @@
         _error = null;
         try
         {
-            var command = new CreateVendorCreditCommand(_vendorId!.Value, _date, BillLineModel.Drafts(_lines), _reference, _memo);
+            var command = new CreateVendorCreditCommand(_vendorId!.Value, _date, BillLineModel.Drafts(_lines), _reference, _memo, LocationId: _locationId);
             var credit = await Ops.RunAsync<VendorCreditService, VendorCredit>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/purchases/vendor-credits/{credit.Id}");
         }

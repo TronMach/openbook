@@ -62,8 +62,9 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
+            <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
@@ -115,8 +116,15 @@
 
     private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty && !string.IsNullOrWhiteSpace(_number);
 
+    private SegmentOptions _segments = SegmentOptions.None;
+
+    private Guid? _locationId;
+
+
     protected override async Task OnInitializedAsync()
     {
+
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _chart, _number) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
@@ -138,7 +146,7 @@
         _error = null;
         try
         {
-            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty);
+            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId);
             var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");
         }

@@ -1,0 +1,128 @@
+@page "/segments/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Segments
+@inject SegmentService Segments
+@inject NavigationManager Navigation
+
+<PageTitle>@(_segment?.Name ?? "Segment") · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(_segment?.Name ?? "Not found")</h1>
+        <a class="button secondary" href="/segments">Back</a>
+        @if (_segment is not null)
+        {
+            <a class="button secondary" href="@ReportLink">Profit and loss</a>
+            <a class="button secondary" href="/audit?entityId=@_segment.Id">History</a>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_segment is null)
+    {
+        <p>That class, location or tag doesn't exist. <a href="/segments">Back</a>.</p>
+    }
+    else
+    {
+        <p class="muted">@(_segment.Kind == SegmentKind.Location ? _label : _segment.Kind.ToString())@(_segment.IsActive ? "" : " · inactive")</p>
+        <EditForm Model="Input" FormName="segment" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="Input.Name" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                @if (_segment.Kind != SegmentKind.Tag)
+                {
+                    <div class="field">
+                        <label for="parent">Under</label>
+                        <InputSelect id="parent" @bind-Value="Input.ParentId">
+                            <option value="">(top level)</option>
+                            @foreach (var s in _siblings.Where(s => s.Segment.Id != _segment.Id))
+                            {
+                                <option value="@s.Segment.Id">@s.FullName</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+            </div>
+            <div class="actions"><button type="submit">Save</button></div>
+        </EditForm>
+
+        <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">@(_segment.IsActive ? "Make inactive" : "Make active")</button>
+        </form>
+    }
+</div>
+
+@code {
+    private Segment? _segment;
+    private IReadOnlyList<SegmentChoice> _siblings = [];
+    private string _label = "Location";
+    private string? _error;
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "segment")]
+    private SegmentModel Input { get; set; } = default!;
+
+    private string ReportLink => _segment!.Kind switch
+    {
+        SegmentKind.Class => $"/reports/profit-and-loss?classId={_segment.Id}",
+        SegmentKind.Location => $"/reports/profit-and-loss?locationId={_segment.Id}",
+        _ => $"/reports/profit-and-loss?tagId={_segment.Id}",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segment = await Segments.GetAsync(Id);
+        if (_segment is null)
+            return;
+        _siblings = await Segments.ListAsync(_segment.Kind, includeInactive: false);
+        _label = (await Segments.GetTrackingAsync()).LocationLabel;
+        Input ??= new SegmentModel { Name = _segment.Name, ParentId = _segment.ParentId };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await Segments.UpdateAsync(Id, Input.Name, Input.ParentId);
+            Navigation.NavigateTo("/segments");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Segments.SetActiveAsync(Id, !_segment!.IsActive);
+            Navigation.NavigateTo($"/segments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class SegmentModel
+    {
+        [Required(ErrorMessage = "Enter a name.")]
+        [StringLength(100)]
+        public string Name { get; set; } = "";
+
+        public Guid? ParentId { get; set; }
+    }
+}

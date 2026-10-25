@@ -3,6 +3,7 @@
 @inject FinancialReports Reports
 @inject AccountService AccountService
 @inject CompanySettingsService Settings
+@inject ReportLedger Ledger
 
 <PageTitle>General ledger · OpenBook</PageTitle>
 
@@ -19,6 +20,7 @@
                     }
                 </select>
             </div>
+            <SegmentFilterFields ClassId="@ClassId" LocationId="@LocationId" TagId="@TagId" />
         </ReportFilter>
     </div>
 
@@ -27,7 +29,7 @@
     <div class="report-heading">
         <h1>General ledger</h1>
         <p>@_companyName</p>
-        <p>@_query.Describe() · @Labels.For(_report.Basis)</p>
+        <p>@_query.Describe() · @Labels.For(_report.Basis)@(_segments is null ? "" : $" · {_segments}")</p>
     </div>
 
     @if (_report.Accounts.Count == 0)
@@ -87,6 +89,10 @@
     [SupplyParameterFromQuery] private DateOnly? To { get; set; }
     [SupplyParameterFromQuery] private string? Basis { get; set; }
     [SupplyParameterFromQuery] private Guid? AccountId { get; set; }
+    [SupplyParameterFromQuery] private string? ClassId { get; set; }
+    [SupplyParameterFromQuery] private string? LocationId { get; set; }
+    [SupplyParameterFromQuery] private string? TagId { get; set; }
+    private string? _segments;
 
     protected override async Task OnInitializedAsync()
     {
@@ -95,6 +101,8 @@
         _useNumbers = company.UseAccountNumbers;
         _chart = await AccountService.GetChartAsync();
         _query = ReportQuery.From(company, Preset, From, To, Basis, DatePreset.ThisMonth);
-        _report = await Reports.GeneralLedgerAsync(_query.Range.From, _query.Range.To, _query.Basis, AccountId);
+        var filter = ReportParameters.Parse($"classId={ClassId}&locationId={LocationId}&tagId={TagId}").Segments();
+        _report = await Reports.GeneralLedgerAsync(_query.Range.From, _query.Range.To, _query.Basis, AccountId, filter);
+        _segments = await Ledger.DescribeAsync(filter);
     }
 }

@@ -30,7 +30,7 @@ public enum SalesLineKind
 /// <param name="PriceSource">Set by the line builder for automatic prices, or kept when copying a line.</param>
 public sealed record SalesLineDraft(
     Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null,
-    bool AutoPrice = false, string? PriceSource = null)
+    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null)
 {
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 }
@@ -55,6 +55,12 @@ public sealed class SalesLine
     /// discount line, the agency's liability account for a tax line; null for note lines.
     /// </summary>
     public Guid? IncomeAccountId { get; private set; }
+
+    /// <summary>The line's class (Domain.Segments); its income posting carries it. Null for none, and on tax lines.</summary>
+    public Guid? ClassId { get; private set; }
+
+    /// <summary>Reclassifying the document's entry changes its lines' class too, so cash basis follows.</summary>
+    public void SetClass(Guid? classId) => ClassId = classId == Guid.Empty ? null : classId;
 
     /// <summary>Whether sales tax applies (item lines only).</summary>
     public bool Taxable { get; private set; }
@@ -115,6 +121,7 @@ public sealed class SalesLine
             IncomeAccountId = item?.IncomeAccountId,
             Taxable = item is not null && (draft.Taxable ?? item.Taxable),
             ListRate = item?.Rate,
+            ClassId = draft.ClassId == Guid.Empty ? null : draft.ClassId,
             PriceSource = item is null ? null
                 : Text.Optional(draft.PriceSource, 200, "sales.price_source_too_long", "Price source") ?? (rate == item.Rate ? null : ManualPrice),
         };
@@ -145,7 +152,8 @@ public sealed class SalesLine
 
     /// <summary>
     /// The journal lines for a sale: <paramref name="debitAccountId"/> (A/R or the deposit account) gets the
-    /// total; each income account is credited with its lines' sum (debited if a discount makes it negative).
+    /// total; each income account is credited with its lines' sum (debited if a discount makes it negative),
+    /// one line per account and class.
     /// </summary>
     public static IReadOnlyList<JournalLineDraft> Postings(Guid debitAccountId, IReadOnlyCollection<SalesLine> lines, string? memo)
     {
@@ -155,13 +163,13 @@ public sealed class SalesLine
             throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
 
         var drafts = new List<JournalLineDraft> { JournalLineDraft.Dr(debitAccountId, total, memo) };
-        foreach (var group in lines.Where(l => l.IncomeAccountId is not null).GroupBy(l => l.IncomeAccountId!.Value))
+        foreach (var group in lines.Where(l => l.IncomeAccountId is not null).GroupBy(l => (Account: l.IncomeAccountId!.Value, l.ClassId)))
         {
             var sum = group.Sum(l => l.Amount);
             if (sum > 0m)
-                drafts.Add(JournalLineDraft.Cr(group.Key, sum));
+                drafts.Add(JournalLineDraft.Cr(group.Key.Account, sum, classId: group.Key.ClassId));
             else if (sum < 0m)
-                drafts.Add(JournalLineDraft.Dr(group.Key, -sum));
+                drafts.Add(JournalLineDraft.Dr(group.Key.Account, -sum, classId: group.Key.ClassId));
         }
 
         return drafts;
@@ -224,6 +232,7 @@ public sealed class SalesLine
             Rate = rate,
             Amount = -amount,
             IncomeAccountId = discountAccountId,
+            ClassId = draft.ClassId == Guid.Empty ? null : draft.ClassId,
         };
     }
 
@@ -235,7 +244,7 @@ public sealed class SalesLine
         Kind == SalesLineKind.Tax
             ? throw new InvalidOperationException("Tax lines are recalculated, not copied.")
             : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null,
-                PriceSource: PriceSource == ManualPrice ? null : PriceSource);
+                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId);
 
     /// <summary>The drafts for a document's lines, leaving out its tax lines.</summary>
     public static List<SalesLineDraft> Drafts(IEnumerable<SalesLine> lines) =>

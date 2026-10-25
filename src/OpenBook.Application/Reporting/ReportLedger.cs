@@ -4,8 +4,18 @@ using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Application.Reporting;
+
+/// <summary>
+/// Narrows report lines to a class, a location (each including those under it) and/or a tag.
+/// <see cref="Guid.Empty"/> for a class or location means lines without one ("Not specified").
+/// </summary>
+public sealed record SegmentFilter(Guid? ClassId = null, Guid? LocationId = null, Guid? TagId = null)
+{
+    public bool IsEmpty => ClassId is null && LocationId is null && TagId is null;
+}
 
 /// <summary>
 /// The lines every report is built from, for one basis. Accrual: the ledger as posted. Cash: invoices,
@@ -16,11 +26,51 @@ namespace OpenBook.Application.Reporting;
 /// refund date; a refund of an unapplied payment just reverses that cash. The inventory cost lines on invoices
 /// and credit memos (cost of goods sold against the inventory asset) are kept as posted: stock leaves when it's sold.
 /// </summary>
-public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases)
+public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases, Companies.ICompanyStore companies)
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
         [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
+
+    /// <summary>Every class, location and tag's full name.</summary>
+    public async Task<IReadOnlyDictionary<Guid, string>> SegmentNamesAsync(CancellationToken ct = default) =>
+        SegmentRules.FullNames(await ledger.ListSegmentsAsync(ct));
+
+    /// <summary>"Class: Retail · Location: East", for report subtitles; null without a filter.</summary>
+    public async Task<string?> DescribeAsync(SegmentFilter? filter, CancellationToken ct = default)
+    {
+        if (filter is null || filter.IsEmpty)
+            return null;
+        var names = SegmentRules.FullNames(await ledger.ListSegmentsAsync(ct));
+        string Name(Guid id) => id == Guid.Empty ? SegmentRules.NotSpecified : names.GetValueOrDefault(id) ?? "?";
+        var label = (await companies.GetCompanyAsync(ct))?.LocationLabel ?? "Location";
+        return string.Join(" · ", new[]
+        {
+            filter.ClassId is { } c ? $"Class: {Name(c)}" : null,
+            filter.LocationId is { } l ? $"{label}: {Name(l)}" : null,
+            filter.TagId is { } t ? $"Tag: {Name(t)}" : null,
+        }.Where(s => s is not null));
+    }
+
+    /// <param name="from">Null for "since the beginning".</param>
+    public async Task<IReadOnlyList<LedgerLine>> LinesAsync(ReportBasis basis, DateOnly? from, DateOnly to, SegmentFilter? filter, CancellationToken ct = default)
+    {
+        var lines = await LinesAsync(basis, from, to, ct);
+        if (filter is null || filter.IsEmpty)
+            return lines;
+
+        var segments = await ledger.ListSegmentsAsync(ct);
+        IReadOnlySet<Guid>? Under(Guid? id) => id is { } s && s != Guid.Empty ? SegmentRules.WithDescendants(s, segments) : null;
+        var classes = Under(filter.ClassId);
+        var locations = Under(filter.LocationId);
+        var tagged = filter.TagId is { } tagId
+            ? (await ledger.GetEntryTagsAsync(null, ct)).Where(t => t.TagId == tagId).Select(t => t.JournalEntryId).ToHashSet()
+            : null;
+        return lines.Where(l =>
+            (filter.ClassId is null || (classes is null ? l.ClassId is null : l.ClassId is { } c && classes.Contains(c)))
+            && (filter.LocationId is null || (locations is null ? l.LocationId is null : l.LocationId is { } loc && locations.Contains(loc)))
+            && (tagged is null || tagged.Contains(l.JournalEntryId))).ToList();
+    }
 
     /// <param name="from">Null for "since the beginning".</param>
     public async Task<IReadOnlyList<LedgerLine>> LinesAsync(ReportBasis basis, DateOnly? from, DateOnly to, CancellationToken ct = default)
@@ -53,8 +103,9 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 cash.AddRange(entryLines.Where(l => l.AccountId != payment.DepositAccountId && l.AccountId != payment.ReceivableAccountId));
                 foreach (var application in payment.Applications)
                 {
-                    foreach (var (accountId, share) in Allocate(application.Settled, IncomeLines(invoices[application.InvoiceId].Lines)))
-                        cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, -share, memo, CustomerPayment.Source, payment.Id));
+                    var invoice = invoices[application.InvoiceId];
+                    foreach (var (accountId, classId, share) in AllocateByClass(application.Settled, IncomeLines(invoice.Lines)))
+                        cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, -share, memo, CustomerPayment.Source, payment.Id, classId, invoice.LocationId));
                 }
 
                 // Money not applied to invoices is still the customer's (or refunded): it stays in A/R.
@@ -80,8 +131,9 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
                 var memo = lines.FirstOrDefault(l => l.JournalEntryId == refund.JournalEntryId)?.EntryMemo;
                 cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.PaymentAccountId, -refund.Amount, memo, CustomerRefund.Source, refund.Id));
-                foreach (var (accountId, share) in Allocate(refund.Amount, IncomeLines(credits[creditId].Lines)))
-                    cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, share, memo, CustomerRefund.Source, refund.Id));
+                var credit = credits[creditId];
+                foreach (var (accountId, classId, share) in AllocateByClass(refund.Amount, IncomeLines(credit.Lines)))
+                    cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, share, memo, CustomerRefund.Source, refund.Id, classId, credit.LocationId));
             }
         }
 
@@ -96,9 +148,10 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.PaymentAccountId, -payment.Amount, memo, BillPayment.Source, payment.Id));
                 foreach (var application in payment.Applications)
                 {
-                    var billLines = bills[application.BillId].Lines.Select(l => (l.AccountId, l.Amount)).ToList();
-                    foreach (var (accountId, share) in Allocate(application.Amount, billLines))
-                        cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, share, memo, BillPayment.Source, payment.Id));
+                    var bill = bills[application.BillId];
+                    var billLines = bill.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount)).ToList();
+                    foreach (var (accountId, classId, share) in AllocateByClass(application.Amount, billLines))
+                        cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, share, memo, BillPayment.Source, payment.Id, classId, bill.LocationId));
                 }
             }
         }
@@ -113,18 +166,19 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
                 var memo = lines.FirstOrDefault(l => l.JournalEntryId == refund.JournalEntryId)?.EntryMemo;
                 cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.DepositAccountId, refund.Amount, memo, VendorRefund.Source, refund.Id));
-                var creditLines = vendorCredits[refund.VendorCreditId].Lines.Select(l => (l.AccountId, l.Amount)).ToList();
-                foreach (var (accountId, share) in Allocate(refund.Amount, creditLines))
-                    cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, -share, memo, VendorRefund.Source, refund.Id));
+                var vendorCredit = vendorCredits[refund.VendorCreditId];
+                var creditLines = vendorCredit.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount)).ToList();
+                foreach (var (accountId, classId, share) in AllocateByClass(refund.Amount, creditLines))
+                    cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, -share, memo, VendorRefund.Source, refund.Id, classId, vendorCredit.LocationId));
             }
         }
 
         return cash.OrderBy(l => l.Date).ThenBy(l => l.EntryNumber).ToList();
     }
 
-    private static List<(Guid AccountId, decimal Amount)> IncomeLines(IEnumerable<SalesLine> lines) => lines
+    private static List<(Guid AccountId, Guid? ClassId, decimal Amount)> IncomeLines(IEnumerable<SalesLine> lines) => lines
         .Where(l => l.IncomeAccountId is not null && l.Amount != 0m)
-        .Select(l => (l.IncomeAccountId!.Value, l.Amount))
+        .Select(l => (l.IncomeAccountId!.Value, l.ClassId, l.Amount))
         .ToList();
 
     /// <summary>
@@ -134,11 +188,18 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
     public static IReadOnlyList<(Guid AccountId, decimal Amount)> Allocate(decimal amount, IReadOnlyList<(Guid AccountId, decimal Amount)> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
+        return AllocateByClass(amount, lines.Select(l => (l.AccountId, (Guid?)null, l.Amount)).ToList()).Select(p => (p.AccountId, p.Amount)).ToList();
+    }
+
+    /// <summary><see cref="Allocate"/>, keeping each line's class: one part per account and class.</summary>
+    public static IReadOnlyList<(Guid AccountId, Guid? ClassId, decimal Amount)> AllocateByClass(decimal amount, IReadOnlyList<(Guid AccountId, Guid? ClassId, decimal Amount)> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
         var total = lines.Sum(l => l.Amount);
         if (lines.Count == 0 || total == 0m)
             return [];
 
-        var parts = new List<(Guid, decimal)>(lines.Count);
+        var parts = new List<(Guid AccountId, Guid? ClassId, decimal Share)>(lines.Count);
         var allocated = 0m;
         for (var i = 0; i < lines.Count; i++)
         {
@@ -146,16 +207,17 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 ? amount - allocated
                 : decimal.Round(amount * lines[i].Amount / total, 2, MidpointRounding.AwayFromZero);
             allocated += share;
-            parts.Add((lines[i].AccountId, share));
+            parts.Add((lines[i].AccountId, lines[i].ClassId, share));
         }
 
         return parts
-            .GroupBy(p => p.Item1)
-            .Select(g => (g.Key, g.Sum(p => p.Item2)))
-            .Where(p => p.Item2 != 0m)
+            .GroupBy(p => (p.AccountId, p.ClassId))
+            .Select(g => (g.Key.AccountId, g.Key.ClassId, g.Sum(p => p.Share)))
+            .Where(p => p.Item3 != 0m)
             .ToList();
     }
 
-    private static LedgerLine Derived(Guid entryId, long number, DateOnly date, Guid accountId, decimal amount, string? memo, string source, Guid sourceId) =>
-        new(Guid.Empty, entryId, number, date, accountId, amount, null, memo, source, sourceId, EntryBasis.Both);
+    private static LedgerLine Derived(
+        Guid entryId, long number, DateOnly date, Guid accountId, decimal amount, string? memo, string source, Guid sourceId, Guid? classId = null, Guid? locationId = null) =>
+        new(Guid.Empty, entryId, number, date, accountId, amount, null, memo, source, sourceId, EntryBasis.Both, classId, locationId);
 }

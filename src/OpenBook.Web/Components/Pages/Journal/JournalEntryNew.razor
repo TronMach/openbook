@@ -44,12 +44,13 @@
                     <span class="hint">For accruals: posts the opposite entry on this date, such as the first day of next month.</span>
                 </div>
             </div>
+            <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
             </div>
 
-            <JournalLinesEditor Lines="_lines" Accounts="_accounts" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+            <JournalLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Accounts="_accounts" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
             <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
 
@@ -79,8 +80,15 @@
 
     private bool CanPost => JournalLines.IsComplete(_lines);
 
+    private SegmentOptions _segments = SegmentOptions.None;
+
+    private Guid? _locationId;
+
+
     protected override async Task OnInitializedAsync()
     {
+
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         (_chart, _useNumbers) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
@@ -96,7 +104,7 @@
         {
             var drafts = JournalLines.Drafts(_lines);
             var entry = await Ops.RunAsync<PostingEngine, JournalEntry>(
-                e => e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn)), _closingPassword);
+                e => e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId)), _closingPassword);
             Navigation.NavigateTo($"/journal/{entry.Id}");
         }
         catch (DomainException ex)

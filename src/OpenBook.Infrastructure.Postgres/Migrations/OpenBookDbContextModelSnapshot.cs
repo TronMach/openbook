@@ -336,6 +336,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -368,6 +371,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("TransferAccountId");
 
@@ -547,6 +552,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("LocationLabel")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -560,6 +570,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("TrackClasses")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("TrackLocations")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("UseAccountNumbers")
                         .HasColumnType("boolean");
@@ -1067,6 +1083,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("JournalEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -1097,6 +1116,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("PayableAccountId");
 
@@ -1307,6 +1328,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("JournalEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -1334,6 +1358,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("PayableAccountId");
 
@@ -1408,11 +1434,17 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateOnly>("FiscalYearStart")
                         .HasColumnType("date");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1420,6 +1452,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClassId");
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("Name")
                         .IsUnique();
@@ -1527,6 +1563,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("JournalEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -1559,6 +1598,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -1802,6 +1843,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("LastEmailedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -1828,6 +1872,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnName("TotalMinor");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -1877,6 +1923,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("LastEmailedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -1914,6 +1963,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -2077,6 +2128,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("LastEmailedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -2116,6 +2170,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -2286,6 +2342,77 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("TaxRates", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Segments.EntryTag", b =>
+                {
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("JournalEntryId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("EntryTags", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Segments.LineSegment", b =>
+                {
+                    b.Property<Guid>("JournalLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("JournalLineId");
+
+                    b.HasIndex("ClassId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("LineSegments", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Segments.Segment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentId");
+
+                    b.HasIndex("Kind", "ParentId", "Name");
+
+                    b.ToTable("Segments", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2452,6 +2579,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("JournalEntryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()
@@ -2696,6 +2828,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()
                         .HasForeignKey("PayableAccountId")
@@ -2731,6 +2868,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
 
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
@@ -2746,6 +2886,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasIndex("AccountId");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("ItemId");
 
                             b1.ToTable("BillLines", (string)null);
@@ -2758,6 +2900,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("BillId");
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Sales.Item", null)
                                 .WithMany()
@@ -2890,6 +3037,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()
                         .HasForeignKey("PayableAccountId")
@@ -2920,6 +3072,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
 
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
@@ -2935,6 +3090,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasIndex("AccountId");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("ItemId");
 
                             b1.ToTable("VendorCreditLines", (string)null);
@@ -2944,6 +3101,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("AccountId")
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Sales.Item", null)
                                 .WithMany()
@@ -3025,6 +3187,16 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.OwnsMany("OpenBook.Domain.Reporting.BudgetLine", "Lines", b1 =>
                         {
                             b1.Property<Guid>("BudgetId")
@@ -3134,6 +3306,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()
                         .HasForeignKey("ReceivableAccountId")
@@ -3191,6 +3368,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
 
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
@@ -3230,6 +3410,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasKey("CreditMemoId", "LineNumber");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
@@ -3237,6 +3419,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.HasIndex("TaxRateId");
 
                             b1.ToTable("CreditMemoLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.WithOwner()
                                 .HasForeignKey("CreditMemoId");
@@ -3389,6 +3576,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
                         .WithMany()
                         .HasForeignKey("TaxCodeId")
@@ -3408,6 +3600,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Amount")
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
@@ -3448,6 +3643,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasKey("EstimateId", "LineNumber");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
@@ -3455,6 +3652,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.HasIndex("TaxRateId");
 
                             b1.ToTable("EstimateLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.WithOwner()
                                 .HasForeignKey("EstimateId");
@@ -3497,6 +3699,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()
                         .HasForeignKey("ReceivableAccountId")
@@ -3527,6 +3734,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Amount")
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
@@ -3567,6 +3777,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasKey("InvoiceId", "LineNumber");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
@@ -3574,6 +3786,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.HasIndex("TaxRateId");
 
                             b1.ToTable("InvoiceLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Accounts.Account", null)
                                 .WithMany()
@@ -3725,6 +3942,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.SalesTax.TaxCode", null)
                         .WithMany()
                         .HasForeignKey("TaxCodeId")
@@ -3744,6 +3966,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Amount")
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
@@ -3784,6 +4009,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasKey("SalesReceiptId", "LineNumber");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("IncomeAccountId");
 
                             b1.HasIndex("ItemId");
@@ -3791,6 +4018,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.HasIndex("TaxRateId");
 
                             b1.ToTable("SalesReceiptLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Accounts.Account", null)
                                 .WithMany()
@@ -3897,6 +4129,54 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Segments.EntryTag", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Segments.LineSegment", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalLine", null)
+                        .WithOne()
+                        .HasForeignKey("OpenBook.Domain.Segments.LineSegment", "JournalLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Segments.Segment", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>

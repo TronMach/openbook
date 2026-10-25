@@ -15,6 +15,7 @@ using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Reporting;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
+using OpenBook.Domain.Segments;
 using OpenBook.Domain.Webhooks;
 
 namespace OpenBook.Infrastructure.Persistence;
@@ -72,6 +73,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
     public DbSet<PriceLevel> PriceLevels => Set<PriceLevel>();
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
+    public DbSet<Segment> Segments => Set<Segment>();
+    public DbSet<LineSegment> LineSegments => Set<LineSegment>();
+    public DbSet<EntryTag> EntryTags => Set<EntryTag>();
 
     /// <summary>Money columns are integer minor units, so SQL sums are exact on every provider.</summary>
     private static readonly ValueConverter<decimal, long> MinorUnits = new(amount => (long)(amount * 100m), minor => minor / 100m);
@@ -210,6 +214,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.FormAccentColor).HasMaxLength(7);
             b.Property(c => c.FormFooter).HasMaxLength(1000);
             b.Property(c => c.PriceRounding).HasConversion<string>().HasMaxLength(20);
+            b.Property(c => c.LocationLabel).HasMaxLength(30);
         });
 
         modelBuilder.Entity<EmailSettings>(b =>
@@ -270,12 +275,51 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<BankRule>().WithMany().HasForeignKey(i => i.RuleId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<Segment>(b =>
+        {
+            b.ToTable("Segments");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.Name).HasMaxLength(100);
+            b.HasIndex(s => new { s.Kind, s.ParentId, s.Name });
+            b.HasOne<Segment>().WithMany().HasForeignKey(s => s.ParentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Beside the ledger, not in it: posted lines stay immutable while segments can be reclassified.
+        modelBuilder.Entity<LineSegment>(b =>
+        {
+            b.ToTable("LineSegments");
+            b.HasKey(s => s.JournalLineId);
+            b.Ignore(s => s.IsEmpty);
+            b.HasIndex(s => s.JournalEntryId);
+            b.HasIndex(s => s.ClassId);
+            b.HasIndex(s => s.LocationId);
+            b.HasOne<JournalLine>().WithOne().HasForeignKey<LineSegment>(s => s.JournalLineId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(s => s.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(s => s.ClassId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(s => s.LocationId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EntryTag>(b =>
+        {
+            b.ToTable("EntryTags");
+            b.HasKey(t => new { t.JournalEntryId, t.TagId });
+            b.HasIndex(t => t.TagId);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(t => t.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(t => t.TagId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        foreach (var document in new[] { typeof(Invoice), typeof(SalesReceipt), typeof(CreditMemo), typeof(Estimate), typeof(Bill), typeof(VendorCredit), typeof(BankTransaction) })
+            modelBuilder.Entity(document).HasOne(typeof(Segment)).WithMany().HasForeignKey("LocationId").OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<Budget>(b =>
         {
             b.ToTable("Budgets");
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).HasMaxLength(100);
             b.HasIndex(x => x.Name).IsUnique();
+            b.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
             b.Ignore(x => x.FiscalYearEnd);
             b.OwnsMany(x => x.Lines, l =>
             {
@@ -627,6 +671,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<TaxRate>().WithMany().HasForeignKey(x => x.TaxRateId).OnDelete(DeleteBehavior.Restrict);
+            l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
         }
 
         void TaxedDocument<TDocument>(EntityTypeBuilder<TDocument> b)
@@ -843,6 +888,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(NullableTenThousandths);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
         }
 
         modelBuilder.Entity<Vendor>(b =>

@@ -19,7 +19,8 @@ public enum BankTransactionStatus
 }
 
 /// <summary>One categorized part of a spend or receive. A negative amount reverses the usual side (e.g. a discount line).</summary>
-public sealed record BankSplit(Guid AccountId, decimal Amount, string? Memo = null);
+/// <param name="ClassId">The category line's class (Domain.Segments); null for none.</param>
+public sealed record BankSplit(Guid AccountId, decimal Amount, string? Memo = null, Guid? ClassId = null);
 
 /// <summary>
 /// A banking document: who was paid or paid you, the check number, and the journal entry it posted.
@@ -59,6 +60,12 @@ public sealed class BankTransaction
 
     public BankTransactionStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
+
+    /// <summary>The location (department) of the whole transaction; its entry's lines carry it too.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
+    public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
 
     /// <summary>Set for rows created by one CSV import, so a batch can be found later.</summary>
     public Guid? ImportBatchId { get; private set; }
@@ -100,7 +107,7 @@ public sealed class BankTransaction
             // Spending debits the category; a negative spend line (a discount) credits it. Receiving is the mirror.
             var debit = (kind == BankTransactionKind.Spend) == (split.Amount > 0m);
             var amount = Math.Abs(split.Amount);
-            drafts.Add(debit ? JournalLineDraft.Dr(split.AccountId, amount, split.Memo) : JournalLineDraft.Cr(split.AccountId, amount, split.Memo));
+            drafts.Add(debit ? JournalLineDraft.Dr(split.AccountId, amount, split.Memo, split.ClassId) : JournalLineDraft.Cr(split.AccountId, amount, split.Memo, split.ClassId));
         }
 
         var total = splits.Sum(s => s.Amount);

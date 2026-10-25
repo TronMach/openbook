@@ -1,6 +1,7 @@
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Application;
 
@@ -27,7 +28,9 @@ public sealed record LedgerLine(
     string? EntryMemo,
     string Source,
     Guid? SourceId,
-    EntryBasis Basis);
+    EntryBasis Basis,
+    Guid? ClassId = null,
+    Guid? LocationId = null);
 
 /// <summary>Filter and page for listing journal entries, newest first.</summary>
 public sealed record JournalEntryFilter(
@@ -66,10 +69,24 @@ public interface ILedgerStore
     /// <summary>Audit records matching the filters, newest first.</summary>
     Task<IReadOnlyList<AuditRecord>> ListAuditAsync(string? entityType, Guid? entityId, string? actor, CancellationToken ct);
 
+    /// <summary>Classes, locations and tags, tracked.</summary>
+    Task<IReadOnlyList<Segment>> ListSegmentsAsync(CancellationToken ct);
+
+    /// <summary>The segment rows of these entries' lines, tracked; includes ones added but not saved.</summary>
+    Task<IReadOnlyList<LineSegment>> GetLineSegmentsAsync(IReadOnlyCollection<Guid> entryIds, CancellationToken ct);
+
+    /// <summary>Tags on these entries (every entry's when null), tracked; includes ones added but not saved.</summary>
+    Task<IReadOnlyList<EntryTag>> GetEntryTagsAsync(IReadOnlyCollection<Guid>? entryIds, CancellationToken ct);
+
     void Add(Account account);
     void Add(JournalEntry entry);
     void Add(RecurringEntry recurring);
     void Add(AuditRecord record);
+    void Add(Segment segment);
+    void Add(LineSegment segment);
+    void Add(EntryTag tag);
+    void Remove(LineSegment segment);
+    void Remove(EntryTag tag);
 
     Task SaveChangesAsync(CancellationToken ct);
 }

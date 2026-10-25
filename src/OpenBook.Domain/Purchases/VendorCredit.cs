@@ -51,6 +51,12 @@ public sealed class VendorCredit
 
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
+
+    /// <summary>The location (department) of the whole transaction; its entry's lines carry it too.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
+    public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<BillLine> Lines => _lines;
@@ -83,7 +89,7 @@ public sealed class VendorCredit
 
     /// <summary>The mirror of a bill's journal lines: payables debited, categories credited.</summary>
     public static IReadOnlyList<JournalLineDraft> Postings(Guid payableAccountId, IReadOnlyCollection<BillLine> lines, string? memo) =>
-        Bill.Postings(payableAccountId, lines, memo).Select(l => new JournalLineDraft(l.AccountId, l.Credit, l.Debit, l.Memo)).ToList();
+        Bill.Postings(payableAccountId, lines, memo).Select(l => l with { Debit = l.Credit, Credit = l.Debit }).ToList();
 
     public void Apply(Guid billId, decimal amount, DateOnly appliedOn)
     {

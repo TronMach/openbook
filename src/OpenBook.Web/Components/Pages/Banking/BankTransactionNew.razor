@@ -49,6 +49,7 @@
                     <label for="reference">@(IsCheck ? "Check number" : "Reference") <span class="muted">(optional)</span></label>
                     <input id="reference" @bind="_reference" maxlength="30" />
                 </div>
+                <LocationField Options="_segments" @bind-Value="_locationId" />
                 <div class="field">
                     <label for="memo">Memo <span class="muted">(optional)</span></label>
                     <input id="memo" @bind="_memo" maxlength="1000" />
@@ -62,6 +63,10 @@
                             <th>Category</th>
                             <th class="num">Amount</th>
                             <th>Line memo</th>
+                            @if (_segments.ClassColumn is not null)
+                            {
+                                <th>Class</th>
+                            }
                             <th></th>
                         </tr>
                     </thead>
@@ -85,6 +90,10 @@
                                 </td>
                                 <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" /></td>
                                 <td><input @bind="line.Memo" aria-label="Line memo" /></td>
+                                @if (_segments.ClassColumn is { } lineClasses)
+                                {
+                                    <td><ClassSelect Classes="lineClasses" Value="line.ClassId" ValueChanged="v => line.ClassId = v" /></td>
+                                }
                                 <td>
                                     @if (_lines.Count > 1)
                                     {
@@ -98,7 +107,7 @@
                         <tr>
                             <td><button type="button" class="secondary" @onclick="() => _lines.Add(new LineModel())">Add line</button></td>
                             <td class="num">@Labels.Amount(Total)</td>
-                            <td colspan="2" class="muted">A negative line reduces the total, e.g. a discount.</td>
+                            <td colspan="@(_segments.ClassColumn is null ? 2 : 3)" class="muted">A negative line reduces the total, e.g. a discount.</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -147,8 +156,15 @@
     private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
     private bool CanSave => Total > 0m && Filled.Any() && Filled.All(l => l.AccountId is not null && (l.Amount ?? 0m) != 0m);
 
+    private SegmentOptions _segments = SegmentOptions.None;
+
+    private Guid? _locationId;
+
+
     protected override async Task OnParametersSetAsync()
     {
+
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _kind = KindName.Equals("receive", StringComparison.OrdinalIgnoreCase) ? BankTransactionKind.Receive : BankTransactionKind.Spend;
         try
         {
@@ -178,9 +194,9 @@
         _error = null;
         try
         {
-            var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo)).ToList();
+            var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo, l.ClassId)).ToList();
             var saved = await Ops.RunAsync<BankingService, BankTransaction>(s =>
-                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null)), _closingPassword);
+                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null, LocationId: _locationId)), _closingPassword);
             Navigation.NavigateTo($"/banking/transactions/{saved.Id}");
         }
         catch (DomainException ex)
@@ -210,5 +226,6 @@
         public Guid? AccountId { get; set; }
         public decimal? Amount { get; set; }
         public string? Memo { get; set; }
+        public Guid? ClassId { get; set; }
     }
 }

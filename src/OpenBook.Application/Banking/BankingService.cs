@@ -18,7 +18,9 @@ public sealed record RecordBankTransactionCommand(
     string? Payee = null,
     string? Reference = null,
     string? Memo = null,
-    Guid? VendorId = null);
+    Guid? VendorId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed record TransferCommand(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
@@ -206,7 +208,9 @@ public sealed class BankingService(
             postings,
             entryMemo.Length == 0 ? null : entryMemo,
             BankTransaction.SourceFor(command.Kind),
-            id), ct);
+            id,
+            LocationId: command.LocationId,
+            TagIds: command.TagIds), ct);
 
         var transaction = BankTransaction.Create(
             id,
@@ -222,6 +226,7 @@ public sealed class BankingService(
             command.Memo,
             importBatchId,
             command.VendorId);
+        transaction.SetLocation(command.LocationId);
         bank.Add(transaction);
         bank.Add(Audit(AuditAction.Created, transaction, before: null));
         return transaction;

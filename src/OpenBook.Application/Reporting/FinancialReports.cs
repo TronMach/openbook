@@ -85,11 +85,13 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
     }
 
     /// <param name="accountId">Only this account (and its subaccounts); null for every account with activity.</param>
-    public async Task<GeneralLedger> GeneralLedgerAsync(DateOnly? from, DateOnly to, ReportBasis? basis = null, Guid? accountId = null, CancellationToken ct = default)
+    /// <param name="filter">Only lines of this class, location or tag (opening balances too).</param>
+    public async Task<GeneralLedger> GeneralLedgerAsync(
+        DateOnly? from, DateOnly to, ReportBasis? basis = null, Guid? accountId = null, SegmentFilter? filter = null, CancellationToken ct = default)
     {
         var reportBasis = basis ?? (await companies.GetRequiredCompanyAsync(ct)).DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(reportBasis, null, to, ct);
+        var lines = await ledger.LinesAsync(reportBasis, null, to, filter, ct);
         var include = accountId is { } id ? Subtree(chart, id).ToHashSet() : null;
 
         var result = new List<GeneralLedgerAccount>();

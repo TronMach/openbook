@@ -17,7 +17,9 @@ public sealed record CreateSalesReceiptCommand(
     string? Number = null,
     string? Reference = null,
     string? Memo = null,
-    Guid? TaxCodeId = null);
+    Guid? TaxCodeId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed class SalesReceiptService(
     ISalesStore store,
@@ -61,10 +63,12 @@ public sealed class SalesReceiptService(
         var id = Guid.CreateVersion7();
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(deposit.Id, lines, memo), .. stock.Postings], memo, SalesReceipt.Source, id), ct);
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(deposit.Id, lines, memo), .. stock.Postings], memo, SalesReceipt.Source, id,
+                LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.SalesReceipt, id);
 
         var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption);
+        receipt.SetLocation(command.LocationId);
         store.Add(receipt);
         store.Add(Audit(AuditAction.Created, receipt, before: null));
         await store.SaveChangesAsync(ct);

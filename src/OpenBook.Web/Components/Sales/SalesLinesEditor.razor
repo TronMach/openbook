@@ -15,6 +15,10 @@
                 {
                     <th title="Charge sales tax on this line">Tax</th>
                 }
+                @if (Classes is not null)
+                {
+                    <th>Class</th>
+                }
                 <th></th>
             </tr>
         </thead>
@@ -83,6 +87,10 @@
                             }
                         </td>
                     }
+                    @if (Classes is not null)
+                    {
+                        <td><ClassSelect Classes="Classes" Value="line.ClassId" ValueChanged="v => line.ClassId = v" /></td>
+                    }
                     <td>
                         @if (Lines.Count > 1)
                         {
@@ -95,7 +103,7 @@
         <tfoot>
             @{
                 var tax = SalesLineModel.Tax(Lines, Items, Tax, Exempt);
-                var extra = Tax is null ? 1 : 2;
+                var extra = (Tax is null ? 1 : 2) + (Classes is null ? 0 : 1);
             }
             @if (Tax is not null)
             {
@@ -144,6 +152,11 @@
     /// <summary>The customer is exempt on the document date: tax shows as zero.</summary>
     [Parameter]
     public bool Exempt { get; set; }
+
+    /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
+    [Parameter]
+    public IReadOnlyList<OpenBook.Application.Segments.SegmentChoice>? Classes { get; set; }
+
 
     /// <summary>The document's customer; prices follow their level. Null prices at list (plus rules for all customers).</summary>
     [Parameter]

@@ -47,6 +47,13 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     public async Task<IReadOnlyList<InventoryLayer>> LayersAsync(Guid itemId, DateOnly? asOf = null, CancellationToken ct = default) =>
         Fifo.Layers((await store.ListMovementsAsync(itemId, ct)).Where(m => asOf is null || m.Date <= asOf));
 
+    /// <summary>The class an item's cost posts to: the one its lines on the document share, else none.</summary>
+    private static Guid? ClassOf(IReadOnlyList<SalesLine> lines, Guid itemId)
+    {
+        var classes = lines.Where(l => l.ItemId == itemId).Select(l => l.ClassId).Distinct().ToList();
+        return classes.Count == 1 ? classes[0] : null;
+    }
+
     /// <summary>Sales (invoices, receipts): take each inventory item's quantity from stock and post its cost.</summary>
     internal async Task<InventoryPlan> PlanSaleAsync(IReadOnlyList<SalesLine> lines, DateOnly date, CancellationToken ct)
     {
@@ -65,8 +72,9 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var cost = takes.Sum(t => t.Cost);
             if (cost != 0m)
             {
-                postings.Add(JournalLineDraft.Dr(item.CostAccountId!.Value, cost, $"Cost of {item.Name}"));
-                postings.Add(JournalLineDraft.Cr(item.InventoryAssetAccountId!.Value, cost, $"Cost of {item.Name}"));
+                var classId = ClassOf(lines, item.Id);
+                postings.Add(JournalLineDraft.Dr(item.CostAccountId!.Value, cost, $"Cost of {item.Name}", classId));
+                postings.Add(JournalLineDraft.Cr(item.InventoryAssetAccountId!.Value, cost, $"Cost of {item.Name}", classId));
             }
 
             movements.AddRange(takes.Select(t => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => InventoryMovement.Issue(t, item.Id, date, type, id, at))));
@@ -92,8 +100,9 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var cost = decimal.Round(quantity * UnitCostForReturn(item, history), 2, MidpointRounding.AwayFromZero);
             if (cost != 0m)
             {
-                postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, cost, $"Return of {item.Name}"));
-                postings.Add(JournalLineDraft.Cr(item.CostAccountId!.Value, cost, $"Return of {item.Name}"));
+                var classId = ClassOf(lines, item.Id);
+                postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, cost, $"Return of {item.Name}", classId));
+                postings.Add(JournalLineDraft.Cr(item.CostAccountId!.Value, cost, $"Return of {item.Name}", classId));
             }
 
             movements.Add((type, id, at) => InventoryMovement.Receipt(item.Id, date, quantity, cost, type, id, at));

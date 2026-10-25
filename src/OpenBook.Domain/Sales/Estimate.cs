@@ -24,6 +24,12 @@ public sealed class Estimate
     public Guid Id { get; private set; }
     public string Number { get; private set; }
     public Guid CustomerId { get; private set; }
+
+    /// <summary>The location (department) of the whole transaction; its entry's lines carry it too.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
+    public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
     public DateOnly Date { get; private set; }
     public DateOnly? ExpirationDate { get; private set; }
 

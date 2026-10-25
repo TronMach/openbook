@@ -1,0 +1,172 @@
+@page "/segments/reclassify"
+@using OpenBook.Application.Accounts
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Segments
+@inject SegmentService Segments
+@inject AccountService Accounts
+
+<PageTitle>Reclassify transactions · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Reclassify transactions</h1>
+        <a class="button secondary" href="/segments">Classes and @(_label.ToLowerInvariant())s</a>
+    </div>
+    <p class="muted">
+        Change the class or @_label.ToLowerInvariant() of posted lines in bulk. Amounts and accounts never change, so nothing is reposted; the
+        change is recorded in each entry's history. A transaction's @_label.ToLowerInvariant() applies to all of its lines. Lines dated on or before
+        the closing date can't be changed here.
+    </p>
+
+    <form method="get" action="/segments/reclassify" class="report-filter">
+        <div class="field">
+            <label for="from">From</label>
+            <input id="from" name="from" type="date" value="@_from.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="field">
+            <label for="to">To</label>
+            <input id="to" name="to" type="date" value="@_to.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="field">
+            <label for="accountId">Account</label>
+            <select id="accountId" name="accountId">
+                <option value="">(income and expense accounts)</option>
+                @foreach (var (account, depth) in _chart.Ordered(includeInactive: false))
+                {
+                    <option value="@account.Id" selected="@(account.Id == AccountId)">@(new string(' ', depth * 3))@account.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="classId">Class now</label>
+            <select id="classId" name="classId">
+                <option value="">(any)</option>
+                <option value="none" selected="@(ClassId == "none")">Not specified</option>
+                @foreach (var c in _classes)
+                {
+                    <option value="@c.Segment.Id" selected="@(ClassId == c.Segment.Id.ToString())">@c.FullName</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="locationId">@_label now</label>
+            <select id="locationId" name="locationId">
+                <option value="">(any)</option>
+                <option value="none" selected="@(LocationId == "none")">Not specified</option>
+                @foreach (var l in _locations)
+                {
+                    <option value="@l.Segment.Id" selected="@(LocationId == l.Segment.Id.ToString())">@l.FullName</option>
+                }
+            </select>
+        </div>
+        <div class="actions"><button type="submit" class="secondary">Show lines</button></div>
+    </form>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    else if (Done is not null)
+    {
+        <div class="alert success" role="status">@Done @(Done == "1" ? "line" : "lines") reclassified.</div>
+    }
+
+    <form method="post" action="/segments/reclassify">
+        <AntiforgeryToken />
+        <input type="hidden" name="back" value="@_back" />
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" aria-label="Select all" onclick="for (const b of this.closest('table').querySelectorAll('tbody input[type=checkbox]')) b.checked = this.checked" /></th>
+                        <th>Date</th><th>Transaction</th><th>Account</th><th>Memo</th><th class="num">Amount</th><th>Class</th><th>@_label</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _lines.Take(MaxLines))
+                    {
+                        <tr class="@(line.Voided ? "inactive" : null)">
+                            <td><input type="checkbox" name="line" value="@line.Line.JournalLineId" aria-label="Select line" /></td>
+                            <td>@Labels.Date(line.Line.Date)</td>
+                            <td><a href="@Links.ForEntry(line.Line.Source, line.Line.SourceId, line.Line.JournalEntryId)">#@line.Line.EntryNumber</a>@(line.Voided ? " (voided)" : "")</td>
+                            <td>@line.Account</td>
+                            <td>@(line.Line.LineMemo ?? line.Line.EntryMemo)</td>
+                            <td class="num">@Labels.Amount(line.Line.Amount)</td>
+                            <td>@(line.Class ?? "")</td>
+                            <td>@(line.Location ?? "")</td>
+                        </tr>
+                    }
+                    @if (_lines.Count == 0)
+                    {
+                        <tr><td colspan="8" class="muted">No lines match.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_lines.Count > MaxLines)
+        {
+            <p class="muted">Showing the first @MaxLines of @_lines.Count lines; narrow the filter to see the rest.</p>
+        }
+        <div class="row" style="margin-top: 1rem">
+            <div class="field">
+                <label for="setClass">Set class</label>
+                <select id="setClass" name="setClass">
+                    <option value="">(leave as is)</option>
+                    <option value="none">Clear it</option>
+                    @foreach (var c in _classes.Where(c => c.Segment.IsActive))
+                    {
+                        <option value="@c.Segment.Id">@c.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="setLocation">Set @_label.ToLowerInvariant()</label>
+                <select id="setLocation" name="setLocation">
+                    <option value="">(leave as is)</option>
+                    <option value="none">Clear it</option>
+                    @foreach (var l in _locations.Where(l => l.Segment.IsActive))
+                    {
+                        <option value="@l.Segment.Id">@l.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="actions"><button type="submit">Reclassify selected lines</button></div>
+        </div>
+    </form>
+</div>
+
+@code {
+    private const int MaxLines = 500;
+    private Domain.Accounts.ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private IReadOnlyList<SegmentChoice> _locations = [];
+    private IReadOnlyList<ReclassifyLine> _lines = [];
+    private DateOnly _from;
+    private DateOnly _to;
+    private string _label = "Location";
+    private string _back = "/segments/reclassify";
+
+    [SupplyParameterFromQuery] public string? From { get; set; }
+    [SupplyParameterFromQuery] public string? To { get; set; }
+    [SupplyParameterFromQuery] public Guid? AccountId { get; set; }
+    [SupplyParameterFromQuery] public string? ClassId { get; set; }
+    [SupplyParameterFromQuery] public string? LocationId { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+    [SupplyParameterFromQuery] public string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _from = DateOnly.TryParse(From, System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : new DateOnly(today.Year, today.Month, 1);
+        _to = DateOnly.TryParse(To, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : today;
+        _chart = await Accounts.GetChartAsync();
+        _classes = await Segments.ListAsync(SegmentKind.Class);
+        _locations = await Segments.ListAsync(SegmentKind.Location);
+        _label = (await Segments.GetTrackingAsync()).LocationLabel;
+        static Guid? Pick(string? value) => value == "none" ? Guid.Empty : Guid.TryParse(value, out var g) ? g : null;
+
+        var lines = await Segments.ListLinesAsync(_from, _to, AccountId, Pick(ClassId), Pick(LocationId));
+        _lines = AccountId is null ? lines.Where(l => !_chart.Get(l.Line.AccountId).Type.IsBalanceSheet()).ToList() : lines;
+        _back = $"/segments/reclassify?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}&accountId={AccountId}&classId={ClassId}&locationId={LocationId}";
+    }
+}

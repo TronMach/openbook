@@ -26,12 +26,12 @@ public sealed class ActivityReports(
     /// through their invoices, receipts, credit memos, payments and refunds. Income posted any other way, such as
     /// journal entries, is one row of its own.
     /// </summary>
-    public async Task<ReportTable> SalesByCustomerAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
+    public async Task<ReportTable> SalesByCustomerAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, SegmentFilter? filter = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = (await ledger.LinesAsync(reportBasis, from, to, ct))
+        var lines = (await ledger.LinesAsync(reportBasis, from, to, filter, ct))
             .Where(l => chart.Find(l.AccountId)?.Type.ClassOf() == AccountClass.Income)
             .ToList();
 
@@ -139,12 +139,12 @@ public sealed class ActivityReports(
     /// Expenses (cost of goods sold, expense and other expense accounts) from the ledger, by the vendor on the bill,
     /// vendor credit, bill payment (cash basis), vendor refund or expense that posted them.
     /// </summary>
-    public async Task<ReportTable> ExpensesByVendorAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
+    public async Task<ReportTable> ExpensesByVendorAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, SegmentFilter? filter = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = (await ledger.LinesAsync(reportBasis, from, to, ct))
+        var lines = (await ledger.LinesAsync(reportBasis, from, to, filter, ct))
             .Where(l => chart.Find(l.AccountId)?.Type.ClassOf() == AccountClass.Expense)
             .ToList();
 
