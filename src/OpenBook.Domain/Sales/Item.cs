@@ -77,6 +77,12 @@ public sealed class Item
     /// <summary>Tracked items: whether units carry lot or serial numbers. Locked once stock has moved.</summary>
     public Inventory.ItemTracking Tracking { get; private set; }
 
+    /// <summary>
+    /// Assemblies without lot or serial tracking: a sale short of finished units builds the shortfall from components
+    /// in the same entry, so pre-packed kits can be assembled to order.
+    /// </summary>
+    public bool AutoBuild { get; private set; }
+
     /// <summary>What a scanner reads off the product (UPC, EAN, or your own code); unique among items.</summary>
     public string? Barcode { get; private set; }
 
@@ -162,10 +168,16 @@ public sealed class Item
             (InventoryAssetAccountId, CostAccountId, ReorderPoint) = (null, null, null);
             CostMethod = InventoryCostMethod.Fifo;
             Tracking = Inventory.ItemTracking.None;
+            AutoBuild = false;
             return;
         }
 
         Tracking = Enum.IsDefined(details.Tracking) ? details.Tracking : throw new DomainException("item.tracking_invalid", "Unknown lot or serial tracking.");
+        AutoBuild = details.AutoBuild && Type == ItemType.Assembly
+            ? Tracking == Inventory.ItemTracking.None
+                ? true
+                : throw new DomainException("item.auto_build_tracked", "Automatic builds need an assembly without lot or serial numbers: there'd be no numbers to give the units built.")
+            : false;
 
         CostMethod = Enum.IsDefined(details.CostMethod) ? details.CostMethod : throw new DomainException("item.cost_method_invalid", "Unknown costing method.");
 
@@ -248,4 +260,5 @@ public sealed record ItemDetails(
     decimal PurchaseCost = 0m,
     InventoryCostMethod CostMethod = InventoryCostMethod.Fifo,
     Inventory.ItemTracking Tracking = Inventory.ItemTracking.None,
-    string? Barcode = null);
+    string? Barcode = null,
+    bool AutoBuild = false);

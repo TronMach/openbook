@@ -177,6 +177,58 @@
         </table>
     }
 
+    <h2 id="pending">Pending builds</h2>
+    @if (PendingNote is not null)
+    {
+        <div class="alert success" role="status">@(PendingNote == "cancelled" ? "Pending build cancelled." : "Saved as a pending build.")</div>
+    }
+    @if (PendingError is not null)
+    {
+        <div class="alert error" role="alert">@PendingError</div>
+    }
+    @if (_pending.Count == 0)
+    {
+        <p class="muted">None waiting.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Saved</th><th>Assembly</th><th class="num">Quantity</th><th>Components today</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var (pending, assembly, preview) in _pending)
+                {
+                    <tr>
+                        <td>@pending.CreatedAt.ToLocalTime().ToString("d") @pending.Reference</td>
+                        <td><a href="/items/@assembly.Id#components">@assembly.Name</a></td>
+                        <td class="num">@Labels.Quantity(pending.Quantity)</td>
+                        <td>
+                            @if (preview is null)
+                            {
+                                <span class="muted">Check the bill of materials</span>
+                            }
+                            else if (preview.Requirements.Any(r => r.IsShort))
+                            {
+                                <span class="badge warn">Short</span>
+                                <span class="muted">@string.Join(", ", preview.Requirements.Where(r => r.IsShort).Select(r => $"{r.Component.Name}: {Labels.Quantity(r.OnHand)} of {Labels.Quantity(r.Needed)}"))</span>
+                            }
+                            else
+                            {
+                                <span class="badge ok">Ready</span>
+                            }
+                        </td>
+                        <td class="inline">
+                            <a class="button secondary" href="/inventory/builds/new?pending=@pending.Id">Build now</a>
+                            <form method="post" action="/inventory/pending-builds/@pending.Id/cancel" data-enhance="false">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link">Cancel</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
     <h2>Assembly builds</h2>
     @if (_builds.Count == 0)
     {
@@ -234,6 +286,10 @@
     private Dictionary<Guid, string> _names = [];
     private IReadOnlyList<StockTransfer> _transfers = [];
     private IReadOnlyList<ExpiringLot> _expiring = [];
+    private IReadOnlyList<(PendingBuild Pending, Item Assembly, BuildPreview? Preview)> _pending = [];
+
+    [SupplyParameterFromQuery(Name = "pending")] private string? PendingNote { get; set; }
+    [SupplyParameterFromQuery] private string? PendingError { get; set; }
     private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
     private const int ExpiryDays = 30;
     private IReadOnlyList<InventoryMovement> _lotHistory = [];
@@ -258,6 +314,7 @@
         _stock = (await Inventory.StockAsync()).Where(s => s.Item.IsActive || s.Quantity != 0m).ToList();
         _adjustments = await Adjustments.ListAsync();
         _builds = await Builds.ListAsync();
+        _pending = await Builds.ListPendingAsync(_today);
         _landed = await LandedCosts.ListAsync();
         _names = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id, i => i.Name);
         _transfers = await Transfers.ListAsync();

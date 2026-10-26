@@ -15,6 +15,10 @@ internal sealed record InventoryPlan(IReadOnlyList<JournalLineDraft> Postings, I
     public static readonly InventoryPlan None = new([], []);
 }
 
+/// <summary>A build worked out: its plan (postings and movements), the components it uses, and the receipts it makes (already given ids).</summary>
+internal sealed record BuildPlan(
+    InventoryPlan Plan, IReadOnlyList<(Guid ItemId, decimal Quantity, decimal Cost, string? Lots)> Lines, IReadOnlyList<InventoryMovement> Outputs);
+
 /// <param name="Value">FIFO cost of what's on hand.</param>
 public sealed record StockLevel(Item Item, decimal Quantity, decimal Value)
 {
@@ -174,6 +178,20 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var filter = await ForPickingAsync(item, StockFilter.In(warehouseId), ct);
             var takes = new List<FifoTake>();
 
+            // Assemble to order: build what the warehouse is short of, in this entry, before taking the sale.
+            if (item.IsAssembly && item.AutoBuild)
+            {
+                var available = Fifo.Slices(history).Where(s => s.Quantity > 0m && s.Date <= date && filter.Matches(s)).Sum(s => s.Quantity);
+                var shortfall = group.Sum(p => p.Quantity) - available;
+                if (shortfall > 0m)
+                {
+                    var build = await PlanBuildAsync(item, await ComponentsAsync(item, ct), shortfall, date, warehouseId, [], ct);
+                    postings.AddRange(build.Plan.Postings);
+                    movements.AddRange(build.Plan.Movements);
+                    history.AddRange(build.Outputs);
+                }
+            }
+
             // Lots named on lines first, then the rest from the oldest stock.
             var named = new List<(Part Part, IReadOnlyList<(string Lot, decimal Quantity)> Lots)>();
             foreach (var part in group.Where(p => p.Line is not null))
@@ -329,12 +347,14 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
 
         var reversed = own.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
         var open = own.Where(m => m.ReversalOf is null && !reversed.Contains(m.Id)).ToList();
+        var ownIds = own.Select(m => m.Id).ToHashSet();
         foreach (var receipt in open.Where(m => m.IsReceipt))
         {
+            // Untouched means nothing else has moved the layer (the document's own movements don't count: a sale may
+            // have built what it sold), apart from movements that were voided again.
             var history = await store.ListMovementsAsync(receipt.ItemId, ct);
-            var layer = Fifo.Layers(history).Single(l => l.LayerId == receipt.Id);
-            var atPlace = Fifo.Slices(history).Where(s => s.LayerId == receipt.Id && s.Place == receipt.Place).Sum(s => s.Quantity);
-            if (layer.RemainingQuantity != receipt.Quantity || layer.RemainingCost != receipt.Cost || atPlace != receipt.Quantity)
+            var undone = history.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
+            if (history.Any(m => m.LayerId == receipt.Id && !ownIds.Contains(m.Id) && m.ReversalOf is null && !undone.Contains(m.Id)))
             {
                 var item = (await sales.GetItemsAsync([receipt.ItemId], ct)).GetValueOrDefault(receipt.ItemId);
                 throw new DomainException("inventory.layer_used",
@@ -343,6 +363,61 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         }
 
         return new InventoryPlan([], open.Select(m => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((_, _, at) => m.Reverse(date, at))).ToList());
+    }
+
+    /// <summary>
+    /// Builds <paramref name="quantity"/> of an assembly in a warehouse: components out at their own cost (soonest expiry
+    /// first), the assembly in as one layer per output lot at the total. Dr the assembly's asset, Cr the components'.
+    /// The receipts are made now (with placeholder sources) so later takes in the same plan can use them.
+    /// </summary>
+    internal async Task<BuildPlan> PlanBuildAsync(
+        Item assembly, IReadOnlyDictionary<Guid, Item> components, decimal quantity, DateOnly date, Guid? warehouseId,
+        IReadOnlyList<(string Lot, decimal Quantity)> outputLots, CancellationToken ct)
+    {
+        var lines = new List<(Guid ItemId, decimal Quantity, decimal Cost, string? Lots)>();
+        var postings = new List<JournalLineDraft>();
+        var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
+        foreach (var c in assembly.Components)
+        {
+            var component = components[c.ComponentItemId];
+            var needed = decimal.Round(quantity * c.Quantity, SalesLine.Precision, MidpointRounding.AwayFromZero);
+            if (component.Tracking == ItemTracking.Serial && needed != decimal.Truncate(needed))
+                throw new DomainException("lot.serial_whole", $"{component.Name} is tracked by serial number, so builds must use whole units of it.");
+            var history = (await store.ListMovementsAsync(component.Id, ct)).ToList();
+            var takes = TakeAndSimulate(component, history, needed, date, await ForPickingAsync(component, StockFilter.In(warehouseId), ct));
+            var cost = takes.Sum(t => t.Cost);
+            lines.Add((component.Id, needed, cost, LotText.Format(takes.Where(t => t.Lot is not null).Select(t => (t.Lot!, t.Quantity)), component.Tracking)));
+            if (cost != 0m)
+                postings.Add(JournalLineDraft.Cr(component.InventoryAssetAccountId!.Value, cost, $"{component.Name} into {assembly.Name}"));
+            movements.AddRange(takes.Select(t => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => InventoryMovement.Issue(t, component.Id, date, type, id, at))));
+        }
+
+        var total = lines.Sum(l => l.Cost);
+        if (total == 0m)
+            throw new DomainException("build.zero_cost", $"The components of {assembly.Name} have no cost on hand to move into it. Give them a cost (an adjustment or a bill) first.");
+        postings.Insert(0, JournalLineDraft.Dr(assembly.InventoryAssetAccountId!.Value, total, $"Build {quantity:0.####} {assembly.Name}"));
+        var receipts = outputLots.Count > 0 ? outputLots.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(quantity, (string?)null)];
+        var outputs = Split(receipts, total)
+            .Select(r => InventoryMovement.Receipt(assembly.Id, date, r.Quantity, r.Cost, Planned, Guid.Empty, DateTimeOffset.UnixEpoch, new StockPlace(warehouseId, null), r.Lot))
+            .ToList();
+        movements.AddRange(outputs.Select(o => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => o.ForSource(type, id, at))));
+        return new BuildPlan(new InventoryPlan(postings, movements), lines, outputs);
+    }
+
+    /// <summary>An assembly's components, which must all be tracked stock.</summary>
+    internal async Task<IReadOnlyDictionary<Guid, Item>> ComponentsAsync(Item assembly, CancellationToken ct)
+    {
+        if (assembly.Components.Count == 0)
+            throw new DomainException("build.no_components", $"{assembly.Name} has no components yet. Add its bill of materials on the item.");
+        var components = await sales.GetItemsAsync(assembly.Components.Select(c => c.ComponentItemId).ToList(), ct);
+        foreach (var c in assembly.Components)
+        {
+            var component = components.GetValueOrDefault(c.ComponentItemId) ?? throw new EntityNotFoundException("item", c.ComponentItemId);
+            if (!component.IsInventory)
+                throw new DomainException("build.component_untracked", $"{component.Name} isn't tracked stock any more, so {assembly.Name} can't be built.");
+        }
+
+        return components;
     }
 
     /// <summary>Adds the plan's movements for the document. Call only after its entry has been staged.</summary>

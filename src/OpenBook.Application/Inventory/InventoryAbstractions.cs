@@ -47,6 +47,12 @@ public interface IInventoryStore
     /// <summary>Tracked; every item's when <paramref name="itemId"/> is null.</summary>
     Task<IReadOnlyList<LotDetail>> ListLotDetailsAsync(Guid? itemId, CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<PendingBuild>> ListPendingBuildsAsync(CancellationToken ct);
+
+    Task<PendingBuild?> GetPendingBuildAsync(Guid id, CancellationToken ct);
+
+    void Add(PendingBuild pending);
     void Add(LotDetail detail);
     void Add(Warehouse warehouse);
     void Add(Bin bin);

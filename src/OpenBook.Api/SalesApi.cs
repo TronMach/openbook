@@ -37,11 +37,12 @@ public sealed record CustomerResponse(
 public sealed record ItemResponse(
     Guid Id, string Name, ItemType Type, string? Description, decimal Rate, Guid IncomeAccountId, bool IsActive, bool Taxable = true,
     Guid? InventoryAssetAccountId = null, Guid? CostAccountId = null, decimal? ReorderPoint = null, decimal PurchaseCost = 0m,
-    IReadOnlyList<QuantityBreakDto>? QuantityBreaks = null, InventoryCostMethod CostMethod = InventoryCostMethod.Fifo, IReadOnlyList<ItemComponent>? Components = null)
+    IReadOnlyList<QuantityBreakDto>? QuantityBreaks = null, InventoryCostMethod CostMethod = InventoryCostMethod.Fifo, IReadOnlyList<ItemComponent>? Components = null,
+    OpenBook.Domain.Inventory.ItemTracking Tracking = OpenBook.Domain.Inventory.ItemTracking.None, string? Barcode = null, bool AutoBuild = false)
 {
     public static ItemResponse From(Item i) => new(
         i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost,
-        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList());
+        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild);
 }
 
 /// <param name="Rate">For a tax line, the percentage charged.</param>

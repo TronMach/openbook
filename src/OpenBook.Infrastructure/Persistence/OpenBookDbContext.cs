@@ -78,6 +78,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<AssemblyBuild> AssemblyBuilds => Set<AssemblyBuild>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<LotDetail> LotDetails => Set<LotDetail>();
+    public DbSet<PendingBuild> PendingBuilds => Set<PendingBuild>();
     public DbSet<Bin> Bins => Set<Bin>();
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<LandedCost> LandedCosts => Set<LandedCost>();
@@ -732,6 +733,21 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(x => x.Name).IsUnique();
             b.Property(x => x.Address).HasMaxLength(500);
             b.Ignore(x => x.Key);
+        });
+
+        modelBuilder.Entity<PendingBuild>(b =>
+        {
+            b.ToTable("PendingBuilds");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+            b.Property(x => x.Reference).HasMaxLength(30);
+            b.Property(x => x.Memo).HasMaxLength(1000);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.CreatedBy).HasMaxLength(100);
+            b.HasIndex(x => x.Status);
+            b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<AssemblyBuild>().WithMany().HasForeignKey(x => x.BuildId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<LotDetail>(b =>

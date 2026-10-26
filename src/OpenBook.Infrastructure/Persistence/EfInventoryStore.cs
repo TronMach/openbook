@@ -46,6 +46,12 @@ internal sealed class EfInventoryStore(OpenBookDbContext db) : IInventoryStore
     public async Task<IReadOnlyList<LotDetail>> ListLotDetailsAsync(Guid? itemId, CancellationToken ct) =>
         await db.LotDetails.Where(l => itemId == null || l.ItemId == itemId).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<PendingBuild>> ListPendingBuildsAsync(CancellationToken ct) => await db.PendingBuilds.ToListAsync(ct);
+
+    public Task<PendingBuild?> GetPendingBuildAsync(Guid id, CancellationToken ct) => db.PendingBuilds.SingleOrDefaultAsync(p => p.Id == id, ct);
+
+    public void Add(PendingBuild pending) => db.PendingBuilds.Add(pending);
+
     public void Add(LotDetail detail) => db.LotDetails.Add(detail);
 
     public void Add(Warehouse warehouse) => db.Warehouses.Add(warehouse);

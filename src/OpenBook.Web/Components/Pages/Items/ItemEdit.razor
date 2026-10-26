@@ -118,6 +118,13 @@
                     </InputSelect>
                 </div>
             </div>
+            @if (Input.Type == ItemType.Assembly)
+            {
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.AutoBuild" />
+                    <span>Build automatically when a sale is short: the shortfall is built from components in the sale's own entry (assemblies without lot or serial numbers)</span>
+                </label>
+            }
             <div class="row">
                 <div class="field">
                     <label for="tracking">Lot or serial numbers</label>
@@ -233,7 +240,8 @@
             }
             else
             {
-                <span>What one @_item.Name contains. It sells as one line at its own price; inventory products in it leave stock and their cost goes to cost of goods sold.</span>
+                <span>What one @_item.Name contains. It sells as one line at its own price; inventory products in it leave stock and their cost goes to cost of goods sold.
+                    A bundle keeps no stock of its own: for kits you keep pre-packed on the shelf, make an assembly instead (it can build itself when a sale is short).</span>
             }
         </p>
         <form method="post" action="/items/@_item.Id/components" data-enhance="false">
@@ -446,7 +454,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
-                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode,
+                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild,
             };
     }
 
@@ -478,7 +486,7 @@
             var method = _assetLocked ? _item!.CostMethod : Input.CostMethod;
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
-                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode);
+                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
             Navigation.NavigateTo(_item is null && Item.HasComponents(saved.Type) ? $"/items/{saved.Id}#components" : "/items");
@@ -524,6 +532,8 @@
         public InventoryCostMethod CostMethod { get; set; }
 
         public ItemTracking Tracking { get; set; }
+
+        public bool AutoBuild { get; set; }
 
         [StringLength(50)]
         public string? Barcode { get; set; }

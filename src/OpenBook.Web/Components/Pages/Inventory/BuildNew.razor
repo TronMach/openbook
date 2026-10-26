@@ -1,6 +1,7 @@
 @page "/inventory/builds/new"
 @using System.ComponentModel.DataAnnotations
 @using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
 @inject AssemblyBuildService Builds
 @inject ItemService Items
 @inject WarehouseService WarehouseService
@@ -96,6 +97,7 @@
                     <input type="hidden" name="Input.Quantity" value="@_quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                     <input type="hidden" name="Input.Date" value="@_date.ToString("yyyy-MM-dd")" />
                     <input type="hidden" name="Input.WarehouseId" value="@_warehouseId" />
+                    <input type="hidden" name="Input.PendingId" value="@_pendingId" />
                     @if (_preview.Assembly.Tracking != ItemTracking.None)
                     {
                         <div class="field">
@@ -114,7 +116,32 @@
                         </div>
                     </div>
                     <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
-                    <button type="submit" disabled="@_preview.Requirements.Any(r => r.IsShort)">Build @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
+                    @{
+                        var shortOfStock = _preview.Requirements.Any(r => r.IsShort);
+                        var now = Math.Min(_quantity, _preview.MaxBuildable);
+                    }
+                    <div class="actions">
+                        @if (_pendingId is not null)
+                        {
+                            <button type="submit" name="Input.Mode" value="finish" disabled="@shortOfStock">Finish the pending build: @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
+                        }
+                        else
+                        {
+                            <button type="submit" name="Input.Mode" value="build" disabled="@shortOfStock">Build @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
+                            @if (shortOfStock && now > 0m)
+                            {
+                                <button type="submit" name="Input.Mode" value="partial" class="secondary">Build @Labels.Quantity(now) now, leave @Labels.Quantity(_quantity - now) pending</button>
+                            }
+                            @if (shortOfStock)
+                            {
+                                <button type="submit" name="Input.Mode" value="pending" class="secondary">Save all @Labels.Quantity(_quantity) as pending</button>
+                            }
+                        }
+                    </div>
+                    @if (shortOfStock)
+                    {
+                        <p class="muted">A pending build posts nothing and doesn't hold the components; finish it from the inventory page once they arrive.</p>
+                    }
                 </EditForm>
             </div>
         }
@@ -136,6 +163,9 @@
     [SupplyParameterFromQuery] private string? Quantity { get; set; }
     [SupplyParameterFromQuery] private string? Date { get; set; }
     [SupplyParameterFromQuery] private Guid? Warehouse { get; set; }
+    [SupplyParameterFromQuery(Name = "pending")] private Guid? PendingQuery { get; set; }
+
+    private Guid? _pendingId;
 
     [SupplyParameterFromForm(FormName = "build")]
     private BuildModel Input { get; set; } = default!;
@@ -148,6 +178,17 @@
         _warehouseId = Input.WarehouseId ?? _warehouses.FirstOrDefault(w => w.Id == Warehouse)?.Key;
         if (_assemblies.Count == 0)
             return;
+
+        // Finishing a pending build: its assembly, quantity, warehouse and notes.
+        _pendingId = Input.PendingId ?? PendingQuery;
+        if (_pendingId is { } pendingId && Input.ItemId is null && await Builds.GetPendingAsync(pendingId) is { Status: PendingBuildStatus.Open } pending)
+        {
+            Input.ItemId = pending.ItemId;
+            Input.Quantity = pending.Quantity;
+            Input.Reference ??= pending.Reference;
+            Input.Memo ??= pending.Memo;
+            _warehouseId = pending.WarehouseId;
+        }
 
         // A posted build carries its own choices; otherwise the query string (or the first assembly).
         _itemId = Input.ItemId ?? (Item is { } chosen && _assemblies.Any(a => a.Id == chosen) ? chosen : _assemblies[0].Id);
@@ -175,8 +216,26 @@
         try
         {
             ClosingOverride.Password = Input.ClosingPassword;
-            var build = await Builds.CreateAsync(new BuildAssemblyCommand(_itemId, _quantity, _date, Input.Reference, Input.Memo, _warehouseId, Input.Lots));
-            Navigation.NavigateTo($"/inventory/builds/{build.Id}");
+            var command = new BuildAssemblyCommand(_itemId, _quantity, _date, Input.Reference, Input.Memo, _warehouseId, Input.Lots);
+            switch (Input.Mode)
+            {
+                case "pending":
+                    await Builds.SavePendingAsync(command);
+                    Navigation.NavigateTo("/inventory?pending=saved#pending");
+                    break;
+                case "partial":
+                    var (built, _) = await Builds.BuildWhatYouCanAsync(command);
+                    Navigation.NavigateTo(built is null ? "/inventory?pending=saved#pending" : $"/inventory/builds/{built.Id}");
+                    break;
+                case "finish" when _pendingId is { } pendingId:
+                    var finished = await Builds.FinishPendingAsync(pendingId, _date, Input.Lots);
+                    Navigation.NavigateTo($"/inventory/builds/{finished.Id}");
+                    break;
+                default:
+                    var build = await Builds.CreateAsync(command);
+                    Navigation.NavigateTo($"/inventory/builds/{build.Id}");
+                    break;
+            }
         }
         catch (DomainException ex)
         {
@@ -191,6 +250,10 @@
         public decimal? Quantity { get; set; }
         public DateOnly? Date { get; set; }
         public Guid? WarehouseId { get; set; }
+        public Guid? PendingId { get; set; }
+
+        /// <summary>Which button: build, partial, pending or finish.</summary>
+        public string? Mode { get; set; }
 
         [StringLength(1000)]
         public string? Lots { get; set; }

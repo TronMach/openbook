@@ -74,6 +74,19 @@ public static class InventoryEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/inventory/pending-builds/{id:guid}/cancel", async (Guid id, IFormCollection form, AssemblyBuildService builds, CancellationToken ct) =>
+        {
+            try
+            {
+                await builds.CancelPendingAsync(id, ct);
+                return Results.Redirect("/inventory?pending=cancelled#pending");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/inventory?pendingError={Uri.EscapeDataString(ex.Message)}#pending");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/inventory/warehouses", async (IFormCollection form, WarehouseService warehouses, CancellationToken ct) =>
             await Warehouses(() => warehouses.CreateAsync(form["name"].ToString(), form["address"], ct))).RequireAuthorization();
 

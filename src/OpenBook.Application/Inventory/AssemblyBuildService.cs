@@ -61,6 +61,101 @@ public sealed class AssemblyBuildService(
 
     public async Task<AssemblyBuild> CreateAsync(BuildAssemblyCommand command, CancellationToken ct = default)
     {
+        var build = await StageAsync(command, ct);
+        await store.SaveChangesAsync(ct);
+        return build;
+    }
+
+    /// <summary>Open pending builds, oldest first, each with what its components allow today.</summary>
+    public async Task<IReadOnlyList<(PendingBuild Pending, Item Assembly, BuildPreview? Preview)>> ListPendingAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var open = (await store.ListPendingBuildsAsync(ct)).Where(p => p.Status == PendingBuildStatus.Open).OrderBy(p => p.CreatedAt).ToList();
+        var items = await sales.GetItemsAsync(open.Select(p => p.ItemId).Distinct().ToList(), ct);
+        var result = new List<(PendingBuild, Item, BuildPreview?)>();
+        foreach (var pending in open)
+        {
+            BuildPreview? preview = null;
+            try
+            {
+                preview = await PreviewAsync(pending.ItemId, pending.Quantity, date, pending.WarehouseId, ct);
+            }
+            catch (DomainException)
+            {
+                // A changed bill of materials or an inactive warehouse shows up when it's built.
+            }
+
+            result.Add((pending, items[pending.ItemId], preview));
+        }
+
+        return result;
+    }
+
+    public Task<PendingBuild?> GetPendingAsync(Guid id, CancellationToken ct = default) => store.GetPendingBuildAsync(id, ct);
+
+    /// <summary>Saves a build to finish later: nothing posts and no stock moves (components aren't reserved).</summary>
+    public async Task<PendingBuild> SavePendingAsync(BuildAssemblyCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var pending = await PendingAsync(command, command.Quantity, ct);
+        await store.SaveChangesAsync(ct);
+        return pending;
+    }
+
+    /// <summary>
+    /// Builds as many whole units as the components on hand allow (lots or serials, if any, are for those) and saves
+    /// the rest as a pending build, in one save. With enough of everything it's an ordinary build.
+    /// </summary>
+    public async Task<(AssemblyBuild? Build, PendingBuild? Pending)> BuildWhatYouCanAsync(BuildAssemblyCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        AssemblyBuild.ValidateQuantity(command.Quantity);
+        var preview = await PreviewAsync(command.ItemId, command.Quantity, command.Date, command.WarehouseId, ct);
+        var now = Math.Min(command.Quantity, preview.MaxBuildable);
+        var build = now > 0m ? await StageAsync(command with { Quantity = now }, ct) : null;
+        var pending = command.Quantity > now ? await PendingAsync(command with { Lots = null }, command.Quantity - now, ct) : null;
+        await store.SaveChangesAsync(ct);
+        return (build, pending);
+    }
+
+    /// <summary>Finishes a pending build on <paramref name="date"/>: an ordinary build of its quantity, in one save.</summary>
+    public async Task<AssemblyBuild> FinishPendingAsync(Guid pendingId, DateOnly date, string? lots = null, CancellationToken ct = default)
+    {
+        var pending = await store.GetPendingBuildAsync(pendingId, ct) ?? throw new EntityNotFoundException("pending_build", pendingId);
+        if (pending.Status != PendingBuildStatus.Open)
+            throw new DomainException("build.pending_closed", "This pending build has already been finished or cancelled.");
+        var build = await StageAsync(new BuildAssemblyCommand(pending.ItemId, pending.Quantity, date, pending.Reference, pending.Memo, pending.WarehouseId, lots), ct);
+        var before = PendingSnapshot(pending);
+        pending.Built(build.Id, clock.UtcNow);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "pending_build", pending.Id, before, PendingSnapshot(pending)));
+        await store.SaveChangesAsync(ct);
+        return build;
+    }
+
+    public async Task<PendingBuild> CancelPendingAsync(Guid pendingId, CancellationToken ct = default)
+    {
+        var pending = await store.GetPendingBuildAsync(pendingId, ct) ?? throw new EntityNotFoundException("pending_build", pendingId);
+        var before = PendingSnapshot(pending);
+        pending.Cancel(clock.UtcNow);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "pending_build", pending.Id, before, PendingSnapshot(pending)));
+        await store.SaveChangesAsync(ct);
+        return pending;
+    }
+
+    private async Task<PendingBuild> PendingAsync(BuildAssemblyCommand command, decimal quantity, CancellationToken ct)
+    {
+        var (assembly, _) = await AssemblyAsync(command.ItemId, ct);
+        if (!assembly.IsActive)
+            throw new DomainException("build.item_inactive", $"{assembly.Name} is inactive.");
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var pending = PendingBuild.Create(assembly.Id, quantity, warehouseId, command.Reference, command.Memo, user.Actor, clock.UtcNow);
+        store.Add(pending);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, "pending_build", pending.Id, null, PendingSnapshot(pending)));
+        return pending;
+    }
+
+    /// <summary>Checks and stages a build (entry, movements, document, audit) without saving.</summary>
+    private async Task<AssemblyBuild> StageAsync(BuildAssemblyCommand command, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(command);
         AssemblyBuild.ValidateQuantity(command.Quantity);
         var (assembly, components) = await AssemblyAsync(command.ItemId, ct);
@@ -68,44 +163,18 @@ public sealed class AssemblyBuildService(
             throw new DomainException("build.item_inactive", $"{assembly.Name} is inactive.");
 
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
-        var place = new StockPlace(warehouseId, null);
         var outputLots = InventoryService.Required(LotText.Parse(command.Lots, assembly.Tracking, command.Quantity, assembly.Name), assembly);
         InventoryService.EnsureNewSerials(assembly, outputLots, await store.ListMovementsAsync(assembly.Id, ct));
-        var lines = new List<(Guid ItemId, decimal Quantity, decimal Cost, string? Lots)>();
-        var postings = new List<JournalLineDraft>();
-        var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
-        foreach (var c in assembly.Components)
-        {
-            var component = components[c.ComponentItemId];
-            var needed = Needed(command.Quantity, c.Quantity);
-            if (component.Tracking == ItemTracking.Serial && needed != decimal.Truncate(needed))
-                throw new DomainException("lot.serial_whole", $"{component.Name} is tracked by serial number, so builds must use whole units of it.");
-            var takes = Costing.Take(component, await store.ListMovementsAsync(component.Id, ct), needed, command.Date,
-                await inventory.ForPickingAsync(component, StockFilter.In(warehouseId), ct));
-            var cost = takes.Sum(t => t.Cost);
-            lines.Add((component.Id, needed, cost, LotText.Format(takes.Where(t => t.Lot is not null).Select(t => (t.Lot!, t.Quantity)), component.Tracking)));
-            if (cost != 0m)
-                postings.Add(JournalLineDraft.Cr(component.InventoryAssetAccountId!.Value, cost, $"{component.Name} into {assembly.Name}"));
-            movements.AddRange(takes.Select(t => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => InventoryMovement.Issue(t, component.Id, command.Date, type, id, at))));
-        }
-
-        var total = lines.Sum(l => l.Cost);
-        if (total == 0m)
-            throw new DomainException("build.zero_cost", "The components have no cost on hand to move into the assembly. Give them a cost (an adjustment or a bill) first.");
-        postings.Insert(0, JournalLineDraft.Dr(assembly.InventoryAssetAccountId!.Value, total, $"Build {command.Quantity:0.####} {assembly.Name}"));
-        var receipts = outputLots.Count > 0 ? outputLots.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(command.Quantity, (string?)null)];
-        foreach (var (quantity, lot, share) in InventoryService.Split(receipts, total).ToList())
-            movements.Add((type, id, at) => InventoryMovement.Receipt(assembly.Id, command.Date, quantity, share, type, id, at, place, lot));
+        var plan = await inventory.PlanBuildAsync(assembly, components, command.Quantity, command.Date, warehouseId, outputLots, ct);
 
         var buildId = Guid.CreateVersion7();
         var memo = command.Memo ?? $"Build {command.Quantity:0.####} {assembly.Name}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, postings, memo, AssemblyBuild.Source, buildId), ct);
-        var build = AssemblyBuild.Create(buildId, command.Date, assembly.Id, command.Quantity, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo,
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, plan.Plan.Postings, memo, AssemblyBuild.Source, buildId), ct);
+        var build = AssemblyBuild.Create(buildId, command.Date, assembly.Id, command.Quantity, plan.Lines, entry.Id, clock.UtcNow, command.Reference, command.Memo,
             warehouseId, LotText.Format(outputLots, assembly.Tracking));
-        inventory.Apply(new InventoryPlan(postings, movements), EntityType, buildId);
+        inventory.Apply(plan.Plan, EntityType, buildId);
         store.Add(build);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, EntityType, buildId, null, Snapshot(build)));
-        await store.SaveChangesAsync(ct);
         return build;
     }
 
@@ -145,6 +214,17 @@ public sealed class AssemblyBuildService(
 
     private static decimal Needed(decimal quantity, decimal perUnit) =>
         decimal.Round(quantity * perUnit, SalesLine.Precision, MidpointRounding.AwayFromZero);
+
+    private static string PendingSnapshot(PendingBuild p) => JsonSerializer.Serialize(new
+    {
+        p.ItemId,
+        p.Quantity,
+        p.WarehouseId,
+        p.Reference,
+        p.Memo,
+        Status = p.Status.ToString(),
+        p.BuildId,
+    });
 
     private static string Snapshot(AssemblyBuild b) => JsonSerializer.Serialize(new
     {

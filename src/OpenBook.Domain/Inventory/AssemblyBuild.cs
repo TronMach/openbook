@@ -234,3 +234,76 @@ public sealed class LandedCost
         Status = DocumentStatus.Voided;
     }
 }
+
+public enum PendingBuildStatus
+{
+    /// <summary>Waiting for components.</summary>
+    Open,
+
+    /// <summary>Finished by a build (<see cref="PendingBuild.BuildId"/>).</summary>
+    Built,
+
+    Cancelled,
+}
+
+/// <summary>
+/// A build waiting for components: it posts nothing and doesn't touch stock (components aren't reserved). Finishing it
+/// makes an ordinary <see cref="AssemblyBuild"/> on the day it's finished.
+/// </summary>
+public sealed class PendingBuild
+{
+    private PendingBuild() => CreatedBy = string.Empty;
+
+    public Guid Id { get; private set; }
+    public Guid ItemId { get; private set; }
+    public decimal Quantity { get; private set; }
+    public Guid? WarehouseId { get; private set; }
+    public string? Reference { get; private set; }
+    public string? Memo { get; private set; }
+    public PendingBuildStatus Status { get; private set; }
+
+    /// <summary>The build that finished it.</summary>
+    public Guid? BuildId { get; private set; }
+
+    public string CreatedBy { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset? ClosedAt { get; private set; }
+
+    public static PendingBuild Create(Guid itemId, decimal quantity, Guid? warehouseId, string? reference, string? memo, string createdBy, DateTimeOffset now)
+    {
+        AssemblyBuild.ValidateQuantity(quantity);
+        return new PendingBuild
+        {
+            Id = Guid.CreateVersion7(),
+            ItemId = itemId,
+            Quantity = quantity,
+            WarehouseId = warehouseId,
+            Reference = Text.Optional(reference, 30, "build.reference_too_long", "Reference"),
+            Memo = Text.Optional(memo, 1000, "build.memo_too_long", "Memo"),
+            Status = PendingBuildStatus.Open,
+            CreatedBy = createdBy,
+            CreatedAt = now.ToUniversalTime(),
+        };
+    }
+
+    public void Built(Guid buildId, DateTimeOffset now)
+    {
+        EnsureOpen();
+        Status = PendingBuildStatus.Built;
+        BuildId = buildId;
+        ClosedAt = now.ToUniversalTime();
+    }
+
+    public void Cancel(DateTimeOffset now)
+    {
+        EnsureOpen();
+        Status = PendingBuildStatus.Cancelled;
+        ClosedAt = now.ToUniversalTime();
+    }
+
+    private void EnsureOpen()
+    {
+        if (Status != PendingBuildStatus.Open)
+            throw new DomainException("build.pending_closed", "This pending build has already been finished or cancelled.");
+    }
+}

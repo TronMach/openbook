@@ -228,4 +228,66 @@ public sealed class InventoryCostingTests : IAsyncLifetime
         Assert.Equal("inventory.layer_used", await Refused(() => Run(sp => sp.GetRequiredService<AssemblyBuildService>().VoidAsync(build.Id, "Wrong"))));
     }
 
+
+    [Fact]
+    public async Task Short_builds_can_wait_as_pending_or_build_what_they_can_and_finish_later()
+    {
+        var leg = await NewItem("Pine leg", ItemType.Inventory);
+        var table = await NewItem("Pine table", ItemType.Assembly, 100m);
+        table = await Components(table, (leg, 4m));
+        await Buy(Jan10, (leg, 6m, 18m)); // enough for one table
+
+        var (built, pending) = await Run(sp => sp.GetRequiredService<AssemblyBuildService>().BuildWhatYouCanAsync(new BuildAssemblyCommand(table.Id, 3m, Jan20, "WO-1")));
+        Assert.Equal(1m, built!.Quantity);
+        Assert.Equal((2m, PendingBuildStatus.Open, "WO-1"), (pending!.Quantity, pending.Status, pending.Reference));
+        Assert.Equal((1m, 2m), ((await Stock(table)).Quantity, (await Stock(leg)).Quantity));
+
+        var waiting = Assert.Single(await Run(sp => sp.GetRequiredService<AssemblyBuildService>().ListPendingAsync(Feb1)));
+        Assert.True(waiting.Preview!.Requirements.Single().IsShort);
+        Assert.Equal("inventory.insufficient", await Refused(() => Run(sp => sp.GetRequiredService<AssemblyBuildService>().FinishPendingAsync(pending.Id, Feb1))));
+
+        await Buy(Feb1, (leg, 6m, 18m));
+        var finished = await Run(sp => sp.GetRequiredService<AssemblyBuildService>().FinishPendingAsync(pending.Id, Feb1));
+        Assert.Equal((2m, Feb1), (finished.Quantity, finished.Date));
+        Assert.Empty(await Run(sp => sp.GetRequiredService<AssemblyBuildService>().ListPendingAsync(Feb1)));
+        Assert.Equal((PendingBuildStatus.Built, finished.Id), await Run(async sp =>
+        {
+            var p = (await sp.GetRequiredService<AssemblyBuildService>().GetPendingAsync(pending.Id))!;
+            return (p.Status, p.BuildId!.Value);
+        }));
+        Assert.Equal("build.pending_closed", await Refused(() => Run(sp => sp.GetRequiredService<AssemblyBuildService>().CancelPendingAsync(pending.Id))));
+
+        // Saving everything as pending moves nothing; cancelling closes it.
+        var later = await Run(sp => sp.GetRequiredService<AssemblyBuildService>().SavePendingAsync(new BuildAssemblyCommand(table.Id, 5m, Feb1)));
+        Assert.Equal(3m, (await Stock(table)).Quantity);
+        await Run(sp => sp.GetRequiredService<AssemblyBuildService>().CancelPendingAsync(later.Id));
+        Assert.Empty(await Run(sp => sp.GetRequiredService<AssemblyBuildService>().ListPendingAsync(Feb1)));
+    }
+
+    [Fact]
+    public async Task Auto_build_assemblies_build_what_a_sale_is_short_of_in_the_same_entry()
+    {
+        var soap = await NewItem("Soap bar", ItemType.Inventory);
+        var towel = await NewItem("Towel", ItemType.Inventory);
+        var basket = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Gift basket", ItemType.Assembly, _sales.Id, 40m, AutoBuild: true)));
+        basket = await Components(basket, (soap, 2m), (towel, 1m));
+        await Buy(Jan10, (soap, 10m, 20m), (towel, 5m, 25m));
+        await Run(sp => sp.GetRequiredService<AssemblyBuildService>().CreateAsync(new BuildAssemblyCommand(basket.Id, 1m, Jan10))); // one on the shelf at 9.00
+
+        var invoice = await Sell(Feb1, basket, 3m); // one from the shelf, two built now
+
+        var entry = await Entry(invoice.JournalEntryId);
+        Assert.Equal(3m * 9m, entry.Lines.Where(l => l.AccountId == basket.CostAccountId).Sum(l => l.Debit));
+        Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
+        Assert.Equal((0m, 4m, 2m), ((await Stock(basket)).Quantity, (await Stock(soap)).Quantity, (await Stock(towel)).Quantity));
+        Assert.Equal("inventory.insufficient", await Refused(() => Sell(Feb1, basket, 3m))); // components for two more only
+
+        // Voiding the sale undoes the build too.
+        await Run(sp => sp.GetRequiredService<InvoiceService>().VoidAsync(invoice.Id, "Cancelled"));
+        Assert.Equal((1m, 8m, 4m), ((await Stock(basket)).Quantity, (await Stock(soap)).Quantity, (await Stock(towel)).Quantity));
+
+        Assert.Equal("item.auto_build_tracked", await Refused(() => Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(
+            new ItemDetails("Serial kit", ItemType.Assembly, _sales.Id, 10m, Tracking: ItemTracking.Serial, AutoBuild: true)))));
+    }
+
 }

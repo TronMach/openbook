@@ -76,6 +76,17 @@ public sealed class InventoryMovement
         };
     }
 
+    /// <summary>
+    /// The same movement (same id, so issues already planned against it as a layer still point at it) for the
+    /// document that makes it: plans build receipts before the document's id is known.
+    /// </summary>
+    public InventoryMovement ForSource(string sourceType, Guid sourceId, DateTimeOffset createdAt) => new()
+    {
+        Id = Id, ItemId = ItemId, LayerId = LayerId, Date = Date, Quantity = Quantity, Cost = Cost,
+        SourceType = sourceType, SourceId = sourceId, ReversalOf = ReversalOf, CreatedAt = createdAt.ToUniversalTime(),
+        WarehouseId = WarehouseId, BinId = BinId, Lot = Lot,
+    };
+
     /// <summary>Takes <paramref name="take"/>'s quantity (positive) out of a layer, at the take's place.</summary>
     public static InventoryMovement Issue(FifoTake take, Guid itemId, DateOnly date, string sourceType, Guid sourceId, DateTimeOffset createdAt)
     {

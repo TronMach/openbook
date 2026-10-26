@@ -66,6 +66,7 @@ public static class Links
         "assembly_build" => $"/inventory/builds/{id}",
         "landed_cost" => $"/inventory/landed-costs/{id}",
         "stock_transfer" => $"/inventory/transfers/{id}",
+        "pending_build" => "/inventory#pending",
         "warehouse" => "/inventory/warehouses",
         "saved_report" => "/reports",
         "price_level" => $"/pricing/levels/{id}",

@@ -15,6 +15,8 @@ public sealed record BinRequest(string Name);
 
 public sealed record LotExpiryRequest(DateOnly? ExpiresOn);
 
+public sealed record FinishPendingBuildRequest(DateOnly Date, string? Lots = null);
+
 public sealed record LabelRequestItem(Guid ItemId, int Copies);
 
 public sealed record LabelsRequest(IReadOnlyList<LabelRequestItem> Items, bool ShowPrice = true);
@@ -79,6 +81,22 @@ internal static class InventoryApi
             var build = await s.CreateAsync(c, ct);
             return Results.Created($"/api/inventory/builds/{build.Id}", build);
         });
+        inventory.MapGet("/builds/pending", async (AssemblyBuildService s, CancellationToken ct) =>
+            (await s.ListPendingAsync(DateOnly.FromDateTime(DateTime.Today), ct)).Select(p => new
+            {
+                p.Pending,
+                AssemblyName = p.Assembly.Name,
+                Ready = p.Preview is { } preview && !preview.Requirements.Any(r => r.IsShort),
+            }));
+        inventory.MapPost("/builds/pending", async (BuildAssemblyCommand c, AssemblyBuildService s, CancellationToken ct) => await s.SavePendingAsync(c, ct));
+        inventory.MapPost("/builds/partial", async (BuildAssemblyCommand c, AssemblyBuildService s, CancellationToken ct) =>
+        {
+            var (build, pending) = await s.BuildWhatYouCanAsync(c, ct);
+            return new { Build = build, Pending = pending };
+        });
+        inventory.MapPost("/builds/pending/{id:guid}/build", async (Guid id, FinishPendingBuildRequest r, AssemblyBuildService s, CancellationToken ct) =>
+            await s.FinishPendingAsync(id, r.Date, r.Lots, ct));
+        inventory.MapPost("/builds/pending/{id:guid}/cancel", async (Guid id, AssemblyBuildService s, CancellationToken ct) => await s.CancelPendingAsync(id, ct));
         inventory.MapPost("/builds/{id:guid}/void", async (Guid id, VoidInventoryAdjustmentRequest r, AssemblyBuildService s, CancellationToken ct) =>
             await s.VoidAsync(id, r.Reason, ct));
 
