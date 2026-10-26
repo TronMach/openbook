@@ -29,11 +29,11 @@
         </div>
         <div class="field">
             <label for="accountId">Account</label>
-            <select id="accountId" name="accountId">
+            <select id="accountId" name="accountId" data-search>
                 <option value="">(income and expense accounts)</option>
-                @foreach (var (account, depth) in _chart.Ordered(includeInactive: false))
+                @foreach (var (account, _) in _chart.Ordered(includeInactive: false))
                 {
-                    <option value="@account.Id" selected="@(account.Id == AccountId)">@(new string(' ', depth * 3))@account.Name</option>
+                    <option value="@account.Id" selected="@(account.Id == AccountId)">@_chart.FullName(account.Id)</option>
                 }
             </select>
         </div>

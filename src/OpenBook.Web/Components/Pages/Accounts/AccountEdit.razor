@@ -62,7 +62,7 @@
             </div>
             <div class="field">
                 <label for="parent">Subaccount of</label>
-                <InputSelect id="parent" @bind-Value="Input.ParentId">
+                <InputSelect id="parent" @bind-Value="Input.ParentId" data-search>
                     <option value="">(none: top-level account)</option>
                     @foreach (var (candidate, _) in _parents)
                     {

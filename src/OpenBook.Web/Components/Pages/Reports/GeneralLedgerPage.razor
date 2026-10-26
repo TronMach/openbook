@@ -12,7 +12,7 @@
         <ReportFilter Action="/reports/general-ledger" Query="_query" Basis="_query.Basis">
             <div class="field">
                 <label for="account">Account</label>
-                <select id="account" name="accountId">
+                <select id="account" name="accountId" data-search>
                     <option value="">All accounts</option>
                     @foreach (var (account, _) in _chart.Ordered())
                     {

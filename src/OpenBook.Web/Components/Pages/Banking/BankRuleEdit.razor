@@ -87,7 +87,7 @@
                 <div class="row">
                     <div class="field">
                         <label for="category">Category</label>
-                        <InputSelect id="category" @bind-Value="Input.CategoryAccountId">
+                        <InputSelect id="category" @bind-Value="Input.CategoryAccountId" data-search>
                             <option value="">Choose…</option>
                             @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
                             {
@@ -107,7 +107,7 @@
                     </div>
                     <div class="field">
                         <label for="vendor">Vendor <span class="muted">(money out only)</span></label>
-                        <InputSelect id="vendor" @bind-Value="Input.VendorId">
+                        <InputSelect id="vendor" @bind-Value="Input.VendorId" data-search>
                             <option value="">None</option>
                             @foreach (var v in _vendors)
                             {

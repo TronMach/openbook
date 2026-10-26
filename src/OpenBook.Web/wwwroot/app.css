@@ -347,3 +347,5 @@ table.entry select[aria-label="Class"] { min-width: 8rem; }
 table.entry .search-select { min-width: 14rem; }
 /* An open picker list must not be clipped by the scrolling line table around it. */
 .table-wrap:has(.search-list) { overflow: visible; }
+/* Static forms: searchselect.js puts a search box in front of a <select data-search>, which then only carries the value. */
+.search-select.static + select[data-search] { display: none; }

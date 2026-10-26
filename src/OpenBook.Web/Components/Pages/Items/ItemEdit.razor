@@ -62,7 +62,7 @@
             </div>
             <div class="field">
                 <label for="account">Income account</label>
-                <InputSelect id="account" @bind-Value="Input.IncomeAccountId">
+                <InputSelect id="account" @bind-Value="Input.IncomeAccountId" data-search>
                     <option value="">Choose…</option>
                     @foreach (var account in _incomeAccounts)
                     {
@@ -82,7 +82,7 @@
             <div class="row">
                 <div class="field">
                     <label for="asset">Inventory asset account</label>
-                    <InputSelect id="asset" @bind-Value="Input.InventoryAssetAccountId" disabled="@_assetLocked">
+                    <InputSelect id="asset" @bind-Value="Input.InventoryAssetAccountId" disabled="@_assetLocked" data-search>
                         <option value="">Default (Inventory Asset)</option>
                         @foreach (var account in _assetAccounts)
                         {
@@ -96,7 +96,7 @@
                 </div>
                 <div class="field">
                     <label for="cost-account">Cost of goods sold account</label>
-                    <InputSelect id="cost-account" @bind-Value="Input.CostAccountId">
+                    <InputSelect id="cost-account" @bind-Value="Input.CostAccountId" data-search>
                         <option value="">Default (Cost of Goods Sold)</option>
                         @foreach (var account in _costAccounts)
                         {

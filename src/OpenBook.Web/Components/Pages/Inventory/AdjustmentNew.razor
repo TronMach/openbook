@@ -39,7 +39,7 @@
             </div>
             <div class="field">
                 <label for="account">Adjustment account</label>
-                <InputSelect id="account" @bind-Value="Input.AccountId">
+                <InputSelect id="account" @bind-Value="Input.AccountId" data-search>
                     <option value="">Inventory Shrinkage (default)</option>
                     @foreach (var account in _accounts)
                     {
@@ -57,7 +57,7 @@
                     var index = i;
                     <tr>
                         <td>
-                            <InputSelect @bind-Value="Input.Lines[index].ItemId" aria-label="@($"Item {index + 1}")">
+                            <InputSelect @bind-Value="Input.Lines[index].ItemId" data-search aria-label="@($"Item {index + 1}")">
                                 <option value="">Choose an item…</option>
                                 @foreach (var s in _stock)
                                 {

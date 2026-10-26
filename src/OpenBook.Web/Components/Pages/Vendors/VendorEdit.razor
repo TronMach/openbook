@@ -144,7 +144,7 @@
                 </div>
                 <div class="field">
                     <label for="category">Default category <span class="muted">(optional)</span></label>
-                    <InputSelect id="category" @bind-Value="Input.DefaultExpenseAccountId">
+                    <InputSelect id="category" @bind-Value="Input.DefaultExpenseAccountId" data-search>
                         <option value="">None</option>
                         @foreach (var a in _categories)
                         {

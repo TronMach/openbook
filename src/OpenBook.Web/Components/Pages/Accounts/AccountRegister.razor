@@ -66,7 +66,7 @@
                     </div>
                     <div class="field">
                         <label for="q-other">Other account</label>
-                        <InputSelect id="q-other" @bind-Value="Input.OtherAccountId">
+                        <InputSelect id="q-other" @bind-Value="Input.OtherAccountId" data-search>
                             <option value="">Choose…</option>
                             @foreach (var (account, _) in _chart.Ordered(includeInactive: false).Where(x => x.Account.Id != _account.Id))
                             {

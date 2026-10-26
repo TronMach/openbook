@@ -87,27 +87,10 @@
                                     <div class="muted">or add it as a new transaction:</div>
                                 }
                                 <div class="inline">
-                                    <select aria-label="Category" @bind="row.CategoryId">
-                                        <option value="">Category…</option>
-                                        @foreach (var group in _categories.GroupBy(a => a.Type.ClassOf()))
-                                        {
-                                            <optgroup label="@Labels.For(group.Key)">
-                                                @foreach (var a in group)
-                                                {
-                                                    <option value="@a.Id">@Labels.AccountName(_chart, a.Id, _useNumbers)</option>
-                                                }
-                                            </optgroup>
-                                        }
-                                    </select>
+                                    <SearchSelect AriaLabel="Category" Options="_categoryOptions" @bind-Value="row.CategoryId" Placeholder="Category…" />
                                     @if (!item.IsMoneyIn)
                                     {
-                                        <select aria-label="Vendor" @bind="row.VendorId">
-                                            <option value="">No vendor</option>
-                                            @foreach (var v in _vendors)
-                                            {
-                                                <option value="@v.Id">@v.DisplayName</option>
-                                            }
-                                        </select>
+                                        <SearchSelect AriaLabel="Vendor" Options="_vendorOptions" @bind-Value="row.VendorId" EmptyText="No vendor" Placeholder="Vendor…" />
                                     }
                                     <input aria-label="Payee" placeholder="Payee" @bind="row.Payee" class="short-text" />
                                     <button type="button" class="secondary" @onclick="() => AddAsync(row)" disabled="@(row.CategoryId is null || _busy)">Add</button>
@@ -160,9 +143,9 @@
 @code {
     private string? _accountName;
     private ChartOfAccounts _chart = new([]);
-    private List<Account> _categories = [];
-    private IReadOnlyList<Vendor> _vendors = [];
     private bool _useNumbers;
+    private IReadOnlyList<PickerOption> _categoryOptions = [];
+    private IReadOnlyList<PickerOption> _vendorOptions = [];
     private BankFeedStatus _status = BankFeedStatus.Pending;
     private List<Row> _rows = [];
     private bool _loaded;
@@ -175,15 +158,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        (_chart, _useNumbers, _vendors) = await Ops.RunAsync(async sp => (
+        (_chart, _useNumbers, var vendors) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
             (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(v => v.Vendor).ToList()));
         _accountName = _chart.FullName(AccountId);
-        _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+        var categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Id != AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable))
-            .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income))
-            .ToList();
+            .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income));
+        _categoryOptions = PickerOptions.Accounts(categories, _chart, _useNumbers);
+        _vendorOptions = PickerOptions.Vendors(vendors);
         await LoadAsync();
     }
 

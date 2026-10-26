@@ -89,7 +89,7 @@
                     </div>
                     <div class="field">
                         <label for="adjustment-account">Account</label>
-                        <InputSelect id="adjustment-account" @bind-Value="Input.AdjustmentAccountId">
+                        <InputSelect id="adjustment-account" @bind-Value="Input.AdjustmentAccountId" data-search>
                             <option value="">Choose…</option>
                             @foreach (var group in _adjustmentAccounts.GroupBy(a => a.Type.ClassOf()))
                             {
