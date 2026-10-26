@@ -33,7 +33,7 @@ public sealed class AttachmentService(IAttachmentStore store, IClock clock, ICur
     {
         "invoice", "payment", "sales_receipt", "estimate", "credit_memo", "refund", "deposit",
         "bill", "bill_payment", "vendor_credit", "vendor_refund", "sales_tax_payment",
-        "bank_transaction", "journal_entry", "reconciliation", "customer", "vendor", "inventory_adjustment",
+        "bank_transaction", "journal_entry", "reconciliation", "customer", "vendor", "inventory_adjustment", "assembly_build", "landed_cost",
     };
 
     public Task<IReadOnlyList<Attachment>> ListAsync(string entityType, Guid entityId, CancellationToken ct = default) =>

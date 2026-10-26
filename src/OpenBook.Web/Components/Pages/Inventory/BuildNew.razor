@@ -1,0 +1,176 @@
+@page "/inventory/builds/new"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Inventory
+@inject AssemblyBuildService Builds
+@inject ItemService Items
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Build assemblies · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Build assemblies</h1>
+        <a href="/inventory">Inventory</a>
+    </div>
+    <p class="muted">
+        A build takes each component in the assembly's bill of materials out of stock, at its own cost, and adds the finished
+        assemblies to stock at the total. Voiding the build undoes it while none of those assemblies has been used.
+    </p>
+
+    @if (_assemblies.Count == 0)
+    {
+        <div class="card"><p>No assemblies yet. <a href="/items/new">Add an item</a> with the type "Assembly" and list its components.</p></div>
+        return;
+    }
+
+    <form class="card filters" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="item">Assembly</label>
+                <select id="item" name="item" data-search>
+                    @foreach (var a in _assemblies)
+                    {
+                        <option value="@a.Id" selected="@(a.Id == _itemId)">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="quantity">Quantity</label>
+                <input id="quantity" name="quantity" class="amount" inputmode="decimal" value="@_quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+            </div>
+            <div class="field">
+                <label for="date">Date</label>
+                <input id="date" type="date" name="date" value="@_date.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+        <div class="actions"><button type="submit" class="secondary">Check stock</button></div>
+    </form>
+
+    @if (_preview is not null)
+    {
+        @if (_preview.Requirements.Count == 0)
+        {
+            <div class="card"><p>@_preview.Assembly.Name has no components yet. <a href="/items/@_preview.Assembly.Id#components">Add its bill of materials</a>.</p></div>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Component</th><th class="num">Per unit</th><th class="num">Needed</th><th class="num">On hand @Labels.Date(_date)</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _preview.Requirements)
+                    {
+                        <tr>
+                            <td><a href="/items/@r.Component.Id">@r.Component.Name</a></td>
+                            <td class="num">@Labels.Quantity(r.PerUnit)</td>
+                            <td class="num">@Labels.Quantity(r.Needed)</td>
+                            <td class="num">@Labels.Quantity(r.OnHand)</td>
+                            <td>@if (r.IsShort) { <span class="badge warn">Short</span> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="muted">Enough on hand to build @Labels.Quantity(_preview.MaxBuildable).</p>
+
+            <div class="card">
+                @if (_error is not null)
+                {
+                    <div class="alert error" role="alert">@_error</div>
+                }
+                <EditForm Model="Input" FormName="build" OnValidSubmit="BuildAsync" method="post">
+                    <DataAnnotationsValidator />
+                    <input type="hidden" name="Input.ItemId" value="@_itemId" />
+                    <input type="hidden" name="Input.Quantity" value="@_quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                    <input type="hidden" name="Input.Date" value="@_date.ToString("yyyy-MM-dd")" />
+                    <div class="row">
+                        <div class="field">
+                            <label for="reference">Reference <span class="muted">(optional)</span></label>
+                            <InputText id="reference" @bind-Value="Input.Reference" />
+                        </div>
+                        <div class="field">
+                            <label for="memo">Memo <span class="muted">(optional)</span></label>
+                            <InputText id="memo" @bind-Value="Input.Memo" />
+                        </div>
+                    </div>
+                    <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+                    <button type="submit" disabled="@_preview.Requirements.Any(r => r.IsShort)">Build @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
+                </EditForm>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Item> _assemblies = [];
+    private Guid _itemId;
+    private decimal _quantity = 1m;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private BuildPreview? _preview;
+    private bool _needsClosingPassword;
+    private string? _error;
+
+    [SupplyParameterFromQuery] private Guid? Item { get; set; }
+    [SupplyParameterFromQuery] private string? Quantity { get; set; }
+    [SupplyParameterFromQuery] private string? Date { get; set; }
+
+    [SupplyParameterFromForm(FormName = "build")]
+    private BuildModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        _assemblies = (await Items.ListAsync()).Where(i => i.IsAssembly).ToList();
+        if (_assemblies.Count == 0)
+            return;
+
+        // A posted build carries its own choices; otherwise the query string (or the first assembly).
+        _itemId = Input.ItemId ?? (Item is { } chosen && _assemblies.Any(a => a.Id == chosen) ? chosen : _assemblies[0].Id);
+        if (Input.Quantity is { } q)
+            _quantity = q;
+        else if (decimal.TryParse(Quantity, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0m)
+            _quantity = parsed;
+        if (Input.Date is { } d)
+            _date = d;
+        else if (DateOnly.TryParseExact(Date, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsedDate))
+            _date = parsedDate;
+
+        try
+        {
+            _preview = await Builds.PreviewAsync(_itemId, _quantity, _date);
+        }
+        catch (DomainException ex) when (ex.Code == "build.no_components")
+        {
+            _preview = new BuildPreview(_assemblies.First(a => a.Id == _itemId), _quantity, [], 0m);
+        }
+    }
+
+    private async Task BuildAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = Input.ClosingPassword;
+            var build = await Builds.CreateAsync(new BuildAssemblyCommand(_itemId, _quantity, _date, Input.Reference, Input.Memo));
+            Navigation.NavigateTo($"/inventory/builds/{build.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class BuildModel
+    {
+        public Guid? ItemId { get; set; }
+        public decimal? Quantity { get; set; }
+        public DateOnly? Date { get; set; }
+
+        [StringLength(30)]
+        public string? Reference { get; set; }
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+
+        public string? ClosingPassword { get; set; }
+    }
+}

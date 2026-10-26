@@ -67,6 +67,7 @@ app.MapAccountEndpoints();
 app.MapAttachmentEndpoints();
 app.MapCheckEndpoints();
 app.MapBankingEndpoints();
+app.MapInventoryEndpoints();
 app.MapReportEndpoints();
 app.MapPricingEndpoints();
 app.MapSegmentEndpoints();

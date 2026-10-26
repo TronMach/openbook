@@ -3,6 +3,9 @@
 @using OpenBook.Domain.Inventory
 @inject InventoryService Inventory
 @inject InventoryAdjustmentService Adjustments
+@inject AssemblyBuildService Builds
+@inject LandedCostService LandedCosts
+@inject ItemService Items
 
 <PageTitle>Inventory · OpenBook</PageTitle>
 
@@ -12,11 +15,15 @@
         <a class="button secondary" href="/reports/inventory-valuation">Valuation</a>
         <a class="button secondary" href="/reports/inventory-stock">Stock status</a>
         <a class="button secondary" href="/items/new">New item</a>
+        <a class="button secondary" href="/inventory/landed-costs/new">Landed cost</a>
+        <a class="button secondary" href="/inventory/builds/new">Build assemblies</a>
         <a class="button" href="/inventory/adjustments/new">Adjust quantities</a>
     </div>
     <p class="muted">
-        Inventory products are counted and costed first in, first out: bills add stock at what you paid, sales take the oldest
-        stock's cost into cost of goods sold, and credit memos put returns back. Adjust quantities for counts, damage or starting stock.
+        Inventory products and assemblies are counted and costed first in, first out (or at weighted average, per item): bills add stock
+        at what you paid, builds turn components into assemblies, sales take the cost into cost of goods sold, and credit memos put
+        returns back. Bundles sell their components together. Adjust quantities for counts, damage or starting stock; add freight and
+        duty with a landed cost.
     </p>
 
     @if (_stock.Count == 0)
@@ -79,15 +86,69 @@
             </tbody>
         </table>
     }
+
+    <h2>Assembly builds</h2>
+    @if (_builds.Count == 0)
+    {
+        <p class="muted">None yet.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Assembly</th><th class="num">Quantity</th><th class="num">Cost</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var b in _builds.Take(50))
+                {
+                    <tr class="@(b.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/inventory/builds/@b.Id">@Labels.Date(b.Date)</a></td>
+                        <td>@(_names.GetValueOrDefault(b.ItemId) ?? "Item")</td>
+                        <td class="num">@Labels.Quantity(b.Quantity)</td>
+                        <td class="num">@Labels.Amount(b.Cost)</td>
+                        <td>@(b.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h2>Landed costs</h2>
+    @if (_landed.Count == 0)
+    {
+        <p class="muted">None yet.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Memo</th><th class="num">Bills</th><th class="num">Amount</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var l in _landed.Take(50))
+                {
+                    <tr class="@(l.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/inventory/landed-costs/@l.Id">@Labels.Date(l.Date)</a></td>
+                        <td class="muted">@l.Memo</td>
+                        <td class="num">@l.BillIds.Count</td>
+                        <td class="num">@Labels.Amount(l.Amount)</td>
+                        <td>@(l.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 </div>
 
 @code {
     private IReadOnlyList<StockLevel> _stock = [];
     private IReadOnlyList<InventoryAdjustment> _adjustments = [];
+    private IReadOnlyList<AssemblyBuild> _builds = [];
+    private IReadOnlyList<LandedCost> _landed = [];
+    private Dictionary<Guid, string> _names = [];
 
     protected override async Task OnInitializedAsync()
     {
         _stock = (await Inventory.StockAsync()).Where(s => s.Item.IsActive || s.Quantity != 0m).ToList();
         _adjustments = await Adjustments.ListAsync();
+        _builds = await Builds.ListAsync();
+        _landed = await LandedCosts.ListAsync();
+        _names = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id, i => i.Name);
     }
 }

@@ -93,7 +93,8 @@
         const none = all.find(o => o.value === '');
         const options = all.filter(o => o.value !== '');
         const label = select.id ? document.querySelector(`label[for="${CSS.escape(select.id)}"]`) : null;
-        const current = () => all.find(o => o.value === select.value)?.label ?? '';
+        // An empty choice ("Choose…", "None") shows as the placeholder, not as typed text.
+        const current = () => select.value === '' ? '' : all.find(o => o.value === select.value)?.label ?? '';
 
         const box = document.createElement('div');
         box.className = 'search-select static';

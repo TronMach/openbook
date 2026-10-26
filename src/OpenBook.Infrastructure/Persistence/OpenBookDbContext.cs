@@ -75,6 +75,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
+    public DbSet<AssemblyBuild> AssemblyBuilds => Set<AssemblyBuild>();
+    public DbSet<LandedCost> LandedCosts => Set<LandedCost>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
     public DbSet<PriceLevel> PriceLevels => Set<PriceLevel>();
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
@@ -694,9 +696,73 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 q.Property(x => x.Value).HasColumnName("ValueTenThousandths").HasConversion(TenThousandths);
             });
             b.Navigation(i => i.QuantityBreaks).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.Property(i => i.CostMethod).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(i => i.IsBundle);
+            b.Ignore(i => i.IsAssembly);
+            b.OwnsMany(i => i.Components, c =>
+            {
+                c.ToTable("ItemComponents");
+                c.WithOwner().HasForeignKey("ItemId");
+                c.HasKey("ItemId", nameof(ItemComponent.ComponentItemId));
+                c.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+                c.HasIndex(x => x.ComponentItemId);
+                c.HasOne<Item>().WithMany().HasForeignKey(x => x.ComponentItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(i => i.Components).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.InventoryAssetAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.CostAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssemblyBuild>(b =>
+        {
+            b.ToTable("AssemblyBuilds");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+            b.Property(x => x.Reference).HasMaxLength(30);
+            b.Property(x => x.Memo).HasMaxLength(1000);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(x => x.Cost);
+            b.HasIndex(x => x.ItemId);
+            b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("AssemblyBuildLines");
+                l.WithOwner().HasForeignKey("AssemblyBuildId");
+                l.HasKey("AssemblyBuildId", nameof(AssemblyBuildLine.LineNumber));
+                l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.Cost).HasColumnName("CostMinor").HasConversion(MinorUnits);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<LandedCost>(b =>
+        {
+            b.ToTable("LandedCosts");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(x => x.Method).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Memo).HasMaxLength(1000);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(x => x.BillIds);
+            b.HasOne<Account>().WithMany().HasForeignKey(x => x.FromAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("LandedCostLines");
+                l.WithOwner().HasForeignKey("LandedCostId");
+                l.HasKey("LandedCostId", nameof(LandedCostLine.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.ToStock).HasColumnName("ToStockMinor").HasConversion(MinorUnits);
+                l.Ignore(x => x.ToCostOfSales);
+                l.HasIndex(x => x.BillId);
+                l.HasOne<Bill>().WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<InventoryMovement>().WithMany().HasForeignKey(x => x.LayerId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<InventoryMovement>(b =>

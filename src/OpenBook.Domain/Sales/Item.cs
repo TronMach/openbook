@@ -12,12 +12,33 @@ public enum ItemType
 
     /// <summary>Stock you buy and resell: quantity on hand and FIFO cost are tracked (see Domain.Inventory).</summary>
     Inventory,
+
+    /// <summary>A kit: several items sold together as one line at one price; its inventory components leave stock.</summary>
+    Bundle,
+
+    /// <summary>Stock you make from inventory components (a bill of materials) with assembly builds; tracked like inventory.</summary>
+    Assembly,
 }
+
+/// <summary>How a tracked item's cost of goods sold is worked out.</summary>
+public enum InventoryCostMethod
+{
+    /// <summary>First in, first out: sales use the oldest layers' costs.</summary>
+    Fifo,
+
+    /// <summary>Weighted average: sales use the average cost of everything on hand on the sale date.</summary>
+    Average,
+}
+
+/// <summary>One line of a bundle or an assembly's bill of materials: how much of another item goes into one unit.</summary>
+public sealed record ItemComponent(Guid ComponentItemId, decimal Quantity);
 
 /// <summary>A product or service with a default description, price and the income account its sales post to.</summary>
 public sealed class Item
 {
+    public const int MaxComponents = 50;
     private readonly List<QuantityBreak> _quantityBreaks = [];
+    private readonly List<ItemComponent> _components = [];
 
     private Item() => Name = string.Empty;
 
@@ -50,7 +71,50 @@ public sealed class Item
     /// <summary>Default unit cost for purchases and quantity adjustments, up to 4 decimal places.</summary>
     public decimal PurchaseCost { get; private set; }
 
-    public bool IsInventory => Type == ItemType.Inventory;
+    /// <summary>Tracked items (inventory products and assemblies): how sales are costed. Locked once stock has moved.</summary>
+    public InventoryCostMethod CostMethod { get; private set; }
+
+    /// <summary>Whether stock on hand and its cost are tracked: inventory products and assemblies.</summary>
+    public bool IsInventory => IsTracked(Type);
+
+    public bool IsBundle => Type == ItemType.Bundle;
+    public bool IsAssembly => Type == ItemType.Assembly;
+
+    /// <summary>Bundles and assemblies: what goes into one unit. Empty for other items.</summary>
+    public IReadOnlyList<ItemComponent> Components => _components;
+
+    public static bool IsTracked(ItemType type) => type is ItemType.Inventory or ItemType.Assembly;
+
+    public static bool HasComponents(ItemType type) => type is ItemType.Bundle or ItemType.Assembly;
+
+    /// <summary>Replaces the components. The service checks what they are (no bundles in bundles, assemblies take tracked items, no cycles).</summary>
+    public void SetComponents(IEnumerable<(Guid ItemId, decimal Quantity)> components)
+    {
+        ArgumentNullException.ThrowIfNull(components);
+        var list = components.ToList();
+        if (!HasComponents(Type))
+        {
+            if (list.Count > 0)
+                throw new DomainException("item.components_not_allowed", "Only bundles and assemblies have components.");
+            _components.Clear();
+            return;
+        }
+
+        if (list.Count > MaxComponents)
+            throw new DomainException("item.components_too_many", $"Use at most {MaxComponents} components.");
+        foreach (var (itemId, quantity) in list)
+        {
+            if (itemId == Id)
+                throw new DomainException("item.component_self", $"{Name} can't be one of its own components.");
+            if (quantity <= 0m || decimal.Round(quantity, SalesLine.Precision) != quantity)
+                throw new DomainException("item.component_quantity_invalid", "Component quantities must be more than zero, with up to 4 decimal places.");
+        }
+
+        if (list.Select(c => c.ItemId).Distinct().Count() != list.Count)
+            throw new DomainException("item.component_duplicate", "List each component once.");
+        _components.Clear();
+        _components.AddRange(list.Select(c => new ItemComponent(c.ItemId, c.Quantity)));
+    }
 
     /// <summary>Volume pricing on automatically priced lines, by the item's total quantity on the document; lowest first.</summary>
     public IReadOnlyList<QuantityBreak> QuantityBreaks => _quantityBreaks;
@@ -84,11 +148,16 @@ public sealed class Item
             ? details.PurchaseCost
             : throw new DomainException("item.cost_invalid", "The purchase cost must be zero or more, with up to 4 decimal places.");
 
-        if (Type != ItemType.Inventory)
+        if (!HasComponents(Type))
+            _components.Clear();
+        if (!IsInventory)
         {
             (InventoryAssetAccountId, CostAccountId, ReorderPoint) = (null, null, null);
+            CostMethod = InventoryCostMethod.Fifo;
             return;
         }
+
+        CostMethod = Enum.IsDefined(details.CostMethod) ? details.CostMethod : throw new DomainException("item.cost_method_invalid", "Unknown costing method.");
 
         InventoryAssetAccountId = details.InventoryAssetAccountId is { } asset && asset != Guid.Empty
             ? asset
@@ -144,7 +213,7 @@ public sealed class Item
         ?? throw new DomainException("item.name_required", "An item needs a name.");
 }
 
-/// <param name="InventoryAssetAccountId">Inventory items only, like <paramref name="CostAccountId"/> and <paramref name="ReorderPoint"/>.</param>
+/// <param name="InventoryAssetAccountId">Tracked items only, like <paramref name="CostAccountId"/>, <paramref name="ReorderPoint"/> and <paramref name="CostMethod"/>.</param>
 public sealed record ItemDetails(
     string Name,
     ItemType Type,
@@ -155,4 +224,5 @@ public sealed record ItemDetails(
     Guid? InventoryAssetAccountId = null,
     Guid? CostAccountId = null,
     decimal? ReorderPoint = null,
-    decimal PurchaseCost = 0m);
+    decimal PurchaseCost = 0m,
+    InventoryCostMethod CostMethod = InventoryCostMethod.Fifo);

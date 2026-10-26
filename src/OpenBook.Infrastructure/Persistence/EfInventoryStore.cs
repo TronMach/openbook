@@ -27,6 +27,18 @@ internal sealed class EfInventoryStore(OpenBookDbContext db) : IInventoryStore
     public Task<InventoryAdjustment?> GetAdjustmentAsync(Guid id, CancellationToken ct) =>
         db.InventoryAdjustments.SingleOrDefaultAsync(a => a.Id == id, ct);
 
+    public async Task<IReadOnlyList<AssemblyBuild>> ListBuildsAsync(CancellationToken ct) => await db.AssemblyBuilds.AsNoTracking().ToListAsync(ct);
+
+    public Task<AssemblyBuild?> GetBuildAsync(Guid id, CancellationToken ct) => db.AssemblyBuilds.SingleOrDefaultAsync(b => b.Id == id, ct);
+
+    public async Task<IReadOnlyList<LandedCost>> ListLandedCostsAsync(CancellationToken ct) => await db.LandedCosts.AsNoTracking().ToListAsync(ct);
+
+    public Task<LandedCost?> GetLandedCostAsync(Guid id, CancellationToken ct) => db.LandedCosts.SingleOrDefaultAsync(l => l.Id == id, ct);
+
+    public void Add(AssemblyBuild build) => db.AssemblyBuilds.Add(build);
+
+    public void Add(LandedCost landedCost) => db.LandedCosts.Add(landedCost);
+
     public void Add(InventoryMovement movement) => db.InventoryMovements.Add(movement);
 
     public void Add(InventoryAdjustment adjustment) => db.InventoryAdjustments.Add(adjustment);

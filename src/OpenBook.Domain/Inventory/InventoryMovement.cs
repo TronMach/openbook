@@ -11,6 +11,8 @@ public static class InventorySources
     public const string SalesReceipt = "sales_receipt";
     public const string CreditMemo = "credit_memo";
     public const string Adjustment = "inventory_adjustment";
+    public const string AssemblyBuild = "assembly_build";
+    public const string LandedCost = "landed_cost";
 }
 
 /// <summary>
@@ -66,6 +68,18 @@ public sealed class InventoryMovement
         Id = Guid.CreateVersion7(), ItemId = itemId, LayerId = take.LayerId, Date = date, Quantity = -take.Quantity, Cost = -take.Cost,
         SourceType = sourceType, SourceId = sourceId, CreatedAt = createdAt.ToUniversalTime(),
     };
+
+    /// <summary>Adds cost (landed cost: freight, duty) to what's left of a layer without changing its quantity.</summary>
+    public static InventoryMovement CostAdjustment(Guid layerId, Guid itemId, DateOnly date, decimal cost, string sourceType, Guid sourceId, DateTimeOffset createdAt)
+    {
+        if (cost == 0m || decimal.Round(cost, 2) != cost)
+            throw new DomainException("inventory.cost_invalid", "Cost changes must be to the cent and not zero.");
+        return new InventoryMovement
+        {
+            Id = Guid.CreateVersion7(), ItemId = itemId, LayerId = layerId, Date = date, Quantity = 0m, Cost = cost,
+            SourceType = sourceType, SourceId = sourceId, CreatedAt = createdAt.ToUniversalTime(),
+        };
+    }
 
     /// <summary>The opposite of this movement, on <paramref name="date"/>, for a voided document.</summary>
     public InventoryMovement Reverse(DateOnly date, DateTimeOffset createdAt) => new()
@@ -130,5 +144,53 @@ public static class Fifo
         }
 
         return takes;
+    }
+}
+
+/// <summary>Picks the quantity and cost a tracked item gives up, by its costing method.</summary>
+public static class Costing
+{
+    /// <summary>
+    /// FIFO: <see cref="Fifo.Take"/>. Weighted average: quantity still comes out of the oldest layers (so stock and
+    /// voids are checked the same way), but the cost is the average of everything on hand on the date, rounded to the
+    /// cent once and spread over the layers in proportion; taking everything on hand takes its whole value.
+    /// </summary>
+    public static IReadOnlyList<FifoTake> Take(Sales.Item item, IReadOnlyList<InventoryMovement> movements, decimal quantity, DateOnly date)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(movements);
+        var takes = Fifo.Take(Fifo.Layers(movements), quantity, date, item.Name);
+        if (item.CostMethod != Sales.InventoryCostMethod.Average || takes.Count == 0)
+            return takes;
+
+        var asOf = movements.Where(m => m.Date <= date).ToList();
+        var onHand = asOf.Sum(m => m.Quantity);
+        var value = Math.Max(0m, asOf.Sum(m => m.Cost));
+        var total = quantity >= onHand ? value : decimal.Round(value * quantity / onHand, 2, MidpointRounding.AwayFromZero);
+        return Spread(takes, total);
+    }
+
+    /// <summary>The average unit cost on hand on the date (null with nothing on hand).</summary>
+    public static decimal? AverageCost(IEnumerable<InventoryMovement> movements, DateOnly date)
+    {
+        ArgumentNullException.ThrowIfNull(movements);
+        var asOf = movements.Where(m => m.Date <= date).ToList();
+        var onHand = asOf.Sum(m => m.Quantity);
+        return onHand > 0m ? asOf.Sum(m => m.Cost) / onHand : null;
+    }
+
+    private static List<FifoTake> Spread(IReadOnlyList<FifoTake> takes, decimal total)
+    {
+        var quantity = takes.Sum(t => t.Quantity);
+        var result = new List<FifoTake>(takes.Count);
+        var left = total;
+        for (var i = 0; i < takes.Count; i++)
+        {
+            var cost = i == takes.Count - 1 ? left : decimal.Round(total * takes[i].Quantity / quantity, 2, MidpointRounding.AwayFromZero);
+            result.Add(takes[i] with { Cost = cost });
+            left -= cost;
+        }
+
+        return result;
     }
 }

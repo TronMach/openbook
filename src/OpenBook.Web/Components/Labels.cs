@@ -122,7 +122,15 @@ public static class Labels
     {
         ItemType.Service => "Service",
         ItemType.Inventory => "Inventory product",
+        ItemType.Bundle => "Bundle (kit)",
+        ItemType.Assembly => "Assembly",
         _ => "Non-inventory product",
+    };
+
+    public static string For(InventoryCostMethod method) => method switch
+    {
+        InventoryCostMethod.Average => "Weighted average",
+        _ => "FIFO (first in, first out)",
     };
 
     /// <summary>A quantity: up to 4 decimals, no trailing zeros.</summary>

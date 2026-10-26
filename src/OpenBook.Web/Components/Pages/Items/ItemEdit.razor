@@ -77,8 +77,8 @@
             <span>Taxable: charge sales tax on it where the customer or document has a tax code</span>
         </label>
         <fieldset>
-            <legend>Inventory products only</legend>
-            <p class="hint">Stock and its FIFO cost are tracked: bills add stock, sales take it out at cost. Leave the accounts on "Default" to use Inventory Asset and Cost of Goods Sold.</p>
+            <legend>Inventory products and assemblies only</legend>
+            <p class="hint">Stock and its cost are tracked: bills and builds add stock, sales take it out at cost. Leave the accounts on "Default" to use Inventory Asset and Cost of Goods Sold.</p>
             <div class="row">
                 <div class="field">
                     <label for="asset">Inventory asset account</label>
@@ -106,6 +106,16 @@
                 </div>
             </div>
             <div class="row">
+                <div class="field">
+                    <label for="cost-method">Costing</label>
+                    <InputSelect id="cost-method" @bind-Value="Input.CostMethod" disabled="@_assetLocked">
+                        @foreach (var method in Enum.GetValues<InventoryCostMethod>())
+                        {
+                            <option value="@method">@Labels.For(method)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Average costs every sale at the average of what's on hand.")</span>
+                </div>
                 <div class="field">
                     <label for="purchase-cost">Purchase cost</label>
                     <InputNumber id="purchase-cost" step="any" @bind-Value="Input.PurchaseCost" />
@@ -176,6 +186,62 @@
     </div>
 }
 
+@if (_item is not null && Item.HasComponents(_item.Type))
+{
+    <div class="card" id="components">
+        <div class="toolbar">
+            <h2>@(_item.IsAssembly ? "Bill of materials" : "Bundle contents")</h2>
+            @if (_item.IsAssembly)
+            {
+                <a href="/inventory/builds/new?item=@_item.Id">Build</a>
+            }
+        </div>
+        @if (ComponentError is not null)
+        {
+            <div class="alert error" role="alert">@ComponentError</div>
+        }
+        else if (ComponentsSaved is not null)
+        {
+            <div class="alert success" role="status">Saved.</div>
+        }
+        <p class="muted">
+            @if (_item.IsAssembly)
+            {
+                <span>What goes into one @_item.Name. A build takes these from stock (inventory products and other assemblies) at their cost and adds finished units at the total.</span>
+            }
+            else
+            {
+                <span>What one @_item.Name contains. It sells as one line at its own price; inventory products in it leave stock and their cost goes to cost of goods sold.</span>
+            }
+        </p>
+        <form method="post" action="/items/@_item.Id/components" data-enhance="false">
+            <AntiforgeryToken />
+            <table class="data entry">
+                <thead><tr><th>Item</th><th class="num">Quantity per unit</th></tr></thead>
+                <tbody>
+                    @for (var n = 0; n < _item.Components.Count + 3; n++)
+                    {
+                        var c = n < _item.Components.Count ? _item.Components[n] : null;
+                        <tr>
+                            <td>
+                                <select name="component@(n)" aria-label="Component @(n + 1)" data-search>
+                                    <option value="">Choose…</option>
+                                    @foreach (var candidate in _componentChoices)
+                                    {
+                                        <option value="@candidate.Id" selected="@(c?.ComponentItemId == candidate.Id)">@candidate.Name</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input class="amount" name="quantity@(n)" aria-label="Quantity of component @(n + 1)" inputmode="decimal" value="@(c?.Quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="actions"><button type="submit" class="secondary">Save components</button></div>
+        </form>
+    </div>
+}
+
 @if (_item is { IsInventory: true } && _stock is not null)
 {
     <div class="card">
@@ -239,6 +305,7 @@
     private List<Account> _costAccounts = [];
     private StockLevel? _stock;
     private IReadOnlyList<InventoryMovement> _movements = [];
+    private List<Item> _componentChoices = [];
     private bool _assetLocked;
     private string? _error;
 
@@ -247,6 +314,12 @@
 
     [SupplyParameterFromQuery(Name = "error")]
     public string? BreakError { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? ComponentError { get; set; }
+
+    [SupplyParameterFromQuery(Name = "components")]
+    public string? ComponentsSaved { get; set; }
 
     [SupplyParameterFromForm(FormName = "item")]
     private ItemModel Input { get; set; } = default!;
@@ -258,6 +331,14 @@
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
         _costAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
         _item = Id is { } id ? await ItemService.GetAsync(id) : null;
+        if (_item is not null && Item.HasComponents(_item.Type))
+        {
+            // Bundles hold anything but bundles; assemblies are built from tracked stock.
+            var chosen = _item.Components.Select(c => c.ComponentItemId).ToHashSet();
+            _componentChoices = (await ItemService.ListAsync(includeInactive: true))
+                .Where(i => i.Id != _item.Id && !i.IsBundle && (!_item.IsAssembly || i.IsInventory) && (i.IsActive || chosen.Contains(i.Id)))
+                .ToList();
+        }
         if (_item is { IsInventory: true })
         {
             _stock = await Inventory.StockForAsync(_item.Id);
@@ -271,6 +352,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
+                CostMethod = _item.CostMethod,
             };
     }
 
@@ -287,6 +369,8 @@
         (InventorySources.SalesReceipt, true) => "Sales receipt",
         (InventorySources.CreditMemo, true) => "Credit memo (return)",
         (InventorySources.Adjustment, true) => "Adjustment",
+        (InventorySources.AssemblyBuild, true) => "Assembly build",
+        (InventorySources.LandedCost, true) => "Landed cost",
         _ => "Voided",
     };
 
@@ -296,10 +380,12 @@
         {
             // A disabled select doesn't post, so a locked asset account keeps the saved one.
             var asset = _assetLocked ? _item!.InventoryAssetAccountId : Input.InventoryAssetAccountId;
+            var method = _assetLocked ? _item!.CostMethod : Input.CostMethod;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
-                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m);
-            _ = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
-            Navigation.NavigateTo("/items");
+                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method);
+            var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
+            // A new bundle or assembly goes straight on to its components.
+            Navigation.NavigateTo(_item is null && Item.HasComponents(saved.Type) ? $"/items/{saved.Id}#components" : "/items");
         }
         catch (DomainException ex)
         {
@@ -338,5 +424,7 @@
         public decimal? ReorderPoint { get; set; }
 
         public decimal? PurchaseCost { get; set; }
+
+        public InventoryCostMethod CostMethod { get; set; }
     }
 }

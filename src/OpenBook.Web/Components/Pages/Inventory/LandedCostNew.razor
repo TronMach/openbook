@@ -1,0 +1,156 @@
+@page "/inventory/landed-costs/new"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject LandedCostService LandedCosts
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Landed cost · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Landed cost</h1>
+        <a href="/inventory">Inventory</a>
+    </div>
+    <p class="muted">
+        Freight, duty and other costs of getting stock in belong in the stock's cost. Enter the freight bill (or expense) to
+        <strong>@InventoryAccounts.LandedCostName</strong> or another clearing account, then spread it here over the stock on the bills it
+        was for. Stock already sold gets its share as cost of goods sold.
+    </p>
+
+    @if (_candidates.Count == 0)
+    {
+        <div class="card"><p>No bills have brought inventory in yet.</p></div>
+        return;
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="landed-cost" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <InputDate id="date" @bind-Value="Input.Date" />
+                </div>
+                <div class="field">
+                    <label for="amount">Amount</label>
+                    <InputNumber id="amount" step="0.01" @bind-Value="Input.Amount" />
+                    <ValidationMessage For="() => Input.Amount" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="from">Comes out of</label>
+                    <InputSelect id="from" @bind-Value="Input.FromAccountId" data-search>
+                        <option value="">@InventoryAccounts.LandedCostName (created if needed)</option>
+                        @foreach (var a in _accounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="method">Spread by</label>
+                    <InputSelect id="method" @bind-Value="Input.Method">
+                        <option value="@LandedCostMethod.ByValue">Value (purchase cost)</option>
+                        <option value="@LandedCostMethod.ByQuantity">Quantity</option>
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <InputText id="memo" @bind-Value="Input.Memo" />
+            </div>
+        </div>
+
+        <h2>Bills it goes on</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="check"></th><th>Date</th><th>Vendor</th><th>Bill no.</th><th class="num">Quantity</th><th class="num">Stock value</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _candidates)
+                    {
+                        <tr>
+                            <td class="check"><input type="checkbox" name="Input.BillIds" value="@c.Bill.Id" checked="@Input.BillIds.Contains(c.Bill.Id)" aria-label="Bill from @c.VendorName on @Labels.Date(c.Bill.Date)" /></td>
+                            <td>@Labels.Date(c.Bill.Date)</td>
+                            <td>@c.VendorName</td>
+                            <td><a href="/purchases/bills/@c.Bill.Id">@(c.Bill.Reference ?? "—")</a></td>
+                            <td class="num">@Labels.Quantity(c.StockQuantity)</td>
+                            <td class="num">@Labels.Amount(c.StockValue)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+        <div class="actions"><button type="submit">Post landed cost</button></div>
+    </EditForm>
+</div>
+
+@code {
+    private IReadOnlyList<LandedCostCandidate> _candidates = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _accounts = [];
+    private bool _needsClosingPassword;
+    private string? _error;
+
+    [SupplyParameterFromQuery] private Guid? Bill { get; set; }
+
+    [SupplyParameterFromForm(FormName = "landed-cost")]
+    private LandedCostModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new LandedCostModel { BillIds = Bill is { } bill ? [bill] : [] };
+        _candidates = await LandedCosts.CandidatesAsync();
+        _chart = await AccountService.GetChartAsync();
+        // Where freight is usually entered: asset clearing accounts and expense accounts.
+        _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.OtherCurrentAsset or AccountType.OtherCurrentLiability || a.Type.ClassOf() == AccountClass.Expense)
+            .Where(a => a.Name != InventoryAccounts.LandedCostName)
+            .ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = Input.ClosingPassword;
+            var landed = await LandedCosts.CreateAsync(new CreateLandedCostCommand(
+                Input.Date, Input.Amount ?? 0m, Input.BillIds, Input.Method, Input.FromAccountId ?? _chart.FindByFullName(InventoryAccounts.LandedCostName)?.Id, Input.Memo));
+            Navigation.NavigateTo($"/inventory/landed-costs/{landed.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class LandedCostModel
+    {
+        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+        [Required(ErrorMessage = "Enter the amount to spread.")]
+        public decimal? Amount { get; set; }
+
+        public Guid? FromAccountId { get; set; }
+
+        public LandedCostMethod Method { get; set; }
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+
+        // Nothing ticked binds as null.
+        public Guid[] BillIds { get; set => field = value ?? []; } = [];
+
+        public string? ClosingPassword { get; set; }
+    }
+}

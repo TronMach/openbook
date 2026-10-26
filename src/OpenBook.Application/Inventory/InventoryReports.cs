@@ -2,6 +2,7 @@ using OpenBook.Application.Companies;
 using OpenBook.Application.Reporting;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Inventory;
 
@@ -27,6 +28,14 @@ public sealed class InventoryReports(InventoryService inventory, IInventoryStore
             }
 
             rows.Add(new ReportTableRow([name, null, null, null, null], 0, ReportRowStyle.Section));
+            if (s.Item.CostMethod == InventoryCostMethod.Average)
+            {
+                // Average-cost stock has one cost for everything on hand, not a cost per purchase.
+                rows.Add(new ReportTableRow(["Weighted average", new ReportCell(s.Quantity), new ReportCell(s.AverageCost), s.Value, null], 1));
+                rows.Add(new ReportTableRow([$"Total {s.Item.Name}", new ReportCell(s.Quantity), new ReportCell(s.AverageCost), s.Value, share], 0, ReportRowStyle.Subtotal));
+                continue;
+            }
+
             foreach (var layer in Fifo.Layers(movements.Where(m => m.ItemId == s.Item.Id)).Where(l => l.RemainingQuantity != 0m))
             {
                 var receipt = movements.Single(m => m.Id == layer.LayerId);
@@ -52,11 +61,11 @@ public sealed class InventoryReports(InventoryService inventory, IInventoryStore
 
         return new ReportTable(
             $"Inventory valuation {(detail ? "detail" : "summary")}",
-            [company.Name, $"As of {asOf:MMM d, yyyy} · FIFO cost"],
+            [company.Name, $"As of {asOf:MMM d, yyyy} · {(stock.Any(s => s.Item.CostMethod == InventoryCostMethod.Average) ? "FIFO and weighted average cost" : "FIFO cost")}"],
             [new("Item"), new("On hand", ColumnFormat.Number), new("Average cost", ColumnFormat.Money), new("Asset value", ColumnFormat.Money), new("% of total", ColumnFormat.Percent)],
             rows,
             ReportBasis.Accrual,
-            detail ? "Each layer is what's left of one purchase, return or adjustment; sales use the oldest first." : null);
+            detail ? "Each layer is what's left of one purchase, build, return or adjustment (with any landed costs); FIFO sales use the oldest first." : null);
     }
 
     public async Task<ReportTable> StockStatusAsync(CancellationToken ct = default)

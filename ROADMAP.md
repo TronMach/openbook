@@ -111,7 +111,8 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 **L4 slice 1 status (2026-10-26): complete.** Bank connections through SimpleFIN Bridge: paste a setup token, choose which bank or card account each remote account fills and from what date, and posted transactions arrive in the bank feed every 6 hours (or on "Sync now") for review, deduplicated by the bank's transaction id; problems the service reports are shown on the connection. Positive pay issue files (CSV) of numbered checks and voids per bank account, remembering the bank's account number, date format and how far exports have gone. Petty cash boxes on the imprest system: fund from the bank, count the cash (with notes and coins), over/short posted automatically, replenish back to the float. API for all of it. Not done: Plaid and GoCardless (need developer accounts), fixed-width positive pay layouts.
 
-## Phase 3 — LATER (pick by audience)
+**L4 slice 2 status (2026-10-26): complete.** Weighted average costing per item alongside FIFO. Bundles (kits) that sell as one line at their own price and take their inventory components out of stock. Assemblies with a bill of materials and assembly builds (stock check and "how many can I build" before building; void to unbuild). Landed costs: spread freight, duty and similar costs over the stock on chosen bills by value or quantity, with the share of stock already gone charged to cost of goods sold. Inventory page lists builds and landed costs; item pages edit components and show build and landed cost history. API for all of it. Not done: landed cost shares for stock that went into assemblies are expensed rather than carried into the assemblies; pending builds and partial builds; bundles' own stock.
+
 
 | # | Module | Notes |
 |---|---|---|

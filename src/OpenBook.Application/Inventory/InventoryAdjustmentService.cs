@@ -68,7 +68,7 @@ public sealed class InventoryAdjustmentService(
             }
             else
             {
-                var takes = Fifo.Take(Fifo.Layers(await store.ListMovementsAsync(item.Id, ct)), -draft.QuantityChange, command.Date, item.Name);
+                var takes = Costing.Take(item, await store.ListMovementsAsync(item.Id, ct), -draft.QuantityChange, command.Date);
                 value = -takes.Sum(t => t.Cost);
                 movements.AddRange(takes.Select(t => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => InventoryMovement.Issue(t, item.Id, command.Date, type, id, at))));
             }

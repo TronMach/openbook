@@ -1,0 +1,125 @@
+@page "/inventory/builds/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject AssemblyBuildService Builds
+@inject ItemService Items
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Assembly build · OpenBook</PageTitle>
+
+@if (_build is null)
+{
+    <div class="card"><p>That build doesn't exist. <a href="/inventory">Back to inventory</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Build @Labels.Quantity(_build.Quantity) @Name(_build.ItemId) @_build.Reference</h1>
+        @if (_build.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a href="/inventory">Inventory</a>
+    </div>
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_build.Date)</dd>
+            <dt>Assembly</dt><dd><a href="/items/@_build.ItemId">@Name(_build.ItemId)</a></dd>
+            <dt>Cost</dt><dd>@Labels.Amount(_build.Cost) (@Labels.Amount(_build.Cost / _build.Quantity) each)</dd>
+            @if (_build.Memo is { } memo)
+            {
+                <dt>Memo</dt><dd>@memo</dd>
+            }
+            <dt>Journal entry</dt><dd><a href="/journal/@_build.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    <table class="data">
+        <thead><tr><th>Component used</th><th class="num">Quantity</th><th class="num">Cost</th></tr></thead>
+        <tbody>
+            @foreach (var line in _build.Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr>
+                    <td><a href="/items/@line.ItemId">@Name(line.ItemId)</a></td>
+                    <td class="num">@Labels.Quantity(line.Quantity)</td>
+                    <td class="num">@Labels.Amount(line.Cost)</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_build.Cost)</td></tr></tfoot>
+    </table>
+
+    <Attachments EntityType="assembly_build" EntityId="_build.Id" />
+
+    <Notes EntityType="assembly_build" EntityId="_build.Id" />
+
+    @if (_build.Status == DocumentStatus.Posted)
+    {
+        <div class="card">
+            <h2>Void this build</h2>
+            <p class="muted">Voiding puts the components back and takes the assemblies out. It's refused once any of these assemblies has been sold or adjusted.</p>
+            @if (_error is not null)
+            {
+                <div class="alert error" role="alert">@_error</div>
+            }
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
+                <button type="submit" class="danger">Void build</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private AssemblyBuild? _build;
+    private Dictionary<Guid, Item> _items = [];
+    private bool _needsClosingPassword;
+    private string? _error;
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _build = await Builds.GetAsync(Id);
+        _items = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id);
+    }
+
+    private string Name(Guid itemId) => _items.GetValueOrDefault(itemId)?.Name ?? "Item";
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
+            await Builds.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/inventory/builds/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why it's being voided.")]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

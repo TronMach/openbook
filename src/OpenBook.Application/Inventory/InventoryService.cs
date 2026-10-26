@@ -21,7 +21,7 @@ public sealed record StockLevel(Item Item, decimal Quantity, decimal Value)
 }
 
 /// <summary>
-/// FIFO costing for documents that move stock. Sales take cost from the oldest layers received by the sale date and
+/// Costing for documents that move stock (FIFO or weighted average per item). Sales take cost from stock on hand on the sale date and
 /// post it (Dr cost of goods sold, Cr inventory asset) in the document's own entry; purchases and returns open layers.
 /// Each document plans first (checking everything), stages its entry, then applies the plan, all in one save.
 /// </summary>
@@ -47,13 +47,6 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     public async Task<IReadOnlyList<InventoryLayer>> LayersAsync(Guid itemId, DateOnly? asOf = null, CancellationToken ct = default) =>
         Fifo.Layers((await store.ListMovementsAsync(itemId, ct)).Where(m => asOf is null || m.Date <= asOf));
 
-    /// <summary>The class an item's cost posts to: the one its lines on the document share, else none.</summary>
-    private static Guid? ClassOf(IReadOnlyList<SalesLine> lines, Guid itemId)
-    {
-        var classes = lines.Where(l => l.ItemId == itemId).Select(l => l.ClassId).Distinct().ToList();
-        return classes.Count == 1 ? classes[0] : null;
-    }
-
     /// <summary>Sales (invoices, receipts): take each inventory item's quantity from stock and post its cost.</summary>
     internal async Task<InventoryPlan> PlanSaleAsync(IReadOnlyList<SalesLine> lines, DateOnly date, CancellationToken ct)
     {
@@ -63,16 +56,14 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
 
         var postings = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
-        foreach (var (item, quantity) in quantities)
+        foreach (var (item, quantity, classId) in quantities)
         {
             if (quantity < 0m)
                 throw new DomainException("inventory.negative_sale", $"{item.Name}: enter returns of stock on a credit memo, not as a negative quantity.");
-            var layers = Fifo.Layers(await store.ListMovementsAsync(item.Id, ct));
-            var takes = Fifo.Take(layers, quantity, date, item.Name);
+            var takes = Costing.Take(item, await store.ListMovementsAsync(item.Id, ct), quantity, date);
             var cost = takes.Sum(t => t.Cost);
             if (cost != 0m)
             {
-                var classId = ClassOf(lines, item.Id);
                 postings.Add(JournalLineDraft.Dr(item.CostAccountId!.Value, cost, $"Cost of {item.Name}", classId));
                 postings.Add(JournalLineDraft.Cr(item.InventoryAssetAccountId!.Value, cost, $"Cost of {item.Name}", classId));
             }
@@ -92,7 +83,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         var quantities = await ItemQuantitiesAsync(lines, ct);
         var postings = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
-        foreach (var (item, quantity) in quantities.Where(q => q.Quantity != 0m))
+        foreach (var (item, quantity, classId) in quantities.Where(q => q.Quantity != 0m))
         {
             if (quantity < 0m)
                 throw new DomainException("inventory.negative_return", $"{item.Name}: a credit memo returns stock, so the quantity must be positive.");
@@ -100,7 +91,6 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var cost = decimal.Round(quantity * UnitCostForReturn(item, history), 2, MidpointRounding.AwayFromZero);
             if (cost != 0m)
             {
-                var classId = ClassOf(lines, item.Id);
                 postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, cost, $"Return of {item.Name}", classId));
                 postings.Add(JournalLineDraft.Cr(item.CostAccountId!.Value, cost, $"Return of {item.Name}", classId));
             }
@@ -158,7 +148,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             {
                 var item = (await sales.GetItemsAsync([receipt.ItemId], ct)).GetValueOrDefault(receipt.ItemId);
                 throw new DomainException("inventory.layer_used",
-                    $"Some of the {item?.Name ?? "stock"} {what} brought in has been sold or adjusted since, so it can't be voided. Void those first, or adjust the quantity instead.");
+                    $"Some of the {item?.Name ?? "stock"} {what} brought in has been sold, used, adjusted or given landed costs since, so it can't be voided. Void those first, or adjust the quantity instead.");
             }
         }
 
@@ -189,17 +179,41 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         return onHand > 0m ? history.Sum(m => m.Cost) / onHand : item.PurchaseCost;
     }
 
-    private async Task<List<(Item Item, decimal Quantity)>> ItemQuantitiesAsync(IReadOnlyList<SalesLine> lines, CancellationToken ct)
+    /// <summary>
+    /// The stock a document's lines move, per tracked item: its own lines plus bundles' tracked components (the line's
+    /// quantity times the component's). The cost posts to the class those lines share, else none.
+    /// </summary>
+    private async Task<List<(Item Item, decimal Quantity, Guid? ClassId)>> ItemQuantitiesAsync(IReadOnlyList<SalesLine> lines, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        var stockLines = lines.Where(l => l.Kind == SalesLineKind.Item && l.ItemId is not null).ToList();
-        if (stockLines.Count == 0)
+        var itemLines = lines.Where(l => l.Kind == SalesLineKind.Item && l.ItemId is not null).ToList();
+        if (itemLines.Count == 0)
             return [];
-        var items = await sales.GetItemsAsync(stockLines.Select(l => l.ItemId!.Value).Distinct().ToList(), ct);
-        return stockLines
-            .Where(l => items.TryGetValue(l.ItemId!.Value, out var i) && i.IsInventory)
-            .GroupBy(l => l.ItemId!.Value)
-            .Select(g => (items[g.Key], g.Sum(l => l.Quantity)))
+        var items = (await sales.GetItemsAsync(itemLines.Select(l => l.ItemId!.Value).Distinct().ToList(), ct)).ToDictionary();
+        var componentIds = items.Values.Where(i => i.IsBundle).SelectMany(i => i.Components.Select(c => c.ComponentItemId)).Where(id => !items.ContainsKey(id)).Distinct().ToList();
+        foreach (var (id, item) in await sales.GetItemsAsync(componentIds, ct))
+            items[id] = item;
+
+        var parts = new List<(Guid ItemId, decimal Quantity, Guid? ClassId)>();
+        foreach (var line in itemLines)
+        {
+            if (!items.TryGetValue(line.ItemId!.Value, out var item))
+                continue;
+            if (item.IsInventory)
+                parts.Add((item.Id, line.Quantity, line.ClassId));
+            else if (item.IsBundle)
+                parts.AddRange(item.Components
+                    .Where(c => items.TryGetValue(c.ComponentItemId, out var component) && component.IsInventory)
+                    .Select(c => (c.ComponentItemId, decimal.Round(line.Quantity * c.Quantity, SalesLine.Precision, MidpointRounding.AwayFromZero), line.ClassId)));
+        }
+
+        return parts
+            .GroupBy(p => p.ItemId)
+            .Select(g =>
+            {
+                var classes = g.Select(p => p.ClassId).Distinct().ToList();
+                return (items[g.Key], g.Sum(p => p.Quantity), classes.Count == 1 ? classes[0] : null);
+            })
             .ToList();
     }
 

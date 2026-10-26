@@ -37,12 +37,22 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         var item = await GetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         details = await WithInventoryAccountsAsync(details, ct);
         await ValidateAsync(details, except: id, ct);
-        if ((item.IsInventory || details.Type == ItemType.Inventory) && await inventory.HasMovementsAsync(id, ct))
+        if ((item.IsInventory || Item.IsTracked(details.Type)) && await inventory.HasMovementsAsync(id, ct))
         {
             if (details.Type != item.Type)
                 throw new DomainException("item.type_locked", $"{item.Name} has stock history, so its type can't change. Make it inactive and add a new item instead.");
             if (details.InventoryAssetAccountId != item.InventoryAssetAccountId)
                 throw new DomainException("item.asset_account_locked", $"{item.Name} has stock history, so its inventory asset account can't change.");
+            if (details.CostMethod != item.CostMethod)
+                throw new DomainException("item.cost_method_locked", $"{item.Name} has stock history, so its costing method can't change.");
+        }
+
+        if (item.Type != details.Type && (await store.ListItemsAsync(ct)).FirstOrDefault(i => i.Components.Any(c => c.ComponentItemId == id)) is { } parent)
+        {
+            if (details.Type == ItemType.Bundle)
+                throw new DomainException("item.component_bundle", $"{item.Name} is a component of {parent.Name}, so it can't become a bundle.");
+            if (parent.IsAssembly && !Item.IsTracked(details.Type))
+                throw new DomainException("item.component_untracked", $"{item.Name} is a component of the assembly {parent.Name}, so its stock must stay tracked.");
         }
 
         var before = Snapshot(item);
@@ -67,6 +77,45 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         return item;
     }
 
+    /// <summary>
+    /// Sets a bundle's or assembly's components. Bundles take any items but bundles; assemblies take tracked items
+    /// (inventory products and other assemblies), never one that contains this assembly.
+    /// </summary>
+    public async Task<Item> SetComponentsAsync(Guid id, IReadOnlyList<(Guid ItemId, decimal Quantity)> components, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(components);
+        var item = await GetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var all = (await store.ListItemsAsync(ct)).ToDictionary(i => i.Id);
+        foreach (var (componentId, _) in components)
+        {
+            var component = all.GetValueOrDefault(componentId) ?? throw new EntityNotFoundException(EntityType, componentId);
+            if (!component.IsActive)
+                throw new DomainException("item.component_inactive", $"{component.Name} is inactive.");
+            if (component.IsBundle)
+                throw new DomainException("item.component_bundle", $"{component.Name} is a bundle; bundles can't go inside other items. Add its components instead.");
+            if (item.IsAssembly && !component.IsInventory)
+                throw new DomainException("item.component_untracked", $"{component.Name} isn't an inventory product or assembly. Assemblies are built from tracked stock.");
+            if (item.IsAssembly && Contains(all, componentId, id, []))
+                throw new DomainException("item.component_cycle", $"{component.Name} is built from {item.Name}, so it can't also go into it.");
+        }
+
+        var before = Snapshot(item);
+        item.SetComponents(components);
+        store.Add(Audit(AuditAction.Updated, item, before));
+        await store.SaveChangesAsync(ct);
+        return item;
+    }
+
+    /// <summary>Whether <paramref name="target"/> is in <paramref name="itemId"/>'s components, at any depth.</summary>
+    private static bool Contains(IReadOnlyDictionary<Guid, Item> all, Guid itemId, Guid target, HashSet<Guid> seen)
+    {
+        if (itemId == target)
+            return true;
+        if (!seen.Add(itemId) || all.GetValueOrDefault(itemId) is not { } item)
+            return false;
+        return item.Components.Any(c => Contains(all, c.ComponentItemId, target, seen));
+    }
+
     internal AuditRecord Audit(AuditAction action, Item i, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, i.Id, before, Snapshot(i));
 
@@ -78,7 +127,7 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
             throw new DomainException("item.name_taken", $"There's already a product or service named '{name}'.");
         var chart = await accounts.GetChartAsync(ct);
         Item.EnsureIncomeAccount(chart.Get(details.IncomeAccountId));
-        if (details.Type == ItemType.Inventory)
+        if (Item.IsTracked(details.Type))
         {
             Item.EnsureInventoryAssetAccount(chart.Get(details.InventoryAssetAccountId ?? Guid.Empty));
             Item.EnsureCostAccount(chart.Get(details.CostAccountId ?? Guid.Empty));
@@ -89,7 +138,7 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
     private async Task<ItemDetails> WithInventoryAccountsAsync(ItemDetails details, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(details);
-        if (details.Type != ItemType.Inventory)
+        if (!Item.IsTracked(details.Type))
             return details;
         if (details.InventoryAssetAccountId is null || details.InventoryAssetAccountId == Guid.Empty)
             details = details with { InventoryAssetAccountId = (await inventoryAccounts.GetOrCreateAssetAsync(ct)).Id };
@@ -111,6 +160,8 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         i.CostAccountId,
         i.ReorderPoint,
         i.PurchaseCost,
+        CostMethod = i.CostMethod.ToString(),
+        Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });
 }
