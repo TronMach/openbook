@@ -115,6 +115,10 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 **L4 slice 3 status (2026-10-26): complete, so L4 is done.** Warehouses (a default "Main" plus any others) and bins inside them; bills, invoices, sales receipts and credit memos name the warehouse their stock moves in or out of, adjustments name a warehouse and bin, and transfers move stock between them without touching its cost. Lot and serial number tracking per item: receipts name lots or serials (each its own cost layer), sales name them or take the oldest, and the numbers used are kept on the document lines and printed on forms; a lookup traces any lot or serial. Barcodes on items, found by scanning into any item picker. Stock by warehouse, bin and lot on item pages and the warehouse page. API for all of it. Not done: lot expiry dates, barcode label printing, per-warehouse costing, warehouse filters on reports.
 
+**L4 loose ends (2026-10-26): done.** Landed costs on stock that went into assemblies now go onto the assemblies (and their cost of goods sold for assemblies already sold). Lot expiry dates, with the soonest-expiring lot picked first and expired lots skipped unless named, and a list of lots expiring in the next 30 days. Barcode label sheets (Code 128, 30 per Letter page). A warehouse filter on the inventory valuation and stock status reports. Still open: Plaid and GoCardless feeds (need developer accounts), fixed-width positive pay layouts, partial builds, bundles with their own stock.
+
+**Order (decided 2026-10-26):** L13 Desktop and Server editions and L7 Security come last, once the features have settled; they package and harden what the other modules build.
+
 ## Phase 3 — LATER (pick by audience)
 
 | # | Module | Notes |

@@ -80,7 +80,8 @@ public sealed class AssemblyBuildService(
             var needed = Needed(command.Quantity, c.Quantity);
             if (component.Tracking == ItemTracking.Serial && needed != decimal.Truncate(needed))
                 throw new DomainException("lot.serial_whole", $"{component.Name} is tracked by serial number, so builds must use whole units of it.");
-            var takes = Costing.Take(component, await store.ListMovementsAsync(component.Id, ct), needed, command.Date, StockFilter.In(warehouseId));
+            var takes = Costing.Take(component, await store.ListMovementsAsync(component.Id, ct), needed, command.Date,
+                await inventory.ForPickingAsync(component, StockFilter.In(warehouseId), ct));
             var cost = takes.Sum(t => t.Cost);
             lines.Add((component.Id, needed, cost, LotText.Format(takes.Where(t => t.Lot is not null).Select(t => (t.Lot!, t.Quantity)), component.Tracking)));
             if (cost != 0m)

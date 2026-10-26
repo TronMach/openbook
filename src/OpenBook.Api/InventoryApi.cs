@@ -13,6 +13,12 @@ public sealed record WarehouseRequest(string Name, string? Address = null, bool 
 
 public sealed record BinRequest(string Name);
 
+public sealed record LotExpiryRequest(DateOnly? ExpiresOn);
+
+public sealed record LabelRequestItem(Guid ItemId, int Copies);
+
+public sealed record LabelsRequest(IReadOnlyList<LabelRequestItem> Items, bool ShowPrice = true);
+
 public sealed record StockLevelResponse(Guid ItemId, string Name, decimal Quantity, decimal Value, decimal? AverageCost, decimal? ReorderPoint, bool NeedsReorder)
 {
     public static StockLevelResponse From(StockLevel s) =>
@@ -93,6 +99,13 @@ internal static class InventoryApi
         inventory.MapGet("/lots/{lot}", async (string lot, InventoryService s, CancellationToken ct) => await s.LotHistoryAsync(lot, ct));
         inventory.MapGet("/items/barcode/{code}", async (string code, ItemService s, CancellationToken ct) =>
             await s.FindByBarcodeAsync(code, ct) is { } item ? Results.Ok(ItemResponse.From(item)) : Results.NotFound());
+
+        inventory.MapPut("/items/{id:guid}/lots/{lot}/expiry", async (Guid id, string lot, LotExpiryRequest r, InventoryService s, CancellationToken ct) =>
+            await s.SetLotExpiryAsync(id, lot, r.ExpiresOn, ct));
+        inventory.MapGet("/lots/expiring", async (int? days, InventoryService s, CancellationToken ct) =>
+            (await s.ExpiringAsync(DateOnly.FromDateTime(DateTime.Today).AddDays(days ?? 30), ct)).Select(l => new { ItemId = l.Item.Id, l.Item.Name, l.Lot, l.ExpiresOn, l.Quantity }));
+        inventory.MapPost("/labels", async (LabelsRequest r, LabelService s, CancellationToken ct) =>
+            Results.File(await s.RenderAsync((r.Items ?? []).Select(i => (i.ItemId, i.Copies)).ToList(), r.ShowPrice, ct), "application/pdf", "Labels.pdf"));
 
         inventory.MapGet("/transfers", async (StockTransferService s, CancellationToken ct) => await s.ListAsync(ct));
         inventory.MapGet("/transfers/{id:guid}", async (Guid id, StockTransferService s, CancellationToken ct) =>

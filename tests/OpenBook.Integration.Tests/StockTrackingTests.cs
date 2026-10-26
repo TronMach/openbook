@@ -190,3 +190,102 @@ public sealed class StockTrackingTests : IAsyncLifetime
         Assert.Equal(soap.Id, Assert.Single(PickerOptions.Filter(options, "0012345678905")).Id);
     }
 }
+
+/// <summary>L4 loose ends: lot expiry, labels, warehouse reports.</summary>
+public sealed class StockTrackingExtrasTests : IAsyncLifetime
+{
+    private static readonly DateOnly Jan10 = new(2026, 1, 10);
+    private static readonly DateOnly Feb1 = new(2026, 2, 1);
+
+    private readonly LedgerDatabase _db = new();
+    private Account _sales = null!;
+    private Customer _customer = null!;
+    private Vendor _vendor = null!;
+
+    public async Task InitializeAsync()
+    {
+        await _db.InitializeAsync();
+        _sales = await _db.CreateAccount("Sales", AccountType.Income);
+        _customer = await Run(sp => sp.GetRequiredService<CustomerService>().CreateAsync(new CustomerDetails("Acme")));
+        _vendor = await Run(sp => sp.GetRequiredService<VendorService>().CreateAsync(new VendorDetails("Supplier")));
+    }
+
+    public Task DisposeAsync() => _db.DisposeAsync();
+
+    private Task<T> Run<T>(Func<IServiceProvider, Task<T>> work) => _db.InScope(work);
+
+    private static async Task<string> Refused(Func<Task> action) => (await Assert.ThrowsAsync<DomainException>(action)).Code;
+
+    private Task<Bill> Buy(Item item, decimal quantity, decimal amount, string? lots = null, Guid? warehouseId = null) =>
+        Run(sp => sp.GetRequiredService<BillService>().CreateAsync(new CreateBillCommand(
+            _vendor.Id, Jan10, [new BillLineDraft(Guid.Empty, amount, null, item.Id, quantity, Lots: lots)], WarehouseId: warehouseId)));
+
+    private Task<Invoice> Sell(Item item, decimal quantity, string? lots = null, DateOnly? date = null) =>
+        Run(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(
+            _customer.Id, date ?? Feb1, [new SalesLineDraft(item.Id, null, quantity, 5m, Lots: lots)])));
+
+    private Task<LotDetail> Expire(Item item, string lot, DateOnly? on) =>
+        Run(sp => sp.GetRequiredService<InventoryService>().SetLotExpiryAsync(item.Id, lot, on));
+
+    [Fact]
+    public void Lot_expiry_details_are_named_and_tell_whether_they_have_expired()
+    {
+        var detail = LotDetail.For(Guid.NewGuid(), " M1 ");
+        detail.Expire(new DateOnly(2026, 3, 1));
+        Assert.Equal("M1", detail.Lot);
+        Assert.True(detail.IsExpiredOn(new DateOnly(2026, 3, 2)));
+        Assert.False(detail.IsExpiredOn(new DateOnly(2026, 3, 1)));
+    }
+
+    [Fact]
+    public async Task Automatic_picks_take_the_first_expiry_and_skip_expired_lots_unless_named()
+    {
+        var milk = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Milk", ItemType.Inventory, _sales.Id, 5m, Tracking: ItemTracking.Lot)));
+        await Buy(milk, 9m, 90m, "M1 x 3; M2 x 3; M3 x 3");
+        await Expire(milk, "M1", new DateOnly(2026, 1, 20)); // expired by the sale date
+        await Expire(milk, "M2", new DateOnly(2026, 3, 1));
+        await Expire(milk, "m3", new DateOnly(2026, 2, 15)); // expires before M2, so it goes first
+        Assert.Equal("lot.unknown", await Refused(() => Expire(milk, "M9", Feb1)));
+
+        var sale = await Sell(milk, 4m);
+        Assert.Equal("M3 x 3; M2 x 1", sale.Lines[0].Lots);
+        Assert.Equal("inventory.insufficient", await Refused(() => Sell(milk, 3m))); // 2 of M2 left; M1 is expired
+        var named = await Sell(milk, 1m, "M1");
+        Assert.Equal("M1 x 1", named.Lines[0].Lots);
+
+        var expiring = await Run(sp => sp.GetRequiredService<InventoryService>().ExpiringAsync(new DateOnly(2026, 3, 1)));
+        Assert.Equal([("M1", 2m), ("M2", 2m)], expiring.Select(l => (l.Lot, l.Quantity)));
+    }
+
+    [Fact]
+    public async Task Labels_print_items_with_barcodes_as_a_pdf()
+    {
+        var soap = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Soap", ItemType.NonInventory, _sales.Id, 3.5m, Barcode: "0012345678905")));
+        var plain = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Plain", ItemType.NonInventory, _sales.Id, 1m)));
+        var pdf = await Run(sp => sp.GetRequiredService<LabelService>().RenderAsync([(soap.Id, 31)], showPrice: true));
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdf, 0, 4));
+        Assert.Equal("label.no_barcode", await Refused(() => Run(sp => sp.GetRequiredService<LabelService>().RenderAsync([(plain.Id, 1)], true))));
+        Assert.Equal("label.none", await Refused(() => Run(sp => sp.GetRequiredService<LabelService>().RenderAsync([(soap.Id, 0)], true))));
+    }
+
+    [Fact]
+    public async Task Inventory_reports_can_show_one_warehouse()
+    {
+        var east = await Run(sp => sp.GetRequiredService<WarehouseService>().CreateAsync("East"));
+        var main = (await Run(sp => sp.GetRequiredService<WarehouseService>().ListAsync())).Single(w => w.IsDefault);
+        var nut = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Nut", ItemType.Inventory, _sales.Id, 1m, ReorderPoint: 5m)));
+        await Buy(nut, 10m, 20m, warehouseId: east.Id);
+        await Buy(nut, 4m, 8m);
+
+        var eastValuation = await Run(sp => sp.GetRequiredService<OpenBook.Application.Reporting.ReportCatalog>().RunAsync("inventory-valuation",
+            OpenBook.Application.Reporting.ReportParameters.Parse($"?asOf=2026-12-31&warehouseId={east.Id}")));
+        var row = eastValuation.Rows.First(r => r.Cells[0]?.Value as string == "Nut");
+        Assert.Equal((10m, 20m), ((decimal)row.Cells[1]!.Value!, (decimal)row.Cells[3]!.Value!));
+        Assert.Contains("East", eastValuation.Subtitles[1], StringComparison.Ordinal);
+
+        var mainStatus = await Run(sp => sp.GetRequiredService<OpenBook.Application.Reporting.ReportCatalog>().RunAsync("inventory-stock",
+            OpenBook.Application.Reporting.ReportParameters.Parse($"?warehouseId={main.Id}")));
+        var status = mainStatus.Rows.First(r => r.Cells[0]?.Value as string == "Nut");
+        Assert.Equal((4m, "Reorder"), ((decimal)status.Cells[1]!.Value!, status.Cells[3]?.Value as string));
+    }
+}

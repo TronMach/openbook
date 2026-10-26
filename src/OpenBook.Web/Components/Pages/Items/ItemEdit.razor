@@ -59,7 +59,12 @@
             <div class="field">
                 <label for="barcode">Barcode <span class="muted">(optional)</span></label>
                 <InputText id="barcode" @bind-Value="Input.Barcode" maxlength="50" autocomplete="off" />
-                <span class="hint">UPC, EAN or your own code. Scanning it into an item picker chooses this item.</span>
+                <span class="hint">UPC, EAN or your own code. Scanning it into an item picker chooses this item.
+                    @if (_item?.Barcode is not null)
+                    {
+                        <a href="/inventory/labels?item=@_item.Id">Print labels</a>
+                    }
+                </span>
             </div>
         </div>
         <div class="row">
@@ -300,6 +305,44 @@
             </table>
             <p><a href="/inventory/transfers/new?item=@_item.Id">Transfer stock</a></p>
         }
+        @if (_item.Tracking == ItemTracking.Lot && _byPlace.Any(p => p.Lot is not null))
+        {
+            <h3 id="lots">Lot expiry dates</h3>
+            @if (LotError is not null)
+            {
+                <div class="alert error" role="alert">@LotError</div>
+            }
+            else if (LotsSaved is not null)
+            {
+                <div class="alert success" role="status">Saved.</div>
+            }
+            <p class="muted">Sales and transfers that don't name a lot take the one that expires first and skip expired lots.</p>
+            <table class="data">
+                <thead><tr><th>Lot</th><th class="num">On hand</th><th>Expires</th></tr></thead>
+                <tbody>
+                    @foreach (var lot in _byPlace.Where(p => p.Lot is not null).GroupBy(p => p.Lot!, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key))
+                    {
+                        var expires = _expiries.TryGetValue(lot.Key, out var e) ? e : (DateOnly?)null;
+                        <tr>
+                            <td>@lot.Key</td>
+                            <td class="num">@Labels.Quantity(lot.Sum(p => p.Quantity))</td>
+                            <td>
+                                <form method="post" action="/items/@_item.Id/lots/expiry" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="lot" value="@lot.Key" />
+                                    <input type="date" name="expiresOn" value="@expires?.ToString("yyyy-MM-dd")" aria-label="Expiry of lot @lot.Key" />
+                                    <button type="submit" class="secondary">Save</button>
+                                    @if (expires is { } date && date < DateOnly.FromDateTime(DateTime.Today))
+                                    {
+                                        <span class="badge warn">Expired</span>
+                                    }
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
         @if (_movements.Count == 0)
         {
             <p class="muted">No stock yet. Enter a bill with this item, or <a href="/inventory/adjustments/new?item=@_item.Id">add starting stock</a>.</p>
@@ -346,6 +389,13 @@
     private IReadOnlyList<InventoryMovement> _movements = [];
     private List<Item> _componentChoices = [];
     private IReadOnlyList<StockAt> _byPlace = [];
+    private IReadOnlyDictionary<string, DateOnly> _expiries = new Dictionary<string, DateOnly>();
+
+    [SupplyParameterFromQuery]
+    public string? LotError { get; set; }
+
+    [SupplyParameterFromQuery(Name = "lots")]
+    public string? LotsSaved { get; set; }
     private Func<OpenBook.Domain.Inventory.StockPlace, string> _place = _ => "";
     private bool _assetLocked;
     private string? _error;
@@ -385,6 +435,7 @@
             _stock = await Inventory.StockForAsync(_item.Id);
             _movements = await Inventory.MovementsAsync(_item.Id);
             _byPlace = await Inventory.StockByPlaceAsync(_item.Id);
+            _expiries = await Inventory.ExpiriesAsync(_item.Id);
             _place = await WarehouseService.NamerAsync();
             _assetLocked = _movements.Count > 0;
         }

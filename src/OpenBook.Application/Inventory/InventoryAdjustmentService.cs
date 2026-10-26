@@ -85,7 +85,7 @@ public sealed class InventoryAdjustmentService(
                 var filter = place.BinId is null ? StockFilter.In(place.WarehouseId) : StockFilter.At(place);
                 var takes = new List<FifoTake>();
                 if (named.Count == 0)
-                    takes.AddRange(InventoryService.TakeAndSimulate(item, history, -draft.QuantityChange, command.Date, filter));
+                    takes.AddRange(InventoryService.TakeAndSimulate(item, history, -draft.QuantityChange, command.Date, await inventory.ForPickingAsync(item, filter, ct)));
                 foreach (var (lot, quantity) in named)
                     takes.AddRange(InventoryService.TakeAndSimulate(item, history, quantity, command.Date, filter.WithLot(lot)));
                 value = -takes.Sum(t => t.Cost);

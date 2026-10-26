@@ -1,4 +1,6 @@
 using OpenBook.Application.Sales;
+using System.Text.Json;
+using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
@@ -23,6 +25,9 @@ public sealed record StockLevel(Item Item, decimal Quantity, decimal Value)
 /// <summary>Stock of one item at one place, in one lot (null for untracked items). Value is the share of its layers' cost.</summary>
 public sealed record StockAt(Item Item, StockPlace Place, string? Lot, decimal Quantity, decimal Value, DateOnly Received);
 
+/// <summary>A lot on hand with an expiry date.</summary>
+public sealed record ExpiringLot(Item Item, string Lot, DateOnly ExpiresOn, decimal Quantity);
+
 /// <summary>
 /// Costing for documents that move stock (FIFO or weighted average per item). Sales take cost from stock on hand on the sale date and
 /// post it (Dr cost of goods sold, Cr inventory asset) in the document's own entry; purchases and returns open layers.
@@ -30,7 +35,7 @@ public sealed record StockAt(Item Item, StockPlace Place, string? Lot, decimal Q
 /// Documents name a warehouse (null = the default one): sales take stock from any bin in it, receipts arrive outside bins.
 /// Lot- and serial-tracked items open one layer per lot or serial; sales take the lots named on the line, else the oldest.
 /// </summary>
-public sealed class InventoryService(IInventoryStore store, ISalesStore sales, IClock clock)
+public sealed class InventoryService(IInventoryStore store, ISalesStore sales, IClock clock, ICurrentUser user)
 {
     /// <summary>A placeholder source for movements simulated while planning several takes of the same item.</summary>
     private const string Planned = "planned";
@@ -88,6 +93,60 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             .ToList();
     }
 
+    /// <summary>Expiry dates of an item's lots (ignoring case).</summary>
+    public async Task<IReadOnlyDictionary<string, DateOnly>> ExpiriesAsync(Guid itemId, CancellationToken ct = default) =>
+        (await store.ListLotDetailsAsync(itemId, ct)).Where(d => d.ExpiresOn is not null)
+            .ToDictionary(d => d.Lot, d => d.ExpiresOn!.Value, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Sets or clears when a lot of a lot-tracked item expires. Audited on the item.</summary>
+    public async Task<LotDetail> SetLotExpiryAsync(Guid itemId, string lot, DateOnly? expiresOn, CancellationToken ct = default)
+    {
+        var item = (await sales.GetItemsAsync([itemId], ct)).GetValueOrDefault(itemId) ?? throw new EntityNotFoundException("item", itemId);
+        if (item.Tracking != ItemTracking.Lot)
+            throw new DomainException("lot.not_lot_tracked", $"{item.Name} isn't tracked by lot.");
+        var name = (lot ?? string.Empty).Trim();
+        var known = (await store.ListMovementsAsync(itemId, ct)).FirstOrDefault(m => string.Equals(m.Lot, name, StringComparison.OrdinalIgnoreCase))?.Lot
+            ?? throw new DomainException("lot.unknown", $"{item.Name} has no lot {name}.");
+        var detail = (await store.ListLotDetailsAsync(itemId, ct)).FirstOrDefault(d => string.Equals(d.Lot, known, StringComparison.OrdinalIgnoreCase));
+        if (detail is null)
+        {
+            detail = LotDetail.For(itemId, known);
+            store.Add(detail);
+        }
+
+        var before = JsonSerializer.Serialize(new { Lot = known, detail.ExpiresOn });
+        detail.Expire(expiresOn);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "item", itemId, before, JsonSerializer.Serialize(new { Lot = known, detail.ExpiresOn })));
+        await store.SaveChangesAsync(ct);
+        return detail;
+    }
+
+    /// <summary>Lots on hand that expire on or before <paramref name="through"/> (expired ones too), soonest first.</summary>
+    public async Task<IReadOnlyList<ExpiringLot>> ExpiringAsync(DateOnly through, CancellationToken ct = default)
+    {
+        var dated = (await store.ListLotDetailsAsync(null, ct)).Where(d => d.ExpiresOn <= through).ToList();
+        if (dated.Count == 0)
+            return [];
+        var items = await sales.GetItemsAsync(dated.Select(d => d.ItemId).Distinct().ToList(), ct);
+        var result = new List<ExpiringLot>();
+        foreach (var group in dated.GroupBy(d => d.ItemId))
+        {
+            var onHand = Fifo.Slices(await store.ListMovementsAsync(group.Key, ct));
+            foreach (var detail in group)
+            {
+                var quantity = onHand.Where(s => string.Equals(s.Lot, detail.Lot, StringComparison.OrdinalIgnoreCase)).Sum(s => s.Quantity);
+                if (quantity > 0m && items.TryGetValue(group.Key, out var item))
+                    result.Add(new ExpiringLot(item, detail.Lot, detail.ExpiresOn!.Value, quantity));
+            }
+        }
+
+        return result.OrderBy(l => l.ExpiresOn).ThenBy(l => l.Item.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    /// <summary>The filter for picking an item's stock automatically: with its lots' expiry dates, for lot-tracked items.</summary>
+    internal async Task<StockFilter> ForPickingAsync(Item item, StockFilter filter, CancellationToken ct) =>
+        item.Tracking == ItemTracking.Lot ? filter.WithExpiries(await ExpiriesAsync(item.Id, ct)) : filter;
+
     public async Task<IReadOnlyList<InventoryLayer>> LayersAsync(Guid itemId, DateOnly? asOf = null, CancellationToken ct = default) =>
         Fifo.Layers((await store.ListMovementsAsync(itemId, ct)).Where(m => asOf is null || m.Date <= asOf));
 
@@ -112,7 +171,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                 throw new DomainException("lot.serial_whole", $"{item.Name} is tracked by serial number, so its quantities are whole units.");
 
             var history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
-            var filter = StockFilter.In(warehouseId);
+            var filter = await ForPickingAsync(item, StockFilter.In(warehouseId), ct);
             var takes = new List<FifoTake>();
 
             // Lots named on lines first, then the rest from the oldest stock.

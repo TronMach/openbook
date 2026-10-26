@@ -1,0 +1,59 @@
+@page "/inventory/labels"
+@inject ItemService Items
+
+<PageTitle>Barcode labels · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Barcode labels</h1>
+        <a class="button secondary" href="/inventory">Inventory</a>
+    </div>
+    <p class="muted">
+        Prints Code 128 barcode labels on Letter sheets of 30 (2⅝" × 1", the common address-label stock such as Avery 5160).
+        Print at 100% ("actual size"). Only items with a barcode are listed; add one on the item's page.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_items.Count == 0)
+    {
+        <div class="card"><p>No items have a barcode yet.</p></div>
+    }
+    else
+    {
+        <form method="post" action="/inventory/labels" target="_blank" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Item</th><th>Barcode</th><th class="num">Price</th><th class="num">Labels</th></tr></thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr>
+                                <td><a href="/items/@item.Id">@item.Name</a></td>
+                                <td>@item.Barcode</td>
+                                <td class="num">@Labels.Price(item.Rate)</td>
+                                <td><input class="amount" type="number" min="0" max="900" step="1" name="copies:@item.Id" value="@(item.Id == Item ? 30 : 0)" aria-label="Labels for @item.Name" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <label class="check"><input type="checkbox" name="showPrice" value="true" checked /> <span>Show the price</span></label>
+            <div class="actions"><button type="submit">Print labels (PDF)</button></div>
+        </form>
+    }
+</div>
+
+@code {
+    private List<Item> _items = [];
+
+    [SupplyParameterFromQuery] private Guid? Item { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _items = (await Items.ListAsync()).Where(i => i.Barcode is not null).ToList();
+}

@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();
+        services.AddSingleton<OpenBook.Application.Inventory.ILabelRenderer, Forms.LabelRenderer>();
         services.AddSingleton<OpenBook.Application.Reporting.IReportExporter, ReportExporter>();
         services.AddSingleton<IEmailSender, MailKitEmailSender>();
         return services;

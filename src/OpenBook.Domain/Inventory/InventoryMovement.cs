@@ -148,6 +148,15 @@ public sealed record StockFilter(bool AnyWarehouse = true, Guid? WarehouseId = n
 
     public StockFilter WithLot(string? lot) => this with { Lot = string.IsNullOrWhiteSpace(lot) ? null : lot.Trim() };
 
+    /// <summary>Lot expiry dates (ignoring case): automatic picks take the soonest expiry first and skip lots already expired.</summary>
+    public IReadOnlyDictionary<string, DateOnly>? Expiries { get; init; }
+
+    public StockFilter WithExpiries(IReadOnlyDictionary<string, DateOnly>? expiries) => this with { Expiries = expiries is { Count: > 0 } ? expiries : null };
+
+    /// <summary>When a slice's lot expires, if known.</summary>
+    public DateOnly? ExpiryOf(StockSlice slice) =>
+        slice?.Lot is { } lot && Expiries is { } expiries && expiries.TryGetValue(lot, out var date) ? date : null;
+
     public bool Matches(StockSlice slice)
     {
         ArgumentNullException.ThrowIfNull(slice);
@@ -214,13 +223,22 @@ public static class Fifo
             return [];
         var remaining = Layers(movements).ToDictionary(l => l.LayerId, l => (l.RemainingQuantity, l.RemainingCost));
         var open = Slices(movements).Where(s => s.Quantity > 0m && s.Date <= date && filter.Matches(s)).ToList();
+        var expired = 0m;
+        if (filter.Lot is null && filter.Expiries is not null)
+        {
+            // First expiry, first out; a lot past its date is only taken when named.
+            expired = open.Where(s => filter.ExpiryOf(s) < date).Sum(s => s.Quantity);
+            open = open.Where(s => !(filter.ExpiryOf(s) < date)).OrderBy(s => filter.ExpiryOf(s) ?? DateOnly.MaxValue).ToList();
+        }
+
         var available = open.Sum(s => s.Quantity);
         if (available < quantity)
         {
             var where = filter.Lot is { } lot ? $" in lot {lot}" : "";
             where += filter.AnyWarehouse ? "" : " at that warehouse" + (filter.AnyBin ? "" : filter.BinId is null ? " (outside bins)" : " and bin");
+            var note = expired > 0m ? $" ({expired:0.####} more is in expired lots; name a lot to use it anyway)" : "";
             throw new DomainException("inventory.insufficient",
-                $"There {(available == 1m ? "is" : "are")} only {available:0.####} of {itemName}{where} on hand on {date:yyyy-MM-dd}; {quantity:0.####} needed. Enter the purchase, transfer or adjustment first.");
+                $"There {(available == 1m ? "is" : "are")} only {available:0.####} of {itemName}{where} on hand on {date:yyyy-MM-dd}{note}; {quantity:0.####} needed. Enter the purchase, transfer or adjustment first.");
         }
 
         var takes = new List<FifoTake>();

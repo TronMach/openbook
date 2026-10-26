@@ -18,6 +18,7 @@
         <a class="button secondary" href="/reports/inventory-stock">Stock status</a>
         <a class="button secondary" href="/items/new">New item</a>
         <a class="button secondary" href="/inventory/warehouses">Warehouses</a>
+        <a class="button secondary" href="/inventory/labels">Labels</a>
         <a class="button secondary" href="/inventory/transfers/new">Transfer</a>
         <a class="button secondary" href="/inventory/landed-costs/new">Landed cost</a>
         <a class="button secondary" href="/inventory/builds/new">Build assemblies</a>
@@ -85,6 +86,31 @@
                         <td class="num">@a.Lines.Count</td>
                         <td class="num">@Labels.Amount(a.ValueChange)</td>
                         <td>@(a.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_expiring.Count > 0)
+    {
+        <h2>Lots expiring within @ExpiryDays days</h2>
+        <table class="data">
+            <thead><tr><th>Item</th><th>Lot</th><th>Expires</th><th class="num">On hand</th></tr></thead>
+            <tbody>
+                @foreach (var lot in _expiring)
+                {
+                    <tr>
+                        <td><a href="/items/@lot.Item.Id#lots">@lot.Item.Name</a></td>
+                        <td><a href="/inventory?lot=@Uri.EscapeDataString(lot.Lot)">@lot.Lot</a></td>
+                        <td>
+                            @Labels.Date(lot.ExpiresOn)
+                            @if (lot.ExpiresOn < _today)
+                            {
+                                <span class="badge warn">Expired</span>
+                            }
+                        </td>
+                        <td class="num">@Labels.Quantity(lot.Quantity)</td>
                     </tr>
                 }
             </tbody>
@@ -207,6 +233,9 @@
     private IReadOnlyList<LandedCost> _landed = [];
     private Dictionary<Guid, string> _names = [];
     private IReadOnlyList<StockTransfer> _transfers = [];
+    private IReadOnlyList<ExpiringLot> _expiring = [];
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private const int ExpiryDays = 30;
     private IReadOnlyList<InventoryMovement> _lotHistory = [];
     private Func<StockPlace, string> _place = _ => "";
 
@@ -232,6 +261,7 @@
         _landed = await LandedCosts.ListAsync();
         _names = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id, i => i.Name);
         _transfers = await Transfers.ListAsync();
+        _expiring = await Inventory.ExpiringAsync(_today.AddDays(ExpiryDays));
         _place = await WarehouseService.NamerAsync();
         if (Lot is { Length: > 0 } lot)
             _lotHistory = await Inventory.LotHistoryAsync(lot);

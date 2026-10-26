@@ -95,11 +95,26 @@ public sealed class LandedCostService(
             var receipt = received[i];
             var share = shares[i];
             var item = items[receipt.ItemId];
-            var layer = Fifo.Layers(await store.ListMovementsAsync(item.Id, ct)).Single(l => l.LayerId == receipt.Id);
-            var toStock = layer.RemainingQuantity <= 0m ? 0m
-                : layer.RemainingQuantity >= receipt.Quantity ? share
-                : decimal.Round(share * layer.RemainingQuantity / receipt.Quantity, 2, MidpointRounding.AwayFromZero);
-            lines.Add((receipt.SourceId, receipt.Id, item.Id, share, toStock));
+            var history = await store.ListMovementsAsync(item.Id, ct);
+            var layer = Fifo.Layers(history).Single(l => l.LayerId == receipt.Id);
+
+            // Stock from the layer that went into assemblies carries its share into them; the rest is on hand or gone.
+            var reversed = history.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
+            var built = history
+                .Where(m => m.LayerId == receipt.Id && m.Quantity < 0m && m.SourceType == InventorySources.AssemblyBuild && m.ReversalOf is null && !reversed.Contains(m.Id))
+                .GroupBy(m => m.SourceId)
+                .Select(g => (BuildId: g.Key, Quantity: -g.Sum(m => m.Quantity)))
+                .ToList();
+            var toStock = Portion(share, Math.Max(0m, layer.RemainingQuantity), receipt.Quantity);
+            var intoBuilds = 0m;
+            foreach (var (buildId, quantity) in built)
+            {
+                var part = Portion(share, quantity, receipt.Quantity);
+                intoBuilds += part;
+                await CarryIntoBuildAsync(buildId, part, receipt.SourceId, command.Date, lines, postings, movements, ct);
+            }
+
+            lines.Add((receipt.SourceId, receipt.Id, item.Id, share - intoBuilds, toStock));
             if (toStock != 0m)
             {
                 postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, toStock, $"Landed cost: {item.Name}"));
@@ -107,8 +122,8 @@ public sealed class LandedCostService(
                 movements.Add((type, id, at) => InventoryMovement.CostAdjustment(layerId, item.Id, command.Date, toStock, type, id, at));
             }
 
-            if (share - toStock != 0m)
-                postings.Add(JournalLineDraft.Dr(item.CostAccountId!.Value, share - toStock, $"Landed cost: {item.Name} already sold"));
+            if (share - intoBuilds - toStock != 0m)
+                postings.Add(JournalLineDraft.Dr(item.CostAccountId!.Value, share - intoBuilds - toStock, $"Landed cost: {item.Name} already sold"));
         }
 
         postings.Add(JournalLineDraft.Cr(from.Id, command.Amount, "Landed cost"));
@@ -152,6 +167,46 @@ public sealed class LandedCostService(
         await store.SaveChangesAsync(ct);
         return landed;
     }
+
+    /// <summary>
+    /// A build's share of a landed cost: spread over the assembly layers it made (by quantity), each split between the
+    /// assemblies still on hand (added to the layer) and those already sold (the assembly's cost of goods sold).
+    /// </summary>
+    private async Task CarryIntoBuildAsync(
+        Guid buildId, decimal amount, Guid billId, DateOnly date,
+        List<(Guid BillId, Guid LayerId, Guid ItemId, decimal Amount, decimal ToStock)> lines,
+        List<JournalLineDraft> postings, List<Func<string, Guid, DateTimeOffset, InventoryMovement>> movements, CancellationToken ct)
+    {
+        if (amount == 0m)
+            return;
+        var outputs = (await store.ListMovementsForSourceAsync(InventorySources.AssemblyBuild, buildId, ct)).Where(m => m.IsReceipt).ToList();
+        var assembly = (await sales.GetItemsAsync(outputs.Select(o => o.ItemId).Distinct().ToList(), ct)).Values.Single();
+        var history = await store.ListMovementsAsync(assembly.Id, ct);
+        var layers = Fifo.Layers(history).ToDictionary(l => l.LayerId);
+        var total = outputs.Sum(o => o.Quantity);
+        var left = amount;
+        for (var i = 0; i < outputs.Count; i++)
+        {
+            // By quantity, the last layer taking the rounding.
+            var (layerId, quantity) = (outputs[i].Id, outputs[i].Quantity);
+            var part = i == outputs.Count - 1 ? left : decimal.Round(amount * quantity / total, 2, MidpointRounding.AwayFromZero);
+            left -= part;
+            var toStock = Portion(part, Math.Max(0m, layers[layerId].RemainingQuantity), quantity);
+            lines.Add((billId, layerId, assembly.Id, part, toStock));
+            if (toStock != 0m)
+            {
+                postings.Add(JournalLineDraft.Dr(assembly.InventoryAssetAccountId!.Value, toStock, $"Landed cost: {assembly.Name}"));
+                movements.Add((type, id, at) => InventoryMovement.CostAdjustment(layerId, assembly.Id, date, toStock, type, id, at));
+            }
+
+            if (part - toStock != 0m)
+                postings.Add(JournalLineDraft.Dr(assembly.CostAccountId!.Value, part - toStock, $"Landed cost: {assembly.Name} already sold"));
+        }
+    }
+
+    /// <summary>The share of <paramref name="amount"/> for <paramref name="quantity"/> of <paramref name="of"/>, to the cent.</summary>
+    private static decimal Portion(decimal amount, decimal quantity, decimal of) =>
+        quantity <= 0m ? 0m : quantity >= of ? amount : decimal.Round(amount * quantity / of, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Bill receipts not undone by a void.</summary>
     private static IEnumerable<InventoryMovement> Received(IReadOnlyList<InventoryMovement> movements)

@@ -1130,6 +1130,25 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("LandedCosts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Inventory.LotDetail", b =>
+                {
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Lot")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExpiresOn")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ItemId", "Lot");
+
+                    b.HasIndex("ExpiresOn");
+
+                    b.ToTable("LotDetails", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Inventory.StockTransfer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3415,6 +3434,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Inventory.LotDetail", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Inventory.StockTransfer", b =>

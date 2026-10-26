@@ -14,6 +14,7 @@ public sealed class StockTransferService(
     IInventoryStore store,
     ISalesStore sales,
     WarehouseService warehouses,
+    InventoryService inventory,
     IClock clock,
     ICurrentUser user)
 {
@@ -47,7 +48,7 @@ public sealed class StockTransferService(
             var named = LotText.Parse(draft.Lots, item.Tracking, draft.Quantity, item.Name);
             var takes = new List<FifoTake>();
             if (named.Count == 0)
-                takes.AddRange(InventoryService.TakeAndSimulate(item, history, draft.Quantity, command.Date, StockFilter.At(from)));
+                takes.AddRange(InventoryService.TakeAndSimulate(item, history, draft.Quantity, command.Date, await inventory.ForPickingAsync(item, StockFilter.At(from), ct)));
             foreach (var (lot, quantity) in named)
                 takes.AddRange(InventoryService.TakeAndSimulate(item, history, quantity, command.Date, StockFilter.At(from).WithLot(lot)));
 

@@ -44,6 +44,10 @@ public interface IInventoryStore
     /// <summary>Tracked, with lines.</summary>
     Task<StockTransfer?> GetTransferAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Tracked; every item's when <paramref name="itemId"/> is null.</summary>
+    Task<IReadOnlyList<LotDetail>> ListLotDetailsAsync(Guid? itemId, CancellationToken ct);
+
+    void Add(LotDetail detail);
     void Add(Warehouse warehouse);
     void Add(Bin bin);
     void Add(StockTransfer transfer);

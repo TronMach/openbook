@@ -43,6 +43,11 @@ internal sealed class EfInventoryStore(OpenBookDbContext db) : IInventoryStore
 
     public Task<StockTransfer?> GetTransferAsync(Guid id, CancellationToken ct) => db.StockTransfers.SingleOrDefaultAsync(t => t.Id == id, ct);
 
+    public async Task<IReadOnlyList<LotDetail>> ListLotDetailsAsync(Guid? itemId, CancellationToken ct) =>
+        await db.LotDetails.Where(l => itemId == null || l.ItemId == itemId).ToListAsync(ct);
+
+    public void Add(LotDetail detail) => db.LotDetails.Add(detail);
+
     public void Add(Warehouse warehouse) => db.Warehouses.Add(warehouse);
 
     public void Add(Bin bin) => db.Bins.Add(bin);

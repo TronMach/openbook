@@ -70,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<AssemblyBuildService>();
         services.AddScoped<WarehouseService>();
         services.AddScoped<StockTransferService>();
+        services.AddScoped<LabelService>();
         services.AddScoped<LandedCostService>();
         services.AddScoped<InventoryReports>();
         services.AddScoped<InvoiceService>();

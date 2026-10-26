@@ -205,4 +205,27 @@ public sealed class InventoryCostingTests : IAsyncLifetime
         Assert.Equal("landed_cost.account_type", await Refused(() => Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
             new CreateLandedCostCommand(Feb1, 5m, [bill.Id], FromAccountId: bank.Id)))));
     }
+
+    [Fact]
+    public async Task Landed_cost_on_stock_built_into_assemblies_goes_onto_the_assemblies()
+    {
+        var leg = await NewItem("Steel leg", ItemType.Inventory);
+        var stool = await NewItem("Stool", ItemType.Assembly, 80m);
+        stool = await Components(stool, (leg, 4m));
+        var bill = await Buy(Jan10, (leg, 10m, 30m));
+        var build = await Run(sp => sp.GetRequiredService<AssemblyBuildService>().CreateAsync(new BuildAssemblyCommand(stool.Id, 2m, Jan20)));
+        await Sell(Feb1, stool, 1m);
+
+        var landed = await Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
+            new CreateLandedCostCommand(new DateOnly(2026, 2, 2), 10m, [bill.Id], LandedCostMethod.ByValue, _freight.Id)));
+
+        // 2 of 10 legs are still on hand (2.00); 8 went into 2 stools (8.00): one still on hand (4.00), one sold (4.00).
+        Assert.Equal((2m, 2m), Share(landed, leg));
+        Assert.Equal((8m, 4m), Share(landed, stool));
+        Assert.Equal(12m + 4m, (await Stock(stool)).Value); // the stool on hand: 4 legs at 3.00, plus its share
+        Assert.Equal(6m + 2m, (await Stock(leg)).Value);
+        Assert.Equal(-10m, await Balance(_freight.Id));
+        Assert.Equal("inventory.layer_used", await Refused(() => Run(sp => sp.GetRequiredService<AssemblyBuildService>().VoidAsync(build.Id, "Wrong"))));
+    }
+
 }

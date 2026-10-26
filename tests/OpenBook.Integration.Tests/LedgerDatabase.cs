@@ -53,7 +53,8 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
         var provider = DatabaseProvider.Sqlite;
         if (OnPostgres)
         {
-            connectionString = new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Database = _postgresDatabase }.ToString();
+            // A whole suite creates hundreds of databases at once; give connections longer than the default 15 s to get through.
+            connectionString = new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Database = _postgresDatabase, Timeout = 120, CommandTimeout = 120 }.ToString();
             provider = DatabaseProvider.Postgres;
         }
         else
@@ -88,13 +89,33 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
         if (OnPostgres)
         {
             Npgsql.NpgsqlConnection.ClearAllPools();
-            await using var admin = new Npgsql.NpgsqlConnection(PostgresFactAttribute.ConnectionString);
-            await admin.OpenAsync();
-            await using var drop = new Npgsql.NpgsqlCommand($"""DROP DATABASE IF EXISTS "{_postgresDatabase}" WITH (FORCE);""", admin);
-            await drop.ExecuteNonQueryAsync();
+            await DropPostgresDatabaseAsync(_postgresDatabase);
         }
         if (Directory.Exists(BackupDirectory))
             Directory.Delete(BackupDirectory, recursive: true);
+    }
+
+    /// <summary>
+    /// Drops a test database. A login that isn't a superuser can't end an autovacuum worker that's still busy in it
+    /// (42501 on PostgreSQL 17), so the drop is retried for a few seconds while the worker finishes.
+    /// </summary>
+    internal static async Task DropPostgresDatabaseAsync(string database)
+    {
+        await using var admin = new Npgsql.NpgsqlConnection(new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Timeout = 120, CommandTimeout = 120 }.ToString());
+        await admin.OpenAsync();
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var drop = new Npgsql.NpgsqlCommand($"""DROP DATABASE IF EXISTS "{database}" WITH (FORCE);""", admin);
+                await drop.ExecuteNonQueryAsync();
+                return;
+            }
+            catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501" && attempt < 20)
+            {
+                await Task.Delay(250);
+            }
+        }
     }
 
     public Task<User> SetUpCompany(string name = "Test Co") =>

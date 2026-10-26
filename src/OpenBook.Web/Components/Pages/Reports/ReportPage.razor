@@ -1,6 +1,7 @@
 @page "/reports/{Key}"
 @using OpenBook.Application.Reporting
 @using OpenBook.Domain.Reporting
+@inject OpenBook.Application.Inventory.WarehouseService Warehouses
 @inject ReportCatalog Catalog
 @inject CompanySettingsService Settings
 @inject BudgetService Budgets
@@ -41,6 +42,19 @@
                     <select id="detail" name="detail">
                         <option value="false" selected="@(!_parameters.GetFlag("detail"))">Summary</option>
                         <option value="true" selected="@_parameters.GetFlag("detail")">Each document</option>
+                    </select>
+                </div>
+            }
+            @if (Has(ReportInputs.Warehouse) && _warehouses.Count > 1)
+            {
+                <div class="field">
+                    <label for="warehouse">Warehouse</label>
+                    <select id="warehouse" name="warehouseId">
+                        <option value="">All warehouses</option>
+                        @foreach (var w in _warehouses)
+                        {
+                            <option value="@w.Id" selected="@(w.Id == _parameters.GetId("warehouseId"))">@w.Name</option>
+                        }
                     </select>
                 </div>
             }
@@ -140,6 +154,7 @@
     private IReadOnlyList<Budget> _budgets = [];
     private Budget? _budget;
     private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<OpenBook.Domain.Inventory.Warehouse> _warehouses = [];
     private IReadOnlyList<OpenBook.Domain.Pricing.PriceLevel> _levels = [];
     private ReportTable? _table;
     private string? _error;
@@ -169,6 +184,9 @@
             _customers = (await Customers.ListAsync(today)).Select(c => c.Customer).ToList();
             _levels = await Pricing.ListLevelsAsync();
         }
+
+        if (Has(ReportInputs.Warehouse))
+            _warehouses = await Warehouses.ListAsync(includeInactive: true);
 
         if (Has(ReportInputs.Budget))
         {

@@ -71,10 +71,7 @@ public sealed class PostgresTests : IAsyncLifetime
             return;
         await _services.DisposeAsync();
         NpgsqlConnection.ClearAllPools();
-        await using var admin = new NpgsqlConnection(PostgresFactAttribute.ConnectionString);
-        await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"""DROP DATABASE IF EXISTS "{_database}" WITH (FORCE);""", admin);
-        await drop.ExecuteNonQueryAsync();
+        await LedgerDatabase.DropPostgresDatabaseAsync(_database);
     }
 
     private async Task<T> InScope<T>(Func<IServiceProvider, Task<T>> work)

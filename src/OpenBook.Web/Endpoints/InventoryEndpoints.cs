@@ -37,6 +37,43 @@ public static class InventoryEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/items/{id:guid}/lots/expiry", async (Guid id, IFormCollection form, InventoryService inventory, CancellationToken ct) =>
+        {
+            var date = DateOnly.TryParseExact(form["expiresOn"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : (DateOnly?)null;
+            try
+            {
+                await inventory.SetLotExpiryAsync(id, form["lot"].ToString(), date, ct);
+                return Results.Redirect($"/items/{id}?lots=saved#lots");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/items/{id}?lotError={Uri.EscapeDataString(ex.Message)}#lots");
+            }
+        }).RequireAuthorization();
+
+        // Fields: copies:{itemId} (how many labels of each) and showPrice. The PDF opens in a new tab.
+        app.MapPost("/inventory/labels", async (IFormCollection form, HttpContext http, LabelService labels, CancellationToken ct) =>
+        {
+            var requests = new List<(Guid, int)>();
+            foreach (var (field, values) in form)
+            {
+                if (field.StartsWith("copies:", StringComparison.Ordinal) && Guid.TryParse(field[7..], out var itemId)
+                    && int.TryParse(values.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var copies) && copies > 0)
+                    requests.Add((itemId, copies));
+            }
+
+            try
+            {
+                var pdf = await labels.RenderAsync(requests, form["showPrice"] == "true", ct);
+                http.Response.Headers.ContentDisposition = new Microsoft.Net.Http.Headers.ContentDispositionHeaderValue("inline") { FileNameStar = "Labels.pdf" }.ToString();
+                return Results.File(pdf, "application/pdf");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/inventory/labels?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/inventory/warehouses", async (IFormCollection form, WarehouseService warehouses, CancellationToken ct) =>
             await Warehouses(() => warehouses.CreateAsync(form["name"].ToString(), form["address"], ct))).RequireAuthorization();
 

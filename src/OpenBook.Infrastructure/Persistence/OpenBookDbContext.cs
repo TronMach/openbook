@@ -77,6 +77,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
     public DbSet<AssemblyBuild> AssemblyBuilds => Set<AssemblyBuild>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<LotDetail> LotDetails => Set<LotDetail>();
     public DbSet<Bin> Bins => Set<Bin>();
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<LandedCost> LandedCosts => Set<LandedCost>();
@@ -731,6 +732,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(x => x.Name).IsUnique();
             b.Property(x => x.Address).HasMaxLength(500);
             b.Ignore(x => x.Key);
+        });
+
+        modelBuilder.Entity<LotDetail>(b =>
+        {
+            b.ToTable("LotDetails");
+            b.HasKey(x => new { x.ItemId, x.Lot });
+            b.Property(x => x.Lot).HasMaxLength(LotText.MaxLotLength);
+            b.HasIndex(x => x.ExpiresOn);
+            b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Bin>(b =>
