@@ -55,8 +55,27 @@ public interface IBankingStore
 
     Task<BankRule?> GetRuleAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Every bank connection with its accounts, tracked.</summary>
+    Task<IReadOnlyList<BankConnection>> ListConnectionsAsync(CancellationToken ct);
+
+    Task<BankConnection?> GetConnectionAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Every petty cash fund, tracked.</summary>
+    Task<IReadOnlyList<PettyCashFund>> ListPettyCashFundsAsync(CancellationToken ct);
+
+    Task<PettyCashFund?> GetPettyCashFundAsync(Guid id, CancellationToken ct);
+
+    /// <summary>The fund's counts, newest first.</summary>
+    Task<IReadOnlyList<CashCount>> ListCashCountsAsync(Guid fundId, CancellationToken ct);
+
+    Task<PositivePaySettings?> GetPositivePaySettingsAsync(Guid accountId, CancellationToken ct);
+
     void Add(BankTransaction transaction);
     void Add(BankFeedItem item);
+    void Add(BankConnection connection);
+    void Add(PettyCashFund fund);
+    void Add(CashCount count);
+    void Add(PositivePaySettings settings);
     void Add(BankRule rule);
     void Add(Reconciliation reconciliation);
     void Remove(Reconciliation reconciliation);

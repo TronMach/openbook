@@ -1,0 +1,144 @@
+@page "/banking/positive-pay"
+@inject PositivePayService PayService
+@inject AccountService AccountService
+
+<PageTitle>Positive pay · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Positive pay</h1>
+        <a class="button secondary" href="/banking">Back to banking</a>
+    </div>
+    <p class="muted">
+        With positive pay, your bank only cashes checks listed in an issue file you send it. This makes that file: every numbered check
+        written on the account in the date range (expenses and bill payments), with voided checks marked <strong>V</strong>. Upload it on
+        your bank's positive pay page. Banks differ, so check the columns and date format against their instructions.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_banks.Count == 0)
+    {
+        <div class="card"><p>No bank accounts yet.</p></div>
+    }
+    else
+    {
+        <form class="card filters" method="get" data-enhance="false">
+            <div class="row">
+                <div class="field">
+                    <label for="account">Account</label>
+                    <select id="account" name="accountId">
+                        @foreach (var a in _banks)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _accountId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="from">From</label>
+                    <input id="from" type="date" name="from" value="@_from.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field">
+                    <label for="to">To</label>
+                    <input id="to" type="date" name="to" value="@_to.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">Show checks</button></div>
+            @if (_settings?.LastExportedThrough is { } through)
+            {
+                <p class="muted">Last exported @_settings.LastExportedAt?.ToLocalTime().ToString("g"), covering checks through @Labels.Date(through).</p>
+            }
+        </form>
+
+        @if (_checks.Count == 0)
+        {
+            <div class="card"><p>No numbered checks on this account in that range. Only references made of digits count as check numbers.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Check no.</th><th>Payee</th><th class="num">Amount</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _checks)
+                        {
+                            <tr>
+                                <td>@Labels.Date(c.Date)</td>
+                                <td>@c.Number</td>
+                                <td>@c.Payee</td>
+                                <td class="num">@Labels.Amount(c.Amount)</td>
+                                <td>@if (c.Void) { <span class="badge">Void</span> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><td colspan="3">@_checks.Count check(s) issued, voids excluded from the total</td><td class="num">@Labels.Amount(_checks.Where(c => !c.Void).Sum(c => c.Amount))</td><td></td></tr></tfoot>
+                </table>
+            </div>
+
+            <form class="card" method="post" action="/banking/positive-pay/export" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="accountId" value="@_accountId" />
+                <input type="hidden" name="from" value="@_from.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="to" value="@_to.ToString("yyyy-MM-dd")" />
+                <h2>Issue file</h2>
+                <div class="row">
+                    <div class="field">
+                        <label for="number">Account number at the bank</label>
+                        <input id="number" name="bankAccountNumber" value="@_settings?.BankAccountNumber" maxlength="34" required autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label for="date-format">Date format</label>
+                        <select id="date-format" name="dateFormat">
+                            @foreach (var f in Enum.GetValues<PositivePayDateFormat>())
+                            {
+                                <option value="@f" selected="@(_settings?.DateFormat == f)">@PositivePayService.Format(new DateOnly(2026, 10, 26), f)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <label class="check"><input type="checkbox" name="includeHeader" value="true" checked="@(_settings?.IncludeHeader ?? true)" /> <span>Include a header row</span></label>
+                <p class="muted">Columns: account number, check number, issue date, amount, payee, void (V). OpenBook remembers these settings for the account.</p>
+                <div class="actions"><button type="submit">Download CSV</button></div>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _banks = [];
+    private Guid _accountId;
+    private DateOnly _from;
+    private DateOnly _to;
+    private PositivePaySettings? _settings;
+    private IReadOnlyList<PositivePayCheck> _checks = [];
+
+    [SupplyParameterFromQuery] private Guid? AccountId { get; set; }
+    [SupplyParameterFromQuery] private string? From { get; set; }
+    [SupplyParameterFromQuery] private string? To { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
+        if (_banks.Count == 0)
+            return;
+        _accountId = AccountId is { } chosen && _banks.Any(b => b.Id == chosen) ? chosen : _banks[0].Id;
+        _settings = await PayService.SettingsAsync(_accountId);
+
+        // By default: from the day after the last export (or the start of the month) to today.
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _to = Parse(To) ?? today;
+        _from = Parse(From) ?? _settings.LastExportedThrough?.AddDays(1) ?? new DateOnly(today.Year, today.Month, 1);
+        if (_from > _to)
+            _from = _to;
+        _checks = await PayService.ListAsync(_accountId, _from, _to);
+    }
+
+    private static DateOnly? Parse(string? text) =>
+        DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+}

@@ -1,0 +1,170 @@
+@page "/banking/connections/{Id:guid}"
+@inject BankConnectionService ConnectionService
+@inject AccountService AccountService
+
+<PageTitle>@(_connection?.Name ?? "Bank connection") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_connection is null)
+    {
+        <h1>Bank connection</h1>
+        <p>That connection doesn't exist. <a href="/banking/connections">Back to bank connections</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_connection.Name</h1>
+            <a class="button secondary" href="/banking/connections">All connections</a>
+            @if (_connection.IsActive)
+            {
+                <form method="post" action="/banking/connections/@Id/sync" data-enhance="false">
+                    <AntiforgeryToken />
+                    <button type="submit">Sync now</button>
+                </form>
+            }
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        else if (Done is not null)
+        {
+            <div class="alert success" role="status">@DoneMessage()</div>
+        }
+
+        <div class="card">
+            <p>
+                @(_connection.Provider == BankConnectionProvider.SimpleFin ? "SimpleFIN Bridge" : _connection.Provider.ToString()) ·
+                connected @_connection.CreatedAt.ToLocalTime().ToString("d") ·
+                @if (!_connection.IsActive)
+                {
+                    <span class="badge">Disconnected</span>
+                }
+                else
+                {
+                    <span>last sync @(_connection.LastSyncAt is { } at ? at.ToLocalTime().ToString("g") : "never")</span>
+                }
+            </p>
+            @if (_connection.LastError is { } problem)
+            {
+                <p class="@(_connection.LastSyncFailed ? "out-of-balance" : "muted")">@problem</p>
+            }
+        </div>
+
+        <h2>Accounts</h2>
+        @if (_connection.Accounts.Count == 0)
+        {
+            <div class="card"><p>The service hasn't reported any accounts yet. Connect your banks in SimpleFIN Bridge, then sync.</p></div>
+        }
+        else
+        {
+            <p class="muted">
+                Choose where each account's transactions go. The first sync fetches from the start date (or the last
+                @BankConnectionService.DefaultHistoryDays days); later syncs pick up from there. Lines already in the feed are never fetched twice.
+            </p>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>At the bank</th><th class="num">Bank balance</th><th>Goes to</th><th>Fetch from</th><th>Fetched through</th><th></th></tr></thead>
+                    <tbody>
+                        @{ var row = 0; }
+                        @foreach (var remote in _connection.Accounts.OrderBy(a => a.Institution).ThenBy(a => a.Name))
+                        {
+                            var formId = $"link-{row++}";
+                            <tr>
+                                <td>
+                                    @remote.Name
+                                    @if (remote.Institution is { } bank)
+                                    {
+                                        <div class="muted">@bank</div>
+                                    }
+                                </td>
+                                <td class="num">@(remote.Balance is { } b ? Labels.Amount(b) : "")</td>
+                                <td>
+                                    <select name="accountId" form="@formId" aria-label="Account for @remote.Name" disabled="@(!_connection.IsActive)">
+                                        <option value="">Don't fetch</option>
+                                        @foreach (var a in _accounts)
+                                        {
+                                            <option value="@a.Id" selected="@(a.Id == remote.AccountId)">@_chart.FullName(a.Id)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input type="date" name="importFrom" form="@formId" value="@remote.ImportFrom?.ToString("yyyy-MM-dd")" aria-label="Fetch from" disabled="@(!_connection.IsActive)" /></td>
+                                <td>
+                                    @if (remote.FetchedThrough is { } through)
+                                    {
+                                        @Labels.Date(through)
+                                    }
+                                    @if (remote.AccountId is { } linked)
+                                    {
+                                        <div><a href="/banking/@linked/feed">Review feed</a></div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (_connection.IsActive)
+                                    {
+                                        <form id="@formId" method="post" action="/banking/connections/@Id/link" data-enhance="false">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="remoteId" value="@remote.RemoteId" />
+                                            <button type="submit" class="secondary">Save</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_connection.IsActive)
+        {
+            <div class="card">
+                <h2>Settings</h2>
+                <form method="post" action="/banking/connections/@Id/rename" data-enhance="false" class="row">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="name">Name</label>
+                        <input id="name" name="name" value="@_connection.Name" maxlength="100" required />
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">Rename</button></div>
+                </form>
+                <form method="post" action="/banking/connections/@Id/disconnect" data-enhance="false"
+                      onsubmit="return confirm('Disconnect? OpenBook forgets the key and stops fetching. Transactions already fetched stay in the bank feed.')">
+                    <AntiforgeryToken />
+                    <p class="muted">Disconnecting forgets the access key. Also remove OpenBook's access in SimpleFIN Bridge.</p>
+                    <button type="submit" class="danger">Disconnect</button>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private BankConnection? _connection;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _accounts = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private int? Queued { get; set; }
+    [SupplyParameterFromQuery] private int? Added { get; set; }
+    [SupplyParameterFromQuery] private int? Skipped { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _connection = await ConnectionService.GetAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+        _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => BankTransaction.IsBankingAccount(a.Type)).ToList();
+    }
+
+    private string DoneMessage() => Done switch
+    {
+        "connected" => "Connected. Choose which accounts to fetch, then sync.",
+        "synced" => $"Synced: {Queued ?? 0} new line(s) to review{(Added > 0 ? $", {Added} added by bank rules" : "")}{(Skipped > 0 ? $", {Skipped} already fetched" : "")}.",
+        "linked" => "Saved. The next sync fetches it.",
+        "disconnected" => "Disconnected.",
+        _ => "Saved.",
+    };
+}

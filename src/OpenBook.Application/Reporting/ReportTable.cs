@@ -145,7 +145,7 @@ public static class ReportCsv
         _ => value.ToString() ?? string.Empty,
     };
 
-    private static string Quote(string field)
+    internal static string Quote(string field)
     {
         // A leading =, +, - or @ would make a spreadsheet treat text as a formula.
         if (field.Length > 0 && "=+@".Contains(field[0], StringComparison.Ordinal) || field.StartsWith('-') && !decimal.TryParse(field, NumberStyles.Number, CultureInfo.InvariantCulture, out _))

@@ -42,6 +42,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Reconciliation> Reconciliations => Set<Reconciliation>();
     public DbSet<BankFeedItem> BankFeedItems => Set<BankFeedItem>();
     public DbSet<BankRule> BankRules => Set<BankRule>();
+    public DbSet<BankConnection> BankConnections => Set<BankConnection>();
+    public DbSet<PettyCashFund> PettyCashFunds => Set<PettyCashFund>();
+    public DbSet<CashCount> CashCounts => Set<CashCount>();
+    public DbSet<PositivePaySettings> PositivePaySettings => Set<PositivePaySettings>();
 
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Item> Items => Set<Item>();
@@ -293,6 +297,64 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<BankTransaction>().WithMany().HasForeignKey(i => i.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(i => i.MatchedJournalEntryId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<BankRule>().WithMany().HasForeignKey(i => i.RuleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BankConnection>(b =>
+        {
+            b.ToTable("BankConnections");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Provider).HasConversion<string>().HasMaxLength(20);
+            b.Property(c => c.Name).HasMaxLength(BankConnection.MaxNameLength);
+            b.Property(c => c.ProtectedAccess).HasMaxLength(4000);
+            b.Property(c => c.LastError).HasMaxLength(1000);
+            b.OwnsMany(c => c.Accounts, a =>
+            {
+                a.ToTable("BankConnectionAccounts");
+                a.WithOwner().HasForeignKey(x => x.ConnectionId);
+                a.HasKey(x => new { x.ConnectionId, x.RemoteId });
+                a.Property(x => x.RemoteId).HasMaxLength(200);
+                a.Property(x => x.Name).HasMaxLength(200);
+                a.Property(x => x.Institution).HasMaxLength(200);
+                a.Property(x => x.Currency).HasMaxLength(10);
+                a.Property(x => x.Balance).HasColumnName("BalanceMinor").HasConversion(NullableMinorUnits);
+                a.HasIndex(x => x.AccountId);
+                a.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(c => c.Accounts).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<PettyCashFund>(b =>
+        {
+            b.ToTable("PettyCashFunds");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.FloatAmount).HasColumnName("FloatMinor").HasConversion(MinorUnits);
+            b.Property(f => f.Custodian).HasMaxLength(100);
+            b.HasIndex(f => f.AccountId).IsUnique();
+            b.HasOne<Account>().WithMany().HasForeignKey(f => f.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CashCount>(b =>
+        {
+            b.ToTable("CashCounts");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Counted).HasColumnName("CountedMinor").HasConversion(MinorUnits);
+            b.Property(c => c.BookBalance).HasColumnName("BookBalanceMinor").HasConversion(MinorUnits);
+            b.Ignore(c => c.Difference);
+            b.Property(c => c.Breakdown).HasMaxLength(1000);
+            b.Property(c => c.Note).HasMaxLength(500);
+            b.Property(c => c.CountedBy).HasMaxLength(100);
+            b.HasIndex(c => new { c.FundId, c.Date });
+            b.HasOne<PettyCashFund>().WithMany().HasForeignKey(c => c.FundId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<BankTransaction>().WithMany().HasForeignKey(c => c.AdjustmentTransactionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PositivePaySettings>(b =>
+        {
+            b.ToTable("PositivePaySettings");
+            b.HasKey(s => s.AccountId);
+            b.Property(s => s.BankAccountNumber).HasMaxLength(34);
+            b.Property(s => s.DateFormat).HasConversion<string>().HasMaxLength(30);
+            b.HasOne<Account>().WithMany().HasForeignKey(s => s.AccountId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Segment>(b =>

@@ -78,6 +78,31 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
 
     public Task<BankRule?> GetRuleAsync(Guid id, CancellationToken ct) => db.BankRules.SingleOrDefaultAsync(r => r.Id == id, ct);
 
+    public async Task<IReadOnlyList<BankConnection>> ListConnectionsAsync(CancellationToken ct) =>
+        await db.BankConnections.Include(c => c.Accounts).ToListAsync(ct);
+
+    public Task<BankConnection?> GetConnectionAsync(Guid id, CancellationToken ct) =>
+        db.BankConnections.Include(c => c.Accounts).SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    public async Task<IReadOnlyList<PettyCashFund>> ListPettyCashFundsAsync(CancellationToken ct) => await db.PettyCashFunds.ToListAsync(ct);
+
+    public Task<PettyCashFund?> GetPettyCashFundAsync(Guid id, CancellationToken ct) => db.PettyCashFunds.SingleOrDefaultAsync(f => f.Id == id, ct);
+
+    // SQLite can't ORDER BY a DateTimeOffset, so the tie-break on CountedAt happens in memory.
+    public async Task<IReadOnlyList<CashCount>> ListCashCountsAsync(Guid fundId, CancellationToken ct) =>
+        (await db.CashCounts.Where(c => c.FundId == fundId).ToListAsync(ct)).OrderByDescending(c => c.Date).ThenByDescending(c => c.CountedAt).ToList();
+
+    public Task<PositivePaySettings?> GetPositivePaySettingsAsync(Guid accountId, CancellationToken ct) =>
+        db.PositivePaySettings.SingleOrDefaultAsync(s => s.AccountId == accountId, ct);
+
+    public void Add(BankConnection connection) => db.BankConnections.Add(connection);
+
+    public void Add(PettyCashFund fund) => db.PettyCashFunds.Add(fund);
+
+    public void Add(CashCount count) => db.CashCounts.Add(count);
+
+    public void Add(PositivePaySettings settings) => db.PositivePaySettings.Add(settings);
+
     public void Add(Reconciliation reconciliation) => db.Reconciliations.Add(reconciliation);
 
     public void Remove(Reconciliation reconciliation) => db.Reconciliations.Remove(reconciliation);

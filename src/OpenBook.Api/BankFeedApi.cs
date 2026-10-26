@@ -97,3 +97,80 @@ internal static class BankFeedApi
         });
     }
 }
+
+public sealed record ConnectRequest(string SetupToken, string? Name);
+
+public sealed record LinkConnectionAccountRequest(Guid? AccountId, DateOnly? ImportFrom);
+
+public sealed record BankConnectionResponse(
+    Guid Id, BankConnectionProvider Provider, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastSyncAt,
+    DateTimeOffset? LastSuccessAt, bool LastSyncFailed, string? LastError, IReadOnlyList<BankConnectionAccountResponse> Accounts)
+{
+    /// <summary>Never includes the access credential.</summary>
+    public static BankConnectionResponse From(BankConnection c) => new(
+        c.Id, c.Provider, c.Name, c.IsActive, c.CreatedAt, c.LastSyncAt, c.LastSuccessAt, c.LastSyncFailed, c.LastError,
+        c.Accounts.Select(a => new BankConnectionAccountResponse(a.RemoteId, a.Name, a.Institution, a.Currency, a.Balance, a.BalanceDate, a.AccountId, a.ImportFrom, a.FetchedThrough)).ToList());
+}
+
+public sealed record BankConnectionAccountResponse(
+    string RemoteId, string Name, string? Institution, string? Currency, decimal? Balance, DateOnly? BalanceDate, Guid? AccountId, DateOnly? ImportFrom,
+    DateOnly? FetchedThrough);
+
+public sealed record PositivePayExportRequest(Guid AccountId, DateOnly From, DateOnly To, string? BankAccountNumber, PositivePayDateFormat DateFormat, bool IncludeHeader = true);
+
+public sealed record UpdatePettyCashFundRequest(decimal FloatAmount, string? Custodian, bool Active = true);
+
+public sealed record ReplenishRequest(Guid FromAccountId, DateOnly Date);
+
+internal static class BankingProApi
+{
+    public static void MapBankingProApi(this RouteGroupBuilder api)
+    {
+        var banking = api.MapGroup("/banking");
+
+        banking.MapGet("/connections", async (BankConnectionService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(BankConnectionResponse.From));
+        banking.MapGet("/connections/{id:guid}", async (Guid id, BankConnectionService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } c ? Results.Ok(BankConnectionResponse.From(c)) : Results.NotFound());
+        banking.MapPost("/connections", async (ConnectRequest r, BankConnectionService s, CancellationToken ct) =>
+        {
+            var connection = await s.ConnectAsync(BankConnectionProvider.SimpleFin, r.SetupToken, r.Name, TimeZoneInfo.Local, ct);
+            return Results.Created($"/api/banking/connections/{connection.Id}", BankConnectionResponse.From(connection));
+        });
+        banking.MapPost("/connections/{id:guid}/sync", async (Guid id, BankConnectionService s, CancellationToken ct) =>
+            await s.SyncAsync(id, TimeZoneInfo.Local, ct));
+        banking.MapPut("/connections/{id:guid}/accounts/{remoteId}", async (Guid id, string remoteId, LinkConnectionAccountRequest r, BankConnectionService s, CancellationToken ct) =>
+            BankConnectionResponse.From(await s.LinkAsync(id, remoteId, r.AccountId, r.ImportFrom, ct)));
+        banking.MapPost("/connections/{id:guid}/disconnect", async (Guid id, BankConnectionService s, CancellationToken ct) =>
+        {
+            await s.DisconnectAsync(id, ct);
+            return Results.NoContent();
+        });
+
+        banking.MapGet("/positive-pay", async (Guid accountId, DateOnly from, DateOnly to, PositivePayService s, CancellationToken ct) =>
+            await s.ListAsync(accountId, from, to, ct));
+        banking.MapPost("/positive-pay/export", async (PositivePayExportRequest r, HttpContext http, PositivePayService s, CancellationToken ct) =>
+        {
+            var file = await s.ExportAsync(r.AccountId, r.From, r.To, new PositivePayOptions(r.BankAccountNumber, r.DateFormat, r.IncludeHeader), ct);
+            http.Response.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment") { FileNameStar = file.FileName }.ToString();
+            return Results.File(file.Content, "text/csv");
+        });
+
+        banking.MapGet("/petty-cash", async (PettyCashService s, CancellationToken ct) =>
+            (await s.ListAsync(ct)).Select(f => new { f.Fund, f.AccountName, f.Balance, f.ToReplenish, f.LastCount }));
+        banking.MapGet("/petty-cash/{id:guid}", async (Guid id, PettyCashService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } f
+                ? Results.Ok(new { f.Fund, f.AccountName, f.Balance, f.ToReplenish, Counts = await s.CountsAsync(id, ct) })
+                : Results.NotFound());
+        banking.MapPost("/petty-cash", async (CreatePettyCashFundCommand r, PettyCashService s, CancellationToken ct) =>
+        {
+            var fund = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/banking/petty-cash/{fund.Id}", fund);
+        });
+        banking.MapPut("/petty-cash/{id:guid}", async (Guid id, UpdatePettyCashFundRequest r, PettyCashService s, CancellationToken ct) =>
+            await s.UpdateAsync(id, r.FloatAmount, r.Custodian, r.Active, ct));
+        banking.MapPost("/petty-cash/{id:guid}/counts", async (Guid id, CountCashCommand r, PettyCashService s, CancellationToken ct) =>
+            await s.CountAsync(id, r, ct));
+        banking.MapPost("/petty-cash/{id:guid}/replenish", async (Guid id, ReplenishRequest r, PettyCashService s, CancellationToken ct) =>
+            BankTransactionResponse.From(await s.ReplenishAsync(id, r.FromAccountId, r.Date, ct)));
+    }
+}

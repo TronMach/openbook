@@ -57,6 +57,7 @@ public static class WebSecurity
         services.AddSingleton<SetupState>();
         services.AddHostedService<RecurringPostingService>();
         services.AddHostedService<ScheduledBackupHostedService>();
+        services.AddHostedService<BankSyncHostedService>();
         services.AddHostedService<WebhookDispatchService>();
         return services;
     }

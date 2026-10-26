@@ -1,0 +1,198 @@
+@page "/banking/petty-cash/{Id:guid}"
+@inject PettyCashService PettyCashService
+@inject AccountService AccountService
+
+<PageTitle>@(_summary?.AccountName ?? "Petty cash") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_summary is null)
+    {
+        <h1>Petty cash</h1>
+        <p>That petty cash box doesn't exist. <a href="/banking/petty-cash">Back to petty cash</a></p>
+    }
+    else
+    {
+        var fund = _summary.Fund;
+        <div class="toolbar">
+            <h1>@_summary.AccountName</h1>
+            <a class="button secondary" href="/banking/petty-cash">All boxes</a>
+            @if (fund.IsActive)
+            {
+                <a class="button secondary" href="/banking/@fund.AccountId/record/spend">Record spending</a>
+            }
+            <a class="button secondary" href="/banking/@fund.AccountId">Register</a>
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        else if (Done is not null)
+        {
+            <div class="alert success" role="status">@DoneMessage()</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div><div class="muted">Float</div><strong>@Labels.Amount(fund.FloatAmount)</strong></div>
+                <div><div class="muted">Balance in books today</div><strong>@Labels.Amount(_summary.Balance)</strong></div>
+                <div><div class="muted">To replenish</div><strong>@Labels.Amount(_summary.ToReplenish)</strong></div>
+                <div><div class="muted">Custodian</div><strong>@(fund.Custodian ?? "—")</strong></div>
+            </div>
+            @if (!fund.IsActive)
+            {
+                <p><span class="badge">Closed</span> Counts and replenishments are off.</p>
+            }
+        </div>
+
+        @if (fund.IsActive)
+        {
+            <div class="card">
+                <h2>Count the cash</h2>
+                <p class="muted">
+                    Enter what's in the box. If it differs from the books on that date, the difference posts to
+                    “@PettyCashService.OverShortName” (created on first use) so the books match the box.
+                </p>
+                <form method="post" action="/banking/petty-cash/@Id/count" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field">
+                            <label for="count-date">Date</label>
+                            <input id="count-date" type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="field">
+                            <label for="counted">Cash counted</label>
+                            <input id="counted" name="counted" class="amount" inputmode="decimal" required />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="breakdown">Notes and coins <span class="muted">(optional, value x count, e.g. 20x5; 1x3; 0.25x8)</span></label>
+                        <input id="breakdown" name="breakdown" maxlength="1000" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label for="note">Note <span class="muted">(optional)</span></label>
+                        <input id="note" name="note" maxlength="500" />
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">Record count</button></div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Replenish</h2>
+                <p class="muted">Transfers the float less the balance on the date (@Labels.Amount(_summary.ToReplenish) today) from a bank account into the box.</p>
+                <form method="post" action="/banking/petty-cash/@Id/replenish" data-enhance="false" class="row">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="from">From</label>
+                        <select id="from" name="fromAccountId" required>
+                            @foreach (var a in _banks)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="replenish-date">Date</label>
+                        <input id="replenish-date" type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" disabled="@(_summary.ToReplenish <= 0m || _banks.Count == 0)">Replenish</button></div>
+                </form>
+            </div>
+        }
+
+        <h2>Counts</h2>
+        @if (_counts.Count == 0)
+        {
+            <div class="card"><p>No counts yet.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th class="num">Counted</th><th class="num">In books</th><th class="num">Over (short)</th><th>Notes and coins</th><th>By</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _counts)
+                        {
+                            <tr>
+                                <td>@Labels.Date(c.Date)</td>
+                                <td class="num">@Labels.Amount(c.Counted)</td>
+                                <td class="num">@Labels.Amount(c.BookBalance)</td>
+                                <td class="num">
+                                    @if (c.AdjustmentTransactionId is { } adjustment)
+                                    {
+                                        <a href="/banking/transactions/@adjustment">@Labels.Amount(c.Difference)</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                                <td>@c.Breakdown @(c.Note is { } n ? $" · {n}" : "")</td>
+                                <td>@c.CountedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="card">
+            <h2>Settings</h2>
+            <form method="post" action="/banking/petty-cash/@Id/edit" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="float">Float</label>
+                        <input id="float" name="float" class="amount" inputmode="decimal" value="@fund.FloatAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required />
+                    </div>
+                    <div class="field">
+                        <label for="custodian">Custodian</label>
+                        <input id="custodian" name="custodian" value="@fund.Custodian" maxlength="100" />
+                    </div>
+                </div>
+                <label class="check"><input type="checkbox" name="active" value="true" checked="@fund.IsActive" /> <span>Box in use</span></label>
+                <div class="actions"><button type="submit" class="secondary">Save</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private PettyCashSummary? _summary;
+    private IReadOnlyList<CashCount> _counts = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _banks = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private decimal? Difference { get; set; }
+    [SupplyParameterFromQuery] private decimal? Amount { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _summary = await PettyCashService.GetAsync(Id);
+        if (_summary is null)
+            return;
+        _counts = await PettyCashService.CountsAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type == AccountType.Bank && a.Id != _summary.Fund.AccountId).ToList();
+    }
+
+    private string DoneMessage() => Done switch
+    {
+        "created" => "Petty cash box created.",
+        "counted" => Difference switch
+        {
+            null or 0m => "Count recorded. The box agrees with the books.",
+            > 0m => $"Count recorded. The box was over by {Labels.Amount(Difference.Value)}; that's been posted.",
+            _ => $"Count recorded. The box was short by {Labels.Amount(-Difference.Value)}; that's been posted.",
+        },
+        "replenished" => $"Transferred {Labels.Amount(Amount ?? 0m)} into the box.",
+        _ => "Saved.",
+    };
+}

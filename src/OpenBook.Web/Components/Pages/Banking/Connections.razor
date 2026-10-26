@@ -1,0 +1,83 @@
+@page "/banking/connections"
+@inject BankConnectionService ConnectionService
+
+<PageTitle>Bank connections · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Bank connections</h1>
+        <a class="button secondary" href="/banking">Back to banking</a>
+    </div>
+    <p class="muted">
+        A connection fetches your bank and card transactions automatically, every @((int)BankConnectionService.SyncEvery.TotalHours) hours,
+        into each account's bank feed, where you review them as if you'd imported a statement. Nothing posts until you add it
+        (or an auto-add bank rule does).
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_connections.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Connection</th><th>Accounts</th><th>Last sync</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _connections)
+                    {
+                        <tr>
+                            <td><a href="/banking/connections/@c.Id">@c.Name</a></td>
+                            <td>@c.Accounts.Count(a => a.AccountId is not null) of @c.Accounts.Count linked</td>
+                            <td>@(c.LastSyncAt is { } at ? at.ToLocalTime().ToString("g") : "Never")</td>
+                            <td>
+                                @if (!c.IsActive)
+                                {
+                                    <span class="badge">Disconnected</span>
+                                }
+                                else if (c.LastSyncFailed)
+                                {
+                                    <span class="badge warn">Failed</span>
+                                }
+                                else
+                                {
+                                    <span class="badge ok">Connected</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="card">
+        <h2>Connect with SimpleFIN</h2>
+        <p class="muted">
+            <a href="https://beta-bridge.simplefin.org/" target="_blank" rel="noopener">SimpleFIN Bridge</a> links to thousands of US and
+            Canadian banks for a small yearly fee. Connect your banks there, then create a <strong>setup token</strong> and paste it here.
+            The token works once; OpenBook swaps it for a key it stores encrypted.
+        </p>
+        <form method="post" action="/banking/connections/connect" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="setup-token">Setup token</label>
+                <textarea id="setup-token" name="setupToken" rows="3" required autocomplete="off" spellcheck="false"></textarea>
+            </div>
+            <div class="field">
+                <label for="name">Name <span class="muted">(optional)</span></label>
+                <input id="name" name="name" maxlength="100" placeholder="SimpleFIN" />
+            </div>
+            <div class="actions"><button type="submit">Connect</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<BankConnection> _connections = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() => _connections = await ConnectionService.ListAsync();
+}

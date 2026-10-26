@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Webhooks.IWebhookSender, HttpWebhookSender>();
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.FolderBackupTarget>();
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.S3BackupTarget>();
+        services.AddSingleton<OpenBook.Application.Banking.IBankConnectionClient, Banking.SimpleFinClient>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();

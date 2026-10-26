@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenBook.Application;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
@@ -39,6 +40,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     /// <summary>Every webhook request "sent" in the test.</summary>
     public RecordingWebhookSender Webhooks { get; } = new();
+
+    /// <summary>Stands in for SimpleFIN Bridge behind the real HTTP client.</summary>
+    public FakeSimpleFinBridge Bridge { get; } = new();
     public string ConnectionString => _connectionString;
     public string BackupDirectory { get; } = Path.Combine(Path.GetTempPath(), $"openbook-tests-{Guid.NewGuid():N}");
     public User? Owner { get; private set; }
@@ -66,6 +70,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .AddSingleton<ISecretProtector, TestSecrets>()
             .AddSingleton<IEmailSender>(Mail)
             .AddSingleton<OpenBook.Application.Webhooks.IWebhookSender>(Webhooks)
+            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Banking.IBankConnectionClient>(new OpenBook.Infrastructure.Banking.SimpleFinClient(Bridge)))
             .BuildServiceProvider(validateScopes: true);
 
         await Services.MigrateOpenBookDatabaseAsync();

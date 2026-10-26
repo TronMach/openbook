@@ -174,6 +174,14 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/api/segments", "POST", UserRole.Standard)]
     [InlineData("/api/segments/tracking", "PUT", UserRole.Accountant)]
     [InlineData("/api/segments/reclassify", "POST", UserRole.Accountant)]
+    [InlineData("/banking/connections", "GET", UserRole.Accountant)]
+    [InlineData("/banking/connections/connect", "POST", UserRole.Accountant)]
+    [InlineData("/api/banking/connections", "GET", UserRole.Accountant)]
+    [InlineData("/banking/positive-pay", "GET", UserRole.ViewOnly)]
+    [InlineData("/banking/positive-pay/export", "POST", UserRole.Standard)]
+    [InlineData("/banking/petty-cash", "GET", UserRole.ViewOnly)]
+    [InlineData("/banking/petty-cash/new", "POST", UserRole.Standard)]
+    [InlineData("/api/banking/petty-cash", "POST", UserRole.Standard)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
 

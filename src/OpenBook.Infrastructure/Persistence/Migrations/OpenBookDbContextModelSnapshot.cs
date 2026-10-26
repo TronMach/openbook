@@ -157,6 +157,51 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditRecords", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Banking.BankConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastSuccessAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("LastSyncFailed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedAccess")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BankConnections", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Banking.BankFeedItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -374,6 +419,113 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("AccountId", "Date");
 
                     b.ToTable("BankTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Banking.CashCount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AdjustmentTransactionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("BookBalance")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("BookBalanceMinor");
+
+                    b.Property<string>("Breakdown")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Counted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CountedMinor");
+
+                    b.Property<DateTimeOffset>("CountedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CountedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FundId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdjustmentTransactionId");
+
+                    b.HasIndex("FundId", "Date");
+
+                    b.ToTable("CashCounts", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Banking.PettyCashFund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Custodian")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FloatAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("FloatMinor");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
+
+                    b.ToTable("PettyCashFunds", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Banking.PositivePaySettings", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(34)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DateFormat")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludeHeader")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("LastExportedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("LastExportedThrough")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("AccountId");
+
+                    b.ToTable("PositivePaySettings", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Banking.Reconciliation", b =>
@@ -2592,6 +2744,64 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Banking.BankConnection", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Banking.BankConnectionAccount", "Accounts", b1 =>
+                        {
+                            b1.Property<Guid>("ConnectionId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("RemoteId")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("AccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("Balance")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("BalanceMinor");
+
+                            b1.Property<DateOnly?>("BalanceDate")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Currency")
+                                .HasMaxLength(10)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly?>("FetchedThrough")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly?>("ImportFrom")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Institution")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("ConnectionId", "RemoteId");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("BankConnectionAccounts", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ConnectionId");
+                        });
+
+                    b.Navigation("Accounts");
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Banking.BankFeedItem", b =>
                 {
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
@@ -2663,6 +2873,38 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Banking.CashCount", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Banking.BankTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Banking.PettyCashFund", null)
+                        .WithMany()
+                        .HasForeignKey("FundId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Banking.PettyCashFund", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Banking.PositivePaySettings", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Banking.Reconciliation", b =>

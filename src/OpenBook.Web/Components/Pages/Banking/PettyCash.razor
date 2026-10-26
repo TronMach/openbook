@@ -1,0 +1,119 @@
+@page "/banking/petty-cash"
+@inject PettyCashService PettyCashService
+@inject AccountService AccountService
+
+<PageTitle>Petty cash · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Petty cash</h1>
+        <a class="button secondary" href="/banking">Back to banking</a>
+    </div>
+    <p class="muted">
+        A petty cash box holds a fixed float. Record what's spent from it as ordinary spends from its account (keep the receipts),
+        count the cash now and then (any over or short is posted), and replenish it from the bank back up to the float.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_funds.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Box</th><th>Custodian</th><th class="num">Float</th><th class="num">Balance</th><th class="num">To replenish</th><th>Last count</th></tr></thead>
+                <tbody>
+                    @foreach (var f in _funds)
+                    {
+                        <tr>
+                            <td>
+                                <a href="/banking/petty-cash/@f.Fund.Id">@f.AccountName</a>
+                                @if (!f.Fund.IsActive)
+                                {
+                                    <span class="badge">Closed</span>
+                                }
+                            </td>
+                            <td>@f.Fund.Custodian</td>
+                            <td class="num">@Labels.Amount(f.Fund.FloatAmount)</td>
+                            <td class="num">@Labels.Amount(f.Balance)</td>
+                            <td class="num">@(f.ToReplenish > 0m ? Labels.Amount(f.ToReplenish) : "")</td>
+                            <td>@(f.LastCount is { } c ? Labels.Date(c.Date) : "Never")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="card">
+        <h2>New petty cash box</h2>
+        <form method="post" action="/banking/petty-cash/new" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="account">Account</label>
+                    <select id="account" name="accountId">
+                        <option value="">Create a new account</option>
+                        @foreach (var a in _available)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="new-name">New account name</label>
+                    <input id="new-name" name="newAccountName" value="Petty Cash" maxlength="100" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="float">Float</label>
+                    <input id="float" name="float" class="amount" inputmode="decimal" required placeholder="200.00" />
+                </div>
+                <div class="field">
+                    <label for="custodian">Custodian <span class="muted">(optional)</span></label>
+                    <input id="custodian" name="custodian" maxlength="100" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="fund-from">Fund it from <span class="muted">(optional)</span></label>
+                    <select id="fund-from" name="fundFromAccountId">
+                        <option value="">Don't record a transfer</option>
+                        @foreach (var a in _banks)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="date">On</label>
+                    <input id="date" type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <div class="actions"><button type="submit">Create box</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<PettyCashSummary> _funds = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _banks = [];
+    private List<Account> _available = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _funds = await PettyCashService.ListAsync();
+        _chart = await AccountService.GetChartAsync();
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
+        var used = _funds.Select(f => f.Fund.AccountId).ToHashSet();
+        _available = _banks.Where(a => !used.Contains(a.Id)).ToList();
+    }
+}
