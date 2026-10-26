@@ -33,6 +33,20 @@ public interface IInventoryStore
 
     void Add(InventoryMovement movement);
     void Add(InventoryAdjustment adjustment);
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<Warehouse>> ListWarehousesAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<Bin>> ListBinsAsync(CancellationToken ct);
+
+    Task<IReadOnlyList<StockTransfer>> ListTransfersAsync(CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<StockTransfer?> GetTransferAsync(Guid id, CancellationToken ct);
+
+    void Add(Warehouse warehouse);
+    void Add(Bin bin);
+    void Add(StockTransfer transfer);
     void Add(AssemblyBuild build);
     void Add(LandedCost landedCost);
     void Add(AuditRecord record);

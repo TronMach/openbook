@@ -6,6 +6,7 @@
 @inject ItemService ItemService
 @inject AccountService AccountService
 @inject InventoryService Inventory
+@inject WarehouseService WarehouseService
 @inject NavigationManager Navigation
 
 <PageTitle>@(_item?.Name ?? "New product or service") · OpenBook</PageTitle>
@@ -50,9 +51,16 @@
                 </InputSelect>
             </div>
         </div>
-        <div class="field">
-            <label for="description">Description on sales forms <span class="muted">(optional)</span></label>
-            <InputText id="description" @bind-Value="Input.Description" />
+        <div class="row">
+            <div class="field">
+                <label for="description">Description on sales forms <span class="muted">(optional)</span></label>
+                <InputText id="description" @bind-Value="Input.Description" />
+            </div>
+            <div class="field">
+                <label for="barcode">Barcode <span class="muted">(optional)</span></label>
+                <InputText id="barcode" @bind-Value="Input.Barcode" maxlength="50" autocomplete="off" />
+                <span class="hint">UPC, EAN or your own code. Scanning it into an item picker chooses this item.</span>
+            </div>
         </div>
         <div class="row">
             <div class="field">
@@ -106,6 +114,15 @@
                 </div>
             </div>
             <div class="row">
+                <div class="field">
+                    <label for="tracking">Lot or serial numbers</label>
+                    <InputSelect id="tracking" @bind-Value="Input.Tracking" disabled="@_assetLocked">
+                        <option value="@ItemTracking.None">Not tracked</option>
+                        <option value="@ItemTracking.Lot">Lot numbers</option>
+                        <option value="@ItemTracking.Serial">Serial numbers</option>
+                    </InputSelect>
+                    <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Receipts must name their lots or serials; sales can name them or take the oldest.")</span>
+                </div>
                 <div class="field">
                     <label for="cost-method">Costing</label>
                     <InputSelect id="cost-method" @bind-Value="Input.CostMethod" disabled="@_assetLocked">
@@ -261,6 +278,28 @@
                 <span class="badge warn">Reorder</span>
             }
         </p>
+        @if (_byPlace.Count > 0 && (_byPlace.Count > 1 || _byPlace[0].Lot is not null || _byPlace[0].Place != OpenBook.Domain.Inventory.StockPlace.Default))
+        {
+            <table class="data">
+                <thead><tr><th>Where</th>@if (_item.Tracking != ItemTracking.None) { <th>@(_item.Tracking == ItemTracking.Serial ? "Serial" : "Lot")</th><th>Received</th> }<th class="num">On hand</th><th class="num">Value</th></tr></thead>
+                <tbody>
+                    @foreach (var s in _byPlace.OrderBy(p => _place(p.Place)).ThenBy(p => p.Received).ThenBy(p => p.Lot))
+                    {
+                        <tr>
+                            <td>@_place(s.Place)</td>
+                            @if (_item.Tracking != ItemTracking.None)
+                            {
+                                <td><a href="/inventory?lot=@Uri.EscapeDataString(s.Lot ?? "")">@s.Lot</a></td>
+                                <td>@Labels.Date(s.Received)</td>
+                            }
+                            <td class="num">@Labels.Quantity(s.Quantity)</td>
+                            <td class="num">@Labels.Amount(s.Value)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p><a href="/inventory/transfers/new?item=@_item.Id">Transfer stock</a></p>
+        }
         @if (_movements.Count == 0)
         {
             <p class="muted">No stock yet. Enter a bill with this item, or <a href="/inventory/adjustments/new?item=@_item.Id">add starting stock</a>.</p>
@@ -306,6 +345,8 @@
     private StockLevel? _stock;
     private IReadOnlyList<InventoryMovement> _movements = [];
     private List<Item> _componentChoices = [];
+    private IReadOnlyList<StockAt> _byPlace = [];
+    private Func<OpenBook.Domain.Inventory.StockPlace, string> _place = _ => "";
     private bool _assetLocked;
     private string? _error;
 
@@ -343,6 +384,8 @@
         {
             _stock = await Inventory.StockForAsync(_item.Id);
             _movements = await Inventory.MovementsAsync(_item.Id);
+            _byPlace = await Inventory.StockByPlaceAsync(_item.Id);
+            _place = await WarehouseService.NamerAsync();
             _assetLocked = _movements.Count > 0;
         }
 
@@ -352,7 +395,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
-                CostMethod = _item.CostMethod,
+                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode,
             };
     }
 
@@ -371,6 +414,7 @@
         (InventorySources.Adjustment, true) => "Adjustment",
         (InventorySources.AssemblyBuild, true) => "Assembly build",
         (InventorySources.LandedCost, true) => "Landed cost",
+        (InventorySources.Transfer, true) => "Transfer",
         _ => "Voided",
     };
 
@@ -381,8 +425,9 @@
             // A disabled select doesn't post, so a locked asset account keeps the saved one.
             var asset = _assetLocked ? _item!.InventoryAssetAccountId : Input.InventoryAssetAccountId;
             var method = _assetLocked ? _item!.CostMethod : Input.CostMethod;
+            var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
-                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method);
+                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
             Navigation.NavigateTo(_item is null && Item.HasComponents(saved.Type) ? $"/items/{saved.Id}#components" : "/items");
@@ -426,5 +471,10 @@
         public decimal? PurchaseCost { get; set; }
 
         public InventoryCostMethod CostMethod { get; set; }
+
+        public ItemTracking Tracking { get; set; }
+
+        [StringLength(50)]
+        public string? Barcode { get; set; }
     }
 }

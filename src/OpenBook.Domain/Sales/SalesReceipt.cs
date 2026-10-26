@@ -45,6 +45,11 @@ public sealed class SalesReceipt
 
     /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
     public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
+
+    /// <summary>The warehouse its stock moved in or out of; null for the default one.</summary>
+    public Guid? WarehouseId { get; private set; }
+
+    public void SetWarehouse(Guid? warehouseId) => WarehouseId = warehouseId == Guid.Empty ? null : warehouseId;
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>The bank deposit that moved it out of undeposited funds.</summary>

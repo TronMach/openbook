@@ -6,6 +6,7 @@
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
+@inject OpenBook.Application.Inventory.WarehouseService WarehouseService
 
 <PageTitle>Bill · OpenBook</PageTitle>
 
@@ -46,6 +47,10 @@
             @if (_bill.Reference is not null) { <dt>Bill no.</dt><dd>@_bill.Reference</dd> }
             <dt>Date</dt><dd>@Labels.Date(_bill.Date)</dd>
             <dt>Due</dt><dd>@Labels.Date(_bill.DueDate)</dd>
+            @if (_bill.WarehouseId is { } warehouseId)
+            {
+                <dt>Warehouse</dt><dd>@_place(new StockPlace(warehouseId, null))</dd>
+            }
             @if (_bill.Memo is not null) { <dt>Memo</dt><dd>@_bill.Memo</dd> }
             <dt>Journal entry</dt><dd><a href="/journal/@_bill.JournalEntryId">View</a></dd>
         </dl>
@@ -60,6 +65,10 @@
                     <td>@Labels.AccountName(_chart, line.AccountId, _useNumbers)</td>
                     <td>
                         @line.Description
+                        @if (line.Lots is { } lots)
+                        {
+                            <div class="muted">@lots</div>
+                        }
                         @if (line.ItemId is { } itemId && line.Quantity is { } quantity)
                         {
                             <span class="muted"> · <a href="/items/@itemId">@Labels.Quantity(quantity) received</a></span>
@@ -150,6 +159,7 @@
 </div>
 
 @code {
+    private Func<StockPlace, string> _place = _ => "";
     private Bill? _bill;
     private Vendor? _vendor;
     private IReadOnlyList<BillPayment> _payments = [];
@@ -168,6 +178,7 @@
     protected override async Task OnInitializedAsync()
     {
         VoidInput ??= new();
+        _place = await WarehouseService.NamerAsync();
         _bill = await Bills.GetAsync(Id);
         if (_bill is null)
             return;

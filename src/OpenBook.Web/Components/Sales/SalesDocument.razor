@@ -29,7 +29,13 @@
             @foreach (var line in Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
             {
                 <tr>
-                    <td>@line.Description</td>
+                    <td>
+                        @line.Description
+                        @if (line.Lots is { } lots)
+                        {
+                            <div class="muted">@lots</div>
+                        }
+                    </td>
                     <td class="num">@(line.Kind == SalesLineKind.Item ? line.Quantity.ToString("0.####") : "")</td>
                     <td class="num">
                         @(line.Kind == SalesLineKind.Item ? line.Rate.ToString("#,##0.00##") : "")

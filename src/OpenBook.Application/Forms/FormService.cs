@@ -160,7 +160,8 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         {
             SalesLineKind.Note => new FormLine(l.Description, null, null, null),
             SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount),
-            _ => new FormLine(l.Description, l.Quantity, l.Rate, l.Amount),
+            // Lot and serial numbers follow the description, so a customer's copy shows what was shipped.
+            _ => new FormLine(l.Lots is { } lots ? $"{l.Description} · {lots}" : l.Description, l.Quantity, l.Rate, l.Amount),
         })
         .ToList();
 

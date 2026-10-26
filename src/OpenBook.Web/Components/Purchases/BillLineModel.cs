@@ -17,6 +17,9 @@ public sealed class BillLineModel
 
     public Guid? ClassId { get; set; }
 
+    /// <summary>Lot or serial numbers received, for lot- and serial-tracked items.</summary>
+    public string? Lots { get; set; }
+
     private bool IsFilled => AccountId is not null || ItemId is not null || (Amount ?? 0m) != 0m;
 
     public static decimal Total(IEnumerable<BillLineModel> lines) => lines.Sum(l => l.Amount ?? 0m);
@@ -31,7 +34,7 @@ public sealed class BillLineModel
     public static List<BillLineDraft> Drafts(IEnumerable<BillLineModel> lines) =>
         lines.Where(l => l.IsFilled)
             .Select(l => l.ItemId is { } item
-                ? new BillLineDraft(Guid.Empty, l.Amount ?? 0m, l.Description, item, l.Quantity, l.ClassId)
+                ? new BillLineDraft(Guid.Empty, l.Amount ?? 0m, l.Description, item, l.Quantity, l.ClassId, l.Lots)
                 : new BillLineDraft(l.AccountId!.Value, l.Amount!.Value, l.Description, ClassId: l.ClassId))
             .ToList();
 

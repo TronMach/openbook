@@ -43,7 +43,14 @@
                         <SearchSelect Options="CategoryOptions" @bind-Value="line.AccountId" @bind-Value:after="Changed.InvokeAsync" Placeholder="Find a category…" AriaLabel="Category" />
                         }
                     </td>
-                    <td><input @bind="line.Description" aria-label="Description" /></td>
+                    <td>
+                        <input @bind="line.Description" aria-label="Description" />
+                        @if (line.ItemId is { } tracked && Items.FirstOrDefault(i => i.Id == tracked)?.Tracking is { } tracking and not ItemTracking.None)
+                        {
+                            <input class="lots" @bind="line.Lots" aria-label="@(tracking == ItemTracking.Serial ? "Serial numbers" : "Lots")"
+                                   placeholder="@(tracking == ItemTracking.Serial ? "Serial numbers received, e.g. SN1, SN2" : "Lots received, e.g. A-1 x 3; B-2 x 2")" />
+                        }
+                    </td>
                     <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" @bind:after="Changed.InvokeAsync" /></td>
                     @if (Classes is not null)
                     {

@@ -6,6 +6,8 @@
 @inject AssemblyBuildService Builds
 @inject LandedCostService LandedCosts
 @inject ItemService Items
+@inject StockTransferService Transfers
+@inject WarehouseService WarehouseService
 
 <PageTitle>Inventory · OpenBook</PageTitle>
 
@@ -15,6 +17,8 @@
         <a class="button secondary" href="/reports/inventory-valuation">Valuation</a>
         <a class="button secondary" href="/reports/inventory-stock">Stock status</a>
         <a class="button secondary" href="/items/new">New item</a>
+        <a class="button secondary" href="/inventory/warehouses">Warehouses</a>
+        <a class="button secondary" href="/inventory/transfers/new">Transfer</a>
         <a class="button secondary" href="/inventory/landed-costs/new">Landed cost</a>
         <a class="button secondary" href="/inventory/builds/new">Build assemblies</a>
         <a class="button" href="/inventory/adjustments/new">Adjust quantities</a>
@@ -87,6 +91,66 @@
         </table>
     }
 
+    <form class="card filters" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="lot">Find a lot or serial number</label>
+                <input id="lot" name="lot" value="@Lot" maxlength="@LotText.MaxLotLength" />
+            </div>
+        </div>
+        <div class="actions"><button type="submit" class="secondary">Find</button></div>
+        @if (Lot is { Length: > 0 })
+        {
+            @if (_lotHistory.Count == 0)
+            {
+                <p class="muted">No stock has moved under @Lot.</p>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Item</th><th>Where</th><th>From</th><th class="num">Quantity</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _lotHistory)
+                        {
+                            <tr class="@(m.ReversalOf is null ? null : "inactive")">
+                                <td>@Labels.Date(m.Date)</td>
+                                <td><a href="/items/@m.ItemId">@(_names.GetValueOrDefault(m.ItemId) ?? "Item")</a></td>
+                                <td>@_place(m.Place)</td>
+                                <td><a href="@Links.ForAuditEntity(m.SourceType, m.SourceId)">@SourceName(m.SourceType)</a></td>
+                                <td class="num">@Labels.Quantity(m.Quantity)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <p class="muted">On hand now: @Labels.Quantity(_lotHistory.Sum(m => m.Quantity)).</p>
+            }
+        }
+    </form>
+
+    <h2>Transfers</h2>
+    @if (_transfers.Count == 0)
+    {
+        <p class="muted">None yet.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Reference</th><th>Memo</th><th class="num">Lines</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var t in _transfers.Take(50))
+                {
+                    <tr class="@(t.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/inventory/transfers/@t.Id">@Labels.Date(t.Date)</a></td>
+                        <td>@t.Reference</td>
+                        <td class="muted">@t.Memo</td>
+                        <td class="num">@t.Lines.Count</td>
+                        <td>@(t.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
     <h2>Assembly builds</h2>
     @if (_builds.Count == 0)
     {
@@ -142,6 +206,23 @@
     private IReadOnlyList<AssemblyBuild> _builds = [];
     private IReadOnlyList<LandedCost> _landed = [];
     private Dictionary<Guid, string> _names = [];
+    private IReadOnlyList<StockTransfer> _transfers = [];
+    private IReadOnlyList<InventoryMovement> _lotHistory = [];
+    private Func<StockPlace, string> _place = _ => "";
+
+    [SupplyParameterFromQuery] private string? Lot { get; set; }
+
+    private static string SourceName(string sourceType) => sourceType switch
+    {
+        InventorySources.Bill => "Bill",
+        InventorySources.Invoice => "Invoice",
+        InventorySources.SalesReceipt => "Sales receipt",
+        InventorySources.CreditMemo => "Credit memo",
+        InventorySources.Adjustment => "Adjustment",
+        InventorySources.AssemblyBuild => "Assembly build",
+        InventorySources.Transfer => "Transfer",
+        _ => "Document",
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -150,5 +231,9 @@
         _builds = await Builds.ListAsync();
         _landed = await LandedCosts.ListAsync();
         _names = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id, i => i.Name);
+        _transfers = await Transfers.ListAsync();
+        _place = await WarehouseService.NamerAsync();
+        if (Lot is { Length: > 0 } lot)
+            _lotHistory = await Inventory.LotHistoryAsync(lot);
     }
 }

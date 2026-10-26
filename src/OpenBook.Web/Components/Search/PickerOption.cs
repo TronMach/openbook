@@ -53,7 +53,7 @@ public static class PickerOptions
         vendors.Select(v => new PickerOption(v.Id, v.DisplayName, Keywords: string.Join(' ', new[] { v.CompanyName, v.Email, v.AccountNumber }.OfType<string>()))).ToList();
 
     public static IReadOnlyList<PickerOption> Items(IEnumerable<Item> items) =>
-        items.Select(i => new PickerOption(i.Id, i.Name, i.Description is { } d && d != i.Name ? d : null)).ToList();
+        items.Select(i => new PickerOption(i.Id, i.Name, i.Description is { } d && d != i.Name ? d : null, Keywords: i.Barcode)).ToList();
 
     /// <summary>Accounts grouped by class, named as the chart shows them (with numbers when the company uses them).</summary>
     public static IReadOnlyList<PickerOption> Accounts(IEnumerable<Account> accounts, ChartOfAccounts chart, bool useNumbers)

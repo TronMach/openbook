@@ -1,0 +1,115 @@
+@page "/inventory/transfers/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject StockTransferService Transfers
+@inject WarehouseService WarehouseService
+@inject ItemService Items
+@inject NavigationManager Navigation
+
+<PageTitle>Stock transfer · OpenBook</PageTitle>
+
+@if (_transfer is null)
+{
+    <div class="card"><p>That transfer doesn't exist. <a href="/inventory">Back to inventory</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Stock transfer @_transfer.Reference</h1>
+        @if (_transfer.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a href="/inventory">Inventory</a>
+    </div>
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_transfer.Date)</dd>
+            @if (_transfer.Memo is { } memo)
+            {
+                <dt>Memo</dt><dd>@memo</dd>
+            }
+        </dl>
+    </div>
+
+    <table class="data">
+        <thead><tr><th>Item</th><th>From</th><th>To</th><th class="num">Quantity</th><th>Lots or serials</th></tr></thead>
+        <tbody>
+            @foreach (var line in _transfer.Lines.OrderBy(l => l.LineNumber))
+            {
+                <tr>
+                    <td><a href="/items/@line.ItemId">@(_items.GetValueOrDefault(line.ItemId)?.Name ?? "Item")</a></td>
+                    <td>@_place(line.From)</td>
+                    <td>@_place(line.To)</td>
+                    <td class="num">@Labels.Quantity(line.Quantity)</td>
+                    <td>@line.Lots</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <Notes EntityType="stock_transfer" EntityId="_transfer.Id" />
+
+    @if (_transfer.Status == DocumentStatus.Posted)
+    {
+        <div class="card">
+            <h2>Void this transfer</h2>
+            <p class="muted">Voiding moves the stock back. It's refused once some of it has been sold, used or moved on from where it went.</p>
+            @if (_error is not null)
+            {
+                <div class="alert error" role="alert">@_error</div>
+            }
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <InputText id="reason" @bind-Value="VoidInput.Reason" />
+                    <ValidationMessage For="() => VoidInput.Reason" />
+                </div>
+                <button type="submit" class="danger">Void transfer</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    private StockTransfer? _transfer;
+    private Dictionary<Guid, Item> _items = [];
+    private Func<StockPlace, string> _place = _ => "";
+    private string? _error;
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "void")]
+    private VoidModel VoidInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        VoidInput ??= new();
+        _transfer = await Transfers.GetAsync(Id);
+        _items = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id);
+        _place = await WarehouseService.NamerAsync();
+    }
+
+    private async Task VoidAsync()
+    {
+        try
+        {
+            await Transfers.VoidAsync(Id, VoidInput.Reason);
+            Navigation.NavigateTo($"/inventory/transfers/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class VoidModel
+    {
+        [Required(ErrorMessage = "Say why it's being voided.")]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,146 @@
+@page "/inventory/transfers/new"
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject StockTransferService Transfers
+@inject WarehouseService WarehouseService
+@inject ItemService Items
+@inject NavigationManager Navigation
+
+<PageTitle>Transfer stock · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Transfer stock</h1>
+    <p class="muted">
+        Moves stock between warehouses and bins. Nothing posts to the books: the stock keeps its cost. For lot- and serial-tracked
+        items, name the lots or serials to move, or leave it blank to move the oldest.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (!_places.HasChoice)
+    {
+        <div class="alert notice" role="status">There's only one warehouse and no bins. <a href="/inventory/warehouses">Add a warehouse or bin</a> first.</div>
+    }
+
+    <EditForm Model="Input" FormName="transfer" OnValidSubmit="SaveAsync" method="post">
+        <div class="row">
+            <div class="field">
+                <label for="date">Date</label>
+                <InputDate id="date" @bind-Value="Input.Date" />
+            </div>
+            <div class="field">
+                <label for="reference">Reference <span class="muted">(optional)</span></label>
+                <InputText id="reference" @bind-Value="Input.Reference" />
+            </div>
+        </div>
+
+        <table class="data entry">
+            <thead><tr><th>Item</th><th>From</th><th>To</th><th class="num">Quantity</th><th>Lots or serials</th></tr></thead>
+            <tbody>
+                @for (var i = 0; i < Input.Lines.Count; i++)
+                {
+                    var index = i;
+                    <tr>
+                        <td>
+                            <InputSelect @bind-Value="Input.Lines[index].ItemId" data-search aria-label="@($"Item {index + 1}")">
+                                <option value="">Choose an item…</option>
+                                @foreach (var item in _items)
+                                {
+                                    <option value="@item.Id">@item.Name</option>
+                                }
+                            </InputSelect>
+                        </td>
+                        <td>
+                            <InputSelect @bind-Value="Input.Lines[index].From" aria-label="@($"From {index + 1}")">
+                                @foreach (var choice in _places.Choices)
+                                {
+                                    <option value="@choice.Value">@choice.Label</option>
+                                }
+                            </InputSelect>
+                        </td>
+                        <td>
+                            <InputSelect @bind-Value="Input.Lines[index].To" aria-label="@($"To {index + 1}")">
+                                @foreach (var choice in _places.Choices)
+                                {
+                                    <option value="@choice.Value">@choice.Label</option>
+                                }
+                            </InputSelect>
+                        </td>
+                        <td><InputNumber class="amount" step="any" @bind-Value="Input.Lines[index].Quantity" aria-label="@($"Quantity {index + 1}")" /></td>
+                        <td><InputText @bind-Value="Input.Lines[index].Lots" aria-label="@($"Lots or serials {index + 1}")" placeholder="Oldest first" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="field">
+            <label for="memo">Memo <span class="muted">(optional)</span></label>
+            <InputText id="memo" @bind-Value="Input.Memo" />
+        </div>
+        <div class="actions">
+            <button type="submit">Transfer</button>
+            <a href="/inventory">Cancel</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private const int Rows = 6;
+
+    private StockPlaces _places = default!;
+    private IReadOnlyList<Item> _items = [];
+    private string? _error;
+
+    [SupplyParameterFromForm(FormName = "transfer")]
+    private TransferModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "item")]
+    private Guid? PresetItem { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _places = await StockPlaces.LoadAsync(WarehouseService);
+        _items = (await Items.ListAsync()).Where(i => i.IsInventory).ToList();
+        Input ??= new TransferModel { Date = DateOnly.FromDateTime(DateTime.Today) };
+        while (Input.Lines.Count < Rows)
+            Input.Lines.Add(new LineModel { To = _places.Choices.Skip(1).FirstOrDefault()?.Value });
+        if (PresetItem is { } preset && Input.Lines.All(l => l.ItemId is null))
+            Input.Lines[0].ItemId = preset;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var lines = Input.Lines
+                .Where(l => l.ItemId is not null || l.Quantity is not null)
+                .Select(l => new StockTransferLineDraft(l.ItemId ?? Guid.Empty, l.Quantity ?? 0m, _places.Parse(l.From), _places.Parse(l.To), l.Lots))
+                .ToList();
+            var transfer = await Transfers.CreateAsync(new CreateStockTransferCommand(Input.Date, lines, Input.Reference, Input.Memo));
+            Navigation.NavigateTo($"/inventory/transfers/{transfer.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class TransferModel
+    {
+        public DateOnly Date { get; set; }
+        public string? Reference { get; set; }
+        public string? Memo { get; set; }
+        public List<LineModel> Lines { get; set; } = [];
+    }
+
+    private sealed class LineModel
+    {
+        public Guid? ItemId { get; set; }
+        public string? From { get; set; }
+        public string? To { get; set; }
+        public decimal? Quantity { get; set; }
+        public string? Lots { get; set; }
+    }
+}

@@ -5,14 +5,19 @@ namespace OpenBook.Domain.Inventory;
 
 /// <param name="QuantityChange">Positive adds stock (at <paramref name="UnitCost"/>), negative removes it at FIFO cost.</param>
 /// <param name="UnitCost">Increases only; null takes the item's purchase cost.</param>
-public sealed record InventoryAdjustmentLineDraft(Guid ItemId, decimal QuantityChange, decimal? UnitCost = null);
+/// <param name="Place">Where: increases arrive there (outside bins unless a bin is given); decreases come from that bin, or any bin in the warehouse.</param>
+/// <param name="Lots">Lot or serial numbers: required for increases of tracked items; decreases take the oldest when blank.</param>
+public sealed record InventoryAdjustmentLineDraft(Guid ItemId, decimal QuantityChange, decimal? UnitCost = null, StockPlace? Place = null, string? Lots = null);
 
 public sealed class InventoryAdjustmentLine
 {
     private InventoryAdjustmentLine() { }
 
-    internal InventoryAdjustmentLine(int lineNumber, Guid itemId, decimal quantityChange, decimal valueChange)
+    internal InventoryAdjustmentLine(int lineNumber, Guid itemId, decimal quantityChange, decimal valueChange, StockPlace place, string? lots)
     {
+        WarehouseId = place.WarehouseId;
+        BinId = place.BinId;
+        Lots = lots;
         LineNumber = lineNumber;
         ItemId = itemId;
         QuantityChange = quantityChange;
@@ -25,6 +30,12 @@ public sealed class InventoryAdjustmentLine
 
     /// <summary>The cost added (positive) or removed (negative).</summary>
     public decimal ValueChange { get; private set; }
+
+    public Guid? WarehouseId { get; private set; }
+    public Guid? BinId { get; private set; }
+
+    /// <summary>The lots or serials added or removed.</summary>
+    public string? Lots { get; private set; }
 }
 
 /// <summary>
@@ -71,15 +82,15 @@ public sealed class InventoryAdjustment
                 throw new DomainException("inventory.cost_invalid", $"Line {index}: the unit cost must be zero or more, with up to 4 decimal places.");
         }
 
-        if (drafts.GroupBy(d => d.ItemId).Any(g => g.Count() > 1))
-            throw new DomainException("inventory.adjustment_duplicate_item", "Each item can appear only once in an adjustment.");
+        if (drafts.GroupBy(d => (d.ItemId, d.Place ?? StockPlace.Default)).Any(g => g.Count() > 1))
+            throw new DomainException("inventory.adjustment_duplicate_item", "Each item can appear only once per warehouse and bin in an adjustment.");
     }
 
     public static InventoryAdjustment Create(
         Guid id,
         DateOnly date,
         Guid adjustmentAccountId,
-        IReadOnlyList<(Guid ItemId, decimal QuantityChange, decimal ValueChange)> lines,
+        IReadOnlyList<(Guid ItemId, decimal QuantityChange, decimal ValueChange, StockPlace Place, string? Lots)> lines,
         Guid journalEntryId,
         DateTimeOffset createdAt,
         string? reference = null,
@@ -97,7 +108,7 @@ public sealed class InventoryAdjustment
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
         };
-        adjustment._lines.AddRange(lines.Select((l, i) => new InventoryAdjustmentLine(i + 1, l.ItemId, l.QuantityChange, l.ValueChange)));
+        adjustment._lines.AddRange(lines.Select((l, i) => new InventoryAdjustmentLine(i + 1, l.ItemId, l.QuantityChange, l.ValueChange, l.Place, l.Lots)));
         return adjustment;
     }
 

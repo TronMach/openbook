@@ -5,6 +5,7 @@
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
+@inject OpenBook.Application.Inventory.WarehouseService WarehouseService
 
 <PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
 
@@ -55,6 +56,10 @@
                 <dt>Invoice</dt><dd>@_invoice.Number</dd>
                 <dt>Date</dt><dd>@Labels.Date(_invoice.Date)</dd>
                 <dt>Due</dt><dd>@Labels.Date(_invoice.DueDate)</dd>
+            @if (_invoice.WarehouseId is { } warehouseId)
+            {
+                <dt>Warehouse</dt><dd>@_place(new StockPlace(warehouseId, null))</dd>
+            }
                 <dt>Terms</dt><dd>@Terms.Label</dd>
                 @if (_invoice.EarlyPaymentDiscountDate is { } discountDate)
                 {
@@ -83,7 +88,13 @@
                 @foreach (var line in _invoice.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
                 {
                     <tr>
-                        <td>@line.Description</td>
+                        <td>
+                            @line.Description
+                            @if (line.Lots is { } lots)
+                            {
+                                <div class="muted">@lots</div>
+                            }
+                        </td>
                         <td class="num">@(line.ItemId is null ? "" : line.Quantity.ToString("0.####"))</td>
                         <td class="num">@(line.ItemId is null ? "" : line.Rate.ToString("#,##0.00##"))<PriceNote Line="line" /></td>
                         <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
@@ -190,6 +201,7 @@
 </div>
 
 @code {
+    private Func<StockPlace, string> _place = _ => "";
     private Invoice? _invoice;
     private Customer? _customer;
     private OpenBook.Domain.Companies.Company? _company;
@@ -207,6 +219,7 @@
     protected override async Task OnInitializedAsync()
     {
         VoidInput ??= new();
+        _place = await WarehouseService.NamerAsync();
         _invoice = await Invoices.GetAsync(Id);
         if (_invoice is null)
             return;

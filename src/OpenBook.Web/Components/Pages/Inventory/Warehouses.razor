@@ -1,0 +1,142 @@
+@page "/inventory/warehouses"
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject WarehouseService WarehouseService
+@inject InventoryService Inventory
+
+<PageTitle>Warehouses · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Warehouses and bins</h1>
+        <a class="button secondary" href="/inventory">Inventory</a>
+        <a class="button" href="/inventory/transfers/new">Transfer stock</a>
+    </div>
+    <p class="muted">
+        Stock is kept in warehouses, and optionally in bins (shelves, aisles) inside them. Bills, sales and credit memos name a
+        warehouse once there's more than one; stock without one is in <strong>@_warehouses.FirstOrDefault(w => w.IsDefault)?.Name</strong>.
+        Move stock between warehouses and bins with a transfer.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    else if (Done is not null)
+    {
+        <div class="alert success" role="status">Saved.</div>
+    }
+
+    @foreach (var w in _warehouses)
+    {
+        var bins = _bins.Where(b => b.WarehouseId == w.Id).ToList();
+        <div class="card @(w.IsActive ? null : "inactive")">
+            <div class="toolbar">
+                <h2>@w.Name</h2>
+                @if (w.IsDefault)
+                {
+                    <span class="badge">Default</span>
+                }
+                @if (!w.IsActive)
+                {
+                    <span class="badge">Inactive</span>
+                }
+                <span class="muted">@Labels.Quantity(OnHand(w.Key, null)) units on hand, worth @Labels.Amount(Value(w.Key))</span>
+            </div>
+            @if (w.Address is { } address)
+            {
+                <p class="muted">@address</p>
+            }
+            @if (bins.Count > 0)
+            {
+                <table class="data">
+                    <thead><tr><th>Bin</th><th class="num">Units on hand</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var b in bins)
+                        {
+                            <tr class="@(b.IsActive ? null : "inactive")">
+                                <td>@b.Name</td>
+                                <td class="num">@Labels.Quantity(OnHand(w.Key, b.Id))</td>
+                                <td>
+                                    <form method="post" action="/inventory/bins/@b.Id/active" data-enhance="false">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="active" value="@(b.IsActive ? "false" : "true")" />
+                                        <button type="submit" class="link">@(b.IsActive ? "Make inactive" : "Make active")</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <div class="row">
+                <form method="post" action="/inventory/warehouses/@w.Id/bins" data-enhance="false" class="row">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="bin-@w.Id">New bin</label>
+                        <input id="bin-@w.Id" name="name" maxlength="@Bin.MaxNameLength" placeholder="A-1" required />
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">Add bin</button></div>
+                </form>
+                <form method="post" action="/inventory/warehouses/@w.Id" data-enhance="false" class="row">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="name-@w.Id">Name</label>
+                        <input id="name-@w.Id" name="name" value="@w.Name" maxlength="@Warehouse.MaxNameLength" required />
+                    </div>
+                    <div class="field">
+                        <label for="address-@w.Id">Address</label>
+                        <input id="address-@w.Id" name="address" value="@w.Address" maxlength="500" />
+                    </div>
+                    @if (!w.IsDefault)
+                    {
+                        <label class="check"><input type="checkbox" name="active" value="true" checked="@w.IsActive" /> <span>In use</span></label>
+                    }
+                    else
+                    {
+                        <input type="hidden" name="active" value="true" />
+                    }
+                    <div class="actions"><button type="submit" class="secondary">Save</button></div>
+                </form>
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <h2>New warehouse</h2>
+        <form method="post" action="/inventory/warehouses" data-enhance="false" class="row">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="new-name">Name</label>
+                <input id="new-name" name="name" maxlength="@Warehouse.MaxNameLength" required />
+            </div>
+            <div class="field">
+                <label for="new-address">Address <span class="muted">(optional)</span></label>
+                <input id="new-address" name="address" maxlength="500" />
+            </div>
+            <div class="actions"><button type="submit">Add warehouse</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private IReadOnlyList<Bin> _bins = [];
+    private IReadOnlyList<StockAt> _stock = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _warehouses = await WarehouseService.ListAsync(includeInactive: true);
+        _bins = await WarehouseService.BinsAsync(includeInactive: true);
+        _stock = await Inventory.StockByPlaceAsync();
+    }
+
+    /// <summary>Units in the warehouse (all bins when <paramref name="binId"/> is null) or in one bin.</summary>
+    private decimal OnHand(Guid? warehouseKey, Guid? binId) =>
+        _stock.Where(s => s.Place.WarehouseId == warehouseKey && (binId is null || s.Place.BinId == binId)).Sum(s => s.Quantity);
+
+    private decimal Value(Guid? warehouseKey) => _stock.Where(s => s.Place.WarehouseId == warehouseKey).Sum(s => s.Value);
+}

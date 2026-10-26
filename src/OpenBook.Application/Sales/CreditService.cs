@@ -18,7 +18,8 @@ public sealed record CreateCreditMemoCommand(
     string? Memo = null,
     Guid? TaxCodeId = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    Guid? WarehouseId = null);
 
 public enum CreditKind
 {
@@ -53,6 +54,7 @@ public sealed class CreditService(
     InvoiceService invoices,
     PostingEngine engine,
     InventoryService inventory,
+    WarehouseService warehouses,
     IClock clock,
     ICurrentUser user)
 {
@@ -92,7 +94,8 @@ public sealed class CreditService(
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
-        var stock = await inventory.PlanReturnAsync(lines, command.Date, ct);
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var stock = await inventory.PlanReturnAsync(lines, command.Date, warehouseId, ct);
         var id = Guid.CreateVersion7();
         var memo = $"Credit memo {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
@@ -102,6 +105,7 @@ public sealed class CreditService(
 
         var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo, taxCodeId, exemption);
         credit.SetLocation(command.LocationId);
+        credit.SetWarehouse(warehouseId);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
         await store.SaveChangesAsync(ct);

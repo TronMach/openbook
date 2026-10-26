@@ -19,7 +19,8 @@ public sealed record CreateSalesReceiptCommand(
     string? Memo = null,
     Guid? TaxCodeId = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    Guid? WarehouseId = null);
 
 public sealed class SalesReceiptService(
     ISalesStore store,
@@ -27,6 +28,7 @@ public sealed class SalesReceiptService(
     SalesLineBuilder lineBuilder,
     PostingEngine engine,
     InventoryService inventory,
+    WarehouseService warehouses,
     IClock clock,
     ICurrentUser user)
 {
@@ -58,7 +60,8 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
-        var stock = await inventory.PlanSaleAsync(lines, command.Date, ct);
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
 
         var id = Guid.CreateVersion7();
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
@@ -69,6 +72,7 @@ public sealed class SalesReceiptService(
 
         var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption);
         receipt.SetLocation(command.LocationId);
+        receipt.SetWarehouse(warehouseId);
         store.Add(receipt);
         store.Add(Audit(AuditAction.Created, receipt, before: null));
         await store.SaveChangesAsync(ct);

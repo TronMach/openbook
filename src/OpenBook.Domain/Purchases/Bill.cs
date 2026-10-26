@@ -7,14 +7,17 @@ namespace OpenBook.Domain.Purchases;
 /// <summary>What a bill's line is for: an account (expense, asset, ...) and amount. A negative amount is a credit, e.g. a discount.</summary>
 /// <param name="ItemId">An inventory item received: the line posts to its asset account and adds <paramref name="Quantity"/> to stock at the line's amount.</param>
 /// <param name="ClassId">The line's class (Domain.Segments); null for none.</param>
-public sealed record BillLineDraft(Guid AccountId, decimal Amount, string? Description = null, Guid? ItemId = null, decimal? Quantity = null, Guid? ClassId = null);
+/// <param name="Lots">Lot or serial numbers of the stock received, for lot- and serial-tracked items (see Domain.Inventory.LotText).</param>
+public sealed record BillLineDraft(
+    Guid AccountId, decimal Amount, string? Description = null, Guid? ItemId = null, decimal? Quantity = null, Guid? ClassId = null, string? Lots = null);
 
 public sealed class BillLine
 {
     private BillLine() { }
 
-    internal BillLine(int lineNumber, Guid accountId, decimal amount, string? description, Guid? itemId = null, decimal? quantity = null, Guid? classId = null)
+    internal BillLine(int lineNumber, Guid accountId, decimal amount, string? description, Guid? itemId = null, decimal? quantity = null, Guid? classId = null, string? lots = null)
     {
+        Lots = itemId is null ? null : lots;
         ClassId = classId == Guid.Empty ? null : classId;
         LineNumber = lineNumber;
         AccountId = accountId;
@@ -36,10 +39,13 @@ public sealed class BillLine
 
     public Guid? ClassId { get; private set; }
 
+    /// <summary>The lot or serial numbers received on an item line.</summary>
+    public string? Lots { get; private set; }
+
     /// <summary>Reclassifying the document's entry changes its lines' class too, so cash basis follows.</summary>
     public void SetClass(Guid? classId) => ClassId = classId == Guid.Empty ? null : classId;
 
-    public BillLineDraft ToDraft() => new(AccountId, Amount, Description, ItemId, Quantity, ClassId);
+    public BillLineDraft ToDraft() => new(AccountId, Amount, Description, ItemId, Quantity, ClassId, Lots);
 }
 
 /// <summary>
@@ -80,6 +86,11 @@ public sealed class Bill
 
     /// <summary>Set when created, or by reclassifying the transaction's entry.</summary>
     public void SetLocation(Guid? locationId) => LocationId = locationId == Guid.Empty ? null : locationId;
+
+    /// <summary>The warehouse its stock moved in or out of; null for the default one.</summary>
+    public Guid? WarehouseId { get; private set; }
+
+    public void SetWarehouse(Guid? warehouseId) => WarehouseId = warehouseId == Guid.Empty ? null : warehouseId;
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<BillLine> Lines => _lines;
@@ -123,7 +134,7 @@ public sealed class Bill
             else if (draft.Quantity is not null)
                 throw new DomainException("bill.line_quantity_without_item", $"Line {index}: a quantity needs an item.");
             lines.Add(new BillLine(index, draft.AccountId, draft.Amount, Text.Optional(draft.Description, 1000, "bill.description_too_long", "Description"),
-                draft.ItemId, draft.Quantity, draft.ClassId));
+                draft.ItemId, draft.Quantity, draft.ClassId, Text.Optional(draft.Lots, 1000, "bill.lots_too_long", "Lot or serial numbers")));
         }
 
         if (lines.Sum(l => l.Amount) <= 0m)

@@ -19,7 +19,8 @@ public sealed record CreateBillCommand(
     string? Reference = null,
     string? Memo = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    Guid? WarehouseId = null);
 
 public sealed class BillService(
     IPurchasesStore store,
@@ -27,6 +28,7 @@ public sealed class BillService(
     AccountService accounts,
     PostingEngine engine,
     InventoryService inventory,
+    WarehouseService warehouses,
     IClock clock,
     ICurrentUser user)
 {
@@ -56,7 +58,8 @@ public sealed class BillService(
                 .Any(b => b.Status == DocumentStatus.Posted && string.Equals(b.Reference, reference, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException("bill.reference_taken", $"There's already a bill {reference} from {vendor.DisplayName}.");
 
-        var (drafts, stock) = await inventory.PlanPurchaseAsync(command.Lines ?? [], command.Date, ct);
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var (drafts, stock) = await inventory.PlanPurchaseAsync(command.Lines ?? [], command.Date, warehouseId, ct);
         var lines = Bill.LinesFrom(drafts);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
@@ -72,6 +75,7 @@ public sealed class BillService(
         var bill = Bill.Create(id, vendor.Id, payables.Id, command.Date, command.DueDate ?? vendor.DueDateFor(command.Date),
             lines, entry.Id, clock.UtcNow, reference, command.Memo, recurringBillId);
         bill.SetLocation(command.LocationId);
+        bill.SetWarehouse(warehouseId);
         store.Add(bill);
         store.Add(Audit(AuditAction.Created, bill, before: null));
         await store.SaveChangesAsync(ct);

@@ -9,6 +9,10 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Api;
 
+public sealed record WarehouseRequest(string Name, string? Address = null, bool Active = true);
+
+public sealed record BinRequest(string Name);
+
 public sealed record StockLevelResponse(Guid ItemId, string Name, decimal Quantity, decimal Value, decimal? AverageCost, decimal? ReorderPoint, bool NeedsReorder)
 {
     public static StockLevelResponse From(StockLevel s) =>
@@ -57,9 +61,9 @@ internal static class InventoryApi
             ItemResponse.From(await s.SetComponentsAsync(id, (components ?? []).Select(c => (c.ComponentItemId, c.Quantity)).ToList(), ct)));
 
         inventory.MapGet("/builds", async (AssemblyBuildService s, CancellationToken ct) => await s.ListAsync(ct));
-        inventory.MapGet("/builds/preview", async (Guid itemId, decimal quantity, DateOnly date, AssemblyBuildService s, CancellationToken ct) =>
+        inventory.MapGet("/builds/preview", async (Guid itemId, decimal quantity, DateOnly date, Guid? warehouseId, AssemblyBuildService s, CancellationToken ct) =>
         {
-            var p = await s.PreviewAsync(itemId, quantity, date, ct);
+            var p = await s.PreviewAsync(itemId, quantity, date, warehouseId, ct);
             return new { p.Quantity, p.MaxBuildable, Requirements = p.Requirements.Select(r => new { ItemId = r.Component.Id, r.Component.Name, r.PerUnit, r.Needed, r.OnHand, r.IsShort }) };
         });
         inventory.MapGet("/builds/{id:guid}", async (Guid id, AssemblyBuildService s, CancellationToken ct) =>
@@ -70,6 +74,35 @@ internal static class InventoryApi
             return Results.Created($"/api/inventory/builds/{build.Id}", build);
         });
         inventory.MapPost("/builds/{id:guid}/void", async (Guid id, VoidInventoryAdjustmentRequest r, AssemblyBuildService s, CancellationToken ct) =>
+            await s.VoidAsync(id, r.Reason, ct));
+
+        inventory.MapGet("/warehouses", async (WarehouseService s, CancellationToken ct) => await s.ListAsync(includeInactive: true, ct: ct));
+        inventory.MapPost("/warehouses", async (WarehouseRequest r, WarehouseService s, CancellationToken ct) =>
+        {
+            var warehouse = await s.CreateAsync(r.Name, r.Address, ct);
+            return Results.Created($"/api/inventory/warehouses/{warehouse.Id}", warehouse);
+        });
+        inventory.MapPut("/warehouses/{id:guid}", async (Guid id, WarehouseRequest r, WarehouseService s, CancellationToken ct) =>
+            await s.UpdateAsync(id, r.Name, r.Address, r.Active, ct));
+        inventory.MapGet("/bins", async (Guid? warehouseId, WarehouseService s, CancellationToken ct) => await s.BinsAsync(warehouseId, includeInactive: true, ct));
+        inventory.MapPost("/warehouses/{id:guid}/bins", async (Guid id, BinRequest r, WarehouseService s, CancellationToken ct) => await s.AddBinAsync(id, r.Name, ct));
+        inventory.MapPut("/bins/{id:guid}/active", async (Guid id, SetActiveRequest r, WarehouseService s, CancellationToken ct) => await s.SetBinActiveAsync(id, r.Active, ct));
+
+        inventory.MapGet("/stock/places", async (Guid? itemId, DateOnly? asOf, InventoryService s, CancellationToken ct) =>
+            (await s.StockByPlaceAsync(itemId, asOf, ct)).Select(x => new { ItemId = x.Item.Id, x.Item.Name, x.Place.WarehouseId, x.Place.BinId, x.Lot, x.Quantity, x.Value, x.Received }));
+        inventory.MapGet("/lots/{lot}", async (string lot, InventoryService s, CancellationToken ct) => await s.LotHistoryAsync(lot, ct));
+        inventory.MapGet("/items/barcode/{code}", async (string code, ItemService s, CancellationToken ct) =>
+            await s.FindByBarcodeAsync(code, ct) is { } item ? Results.Ok(ItemResponse.From(item)) : Results.NotFound());
+
+        inventory.MapGet("/transfers", async (StockTransferService s, CancellationToken ct) => await s.ListAsync(ct));
+        inventory.MapGet("/transfers/{id:guid}", async (Guid id, StockTransferService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } t ? Results.Ok(t) : Results.NotFound());
+        inventory.MapPost("/transfers", async (CreateStockTransferCommand c, StockTransferService s, CancellationToken ct) =>
+        {
+            var transfer = await s.CreateAsync(c, ct);
+            return Results.Created($"/api/inventory/transfers/{transfer.Id}", transfer);
+        });
+        inventory.MapPost("/transfers/{id:guid}/void", async (Guid id, VoidInventoryAdjustmentRequest r, StockTransferService s, CancellationToken ct) =>
             await s.VoidAsync(id, r.Reason, ct));
 
         inventory.MapGet("/landed-costs", async (LandedCostService s, CancellationToken ct) => await s.ListAsync(ct));

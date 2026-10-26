@@ -65,6 +65,8 @@ public static class Links
         "inventory_adjustment" => $"/inventory/adjustments/{id}",
         "assembly_build" => $"/inventory/builds/{id}",
         "landed_cost" => $"/inventory/landed-costs/{id}",
+        "stock_transfer" => $"/inventory/transfers/{id}",
+        "warehouse" => "/inventory/warehouses",
         "saved_report" => "/reports",
         "price_level" => $"/pricing/levels/{id}",
         "price_rule" => $"/pricing/rules/{id}",

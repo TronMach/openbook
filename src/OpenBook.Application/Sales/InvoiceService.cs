@@ -22,7 +22,8 @@ public sealed record CreateInvoiceCommand(
     Guid? EstimateId = null,
     Guid? TaxCodeId = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    Guid? WarehouseId = null);
 
 public sealed class InvoiceService(
     ISalesStore store,
@@ -30,6 +31,7 @@ public sealed class InvoiceService(
     SalesLineBuilder lineBuilder,
     PostingEngine engine,
     InventoryService inventory,
+    WarehouseService warehouses,
     IClock clock,
     ICurrentUser user)
 {
@@ -80,7 +82,8 @@ public sealed class InvoiceService(
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
-        var stock = await inventory.PlanSaleAsync(lines, command.Date, ct);
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
 
         var id = Guid.CreateVersion7();
         var memo = $"Invoice {number} · {customer.DisplayName}";
@@ -94,6 +97,7 @@ public sealed class InvoiceService(
             id, number, customer.Id, receivables.Id, command.Date, command.DueDate ?? terms.DueDate(command.Date),
             lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId, taxCodeId, exemption);
         invoice.SetLocation(command.LocationId);
+        invoice.SetWarehouse(warehouseId);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
         if (estimate is not null)

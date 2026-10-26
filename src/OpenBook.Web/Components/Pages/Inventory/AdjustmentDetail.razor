@@ -4,6 +4,7 @@
 @using OpenBook.Domain.Inventory
 @inject InventoryAdjustmentService Adjustments
 @inject ItemService Items
+@inject WarehouseService WarehouseService
 @inject AccountService AccountService
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
@@ -39,19 +40,21 @@
     </div>
 
     <table class="data">
-        <thead><tr><th>Item</th><th class="num">Quantity change</th><th class="num">Value change</th></tr></thead>
+        <thead><tr><th>Item</th><th>Where</th><th>Lots or serials</th><th class="num">Quantity change</th><th class="num">Value change</th></tr></thead>
         <tbody>
             @foreach (var line in _adjustment.Lines.OrderBy(l => l.LineNumber))
             {
                 <tr>
                     <td><a href="/items/@line.ItemId">@(_items.GetValueOrDefault(line.ItemId)?.Name ?? "Item")</a></td>
+                    <td>@_place(new StockPlace(line.WarehouseId, line.BinId))</td>
+                    <td>@line.Lots</td>
                     <td class="num">@Labels.Quantity(line.QuantityChange)</td>
                     <td class="num">@Labels.Amount(line.ValueChange)</td>
                 </tr>
             }
         </tbody>
         <tfoot>
-            <tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_adjustment.ValueChange)</td></tr>
+            <tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_adjustment.ValueChange)</td></tr>
         </tfoot>
     </table>
 
@@ -85,6 +88,7 @@
 @code {
     private InventoryAdjustment? _adjustment;
     private Dictionary<Guid, Item> _items = [];
+    private Func<StockPlace, string> _place = _ => "";
     private ChartOfAccounts _chart = new([]);
     private bool _needsClosingPassword;
     private string? _error;
@@ -100,6 +104,7 @@
         _adjustment = await Adjustments.GetAsync(Id);
         _items = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id);
         _chart = await AccountService.GetChartAsync();
+        _place = await WarehouseService.NamerAsync();
     }
 
     private async Task VoidAsync()

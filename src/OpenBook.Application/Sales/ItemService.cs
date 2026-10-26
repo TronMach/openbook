@@ -21,6 +21,13 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
     public async Task<Item?> GetAsync(Guid id, CancellationToken ct = default) =>
         (await store.GetItemsAsync([id], ct)).GetValueOrDefault(id);
 
+    /// <summary>The item with this barcode (ignoring case and surrounding spaces), active or not.</summary>
+    public async Task<Item?> FindByBarcodeAsync(string barcode, CancellationToken ct = default)
+    {
+        var code = barcode?.Trim();
+        return string.IsNullOrEmpty(code) ? null : (await store.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Barcode, code, StringComparison.OrdinalIgnoreCase));
+    }
+
     public async Task<Item> CreateAsync(ItemDetails details, CancellationToken ct = default)
     {
         details = await WithInventoryAccountsAsync(details, ct);
@@ -45,6 +52,8 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
                 throw new DomainException("item.asset_account_locked", $"{item.Name} has stock history, so its inventory asset account can't change.");
             if (details.CostMethod != item.CostMethod)
                 throw new DomainException("item.cost_method_locked", $"{item.Name} has stock history, so its costing method can't change.");
+            if (details.Tracking != item.Tracking)
+                throw new DomainException("item.tracking_locked", $"{item.Name} has stock history, so its lot or serial tracking can't change.");
         }
 
         if (item.Type != details.Type && (await store.ListItemsAsync(ct)).FirstOrDefault(i => i.Components.Any(c => c.ComponentItemId == id)) is { } parent)
@@ -123,8 +132,11 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
     {
         ArgumentNullException.ThrowIfNull(details);
         var name = Item.NormalizeName(details.Name);
-        if ((await store.ListItemsAsync(ct)).Any(i => i.Id != except && string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)))
+        var items = await store.ListItemsAsync(ct);
+        if (items.Any(i => i.Id != except && string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException("item.name_taken", $"There's already a product or service named '{name}'.");
+        if (Item.NormalizeBarcode(details.Barcode) is { } barcode && items.FirstOrDefault(i => i.Id != except && string.Equals(i.Barcode, barcode, StringComparison.OrdinalIgnoreCase)) is { } other)
+            throw new DomainException("item.barcode_taken", $"{other.Name} already has the barcode {barcode}.");
         var chart = await accounts.GetChartAsync(ct);
         Item.EnsureIncomeAccount(chart.Get(details.IncomeAccountId));
         if (Item.IsTracked(details.Type))
@@ -161,6 +173,8 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         i.ReorderPoint,
         i.PurchaseCost,
         CostMethod = i.CostMethod.ToString(),
+        Tracking = i.Tracking.ToString(),
+        i.Barcode,
         Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });

@@ -30,7 +30,7 @@ public enum SalesLineKind
 /// <param name="PriceSource">Set by the line builder for automatic prices, or kept when copying a line.</param>
 public sealed record SalesLineDraft(
     Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null,
-    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null)
+    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null, string? Lots = null)
 {
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 }
@@ -82,6 +82,12 @@ public sealed class SalesLine
     /// <summary>The rate a tax line charges; its <see cref="Rate"/> is that rate's percentage when the line was created.</summary>
     public Guid? TaxRateId { get; private set; }
 
+    /// <summary>Lot or serial numbers of lot- and serial-tracked stock on the line: as typed, then as actually used once stock has moved.</summary>
+    public string? Lots { get; private set; }
+
+    /// <summary>Records the lots or serials the sale actually took (or the return brought back).</summary>
+    public void RecordLots(string? lots) => Lots = string.IsNullOrWhiteSpace(lots) ? null : lots.Length > 1000 ? lots[..1000] : lots;
+
     /// <param name="item">The draft's item, already looked up; null for a note line.</param>
     public static SalesLine Create(int lineNumber, SalesLineDraft draft, Item? item)
     {
@@ -124,6 +130,7 @@ public sealed class SalesLine
             ClassId = draft.ClassId == Guid.Empty ? null : draft.ClassId,
             PriceSource = item is null ? null
                 : Text.Optional(draft.PriceSource, 200, "sales.price_source_too_long", "Price source") ?? (rate == item.Rate ? null : ManualPrice),
+            Lots = item is null ? null : Text.Optional(draft.Lots, 1000, "sales.lots_too_long", "Lot or serial numbers"),
         };
     }
 
@@ -244,7 +251,7 @@ public sealed class SalesLine
         Kind == SalesLineKind.Tax
             ? throw new InvalidOperationException("Tax lines are recalculated, not copied.")
             : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null,
-                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId);
+                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId, Lots: Lots);
 
     /// <summary>The drafts for a document's lines, leaving out its tax lines.</summary>
     public static List<SalesLineDraft> Drafts(IEnumerable<SalesLine> lines) =>

@@ -28,6 +28,9 @@ public sealed class SalesLineModel
 
     public string? PriceSource { get; set; }
 
+    /// <summary>Lot or serial numbers, for lot- and serial-tracked items; blank takes the oldest on a sale.</summary>
+    public string? Lots { get; set; }
+
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 
     public bool IsBlank => !IsDiscount && ItemId is null && string.IsNullOrWhiteSpace(Description) && ItemAmount == 0m;
@@ -80,7 +83,8 @@ public sealed class SalesLineModel
         .Where(l => !l.IsBlank)
         .Select(l => new SalesLineDraft(l.ItemId, l.Description, l.IsDiscount ? 1m : l.Quantity ?? 0m, l.Rate ?? 0m,
             l.IsDiscount ? l.Kind : SalesLineKind.Item, l.IsDiscount || l.ItemId is null ? null : l.Taxable,
-            AutoPrice: l.AutoPrice && !l.IsDiscount && l.ItemId is not null, PriceSource: l.AutoPrice ? null : l.PriceSource, ClassId: l.ClassId))
+            AutoPrice: l.AutoPrice && !l.IsDiscount && l.ItemId is not null, PriceSource: l.AutoPrice ? null : l.PriceSource, ClassId: l.ClassId,
+            Lots: l.IsDiscount || l.ItemId is null ? null : l.Lots))
         .ToList();
 
     public static SalesLineModel From(SalesLineDraft draft)
@@ -96,6 +100,7 @@ public sealed class SalesLineModel
             Taxable = draft.Taxable,
             PriceSource = draft.PriceSource,
             ClassId = draft.ClassId,
+            Lots = draft.Lots,
         };
     }
 }

@@ -23,6 +23,7 @@ public sealed class InventoryAdjustmentService(
     IInventoryStore store,
     ISalesStore sales,
     InventoryService inventory,
+    WarehouseService warehouses,
     InventoryAccounts inventoryAccounts,
     AccountService accounts,
     PostingEngine engine,
@@ -50,7 +51,8 @@ public sealed class InventoryAdjustmentService(
             throw new DomainException("inventory.adjustment_account_inactive", $"'{adjustmentAccount.Name}' is inactive.");
 
         var items = await sales.GetItemsAsync(command.Lines.Select(l => l.ItemId).ToList(), ct);
-        var lines = new List<(Guid ItemId, decimal QuantityChange, decimal ValueChange)>();
+        var lines = new List<(Guid ItemId, decimal QuantityChange, decimal ValueChange, StockPlace Place, string? Lots)>();
+        var histories = new Dictionary<Guid, List<InventoryMovement>>();
         var postings = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
         foreach (var draft in command.Lines)
@@ -59,21 +61,39 @@ public sealed class InventoryAdjustmentService(
             if (adjustmentAccount.Id == item.InventoryAssetAccountId)
                 throw new DomainException("inventory.adjustment_account_is_asset", $"'{adjustmentAccount.Name}' holds {item.Name}'s stock, so it can't be the adjustment account.");
 
+            var place = await warehouses.CheckAsync(draft.Place ?? StockPlace.Default, ct);
+            if (!histories.TryGetValue(item.Id, out var history))
+                histories[item.Id] = history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
+            var named = LotText.Parse(draft.Lots, item.Tracking, Math.Abs(draft.QuantityChange), item.Name);
+
             decimal value;
+            string? lots;
             if (draft.QuantityChange > 0m)
             {
+                var received = InventoryService.Required(named, item);
+                InventoryService.EnsureNewSerials(item, received, history);
                 value = decimal.Round(draft.QuantityChange * (draft.UnitCost ?? item.PurchaseCost), 2, MidpointRounding.AwayFromZero);
-                var quantity = draft.QuantityChange;
-                movements.Add((type, id, at) => InventoryMovement.Receipt(item.Id, command.Date, quantity, value, type, id, at));
+                var receipts = received.Count > 0 ? received.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(draft.QuantityChange, (string?)null)];
+                foreach (var (quantity, lot, share) in InventoryService.Split(receipts, value).ToList())
+                    movements.Add((type, id, at) => InventoryMovement.Receipt(item.Id, command.Date, quantity, share, type, id, at, place, lot));
+                lots = LotText.Format(received, item.Tracking);
             }
             else
             {
-                var takes = Costing.Take(item, await store.ListMovementsAsync(item.Id, ct), -draft.QuantityChange, command.Date);
+                if (item.Tracking == ItemTracking.Serial && draft.QuantityChange != decimal.Truncate(draft.QuantityChange))
+                    throw new DomainException("lot.serial_whole", $"{item.Name} is tracked by serial number, so its quantities are whole units.");
+                var filter = place.BinId is null ? StockFilter.In(place.WarehouseId) : StockFilter.At(place);
+                var takes = new List<FifoTake>();
+                if (named.Count == 0)
+                    takes.AddRange(InventoryService.TakeAndSimulate(item, history, -draft.QuantityChange, command.Date, filter));
+                foreach (var (lot, quantity) in named)
+                    takes.AddRange(InventoryService.TakeAndSimulate(item, history, quantity, command.Date, filter.WithLot(lot)));
                 value = -takes.Sum(t => t.Cost);
                 movements.AddRange(takes.Select(t => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => InventoryMovement.Issue(t, item.Id, command.Date, type, id, at))));
+                lots = LotText.Format(takes.Where(t => t.Lot is not null).Select(t => (t.Lot!, t.Quantity)), item.Tracking);
             }
 
-            lines.Add((item.Id, draft.QuantityChange, value));
+            lines.Add((item.Id, draft.QuantityChange, value, place, lots));
             if (value > 0m)
                 postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, value, item.Name));
             else if (value < 0m)
@@ -123,6 +143,6 @@ public sealed class InventoryAdjustmentService(
         a.AdjustmentAccountId,
         a.Memo,
         Status = a.Status.ToString(),
-        Lines = a.Lines.Select(l => new { l.ItemId, l.QuantityChange, l.ValueChange }),
+        Lines = a.Lines.Select(l => new { l.ItemId, l.QuantityChange, l.ValueChange, l.WarehouseId, l.BinId, l.Lots }),
     });
 }

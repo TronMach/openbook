@@ -3,6 +3,7 @@
 @using OpenBook.Domain.Inventory
 @inject InventoryAdjustmentService Adjustments
 @inject InventoryService Inventory
+@inject WarehouseService Warehouses
 @inject AccountService AccountService
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
@@ -50,7 +51,20 @@
         </div>
 
         <table class="data entry">
-            <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Quantity change</th><th class="num">Unit cost (increases)</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    @if (_places.HasChoice)
+                    {
+                        <th>Where</th>
+                    }
+                    <th class="num">On hand</th><th class="num">Quantity change</th><th class="num">Unit cost (increases)</th>
+                    @if (_tracksLots)
+                    {
+                        <th>Lots or serials</th>
+                    }
+                </tr>
+            </thead>
             <tbody>
                 @for (var i = 0; i < Input.Lines.Count; i++)
                 {
@@ -65,9 +79,24 @@
                                 }
                             </InputSelect>
                         </td>
+                        @if (_places.HasChoice)
+                        {
+                            <td>
+                                <InputSelect @bind-Value="Input.Lines[index].Place" aria-label="@($"Where {index + 1}")">
+                                    @foreach (var choice in _places.Choices)
+                                    {
+                                        <option value="@choice.Value">@choice.Label</option>
+                                    }
+                                </InputSelect>
+                            </td>
+                        }
                         <td class="num muted">@(Input.Lines[index].ItemId is { } id && _stock.FirstOrDefault(s => s.Item.Id == id) is { } level ? Labels.Quantity(level.Quantity) : "")</td>
                         <td><InputNumber class="amount" step="any" @bind-Value="Input.Lines[index].QuantityChange" aria-label="@($"Quantity change {index + 1}")" /></td>
                         <td><InputNumber class="amount" step="any" @bind-Value="Input.Lines[index].UnitCost" aria-label="@($"Unit cost {index + 1}")" /></td>
+                        @if (_tracksLots)
+                        {
+                            <td><InputText @bind-Value="Input.Lines[index].Lots" aria-label="@($"Lots or serials {index + 1}")" placeholder="A-1 x 3; B-2 x 2 or SN1, SN2" /></td>
+                        }
                     </tr>
                 }
             </tbody>
@@ -89,6 +118,8 @@
     private const int Rows = 8;
 
     private IReadOnlyList<StockLevel> _stock = [];
+    private StockPlaces _places = default!;
+    private bool _tracksLots;
     private ChartOfAccounts _chart = new([]);
     private List<Account> _accounts = [];
     private bool _needsClosingPassword;
@@ -103,6 +134,8 @@
     protected override async Task OnInitializedAsync()
     {
         _stock = (await Inventory.StockAsync()).Where(s => s.Item.IsActive).ToList();
+        _places = await StockPlaces.LoadAsync(Warehouses);
+        _tracksLots = _stock.Any(s => s.Item.Tracking != ItemTracking.None);
         _chart = await AccountService.GetChartAsync();
         _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type is AccountType.CostOfGoodsSold or AccountType.Expense or AccountType.OtherExpense or AccountType.Equity or AccountType.OtherIncome)
@@ -120,7 +153,7 @@
         {
             var lines = Input.Lines
                 .Where(l => l.ItemId is not null || l.QuantityChange is not null)
-                .Select(l => new InventoryAdjustmentLineDraft(l.ItemId ?? Guid.Empty, l.QuantityChange ?? 0m, l.UnitCost))
+                .Select(l => new InventoryAdjustmentLineDraft(l.ItemId ?? Guid.Empty, l.QuantityChange ?? 0m, l.UnitCost, _places.Parse(l.Place), l.Lots))
                 .ToList();
             ClosingOverride.Password = Input.ClosingPassword;
             var adjustment = await Adjustments.CreateAsync(new CreateInventoryAdjustmentCommand(Input.Date, lines, Input.AccountId, Input.Reference, Input.Memo));
@@ -148,5 +181,7 @@
         public Guid? ItemId { get; set; }
         public decimal? QuantityChange { get; set; }
         public decimal? UnitCost { get; set; }
+        public string? Place { get; set; }
+        public string? Lots { get; set; }
     }
 }

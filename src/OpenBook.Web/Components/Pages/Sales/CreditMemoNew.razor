@@ -45,6 +45,7 @@
             <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional)</span></label>
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
@@ -94,6 +95,8 @@
     private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
 
     private SegmentOptions _segments = SegmentOptions.None;
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
 
     private Guid? _locationId;
 
@@ -102,6 +105,7 @@
     {
 
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+        _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
         _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _number) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
@@ -118,7 +122,7 @@
         _error = null;
         try
         {
-            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId);
+            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId);
             var credit = await Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/credit-memos/{credit.Id}");
         }

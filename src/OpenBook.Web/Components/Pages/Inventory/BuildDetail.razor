@@ -4,6 +4,7 @@
 @using OpenBook.Domain.Inventory
 @inject AssemblyBuildService Builds
 @inject ItemService Items
+@inject WarehouseService WarehouseService
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
 
@@ -30,6 +31,11 @@
             <dt>Date</dt><dd>@Labels.Date(_build.Date)</dd>
             <dt>Assembly</dt><dd><a href="/items/@_build.ItemId">@Name(_build.ItemId)</a></dd>
             <dt>Cost</dt><dd>@Labels.Amount(_build.Cost) (@Labels.Amount(_build.Cost / _build.Quantity) each)</dd>
+            <dt>Warehouse</dt><dd>@_place(new StockPlace(_build.WarehouseId, null))</dd>
+            @if (_build.Lots is { } lots)
+            {
+                <dt>Lots or serials built</dt><dd>@lots</dd>
+            }
             @if (_build.Memo is { } memo)
             {
                 <dt>Memo</dt><dd>@memo</dd>
@@ -39,18 +45,19 @@
     </div>
 
     <table class="data">
-        <thead><tr><th>Component used</th><th class="num">Quantity</th><th class="num">Cost</th></tr></thead>
+        <thead><tr><th>Component used</th><th>Lots or serials</th><th class="num">Quantity</th><th class="num">Cost</th></tr></thead>
         <tbody>
             @foreach (var line in _build.Lines.OrderBy(l => l.LineNumber))
             {
                 <tr>
                     <td><a href="/items/@line.ItemId">@Name(line.ItemId)</a></td>
+                    <td>@line.Lots</td>
                     <td class="num">@Labels.Quantity(line.Quantity)</td>
                     <td class="num">@Labels.Amount(line.Cost)</td>
                 </tr>
             }
         </tbody>
-        <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_build.Cost)</td></tr></tfoot>
+        <tfoot><tr><td colspan="3">Total</td><td class="num">@Labels.Amount(_build.Cost)</td></tr></tfoot>
     </table>
 
     <Attachments EntityType="assembly_build" EntityId="_build.Id" />
@@ -83,6 +90,7 @@
 @code {
     private AssemblyBuild? _build;
     private Dictionary<Guid, Item> _items = [];
+    private Func<StockPlace, string> _place = _ => "";
     private bool _needsClosingPassword;
     private string? _error;
 
@@ -96,6 +104,7 @@
         VoidInput ??= new();
         _build = await Builds.GetAsync(Id);
         _items = (await Items.ListAsync(includeInactive: true)).ToDictionary(i => i.Id);
+        _place = await WarehouseService.NamerAsync();
     }
 
     private string Name(Guid itemId) => _items.GetValueOrDefault(itemId)?.Name ?? "Item";

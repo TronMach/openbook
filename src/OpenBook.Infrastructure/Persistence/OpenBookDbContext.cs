@@ -76,6 +76,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
     public DbSet<AssemblyBuild> AssemblyBuilds => Set<AssemblyBuild>();
+    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<Bin> Bins => Set<Bin>();
+    public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<LandedCost> LandedCosts => Set<LandedCost>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
     public DbSet<PriceLevel> PriceLevels => Set<PriceLevel>();
@@ -396,6 +399,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         foreach (var document in new[] { typeof(Invoice), typeof(SalesReceipt), typeof(CreditMemo), typeof(Estimate), typeof(Bill), typeof(VendorCredit), typeof(BankTransaction) })
             modelBuilder.Entity(document).HasOne(typeof(Segment)).WithMany().HasForeignKey("LocationId").OnDelete(DeleteBehavior.Restrict);
 
+        foreach (var document in new[] { typeof(Invoice), typeof(SalesReceipt), typeof(CreditMemo), typeof(Bill) })
+            modelBuilder.Entity(document).HasOne(typeof(Warehouse)).WithMany().HasForeignKey("WarehouseId").OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<Budget>(b =>
         {
             b.ToTable("Budgets");
@@ -697,6 +703,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             });
             b.Navigation(i => i.QuantityBreaks).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Property(i => i.CostMethod).HasConversion<string>().HasMaxLength(20);
+            b.Property(i => i.Tracking).HasConversion<string>().HasMaxLength(20);
+            b.Property(i => i.Barcode).HasMaxLength(50);
+            b.HasIndex(i => i.Barcode).IsUnique();
             b.Ignore(i => i.IsBundle);
             b.Ignore(i => i.IsAssembly);
             b.OwnsMany(i => i.Components, c =>
@@ -714,6 +723,50 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.CostAccountId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<Warehouse>(b =>
+        {
+            b.ToTable("Warehouses");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).HasMaxLength(Warehouse.MaxNameLength);
+            b.HasIndex(x => x.Name).IsUnique();
+            b.Property(x => x.Address).HasMaxLength(500);
+            b.Ignore(x => x.Key);
+        });
+
+        modelBuilder.Entity<Bin>(b =>
+        {
+            b.ToTable("Bins");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).HasMaxLength(Bin.MaxNameLength);
+            b.HasIndex(x => new { x.WarehouseId, x.Name }).IsUnique();
+            b.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StockTransfer>(b =>
+        {
+            b.ToTable("StockTransfers");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Reference).HasMaxLength(30);
+            b.Property(x => x.Memo).HasMaxLength(1000);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("StockTransferLines");
+                l.WithOwner().HasForeignKey("StockTransferId");
+                l.HasKey("StockTransferId", nameof(StockTransferLine.LineNumber));
+                l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.Lots).HasMaxLength(1000);
+                l.Ignore(x => x.From);
+                l.Ignore(x => x.To);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.FromWarehouseId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.ToWarehouseId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Bin>().WithMany().HasForeignKey(x => x.FromBinId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Bin>().WithMany().HasForeignKey(x => x.ToBinId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
         modelBuilder.Entity<AssemblyBuild>(b =>
         {
             b.ToTable("AssemblyBuilds");
@@ -723,12 +776,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(x => x.Memo).HasMaxLength(1000);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             b.Ignore(x => x.Cost);
+            b.Property(x => x.Lots).HasMaxLength(1000);
+            b.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => x.ItemId);
             b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
             b.OwnsMany(x => x.Lines, l =>
             {
                 l.ToTable("AssemblyBuildLines");
+                l.Property(x => x.Lots).HasMaxLength(1000);
                 l.WithOwner().HasForeignKey("AssemblyBuildId");
                 l.HasKey("AssemblyBuildId", nameof(AssemblyBuildLine.LineNumber));
                 l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
@@ -773,6 +829,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(m => m.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
             b.Property(m => m.Cost).HasColumnName("CostMinor").HasConversion(MinorUnits);
             b.Ignore(m => m.IsReceipt);
+            b.Ignore(m => m.Place);
+            b.Property(m => m.Lot).HasMaxLength(50);
+            b.HasIndex(m => new { m.ItemId, m.Lot });
+            b.HasOne<Warehouse>().WithMany().HasForeignKey(m => m.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Bin>().WithMany().HasForeignKey(m => m.BinId).OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(m => new { m.ItemId, m.Date });
             b.HasIndex(m => m.LayerId);
             b.HasIndex(m => new { m.SourceType, m.SourceId });
@@ -797,7 +858,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.HasKey("InventoryAdjustmentId", nameof(InventoryAdjustmentLine.LineNumber));
                 l.Property(x => x.QuantityChange).HasColumnName("QuantityChangeTenThousandths").HasConversion(TenThousandths);
                 l.Property(x => x.ValueChange).HasColumnName("ValueChangeMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Lots).HasMaxLength(1000);
                 l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Bin>().WithMany().HasForeignKey(x => x.BinId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(a => a.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
@@ -815,6 +879,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             l.Property(x => x.ListRate).HasColumnName("ListRateTenThousandths").HasConversion(NullableTenThousandths);
             l.Property(x => x.PriceSource).HasMaxLength(200);
+            l.Property(x => x.Lots).HasMaxLength(1000);
             l.Ignore(x => x.Saved);
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -1034,6 +1099,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.Property(x => x.Description).HasMaxLength(1000);
             l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(NullableTenThousandths);
+            l.Property(x => x.Lots).HasMaxLength(1000);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);

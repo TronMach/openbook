@@ -74,6 +74,12 @@ public sealed class Item
     /// <summary>Tracked items (inventory products and assemblies): how sales are costed. Locked once stock has moved.</summary>
     public InventoryCostMethod CostMethod { get; private set; }
 
+    /// <summary>Tracked items: whether units carry lot or serial numbers. Locked once stock has moved.</summary>
+    public Inventory.ItemTracking Tracking { get; private set; }
+
+    /// <summary>What a scanner reads off the product (UPC, EAN, or your own code); unique among items.</summary>
+    public string? Barcode { get; private set; }
+
     /// <summary>Whether stock on hand and its cost are tracked: inventory products and assemblies.</summary>
     public bool IsInventory => IsTracked(Type);
 
@@ -140,6 +146,7 @@ public sealed class Item
         Type = Enum.IsDefined(details.Type) ? details.Type : throw new DomainException("item.type_invalid", $"Unknown item type {details.Type}.");
         Description = Text.Optional(details.Description, 1000, "item.description_too_long", "Description");
         Rate = SalesLine.ValidRate(details.Rate);
+        Barcode = NormalizeBarcode(details.Barcode);
         Taxable = details.Taxable;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
             ? throw new DomainException("item.income_account_required", "Choose the income account sales of this item post to.")
@@ -154,8 +161,11 @@ public sealed class Item
         {
             (InventoryAssetAccountId, CostAccountId, ReorderPoint) = (null, null, null);
             CostMethod = InventoryCostMethod.Fifo;
+            Tracking = Inventory.ItemTracking.None;
             return;
         }
+
+        Tracking = Enum.IsDefined(details.Tracking) ? details.Tracking : throw new DomainException("item.tracking_invalid", "Unknown lot or serial tracking.");
 
         CostMethod = Enum.IsDefined(details.CostMethod) ? details.CostMethod : throw new DomainException("item.cost_method_invalid", "Unknown costing method.");
 
@@ -208,6 +218,17 @@ public sealed class Item
             throw new DomainException("item.cost_account_inactive", $"'{account.Name}' is inactive.");
     }
 
+    /// <summary>Trimmed; printable characters only, up to 50; null when blank.</summary>
+    public static string? NormalizeBarcode(string? barcode)
+    {
+        var code = barcode?.Trim();
+        if (string.IsNullOrEmpty(code))
+            return null;
+        if (code.Length > 50 || code.Any(c => c < ' ' || c > '~'))
+            throw new DomainException("item.barcode_invalid", "A barcode is up to 50 plain characters (letters, digits and symbols).");
+        return code;
+    }
+
     public static string NormalizeName(string? name) =>
         Text.Optional(name, 100, "item.name_too_long", "Item name")
         ?? throw new DomainException("item.name_required", "An item needs a name.");
@@ -225,4 +246,6 @@ public sealed record ItemDetails(
     Guid? CostAccountId = null,
     decimal? ReorderPoint = null,
     decimal PurchaseCost = 0m,
-    InventoryCostMethod CostMethod = InventoryCostMethod.Fifo);
+    InventoryCostMethod CostMethod = InventoryCostMethod.Fifo,
+    Inventory.ItemTracking Tracking = Inventory.ItemTracking.None,
+    string? Barcode = null);

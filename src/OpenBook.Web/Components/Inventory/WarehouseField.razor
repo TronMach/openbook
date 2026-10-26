@@ -1,0 +1,30 @@
+@* The warehouse a document's stock moves in or out of, on an interactive form; nothing while there's only one warehouse. *@
+@using OpenBook.Domain.Inventory
+@if (Warehouses.Count > 1)
+{
+    <div class="field">
+        <label for="warehouse">Warehouse</label>
+        <select id="warehouse" value="@(Value?.ToString() ?? "")" @onchange="PickAsync">
+            @foreach (var w in Warehouses)
+            {
+                <option value="@(w.IsDefault ? "" : w.Id.ToString())">@w.Name</option>
+            }
+        </select>
+    </div>
+}
+
+@code {
+    /// <summary>Active warehouses, default first (WarehouseService.ListAsync).</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Warehouse> Warehouses { get; set; } = [];
+
+    /// <summary>The chosen warehouse; null for the default one.</summary>
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    private Task PickAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+}

@@ -8,8 +8,9 @@ public sealed class AssemblyBuildLine
 {
     private AssemblyBuildLine() { }
 
-    internal AssemblyBuildLine(int lineNumber, Guid itemId, decimal quantity, decimal cost)
+    internal AssemblyBuildLine(int lineNumber, Guid itemId, decimal quantity, decimal cost, string? lots)
     {
+        Lots = lots;
         LineNumber = lineNumber;
         ItemId = itemId;
         Quantity = quantity;
@@ -20,6 +21,9 @@ public sealed class AssemblyBuildLine
     public Guid ItemId { get; private set; }
     public decimal Quantity { get; private set; }
     public decimal Cost { get; private set; }
+
+    /// <summary>The component lots or serials used.</summary>
+    public string? Lots { get; private set; }
 }
 
 /// <summary>
@@ -45,6 +49,12 @@ public sealed class AssemblyBuild
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>Where the components came from and the assemblies went; null for the default warehouse.</summary>
+    public Guid? WarehouseId { get; private set; }
+
+    /// <summary>The lots or serials given to the built assemblies.</summary>
+    public string? Lots { get; private set; }
+
     public IReadOnlyList<AssemblyBuildLine> Lines => _lines;
 
     /// <summary>What the built assemblies cost: the sum of the components used.</summary>
@@ -57,8 +67,8 @@ public sealed class AssemblyBuild
     }
 
     public static AssemblyBuild Create(
-        Guid id, DateOnly date, Guid itemId, decimal quantity, IReadOnlyList<(Guid ItemId, decimal Quantity, decimal Cost)> lines,
-        Guid journalEntryId, DateTimeOffset createdAt, string? reference = null, string? memo = null)
+        Guid id, DateOnly date, Guid itemId, decimal quantity, IReadOnlyList<(Guid ItemId, decimal Quantity, decimal Cost, string? Lots)> lines,
+        Guid journalEntryId, DateTimeOffset createdAt, string? reference = null, string? memo = null, Guid? warehouseId = null, string? lots = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         ValidateQuantity(quantity);
@@ -73,8 +83,10 @@ public sealed class AssemblyBuild
             Status = DocumentStatus.Posted,
             JournalEntryId = journalEntryId,
             CreatedAt = createdAt.ToUniversalTime(),
+            WarehouseId = warehouseId,
+            Lots = lots,
         };
-        build._lines.AddRange(lines.Select((l, i) => new AssemblyBuildLine(i + 1, l.ItemId, l.Quantity, l.Cost)));
+        build._lines.AddRange(lines.Select((l, i) => new AssemblyBuildLine(i + 1, l.ItemId, l.Quantity, l.Cost, l.Lots)));
         return build;
     }
 

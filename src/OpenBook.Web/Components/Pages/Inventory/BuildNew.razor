@@ -3,6 +3,7 @@
 @using OpenBook.Application.Inventory
 @inject AssemblyBuildService Builds
 @inject ItemService Items
+@inject WarehouseService WarehouseService
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
 
@@ -43,6 +44,18 @@
                 <label for="date">Date</label>
                 <input id="date" type="date" name="date" value="@_date.ToString("yyyy-MM-dd")" />
             </div>
+            @if (_warehouses.Count > 1)
+            {
+                <div class="field">
+                    <label for="warehouse">Warehouse</label>
+                    <select id="warehouse" name="warehouse">
+                        @foreach (var w in _warehouses)
+                        {
+                            <option value="@(w.IsDefault ? "" : w.Id.ToString())" selected="@(w.Key == _warehouseId)">@w.Name</option>
+                        }
+                    </select>
+                </div>
+            }
         </div>
         <div class="actions"><button type="submit" class="secondary">Check stock</button></div>
     </form>
@@ -82,6 +95,14 @@
                     <input type="hidden" name="Input.ItemId" value="@_itemId" />
                     <input type="hidden" name="Input.Quantity" value="@_quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                     <input type="hidden" name="Input.Date" value="@_date.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="Input.WarehouseId" value="@_warehouseId" />
+                    @if (_preview.Assembly.Tracking != ItemTracking.None)
+                    {
+                        <div class="field">
+                            <label for="lots">@(_preview.Assembly.Tracking == ItemTracking.Serial ? "Serial numbers for the assemblies built" : "Lot for the assemblies built")</label>
+                            <InputText id="lots" @bind-Value="Input.Lots" placeholder="@(_preview.Assembly.Tracking == ItemTracking.Serial ? "SN1, SN2" : "A-1")" />
+                        </div>
+                    }
                     <div class="row">
                         <div class="field">
                             <label for="reference">Reference <span class="muted">(optional)</span></label>
@@ -106,12 +127,15 @@
     private decimal _quantity = 1m;
     private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
     private BuildPreview? _preview;
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
     private bool _needsClosingPassword;
     private string? _error;
 
     [SupplyParameterFromQuery] private Guid? Item { get; set; }
     [SupplyParameterFromQuery] private string? Quantity { get; set; }
     [SupplyParameterFromQuery] private string? Date { get; set; }
+    [SupplyParameterFromQuery] private Guid? Warehouse { get; set; }
 
     [SupplyParameterFromForm(FormName = "build")]
     private BuildModel Input { get; set; } = default!;
@@ -120,6 +144,8 @@
     {
         Input ??= new();
         _assemblies = (await Items.ListAsync()).Where(i => i.IsAssembly).ToList();
+        _warehouses = await WarehouseService.ListAsync();
+        _warehouseId = Input.WarehouseId ?? _warehouses.FirstOrDefault(w => w.Id == Warehouse)?.Key;
         if (_assemblies.Count == 0)
             return;
 
@@ -136,7 +162,7 @@
 
         try
         {
-            _preview = await Builds.PreviewAsync(_itemId, _quantity, _date);
+            _preview = await Builds.PreviewAsync(_itemId, _quantity, _date, _warehouseId);
         }
         catch (DomainException ex) when (ex.Code == "build.no_components")
         {
@@ -149,7 +175,7 @@
         try
         {
             ClosingOverride.Password = Input.ClosingPassword;
-            var build = await Builds.CreateAsync(new BuildAssemblyCommand(_itemId, _quantity, _date, Input.Reference, Input.Memo));
+            var build = await Builds.CreateAsync(new BuildAssemblyCommand(_itemId, _quantity, _date, Input.Reference, Input.Memo, _warehouseId, Input.Lots));
             Navigation.NavigateTo($"/inventory/builds/{build.Id}");
         }
         catch (DomainException ex)
@@ -164,6 +190,10 @@
         public Guid? ItemId { get; set; }
         public decimal? Quantity { get; set; }
         public DateOnly? Date { get; set; }
+        public Guid? WarehouseId { get; set; }
+
+        [StringLength(1000)]
+        public string? Lots { get; set; }
 
         [StringLength(30)]
         public string? Reference { get; set; }
