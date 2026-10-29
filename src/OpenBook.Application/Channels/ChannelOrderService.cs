@@ -196,6 +196,8 @@ public sealed class ChannelOrderService(
             rows.Add(Row($"Total {(marketplace ? "marketplaces collected" : "you collected")}", part, 0, ReportRowStyle.Subtotal));
         }
 
+        rows.Add(Row("Total", lines.Select(x => x.Line).ToList(), 0, ReportRowStyle.Total));
+
         return new ReportTable(
             "Sales tax by state (online orders)",
             [company.Name, Comparisons.Describe(from, to)],
