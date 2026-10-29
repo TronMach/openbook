@@ -36,7 +36,7 @@ public sealed record PayoutImportResult(IReadOnlyList<PayoutData> New, IReadOnly
 /// Sales channels and their payouts. A report is read by <see cref="ChannelReports"/>; payouts not seen before (by the
 /// channel's id for them) wait as Pending until posted, each as one journal entry (<see cref="ChannelPayout.Source"/>).
 /// </summary>
-public sealed class ChannelService(IChannelStore store, AccountService accounts, PostingEngine engine, IClock clock, ICurrentUser user)
+public sealed class ChannelService(IChannelStore store, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user)
 {
     public const string ChannelEntity = "sales_channel";
     public const string PayoutEntity = "channel_payout";
@@ -103,6 +103,15 @@ public sealed class ChannelService(IChannelStore store, AccountService accounts,
         var read = ChannelReports.Read(channel.Kind, Encoding.UTF8.GetString(content), fileName);
         return await AddAsync(channel, read.Payouts, read.Warnings, save, ct);
     }
+
+    /// <summary>Records a connection change on the channel (the credential itself never goes in the audit log).</summary>
+    internal async Task SaveConnectionAsync(SalesChannel channel, string before, CancellationToken ct)
+    {
+        store.Add(Audit(AuditAction.Updated, ChannelEntity, channel.Id, before, Snapshot(channel)));
+        await store.SaveChangesAsync(ct);
+    }
+
+    internal static string SnapshotOf(SalesChannel channel) => Snapshot(channel);
 
     /// <summary>Saves payouts not seen before (live connections use this too).</summary>
     internal async Task<PayoutImportResult> AddAsync(SalesChannel channel, IReadOnlyList<PayoutData> payouts, IReadOnlyList<string> warnings, bool save, CancellationToken ct)
@@ -204,6 +213,11 @@ public sealed class ChannelService(IChannelStore store, AccountService accounts,
 
         if (d.DepositAccountId == Guid.Empty)
             throw new DomainException("channel.deposit_required", "Choose the account payouts are paid into.");
+
+        // Stripe payouts can include invoices paid online, already sitting in the online payments deposit account.
+        var clearing = d.ClearingAccountId is { } chosen && chosen != Guid.Empty
+            ? await Pick(chosen, "", AccountType.OtherCurrentAsset, "", "invoice payments", AccountType.Bank, AccountType.OtherCurrentAsset)
+            : d.Kind == ChannelKind.Stripe ? (await sales.GetOnlinePaymentSettingsAsync(ct))?.DepositAccountId : null;
         return d with
         {
             DepositAccountId = await Pick(d.DepositAccountId, "", AccountType.Bank, "", "payouts", AccountType.Bank, AccountType.OtherCurrentAsset),
@@ -213,6 +227,7 @@ public sealed class ChannelService(IChannelStore store, AccountService accounts,
             FeesAccountId = await Pick(d.FeesAccountId, FeesName, AccountType.Expense, "Payment processing and marketplace fees.", "fees"),
             TaxAccountId = await Pick(d.TaxAccountId, TaxName, AccountType.OtherCurrentLiability, "Sales tax collected and not yet paid.", "sales tax"),
             AdjustmentsAccountId = await Pick(d.AdjustmentsAccountId, AdjustmentsName, AccountType.Expense, "Reserves, reimbursements and other channel adjustments.", "adjustments"),
+            ClearingAccountId = clearing,
         };
     }
 
@@ -236,7 +251,10 @@ public sealed class ChannelService(IChannelStore store, AccountService accounts,
         c.FeesAccountId,
         c.TaxAccountId,
         c.AdjustmentsAccountId,
+        c.ClearingAccountId,
         c.IsActive,
+        Connected = c.IsConnected,
+        c.ShopDomain,
     });
 
     private static string PayoutSnapshot(ChannelPayout p, SalesChannel c) => JsonSerializer.Serialize(new

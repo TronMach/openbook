@@ -45,6 +45,17 @@
                 </select>
             </div>
         }
+        <div class="field">
+            <label for="clearing">Invoices paid online</label>
+            <select id="clearing" name="clearingAccountId" data-search>
+                <option value="">@(Channel is null ? "The online payments deposit account (Stripe)" : "None")</option>
+                @foreach (var a in Accounts.Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset))
+                {
+                    <option value="@a.Id" selected="@(a.Id == Channel?.ClearingAccountId)">@Chart.FullName(a.Id)</option>
+                }
+            </select>
+            <span class="hint">Stripe payouts can include invoices customers paid online, already recorded as payments into this account (usually Undeposited Funds): they clear it instead of counting as sales again.</span>
+        </div>
     </div>
 </details>
 

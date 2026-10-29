@@ -21,6 +21,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         ["Users"] = ["PasswordHash", "SecurityStamp"],
         ["ApiKeys"] = ["TokenHash"],
         ["UserSessions"] = ["SecurityStamp"],
+        ["SalesChannels"] = ["ProtectedCredential"],
         ["CaptureDrafts"] = ["Payload"],
         ["WebhookSubscriptions"] = ["ProtectedSecret"],
         ["EmailSettings"] = ["ProtectedPassword"],

@@ -4,6 +4,7 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Channels;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Reporting;
+using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Channels;
 using OpenBook.Domain.Common;
@@ -178,5 +179,69 @@ public sealed class ChannelTests : IAsyncLifetime
         Assert.Equal("channel.name_taken", (await Assert.ThrowsAsync<DomainException>(() => Channel(ChannelKind.Etsy))).Code);
         Assert.Equal("channel.deposit_required", (await Assert.ThrowsAsync<DomainException>(() =>
             In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Etsy", ChannelKind.Etsy, Guid.Empty))))).Code);
+    }
+
+    [Fact]
+    public async Task A_stripe_connection_fetches_payouts_and_clears_invoices_already_paid_online()
+    {
+        // An invoice paid online was recorded as a payment into Undeposited Funds with its PaymentIntent.
+        var undeposited = await _db.CreateAccount("Undeposited Funds", AccountType.OtherCurrentAsset);
+        var income = await _db.CreateAccount("Services", AccountType.Income);
+        var item = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Work", Domain.Sales.ItemType.Service, income.Id, 50m)));
+        var customer = await In<CustomerService, Domain.Sales.Customer>(s => s.CreateAsync(new Domain.Sales.CustomerDetails("Client")));
+        var invoice = await In<InvoiceService, Domain.Sales.Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(customer.Id, new DateOnly(2026, 3, 1), [new(item.Id, null, 1m, 50m)])));
+        await In<PaymentService, Domain.Sales.CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(customer.Id, new DateOnly(2026, 3, 2), undeposited.Id,
+            [new ApplyToInvoice(invoice.Id, 50m)], Reference: "pi_invoice")));
+
+        var stripe = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Stripe", ChannelKind.Stripe, _checking.Id, ClearingAccountId: undeposited.Id)));
+        Assert.Equal("channel.not_connected", (await Assert.ThrowsAsync<DomainException>(() => In<ChannelSyncService, ChannelSyncResult>(s => s.SyncAsync(stripe.Id)))).Code);
+
+        await In<ChannelSyncService, SalesChannel>(s => s.ConnectAsync(stripe.Id, null, "wrong_key"));
+        var failed = await In<ChannelSyncService, ChannelSyncResult>(s => s.SyncAsync(stripe.Id));
+        Assert.False(failed.Succeeded);
+        Assert.Contains("Invalid API Key", failed.Error, StringComparison.Ordinal);
+
+        await In<ChannelSyncService, SalesChannel>(s => s.ConnectAsync(stripe.Id, null, FakeChannelApis.StripeKey));
+        var synced = await In<ChannelSyncService, ChannelSyncResult>(s => s.SyncAsync(stripe.Id));
+        Assert.Equal((true, 1), (synced.Succeeded, synced.Imported));
+        Assert.Equal(0, (await In<ChannelSyncService, ChannelSyncResult>(s => s.SyncAsync(stripe.Id))).Imported);
+
+        var payout = Assert.Single(await In<ChannelService, IReadOnlyList<ChannelPayout>>(s => s.PayoutsAsync(stripe.Id)));
+        Assert.Equal(("po_1", 125.05m, 0m), (payout.ExternalId, payout.Net, payout.Difference));
+        Assert.Equal(50m, payout.Total(ChannelLineType.Cleared));
+        Assert.Equal(100m, payout.Total(ChannelLineType.Sale));
+        Assert.Equal(-4.95m, payout.Total(ChannelLineType.Fee));
+
+        var posted = await In<ChannelService, ChannelPayout>(s => s.PostAsync(payout.Id));
+        var entry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(posted.JournalEntryId!.Value)))!;
+        Assert.Equal(-50m, entry.Lines.Where(l => l.AccountId == undeposited.Id).Sum(l => l.Amount));
+
+        // The credential is stored protected and never audited.
+        var channel = (await In<ChannelService, SalesChannel?>(s => s.GetAsync(stripe.Id)))!;
+        Assert.True(channel.IsConnected);
+        Assert.NotEqual(FakeChannelApis.StripeKey, channel.ProtectedCredential);
+        var audit = await _db.InDb(async db => await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(db.AuditRecords.Where(a => a.EntityId == stripe.Id)));
+        Assert.DoesNotContain(audit, a => (a.Before + a.After).Contains(FakeChannelApis.StripeKey, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_shopify_connection_follows_pages_of_transactions()
+    {
+        Assert.Equal(FakeChannelApis.Shop, ChannelSyncService.ShopDomain("https://My-Store.myshopify.com/admin"));
+        Assert.Equal(FakeChannelApis.Shop, ChannelSyncService.ShopDomain("my-store"));
+        Assert.Equal("channel.shop_invalid", Assert.Throws<DomainException>(() => ChannelSyncService.ShopDomain("evil.example.com")).Code);
+
+        var shopify = await Channel(ChannelKind.Shopify);
+        await In<ChannelSyncService, SalesChannel>(s => s.ConnectAsync(shopify.Id, "my-store", FakeChannelApis.ShopifyToken));
+        var synced = await In<ChannelSyncService, ChannelSyncResult>(s => s.SyncAsync(shopify.Id));
+        Assert.True(synced.Succeeded, synced.Error);
+        var payout = Assert.Single(await In<ChannelService, IReadOnlyList<ChannelPayout>>(s => s.PayoutsAsync(shopify.Id)));
+        Assert.Equal(("778", 76.80m, 0m), (payout.ExternalId, payout.Net, payout.Difference));
+        Assert.Equal(-20m, payout.Total(ChannelLineType.Refund));
+        Assert.Contains(_db.ChannelApis.Requests, r => r.Contains("page_info=2", StringComparison.Ordinal));
+
+        var import = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Etsy", ChannelKind.Etsy, _checking.Id)));
+        Assert.Equal("channel.no_live_connection", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ChannelSyncService, SalesChannel>(s => s.ConnectAsync(import.Id, null, "x")))).Code);
     }
 }

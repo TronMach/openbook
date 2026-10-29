@@ -933,6 +933,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("AdjustmentsAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClearingAccountId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -950,10 +953,24 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("LastSyncFailed")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProtectedCredential")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<Guid>("RefundsAccountId")
                         .HasColumnType("uuid");
@@ -964,12 +981,21 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("ShippingAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ShopDomain")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly?>("SyncedThrough")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("TaxAccountId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AdjustmentsAccountId");
+
+                    b.HasIndex("ClearingAccountId");
 
                     b.HasIndex("DepositAccountId");
 
@@ -5115,6 +5141,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("AdjustmentsAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ClearingAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()

@@ -926,6 +926,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AdjustmentsAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ClearingAccountId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -943,9 +946,23 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("LastSyncFailed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedCredential")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("RefundsAccountId")
@@ -957,12 +974,21 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ShippingAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ShopDomain")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("SyncedThrough")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("TaxAccountId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AdjustmentsAccountId");
+
+                    b.HasIndex("ClearingAccountId");
 
                     b.HasIndex("DepositAccountId");
 
@@ -5104,6 +5130,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AdjustmentsAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ClearingAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()

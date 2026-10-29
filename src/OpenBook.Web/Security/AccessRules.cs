@@ -82,6 +82,8 @@ public static class AccessRules
         ("/api/import", UserRole.Accountant, UserRole.Accountant),
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/sales/channels/connections", UserRole.Accountant, UserRole.Accountant),
+        ("/api/channels/connections", UserRole.Accountant, UserRole.Accountant),
         ("/reports/schedules", UserRole.Accountant, UserRole.Accountant),
         ("/accountant", UserRole.Accountant, UserRole.Accountant),
         ("/api/accountant", UserRole.Accountant, UserRole.Accountant),

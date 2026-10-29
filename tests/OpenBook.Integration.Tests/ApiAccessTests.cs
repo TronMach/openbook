@@ -222,6 +222,8 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/sales/channels", "GET", UserRole.ViewOnly)]
     [InlineData("/sales/channels/payouts/0190a7a2-0000-7000-8000-000000000000/post", "POST", UserRole.Standard)]
     [InlineData("/api/channels", "POST", UserRole.Standard)]
+    [InlineData("/api/channels/connections/0190a7a2-0000-7000-8000-000000000000", "PUT", UserRole.Accountant)]
+    [InlineData("/sales/channels/connections/0190a7a2-0000-7000-8000-000000000000/sync", "POST", UserRole.Accountant)]
     [InlineData("/time/rates", "POST", UserRole.Accountant)]
     [InlineData("/api/projects/rates", "POST", UserRole.Accountant)]
     [InlineData("/account/sessions/0190a7a2-0000-7000-8000-000000000000/end", "POST", UserRole.ViewOnly)]

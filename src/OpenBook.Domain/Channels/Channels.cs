@@ -30,6 +30,12 @@ public enum ChannelLineType
     Refund,
     Fee,
     Adjustment,
+
+    /// <summary>
+    /// Money for something already in the books, such as an invoice paid online (recorded as a customer payment into
+    /// Undeposited Funds): posted against the channel's clearing account instead of sales.
+    /// </summary>
+    Cleared,
 }
 
 /// <param name="DepositAccountId">Where the payout lands: a Bank account, or an Other current asset to clear later.</param>
@@ -43,7 +49,8 @@ public sealed record ChannelDetails(
     Guid RefundsAccountId = default,
     Guid FeesAccountId = default,
     Guid TaxAccountId = default,
-    Guid AdjustmentsAccountId = default);
+    Guid AdjustmentsAccountId = default,
+    Guid? ClearingAccountId = null);
 
 /// <summary>
 /// A place you sell (a Shopify store, an Amazon seller account, an Etsy shop…) and the accounts its payouts post to.
@@ -63,7 +70,28 @@ public sealed class SalesChannel
     public Guid FeesAccountId { get; private set; }
     public Guid TaxAccountId { get; private set; }
     public Guid AdjustmentsAccountId { get; private set; }
+
+    /// <summary>Where <see cref="ChannelLineType.Cleared"/> lines go: usually Undeposited Funds, where invoices paid online wait.</summary>
+    public Guid? ClearingAccountId { get; private set; }
+
     public bool IsActive { get; private set; }
+
+    /// <summary>A Shopify store's domain (shop.myshopify.com) for a live connection.</summary>
+    public string? ShopDomain { get; private set; }
+
+    /// <summary>The live connection's key or access token, protected by the host; never shown, exported or audited.</summary>
+    public string? ProtectedCredential { get; private set; }
+
+    public DateTimeOffset? LastSyncAt { get; private set; }
+    public bool LastSyncFailed { get; private set; }
+    public string? LastError { get; private set; }
+
+    /// <summary>The latest payout date fetched; the next sync starts a little before it to catch late arrivals.</summary>
+    public DateOnly? SyncedThrough { get; private set; }
+
+    public bool IsConnected => ProtectedCredential is not null;
+
+    public static bool CanConnect(ChannelKind kind) => kind is ChannelKind.Stripe or ChannelKind.Shopify;
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>Accounts are resolved (and created if needed) by the service before this is called.</summary>
@@ -90,6 +118,36 @@ public sealed class SalesChannel
         FeesAccountId = details.FeesAccountId;
         TaxAccountId = details.TaxAccountId;
         AdjustmentsAccountId = details.AdjustmentsAccountId;
+        ClearingAccountId = details.ClearingAccountId == Guid.Empty ? null : details.ClearingAccountId;
+        if (!CanConnect(Kind))
+            Disconnect();
+    }
+
+    public void Connect(string? shopDomain, string protectedCredential)
+    {
+        if (!CanConnect(Kind))
+            throw new DomainException("channel.no_live_connection", "Only Stripe and Shopify channels connect live; import the others' reports.");
+        ShopDomain = Kind == ChannelKind.Shopify
+            ? shopDomain ?? throw new DomainException("channel.shop_required", "Enter the store's myshopify.com address.")
+            : null;
+        ProtectedCredential = protectedCredential;
+        LastError = null;
+        LastSyncFailed = false;
+    }
+
+    public void Disconnect()
+    {
+        ProtectedCredential = null;
+        ShopDomain = null;
+    }
+
+    public void RecordSync(DateTimeOffset at, DateOnly? through, string? error)
+    {
+        LastSyncAt = at.ToUniversalTime();
+        LastSyncFailed = error is not null;
+        LastError = error is null ? null : error.Length > 500 ? error[..500] : error;
+        if (through is { } t && (SyncedThrough is null || t > SyncedThrough))
+            SyncedThrough = t;
     }
 
     public Guid AccountFor(ChannelLineType type) => type switch
@@ -99,6 +157,7 @@ public sealed class SalesChannel
         ChannelLineType.Tax or ChannelLineType.MarketplaceTax => TaxAccountId,
         ChannelLineType.Refund => RefundsAccountId,
         ChannelLineType.Fee => FeesAccountId,
+        ChannelLineType.Cleared => ClearingAccountId ?? AdjustmentsAccountId,
         _ => AdjustmentsAccountId,
     };
 
@@ -276,6 +335,7 @@ public sealed class ChannelPayout
     {
         ChannelLineType.MarketplaceTax => "Tax paid by marketplace",
         ChannelLineType.Tax => "Sales tax",
+        ChannelLineType.Cleared => "Already recorded (invoices paid online)",
         _ => type.ToString(),
     };
 }

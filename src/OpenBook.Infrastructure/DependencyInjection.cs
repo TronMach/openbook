@@ -90,6 +90,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.S3BackupTarget>();
         services.AddSingleton<OpenBook.Application.Banking.IBankConnectionClient, Banking.SimpleFinClient>();
         services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway, Payments.StripeGateway>();
+        services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();

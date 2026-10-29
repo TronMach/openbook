@@ -32,6 +32,68 @@
             </div>
         }
 
+        @if (SalesChannel.CanConnect(_channel.Kind))
+        {
+            <div class="card">
+                <h2>@L["Live connection"]</h2>
+                @if (_channel.IsConnected)
+                {
+                    <p>
+                        Connected@(_channel.ShopDomain is { } shop ? $" to {shop}" : ""). Payouts are fetched every few hours and wait below to be posted.
+                        @if (_channel.LastSyncAt is { } at)
+                        {
+                            <span class="muted">Last fetched @at.ToLocalTime().ToString("g")@(_channel.SyncedThrough is { } t ? $", payouts through {Labels.Date(t)}" : "").</span>
+                        }
+                    </p>
+                    @if (_channel.LastSyncFailed)
+                    {
+                        <div class="alert error" role="alert">The last fetch failed: @_channel.LastError</div>
+                    }
+                    <div class="actions">
+                        <form method="post" action="/sales/channels/connections/@_channel.Id/sync" data-enhance="false" class="inline">
+                            <AntiforgeryToken />
+                            <button type="submit">@L["Fetch payouts now"]</button>
+                        </form>
+                        <form method="post" action="/sales/channels/connections/@_channel.Id/disconnect" data-enhance="false" class="inline">
+                            <AntiforgeryToken />
+                            <button type="submit" class="secondary">@L["Disconnect"]</button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <p class="muted">
+                        @if (_channel.Kind == ChannelKind.Shopify)
+                        {
+                            <span>In Shopify: Settings › Apps and sales channels › Develop apps › Create an app, give it the Admin API scope "read_shopify_payments_payouts", install it, and copy the Admin API access token.</span>
+                        }
+                        else
+                        {
+                            <span>In Stripe: Developers › API keys › Create restricted key with read access to Balance and Payouts (a secret key works too).</span>
+                        }
+                        The key is stored encrypted and never shown again.
+                    </p>
+                    <form method="post" action="/sales/channels/connections/@_channel.Id" data-enhance="false" autocomplete="off">
+                        <AntiforgeryToken />
+                        <div class="row">
+                            @if (_channel.Kind == ChannelKind.Shopify)
+                            {
+                                <div class="field">
+                                    <label for="shop">@L["Store address"]</label>
+                                    <input id="shop" name="shopDomain" placeholder="my-store.myshopify.com" required />
+                                </div>
+                            }
+                            <div class="field">
+                                <label for="credential">@(_channel.Kind == ChannelKind.Shopify ? L["Admin API access token"] : L["Restricted or secret key"])</label>
+                                <input id="credential" name="credential" type="password" required />
+                            </div>
+                        </div>
+                        <div class="actions"><button type="submit">@L["Connect"]</button></div>
+                    </form>
+                }
+            </div>
+        }
+
         <div class="card">
             <h2>@L["Import a payout report"]</h2>
             <p class="muted">@ChannelLabels.ReportHelp(_channel.Kind)</p>

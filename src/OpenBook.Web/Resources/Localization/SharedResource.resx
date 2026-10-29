@@ -59,6 +59,9 @@
   <data name="Address" xml:space="preserve">
     <value>Address</value>
   </data>
+  <data name="Admin API access token" xml:space="preserve">
+    <value>Admin API access token</value>
+  </data>
   <data name="also sign out my other sessions" xml:space="preserve">
     <value>also sign out my other sessions</value>
   </data>
@@ -197,6 +200,9 @@
   <data name="Confirm new password" xml:space="preserve">
     <value>Confirm new password</value>
   </data>
+  <data name="Connect" xml:space="preserve">
+    <value>Connect</value>
+  </data>
   <data name="Counts toward" xml:space="preserve">
     <value>Counts toward</value>
   </data>
@@ -254,6 +260,9 @@
   <data name="Device" xml:space="preserve">
     <value>Device</value>
   </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>Disconnect</value>
+  </data>
   <data name="Dismiss" xml:space="preserve">
     <value>Dismiss</value>
   </data>
@@ -310,6 +319,9 @@
   </data>
   <data name="Fees" xml:space="preserve">
     <value>Fees</value>
+  </data>
+  <data name="Fetch payouts now" xml:space="preserve">
+    <value>Fetch payouts now</value>
   </data>
   <data name="Finished" xml:space="preserve">
     <value>Finished</value>
@@ -442,6 +454,9 @@
   </data>
   <data name="Legal name" xml:space="preserve">
     <value>Legal name</value>
+  </data>
+  <data name="Live connection" xml:space="preserve">
+    <value>Live connection</value>
   </data>
   <data name="Memo" xml:space="preserve">
     <value>Memo</value>
@@ -680,6 +695,9 @@
   <data name="Restore" xml:space="preserve">
     <value>Restore</value>
   </data>
+  <data name="Restricted or secret key" xml:space="preserve">
+    <value>Restricted or secret key</value>
+  </data>
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>
   </data>
@@ -751,6 +769,9 @@
   </data>
   <data name="Status" xml:space="preserve">
     <value>Status</value>
+  </data>
+  <data name="Store address" xml:space="preserve">
+    <value>Store address</value>
   </data>
   <data name="tell other systems about changes as they happen (admins)" xml:space="preserve">
     <value>tell other systems about changes as they happen (admins)</value>

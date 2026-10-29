@@ -59,6 +59,7 @@ public static class WebSecurity
         services.AddHostedService<RecurringPostingService>();
         services.AddHostedService<ScheduledBackupHostedService>();
         services.AddHostedService<BankSyncHostedService>();
+        services.AddHostedService<ChannelSyncHostedService>();
         services.AddHostedService<WebhookDispatchService>();
         return services;
     }

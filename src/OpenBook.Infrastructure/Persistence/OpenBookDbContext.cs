@@ -794,6 +794,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(c => c.FeesAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(c => c.TaxAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(c => c.AdjustmentsAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.ClearingAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.Property(c => c.ShopDomain).HasMaxLength(200);
+            b.Property(c => c.ProtectedCredential).HasMaxLength(2000);
+            b.Property(c => c.LastError).HasMaxLength(500);
+            b.Ignore(c => c.IsConnected);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelPayout>(b =>

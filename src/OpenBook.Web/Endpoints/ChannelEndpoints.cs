@@ -54,6 +54,25 @@ public static class ChannelEndpoints
             }
         }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes));
 
+        app.MapPost("/sales/channels/connections/{id:guid}", async (Guid id, IFormCollection form, ChannelSyncService sync, CancellationToken ct) =>
+            await Back($"/sales/channels/{id}", () => sync.ConnectAsync(id, form["shopDomain"].ToString(), form["credential"].ToString(), ct))).RequireAuthorization();
+
+        app.MapPost("/sales/channels/connections/{id:guid}/disconnect", async (Guid id, ChannelSyncService sync, CancellationToken ct) =>
+            await Back($"/sales/channels/{id}", () => sync.DisconnectAsync(id, ct))).RequireAuthorization();
+
+        app.MapPost("/sales/channels/connections/{id:guid}/sync", async (Guid id, ChannelSyncService sync, CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await sync.SyncAsync(id, ct);
+                return Results.Redirect(result.Succeeded ? $"/sales/channels/{id}?imported={result.Imported}" : $"/sales/channels/{id}?error={Uri.EscapeDataString(result.Error!)}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/sales/channels/payouts/{id:guid}/post", async (Guid id, ChannelService channels, CancellationToken ct) =>
             await Back($"/sales/channels/payouts/{id}", () => channels.PostAsync(id, ct))).RequireAuthorization();
 
@@ -79,7 +98,8 @@ public static class ChannelEndpoints
             Id("refundsAccountId"),
             Id("feesAccountId"),
             Id("taxAccountId"),
-            Id("adjustmentsAccountId"));
+            Id("adjustmentsAccountId"),
+            Id("clearingAccountId") is var clearing && clearing != Guid.Empty ? clearing : null);
     }
 
     private static async Task<IResult> Back(string page, Func<Task> change)

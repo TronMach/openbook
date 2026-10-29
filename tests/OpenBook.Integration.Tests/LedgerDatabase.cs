@@ -55,6 +55,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     /// <summary>Stands in for Stripe behind the real payment gateway.</summary>
     public FakeStripe Stripe { get; } = new();
+
+    /// <summary>Stands in for Stripe's and Shopify's payout APIs behind the real channel client.</summary>
+    public FakeChannelApis ChannelApis { get; } = new();
     public string ConnectionString => _connectionString;
     public string BackupDirectory { get; } = Path.Combine(Path.GetTempPath(), $"openbook-tests-{Guid.NewGuid():N}");
     public User? Owner { get; private set; }
@@ -78,7 +81,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             provider = DatabaseProvider.Sqlite;
         }
 
-        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe);
+        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis);
         if (setUpCompany)
             Owner = await InDb(db => db.Users.SingleAsync(u => u.Username == OwnerUsername));
     }
@@ -142,7 +145,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     private static ServiceProvider BuildServices(
         string connectionString, DatabaseProvider provider, FixedClock clock, RecordingEmailSender mail, RecordingWebhookSender webhooks,
-        FakeSimpleFinBridge bridge, string backupDirectory, FakeStripe? stripe = null) =>
+        FakeSimpleFinBridge bridge, string backupDirectory, FakeStripe? stripe = null, FakeChannelApis? channels = null) =>
         new ServiceCollection()
             .AddOpenBookApplication()
             .AddOpenBookInfrastructure(connectionString, backupDirectory, provider: provider)
@@ -153,6 +156,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .AddSingleton<OpenBook.Application.Webhooks.IWebhookSender>(webhooks)
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Banking.IBankConnectionClient>(new OpenBook.Infrastructure.Banking.SimpleFinClient(bridge)))
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Sales.IPaymentGateway>(new OpenBook.Infrastructure.Payments.StripeGateway(stripe ?? new FakeStripe())))
+            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Channels.IChannelClient>(new OpenBook.Infrastructure.Channels.ChannelClient(channels ?? new FakeChannelApis())))
             .BuildServiceProvider(validateScopes: true);
 
     /// <summary>Migrates a database (and sets up the company), exactly as each test used to do for itself.</summary>
