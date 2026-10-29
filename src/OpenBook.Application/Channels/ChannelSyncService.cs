@@ -12,9 +12,12 @@ namespace OpenBook.Application.Channels;
 public interface IChannelClient
 {
     Task<IReadOnlyList<PayoutData>> FetchPayoutsAsync(ChannelKind kind, string? shopDomain, string credential, DateOnly since, CancellationToken ct);
+
+    /// <summary>Shopify orders created since the date (not cancelled), as item lines with the order's id.</summary>
+    Task<IReadOnlyList<ChannelOrderDraft>> FetchOrdersAsync(string shopDomain, string token, DateOnly since, CancellationToken ct);
 }
 
-public sealed record ChannelSyncResult(bool Succeeded, int Imported, string? Error);
+public sealed record ChannelSyncResult(bool Succeeded, int Imported, string? Error, int Orders = 0);
 
 /// <summary>
 /// Live Stripe and Shopify connections: the credential is stored protected; a sync fetches payouts paid since a little
@@ -22,7 +25,8 @@ public sealed record ChannelSyncResult(bool Succeeded, int Imported, string? Err
 /// Stripe charges for invoices paid online (already recorded as customer payments) become Cleared lines. Failures are
 /// kept on the channel, not thrown.
 /// </summary>
-public sealed class ChannelSyncService(IChannelStore store, ChannelService channels, IChannelClient client, ISecretProtector secrets, ISalesStore sales, IClock clock)
+public sealed class ChannelSyncService(
+    IChannelStore store, ChannelService channels, ChannelOrderService orders, IChannelClient client, ISecretProtector secrets, ISalesStore sales, IClock clock)
 {
     public static readonly TimeSpan SyncEvery = TimeSpan.FromHours(6);
     private const int OverlapDays = 7;
@@ -65,10 +69,28 @@ public sealed class ChannelSyncService(IChannelStore store, ChannelService chann
             var payouts = await client.FetchPayoutsAsync(channel.Kind, channel.ShopDomain, key, since, ct);
             if (channel.Kind == ChannelKind.Stripe)
                 payouts = await ClearInvoicePaymentsAsync(payouts, ct);
+
+            // Shopify: the orders behind the charges split them into sales, shipping and tax, and move stock.
+            IReadOnlyList<ChannelOrderDraft> fetched = [];
+            string? ordersError = null;
+            if (channel.Kind == ChannelKind.Shopify)
+            {
+                try
+                {
+                    fetched = await client.FetchOrdersAsync(channel.ShopDomain!, key, since.AddDays(-30), ct);
+                    payouts = SplitCharges(payouts, fetched);
+                }
+                catch (DomainException ex)
+                {
+                    ordersError = $"Payouts were fetched, but not orders (give the app the read_orders scope): {ex.Message}";
+                }
+            }
+
             var result = await channels.AddAsync(channel, payouts, [], save: true, ct);
-            channel.RecordSync(clock.UtcNow, payouts.Count > 0 ? payouts.Max(p => p.Date) : null, null);
+            var newOrders = fetched.Count > 0 ? (await orders.AddAsync(channel, fetched, [], ct)).Orders : 0;
+            channel.RecordSync(clock.UtcNow, payouts.Count > 0 ? payouts.Max(p => p.Date) : null, ordersError);
             await store.SaveChangesAsync(ct);
-            return new ChannelSyncResult(true, result.Saved.Count, null);
+            return new ChannelSyncResult(ordersError is null, result.Saved.Count, ordersError, newOrders);
         }
         catch (Exception ex) when (ex is DomainException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -104,6 +126,36 @@ public sealed class ChannelSyncService(IChannelStore store, ChannelService chann
             || !value[..^".myshopify.com".Length].All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
             throw new DomainException("channel.shop_invalid", "Enter the store's address ending in .myshopify.com (Settings › Domains in Shopify shows it).");
         return value;
+    }
+
+    /// <summary>
+    /// Splits each Shopify charge ("order {id}") into sales, shipping and tax in the order's proportions (a partial
+    /// charge takes its share), with the order's ship-to state. Charges without a known order stay as sales.
+    /// </summary>
+    public static IReadOnlyList<PayoutData> SplitCharges(IReadOnlyList<PayoutData> payouts, IReadOnlyList<ChannelOrderDraft> orders)
+    {
+        ArgumentNullException.ThrowIfNull(payouts);
+        ArgumentNullException.ThrowIfNull(orders);
+        var byOrder = orders.GroupBy(o => o.OrderId).ToDictionary(g => g.Key, g => (Sales: g.Sum(o => o.Sales), Shipping: g.Sum(o => o.Shipping),
+            Tax: g.Sum(o => o.Tax), Region: g.Select(o => o.Region).FirstOrDefault(r => r is not null)));
+        return payouts.Select(p => p with
+        {
+            Lines = p.Lines.SelectMany(l =>
+            {
+                if (l.Type != ChannelLineType.Sale || l.Reference is not { } reference || !reference.StartsWith("order ", StringComparison.Ordinal)
+                    || !byOrder.TryGetValue(reference[6..], out var order) || order.Sales + order.Shipping + order.Tax is var total && total <= 0m)
+                    return [l];
+                var share = l.Amount / total;
+                var tax = decimal.Round(order.Tax * share, 2, MidpointRounding.AwayFromZero);
+                var shipping = decimal.Round(order.Shipping * share, 2, MidpointRounding.AwayFromZero);
+                var parts = new List<ChannelLineDraft> { l with { Amount = l.Amount - tax - shipping, Region = order.Region } };
+                if (shipping != 0m)
+                    parts.Add(l with { Type = ChannelLineType.Shipping, Amount = shipping, Region = order.Region });
+                if (tax != 0m)
+                    parts.Add(l with { Type = ChannelLineType.Tax, Amount = tax, Region = order.Region });
+                return (IEnumerable<ChannelLineDraft>)parts;
+            }).ToList(),
+        }).ToList();
     }
 
     /// <summary>Charges for invoices paid through OpenBook's payment links are already in the books: mark them Cleared.</summary>

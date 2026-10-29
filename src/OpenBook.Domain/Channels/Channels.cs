@@ -50,7 +50,8 @@ public sealed record ChannelDetails(
     Guid FeesAccountId = default,
     Guid TaxAccountId = default,
     Guid AdjustmentsAccountId = default,
-    Guid? ClearingAccountId = null);
+    Guid? ClearingAccountId = null,
+    bool? MarketplaceCollectsTax = null);
 
 /// <summary>
 /// A place you sell (a Shopify store, an Amazon seller account, an Etsy shop…) and the accounts its payouts post to.
@@ -92,6 +93,12 @@ public sealed class SalesChannel
     public bool IsConnected => ProtectedCredential is not null;
 
     public static bool CanConnect(ChannelKind kind) => kind is ChannelKind.Stripe or ChannelKind.Shopify;
+
+    /// <summary>
+    /// The marketplace collects and pays the sales tax on its orders (marketplace facilitator rules), so the tax by
+    /// state report shows it as theirs. Defaults on for Amazon, eBay and Etsy.
+    /// </summary>
+    public bool MarketplaceCollectsTax { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>Accounts are resolved (and created if needed) by the service before this is called.</summary>
@@ -119,6 +126,7 @@ public sealed class SalesChannel
         TaxAccountId = details.TaxAccountId;
         AdjustmentsAccountId = details.AdjustmentsAccountId;
         ClearingAccountId = details.ClearingAccountId == Guid.Empty ? null : details.ClearingAccountId;
+        MarketplaceCollectsTax = details.MarketplaceCollectsTax ?? Kind is ChannelKind.Amazon or ChannelKind.Ebay or ChannelKind.Etsy;
         if (!CanConnect(Kind))
             Disconnect();
     }
@@ -338,4 +346,135 @@ public sealed class ChannelPayout
         ChannelLineType.Cleared => "Already recorded (invoices paid online)",
         _ => type.ToString(),
     };
+}
+
+/// <summary>One item line of an order, as the channel reported it.</summary>
+/// <param name="Sales">The item's price times quantity, after the order's discounts; without shipping and tax.</param>
+public sealed record ChannelOrderDraft(
+    string OrderId, DateOnly Date, string? Sku, string? Title, decimal Quantity, decimal Sales, decimal Shipping = 0m, decimal Tax = 0m, string? Region = null);
+
+public sealed class ChannelOrderLine
+{
+    private ChannelOrderLine() => OrderId = string.Empty;
+
+    internal ChannelOrderLine(int lineNumber, ChannelOrderDraft draft)
+    {
+        LineNumber = lineNumber;
+        OrderId = Cut(draft.OrderId, 100) ?? throw new DomainException("channel.order_id_required", "An order line needs its order id.");
+        Date = draft.Date;
+        Sku = Cut(draft.Sku, 100);
+        Title = Cut(draft.Title, 300);
+        Quantity = decimal.Round(draft.Quantity, 4) == draft.Quantity ? draft.Quantity : throw new DomainException("channel.quantity_invalid", "Quantities have at most 4 decimals.");
+        Sales = decimal.Round(draft.Sales, 2);
+        Shipping = decimal.Round(draft.Shipping, 2);
+        Tax = decimal.Round(draft.Tax, 2);
+        Region = Cut(draft.Region, 50)?.ToUpperInvariant();
+    }
+
+    public int LineNumber { get; private set; }
+    public string OrderId { get; private set; }
+    public DateOnly Date { get; private set; }
+    public string? Sku { get; private set; }
+    public string? Title { get; private set; }
+    public decimal Quantity { get; private set; }
+    public decimal Sales { get; private set; }
+    public decimal Shipping { get; private set; }
+    public decimal Tax { get; private set; }
+    public string? Region { get; private set; }
+
+    private static string? Cut(string? text, int max)
+    {
+        var t = text?.Trim();
+        return string.IsNullOrEmpty(t) ? null : t.Length > max ? t[..max] : t;
+    }
+}
+
+/// <summary>
+/// A day's orders from a channel (one per import or sync and date). The money comes in with payouts; posting a batch
+/// moves stock: each line's SKU maps to an item (<see cref="ChannelSku"/>), tracked items leave stock and their cost
+/// goes to cost of goods sold, in one entry (<see cref="Source"/>). Voiding it puts the stock back and it waits again.
+/// The lines also feed sales tax by state.
+/// </summary>
+public sealed class ChannelOrderBatch
+{
+    public const string Source = "channels.orders";
+
+    private readonly List<ChannelOrderLine> _lines = [];
+
+    private ChannelOrderBatch() { }
+
+    public Guid Id { get; private set; }
+    public Guid ChannelId { get; private set; }
+    public DateOnly Date { get; private set; }
+    public PayoutStatus Status { get; private set; }
+
+    /// <summary>The stock entry, when the batch had stocked items; posted batches without any have none.</summary>
+    public Guid? JournalEntryId { get; private set; }
+
+    public DateTimeOffset ImportedAt { get; private set; }
+
+    public IReadOnlyList<ChannelOrderLine> Lines => _lines;
+
+    public int Orders => _lines.Select(l => l.OrderId).Distinct().Count();
+
+    public static ChannelOrderBatch Import(Guid channelId, DateOnly date, IReadOnlyList<ChannelOrderDraft> lines, DateTimeOffset importedAt)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (lines.Count == 0)
+            throw new DomainException("channel.orders_empty", "There are no order lines.");
+        var batch = new ChannelOrderBatch { Id = Guid.CreateVersion7(), ChannelId = channelId, Date = date, Status = PayoutStatus.Pending, ImportedAt = importedAt.ToUniversalTime() };
+        batch._lines.AddRange(lines.Select((l, i) => new ChannelOrderLine(i + 1, l)));
+        return batch;
+    }
+
+    public void Posted(Guid? entryId)
+    {
+        if (Status != PayoutStatus.Pending)
+            throw new DomainException("channel.orders_not_pending", "Only orders waiting to be posted can be posted.");
+        Status = PayoutStatus.Posted;
+        JournalEntryId = entryId;
+    }
+
+    public void Unpost()
+    {
+        Status = PayoutStatus.Pending;
+        JournalEntryId = null;
+    }
+
+    public void Dismiss()
+    {
+        if (Status == PayoutStatus.Posted)
+            throw new DomainException("channel.orders_posted", "Void the orders' stock entry before dismissing them.");
+        Status = PayoutStatus.Dismissed;
+    }
+
+    public void Restore()
+    {
+        if (Status == PayoutStatus.Dismissed)
+            Status = PayoutStatus.Pending;
+    }
+}
+
+/// <summary>
+/// What a channel's SKU is in OpenBook: an item, or nothing (not stocked: gift cards, services), so the line is left out
+/// of stock. SKUs without a mapping fall back to an item whose barcode or name is the SKU.
+/// </summary>
+public sealed class ChannelSku
+{
+    private ChannelSku() => Sku = string.Empty;
+
+    public Guid Id { get; private set; }
+    public Guid ChannelId { get; private set; }
+    public string Sku { get; private set; }
+    public Guid? ItemId { get; private set; }
+
+    public static ChannelSku Create(Guid channelId, string sku, Guid? itemId) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        ChannelId = channelId,
+        Sku = Text.Optional(sku, 100, "channel.sku_too_long", "SKU") ?? throw new DomainException("channel.sku_required", "Enter the SKU."),
+        ItemId = itemId == Guid.Empty ? null : itemId,
+    };
+
+    public void MapTo(Guid? itemId) => ItemId = itemId == Guid.Empty ? null : itemId;
 }

@@ -29,6 +29,14 @@
         <span class="hint">The bank account, or a "balance" account (Other current asset) when money waits in the channel first, as with PayPal or Etsy.</span>
     </div>
 </div>
+@if (Channel is not null)
+{
+    <input type="hidden" name="taxSet" value="true" />
+    <label class="check">
+        <input type="checkbox" name="marketplaceTax" value="true" checked="@Channel.MarketplaceCollectsTax" />
+        <span>The marketplace collects and pays sales tax on these orders</span>
+    </label>
+}
 <details open="@(Channel is not null)">
     <summary>Accounts for each part of a payout</summary>
     <div class="row">

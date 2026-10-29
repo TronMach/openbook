@@ -1,0 +1,122 @@
+@page "/sales/channels/orders/{Id:guid}"
+@using OpenBook.Application.Channels
+@using OpenBook.Domain.Channels
+@using OpenBook.Web.Components.Channels
+@inject ChannelOrderService Orders
+@inject ChannelService ChannelService
+
+<PageTitle>@L["Orders"] · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_batch is null || _channel is null)
+    {
+        <div class="card"><p>Those orders don't exist. <a href="/sales/channels">Back to sales channels</a>.</p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_channel.Name · orders of @Labels.Date(_batch.Date)</h1>
+            <a class="button secondary" href="/sales/channels/@_channel.Id">@L["Back to the channel"]</a>
+            <a class="button secondary" href="/sales/channels/@_channel.Id/skus">@L["SKUs"]</a>
+            <a class="button secondary" href="/audit?entityId=@_batch.Id">@L["History"]</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <p class="muted">
+                Posting takes the stocked items out of stock on this date and moves their cost to cost of goods sold. The money for these
+                orders comes in with the channel's payouts. Unmapped SKUs need an item (or "not stocked") on the SKUs page first.
+            </p>
+            <dl class="facts">
+                <dt>@L["Status"]</dt><dd>@ChannelLabels.Status(_batch.Status)</dd>
+                <dt>@L["Orders"]</dt><dd>@_batch.Orders</dd>
+                @if (_batch.JournalEntryId is { } entryId)
+                {
+                    <dt>@L["Journal entry"]</dt><dd><a href="/journal/@entryId">@L["Open"]</a></dd>
+                }
+            </dl>
+            @if (_unmapped.Count > 0 && _batch.Status == PayoutStatus.Pending)
+            {
+                <div class="alert notice" role="status">Not mapped yet: @string.Join(", ", _unmapped). <a href="/sales/channels/@_channel.Id/skus">Map them</a>.</div>
+            }
+            <div class="actions">
+                @if (_batch.Status == PayoutStatus.Pending)
+                {
+                    <form method="post" action="/sales/channels/orders/@_batch.Id/post" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <button type="submit" disabled="@(_unmapped.Count > 0)">@L["Post stock"]</button>
+                    </form>
+                    <form method="post" action="/sales/channels/orders/@_batch.Id/dismiss" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <button type="submit" class="secondary">@L["Dismiss"]</button>
+                    </form>
+                }
+                else if (_batch.Status == PayoutStatus.Dismissed)
+                {
+                    <form method="post" action="/sales/channels/orders/@_batch.Id/dismiss" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="restore" value="true" />
+                        <button type="submit" class="secondary">@L["Restore"]</button>
+                    </form>
+                }
+                else
+                {
+                    <form method="post" action="/sales/channels/orders/@_batch.Id/void" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <input name="reason" placeholder="Reason for voiding" maxlength="500" />
+                        <button type="submit" class="danger">@L["Put the stock back"]</button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        <div class="table-wrap" style="margin-top: 1.5rem">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>@L["Order"]</th><th>@L["SKU"]</th><th>@L["Item"]</th><th class="num">@L["Qty"]</th><th class="num">@L["Sales"]</th>
+                        <th class="num">@L["Shipping"]</th><th class="num">@L["Tax"]</th><th>@L["State"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _batch.Lines)
+                    {
+                        <tr>
+                            <td>@l.OrderId</td>
+                            <td>@l.Sku</td>
+                            <td>@l.Title</td>
+                            <td class="num">@Labels.Quantity(l.Quantity)</td>
+                            <td class="num">@Labels.Amount(l.Sales)</td>
+                            <td class="num">@Labels.AmountOrBlank(l.Shipping)</td>
+                            <td class="num">@Labels.AmountOrBlank(l.Tax)</td>
+                            <td>@l.Region</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private ChannelOrderBatch? _batch;
+    private SalesChannel? _channel;
+    private IReadOnlyList<string> _unmapped = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _batch = await Orders.GetBatchAsync(Id);
+        if (_batch is null)
+            return;
+        _channel = await ChannelService.GetAsync(_batch.ChannelId);
+        var skus = (await Orders.SkusAsync(_batch.ChannelId)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
+        _unmapped = _batch.Lines.Select(l => l.Sku ?? "(no SKU)").Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(s => !skus.TryGetValue(s, out var m) || !m.Mapped).ToList();
+    }
+}

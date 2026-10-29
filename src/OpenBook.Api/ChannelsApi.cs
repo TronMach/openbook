@@ -22,7 +22,20 @@ public sealed record PayoutImportResponse(IReadOnlyList<string> New, IReadOnlyLi
 
 public sealed record VoidPayoutRequest(string? Reason);
 
+/// <summary>A channel's settings; leave an account out to use (and create if needed) the usual one.</summary>
+public sealed record ChannelRequest(
+    string Name, ChannelKind Kind, Guid DepositAccountId, Guid? SalesAccountId = null, Guid? ShippingAccountId = null, Guid? RefundsAccountId = null,
+    Guid? FeesAccountId = null, Guid? TaxAccountId = null, Guid? AdjustmentsAccountId = null, Guid? ClearingAccountId = null, bool? MarketplaceCollectsTax = null)
+{
+    public ChannelDetails ToDetails() => new(
+        Name, Kind, DepositAccountId, SalesAccountId ?? Guid.Empty, ShippingAccountId ?? Guid.Empty, RefundsAccountId ?? Guid.Empty, FeesAccountId ?? Guid.Empty,
+        TaxAccountId ?? Guid.Empty, AdjustmentsAccountId ?? Guid.Empty, ClearingAccountId, MarketplaceCollectsTax);
+}
+
 public sealed record ConnectChannelRequest(string Credential, string? ShopDomain = null);
+
+/// <param name="ItemId">The item, or null for "not stocked".</param>
+public sealed record SkuMapRequest(string Sku, Guid? ItemId);
 
 /// <summary>A channel without its credential (only whether it's connected).</summary>
 public sealed record ChannelResponse(
@@ -41,12 +54,12 @@ public static class ChannelsApi
     {
         var channels = api.MapGroup("/channels");
         channels.MapGet("", async (ChannelService s, CancellationToken ct) => (await s.ListAsync(includeInactive: true, ct)).Select(ChannelResponse.From));
-        channels.MapPost("", async (ChannelDetails r, ChannelService s, CancellationToken ct) =>
+        channels.MapPost("", async (ChannelRequest r, ChannelService s, CancellationToken ct) =>
         {
-            var channel = await s.CreateAsync(r, ct);
+            var channel = await s.CreateAsync(r.ToDetails(), ct);
             return Results.Created($"/api/channels/{channel.Id}", ChannelResponse.From(channel));
         });
-        channels.MapPut("/{id:guid}", async (Guid id, ChannelDetails r, ChannelService s, CancellationToken ct) => ChannelResponse.From(await s.UpdateAsync(id, r, ct)));
+        channels.MapPut("/{id:guid}", async (Guid id, ChannelRequest r, ChannelService s, CancellationToken ct) => ChannelResponse.From(await s.UpdateAsync(id, r.ToDetails(), ct)));
         channels.MapGet("/{id:guid}/payouts", async (Guid id, ChannelService s, CancellationToken ct) =>
             (await s.PayoutsAsync(id, ct)).Select(p => PayoutResponse.From(p)));
 
@@ -72,6 +85,26 @@ public static class ChannelsApi
             return Results.NoContent();
         });
         channels.MapPost("/connections/{id:guid}/sync", async (Guid id, ChannelSyncService s, CancellationToken ct) => await s.SyncAsync(id, ct));
+
+        // An orders report as the body.
+        channels.MapPost("/{id:guid}/orders", async (Guid id, HttpRequest request, ChannelOrderService s, CancellationToken ct) =>
+        {
+            using var memory = new MemoryStream();
+            await request.Body.CopyToAsync(memory, ct);
+            var result = await s.ImportAsync(id, memory.ToArray(), ct);
+            return new { result.Orders, result.AlreadyImported, Batches = result.Saved.Select(b => b.Id), result.Warnings };
+        });
+        channels.MapGet("/{id:guid}/orders", async (Guid id, ChannelOrderService s, CancellationToken ct) =>
+            (await s.BatchesAsync(id, ct)).Select(b => new { b.Id, b.Date, b.Status, b.Orders, b.JournalEntryId }));
+        channels.MapGet("/{id:guid}/skus", async (Guid id, ChannelOrderService s, CancellationToken ct) => await s.SkusAsync(id, ct));
+        channels.MapPut("/{id:guid}/skus", async (Guid id, SkuMapRequest r, ChannelOrderService s, CancellationToken ct) =>
+        {
+            await s.MapSkuAsync(id, r.Sku, r.ItemId, ct);
+            return Results.NoContent();
+        });
+        channels.MapPost("/orders/{id:guid}/post", async (Guid id, ChannelOrderService s, CancellationToken ct) => (await s.PostAsync(id, ct)).Status);
+        channels.MapPost("/orders/{id:guid}/void", async (Guid id, VoidPayoutRequest r, ChannelOrderService s, CancellationToken ct) =>
+            (await s.VoidAsync(id, r.Reason ?? "Orders voided", ct)).Status);
 
         channels.MapGet("/payouts/{id:guid}", async (Guid id, ChannelService s, CancellationToken ct) =>
             await s.GetPayoutAsync(id, ct) is { } p ? Results.Ok(PayoutResponse.From(p, lines: true)) : Results.NotFound());

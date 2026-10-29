@@ -86,6 +86,9 @@
   <data name="As of" xml:space="preserve">
     <value>As of</value>
   </data>
+  <data name="As sold" xml:space="preserve">
+    <value>As sold</value>
+  </data>
   <data name="Audit log" xml:space="preserve">
     <value>Audit log</value>
   </data>
@@ -383,6 +386,9 @@
   <data name="Import a payout report" xml:space="preserve">
     <value>Import a payout report</value>
   </data>
+  <data name="Import orders" xml:space="preserve">
+    <value>Import orders</value>
+  </data>
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>
   </data>
@@ -415,6 +421,12 @@
   </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
+  </data>
+  <data name="Item" xml:space="preserve">
+    <value>Item</value>
+  </data>
+  <data name="Items" xml:space="preserve">
+    <value>Items</value>
   </data>
   <data name="Journal" xml:space="preserve">
     <value>Journal</value>
@@ -515,6 +527,9 @@
   <data name="No rates yet: time uses each person's bill rate, else the service's price." xml:space="preserve">
     <value>No rates yet: time uses each person's bill rate, else the service's price.</value>
   </data>
+  <data name="No SKUs yet: import or fetch some orders first." xml:space="preserve">
+    <value>No SKUs yet: import or fetch some orders first.</value>
+  </data>
   <data name="Not allowed" xml:space="preserve">
     <value>Not allowed</value>
   </data>
@@ -541,6 +556,12 @@
   </data>
   <data name="Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device." xml:space="preserve">
     <value>Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device.</value>
+  </data>
+  <data name="Order" xml:space="preserve">
+    <value>Order</value>
+  </data>
+  <data name="Orders" xml:space="preserve">
+    <value>Orders</value>
   </data>
   <data name="Overdue invoice" xml:space="preserve">
     <value>Overdue invoice</value>
@@ -599,6 +620,9 @@
   <data name="Post payout" xml:space="preserve">
     <value>Post payout</value>
   </data>
+  <data name="Post stock" xml:space="preserve">
+    <value>Post stock</value>
+  </data>
   <data name="Posted" xml:space="preserve">
     <value>Posted</value>
   </data>
@@ -616,6 +640,9 @@
   </data>
   <data name="Purchases" xml:space="preserve">
     <value>Purchases</value>
+  </data>
+  <data name="Put the stock back" xml:space="preserve">
+    <value>Put the stock back</value>
   </data>
   <data name="Qty" xml:space="preserve">
     <value>Qty</value>
@@ -737,6 +764,9 @@
   <data name="Settings saved." xml:space="preserve">
     <value>Settings saved.</value>
   </data>
+  <data name="Shipping" xml:space="preserve">
+    <value>Shipping</value>
+  </data>
   <data name="Show" xml:space="preserve">
     <value>Show</value>
   </data>
@@ -755,6 +785,12 @@
   <data name="Since" xml:space="preserve">
     <value>Since</value>
   </data>
+  <data name="SKU" xml:space="preserve">
+    <value>SKU</value>
+  </data>
+  <data name="SKUs" xml:space="preserve">
+    <value>SKUs</value>
+  </data>
   <data name="Sorry, the content you are looking for does not exist." xml:space="preserve">
     <value>Sorry, the content you are looking for does not exist.</value>
   </data>
@@ -772,6 +808,9 @@
   </data>
   <data name="Store address" xml:space="preserve">
     <value>Store address</value>
+  </data>
+  <data name="Tax" xml:space="preserve">
+    <value>Tax</value>
   </data>
   <data name="tell other systems about changes as they happen (admins)" xml:space="preserve">
     <value>tell other systems about changes as they happen (admins)</value>

@@ -38,6 +38,40 @@ public sealed class ChannelClient : IChannelClient, IDisposable
 
     public void Dispose() => _client.Dispose();
 
+    public async Task<IReadOnlyList<ChannelOrderDraft>> FetchOrdersAsync(string shopDomain, string token, DateOnly since, CancellationToken ct)
+    {
+        var url = $"https://{shopDomain}/admin/api/{ShopifyVersion}/orders.json?status=any&limit=250&created_at_min={since:yyyy-MM-dd}T00:00:00Z"
+            + "&fields=id,name,created_at,cancelled_at,line_items,shipping_lines,shipping_address";
+        var lines = new List<ChannelOrderDraft>();
+        await foreach (var order in ShopifyListAsync(url, "orders", token, ct))
+        {
+            if (Text(order, "cancelled_at").Length > 0)
+                continue;
+            var id = Text(order, "id");
+            var name = Text(order, "name");
+            var date = DateTimeOffset.TryParse(Text(order, "created_at"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var at)
+                ? DateOnly.FromDateTime(at.UtcDateTime) : DateOnly.FromDateTime(DateTime.UtcNow);
+            var region = order.TryGetProperty("shipping_address", out var address) && address.ValueKind == JsonValueKind.Object ? Text(address, "province_code") : "";
+            var shipLines = order.TryGetProperty("shipping_lines", out var found) && found.ValueKind == JsonValueKind.Array ? found.EnumerateArray().ToList() : [];
+            var shipping = shipLines.Sum(s => Text(s, "discounted_price").Length > 0 ? Money(s, "discounted_price") : Money(s, "price"));
+            var shippingTax = shipLines.Sum(TaxOf);
+            var first = true;
+            foreach (var item in order.GetProperty("line_items").EnumerateArray())
+            {
+                var quantity = Money(item, "quantity");
+                var sales = decimal.Round(Money(item, "price") * quantity - Money(item, "total_discount"), 2, MidpointRounding.AwayFromZero);
+                lines.Add(new ChannelOrderDraft(id, date, Text(item, "sku") is { Length: > 0 } sku ? sku : null, $"{name} · {Text(item, "title")}", quantity, sales,
+                    first ? shipping : 0m, TaxOf(item) + (first ? shippingTax : 0m), region.Length > 0 ? region : null));
+                first = false;
+            }
+        }
+
+        return lines;
+
+        static decimal TaxOf(JsonElement line) =>
+            line.TryGetProperty("tax_lines", out var taxes) && taxes.ValueKind == JsonValueKind.Array ? taxes.EnumerateArray().Sum(t => Money(t, "price")) : 0m;
+    }
+
     // ---------------- Stripe ----------------
 
     private async Task<IReadOnlyList<PayoutData>> StripeAsync(string key, DateOnly since, CancellationToken ct)

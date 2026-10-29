@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Channels;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Purchases;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
@@ -243,5 +245,97 @@ public sealed class ChannelTests : IAsyncLifetime
         var import = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Etsy", ChannelKind.Etsy, _checking.Id)));
         Assert.Equal("channel.no_live_connection", (await Assert.ThrowsAsync<DomainException>(() =>
             In<ChannelSyncService, SalesChannel>(s => s.ConnectAsync(import.Id, null, "x")))).Code);
+    }
+
+    // Amazon All Orders report (tab-separated): item-price is the line's total.
+    private const string AmazonOrders =
+        "amazon-order-id\tpurchase-date\torder-status\tproduct-name\tsku\tquantity\titem-price\titem-tax\tshipping-price\tship-state\n" +
+        "113-1\t2026-03-02T10:00:00+00:00\tShipped\tBlue mug\tMUG-1\t2\t80.00\t6.80\t5.00\tWA\n" +
+        "113-2\t2026-03-02T11:00:00+00:00\tCancelled\tBlue mug\tMUG-1\t1\t40.00\t0\t0\tOR\n" +
+        "113-3\t2026-03-03T09:00:00+00:00\tShipped\tGift card\tGIFT\t1\t25.00\t0\t0\tTX\n";
+
+    // Etsy sold order items: the order's shipping and tax repeat on each item row.
+    private const string EtsyOrders =
+        "Sale Date,Item Name,Quantity,Price,Discount Amount,Order Shipping,Order Sales Tax,Ship State,Order ID,SKU\n" +
+        "03/02/26,Blue mug,1,40.00,0,6.00,3.20,NY,900,MUG-1\n" +
+        "03/02/26,Red mug,2,30.00,5.00,6.00,3.20,NY,900,MUG-2\n";
+
+    // Shopify orders export: order fields only on the first row.
+    private const string ShopifyOrders =
+        "Name,Created at,Financial Status,Shipping,Taxes,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku,Shipping Province,Cancelled at\n" +
+        "#1001,2026-03-02 09:00:00 -0500,paid,10.00,10.00,2,Blue mug,40.00,MUG-1,CA,\n" +
+        "#1001,,,,,1,Red mug,30.00,MUG-2,,\n";
+
+    [Fact]
+    public void Order_reports_read_into_item_lines_once_per_order()
+    {
+        var amazon = ChannelOrderReports.Read(ChannelKind.Amazon, AmazonOrders);
+        Assert.Equal(2, amazon.Lines.Count);
+        Assert.Equal(new ChannelOrderDraft("113-1", new DateOnly(2026, 3, 2), "MUG-1", "Blue mug", 2m, 80m, 5m, 6.80m, "WA"), amazon.Lines[0]);
+        Assert.Contains(amazon.Warnings, w => w.Contains("cancelled", StringComparison.Ordinal));
+
+        var etsy = ChannelOrderReports.Read(ChannelKind.Etsy, EtsyOrders).Lines;
+        Assert.Equal([40m, 55m], etsy.Select(l => l.Sales));
+        Assert.Equal([6m, 0m], etsy.Select(l => l.Shipping));
+        Assert.Equal(3.20m, etsy.Sum(l => l.Tax));
+
+        var shopify = ChannelOrderReports.Read(ChannelKind.Shopify, ShopifyOrders).Lines;
+        Assert.Equal(2, shopify.Count);
+        Assert.All(shopify, l => Assert.Equal(new DateOnly(2026, 3, 2), l.Date));
+        Assert.Equal((10m, 10m, 110m), (shopify.Sum(l => l.Shipping), shopify.Sum(l => l.Tax), shopify.Sum(l => l.Sales)));
+    }
+
+    [Fact]
+    public async Task Posting_orders_moves_stock_once_every_sku_is_mapped()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income);
+        var mug = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Blue mug", Domain.Sales.ItemType.Inventory, sales.Id, 40m, Barcode: "MUG-1")));
+        var vendor = await In<VendorService, Domain.Purchases.Vendor>(s => s.CreateAsync(new Domain.Purchases.VendorDetails("Pottery")));
+        await In<BillService, Domain.Purchases.Bill>(s => s.CreateAsync(new CreateBillCommand(vendor.Id, new DateOnly(2026, 3, 1),
+            [new Domain.Purchases.BillLineDraft(Guid.Empty, 50m, null, mug.Id, 10m)])));
+
+        var amazon = await Channel(ChannelKind.Amazon, "Amazon US");
+        var imported = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)));
+        Assert.Equal((2, 2), (imported.Orders, imported.Saved.Count));
+        Assert.Equal(0, (await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)))).Orders);
+
+        // MUG-1 maps itself (the mug's barcode); the gift card needs saying it isn't stocked.
+        var giftDay = imported.Saved.Single(b => b.Date == new DateOnly(2026, 3, 3));
+        Assert.Equal("channel.sku_unmapped", (await Assert.ThrowsAsync<DomainException>(() => In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(giftDay.Id)))).Code);
+        await In<ChannelOrderService, bool>(async s => { await s.MapSkuAsync(amazon.Id, "GIFT", null); return true; });
+        var gifts = await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(giftDay.Id));
+        Assert.Equal((PayoutStatus.Posted, (Guid?)null), (gifts.Status, gifts.JournalEntryId));
+
+        var mugDay = await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(imported.Saved.Single(b => b.Date == new DateOnly(2026, 3, 2)).Id));
+        var entry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(mugDay.JournalEntryId!.Value)))!;
+        Assert.Equal(10m, entry.Lines.Where(l => l.AccountId == mug.CostAccountId).Sum(l => l.Amount));
+        Assert.Equal(8m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);
+
+        var voided = await In<ChannelOrderService, ChannelOrderBatch>(s => s.VoidAsync(mugDay.Id, "Wrong day"));
+        Assert.Equal(PayoutStatus.Pending, voided.Status);
+        Assert.Equal(10m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);
+
+        var tax = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("channel-sales-tax", ReportParameters.Parse("preset=Custom&from=2026-03-01&to=2026-03-31")));
+        Assert.Equal("Marketplaces collected and paid", tax.Rows[0].Cells[0].Value);
+        Assert.Equal(6.80m, tax.Rows.Single(r => r.Cells[0].Value as string == "WA").Cells[4].Value);
+    }
+
+    [Fact]
+    public async Task A_shopify_sync_splits_charges_by_order_and_brings_the_orders_in()
+    {
+        var shopify = await Channel(ChannelKind.Shopify);
+        Assert.False(shopify.MarketplaceCollectsTax);
+        await In<ChannelSyncService, SalesChannel>(s => s.ConnectAsync(shopify.Id, "my-store", FakeChannelApis.ShopifyToken));
+        var synced = await In<ChannelSyncService, ChannelSyncResult>(s => s.SyncAsync(shopify.Id));
+        Assert.True(synced.Succeeded, synced.Error);
+        Assert.Equal(1, synced.Orders); // the cancelled order is left out
+
+        var payout = Assert.Single(await In<ChannelService, IReadOnlyList<ChannelPayout>>(s => s.PayoutsAsync(shopify.Id)));
+        Assert.Equal((80m, 10m, 10m), (payout.Total(ChannelLineType.Sale), payout.Total(ChannelLineType.Shipping), payout.Total(ChannelLineType.Tax)));
+        Assert.Equal(76.80m, payout.Net);
+        Assert.All(payout.Lines.Where(l => l.Type is ChannelLineType.Tax), l => Assert.Equal("CA", l.Region));
+
+        var batch = Assert.Single(await In<ChannelOrderService, IReadOnlyList<ChannelOrderBatch>>(s => s.BatchesAsync(shopify.Id)));
+        Assert.Equal(("5001", 2m, "CA"), (batch.Lines[0].OrderId, batch.Lines[0].Quantity, batch.Lines[0].Region));
     }
 }

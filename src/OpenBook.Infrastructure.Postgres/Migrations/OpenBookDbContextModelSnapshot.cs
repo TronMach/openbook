@@ -876,6 +876,38 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("CaptureDrafts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelOrderBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("ChannelId", "Date");
+
+                    b.ToTable("ChannelOrderBatches", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Channels.ChannelPayout", b =>
                 {
                     b.Property<Guid>("Id")
@@ -924,6 +956,33 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("ChannelPayouts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelSku", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("ChannelId", "Sku")
+                        .IsUnique();
+
+                    b.ToTable("ChannelSkus", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Channels.SalesChannel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -961,6 +1020,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("LastSyncFailed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("MarketplaceCollectsTax")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Name")
@@ -5075,6 +5137,79 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelOrderBatch", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Channels.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Channels.ChannelOrderLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("ChannelOrderBatchId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("OrderId")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<long>("Quantity")
+                                .HasColumnType("bigint")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.Property<string>("Region")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)");
+
+                            b1.Property<long>("Sales")
+                                .HasColumnType("bigint")
+                                .HasColumnName("SalesMinor");
+
+                            b1.Property<long>("Shipping")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ShippingMinor");
+
+                            b1.Property<string>("Sku")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<long>("Tax")
+                                .HasColumnType("bigint")
+                                .HasColumnName("TaxMinor");
+
+                            b1.Property<string>("Title")
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)");
+
+                            b1.HasKey("ChannelOrderBatchId", "LineNumber");
+
+                            b1.HasIndex("OrderId");
+
+                            b1.ToTable("ChannelOrderLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ChannelOrderBatchId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Channels.ChannelPayout", b =>
                 {
                     b.HasOne("OpenBook.Domain.Channels.SalesChannel", null)
@@ -5132,6 +5267,20 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelSku", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Channels.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Sales.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Channels.SalesChannel", b =>

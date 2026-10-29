@@ -1,0 +1,87 @@
+@page "/sales/channels/{Id:guid}/skus"
+@using OpenBook.Application.Channels
+@using OpenBook.Domain.Channels
+@inject ChannelOrderService Orders
+@inject ChannelService ChannelService
+@inject ItemService ItemService
+
+<PageTitle>@L["SKUs"] · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_channel is null)
+    {
+        <div class="card"><p>That channel doesn't exist. <a href="/sales/channels">Back to sales channels</a>.</p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_channel.Name · SKUs</h1>
+            <a class="button secondary" href="/sales/channels/@_channel.Id">@L["Back to the channel"]</a>
+        </div>
+        <p class="muted">
+            Which product each SKU in this channel's orders is, so posting orders takes the right item out of stock. A SKU matching an
+            item's barcode or name maps itself; choose "Not stocked" for things without stock (gift cards, services, digital goods).
+        </p>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        @if (_skus.Count == 0)
+        {
+            <div class="card"><p class="muted">@L["No SKUs yet: import or fetch some orders first."]</p></div>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>@L["SKU"]</th><th>@L["As sold"]</th><th>@L["Item"]</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var s in _skus)
+                    {
+                        <tr class="@(s.Mapped ? "" : "warn")">
+                            <td>@s.Sku</td>
+                            <td class="muted">@s.Title</td>
+                            <td>
+                                <form method="post" action="/sales/channels/@_channel.Id/skus" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="sku" value="@s.Sku" />
+                                    <select name="itemId" data-search>
+                                        @if (!s.Mapped)
+                                        {
+                                            <option value="" selected>Choose…</option>
+                                        }
+                                        <option value="none" selected="@(s.Mapped && s.ItemId is null)">Not stocked</option>
+                                        @foreach (var item in _items)
+                                        {
+                                            <option value="@item.Id" selected="@(item.Id == s.ItemId)">@item.Name</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="secondary">@L["Save"]</button>
+                                </form>
+                            </td>
+                            <td class="muted">@(s.Automatic ? "matched by barcode or name" : s.Mapped ? "" : "not mapped")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</div>
+
+@code {
+    private SalesChannel? _channel;
+    private IReadOnlyList<SkuChoice> _skus = [];
+    private IReadOnlyList<Item> _items = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _channel = await ChannelService.GetAsync(Id);
+        if (_channel is null)
+            return;
+        _skus = await Orders.SkusAsync(Id);
+        _items = await ItemService.ListAsync();
+    }
+}

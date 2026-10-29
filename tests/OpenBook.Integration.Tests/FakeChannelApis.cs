@@ -58,6 +58,27 @@ public sealed class FakeChannelApis : HttpMessageHandler
             if (!request.Headers.TryGetValues("X-Shopify-Access-Token", out var token) || token.Single() != ShopifyToken)
                 return Task.FromResult(Json(HttpStatusCode.Unauthorized, new { errors = "[API] Invalid API key or access token" }));
             var path = uri.AbsolutePath;
+            if (path.EndsWith("/orders.json", StringComparison.Ordinal))
+                return Task.FromResult(Json(HttpStatusCode.OK, new
+                {
+                    orders = new object[]
+                    {
+                        new
+                        {
+                            id = 5001, name = "#1001", created_at = "2026-03-02T09:00:00-05:00", cancelled_at = (string?)null,
+                            shipping_address = new { province_code = "CA" },
+                            shipping_lines = new[] { new { price = "10.00", discounted_price = "10.00", tax_lines = new[] { new { price = "2.00" } } } },
+                            line_items = new[] { new { sku = "MUG-1", title = "Blue mug", quantity = 2, price = "40.00", total_discount = "0.00", tax_lines = new[] { new { price = "8.00" } } } },
+                        },
+                        new
+                        {
+                            id = 5002, name = "#1002", created_at = "2026-03-02T11:00:00-05:00", cancelled_at = "2026-03-02T12:00:00-05:00",
+                            shipping_address = new { province_code = "NY" },
+                            shipping_lines = Array.Empty<object>(),
+                            line_items = new[] { new { sku = "MUG-1", title = "Blue mug", quantity = 1, price = "40.00", total_discount = "0.00", tax_lines = Array.Empty<object>() } },
+                        },
+                    },
+                }));
             if (path.EndsWith("/shopify_payments/payouts.json", StringComparison.Ordinal))
                 return Task.FromResult(Json(HttpStatusCode.OK, new { payouts = new[] { new { id = 778, date = "2026-03-04", amount = "76.80", status = "paid", currency = "USD" } } }));
             if (path.EndsWith("/shopify_payments/balance/transactions.json", StringComparison.Ordinal))

@@ -73,6 +73,47 @@ public static class ChannelEndpoints
             }
         }).RequireAuthorization();
 
+        // Form-bound (the file), so the page's antiforgery token is checked automatically.
+        app.MapPost("/sales/channels/{id:guid}/orders", async (Guid id, IFormFile? file, ChannelOrderService orders, CancellationToken ct) =>
+        {
+            if (file is null || file.Length == 0)
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString("Choose the orders report to import.")}");
+            if (file.Length > MaxReportBytes)
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString("The file is larger than 20 MB. Download a shorter period.")}");
+            using var memory = new MemoryStream();
+            await file.CopyToAsync(memory, ct);
+            try
+            {
+                var result = await orders.ImportAsync(id, memory.ToArray(), ct);
+                var query = $"orders={result.Orders}&skipped={result.AlreadyImported}";
+                if (result.Warnings.Count > 0)
+                    query += $"&note={Uri.EscapeDataString(string.Join(" ", result.Warnings))}";
+                return Results.Redirect($"/sales/channels/{id}?{query}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes));
+
+        app.MapPost("/sales/channels/{id:guid}/skus", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
+        {
+            var choice = form["itemId"].ToString();
+            if (choice.Length == 0)
+                return Results.Redirect($"/sales/channels/{id}/skus");
+            return await Back($"/sales/channels/{id}/skus", () => orders.MapSkuAsync(id, form["sku"].ToString(), Guid.TryParse(choice, out var item) ? item : null, ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/sales/channels/orders/{id:guid}/post", async (Guid id, ChannelOrderService orders, CancellationToken ct) =>
+            await Back($"/sales/channels/orders/{id}", () => orders.PostAsync(id, ct))).RequireAuthorization();
+
+        app.MapPost("/sales/channels/orders/{id:guid}/void", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
+            await Back($"/sales/channels/orders/{id}", () => orders.VoidAsync(id, form["reason"].ToString() is { Length: > 0 } r ? r : "Orders voided", ct)))
+            .RequireAuthorization();
+
+        app.MapPost("/sales/channels/orders/{id:guid}/dismiss", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
+            await Back($"/sales/channels/orders/{id}", () => orders.SetDismissedAsync(id, form["restore"] != "true", ct))).RequireAuthorization();
+
         app.MapPost("/sales/channels/payouts/{id:guid}/post", async (Guid id, ChannelService channels, CancellationToken ct) =>
             await Back($"/sales/channels/payouts/{id}", () => channels.PostAsync(id, ct))).RequireAuthorization();
 
@@ -99,7 +140,8 @@ public static class ChannelEndpoints
             Id("feesAccountId"),
             Id("taxAccountId"),
             Id("adjustmentsAccountId"),
-            Id("clearingAccountId") is var clearing && clearing != Guid.Empty ? clearing : null);
+            Id("clearingAccountId") is var clearing && clearing != Guid.Empty ? clearing : null,
+            form.ContainsKey("taxSet") ? form["marketplaceTax"] == "true" : null);
     }
 
     private static async Task<IResult> Back(string page, Func<Task> change)
