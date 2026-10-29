@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -67,9 +68,78 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         return await CheckPasswordAsync(user, password, ct);
     }
 
+    /// <summary>The claim on the sign-in cookie naming its <see cref="UserSession"/>.</summary>
+    public const string SessionClaim = "openbook:session";
+
+    public static Guid? SessionIdOf(ClaimsPrincipal principal) =>
+        Guid.TryParse(principal?.FindFirst(SessionClaim)?.Value, out var id) ? id : null;
+
     /// <summary>False once the user is gone or inactive, or their credentials or role changed after the cookie was issued.</summary>
     public async Task<bool> IsSessionValidAsync(Guid userId, string securityStamp, CancellationToken ct = default) =>
         await store.GetUserAsync(userId, ct) is { IsActive: true } user && user.SecurityStamp == securityStamp;
+
+    /// <summary>
+    /// As above, and the cookie's own session must still count (not signed out on its own, not left behind by a new
+    /// stamp, not idle too long). Records its last use now and then.
+    /// </summary>
+    public async Task<bool> IsSessionValidAsync(Guid userId, string securityStamp, Guid sessionId, CancellationToken ct = default)
+    {
+        if (await store.GetUserAsync(userId, ct) is not { IsActive: true } user || user.SecurityStamp != securityStamp)
+            return false;
+        var session = await store.GetSessionAsync(sessionId, ct);
+        var now = clock.UtcNow;
+        if (session is null || !session.IsCurrent(user, now))
+            return false;
+        if (session.Touch(now))
+            await store.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>A new session for a browser that just signed in.</summary>
+    public async Task<Guid> StartSessionAsync(AuthenticatedUser user, string? device, string? address, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var session = UserSession.Start(user.Id, user.SecurityStamp, device, address, clock.UtcNow);
+        store.Add(session);
+        await store.SaveChangesAsync(ct);
+        return session.Id;
+    }
+
+    /// <summary>Keeps the browser's session when its cookie is re-issued after a stamp change; false if it no longer counts.</summary>
+    public async Task<bool> RenewSessionAsync(Guid sessionId, AuthenticatedUser user, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        if (await store.GetSessionAsync(sessionId, ct) is not { EndedAt: null } session || session.UserId != user.Id)
+            return false;
+        session.Renew(user.SecurityStamp);
+        session.Touch(clock.UtcNow);
+        await store.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>The user's sessions that still count, most recently used first.</summary>
+    public async Task<IReadOnlyList<UserSession>> ListSessionsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId);
+        var now = clock.UtcNow;
+        return (await store.ListOpenSessionsAsync(userId, ct)).Where(s => s.IsCurrent(user, now)).OrderByDescending(s => s.LastSeenAt).ToList();
+    }
+
+    /// <summary>Signs out one of the user's sessions: its cookie is refused on its next request.</summary>
+    /// <param name="audit">False for signing out of this browser, which isn't worth a history entry.</param>
+    public async Task EndSessionAsync(Guid userId, Guid sessionId, bool audit = true, CancellationToken ct = default)
+    {
+        var session = await store.GetSessionAsync(sessionId, ct);
+        if (session is null || session.UserId != userId)
+            throw new EntityNotFoundException("session", sessionId);
+        if (session.EndedAt is not null)
+            return;
+        session.End(clock.UtcNow);
+        if (audit && await store.GetUserAsync(userId, ct) is { } user)
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Username, AuditAction.Updated, "user", user.Id, null,
+                JsonSerializer.Serialize(new { Changed = "session signed out", Session = session.Device ?? "unknown device" })));
+        await store.SaveChangesAsync(ct);
+    }
 
     internal static AuthenticatedUser Authenticated(User user) => new(user.Id, user.Username, user.SecurityStamp, user.Role);
 

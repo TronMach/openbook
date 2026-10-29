@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Capture;
+using OpenBook.Application.Companies;
 using OpenBook.Domain.Capture;
 using OpenBook.Domain.Common;
 
@@ -28,12 +29,12 @@ public static class CaptureApi
             (await s.ListDevicesAsync(UserId(principal), ct)).Select(CaptureDeviceResponse.From));
         capture.MapPost("/devices", async (RegisterDeviceRequest r, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
         {
-            var device = await s.RegisterDeviceAsync(UserId(principal), r.Name ?? "This device", ct);
+            var device = await s.RegisterDeviceAsync(UserId(principal), r.Name ?? "This device", AuthService.SessionIdOf(principal), ct);
             return Results.Created($"/api/capture/devices/{device.Id}", CaptureDeviceResponse.From(device));
         });
         capture.MapDelete("/devices/{id:guid}", async (Guid id, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
         {
-            await s.RevokeDeviceAsync(id, UserId(principal), ct);
+            await s.RevokeDeviceAsync(id, UserId(principal), AuthService.SessionIdOf(principal), ct);
             return Results.NoContent();
         });
 

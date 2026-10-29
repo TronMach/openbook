@@ -107,7 +107,7 @@ app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async
 app.MapPost("/capture/devices/{id:guid}/revoke", async (Guid id, IFormCollection form, HttpContext http, OpenBook.Application.Capture.CaptureService capture,
     OpenBook.Application.Companies.AuthService auth, CancellationToken ct) =>
 {
-    await capture.RevokeDeviceAsync(id, http.User.GetUserId(), ct);
+    await capture.RevokeDeviceAsync(id, http.User.GetUserId(), http.User.GetSessionId(), ct);
     if (form["endSessions"] == "true")
         await WebSecurity.SignInAsync(http, await auth.EndOtherSessionsAsync(http.User.GetUserId(), ct));
     return Results.Redirect("/capture");

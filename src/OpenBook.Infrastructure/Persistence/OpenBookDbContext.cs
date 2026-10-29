@@ -29,6 +29,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 {
     internal const string IsSealed = nameof(IsSealed);
 
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
@@ -614,6 +615,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(n => n.Text).HasMaxLength(Note.MaxLength);
             b.Property(n => n.CreatedBy).HasMaxLength(100);
             b.HasIndex(n => new { n.EntityType, n.EntityId });
+        });
+
+        modelBuilder.Entity<UserSession>(b =>
+        {
+            b.ToTable("UserSessions");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.SecurityStamp).HasMaxLength(64);
+            b.Property(s => s.Device).HasMaxLength(200);
+            b.Property(s => s.Address).HasMaxLength(45);
+            b.HasIndex(s => s.UserId);
+            b.HasOne<User>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ApiKey>(b =>

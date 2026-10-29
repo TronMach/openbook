@@ -16,12 +16,29 @@ public static class AccountEndpoints
 
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/logout", async (HttpContext http, IAntiforgery antiforgery) =>
+        app.MapPost("/logout", async (HttpContext http, IAntiforgery antiforgery, AuthService auth) =>
         {
             if (!await antiforgery.IsRequestValidAsync(http))
                 return Results.BadRequest();
+            if (http.User.GetSessionId() is { } sessionId)
+                await auth.EndSessionAsync(http.User.GetUserId(), sessionId, audit: false, http.RequestAborted);
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/login");
+        }).RequireAuthorization();
+
+        // Signs out one of the user's own sessions; signing out this one is the same as signing out.
+        app.MapPost("/account/sessions/{id:guid}/end", async (Guid id, HttpContext http, IAntiforgery antiforgery, AuthService auth) =>
+        {
+            if (!await antiforgery.IsRequestValidAsync(http))
+                return Results.BadRequest();
+            await auth.EndSessionAsync(http.User.GetUserId(), id, ct: http.RequestAborted);
+            if (http.User.GetSessionId() == id)
+            {
+                await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return Results.Redirect("/login");
+            }
+
+            return Results.Redirect("/account/password?ended=true");
         }).RequireAuthorization();
 
         app.MapGet("/backup/download", async (IBackupService backups, CancellationToken ct) =>

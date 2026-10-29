@@ -39,7 +39,7 @@ public static class WebSecurity
             o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             o.LoginPath = "/login";
             o.AccessDeniedPath = "/login";
-            o.ExpireTimeSpan = TimeSpan.FromHours(8);
+            o.ExpireTimeSpan = OpenBook.Domain.Companies.UserSession.IdleLimit;
             o.SlidingExpiration = true;
             o.Events.OnRedirectToLogin = ctx => ApiAwareRedirect(ctx, StatusCodes.Status401Unauthorized);
             o.Events.OnRedirectToAccessDenied = ctx => ApiAwareRedirect(ctx, StatusCodes.Status403Forbidden);
@@ -72,11 +72,26 @@ public static class WebSecurity
         new(StampClaim, user.SecurityStamp),
     ];
 
-    public static Task SignInAsync(HttpContext http, AuthenticatedUser user)
+    /// <summary>
+    /// Issues the sign-in cookie. Re-issuing it for the same user (after a password change) keeps the browser's
+    /// session; otherwise a new session is started, named by the cookie.
+    /// </summary>
+    public static async Task SignInAsync(HttpContext http, AuthenticatedUser user)
     {
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(Claims(user), CookieAuthenticationDefaults.AuthenticationScheme));
-        return http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+        ArgumentNullException.ThrowIfNull(http);
+        ArgumentNullException.ThrowIfNull(user);
+        var auth = http.RequestServices.GetRequiredService<AuthService>();
+        var ct = http.RequestAborted;
+        var sessionId = AuthService.SessionIdOf(http.User) is { } current && http.User.FindFirstValue(ClaimTypes.NameIdentifier) == user.Id.ToString()
+            && await auth.RenewSessionAsync(current, user, ct)
+                ? current
+                : await auth.StartSessionAsync(user, UserAgents.Describe(http.Request.Headers.UserAgent), http.Connection.RemoteIpAddress?.ToString(), ct);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [.. Claims(user), new Claim(AuthService.SessionClaim, sessionId.ToString())], CookieAuthenticationDefaults.AuthenticationScheme));
+        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
     }
+
+    public static Guid? GetSessionId(this ClaimsPrincipal principal) => AuthService.SessionIdOf(principal);
 
     public static Guid GetUserId(this ClaimsPrincipal principal) =>
         Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
@@ -93,11 +108,12 @@ public static class WebSecurity
     private static async Task ValidateSessionAsync(CookieValidatePrincipalContext ctx)
     {
         var stamp = ctx.Principal?.FindFirstValue(StampClaim);
-        // A cookie from before roles existed has no role claim: sign in again to get one.
+        // A cookie from before roles or sessions existed has no role or session claim: sign in again to get one.
         var valid = Guid.TryParse(ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
             && stamp is not null
             && ctx.Principal?.FindFirstValue(ClaimTypes.Role) is not null
-            && await ctx.HttpContext.RequestServices.GetRequiredService<AuthService>().IsSessionValidAsync(userId, stamp, ctx.HttpContext.RequestAborted);
+            && AuthService.SessionIdOf(ctx.Principal!) is { } sessionId
+            && await ctx.HttpContext.RequestServices.GetRequiredService<AuthService>().IsSessionValidAsync(userId, stamp, sessionId, ctx.HttpContext.RequestAborted);
         if (!valid)
         {
             ctx.RejectPrincipal();

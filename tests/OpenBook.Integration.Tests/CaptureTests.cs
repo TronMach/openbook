@@ -122,4 +122,54 @@ public sealed class CaptureTests : IAsyncLifetime
         await In<CaptureService, bool>(async s => { await s.RevokeDeviceAsync(_device, _userId); return true; });
         Assert.True(await In<CaptureService, bool>(s => s.IsRevokedAsync(_device)));
     }
+
+    [Fact]
+    public async Task One_session_can_be_signed_out_and_the_rest_keep_working()
+    {
+        var owner = Assert.IsType<AuthenticatedUser>((await In<AuthService, SignInResult>(s => s.SignInAsync(LedgerDatabase.OwnerUsername, LedgerDatabase.OwnerPassword))).User);
+        var laptop = await In<AuthService, Guid>(s => s.StartSessionAsync(owner, "Firefox on Mac", "10.0.0.2"));
+        var phone = await In<AuthService, Guid>(s => s.StartSessionAsync(owner, "Safari on iPhone", null));
+        Assert.Equal(2, (await In<AuthService, IReadOnlyList<Domain.Companies.UserSession>>(s => s.ListSessionsAsync(_userId))).Count);
+
+        await In<AuthService, bool>(async s => { await s.EndSessionAsync(_userId, phone); return true; });
+        Assert.False(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, owner.SecurityStamp, phone)));
+        Assert.True(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, owner.SecurityStamp, laptop)));
+        Assert.Equal([laptop], (await In<AuthService, IReadOnlyList<Domain.Companies.UserSession>>(s => s.ListSessionsAsync(_userId))).Select(x => x.Id));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => In<AuthService, bool>(async s => { await s.EndSessionAsync(Guid.NewGuid(), laptop); return true; }));
+
+        // Signing out everywhere else leaves the other sessions behind; the browser that asked keeps its own.
+        var tablet = await In<AuthService, Guid>(s => s.StartSessionAsync(owner, "Chrome on Android", null));
+        var renewed = await In<AuthService, AuthenticatedUser>(s => s.EndOtherSessionsAsync(_userId));
+        Assert.True(await In<AuthService, bool>(s => s.RenewSessionAsync(laptop, renewed)));
+        Assert.True(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, renewed.SecurityStamp, laptop)));
+        Assert.False(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, renewed.SecurityStamp, tablet)));
+        Assert.Equal([laptop], (await In<AuthService, IReadOnlyList<Domain.Companies.UserSession>>(s => s.ListSessionsAsync(_userId))).Select(x => x.Id));
+        Assert.False(await In<AuthService, bool>(s => s.RenewSessionAsync(phone, renewed)));
+    }
+
+    [Fact]
+    public async Task Removing_a_device_signs_out_the_session_that_registered_it_but_not_your_own()
+    {
+        var owner = (await In<AuthService, SignInResult>(s => s.SignInAsync(LedgerDatabase.OwnerUsername, LedgerDatabase.OwnerPassword))).User!;
+        var phoneSession = await In<AuthService, Guid>(s => s.StartSessionAsync(owner, "Safari on iPhone", null));
+        var desk = await In<AuthService, Guid>(s => s.StartSessionAsync(owner, "Edge on Windows", null));
+        var phone = await In<CaptureService, CaptureDevice>(s => s.RegisterDeviceAsync(_userId, "Lost phone", phoneSession));
+        var here = await In<CaptureService, CaptureDevice>(s => s.RegisterDeviceAsync(_userId, "This laptop", desk));
+
+        await In<CaptureService, bool>(async s => { await s.RevokeDeviceAsync(phone.Id, _userId, desk); return true; });
+        Assert.False(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, owner.SecurityStamp, phoneSession)));
+
+        await In<CaptureService, bool>(async s => { await s.RevokeDeviceAsync(here.Id, _userId, desk); return true; });
+        Assert.True(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, owner.SecurityStamp, desk)));
+    }
+
+    [Theory]
+    [InlineData("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36 Edg/129.0", "Edge on Windows")]
+    [InlineData("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "Safari on iPhone")]
+    [InlineData("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36", "Chrome on Android")]
+    [InlineData("Mozilla/5.0 (Macintosh; Intel Mac OS X 14.6; rv:131.0) Gecko/20100101 Firefox/131.0", "Firefox on Mac")]
+    [InlineData("curl/8.4.0", "curl/8.4.0")]
+    [InlineData("", null)]
+    public void Sessions_are_named_after_the_browser(string userAgent, string? expected) =>
+        Assert.Equal(expected, OpenBook.Web.Security.UserAgents.Describe(userAgent));
 }

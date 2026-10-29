@@ -17,12 +17,16 @@ public sealed class CaptureDevice
     public DateTimeOffset? LastSyncAt { get; private set; }
     public DateTimeOffset? RevokedAt { get; private set; }
 
+    /// <summary>The sign-in session that registered it (null through an API key); removing the device ends it.</summary>
+    public Guid? SessionId { get; private set; }
+
     public bool IsActive => RevokedAt is null;
 
-    public static CaptureDevice Create(Guid userId, string name, DateTimeOffset createdAt) => new()
+    public static CaptureDevice Create(Guid userId, string name, DateTimeOffset createdAt, Guid? sessionId = null) => new()
     {
         Id = Guid.CreateVersion7(),
         UserId = userId,
+        SessionId = sessionId,
         Name = Text.Optional(name, 100, "capture.device_name_too_long", "Device name") ?? "This device",
         CreatedAt = createdAt.ToUniversalTime(),
     };

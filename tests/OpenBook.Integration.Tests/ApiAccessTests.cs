@@ -218,6 +218,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/reports/builder", "GET", UserRole.ViewOnly)]
     [InlineData("/settings/plugins", "GET", UserRole.Admin)]
     [InlineData("/account/sessions/end-others", "POST", UserRole.ViewOnly)]
+    [InlineData("/account/sessions/0190a7a2-0000-7000-8000-000000000000/end", "POST", UserRole.ViewOnly)]
     [InlineData("/settings/plugins/sample/disable", "POST", UserRole.Admin)]
     [InlineData("/accountant/package", "GET", UserRole.Accountant)]
     [InlineData("/api/accountant/1099-filing", "GET", UserRole.Accountant)]

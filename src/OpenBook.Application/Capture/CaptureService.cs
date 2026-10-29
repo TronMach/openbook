@@ -6,6 +6,7 @@ using OpenBook.Application.Banking;
 using OpenBook.Application.Projects;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
+using OpenBook.Application.Companies;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
@@ -59,7 +60,7 @@ public sealed record CaptureLists(
 /// online form uses (so every rule and the audit trail apply), in its own scope so one refusal doesn't affect the
 /// rest. Drafts that can't be entered wait as "needs attention". Repeats of a draft (same id) return its outcome.
 /// </summary>
-public sealed class CaptureService(ICaptureStore store, IServiceScopeFactory scopes, IClock clock, ICurrentUser user)
+public sealed class CaptureService(ICaptureStore store, AuthService auth, IServiceScopeFactory scopes, IClock clock, ICurrentUser user)
 {
     public const string DeviceEntity = "capture_device";
     public const string DraftEntity = "capture_draft";
@@ -68,17 +69,22 @@ public sealed class CaptureService(ICaptureStore store, IServiceScopeFactory sco
 
     public Task<IReadOnlyList<CaptureDevice>> ListDevicesAsync(Guid? userId, CancellationToken ct = default) => store.ListDevicesAsync(userId, ct);
 
-    public async Task<CaptureDevice> RegisterDeviceAsync(Guid userId, string name, CancellationToken ct = default)
+    /// <param name="sessionId">The sign-in session registering it, so removing the device can sign that session out.</param>
+    public async Task<CaptureDevice> RegisterDeviceAsync(Guid userId, string name, Guid? sessionId = null, CancellationToken ct = default)
     {
-        var device = CaptureDevice.Create(userId, name, clock.UtcNow);
+        var device = CaptureDevice.Create(userId, name, clock.UtcNow, sessionId);
         store.Add(device);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, DeviceEntity, device.Id, null, JsonSerializer.Serialize(new { device.Name, device.UserId })));
         await store.SaveChangesAsync(ct);
         return device;
     }
 
+    /// <summary>
+    /// Removes a device's access and signs out the session that registered it, unless that's the caller's own
+    /// session (a capture page opened in the same browser).
+    /// </summary>
     /// <param name="ownerId">The user the device must belong to; null lets an admin revoke anyone's.</param>
-    public async Task RevokeDeviceAsync(Guid id, Guid? ownerId, CancellationToken ct = default)
+    public async Task RevokeDeviceAsync(Guid id, Guid? ownerId, Guid? currentSessionId = null, CancellationToken ct = default)
     {
         var device = await store.GetDeviceAsync(id, ct);
         if (device is null || (ownerId is { } owner && device.UserId != owner))
@@ -88,6 +94,8 @@ public sealed class CaptureService(ICaptureStore store, IServiceScopeFactory sco
         device.Revoke(clock.UtcNow);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, DeviceEntity, device.Id, null, JsonSerializer.Serialize(new { device.Name, Revoked = true })));
         await store.SaveChangesAsync(ct);
+        if (device.SessionId is { } sessionId && sessionId != currentSessionId)
+            await auth.EndSessionAsync(device.UserId, sessionId, audit: false, ct);
     }
 
     /// <summary>

@@ -38,11 +38,18 @@ public interface ICompanyStore
     /// <summary>Tracked.</summary>
     Task<ApiKey?> FindApiKeyAsync(string tokenHash, CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<UserSession?> GetSessionAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked; the user's sessions not yet ended.</summary>
+    Task<IReadOnlyList<UserSession>> ListOpenSessionsAsync(Guid userId, CancellationToken ct);
+
     void Add(Company company);
     void Add(EmailSettings settings);
     void Add(BackupSchedule schedule);
     void Add(User user);
     void Add(ApiKey key);
+    void Add(UserSession session);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);
