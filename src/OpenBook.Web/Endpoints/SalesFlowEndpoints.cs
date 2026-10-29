@@ -117,7 +117,8 @@ public static class SalesFlowEndpoints
                     || !int.TryParse(form["lineNumber"], NumberStyles.None, CultureInfo.InvariantCulture, out var lineNumber))
                     throw new DomainException("billable.line_invalid", "That line can't be billed.");
                 var customerId = Id(form["customerId"]) ?? throw new DomainException("billable.customer_required", "Choose the customer to bill.");
-                await billables.MarkAsync(new MarkBillableCommand(kind, documentId, lineNumber, customerId, Amount(form["markup"]) ?? 0m), ct);
+                await billables.MarkAsync(new MarkBillableCommand(kind, documentId, lineNumber, customerId, Amount(form["markup"]) ?? 0m,
+                    Billable: form["billable"] == "true"), ct);
                 return Results.Redirect($"{back}#billable");
             }
             catch (DomainException ex)

@@ -68,6 +68,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<AchBatch> AchBatches => Set<AchBatch>();
     public DbSet<Retainer> Retainers => Set<Retainer>();
     public DbSet<BillableExpense> BillableExpenses => Set<BillableExpense>();
+    public DbSet<OpenBook.Domain.Projects.Project> Projects => Set<OpenBook.Domain.Projects.Project>();
+    public DbSet<OpenBook.Domain.Projects.Worker> Workers => Set<OpenBook.Domain.Projects.Worker>();
+    public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
+    public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
+    public DbSet<OpenBook.Domain.Projects.MileageRate> MileageRates => Set<OpenBook.Domain.Projects.MileageRate>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
     public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
@@ -630,6 +635,81 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(d => new { d.Status, d.NextAttemptAt });
             b.HasIndex(d => new { d.SubscriptionId, d.CreatedAt });
             b.HasOne<WebhookSubscription>().WithMany().HasForeignKey(d => d.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    private static void ConfigureProjects(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<OpenBook.Domain.Projects.Project>(b =>
+        {
+            b.ToTable("Projects");
+            b.HasKey(p => p.Id);
+            b.HasIndex(p => p.CustomerId).IsUnique();
+            b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(p => p.BudgetRevenue).HasColumnName("BudgetRevenueMinor").HasConversion(NullableMinorUnits);
+            b.Property(p => p.BudgetCost).HasColumnName("BudgetCostMinor").HasConversion(NullableMinorUnits);
+            b.Property(p => p.BudgetHours).HasColumnName("BudgetHoursTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(p => p.Description).HasMaxLength(2000);
+            b.Ignore(p => p.IsOpen);
+            b.HasOne<Customer>().WithMany().HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.Worker>(b =>
+        {
+            b.ToTable("Workers");
+            b.HasKey(w => w.Id);
+            b.Property(w => w.Name).HasMaxLength(100);
+            b.Property(w => w.Username).HasMaxLength(100);
+            b.Property(w => w.CostRate).HasColumnName("CostRateTenThousandths").HasConversion(TenThousandths);
+            b.Property(w => w.BillRate).HasColumnName("BillRateTenThousandths").HasConversion(NullableTenThousandths);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(w => w.VendorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.TimeEntry>(b =>
+        {
+            b.ToTable("TimeEntries");
+            b.HasKey(t => t.Id);
+            b.HasIndex(t => new { t.WorkerId, t.Date });
+            b.HasIndex(t => t.CustomerId);
+            b.HasIndex(t => t.InvoiceId);
+            b.Property(t => t.Hours).HasColumnName("HoursTenThousandths").HasConversion(TenThousandths);
+            b.Property(t => t.BillRate).HasColumnName("BillRateTenThousandths").HasConversion(TenThousandths);
+            b.Property(t => t.CostRate).HasColumnName("CostRateTenThousandths").HasConversion(TenThousandths);
+            b.Property(t => t.Notes).HasMaxLength(1000);
+            b.Ignore(t => t.IsRunning);
+            b.Ignore(t => t.Amount);
+            b.Ignore(t => t.Cost);
+            b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(t => t.WorkerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Customer>().WithMany().HasForeignKey(t => t.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Item>().WithMany().HasForeignKey(t => t.ItemId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(t => t.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.MileageTrip>(b =>
+        {
+            b.ToTable("MileageTrips");
+            b.HasKey(t => t.Id);
+            b.HasIndex(t => t.Date);
+            b.HasIndex(t => t.CustomerId);
+            b.HasIndex(t => t.InvoiceId);
+            b.Property(t => t.Miles).HasColumnName("MilesTenThousandths").HasConversion(TenThousandths);
+            b.Property(t => t.BillRate).HasColumnName("BillRateTenThousandths").HasConversion(TenThousandths);
+            b.Property(t => t.Purpose).HasMaxLength(500);
+            b.Property(t => t.Vehicle).HasMaxLength(100);
+            b.Property(t => t.FromPlace).HasMaxLength(200);
+            b.Property(t => t.ToPlace).HasMaxLength(200);
+            b.Ignore(t => t.Amount);
+            b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(t => t.WorkerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Customer>().WithMany().HasForeignKey(t => t.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(t => t.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.MileageRate>(b =>
+        {
+            b.ToTable("MileageRates");
+            b.HasKey(r => r.Year);
+            b.Property(r => r.Year).ValueGeneratedNever();
+            b.Property(r => r.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
         });
     }
 
@@ -1325,6 +1405,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
+
+        ConfigureProjects(modelBuilder);
 
         modelBuilder.Entity<CollectionSettings>(b =>
         {

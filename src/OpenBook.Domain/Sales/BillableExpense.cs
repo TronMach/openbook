@@ -14,7 +14,8 @@ public enum BillableSource
 /// <summary>
 /// A cost to pass on to a customer: one category line of a bill or expense, with an optional markup. It waits until
 /// it's added to an invoice (as a line for the "Billable Expenses" item); voiding that invoice makes it billable again.
-/// The bill or expense can't be voided while the cost is on an invoice.
+/// The bill or expense can't be voided while the cost is on an invoice. A line marked to a customer or project
+/// without being billable (<see cref="IsBillable"/> false) only counts as that project's cost.
 /// </summary>
 public sealed class BillableExpense
 {
@@ -40,6 +41,9 @@ public sealed class BillableExpense
     /// <summary>What the customer is charged: cost plus markup, to the cent.</summary>
     public decimal Amount => decimal.Round(Cost * (1m + MarkupPercent / 100m), 2, MidpointRounding.AwayFromZero);
 
+    /// <summary>False for a cost that only counts toward the customer's or project's profitability.</summary>
+    public bool IsBillable { get; private set; }
+
     /// <summary>The invoice it's on; null while it's waiting to be billed.</summary>
     public Guid? InvoiceId { get; private set; }
 
@@ -47,7 +51,7 @@ public sealed class BillableExpense
 
     public static BillableExpense Create(
         BillableSource kind, Guid documentId, int lineNumber, Guid customerId, DateOnly date, string description, decimal cost, decimal markupPercent,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt, bool billable = true)
     {
         Money.EnsureCents(cost);
         if (cost <= 0m)
@@ -64,13 +68,16 @@ public sealed class BillableExpense
             Date = date,
             Description = Text.Optional(description, 1000, "billable.description_too_long", "Description") ?? "Billable expense",
             Cost = cost,
-            MarkupPercent = markupPercent,
+            MarkupPercent = billable ? markupPercent : 0m,
+            IsBillable = billable,
             CreatedAt = createdAt.ToUniversalTime(),
         };
     }
 
     public void MarkInvoiced(Guid invoiceId)
     {
+        if (!IsBillable)
+            throw new DomainException("billable.not_billable", $"'{Description}' is a project cost, not billable.");
         if (InvoiceId is not null)
             throw new DomainException("billable.already_invoiced", $"'{Description}' is already on an invoice.");
         InvoiceId = invoiceId;

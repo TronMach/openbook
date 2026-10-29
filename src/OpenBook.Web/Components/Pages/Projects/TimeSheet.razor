@@ -1,0 +1,205 @@
+@page "/time"
+@inject TimeService TimeService
+@inject WorkerService WorkerService
+@inject CustomerService CustomerService
+@inject ItemService ItemService
+
+<PageTitle>Time · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Time</h1>
+        <a class="button secondary" href="/time/people">People and rates</a>
+        <a class="button secondary" href="/projects">Projects</a>
+        <a class="button secondary" href="/reports/time-by-customer">Time by customer</a>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_workers.Count == 0)
+    {
+        <div class="card"><p>Time is tracked per person. <a href="/time/people">Add the people</a> who do the work first.</p></div>
+    }
+    else
+    {
+        @if (_running.Count > 0)
+        {
+            <div class="card">
+                <h2>Running</h2>
+                @foreach (var t in _running)
+                {
+                    <form method="post" action="/time/@t.Id/stop" data-enhance="false" class="inline" style="display:block; margin-bottom: .5rem">
+                        <AntiforgeryToken />
+                        <strong>@Worker(t.WorkerId)</strong>
+                        <span>@(t.CustomerId is { } c ? _customerNames.GetValueOrDefault(c) : "no customer")@(t.Notes is { } n ? $" · {n}" : "")</span>
+                        <span class="muted">since @t.StartedAt!.Value.ToLocalTime().ToString("t")</span>
+                        <button type="submit">Stop</button>
+                    </form>
+                }
+            </div>
+        }
+
+        <div class="card">
+            <h2>Start a timer or add time</h2>
+            <form method="post" action="/time" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="worker">Person</label>
+                        <select id="worker" name="workerId">
+                            @foreach (var w in _workers)
+                            {
+                                <option value="@w.Id" selected="@(w.Id == (WorkerId ?? _me?.Id))">@w.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="customer">Customer or project <span class="muted">(optional)</span></label>
+                        <select id="customer" name="customerId" data-search>
+                            <option value="">None</option>
+                            @foreach (var c in _customers)
+                            {
+                                <option value="@c.Customer.Id" selected="@(c.Customer.Id == Customer)">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="item">Service <span class="muted">(needed to bill)</span></label>
+                        <select id="item" name="itemId" data-search>
+                            <option value="">None</option>
+                            @foreach (var i in _services)
+                            {
+                                <option value="@i.Id">@i.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="field">
+                        <label for="hours">Hours</label>
+                        <input id="hours" name="hours" class="short" inputmode="decimal" placeholder="1.5" />
+                    </div>
+                    <div class="field">
+                        <label for="rate">Rate per hour <span class="muted">(blank: the person's or the service's)</span></label>
+                        <input id="rate" name="rate" class="amount" inputmode="decimal" />
+                    </div>
+                    <div class="field">
+                        <label><input type="checkbox" name="billable" value="true" /> Billable</label>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="notes">Notes <span class="muted">(optional; shown on the invoice)</span></label>
+                    <input id="notes" name="notes" maxlength="1000" />
+                </div>
+                <div class="actions">
+                    <button type="submit" name="mode" value="add">Add time</button>
+                    <button type="submit" name="mode" value="start" class="secondary">Start timer</button>
+                </div>
+            </form>
+        </div>
+    }
+
+    <form method="get" class="inline" style="margin: 1.5rem 0 1rem">
+        <label>From <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd")" /></label>
+        <label>To <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd")" /></label>
+        <select name="worker" aria-label="Person">
+            <option value="">Everyone</option>
+            @foreach (var w in _workers)
+            {
+                <option value="@w.Id" selected="@(w.Id == WorkerId)">@w.Name</option>
+            }
+        </select>
+        <select name="customer" aria-label="Customer" data-search>
+            <option value="">All customers</option>
+            @foreach (var c in _customers)
+            {
+                <option value="@c.Customer.Id" selected="@(c.Customer.Id == Customer)">@c.FullName</option>
+            }
+        </select>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    @if (_entries.Count == 0)
+    {
+        <p class="muted">No time in this period.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Person</th><th>Customer</th><th>Service</th><th>Notes</th><th class="num">Hours</th><th class="num">Billable</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _entries)
+                {
+                    <tr>
+                        <td>@Labels.Date(t.Date)</td>
+                        <td>@Worker(t.WorkerId)</td>
+                        <td>@(t.CustomerId is { } c ? _customerNames.GetValueOrDefault(c) : "")</td>
+                        <td>@(t.ItemId is { } i ? _itemNames.GetValueOrDefault(i) : "")</td>
+                        <td>@t.Notes</td>
+                        <td class="num">@(t.IsRunning ? "running" : Labels.Quantity(t.Hours))</td>
+                        <td class="num">@(t.Billable ? Labels.Amount(t.Amount) : "")</td>
+                        <td>
+                            @if (t.InvoiceId is { } invoiceId)
+                            {
+                                <a href="/sales/invoices/@invoiceId">invoiced</a>
+                            }
+                            else
+                            {
+                                <a href="/time/@t.Id/edit">Edit</a>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="5">Total</td><td class="num">@Labels.Quantity(_entries.Sum(t => t.Hours))</td><td class="num">@Labels.Amount(_entries.Sum(t => t.Amount))</td><td></td></tr>
+            </tfoot>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Worker> _workers = [];
+    private Worker? _me;
+    private IReadOnlyList<TimeEntry> _running = [];
+    private IReadOnlyList<TimeEntry> _entries = [];
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyDictionary<Guid, string> _customerNames = new Dictionary<Guid, string>();
+    private List<Item> _services = [];
+    private Dictionary<Guid, string> _itemNames = [];
+    private Dictionary<Guid, string> _allWorkers = [];
+    private DateOnly _from;
+    private DateOnly _to;
+
+    [SupplyParameterFromQuery] private string? From { get; set; }
+    [SupplyParameterFromQuery] private string? To { get; set; }
+    [SupplyParameterFromQuery(Name = "worker")] private Guid? WorkerId { get; set; }
+    [SupplyParameterFromQuery] private Guid? Customer { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+        _from = DateOnly.TryParse(From, out var f) ? f : monday;
+        _to = DateOnly.TryParse(To, out var t) ? t : monday.AddDays(6);
+        _workers = await WorkerService.ListAsync();
+        _allWorkers = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
+        _me = await WorkerService.ForCurrentUserAsync();
+        _running = await TimeService.RunningAsync();
+        _entries = await TimeService.ListAsync(new TimeFilter(_from, _to, WorkerId, Customer));
+        _customers = await CustomerService.ListAsync(today);
+        _customerNames = await CustomerService.FullNamesAsync();
+        var items = await ItemService.ListAsync(includeInactive: true);
+        _itemNames = items.ToDictionary(i => i.Id, i => i.Name);
+        _services = items.Where(i => i.IsActive && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
+    }
+
+    private string Worker(Guid id) => _allWorkers.GetValueOrDefault(id) ?? "";
+}

@@ -1,0 +1,166 @@
+@page "/projects/{Id:guid}"
+@inject ProjectService ProjectService
+@inject ProjectReports Reports
+@inject TimeService TimeService
+@inject WorkerService WorkerService
+@inject BillableExpenseService Billables
+@inject MileageService MileageService
+
+<PageTitle>@(_project?.FullName ?? "Project") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_project is null || _figures is null)
+    {
+        <h1>Project not found</h1>
+        <p><a href="/projects">Back to projects</a></p>
+    }
+    else
+    {
+        var p = _project.Project;
+        <div class="toolbar">
+            <h1>@_project.FullName</h1>
+            <span class="badge">@ProjectReports.Status(p.Status)</span>
+            <a class="button" href="/sales/invoices/new?customer=@_project.Customer.Id">Invoice</a>
+            <a class="button secondary" href="/time?customer=@_project.Customer.Id">Time</a>
+            <a class="button secondary" href="/customers/@_project.Customer.Id">Customer record</a>
+            <a class="button secondary" href="/projects">Projects</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (p.Description is { } description)
+        {
+            <p>@description</p>
+        }
+
+        <table class="data">
+            <thead><tr><th></th><th class="num">Actual</th><th class="num">Budget</th><th class="num">Left</th></tr></thead>
+            <tbody>
+                <tr><td>Income</td><td class="num">@Labels.Amount(_figures.Income)</td>@Budget(p.BudgetRevenue, _figures.Income)</tr>
+                <tr><td class="indent">Expenses</td><td class="num">@Labels.Amount(_figures.ExpenseCost)</td><td></td><td></td></tr>
+                <tr><td class="indent">Labor</td><td class="num">@Labels.Amount(_figures.LaborCost)</td><td></td><td></td></tr>
+                <tr><td class="indent">Mileage</td><td class="num">@Labels.Amount(_figures.MileageCost)</td><td></td><td></td></tr>
+                <tr><td>Costs</td><td class="num">@Labels.Amount(_figures.Cost)</td>@Budget(p.BudgetCost, _figures.Cost)</tr>
+                <tr class="total"><td>Profit</td><td class="num">@Labels.Amount(_figures.Profit)</td><td class="num">@(p.BudgetRevenue is { } r && p.BudgetCost is { } c ? Labels.Amount(r - c) : "")</td><td class="num">@(_figures.Margin is { } m ? Labels.Percent(m) + " margin" : "")</td></tr>
+                <tr><td>Hours</td><td class="num">@Labels.Quantity(_figures.Hours)</td>@Hours(p.BudgetHours, _figures.Hours)</tr>
+            </tbody>
+        </table>
+        @if (_figures.Unbilled > 0m)
+        {
+            <p>Not billed yet: @Labels.Amount(_figures.Unbilled) (time @Labels.Amount(_figures.UnbilledTime), expenses @Labels.Amount(_figures.UnbilledExpenses), mileage @Labels.Amount(_figures.UnbilledMileage)). <a href="/sales/invoices/new?customer=@_project.Customer.Id">Put it on an invoice</a>.</p>
+        }
+
+        <h2>Time</h2>
+        @if (_time.Count == 0)
+        {
+            <p class="muted">No time yet. <a href="/time?customer=@_project.Customer.Id">Add time</a>.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Date</th><th>Person</th><th>Notes</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Billable</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _time)
+                    {
+                        <tr>
+                            <td>@Labels.Date(t.Date)</td>
+                            <td>@_workers.GetValueOrDefault(t.WorkerId)</td>
+                            <td>@t.Notes</td>
+                            <td class="num">@(t.IsRunning ? "running" : Labels.Quantity(t.Hours))</td>
+                            <td class="num">@Labels.Amount(t.Cost)</td>
+                            <td class="num">@(t.Billable ? Labels.Amount(t.Amount) : "")</td>
+                            <td>@if (t.InvoiceId is { } invoiceId) { <a href="/sales/invoices/@invoiceId">invoiced</a> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <h2>Expenses</h2>
+        @if (_expenses.Count == 0)
+        {
+            <p class="muted">No bill or expense lines are marked to this project. Mark them from the bill or expense page.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Date</th><th>Cost</th><th class="num">Cost</th><th class="num">To bill</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var e in _expenses)
+                    {
+                        <tr>
+                            <td>@Labels.Date(e.Date)</td>
+                            <td><a href="@(e.Kind == BillableSource.Bill ? $"/purchases/bills/{e.DocumentId}" : $"/banking/transactions/{e.DocumentId}")">@e.Description</a></td>
+                            <td class="num">@Labels.Amount(e.Cost)</td>
+                            <td class="num">@(e.IsBillable ? Labels.Amount(e.Amount) : "not billed")</td>
+                            <td>@if (e.InvoiceId is { } invoiceId) { <a href="/sales/invoices/@invoiceId">invoiced</a> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (_trips.Count > 0)
+        {
+            <h2>Mileage</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th>Purpose</th><th class="num">Miles</th><th class="num">Billable</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var trip in _trips)
+                    {
+                        <tr>
+                            <td>@Labels.Date(trip.Date)</td>
+                            <td>@trip.Purpose</td>
+                            <td class="num">@Labels.Quantity(trip.Miles)</td>
+                            <td class="num">@(trip.Billable ? Labels.Amount(trip.Amount) : "")</td>
+                            <td>@if (trip.InvoiceId is { } invoiceId) { <a href="/sales/invoices/@invoiceId">invoiced</a> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Status and budget</h2>
+            <form method="post" action="/projects/@p.Id" data-enhance="false">
+                <AntiforgeryToken />
+                <ProjectFields Project="p" />
+                <div class="actions"><button type="submit">Save</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private ProjectSummary? _project;
+    private ProjectFigures? _figures;
+    private IReadOnlyList<TimeEntry> _time = [];
+    private IReadOnlyList<BillableExpense> _expenses = [];
+    private IReadOnlyList<MileageTrip> _trips = [];
+    private Dictionary<Guid, string> _workers = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _project = await ProjectService.GetAsync(Id);
+        if (_project is null)
+            return;
+        _figures = await Reports.FiguresAsync(_project, null, DateOnly.MaxValue);
+        var customerId = _project.Customer.Id;
+        _time = await TimeService.ListAsync(new TimeFilter(CustomerId: customerId));
+        _expenses = await Billables.ListAsync(customerId);
+        _trips = await MileageService.ListAsync(customerId: customerId);
+        _workers = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
+    }
+
+    private static RenderFragment Budget(decimal? budget, decimal actual) => budget is { } b
+        ? @<text><td class="num">@Labels.Amount(b)</td><td class="num">@Labels.Amount(b - actual)</td></text>
+        : @<text><td></td><td></td></text>;
+
+    private static RenderFragment Hours(decimal? budget, decimal actual) => budget is { } b
+        ? @<text><td class="num">@Labels.Quantity(b)</td><td class="num">@Labels.Quantity(b - actual)</td></text>
+        : @<text><td></td><td></td></text>;
+}

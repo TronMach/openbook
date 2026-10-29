@@ -13,6 +13,8 @@ namespace OpenBook.Application.Sales;
 /// <param name="EstimateId">The estimate being invoiced; it's closed in the same save.</param>
 /// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
 /// <param name="BillableExpenseIds">Costs waiting to be billed to the customer, added as "Billable Expenses" lines.</param>
+/// <param name="TimeEntryIds">Billable time for the customer, added as lines for each entry's service.</param>
+/// <param name="MileageTripIds">Billable mileage for the customer, added as "Mileage" lines.</param>
 public sealed record CreateInvoiceCommand(
     Guid CustomerId,
     DateOnly Date,
@@ -25,7 +27,9 @@ public sealed record CreateInvoiceCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    IReadOnlyList<Guid>? BillableExpenseIds = null);
+    IReadOnlyList<Guid>? BillableExpenseIds = null,
+    IReadOnlyList<Guid>? TimeEntryIds = null,
+    IReadOnlyList<Guid>? MileageTripIds = null);
 
 /// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
 internal sealed record InvoiceSource(Guid? SalesOrderId, IReadOnlyList<InvoiceSourceLine> Lines, bool Completes);
@@ -38,6 +42,7 @@ public sealed class InvoiceService(
     InventoryService inventory,
     WarehouseService warehouses,
     BillableExpenseService billables,
+    Projects.ProjectBilling projectBilling,
     IClock clock,
     ICurrentUser user)
 {
@@ -103,6 +108,9 @@ public sealed class InvoiceService(
             drafts.AddRange(billable.Select(b => new SalesLineDraft(itemId, b.Description, 1m, b.Amount, PriceSource: BillableExpenseService.PriceSource)));
         }
 
+        var charges = await projectBilling.ForInvoiceAsync(customer.Id, command.TimeEntryIds ?? [], command.MileageTripIds ?? [], ct);
+        drafts.AddRange(await projectBilling.DraftsAsync(charges, ct));
+
         var number = Invoice.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
@@ -138,6 +146,8 @@ public sealed class InvoiceService(
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, BillableExpenseService.EntityType, b.Id,
                 billableBefore, BillableExpenseService.Snapshot(b)));
         }
+
+        projectBilling.MarkInvoiced(charges, invoice.Id);
 
         if (order is not null && source!.Completes)
         {
@@ -199,6 +209,7 @@ public sealed class InvoiceService(
                 billableBefore, BillableExpenseService.Snapshot(b)));
         }
 
+        await projectBilling.ReleaseAsync(invoice.Id, ct);
         await store.SaveChangesAsync(ct);
         return invoice;
     }

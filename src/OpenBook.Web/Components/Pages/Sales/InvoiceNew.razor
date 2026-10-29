@@ -74,6 +74,28 @@
                 </fieldset>
             }
 
+            @if (_time.Count > 0 || _trips.Count > 0)
+            {
+                <fieldset style="margin-top: 1rem">
+                    <legend>Billable time and mileage for this customer</legend>
+                    @foreach (var t in _time)
+                    {
+                        <label class="check">
+                            <input type="checkbox" checked="@_chosenTime.Contains(t.Id)" @onchange="e => Toggle(_chosenTime, t.Id, e)" />
+                            <span>@Labels.Date(t.Date) · @(_workerNames.GetValueOrDefault(t.WorkerId)) · @Labels.Quantity(t.Hours) h × @Labels.Price(t.BillRate) = @Labels.Amount(t.Amount)@(t.Notes is { } n ? $" · {n}" : "")</span>
+                        </label>
+                    }
+                    @foreach (var m in _trips)
+                    {
+                        <label class="check">
+                            <input type="checkbox" checked="@_chosenTrips.Contains(m.Id)" @onchange="e => Toggle(_chosenTrips, m.Id, e)" />
+                            <span>@Labels.Date(m.Date) · @m.Purpose · @Labels.Quantity(m.Miles) mi × @Labels.Price(m.BillRate) = @Labels.Amount(m.Amount)</span>
+                        </label>
+                    }
+                    <span class="hint">Ticked time and trips are added as lines when you save: @Labels.Amount(ProjectTotal) more on this invoice.</span>
+                </fieldset>
+            }
+
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             <div class="field" style="margin-top: 1rem">
@@ -126,12 +148,28 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
-    private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) + BillableTotal > 0m && !string.IsNullOrWhiteSpace(_number);
+    private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) + BillableTotal + ProjectTotal > 0m && !string.IsNullOrWhiteSpace(_number);
 
     private IReadOnlyList<BillableExpense> _billable = [];
     private readonly HashSet<Guid> _chosenBillable = [];
 
     private decimal BillableTotal => _billable.Where(b => _chosenBillable.Contains(b.Id)).Sum(b => b.Amount);
+
+    private IReadOnlyList<TimeEntry> _time = [];
+    private IReadOnlyList<MileageTrip> _trips = [];
+    private IReadOnlyDictionary<Guid, string> _workerNames = new Dictionary<Guid, string>();
+    private readonly HashSet<Guid> _chosenTime = [];
+    private readonly HashSet<Guid> _chosenTrips = [];
+
+    private decimal ProjectTotal => _time.Where(t => _chosenTime.Contains(t.Id)).Sum(t => t.Amount) + _trips.Where(m => _chosenTrips.Contains(m.Id)).Sum(m => m.Amount);
+
+    private static void Toggle(HashSet<Guid> chosen, Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            chosen.Add(id);
+        else
+            chosen.Remove(id);
+    }
 
     private void ToggleBillable(Guid id, ChangeEventArgs e)
     {
@@ -176,6 +214,19 @@
         _billable = id is { } customerId
             ? await Ops.RunAsync(sp => sp.GetRequiredService<BillableExpenseService>().OpenAsync(customerId))
             : [];
+        _chosenTime.Clear();
+        _chosenTrips.Clear();
+        if (id is { } forCustomer)
+        {
+            (_time, _trips, _workerNames) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<TimeService>().OpenAsync(forCustomer),
+                await sp.GetRequiredService<MileageService>().OpenAsync(forCustomer),
+                (IReadOnlyDictionary<Guid, string>)(await sp.GetRequiredService<WorkerService>().ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name)));
+        }
+        else
+        {
+            (_time, _trips) = ([], []);
+        }
     }
 
     private void ChangeDate(ChangeEventArgs e)
@@ -193,7 +244,7 @@
         try
         {
             var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId,
-                BillableExpenseIds: [.. _chosenBillable]);
+                BillableExpenseIds: [.. _chosenBillable], TimeEntryIds: [.. _chosenTime], MileageTripIds: [.. _chosenTrips]);
             var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
         }

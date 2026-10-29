@@ -1,0 +1,110 @@
+@page "/time/people"
+@inject WorkerService WorkerService
+@inject VendorService VendorService
+@inject UserService UserService
+
+<PageTitle>People and rates · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>People and rates</h1>
+        <a class="button secondary" href="/time">Time</a>
+    </div>
+    <p class="muted">
+        Everyone whose time you track: employees, owners and contractors. The cost rate is what an hour of their time costs the business
+        and counts toward project profitability; the bill rate is what customers pay by default (blank uses the service's price).
+        Link a person to their OpenBook user so their own timer knows them.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_workers.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>Name</th><th class="num">Cost rate</th><th class="num">Bill rate</th><th>User</th><th>Vendor</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var w in _workers)
+                {
+                    <tr class="@(w.IsActive ? "" : "muted")">
+                        <td>@w.Name@(w.IsActive ? "" : " (inactive)")</td>
+                        <td class="num">@Labels.Price(w.CostRate)</td>
+                        <td class="num">@(w.BillRate is { } b ? Labels.Price(b) : "")</td>
+                        <td>@w.Username</td>
+                        <td>@(w.VendorId is { } v ? _vendors.FirstOrDefault(x => x.Id == v)?.DisplayName : "")</td>
+                        <td><a href="/time/people?edit=@w.Id#edit">Edit</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" id="edit" style="margin-top: 1.5rem">
+        <h2>@(_editing is null ? "Add a person" : $"Edit {_editing.Name}")</h2>
+        <form method="post" action="@(_editing is null ? "/time/people" : $"/time/people/{_editing.Id}")" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <input id="name" name="name" maxlength="100" required value="@_editing?.Name" />
+                </div>
+                <div class="field">
+                    <label for="cost">Cost rate per hour</label>
+                    <input id="cost" name="costRate" class="amount" inputmode="decimal" value="@_editing?.CostRate.ToString("0.00##")" />
+                </div>
+                <div class="field">
+                    <label for="bill">Bill rate per hour <span class="muted">(optional)</span></label>
+                    <input id="bill" name="billRate" class="amount" inputmode="decimal" value="@_editing?.BillRate?.ToString("0.00##")" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="user">OpenBook user <span class="muted">(optional)</span></label>
+                    <select id="user" name="username">
+                        <option value="">None</option>
+                        @foreach (var u in _users)
+                        {
+                            <option value="@u" selected="@(string.Equals(u, _editing?.Username, StringComparison.OrdinalIgnoreCase))">@u</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="vendor">Vendor <span class="muted">(contractors, optional)</span></label>
+                    <select id="vendor" name="vendorId" data-search>
+                        <option value="">None</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id" selected="@(v.Id == _editing?.VendorId)">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                @if (_editing is not null)
+                {
+                    <div class="field">
+                        <label><input type="checkbox" name="active" value="true" checked="@_editing.IsActive" /> Active</label>
+                    </div>
+                }
+            </div>
+            <div class="actions"><button type="submit">@(_editing is null ? "Add" : "Save")</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Worker> _workers = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<string> _users = [];
+    private Worker? _editing;
+
+    [SupplyParameterFromQuery] private Guid? Edit { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _workers = await WorkerService.ListAsync(includeInactive: true);
+        _editing = _workers.FirstOrDefault(w => w.Id == Edit);
+        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true)).Select(v => v.Vendor).ToList();
+        _users = (await UserService.ListAsync()).Where(u => u.IsActive).Select(u => u.Username).ToList();
+    }
+}

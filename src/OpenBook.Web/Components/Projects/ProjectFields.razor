@@ -1,0 +1,43 @@
+@* Status, dates and budgets of a project, for the new project and edit forms (read by ProjectEndpoints.Details). *@
+
+<div class="row">
+    <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+            @foreach (var status in Enum.GetValues<ProjectStatus>())
+            {
+                <option value="@status" selected="@(status == (Project?.Status ?? ProjectStatus.InProgress))">@ProjectReports.Status(status)</option>
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="start">Start <span class="muted">(optional)</span></label>
+        <input id="start" name="startDate" type="date" value="@Project?.StartDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="field">
+        <label for="end">End <span class="muted">(optional)</span></label>
+        <input id="end" name="endDate" type="date" value="@Project?.EndDate?.ToString("yyyy-MM-dd")" />
+    </div>
+</div>
+<div class="row">
+    <div class="field">
+        <label for="budgetRevenue">Revenue budget</label>
+        <input id="budgetRevenue" name="budgetRevenue" class="amount" inputmode="decimal" value="@Project?.BudgetRevenue?.ToString("0.00")" />
+    </div>
+    <div class="field">
+        <label for="budgetCost">Cost budget</label>
+        <input id="budgetCost" name="budgetCost" class="amount" inputmode="decimal" value="@Project?.BudgetCost?.ToString("0.00")" />
+    </div>
+    <div class="field">
+        <label for="budgetHours">Hours budget</label>
+        <input id="budgetHours" name="budgetHours" class="short" inputmode="decimal" value="@Project?.BudgetHours?.ToString("0.##")" />
+    </div>
+</div>
+<div class="field">
+    <label for="description">Description <span class="muted">(optional)</span></label>
+    <input id="description" name="description" maxlength="2000" value="@Project?.Description" />
+</div>
+
+@code {
+    [Parameter] public Project? Project { get; set; }
+}

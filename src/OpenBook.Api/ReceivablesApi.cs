@@ -94,10 +94,10 @@ public sealed record RetainerResponse(
 
 public sealed record BillableExpenseResponse(
     Guid Id, BillableSource Kind, Guid DocumentId, int LineNumber, Guid CustomerId, DateOnly Date, string Description, decimal Cost, decimal MarkupPercent,
-    decimal Amount, Guid? InvoiceId)
+    decimal Amount, Guid? InvoiceId, bool IsBillable = true)
 {
     public static BillableExpenseResponse From(BillableExpense b) =>
-        new(b.Id, b.Kind, b.DocumentId, b.LineNumber, b.CustomerId, b.Date, b.Description, b.Cost, b.MarkupPercent, b.Amount, b.InvoiceId);
+        new(b.Id, b.Kind, b.DocumentId, b.LineNumber, b.CustomerId, b.Date, b.Description, b.Cost, b.MarkupPercent, b.Amount, b.InvoiceId, b.IsBillable);
 }
 
 public sealed record OnlinePaymentSettingsResponse(PaymentProvider Provider, bool Enabled, Guid? DepositAccountId, string? PublicUrl, bool HasSecretKey, bool HasWebhookSecret)

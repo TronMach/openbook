@@ -1,4 +1,5 @@
-@* The category lines of a posted bill or expense, each of which can be marked billable to a customer (with a markup).
+@* The category lines of a posted bill or expense, each of which can be marked billable to a customer (with a markup),
+   or marked to a customer or project as a cost only (counted in project profitability, never invoiced).
    Form posts go to /sales/billable and /sales/billable/{id}/remove. *@
 @inject BillableExpenseService Billables
 @inject CustomerService CustomerService
@@ -6,8 +7,9 @@
 @if (_lines.Count > 0)
 {
     <div class="card no-print" id="billable" style="margin-top: 1.5rem">
-        <h2>Billable to customers</h2>
-        <p class="muted">Pass a cost on to a customer: it waits under "billable expenses" until you add it to one of their invoices.</p>
+        <h2>Billable to customers and project costs</h2>
+        <p class="muted">Pass a cost on to a customer: it waits under "billable expenses" until you add it to one of their invoices.
+            Untick "bill it" to count it as a project's cost without billing it.</p>
         @if (Error is not null)
         {
             <div class="alert error" role="alert">@Error</div>
@@ -24,6 +26,10 @@
                             @if (line.Billable is { } b)
                             {
                                 <span>@_names.GetValueOrDefault(b.CustomerId)</span>
+                                @if (!b.IsBillable)
+                                {
+                                    <span class="muted"> (cost only, not billed)</span>
+                                }
                                 @if (b.MarkupPercent > 0m)
                                 {
                                     <span class="muted"> + @b.MarkupPercent.ToString("0.####")% = @Labels.Amount(b.Amount)</span>
@@ -37,7 +43,7 @@
                                     <form method="post" action="/sales/billable/@b.Id/remove" data-enhance="false" class="inline">
                                         <AntiforgeryToken />
                                         <input type="hidden" name="back" value="@Back" />
-                                        <button type="submit" class="secondary">Not billable</button>
+                                        <button type="submit" class="secondary">@(b.IsBillable ? "Not billable" : "Remove")</button>
                                     </form>
                                 }
                             }
@@ -57,7 +63,8 @@
                                         }
                                     </select>
                                     <input name="markup" class="short" inputmode="decimal" placeholder="0" aria-label="Markup percent" /> <span>% markup</span>
-                                    <button type="submit" class="secondary">Make billable</button>
+                                    <label class="inline"><input type="checkbox" name="billable" value="true" checked /> Bill it</label>
+                                    <button type="submit" class="secondary">Mark</button>
                                 </form>
                             }
                         </td>

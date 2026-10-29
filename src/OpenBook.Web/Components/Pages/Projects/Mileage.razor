@@ -1,0 +1,174 @@
+@page "/mileage"
+@inject MileageService MileageService
+@inject WorkerService WorkerService
+@inject CustomerService CustomerService
+
+<PageTitle>Mileage · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Mileage</h1>
+        <a class="button secondary" href="/reports/mileage-log?year=@_year">Mileage log report</a>
+        <a class="button secondary" href="/projects">Projects</a>
+    </div>
+    <p class="muted">
+        Business trips by car. The log shows what they're worth at the standard mileage rate for the year (for your tax return; nothing is
+        posted). Billable trips can be added to the customer's next invoice at a rate per mile.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <h2>Add a trip</h2>
+        <form method="post" action="/mileage" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field">
+                    <label for="miles">Miles</label>
+                    <input id="miles" name="miles" class="short" inputmode="decimal" required />
+                </div>
+                <div class="field">
+                    <label for="purpose">Business purpose</label>
+                    <input id="purpose" name="purpose" maxlength="500" required placeholder="Site visit" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="from">From <span class="muted">(optional)</span></label>
+                    <input id="from" name="fromPlace" maxlength="200" />
+                </div>
+                <div class="field">
+                    <label for="to">To <span class="muted">(optional)</span></label>
+                    <input id="to" name="toPlace" maxlength="200" />
+                </div>
+                <div class="field">
+                    <label for="vehicle">Vehicle <span class="muted">(optional)</span></label>
+                    <input id="vehicle" name="vehicle" maxlength="100" />
+                </div>
+                <div class="field">
+                    <label for="worker">Driver <span class="muted">(optional)</span></label>
+                    <select id="worker" name="workerId">
+                        <option value="">—</option>
+                        @foreach (var w in _workers)
+                        {
+                            <option value="@w.Id">@w.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer or project <span class="muted">(optional)</span></label>
+                    <select id="customer" name="customerId" data-search>
+                        <option value="">None</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Customer.Id">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="rate">Bill per mile</label>
+                    <input id="rate" name="billRate" class="amount" inputmode="decimal" value="@_rates.GetValueOrDefault(DateTime.Today.Year).ToString("0.00##")" />
+                </div>
+                <div class="field">
+                    <label><input type="checkbox" name="billable" value="true" /> Billable</label>
+                </div>
+            </div>
+            <div class="actions"><button type="submit">Add trip</button></div>
+        </form>
+    </div>
+
+    <form method="get" class="inline" style="margin: 1.5rem 0 1rem">
+        <label>Year <input type="number" name="year" class="short" value="@_year" /></label>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    @if (_log is null || _log.Trips.Count == 0)
+    {
+        <p class="muted">No trips in @_year.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Purpose</th><th>Route</th><th>Customer</th><th class="num">Miles</th><th class="num">Billable</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _log.Trips)
+                {
+                    <tr>
+                        <td>@Labels.Date(t.Date)</td>
+                        <td>@t.Purpose</td>
+                        <td>@string.Join(" → ", new[] { t.FromPlace, t.ToPlace }.Where(p => p is not null))</td>
+                        <td>@(t.CustomerId is { } c ? _names.GetValueOrDefault(c) : "")</td>
+                        <td class="num">@Labels.Quantity(t.Miles)</td>
+                        <td class="num">@(t.Billable ? Labels.Amount(t.Amount) : "")</td>
+                        <td>
+                            @if (t.InvoiceId is { } invoiceId)
+                            {
+                                <a href="/sales/invoices/@invoiceId">invoiced</a>
+                            }
+                            else
+                            {
+                                <form method="post" action="/mileage/@t.Id/delete" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary">Delete</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="4">@_year at @_log.Rate.ToString("0.###") per mile: @Labels.Amount(_log.Deduction)</td><td class="num">@Labels.Quantity(_log.Miles)</td><td colspan="2"></td></tr>
+            </tfoot>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Standard mileage rates</h2>
+        <table class="data">
+            <thead><tr><th>Year</th><th class="num">Per mile</th></tr></thead>
+            <tbody>
+                @foreach (var (year, rate) in _rates.Reverse())
+                {
+                    <tr><td>@year</td><td class="num">@rate.ToString("0.000#")</td></tr>
+                }
+            </tbody>
+        </table>
+        <p class="hint">The IRS business rates are filled in; check them before filing, and add later years as they're announced.</p>
+        <form method="post" action="/mileage/rates" data-enhance="false" class="inline">
+            <AntiforgeryToken />
+            <input name="year" type="number" class="short" value="@DateTime.Today.Year" aria-label="Year" />
+            <input name="rate" class="short" inputmode="decimal" placeholder="0.725" aria-label="Rate per mile" />
+            <button type="submit" class="secondary">Set rate</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private int _year;
+    private MileageYear? _log;
+    private IReadOnlyDictionary<int, decimal> _rates = new Dictionary<int, decimal>();
+    private IReadOnlyList<Worker> _workers = [];
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+
+    [SupplyParameterFromQuery] private int? Year { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _year = Year is >= 2000 and <= 2100 ? Year.Value : DateTime.Today.Year;
+        _log = await MileageService.YearAsync(_year);
+        _rates = await MileageService.RatesAsync();
+        _workers = await WorkerService.ListAsync();
+        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _names = await CustomerService.FullNamesAsync();
+    }
+}

@@ -1,0 +1,113 @@
+@page "/time/{Id:guid}/edit"
+@inject TimeService TimeService
+@inject WorkerService WorkerService
+@inject CustomerService CustomerService
+@inject ItemService ItemService
+
+<PageTitle>Edit time · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Edit time</h1>
+        <a class="button secondary" href="/time">Time</a>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (_entry is null)
+    {
+        <p>That time entry doesn't exist.</p>
+    }
+    else if (_entry.InvoiceId is { } invoiceId)
+    {
+        <p>This time is on <a href="/sales/invoices/@invoiceId">an invoice</a>. Void the invoice to change it.</p>
+    }
+    else
+    {
+        <div class="card">
+            <form method="post" action="/time/@_entry.Id" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="worker">Person</label>
+                        <select id="worker" name="workerId">
+                            @foreach (var w in _workers.Where(w => w.IsActive || w.Id == _entry.WorkerId))
+                            {
+                                <option value="@w.Id" selected="@(w.Id == _entry.WorkerId)">@w.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="customer">Customer or project</label>
+                        <select id="customer" name="customerId" data-search>
+                            <option value="">None</option>
+                            @foreach (var c in _customers)
+                            {
+                                <option value="@c.Customer.Id" selected="@(c.Customer.Id == _entry.CustomerId)">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="item">Service</label>
+                        <select id="item" name="itemId" data-search>
+                            <option value="">None</option>
+                            @foreach (var i in _services)
+                            {
+                                <option value="@i.Id" selected="@(i.Id == _entry.ItemId)">@i.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input id="date" name="date" type="date" value="@_entry.Date.ToString("yyyy-MM-dd")" />
+                    </div>
+                    @if (!_entry.IsRunning)
+                    {
+                        <div class="field">
+                            <label for="hours">Hours</label>
+                            <input id="hours" name="hours" class="short" inputmode="decimal" value="@_entry.Hours.ToString("0.##")" />
+                        </div>
+                    }
+                    <div class="field">
+                        <label for="rate">Rate per hour</label>
+                        <input id="rate" name="rate" class="amount" inputmode="decimal" value="@(_entry.Billable ? _entry.BillRate.ToString("0.00##") : "")" />
+                    </div>
+                    <div class="field">
+                        <label><input type="checkbox" name="billable" value="true" checked="@_entry.Billable" /> Billable</label>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="notes">Notes</label>
+                    <input id="notes" name="notes" maxlength="1000" value="@_entry.Notes" />
+                </div>
+                <div class="actions"><button type="submit">Save</button></div>
+            </form>
+        </div>
+        <form method="post" action="/time/@_entry.Id/delete" data-enhance="false" style="margin-top: 1rem">
+            <AntiforgeryToken />
+            <button type="submit" class="danger">Delete this time</button>
+        </form>
+    }
+</div>
+
+@code {
+    private TimeEntry? _entry;
+    private IReadOnlyList<Worker> _workers = [];
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private List<Item> _services = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _entry = await TimeService.GetAsync(Id);
+        _workers = await WorkerService.ListAsync(includeInactive: true);
+        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _services = (await ItemService.ListAsync(includeInactive: true))
+            .Where(i => (i.IsActive || i.Id == _entry?.ItemId) && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
+    }
+}

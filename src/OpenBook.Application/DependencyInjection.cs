@@ -114,6 +114,12 @@ public static class DependencyInjection
         services.AddScoped<ApiKeyService>();
         services.AddScoped<WebhookService>();
         services.AddScoped<WebhookDispatcher>();
+        services.AddScoped<OpenBook.Application.Projects.ProjectService>();
+        services.AddScoped<OpenBook.Application.Projects.WorkerService>();
+        services.AddScoped<OpenBook.Application.Projects.TimeService>();
+        services.AddScoped<OpenBook.Application.Projects.MileageService>();
+        services.AddScoped<OpenBook.Application.Projects.ProjectBilling>();
+        services.AddScoped<OpenBook.Application.Projects.ProjectReports>();
         return services;
     }
 }

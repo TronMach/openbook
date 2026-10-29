@@ -76,6 +76,7 @@ app.MapPricingEndpoints();
 app.MapSegmentEndpoints();
 app.MapCollectionEndpoints();
 app.MapSalesFlowEndpoints();
+app.MapProjectEndpoints();
 app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
 app.MapPortabilityEndpoints();

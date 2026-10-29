@@ -14,7 +14,8 @@ namespace OpenBook.Application.Sales;
 /// <summary>A category line of a bill or expense that could be billed to a customer, and whether it is.</summary>
 public sealed record BillableLine(int LineNumber, Guid AccountId, string Description, decimal Cost, BillableExpense? Billable);
 
-public sealed record MarkBillableCommand(BillableSource Kind, Guid DocumentId, int LineNumber, Guid CustomerId, decimal MarkupPercent = 0m);
+/// <param name="Billable">False marks the cost to the customer or project for profitability only.</param>
+public sealed record MarkBillableCommand(BillableSource Kind, Guid DocumentId, int LineNumber, Guid CustomerId, decimal MarkupPercent = 0m, bool Billable = true);
 
 /// <summary>
 /// Billable expenses: costs on bills and expenses marked to be passed on to a customer, then added to one of their
@@ -40,7 +41,7 @@ public sealed class BillableExpenseService(
 
     /// <summary>Costs waiting to be billed to the customer, oldest first.</summary>
     public async Task<IReadOnlyList<BillableExpense>> OpenAsync(Guid customerId, CancellationToken ct = default) =>
-        (await store.ListBillableExpensesAsync(customerId, ct)).Where(b => b.InvoiceId is null).ToList();
+        (await store.ListBillableExpensesAsync(customerId, ct)).Where(b => b.IsBillable && b.InvoiceId is null).ToList();
 
     public Task<IReadOnlyList<BillableExpense>> ListAsync(Guid? customerId = null, CancellationToken ct = default) => store.ListBillableExpensesAsync(customerId, ct);
 
@@ -57,7 +58,7 @@ public sealed class BillableExpenseService(
             throw new DomainException("billable.already_marked", "That line is already billable.");
 
         var billable = BillableExpense.Create(command.Kind, command.DocumentId, command.LineNumber, customer.Id, date,
-            $"{prefix}: {line.Description}", line.Cost, command.MarkupPercent, clock.UtcNow);
+            $"{prefix}: {line.Description}", line.Cost, command.MarkupPercent, clock.UtcNow, command.Billable);
         store.Add(billable);
         store.Add(Audit(AuditAction.Created, billable, null));
         await store.SaveChangesAsync(ct);
@@ -87,6 +88,8 @@ public sealed class BillableExpenseService(
         {
             if (b.CustomerId != customerId)
                 throw new DomainException("billable.wrong_customer", $"'{b.Description}' is billable to a different customer.");
+            if (!b.IsBillable)
+                throw new DomainException("billable.not_billable", $"'{b.Description}' is a project cost, not billable.");
             if (b.InvoiceId is not null)
                 throw new DomainException("billable.already_invoiced", $"'{b.Description}' is already on an invoice.");
         }
@@ -160,6 +163,7 @@ public sealed class BillableExpenseService(
         b.Description,
         b.Cost,
         b.MarkupPercent,
+        b.IsBillable,
         b.InvoiceId,
     });
 }

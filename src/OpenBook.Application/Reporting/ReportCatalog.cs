@@ -176,6 +176,12 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Taxes", ReportInputs.Period, DatePreset.LastQuarter),
         new("tax-summary", "Tax summary", "Income and expenses totalled by the lines of your income tax return.",
             "Taxes", ReportInputs.Period | ReportInputs.Basis, DatePreset.LastFiscalYear),
+        new("project-profitability", "Project profitability", "Each project's income, costs (expenses, labor, mileage) and profit, with its cost budget and what's not billed yet.",
+            "Projects and time", ReportInputs.Period),
+        new("time-by-customer", "Time by customer", "Hours worked for each customer and project, by whom, and whether they're billed.",
+            "Projects and time", ReportInputs.Period, DatePreset.ThisMonth),
+        new("mileage-log", "Mileage log", "Business trips in a year with miles driven and their value at the standard mileage rate.",
+            "Projects and time", ReportInputs.Year),
         new("budget-vs-actual", "Budget vs. actual", "Actual income and expenses beside a budget, with what's over or under.",
             "Budgets", ReportInputs.Budget | ReportInputs.Basis),
     ];
@@ -221,6 +227,9 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "sales-tax" => SalesTax(company, await Get<SalesTaxReports>().LiabilityAsync(from, range.To, ct)),
             "tax-summary" => await Get<StatementReports>().TaxSummaryTableAsync(from, range.To, basis, ct),
             "budget-vs-actual" => await BudgetVsActualAsync(p, basis, ct),
+            "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, ct),
+            "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
+            "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetNumber("year") ?? today.Year, ct),
             _ => throw new DomainException("report.unknown", "Unknown report."),
         };
     }

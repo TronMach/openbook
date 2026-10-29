@@ -1,0 +1,112 @@
+@page "/projects"
+@inject ProjectReports Reports
+@inject CustomerService CustomerService
+
+<PageTitle>Projects · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Projects</h1>
+        <a class="button secondary" href="/time">Time</a>
+        <a class="button secondary" href="/mileage">Mileage</a>
+        <a class="button secondary" href="/reports/project-profitability">Profitability report</a>
+    </div>
+    <p class="muted">
+        A project is a job for a customer, kept as its own sub-customer (billed with the customer unless you change it), so its invoices and
+        receipts are its income. Mark bill and expense lines to it, track time and mileage against it, and see what it earns.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <form method="get" class="inline" style="margin-bottom: 1rem">
+        <label><input type="checkbox" name="closed" value="true" checked="@Closed" /> Show completed and cancelled</label>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    @if (_figures.Count == 0)
+    {
+        <div class="card"><p>No projects yet.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Project</th><th>Status</th><th class="num">Income</th><th class="num">Costs</th><th class="num">Profit</th>
+                    <th class="num">Margin</th><th class="num">Hours</th><th class="num">Unbilled</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var f in _figures)
+                {
+                    <tr>
+                        <td><a href="/projects/@f.Project.Project.Id">@f.Project.FullName</a></td>
+                        <td>@ProjectReports.Status(f.Project.Project.Status)</td>
+                        <td class="num">@Labels.Amount(f.Income)</td>
+                        <td class="num">@Labels.Amount(f.Cost)</td>
+                        <td class="num">@Labels.Amount(f.Profit)</td>
+                        <td class="num">@(f.Margin is { } m ? Labels.Percent(m) : "")</td>
+                        <td class="num">@Labels.Quantity(f.Hours)</td>
+                        <td class="num">@Labels.AmountOrBlank(f.Unbilled)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>New project</h2>
+        <form method="post" action="/projects" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="parent">Customer</label>
+                    <select id="parent" name="parentId" data-search>
+                        <option value="">Choose the customer…</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Customer.Id">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="name">Project name</label>
+                    <input id="name" name="name" maxlength="100" placeholder="Kitchen remodel" />
+                </div>
+            </div>
+            <p class="hint">Or turn an existing sub-customer into a project:</p>
+            <div class="field">
+                <label for="existing">Existing customer <span class="muted">(instead of the two above)</span></label>
+                <select id="existing" name="customerId" data-search>
+                    <option value="">None</option>
+                    @foreach (var c in _customers.Where(c => !_projectCustomers.Contains(c.Customer.Id)))
+                    {
+                        <option value="@c.Customer.Id">@c.FullName</option>
+                    }
+                </select>
+            </div>
+            <ProjectFields />
+            <div class="actions"><button type="submit">Create project</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<ProjectFigures> _figures = [];
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private HashSet<Guid> _projectCustomers = [];
+
+    [SupplyParameterFromQuery] private bool Closed { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await Reports.ProfitabilityAsync(null, DateOnly.MaxValue);
+        _projectCustomers = all.Select(f => f.Project.Customer.Id).ToHashSet();
+        _figures = all.Where(f => Closed || f.Project.Project.IsOpen).ToList();
+        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+    }
+}
