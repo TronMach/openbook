@@ -29,6 +29,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 {
     internal const string IsSealed = nameof(IsSealed);
 
+    public DbSet<OpenBook.Domain.Channels.SalesChannel> SalesChannels => Set<OpenBook.Domain.Channels.SalesChannel>();
+    public DbSet<OpenBook.Domain.Channels.ChannelPayout> ChannelPayouts => Set<OpenBook.Domain.Channels.ChannelPayout>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
@@ -777,6 +779,47 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(w => w.Role).HasMaxLength(OpenBook.Domain.Projects.Worker.MaxRoleLength);
             b.Property(w => w.WeeklyHours).HasColumnName("WeeklyHoursTenThousandths").HasConversion(NullableTenThousandths);
             b.HasOne<Vendor>().WithMany().HasForeignKey(w => w.VendorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Channels.SalesChannel>(b =>
+        {
+            b.ToTable("SalesChannels");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Name).HasMaxLength(100);
+            b.Property(c => c.Kind).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.SalesAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.ShippingAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.RefundsAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.FeesAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.TaxAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.AdjustmentsAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Channels.ChannelPayout>(b =>
+        {
+            b.ToTable("ChannelPayouts");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.ExternalId).HasMaxLength(200);
+            b.HasIndex(p => new { p.ChannelId, p.ExternalId }).IsUnique();
+            b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(p => p.ReportedNet).HasColumnName("ReportedNetMinor").HasConversion(NullableMinorUnits);
+            b.Ignore(p => p.Net);
+            b.Ignore(p => p.Difference);
+            b.HasOne<OpenBook.Domain.Channels.SalesChannel>().WithMany().HasForeignKey(p => p.ChannelId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(p => p.Lines, l =>
+            {
+                l.ToTable("ChannelPayoutLines");
+                l.WithOwner().HasForeignKey("ChannelPayoutId");
+                l.HasKey("ChannelPayoutId", nameof(OpenBook.Domain.Channels.ChannelPayoutLine.LineNumber));
+                l.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Reference).HasMaxLength(100);
+                l.Property(x => x.Description).HasMaxLength(300);
+                l.Property(x => x.Region).HasMaxLength(50);
+            });
+            b.Navigation(p => p.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.BillingRate>(b =>

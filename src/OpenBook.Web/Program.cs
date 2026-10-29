@@ -86,6 +86,7 @@ app.MapCollectionEndpoints();
 app.MapSalesFlowEndpoints();
 app.MapProjectEndpoints();
 app.MapAssetEndpoints();
+app.MapChannelEndpoints();
 app.MapDashboardEndpoints();
 app.MapPluginEndpoints();
 app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async (Guid id, string action, HttpContext http,

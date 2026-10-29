@@ -1,0 +1,68 @@
+@page "/sales/channels"
+@using OpenBook.Application.Accounts
+@using OpenBook.Application.Channels
+@using OpenBook.Domain.Channels
+@using OpenBook.Web.Components.Channels
+@inject ChannelService ChannelService
+@inject AccountService AccountService
+
+<PageTitle>@L["Sales channels"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Sales channels"]</h1>
+        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
+    </div>
+    <p class="muted">
+        Where you sell online: a Shopify store, Amazon, Etsy, eBay, PayPal or Stripe. Import each channel's payout report; every payout
+        waits here until you post it, as one entry: the deposit for the net, sales, shipping and sales tax credited, refunds and fees
+        debited. The deposit then matches the bank feed line. Importing the same report twice skips what's already in.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_channels.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>@L["Channel"]</th><th>@L["Kind"]</th><th class="num">@L["Waiting to post"]</th><th>@L["Latest payout"]</th></tr></thead>
+            <tbody>
+                @foreach (var c in _channels)
+                {
+                    var payouts = _payouts.Where(p => p.ChannelId == c.Id).ToList();
+                    <tr class="@(c.IsActive ? "" : "muted")">
+                        <td><a href="/sales/channels/@c.Id">@c.Name</a>@(c.IsActive ? "" : " (inactive)")</td>
+                        <td>@ChannelLabels.Kind(c.Kind)</td>
+                        <td class="num">@payouts.Count(p => p.Status == PayoutStatus.Pending)</td>
+                        <td>@(payouts.FirstOrDefault() is { } latest ? Labels.Date(latest.Date) : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Add a channel"]</h2>
+        <form method="post" action="/sales/channels" data-enhance="false">
+            <AntiforgeryToken />
+            <ChannelForm Chart="_chart" />
+            <div class="actions"><button type="submit">@L["Add"]</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<SalesChannel> _channels = [];
+    private IReadOnlyList<ChannelPayout> _payouts = [];
+    private OpenBook.Domain.Accounts.ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _channels = await ChannelService.ListAsync(includeInactive: true);
+        _payouts = await ChannelService.PayoutsAsync();
+        _chart = await AccountService.GetChartAsync();
+    }
+}

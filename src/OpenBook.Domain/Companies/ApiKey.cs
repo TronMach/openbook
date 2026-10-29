@@ -91,6 +91,7 @@ public static class ApiScopes
         ["banking"] = ("Banking", ["/api/banking"]),
         ["inventory"] = ("Inventory", ["/api/inventory"]),
         ["projects"] = ("Projects, time and mileage", ["/api/projects"]),
+        ["channels"] = ("Sales channels and payouts", ["/api/channels"]),
         ["assets"] = ("Fixed assets and loans", ["/api/assets"]),
         ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),
         ["capture"] = ("Offline capture (time, mileage, expenses, receipts)", ["/api/capture"]),

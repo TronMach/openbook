@@ -1,0 +1,144 @@
+@page "/sales/channels/payouts/{Id:guid}"
+@using OpenBook.Application.Channels
+@using OpenBook.Domain.Channels
+@using OpenBook.Web.Components.Channels
+@inject ChannelService ChannelService
+
+<PageTitle>@L["Payout"] @_payout?.ExternalId · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_payout is null || _channel is null)
+    {
+        <div class="card"><p>That payout doesn't exist. <a href="/sales/channels">Back to sales channels</a>.</p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_channel.Name · @_payout.ExternalId</h1>
+            <a class="button secondary" href="/sales/channels/@_channel.Id">@L["Back to the channel"]</a>
+            <a class="button secondary" href="/audit?entityId=@_payout.Id">@L["History"]</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <dl class="facts">
+                <dt>@L["Status"]</dt><dd>@ChannelLabels.Status(_payout.Status)</dd>
+                <dt>@L["Paid on"]</dt><dd>@Labels.Date(_payout.Date)</dd>
+                @if (_payout.PeriodStart is { } from && _payout.PeriodEnd is { } to)
+                {
+                    <dt>@L["Period"]</dt><dd>@Labels.Date(from) – @Labels.Date(to)</dd>
+                }
+                @if (_payout.ReportedNet is { } reported)
+                {
+                    <dt>@L["Reported by the channel"]</dt><dd>@Labels.Amount(reported)</dd>
+                }
+                @if (_payout.JournalEntryId is { } entryId)
+                {
+                    <dt>@L["Journal entry"]</dt><dd><a href="/journal/@entryId">@L["Open"]</a></dd>
+                }
+            </dl>
+            @if (_payout.Difference != 0m)
+            {
+                <div class="alert error" role="alert">
+                    The transactions add up to @Labels.Amount(_payout.Net), but the channel reported @Labels.Amount(_payout.ReportedNet ?? 0m)
+                    (@Labels.Amount(_payout.Difference) apart). It can't be posted until they agree: check the report, or dismiss this payout and import a fresh one.
+                </div>
+            }
+
+            <table class="data" style="margin-top: 1rem">
+                <thead><tr><th>@L["Part"]</th><th>@L["Account"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                <tbody>
+                    @foreach (var type in Enum.GetValues<ChannelLineType>().Where(t => _payout.Lines.Any(l => l.Type == t)))
+                    {
+                        <tr>
+                            <td>@ChannelPayout.Label(type)</td>
+                            <td>@(_accountNames.GetValueOrDefault(_channel.AccountFor(type)))</td>
+                            <td class="num">@Labels.Amount(_payout.Total(type))</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr><td>@L["Net payout"]</td><td>@(_accountNames.GetValueOrDefault(_channel.DepositAccountId))</td><td class="num">@Labels.Amount(_payout.Net)</td></tr>
+                </tfoot>
+            </table>
+
+            <div class="actions">
+                @if (_payout.Status == PayoutStatus.Pending)
+                {
+                    <form method="post" action="/sales/channels/payouts/@_payout.Id/post" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <button type="submit" disabled="@(_payout.Difference != 0m)">@L["Post payout"]</button>
+                    </form>
+                    <form method="post" action="/sales/channels/payouts/@_payout.Id/dismiss" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <button type="submit" class="secondary">@L["Dismiss"]</button>
+                    </form>
+                }
+                else if (_payout.Status == PayoutStatus.Dismissed)
+                {
+                    <form method="post" action="/sales/channels/payouts/@_payout.Id/dismiss" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="restore" value="true" />
+                        <button type="submit" class="secondary">@L["Restore"]</button>
+                    </form>
+                }
+                else
+                {
+                    <form method="post" action="/sales/channels/payouts/@_payout.Id/void" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <input name="reason" placeholder="Reason for voiding" maxlength="500" />
+                        <button type="submit" class="danger">@L["Void the entry"]</button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        <h2 style="margin-top: 1.5rem">@L["Transactions"] <span class="muted">(@_payout.Lines.Count)</span></h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Date"]</th><th>@L["Type"]</th><th>@L["Reference"]</th><th>@L["Description"]</th><th>@L["State"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                <tbody>
+                    @foreach (var l in _payout.Lines.Take(1000))
+                    {
+                        <tr>
+                            <td>@Labels.Date(l.Date)</td>
+                            <td>@ChannelPayout.Label(l.Type)</td>
+                            <td>@l.Reference</td>
+                            <td>@l.Description</td>
+                            <td>@l.Region</td>
+                            <td class="num">@Labels.Amount(l.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_payout.Lines.Count > 1000)
+        {
+            <p class="muted">The first 1,000 transactions are shown; the totals above count them all.</p>
+        }
+    }
+</div>
+
+@code {
+    private ChannelPayout? _payout;
+    private SalesChannel? _channel;
+    private IReadOnlyDictionary<Guid, string> _accountNames = new Dictionary<Guid, string>();
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    [Inject] private OpenBook.Application.Accounts.AccountService AccountService { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _payout = await ChannelService.GetPayoutAsync(Id);
+        if (_payout is null)
+            return;
+        _channel = await ChannelService.GetAsync(_payout.ChannelId);
+        var chart = await AccountService.GetChartAsync();
+        _accountNames = chart.All.ToDictionary(a => a.Id, a => chart.FullName(a.Id));
+    }
+}

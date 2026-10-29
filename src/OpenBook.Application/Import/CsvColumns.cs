@@ -14,6 +14,8 @@ public sealed class CsvColumns(CsvRecord header)
 
     public string HeaderAt(int column) => header.Fields[column];
 
+    public int Count => header.Fields.Count;
+
     /// <summary>The trimmed value, or null when the column is absent or the cell empty.</summary>
     public static string? Field(CsvRecord record, int? column) =>
         column is { } c && c < record.Fields.Count && record.Fields[c].Length > 0 ? record.Fields[c] : null;

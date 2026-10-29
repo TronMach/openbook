@@ -56,6 +56,7 @@ public static class Editions
         ],
         Edition.ECommerce =>
         [
+            new("/sales/channels", "Sales channels", "Payouts from Shopify, Stripe, Amazon, Etsy, eBay and PayPal"),
             new("/sales", "Sales", "Invoices, sales receipts and payments"),
             new("/reports/inventory-stock", "Stock status", "What's on hand and what needs reordering"),
             new("/reports/sales-by-item", "Sales by item", "What sells, and for how much"),

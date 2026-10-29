@@ -81,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Notes.INoteStore, EfNoteStore>();
         services.AddScoped<OpenBook.Application.Projects.IProjectStore, EfProjectStore>();
         services.AddScoped<OpenBook.Application.Assets.IAssetStore, EfAssetStore>();
+        services.AddScoped<OpenBook.Application.Channels.IChannelStore, EfChannelStore>();
         services.AddScoped<OpenBook.Application.Capture.ICaptureStore, EfCaptureStore>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IDataExporter, DataExporter>();

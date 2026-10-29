@@ -1,0 +1,69 @@
+@* The fields of a sales channel, for the new channel form and the channel page (static forms posting to ChannelEndpoints). *@
+@using OpenBook.Domain.Accounts
+@using OpenBook.Domain.Channels
+@using OpenBook.Application.Channels
+
+<div class="row">
+    <div class="field">
+        <label for="name">Name</label>
+        <input id="name" name="name" maxlength="100" required value="@Channel?.Name" placeholder="My Shopify store" />
+    </div>
+    <div class="field">
+        <label for="kind">Channel</label>
+        <select id="kind" name="kind">
+            @foreach (var kind in Enum.GetValues<ChannelKind>())
+            {
+                <option value="@kind" selected="@(kind == Channel?.Kind)">@ChannelLabels.Kind(kind)</option>
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="deposit">Payouts go into</label>
+        <select id="deposit" name="depositAccountId" required data-search>
+            <option value="">Choose…</option>
+            @foreach (var a in Accounts.Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset))
+            {
+                <option value="@a.Id" selected="@(a.Id == Channel?.DepositAccountId)">@Chart.FullName(a.Id)</option>
+            }
+        </select>
+        <span class="hint">The bank account, or a "balance" account (Other current asset) when money waits in the channel first, as with PayPal or Etsy.</span>
+    </div>
+</div>
+<details open="@(Channel is not null)">
+    <summary>Accounts for each part of a payout</summary>
+    <div class="row">
+        @foreach (var (name, label, usual, value) in Parts)
+        {
+            <div class="field">
+                <label for="@name">@label</label>
+                <select id="@name" name="@name" data-search>
+                    <option value="">@usual (created if needed)</option>
+                    @foreach (var a in Accounts.Where(a => a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)))
+                    {
+                        <option value="@a.Id" selected="@(a.Id == value)">@Chart.FullName(a.Id)</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
+</details>
+
+@code {
+    [Parameter]
+    public SalesChannel? Channel { get; set; }
+
+    [Parameter, EditorRequired]
+    public ChartOfAccounts Chart { get; set; } = new([]);
+
+    private IEnumerable<Account> Accounts => Chart.Ordered(includeInactive: false).Select(x => x.Account);
+
+    private IEnumerable<(string Name, string Label, string Usual, Guid? Value)> Parts =>
+    [
+        ("salesAccountId", "Sales", ChannelService.SalesName, Channel?.SalesAccountId),
+        ("shippingAccountId", "Shipping charged", ChannelService.ShippingName, Channel?.ShippingAccountId),
+        ("refundsAccountId", "Refunds", ChannelService.RefundsName, Channel?.RefundsAccountId),
+        ("feesAccountId", "Fees", ChannelService.FeesName, Channel?.FeesAccountId),
+        ("taxAccountId", "Sales tax", ChannelService.TaxName, Channel?.TaxAccountId),
+        ("adjustmentsAccountId", "Adjustments", ChannelService.AdjustmentsName, Channel?.AdjustmentsAccountId),
+    ];
+}

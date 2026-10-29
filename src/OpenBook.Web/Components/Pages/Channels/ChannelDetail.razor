@@ -1,0 +1,111 @@
+@page "/sales/channels/{Id:guid}"
+@using OpenBook.Application.Accounts
+@using OpenBook.Application.Channels
+@using OpenBook.Domain.Channels
+@using OpenBook.Web.Components.Channels
+@inject ChannelService ChannelService
+@inject AccountService AccountService
+
+<PageTitle>@(_channel?.Name ?? "Channel") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_channel is null)
+    {
+        <div class="card"><p>That channel doesn't exist. <a href="/sales/channels">Back to sales channels</a>.</p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_channel.Name</h1>
+            <a class="button secondary" href="/sales/channels">@L["Sales channels"]</a>
+            <a class="button secondary" href="/audit?entityId=@_channel.Id">@L["History"]</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (Imported is not null)
+        {
+            <div class="alert notice" role="status">
+                Imported @Imported new @(Imported == 1 ? "payout" : "payouts")@(Skipped > 0 ? $"; {Skipped} already imported were skipped" : "").
+                @Note
+            </div>
+        }
+
+        <div class="card">
+            <h2>@L["Import a payout report"]</h2>
+            <p class="muted">@ChannelLabels.ReportHelp(_channel.Kind)</p>
+            <form method="post" action="/sales/channels/@_channel.Id/import" enctype="multipart/form-data" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <input type="file" name="file" accept=".csv,.txt,.tsv" required />
+                </div>
+                <div class="actions"><button type="submit" disabled="@(!_channel.IsActive)">@L["Import"]</button></div>
+            </form>
+        </div>
+
+        <h2 style="margin-top: 1.5rem">@L["Payouts"]</h2>
+        @if (_payouts.Count == 0)
+        {
+            <p class="muted">@L["No payouts yet."]</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>@L["Date"]</th><th>@L["Payout"]</th><th class="num">@L["Sales"]</th><th class="num">@L["Refunds"]</th>
+                            <th class="num">@L["Fees"]</th><th class="num">@L["Net"]</th><th>@L["Status"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _payouts)
+                        {
+                            <tr class="@(p.Status == PayoutStatus.Dismissed ? "muted" : "")">
+                                <td>@Labels.Date(p.Date)</td>
+                                <td><a href="/sales/channels/payouts/@p.Id">@p.ExternalId</a></td>
+                                <td class="num">@Labels.Amount(p.Total(ChannelLineType.Sale) + p.Total(ChannelLineType.Shipping))</td>
+                                <td class="num">@Labels.Amount(p.Total(ChannelLineType.Refund))</td>
+                                <td class="num">@Labels.Amount(p.Total(ChannelLineType.Fee))</td>
+                                <td class="num">@Labels.Amount(p.Net)</td>
+                                <td>@ChannelLabels.Status(p.Status)@(p.Difference != 0m ? " · doesn't add up" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Settings"]</h2>
+            <form method="post" action="/sales/channels/@_channel.Id" data-enhance="false">
+                <AntiforgeryToken />
+                <ChannelForm Channel="_channel" Chart="_chart" />
+                <label class="check"><input type="checkbox" name="active" value="true" checked="@_channel.IsActive" /> <span>@L["Active"]</span></label>
+                <div class="actions"><button type="submit">@L["Save"]</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private SalesChannel? _channel;
+    private IReadOnlyList<ChannelPayout> _payouts = [];
+    private OpenBook.Domain.Accounts.ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Imported { get; set; }
+    [SupplyParameterFromQuery] private int Skipped { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _channel = await ChannelService.GetAsync(Id);
+        if (_channel is null)
+            return;
+        _payouts = await ChannelService.PayoutsAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+    }
+}

@@ -869,6 +869,116 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("CaptureDrafts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelPayout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PeriodEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PeriodStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ReportedNet")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ReportedNetMinor");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("ChannelId", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("ChannelPayouts", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Channels.SalesChannel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AdjustmentsAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DepositAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FeesAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RefundsAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SalesAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ShippingAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TaxAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdjustmentsAccountId");
+
+                    b.HasIndex("DepositAccountId");
+
+                    b.HasIndex("FeesAccountId");
+
+                    b.HasIndex("RefundsAccountId");
+
+                    b.HasIndex("SalesAccountId");
+
+                    b.HasIndex("ShippingAccountId");
+
+                    b.HasIndex("TaxAccountId");
+
+                    b.ToTable("SalesChannels", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.ApiKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4926,6 +5036,108 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasOne("OpenBook.Domain.Capture.CaptureDevice", null)
                         .WithMany()
                         .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelPayout", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Channels.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Channels.ChannelPayoutLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("ChannelPayoutId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Description")
+                                .HasMaxLength(300)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Reference")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Region")
+                                .HasMaxLength(50)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("ChannelPayoutId", "LineNumber");
+
+                            b1.ToTable("ChannelPayoutLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ChannelPayoutId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Channels.SalesChannel", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DepositAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("FeesAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RefundsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("SalesAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ShippingAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("TaxAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
