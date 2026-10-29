@@ -1,0 +1,230 @@
+@page "/purchases/orders/new"
+@page "/purchases/orders/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New purchase order" : $"Purchase order {_number}") · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New purchase order" : $"Edit purchase order {_number}")</h1>
+        <a class="button secondary" href="@(Id is { } id ? $"/purchases/orders/{id}" : "/purchases/orders")">Cancel</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_notEditable)
+    {
+        <div class="card"><p>That purchase order doesn't exist, isn't open, or has goods received or bills. <a href="/purchases/orders">Back to purchase orders</a>.</p></div>
+    }
+    else if (_loaded && _vendors.Count == 0)
+    {
+        <div class="card"><p>Purchase orders need a vendor. <a href="/vendors/new">Add one</a>.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="vendor">Vendor</label>
+                    <SearchSelect Id="vendor" Options="_vendorOptions" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
+                </div>
+                <div class="field">
+                    <label for="number">Order number</label>
+                    <input id="number" @bind="_number" maxlength="20" disabled="@(Id is not null)" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="expected">Expected <span class="muted">(optional)</span></label>
+                    <input id="expected" type="date" @bind="_expectedDate" />
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead><tr><th>Inventory item</th><th>Category</th><th>Description</th><th class="num">Qty</th><th class="num">Unit cost / amount</th><th class="num">Total</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr @key="line">
+                                <td><SearchSelect Options="_itemOptions" @bind-Value="line.ItemId" @bind-Value:after="() => ItemChanged(line)" EmptyText="(category line)" Placeholder="Find an item…" AriaLabel="Inventory item" /></td>
+                                <td>
+                                    @if (line.ItemId is null)
+                                    {
+                                        <SearchSelect Options="_categoryOptions" @bind-Value="line.AccountId" Placeholder="Find a category…" AriaLabel="Category" />
+                                    }
+                                </td>
+                                <td><input @bind="line.Description" aria-label="Description" /></td>
+                                <td>
+                                    @if (line.ItemId is not null)
+                                    {
+                                        <input class="quantity" type="number" step="any" min="0" aria-label="Quantity" @bind="line.Quantity" />
+                                    }
+                                </td>
+                                <td><input class="amount" type="number" step="any" min="0" aria-label="Unit cost or amount" @bind="line.UnitCost" /></td>
+                                <td class="num">@Labels.Amount(line.Total)</td>
+                                <td>
+                                    @if (_lines.Count > 1)
+                                    {
+                                        <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => _lines.Remove(line)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><button type="button" class="secondary" @onclick="() => _lines.Add(new())">Add line</button></td>
+                            <td colspan="4" class="num">Total</td>
+                            <td class="num">@Labels.Amount(_lines.Sum(l => l.Total))</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to the vendor <span class="muted">(optional)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(_vendorId is null || _busy || string.IsNullOrWhiteSpace(_number))">Save purchase order</button>
+                <span class="muted">Orders post nothing. Receive goods and enter the vendor's bill from the order.</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<Item> _items = [];
+    private IReadOnlyList<PickerOption> _vendorOptions = [];
+    private IReadOnlyList<PickerOption> _itemOptions = [];
+    private IReadOnlyList<PickerOption> _categoryOptions = [];
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid? _vendorId;
+    private string? _number;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _expectedDate;
+    private string? _memo;
+    private Guid? _warehouseId;
+    private Guid? _locationId;
+    private List<LineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _notEditable;
+    private bool _busy;
+    private string? _error;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "vendor")] private Guid? PresetVendor { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+        _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+        ChartOfAccounts chart;
+        bool useNumbers;
+        PurchaseOrder? order;
+        bool started;
+        (_vendors, chart, useNumbers, _items, _number, order, started) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync(),
+            (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
+            (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory && !i.IsAssembly).ToList(),
+            await sp.GetRequiredService<PurchaseOrderService>().SuggestNumberAsync(),
+            Id is { } id ? await sp.GetRequiredService<PurchaseOrderService>().GetAsync(id) : null,
+            Id is { } id2 && (await sp.GetRequiredService<PurchaseOrderService>().ProgressAsync(id2)).Started));
+        _vendorOptions = PickerOptions.Vendors(_vendors);
+        _itemOptions = PickerOptions.Items(_items);
+        _categoryOptions = PickerOptions.Accounts(BillLineModel.Categories(chart), chart, useNumbers);
+        _vendorId = PresetVendor;
+
+        if (Id is not null)
+        {
+            if (order is null || order.Status != PurchaseOrderStatus.Open || started || order.Receipts.Any(r => !r.IsVoided))
+            {
+                _notEditable = true;
+                return;
+            }
+
+            _vendorId = order.VendorId;
+            _number = order.Number;
+            _date = order.Date;
+            _expectedDate = order.ExpectedDate;
+            _memo = order.Memo;
+            _warehouseId = order.WarehouseId;
+            _locationId = order.LocationId;
+            _lines = order.Lines.Select(l => new LineModel
+            {
+                ItemId = l.ItemId,
+                AccountId = l.AccountId,
+                Description = l.Description,
+                Quantity = l.IsItem ? l.Quantity : null,
+                UnitCost = l.UnitCost,
+            }).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private void ItemChanged(LineModel line)
+    {
+        if (line.ItemId is { } id && _items.FirstOrDefault(i => i.Id == id) is { } item)
+        {
+            line.Description ??= item.Name;
+            line.Quantity ??= 1m;
+            if (line.UnitCost is null or 0m && item.PurchaseCost > 0m)
+                line.UnitCost = item.PurchaseCost;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var drafts = _lines.Where(l => l.ItemId is not null || l.AccountId is not null || (l.UnitCost ?? 0m) != 0m)
+                .Select(l => new PurchaseOrderLineDraft(l.ItemId, l.ItemId is null ? l.AccountId : null, l.Description, l.Quantity ?? 1m, l.UnitCost ?? 0m))
+                .ToList();
+            var command = new SavePurchaseOrderCommand(_vendorId!.Value, _date, drafts, _expectedDate, _number, _memo, _warehouseId, _locationId);
+            var order = await Ops.RunAsync<PurchaseOrderService, PurchaseOrder>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            Navigation.NavigateTo($"/purchases/orders/{order.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class LineModel
+    {
+        public Guid? ItemId { get; set; }
+        public Guid? AccountId { get; set; }
+        public string? Description { get; set; }
+        public decimal? Quantity { get; set; }
+        public decimal? UnitCost { get; set; }
+
+        public decimal Total => ItemId is null
+            ? UnitCost ?? 0m
+            : decimal.Round((Quantity ?? 0m) * (UnitCost ?? 0m), 2, MidpointRounding.AwayFromZero);
+    }
+}

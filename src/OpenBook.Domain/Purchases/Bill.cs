@@ -57,8 +57,73 @@ public sealed class Bill
     public const string Source = "purchases.bill";
 
     private readonly List<BillLine> _lines = [];
+    private readonly List<BillSourceLine> _sourceLines = [];
 
     private Bill() { }
+
+    /// <summary>The purchase order this bill bills (part of).</summary>
+    public Guid? PurchaseOrderId { get; private set; }
+
+    /// <summary>For a bill made from a purchase order: what it bills of each order line.</summary>
+    public IReadOnlyList<BillSourceLine> SourceLines => _sourceLines;
+
+    public void SetSource(Guid purchaseOrderId, IReadOnlyList<BillSourceLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        PurchaseOrderId = purchaseOrderId;
+        _sourceLines.Clear();
+        _sourceLines.AddRange(lines);
+    }
+
+    /// <summary>Who entered it (the audit actor), for approvals by someone else.</summary>
+    public string? EnteredBy { get; private set; }
+
+    public BillApproval Approval { get; private set; }
+
+    /// <summary>Why it's waiting for approval ("Over 5,000.00"; 3-way match differences), one per line.</summary>
+    public string? HoldReason { get; private set; }
+
+    public string? ApprovedBy { get; private set; }
+    public DateTimeOffset? ApprovedAt { get; private set; }
+
+    /// <summary>The approver's note, or why it was rejected.</summary>
+    public string? ApprovalNote { get; private set; }
+
+    /// <summary>Whether it can be paid: anything but a bill waiting for approval or rejected.</summary>
+    public bool CanBePaid => Approval is BillApproval.NotRequired or BillApproval.Approved;
+
+    public void SetEnteredBy(string actor) => EnteredBy = Text.Optional(actor, 200, "bill.actor_too_long", "Entered by");
+
+    /// <summary>Holds a new bill for approval.</summary>
+    public void Hold(IReadOnlyList<string> reasons)
+    {
+        ArgumentNullException.ThrowIfNull(reasons);
+        if (reasons.Count == 0)
+            return;
+        Approval = BillApproval.Pending;
+        HoldReason = Text.Optional(string.Join('\n', reasons), 2000, "bill.hold_too_long", "Hold reason");
+    }
+
+    public void Approve(string by, DateTimeOffset at, string? note) => Decide(BillApproval.Approved, by, at, note);
+
+    public void Reject(string by, DateTimeOffset at, string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+            throw new DomainException("approval.reason_required", "Say why the bill is rejected.");
+        Decide(BillApproval.Rejected, by, at, note);
+    }
+
+    private void Decide(BillApproval decision, string by, DateTimeOffset at, string? note)
+    {
+        if (Status != DocumentStatus.Posted)
+            throw new DomainException("bill.voided", "This bill is voided.");
+        if (Approval is not (BillApproval.Pending or BillApproval.Rejected) || (Approval == BillApproval.Rejected && decision == BillApproval.Rejected))
+            throw new DomainException("approval.not_pending", "This bill isn't waiting for approval.");
+        Approval = decision;
+        ApprovedBy = by;
+        ApprovedAt = at.ToUniversalTime();
+        ApprovalNote = Text.Optional(note, 500, "approval.note_too_long", "Note");
+    }
 
     public Guid Id { get; private set; }
     public Guid VendorId { get; private set; }

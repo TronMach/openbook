@@ -57,6 +57,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<CustomerRefund> CustomerRefunds => Set<CustomerRefund>();
     public DbSet<BadDebtWriteOff> BadDebtWriteOffs => Set<BadDebtWriteOff>();
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
+    public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
+    public DbSet<AchSettings> AchSettings => Set<AchSettings>();
+    public DbSet<AchBatch> AchBatches => Set<AchBatch>();
     public DbSet<Retainer> Retainers => Set<Retainer>();
     public DbSet<BillableExpense> BillableExpenses => Set<BillableExpense>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
@@ -1101,6 +1106,88 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(w => w.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<PurchaseOrder>(b =>
+        {
+            b.ToTable("PurchaseOrders");
+            b.HasKey(o => o.Id);
+            b.Property(o => o.Number).HasMaxLength(20);
+            b.HasIndex(o => o.Number).IsUnique();
+            b.HasIndex(o => new { o.VendorId, o.Date });
+            b.Property(o => o.Memo).HasMaxLength(1000);
+            b.Property(o => o.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
+            b.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(o => o.Received);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(o => o.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(o => o.Lines, l =>
+            {
+                l.ToTable("PurchaseOrderLines");
+                l.WithOwner().HasForeignKey("PurchaseOrderId");
+                l.HasKey("PurchaseOrderId", nameof(PurchaseOrderLine.LineNumber));
+                l.Property(x => x.Description).HasMaxLength(1000);
+                l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.UnitCost).HasColumnName("UnitCostTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Ignore(x => x.IsItem);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(o => o.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(o => o.Receipts, r =>
+            {
+                r.ToTable("PurchaseOrderReceipts");
+                r.WithOwner().HasForeignKey("PurchaseOrderId");
+                r.HasKey(x => x.Id);
+                r.Property(x => x.Id).ValueGeneratedNever();
+                r.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+                r.Property(x => x.Note).HasMaxLength(500);
+            });
+            b.Navigation(o => o.Receipts).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<PurchasingSettings>(b =>
+        {
+            b.ToTable("PurchasingSettings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.ApprovalThreshold).HasColumnName("ApprovalThresholdMinor").HasConversion(NullableMinorUnits);
+            b.Property(s => s.PriceTolerancePercent).HasColumnName("PriceTolerancePercentTenThousandths").HasConversion(TenThousandths);
+        });
+
+        modelBuilder.Entity<VendorBankAccount>(b =>
+        {
+            b.ToTable("VendorBankAccounts");
+            b.HasKey(a => a.VendorId);
+            b.Property(a => a.RoutingNumber).HasMaxLength(9);
+            b.Property(a => a.ProtectedAccountNumber).HasMaxLength(2000);
+            b.Property(a => a.AccountLast4).HasMaxLength(4);
+            b.Property(a => a.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(a => a.Masked);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(a => a.VendorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AchSettings>(b =>
+        {
+            b.ToTable("AchSettings");
+            b.HasKey(a => a.AccountId);
+            b.Property(a => a.DestinationRouting).HasMaxLength(9);
+            b.Property(a => a.DestinationName).HasMaxLength(23);
+            b.Property(a => a.OriginId).HasMaxLength(10);
+            b.Property(a => a.OriginName).HasMaxLength(23);
+            b.Property(a => a.CompanyId).HasMaxLength(10);
+            b.Property(a => a.CompanyName).HasMaxLength(16);
+            b.Property(a => a.EntryDescription).HasMaxLength(10);
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AchBatch>(b =>
+        {
+            b.ToTable("AchBatches");
+            b.HasKey(a => a.Id);
+            b.HasIndex(a => a.AccountId);
+            b.Property(a => a.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
+            b.Property(a => a.FileIdModifier).HasConversion(c => c.ToString(), s => s[0]).HasMaxLength(1);
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<SalesOrder>(b =>
         {
             b.ToTable("SalesOrders");
@@ -1302,6 +1389,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<RecurringBill>().WithMany().HasForeignKey(x => x.RecurringBillId).OnDelete(DeleteBehavior.Restrict);
             b.OwnsMany(x => x.Lines, l => BillLines(l, "BillLines", "BillId"));
             b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.Property(x => x.Approval).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.HoldReason).HasMaxLength(2000);
+            b.Property(x => x.EnteredBy).HasMaxLength(200);
+            b.Property(x => x.ApprovedBy).HasMaxLength(200);
+            b.Property(x => x.ApprovalNote).HasMaxLength(500);
+            b.Ignore(x => x.CanBePaid);
+            b.HasOne<PurchaseOrder>().WithMany().HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.SourceLines, l =>
+            {
+                l.ToTable("BillSourceLines");
+                l.WithOwner().HasForeignKey("BillId");
+                l.HasKey("BillId", nameof(BillSourceLine.LineNumber));
+                l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            });
+            b.Navigation(x => x.SourceLines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<VendorCredit>(b =>
@@ -1395,6 +1498,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("BillPayments");
             b.HasKey(p => p.Id);
+            b.HasOne<AchBatch>().WithMany().HasForeignKey(p => p.AchBatchId).OnDelete(DeleteBehavior.Restrict);
             b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             b.Property(p => p.Reference).HasMaxLength(30);
             b.Property(p => p.Memo).HasMaxLength(1000);

@@ -1,0 +1,59 @@
+@page "/purchases/approvals/settings"
+@inject BillApprovalService ApprovalService
+
+<PageTitle>Approval settings · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Bill approval settings</h1>
+        <a class="button secondary" href="/purchases/approvals">Bill approvals</a>
+        <a class="button secondary" href="/audit?entityType=purchasing_settings">History</a>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">Saved. New bills follow these rules; bills already entered keep their status.</div>
+    }
+
+    <div class="card">
+        <form method="post" action="/purchases/approvals/settings" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="threshold">Approval limit</label>
+                    <input id="threshold" name="threshold" class="amount" inputmode="decimal"
+                           value="@(_settings.ApprovalThreshold?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" placeholder="None" />
+                    <span class="hint">Bills of this total or more wait for approval before they can be paid. Blank for no limit.</span>
+                </div>
+                <div class="field">
+                    <label for="tolerance">Price tolerance (%)</label>
+                    <input id="tolerance" name="tolerance" class="amount" inputmode="decimal"
+                           value="@_settings.PriceTolerancePercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
+                    <span class="hint">How far a bill's cost may be over the purchase order before it's held (3-way match).</span>
+                </div>
+            </div>
+            <label class="check">
+                <input type="checkbox" name="requireReceipt" value="true" checked="@_settings.RequireReceipt" />
+                <span>Hold bills from purchase orders that bill more than has been received</span>
+            </label>
+            <label class="check">
+                <input type="checkbox" name="allowSelfApproval" value="true" checked="@_settings.AllowSelfApproval" />
+                <span>Let the person who entered a bill approve it too (for one-person offices)</span>
+            </label>
+            <div class="actions"><button type="submit">Save</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private PurchasingSettings _settings = default!;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync() => _settings = await ApprovalService.GetSettingsAsync();
+}

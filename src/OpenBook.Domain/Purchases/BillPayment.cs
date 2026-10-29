@@ -50,6 +50,16 @@ public sealed class BillPayment
 
     public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
+    /// <summary>The ACH file it was sent in; null if it hasn't been.</summary>
+    public Guid? AchBatchId { get; private set; }
+
+    public void MarkSentByAch(Guid batchId)
+    {
+        if (AchBatchId is not null)
+            throw new DomainException("ach.already_sent", "This payment is already in an ACH file.");
+        AchBatchId = batchId;
+    }
+
     public static BillPayment Create(
         Guid id,
         Guid vendorId,

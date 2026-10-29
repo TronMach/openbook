@@ -43,6 +43,44 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
             .ThenByDescending(t => t.CreatedAt)
             .ToList();
 
+    public Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct) => db.PurchaseOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
+
+    public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct) =>
+        (await db.PurchaseOrders.AsNoTracking().Where(o => vendorId == null || o.VendorId == vendorId).ToListAsync(ct))
+            .OrderByDescending(o => o.Date)
+            .ThenByDescending(o => o.CreatedAt)
+            .ToList();
+
+    public async Task<IReadOnlyList<string>> ListPurchaseOrderNumbersAsync(CancellationToken ct) =>
+        await db.PurchaseOrders.Select(o => o.Number).ToListAsync(ct);
+
+    public Task<PurchasingSettings?> GetPurchasingSettingsAsync(CancellationToken ct) => db.PurchasingSettings.FirstOrDefaultAsync(ct);
+
+    public Task<VendorBankAccount?> GetVendorBankAccountAsync(Guid vendorId, CancellationToken ct) =>
+        db.VendorBankAccounts.SingleOrDefaultAsync(a => a.VendorId == vendorId, ct);
+
+    public async Task<IReadOnlyList<VendorBankAccount>> ListVendorBankAccountsAsync(CancellationToken ct) =>
+        await db.VendorBankAccounts.AsNoTracking().ToListAsync(ct);
+
+    public Task<AchSettings?> GetAchSettingsAsync(Guid accountId, CancellationToken ct) => db.AchSettings.SingleOrDefaultAsync(a => a.AccountId == accountId, ct);
+
+    public Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct) => db.AchBatches.AsNoTracking().SingleOrDefaultAsync(b => b.Id == id, ct);
+
+    public async Task<IReadOnlyList<AchBatch>> ListAchBatchesAsync(Guid accountId, CancellationToken ct) =>
+        (await db.AchBatches.AsNoTracking().Where(b => b.AccountId == accountId).ToListAsync(ct)).OrderByDescending(b => b.CreatedAt).ToList();
+
+    public void Add(PurchaseOrder order) => db.PurchaseOrders.Add(order);
+
+    public void Add(PurchasingSettings settings) => db.PurchasingSettings.Add(settings);
+
+    public void Add(VendorBankAccount account) => db.VendorBankAccounts.Add(account);
+
+    public void Remove(VendorBankAccount account) => db.VendorBankAccounts.Remove(account);
+
+    public void Add(AchSettings settings) => db.AchSettings.Add(settings);
+
+    public void Add(AchBatch batch) => db.AchBatches.Add(batch);
+
     public void Add(Vendor vendor) => db.Vendors.Add(vendor);
 
     public void Add(Bill bill) => db.Bills.Add(bill);

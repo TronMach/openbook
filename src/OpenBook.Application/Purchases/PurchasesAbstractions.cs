@@ -47,12 +47,43 @@ public interface IPurchasesStore
     /// <summary>Spend bank transactions (checks, payments, card charges), optionally for one vendor; newest first.</summary>
     Task<IReadOnlyList<BankTransaction>> ListExpensesAsync(Guid? vendorId, CancellationToken ct);
 
+    /// <summary>Tracked, with lines and receipts.</summary>
+    Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct);
+
+    Task<IReadOnlyList<string>> ListPurchaseOrderNumbersAsync(CancellationToken ct);
+
+    /// <summary>Tracked; null until first saved.</summary>
+    Task<PurchasingSettings?> GetPurchasingSettingsAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<VendorBankAccount?> GetVendorBankAccountAsync(Guid vendorId, CancellationToken ct);
+
+    /// <summary>Untracked.</summary>
+    Task<IReadOnlyList<VendorBankAccount>> ListVendorBankAccountsAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<AchSettings?> GetAchSettingsAsync(Guid accountId, CancellationToken ct);
+
+    Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first, without their file content.</summary>
+    Task<IReadOnlyList<AchBatch>> ListAchBatchesAsync(Guid accountId, CancellationToken ct);
+
     void Add(Vendor vendor);
     void Add(Bill bill);
     void Add(BillPayment payment);
     void Add(VendorCredit credit);
     void Add(VendorRefund refund);
     void Add(RecurringBill recurringBill);
+    void Add(PurchaseOrder order);
+    void Add(PurchasingSettings settings);
+    void Add(VendorBankAccount account);
+    void Remove(VendorBankAccount account);
+    void Add(AchSettings settings);
+    void Add(AchBatch batch);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

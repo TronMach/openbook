@@ -1,0 +1,228 @@
+@page "/purchases/orders/{Id:guid}"
+@inject PurchaseOrderService Orders
+@inject VendorService VendorService
+@inject BillApprovalService Approvals
+
+<PageTitle>Purchase order @(_order?.Number) · OpenBook</PageTitle>
+
+@if (_order is null || _progress is null)
+{
+    <div class="card"><p>That purchase order doesn't exist. <a href="/purchases/orders">Back to purchase orders</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    @{
+        var open = _order.Status == PurchaseOrderStatus.Open;
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var anyReceived = _order.Receipts.Any(r => !r.IsVoided);
+    }
+    <div class="toolbar">
+        <h1>Purchase order @_order.Number</h1>
+        <span class="badge @(_order.Status == PurchaseOrderStatus.Closed ? "ok" : null)">@_order.Status</span>
+        <a class="button secondary" href="/purchases/orders">Back to purchase orders</a>
+        <a class="button secondary" href="/audit?entityId=@_order.Id">History</a>
+        @if (open && !_progress.Started && !anyReceived)
+        {
+            <a class="button secondary" href="/purchases/orders/@_order.Id/edit">Edit</a>
+        }
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "received")
+    {
+        <div class="alert notice" role="status">Received.</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Vendor</dt><dd><a href="/vendors/@_order.VendorId">@_vendorName</a></dd>
+            <dt>Date</dt><dd>@Labels.Date(_order.Date)</dd>
+            @if (_order.ExpectedDate is { } expected) { <dt>Expected</dt><dd>@Labels.Date(expected)</dd> }
+            @if (_order.Memo is not null) { <dt>Message</dt><dd style="white-space: pre-line">@_order.Memo</dd> }
+            <dt>Total</dt><dd>@Labels.Amount(_order.Total)</dd>
+        </dl>
+        <table class="data" style="margin-top: 1rem">
+            <thead><tr><th>Line</th><th class="num">Ordered</th><th class="num">Unit cost</th><th class="num">Amount</th><th class="num">Received</th><th class="num">Billed</th></tr></thead>
+            <tbody>
+                @foreach (var s in _progress.Lines)
+                {
+                    <tr>
+                        <td>@(s.Line.Description ?? "")</td>
+                        <td class="num">@(s.Line.IsItem ? Labels.Quantity(s.Line.Quantity) : "")</td>
+                        <td class="num">@(s.Line.IsItem ? s.Line.UnitCost.ToString("#,##0.00##") : "")</td>
+                        <td class="num">@Labels.Amount(s.Line.Amount)</td>
+                        <td class="num">@(s.Line.IsItem ? Labels.Quantity(s.Received) : "")</td>
+                        <td class="num">@(s.Line.IsItem ? Labels.Quantity(s.BilledQuantity) : Labels.Amount(s.BilledAmount))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_order.Receipts.Count > 0)
+    {
+        <h2>Received</h2>
+        <table class="data">
+            <thead><tr><th>Receipt</th><th>Date</th><th>What</th><th>Note</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var group in _order.Receipts.GroupBy(r => r.ReceiptNumber).OrderBy(g => g.Key))
+                {
+                    var voided = group.All(r => r.IsVoided);
+                    <tr class="@(voided ? "inactive" : null)">
+                        <td>@group.Key @(voided ? "(taken back)" : "")</td>
+                        <td>@Labels.Date(group.First().Date)</td>
+                        <td>@string.Join(", ", group.Select(r => $"{Labels.Quantity(r.Quantity)} × {_order.Lines.First(l => l.LineNumber == r.LineNumber).Description}"))</td>
+                        <td>@group.First().Note</td>
+                        <td>
+                            @if (!voided && open)
+                            {
+                                <form method="post" action="/purchases/orders/@_order.Id/receipts/@group.Key/void" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary">Take back</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_progress.Bills.Count > 0)
+    {
+        <h2>Bills</h2>
+        <table class="data">
+            <thead><tr><th>Bill</th><th>Date</th><th>Approval</th><th class="num">Total</th></tr></thead>
+            <tbody>
+                @foreach (var b in _progress.Bills)
+                {
+                    <tr class="@(b.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/purchases/bills/@b.Id">@(b.Reference ?? "(no number)")</a> @(b.Status == DocumentStatus.Voided ? "(voided)" : "")</td>
+                        <td>@Labels.Date(b.Date)</td>
+                        <td>@Approval(b.Approval)</td>
+                        <td class="num">@Labels.Amount(b.Total)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (open && _progress.Lines.Any(l => l.Line.IsItem && l.Received < l.Line.Quantity))
+    {
+        <div class="card" style="margin-top: 1.5rem" id="receive">
+            <h2>Receive goods</h2>
+            <p class="muted">Record what arrived, to match against the vendor's bill. Stock goes into the books when the bill is entered.</p>
+            <form method="post" action="/purchases/orders/@_order.Id/receive" data-enhance="false">
+                <AntiforgeryToken />
+                <table class="data">
+                    <thead><tr><th>Item</th><th class="num">Still to come</th><th class="num">Arrived now</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _progress.Lines.Where(l => l.Line.IsItem && l.Received < l.Line.Quantity))
+                        {
+                            <tr>
+                                <td>@s.Line.Description</td>
+                                <td class="num">@Labels.Quantity(s.Line.Quantity - s.Received)</td>
+                                <td class="num"><input name="qty:@s.Line.LineNumber" class="amount" inputmode="decimal" aria-label="Quantity arrived" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="row">
+                    <div class="field"><label for="receive-date">Date</label><input id="receive-date" type="date" name="date" value="@today" /></div>
+                    <div class="field"><label for="receive-note">Note <span class="muted">(optional)</span></label><input id="receive-note" name="note" maxlength="500" placeholder="Packing slip number" /></div>
+                </div>
+                <div class="actions"><button type="submit">Record receipt</button></div>
+            </form>
+        </div>
+    }
+
+    @if (open)
+    {
+        <div class="card" style="margin-top: 1.5rem" id="bill">
+            <h2>Enter the vendor's bill</h2>
+            <p class="muted">
+                Filled in with @(anyReceived ? "what's been received and not billed yet" : "everything still to bill"); change the quantities and the vendor's
+                costs to match their invoice. @MatchRule()
+            </p>
+            <form method="post" action="/purchases/orders/@_order.Id/bill" data-enhance="false">
+                <AntiforgeryToken />
+                <table class="data">
+                    <thead><tr><th>Line</th><th class="num">Quantity</th><th class="num">Their unit cost / amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _progress.Lines.Where(l => l.ToBill > 0m))
+                        {
+                            var quantity = s.Line.IsItem ? (anyReceived ? s.ReceivedNotBilled : s.ToBill) : 1m;
+                            <tr>
+                                <td>@s.Line.Description</td>
+                                <td class="num">
+                                    @if (s.Line.IsItem)
+                                    {
+                                        <input name="qty:@s.Line.LineNumber" class="amount" inputmode="decimal" aria-label="Quantity billed" value="@quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                                    }
+                                </td>
+                                <td class="num">
+                                    <input name="cost:@s.Line.LineNumber" class="amount" inputmode="decimal" aria-label="Unit cost or amount billed"
+                                           value="@((s.Line.IsItem ? s.Line.UnitCost : s.ToBill).ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture))" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="row">
+                    <div class="field"><label for="bill-ref">Their invoice number</label><input id="bill-ref" name="reference" maxlength="30" /></div>
+                    <div class="field"><label for="bill-date">Bill date</label><input id="bill-date" type="date" name="date" value="@today" /></div>
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Enter bill</button></div>
+            </form>
+        </div>
+
+        <form method="post" action="/purchases/orders/@_order.Id/cancel" data-enhance="false" class="actions">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">Cancel the rest of the order</button>
+        </form>
+    }
+
+    <Attachments EntityType="purchase_order" EntityId="_order.Id" />
+
+    <Notes EntityType="purchase_order" EntityId="_order.Id" />
+</div>
+
+@code {
+    private PurchaseOrder? _order;
+    private PurchaseOrderProgress? _progress;
+    private PurchasingSettings? _settings;
+    private string? _vendorName;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _order = await Orders.GetAsync(Id);
+        if (_order is null)
+            return;
+        _progress = await Orders.ProgressAsync(Id);
+        _settings = await Approvals.GetSettingsAsync();
+        _vendorName = (await VendorService.GetAsync(_order.VendorId))?.DisplayName;
+    }
+
+    private string MatchRule() =>
+        (_settings!.RequireReceipt ? "Billing more than has arrived" : "Billing more than was ordered")
+        + (_settings.PriceTolerancePercent > 0m ? $", or costs more than {_settings.PriceTolerancePercent:0.##}% over the order," : ", or costs over the order,")
+        + " holds the bill for approval.";
+
+    internal static string Approval(BillApproval approval) => approval switch
+    {
+        BillApproval.Pending => "Waiting for approval",
+        BillApproval.Approved => "Approved",
+        BillApproval.Rejected => "Rejected",
+        _ => "",
+    };
+}

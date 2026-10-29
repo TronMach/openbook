@@ -25,6 +25,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         ["BackupSchedules"] = ["ProtectedSecretKey"],
         ["BankConnections"] = ["ProtectedAccess"],
         ["Vendors"] = ["TaxId"],
+        ["VendorBankAccounts"] = ["ProtectedAccountNumber"],
         ["AttachmentContents"] = ["Data"],
     };
 

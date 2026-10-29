@@ -11,6 +11,14 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Purchases</h1>
+        <a class="button secondary" href="/purchases/orders">Purchase orders</a>
+        <AuthorizeView>
+            @if (context.User.Can(OpenBook.Domain.Companies.UserRole.Accountant))
+            {
+                <a class="button secondary" href="/purchases/approvals">Approvals</a>
+                <a class="button secondary" href="/purchases/ach">ACH payments</a>
+            }
+        </AuthorizeView>
         <a class="button secondary" href="/vendors">Vendors</a>
         <a class="button secondary" href="/purchases/recurring">Recurring</a>
         <a class="button secondary" href="/purchases/vendor-credits/new">Vendor credit</a>

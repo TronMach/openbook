@@ -1,0 +1,82 @@
+@page "/purchases/approvals"
+@inject BillApprovalService ApprovalService
+@inject VendorService VendorService
+
+<PageTitle>Bill approvals · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Bill approvals</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <a class="button secondary" href="/purchases/approvals/settings">Settings</a>
+    </div>
+    <p class="muted">
+        Bills held for approval can't be paid until they're approved: bills at or over the approval limit
+        (@(_settings.ApprovalThreshold is { } t ? Labels.Amount(t) : "none set")), and bills from purchase orders that don't match what was ordered or received.
+        @(_settings.AllowSelfApproval ? "" : "Someone other than the person who entered a bill has to approve it.")
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is { } done)
+    {
+        <div class="alert notice" role="status">@(done == "approved" ? "Approved: it can be paid now." : "Rejected. Void it, or approve it later if it turns out right.")</div>
+    }
+
+    @if (_bills.Count == 0)
+    {
+        <div class="card"><p>Nothing waiting for approval.</p></div>
+    }
+    else
+    {
+        @foreach (var b in _bills)
+        {
+            <div class="card" style="margin-bottom: 1rem">
+                <div class="toolbar">
+                    <h2><a href="/purchases/bills/@b.Id">@_vendors.GetValueOrDefault(b.VendorId) · @(b.Reference ?? "(no number)")</a></h2>
+                    <span class="badge @(b.Approval == BillApproval.Rejected ? "warn" : null)">@(b.Approval == BillApproval.Rejected ? "Rejected" : "Waiting")</span>
+                </div>
+                <dl class="facts">
+                    <dt>Total</dt><dd>@Labels.Amount(b.Total)</dd>
+                    <dt>Due</dt><dd>@Labels.Date(b.DueDate)</dd>
+                    <dt>Entered by</dt><dd>@b.EnteredBy</dd>
+                    @if (b.PurchaseOrderId is { } orderId) { <dt>From</dt><dd><a href="/purchases/orders/@orderId">Purchase order</a></dd> }
+                    <dt>Held because</dt><dd style="white-space: pre-line">@b.HoldReason</dd>
+                    @if (b.Approval == BillApproval.Rejected) { <dt>Rejected by</dt><dd>@b.ApprovedBy: @b.ApprovalNote</dd> }
+                </dl>
+                <form method="post" action="/purchases/approvals/@b.Id" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="note-@b.Id">Note <span class="muted">(needed to reject)</span></label>
+                        <input id="note-@b.Id" name="note" maxlength="500" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit" name="decision" value="approve">Approve</button>
+                        @if (b.Approval == BillApproval.Pending)
+                        {
+                            <button type="submit" name="decision" value="reject" class="secondary">Reject</button>
+                        }
+                    </div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Bill> _bills = [];
+    private PurchasingSettings _settings = default!;
+    private Dictionary<Guid, string> _vendors = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await ApprovalService.GetSettingsAsync();
+        _bills = await ApprovalService.PendingAsync();
+        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+    }
+}

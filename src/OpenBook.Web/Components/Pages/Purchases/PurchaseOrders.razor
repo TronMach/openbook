@@ -1,0 +1,54 @@
+@page "/purchases/orders"
+@inject PurchaseOrderService Orders
+@inject VendorService VendorService
+
+<PageTitle>Purchase orders · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Purchase orders</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <a class="button secondary" href="@(ShowAll ? "/purchases/orders" : "/purchases/orders?showAll=true")">@(ShowAll ? "Open only" : "Show all")</a>
+        <a class="button" href="/purchases/orders/new">New purchase order</a>
+    </div>
+    <p class="muted">Orders post nothing. Record goods as they arrive, then enter the vendor's bill from the order: it's matched to both.</p>
+
+    @if (_orders.Count == 0)
+    {
+        <div class="card"><p>@(ShowAll ? "No purchase orders yet." : "No open purchase orders.") <a href="/purchases/orders/new">Enter one</a>.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>No.</th><th>Date</th><th>Vendor</th><th>Expected</th><th>Status</th><th class="num">Total</th></tr></thead>
+                <tbody>
+                    @foreach (var o in _orders)
+                    {
+                        <tr class="@(o.Status == PurchaseOrderStatus.Cancelled ? "inactive" : null)">
+                            <td><a href="/purchases/orders/@o.Id">@o.Number</a></td>
+                            <td>@Labels.Date(o.Date)</td>
+                            <td>@_vendors.GetValueOrDefault(o.VendorId)</td>
+                            <td>@(o.ExpectedDate is { } e ? Labels.Date(e) : "")</td>
+                            <td>@o.Status</td>
+                            <td class="num">@Labels.Amount(o.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<PurchaseOrder> _orders = [];
+    private Dictionary<Guid, string> _vendors = [];
+
+    [SupplyParameterFromQuery] private bool ShowAll { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _orders = (await Orders.ListAsync()).Where(o => ShowAll || o.Status == PurchaseOrderStatus.Open).ToList();
+        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+    }
+}

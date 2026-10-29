@@ -52,6 +52,20 @@
                 <dt>Warehouse</dt><dd>@_place(new StockPlace(warehouseId, null))</dd>
             }
             @if (_bill.Memo is not null) { <dt>Memo</dt><dd>@_bill.Memo</dd> }
+            @if (_bill.PurchaseOrderId is { } orderId) { <dt>Purchase order</dt><dd><a href="/purchases/orders/@orderId">View</a></dd> }
+            @if (_bill.Approval != BillApproval.NotRequired)
+            {
+                <dt>Approval</dt>
+                <dd>
+                    @PurchaseOrderDetail.Approval(_bill.Approval)@(_bill.ApprovedBy is { } by ? $" by {by}" : "")@(_bill.ApprovalNote is { } note ? $": {note}" : "")
+                    @if (_bill.Approval is BillApproval.Pending or BillApproval.Rejected)
+                    {
+                        <span> · <a href="/purchases/approvals">Approvals</a></span>
+                    }
+                </dd>
+                @if (_bill.Approval is BillApproval.Pending or BillApproval.Rejected) { <dt>Held because</dt><dd style="white-space: pre-line">@_bill.HoldReason</dd> }
+            }
+            @if (_bill.EnteredBy is { } enteredBy) { <dt>Entered by</dt><dd>@enteredBy</dd> }
             <dt>Journal entry</dt><dd><a href="/journal/@_bill.JournalEntryId">View</a></dd>
         </dl>
     </div>

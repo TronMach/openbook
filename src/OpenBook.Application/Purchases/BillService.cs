@@ -22,6 +22,9 @@ public sealed record CreateBillCommand(
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null);
 
+/// <summary>What part of a purchase order a bill bills, the 3-way match differences found, and whether that finishes it.</summary>
+internal sealed record BillSource(Guid PurchaseOrderId, IReadOnlyList<BillSourceLine> Lines, IReadOnlyList<string> Exceptions, bool Completes);
+
 public sealed class BillService(
     IPurchasesStore store,
     PurchaseAccounts purchaseAccounts,
@@ -46,7 +49,8 @@ public sealed class BillService(
     public Task<Bill> CreateAsync(CreateBillCommand command, CancellationToken ct = default) => CreateAsync(command, recurringBillId: null, ct);
 
     /// <param name="recurringBillId">The template entering it, recorded on the bill.</param>
-    internal async Task<Bill> CreateAsync(CreateBillCommand command, Guid? recurringBillId, CancellationToken ct)
+    /// <param name="source">For a bill made from a purchase order.</param>
+    internal async Task<Bill> CreateAsync(CreateBillCommand command, Guid? recurringBillId, CancellationToken ct, BillSource? source = null)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -77,6 +81,24 @@ public sealed class BillService(
             lines, entry.Id, clock.UtcNow, reference, command.Memo, recurringBillId);
         bill.SetLocation(command.LocationId);
         bill.SetWarehouse(warehouseId);
+        bill.SetEnteredBy(user.Actor);
+        var settings = await store.GetPurchasingSettingsAsync(ct);
+        var holds = new List<string>(source?.Exceptions ?? []);
+        if (settings?.ApprovalThreshold is { } threshold && bill.Total >= threshold)
+            holds.Insert(0, $"The total, {bill.Total:N2}, is at or over the approval limit of {threshold:N2}.");
+        bill.Hold(holds);
+        if (source is not null)
+        {
+            bill.SetSource(source.PurchaseOrderId, source.Lines);
+            if (source.Completes && await store.GetPurchaseOrderAsync(source.PurchaseOrderId, ct) is { } order)
+            {
+                var orderBefore = PurchaseOrderService.Snapshot(order);
+                order.Close();
+                store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PurchaseOrderService.EntityType, order.Id,
+                    orderBefore, PurchaseOrderService.Snapshot(order)));
+            }
+        }
+
         store.Add(bill);
         store.Add(Audit(AuditAction.Created, bill, before: null));
         await store.SaveChangesAsync(ct);
@@ -98,9 +120,19 @@ public sealed class BillService(
         inventory.Apply(stock, InventorySources.Bill, bill.Id);
         bill.Void();
         store.Add(Audit(AuditAction.Voided, bill, before));
+        if (bill.PurchaseOrderId is { } orderId && await store.GetPurchaseOrderAsync(orderId, ct) is { Status: PurchaseOrderStatus.Closed } order)
+        {
+            var orderBefore = PurchaseOrderService.Snapshot(order);
+            order.Reopen();
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PurchaseOrderService.EntityType, order.Id,
+                orderBefore, PurchaseOrderService.Snapshot(order)));
+        }
         await store.SaveChangesAsync(ct);
         return bill;
     }
+
+    internal static AuditRecord Audit(IClock clock, ICurrentUser user, AuditAction action, Bill b, string? before) =>
+        AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, b.Id, before, Snapshot(b));
 
     private AuditRecord Audit(AuditAction action, Bill b, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, b.Id, before, Snapshot(b));
@@ -115,6 +147,13 @@ public sealed class BillService(
         b.AmountPaid,
         Status = b.Status.ToString(),
         b.Memo,
+        b.PurchaseOrderId,
+        Approval = b.Approval.ToString(),
+        b.HoldReason,
+        b.ApprovedBy,
+        b.ApprovedAt,
+        b.ApprovalNote,
         Lines = b.Lines.Select(l => new { l.AccountId, l.Description, l.Amount, l.ItemId, l.Quantity }),
+        SourceLines = b.SourceLines.Select(l => new { l.LineNumber, l.Quantity, l.Amount }),
     });
 }

@@ -1555,6 +1555,89 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("PriceRules", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Purchases.AchBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EntryCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FileIdModifier")
+                        .IsRequired()
+                        .HasMaxLength(1)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Total")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("TotalMinor");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.ToTable("AchBatches", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.AchSettings", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompanyId")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationName")
+                        .IsRequired()
+                        .HasMaxLength(23)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationRouting")
+                        .IsRequired()
+                        .HasMaxLength(9)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntryDescription")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginId")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginName")
+                        .IsRequired()
+                        .HasMaxLength(23)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("AccountId");
+
+                    b.ToTable("AchSettings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1565,6 +1648,22 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountPaidMinor");
 
+                    b.Property<string>("Approval")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovalNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -1572,6 +1671,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EnteredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HoldReason")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("JournalEntryId")
@@ -1585,6 +1692,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("PayableAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PurchaseOrderId")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("RecurringBillId")
@@ -1618,6 +1728,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PayableAccountId");
 
+                    b.HasIndex("PurchaseOrderId");
+
                     b.HasIndex("RecurringBillId");
 
                     b.HasIndex("WarehouseId");
@@ -1631,6 +1743,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AchBatchId")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("Amount")
@@ -1673,6 +1788,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AchBatchId");
+
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
 
@@ -1683,6 +1800,83 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("VendorId", "Date");
 
                     b.ToTable("BillPayments", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.PurchaseOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExpectedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Total")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("TotalMinor");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("VendorId", "Date");
+
+                    b.ToTable("PurchaseOrders", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.PurchasingSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowSelfApproval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ApprovalThreshold")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ApprovalThresholdMinor");
+
+                    b.Property<long>("PriceTolerancePercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PriceTolerancePercentTenThousandths");
+
+                    b.Property<bool>("RequireReceipt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PurchasingSettings", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.RecurringBill", b =>
@@ -1806,6 +2000,39 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Vendors", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.VendorBankAccount", b =>
+                {
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountLast4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedAccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoutingNumber")
+                        .IsRequired()
+                        .HasMaxLength(9)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("VendorId");
+
+                    b.ToTable("VendorBankAccounts", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.VendorCredit", b =>
@@ -4065,6 +4292,24 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Navigation("Targets");
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Purchases.AchBatch", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.AchSettings", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.Bill", b =>
                 {
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
@@ -4083,6 +4328,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("PayableAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Purchases.PurchaseOrder", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OpenBook.Domain.Purchases.RecurringBill", null)
                         .WithMany()
@@ -4164,11 +4414,43 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .OnDelete(DeleteBehavior.Restrict);
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Purchases.BillSourceLine", "SourceLines", b1 =>
+                        {
+                            b1.Property<Guid>("BillId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<long>("Quantity")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.HasKey("BillId", "LineNumber");
+
+                            b1.ToTable("BillSourceLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("BillId");
+                        });
+
                     b.Navigation("Lines");
+
+                    b.Navigation("SourceLines");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.BillPayment", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Purchases.AchBatch", null)
+                        .WithMany()
+                        .HasForeignKey("AchBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
@@ -4224,6 +4506,110 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Navigation("Applications");
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Purchases.PurchaseOrder", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Purchases.PurchaseOrderLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("PurchaseOrderId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<Guid?>("AccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Description")
+                                .HasMaxLength(1000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("ItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Quantity")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.Property<long>("UnitCost")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("UnitCostTenThousandths");
+
+                            b1.HasKey("PurchaseOrderId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.HasIndex("ItemId");
+
+                            b1.ToTable("PurchaseOrderLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.Sales.Item", null)
+                                .WithMany()
+                                .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("PurchaseOrderId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Purchases.PurchaseOrderReceipt", "Receipts", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<string>("Note")
+                                .HasMaxLength(500)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("PurchaseOrderId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Quantity")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.Property<int>("ReceiptNumber")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("PurchaseOrderId");
+
+                            b1.ToTable("PurchaseOrderReceipts", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("PurchaseOrderId");
+                        });
+
+                    b.Navigation("Lines");
+
+                    b.Navigation("Receipts");
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.RecurringBill", b =>
                 {
                     b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
@@ -4277,6 +4663,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("DefaultExpenseAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.VendorBankAccount", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.VendorCredit", b =>

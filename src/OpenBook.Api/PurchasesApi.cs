@@ -42,11 +42,41 @@ public sealed record BillResponse(
     decimal Balance,
     DocumentStatus Status,
     Guid JournalEntryId,
-    IReadOnlyList<BillLineDraft> Lines)
+    IReadOnlyList<BillLineDraft> Lines,
+    BillApproval Approval = BillApproval.NotRequired,
+    string? HoldReason = null,
+    Guid? PurchaseOrderId = null)
 {
     public static BillResponse From(Bill b) => new(
         b.Id, b.VendorId, b.Reference, b.Date, b.DueDate, b.Memo, b.Total, b.AmountPaid, b.Balance, b.Status, b.JournalEntryId,
-        b.Lines.Select(l => l.ToDraft()).ToList());
+        b.Lines.Select(l => l.ToDraft()).ToList(), b.Approval, b.HoldReason, b.PurchaseOrderId);
+}
+
+public sealed record PurchaseOrderResponse(
+    Guid Id, string Number, Guid VendorId, DateOnly Date, DateOnly? ExpectedDate, string? Memo, decimal Total, PurchaseOrderStatus Status,
+    IReadOnlyList<PurchaseOrderLineResponse> Lines)
+{
+    public static PurchaseOrderResponse From(PurchaseOrder o, PurchaseOrderProgress? progress = null) => new(
+        o.Id, o.Number, o.VendorId, o.Date, o.ExpectedDate, o.Memo, o.Total, o.Status,
+        o.Lines.Select(l =>
+        {
+            var status = progress?.Lines.FirstOrDefault(s => s.Line.LineNumber == l.LineNumber);
+            return new PurchaseOrderLineResponse(l.LineNumber, l.ItemId, l.AccountId, l.Description, l.Quantity, l.UnitCost, l.Amount,
+                status?.Received ?? 0m, status?.BilledQuantity ?? 0m, status?.BilledAmount ?? 0m);
+        }).ToList());
+}
+
+public sealed record PurchaseOrderLineResponse(
+    int LineNumber, Guid? ItemId, Guid? AccountId, string? Description, decimal Quantity, decimal UnitCost, decimal Amount,
+    decimal Received, decimal BilledQuantity, decimal BilledAmount);
+
+public sealed record ApprovalRequest(string? Note);
+
+public sealed record AchFileRequest(DateOnly EffectiveDate, IReadOnlyList<Guid> PaymentIds);
+
+public sealed record AchBatchResponse(Guid Id, Guid AccountId, DateOnly EffectiveDate, int EntryCount, decimal Total, DateTimeOffset CreatedAt)
+{
+    public static AchBatchResponse From(AchBatch b) => new(b.Id, b.AccountId, b.EffectiveDate, b.EntryCount, b.Total, b.CreatedAt);
 }
 
 public sealed record BillPaymentResponse(
@@ -91,6 +121,63 @@ internal static class PurchasesApi
         }).Accepts<string>("text/csv");
 
         var purchases = api.MapGroup("/purchases");
+
+        purchases.MapGet("/orders", async (Guid? vendorId, PurchaseOrderService s, CancellationToken ct) =>
+            (await s.ListAsync(vendorId, ct)).Select(o => PurchaseOrderResponse.From(o)));
+        purchases.MapGet("/orders/{id:guid}", async (Guid id, PurchaseOrderService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } o ? Results.Ok(PurchaseOrderResponse.From(o, await s.ProgressAsync(id, ct))) : Results.NotFound());
+        purchases.MapPost("/orders", async (SavePurchaseOrderCommand r, PurchaseOrderService s, CancellationToken ct) =>
+        {
+            var order = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/purchases/orders/{order.Id}", PurchaseOrderResponse.From(order));
+        });
+        purchases.MapPut("/orders/{id:guid}", async (Guid id, SavePurchaseOrderCommand r, PurchaseOrderService s, CancellationToken ct) =>
+            PurchaseOrderResponse.From(await s.UpdateAsync(id, r, ct)));
+        purchases.MapPost("/orders/{id:guid}/cancel", async (Guid id, PurchaseOrderService s, CancellationToken ct) =>
+            PurchaseOrderResponse.From(await s.CancelAsync(id, ct)));
+        purchases.MapPost("/orders/{id:guid}/receipts", async (Guid id, ReceiveGoodsCommand r, PurchaseOrderService s, CancellationToken ct) =>
+            new { ReceiptNumber = await s.ReceiveAsync(id, r, ct) });
+        purchases.MapPost("/orders/{id:guid}/receipts/{number:int}/void", async (Guid id, int number, PurchaseOrderService s, CancellationToken ct) =>
+            PurchaseOrderResponse.From(await s.VoidReceiptAsync(id, number, ct)));
+        purchases.MapPost("/orders/{id:guid}/bill", async (Guid id, BillFromOrderCommand r, PurchaseOrderService s, CancellationToken ct) =>
+        {
+            var bill = await s.CreateBillAsync(id, r, ct);
+            return Results.Created($"/api/purchases/bills/{bill.Id}", BillResponse.From(bill));
+        });
+
+        purchases.MapGet("/approvals", async (BillApprovalService s, CancellationToken ct) => (await s.PendingAsync(ct)).Select(BillResponse.From));
+        purchases.MapPost("/approvals/{billId:guid}/approve", async (Guid billId, ApprovalRequest r, BillApprovalService s, CancellationToken ct) =>
+            BillResponse.From(await s.ApproveAsync(billId, r.Note, ct)));
+        purchases.MapPost("/approvals/{billId:guid}/reject", async (Guid billId, ApprovalRequest r, BillApprovalService s, CancellationToken ct) =>
+            BillResponse.From(await s.RejectAsync(billId, r.Note, ct)));
+        purchases.MapGet("/approvals/settings", async (BillApprovalService s, CancellationToken ct) => await s.GetSettingsAsync(ct));
+        purchases.MapPut("/approvals/settings", async (PurchasingSettingsCommand r, BillApprovalService s, CancellationToken ct) => await s.SaveSettingsAsync(r, ct));
+
+        purchases.MapPut("/ach/vendors/{vendorId:guid}", async (Guid vendorId, VendorBankAccountCommand r, AchService s, CancellationToken ct) =>
+        {
+            var account = await s.SetVendorBankAccountAsync(vendorId, r, ct);
+            return new { account.VendorId, account.RoutingNumber, account.AccountLast4, account.Kind };
+        });
+        purchases.MapDelete("/ach/vendors/{vendorId:guid}", async (Guid vendorId, AchService s, CancellationToken ct) =>
+        {
+            await s.RemoveVendorBankAccountAsync(vendorId, ct);
+            return Results.NoContent();
+        });
+        purchases.MapGet("/ach/{accountId:guid}/settings", async (Guid accountId, AchService s, CancellationToken ct) =>
+            await s.GetSettingsAsync(accountId, ct) is { } settings ? Results.Ok(settings) : Results.NotFound());
+        purchases.MapPut("/ach/{accountId:guid}/settings", async (Guid accountId, AchSettingsCommand r, AchService s, CancellationToken ct) =>
+            await s.SaveSettingsAsync(accountId, r, ct));
+        purchases.MapGet("/ach/{accountId:guid}/payments", async (Guid accountId, AchService s, CancellationToken ct) =>
+            (await s.CandidatesAsync(accountId, ct)).Select(c => new { PaymentId = c.Payment.Id, c.Payment.Date, c.Payment.Amount, c.Vendor.DisplayName, c.BankAccount.AccountLast4 }));
+        purchases.MapGet("/ach/{accountId:guid}/files", async (Guid accountId, AchService s, CancellationToken ct) =>
+            (await s.ListBatchesAsync(accountId, ct)).Select(AchBatchResponse.From));
+        purchases.MapPost("/ach/{accountId:guid}/files", async (Guid accountId, AchFileRequest r, AchService s, CancellationToken ct) =>
+        {
+            var batch = await s.CreateFileAsync(accountId, r.EffectiveDate, r.PaymentIds ?? [], ct);
+            return Results.Created($"/api/purchases/ach/files/{batch.Id}", AchBatchResponse.From(batch));
+        });
+        purchases.MapGet("/ach/files/{id:guid}", async (Guid id, AchService s, CancellationToken ct) =>
+            await s.GetBatchAsync(id, ct) is { } batch ? Results.Text(batch.Content, "text/plain") : Results.NotFound());
 
         purchases.MapGet("/bills", async (Guid? vendorId, BillService s, CancellationToken ct) =>
             (await s.ListAsync(vendorId, ct)).Select(BillResponse.From));

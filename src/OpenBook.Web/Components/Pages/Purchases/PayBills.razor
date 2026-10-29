@@ -81,9 +81,15 @@
                         @foreach (var row in Shown)
                         {
                             <tr @key="row.Bill.Id" class="@(row.Selected ? "cleared" : null)">
-                                <td class="check"><input type="checkbox" aria-label="Pay bill @row.Bill.Reference" checked="@row.Selected" @onchange="e => Toggle(row, e.Value is true)" /></td>
+                                <td class="check"><input type="checkbox" aria-label="Pay bill @row.Bill.Reference" checked="@row.Selected" disabled="@(!row.Bill.CanBePaid)" @onchange="e => Toggle(row, e.Value is true)" /></td>
                                 <td>@Vendor(row.Bill.VendorId)</td>
-                                <td><a href="/purchases/bills/@row.Bill.Id" target="_blank">@(row.Bill.Reference ?? "(no number)")</a></td>
+                                <td>
+                                    <a href="/purchases/bills/@row.Bill.Id" target="_blank">@(row.Bill.Reference ?? "(no number)")</a>
+                                    @if (!row.Bill.CanBePaid)
+                                    {
+                                        <span class="badge warn">@(row.Bill.Approval == BillApproval.Rejected ? "Rejected" : "Needs approval")</span>
+                                    }
+                                </td>
                                 <td class="@(row.Bill.IsOverdue(today) ? "out-of-balance" : null)">@Labels.Date(row.Bill.DueDate)</td>
                                 <td class="num">@Labels.Amount(row.Bill.Balance)</td>
                                 <td><input class="amount" type="number" step="0.01" min="0" aria-label="Payment for bill @row.Bill.Reference" @bind="row.Amount" @bind:after="() => row.Selected = (row.Amount ?? 0m) > 0m" /></td>
@@ -173,7 +179,7 @@
 
     private void ToggleAll(ChangeEventArgs e)
     {
-        foreach (var row in Shown.ToList())
+        foreach (var row in Shown.Where(r => r.Bill.CanBePaid).ToList())
             Toggle(row, e.Value is true);
     }
 

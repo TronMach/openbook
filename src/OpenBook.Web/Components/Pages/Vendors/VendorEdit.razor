@@ -201,6 +201,9 @@
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_vendor.IsActive ? "Make inactive" : "Make active")</button>
         </form>
+        <AuthorizeView>
+            <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.Can(OpenBook.Domain.Companies.UserRole.Accountant)" Error="@BankError" />
+        </AuthorizeView>
         <Notes EntityType="vendor" EntityId="_vendor.Id" />
     }
 </div>
@@ -216,6 +219,8 @@
 
     [Parameter]
     public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "bankError")] private string? BankError { get; set; }
 
     [SupplyParameterFromForm(FormName = "vendor")]
     private VendorModel Input { get; set; } = default!;

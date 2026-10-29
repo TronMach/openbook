@@ -64,6 +64,9 @@ public sealed class BillPaymentService(
                 throw new EntityNotFoundException("bill", application.BillId);
             if (bill.Status != DocumentStatus.Posted)
                 throw new DomainException("bill.voided", $"A bill from {vendors[bill.VendorId].DisplayName} is voided.");
+            if (!bill.CanBePaid)
+                throw new DomainException("bill.not_approved",
+                    $"The bill {bill.Reference} from {vendors[bill.VendorId].DisplayName} is {(bill.Approval == BillApproval.Rejected ? "rejected" : "waiting for approval")}, so it can't be paid.");
             if (application.Amount > bill.Balance)
                 throw new DomainException("payment.exceeds_balance",
                     $"The bill {bill.Reference} from {vendors[bill.VendorId].DisplayName} has only {bill.Balance:N2} left to pay.");
