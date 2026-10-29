@@ -1,0 +1,102 @@
+@* The category lines of a posted bill or expense, each of which can be marked billable to a customer (with a markup).
+   Form posts go to /sales/billable and /sales/billable/{id}/remove. *@
+@inject BillableExpenseService Billables
+@inject CustomerService CustomerService
+
+@if (_lines.Count > 0)
+{
+    <div class="card no-print" id="billable" style="margin-top: 1.5rem">
+        <h2>Billable to customers</h2>
+        <p class="muted">Pass a cost on to a customer: it waits under "billable expenses" until you add it to one of their invoices.</p>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <table class="data">
+            <thead><tr><th>Line</th><th class="num">Cost</th><th>Billable to</th></tr></thead>
+            <tbody>
+                @foreach (var line in _lines)
+                {
+                    <tr>
+                        <td>@line.Description</td>
+                        <td class="num">@Labels.Amount(line.Cost)</td>
+                        <td>
+                            @if (line.Billable is { } b)
+                            {
+                                <span>@_names.GetValueOrDefault(b.CustomerId)</span>
+                                @if (b.MarkupPercent > 0m)
+                                {
+                                    <span class="muted"> + @b.MarkupPercent.ToString("0.####")% = @Labels.Amount(b.Amount)</span>
+                                }
+                                @if (b.InvoiceId is { } invoiceId)
+                                {
+                                    <span> · <a href="/sales/invoices/@invoiceId">invoiced</a></span>
+                                }
+                                else
+                                {
+                                    <form method="post" action="/sales/billable/@b.Id/remove" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="back" value="@Back" />
+                                        <button type="submit" class="secondary">Not billable</button>
+                                    </form>
+                                }
+                            }
+                            else if (Active)
+                            {
+                                <form method="post" action="/sales/billable" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="kind" value="@Kind" />
+                                    <input type="hidden" name="documentId" value="@DocumentId" />
+                                    <input type="hidden" name="lineNumber" value="@line.LineNumber" />
+                                    <input type="hidden" name="back" value="@Back" />
+                                    <select name="customerId" aria-label="Customer" data-search required>
+                                        <option value="">Customer…</option>
+                                        @foreach (var c in _customers)
+                                        {
+                                            <option value="@c.Customer.Id">@c.FullName</option>
+                                        }
+                                    </select>
+                                    <input name="markup" class="short" inputmode="decimal" placeholder="0" aria-label="Markup percent" /> <span>% markup</span>
+                                    <button type="submit" class="secondary">Make billable</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<BillableLine> _lines = [];
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+
+    [Parameter, EditorRequired] public BillableSource Kind { get; set; }
+    [Parameter, EditorRequired] public Guid DocumentId { get; set; }
+
+    /// <summary>The page to come back to.</summary>
+    [Parameter, EditorRequired] public string Back { get; set; } = "";
+
+    /// <summary>False for a voided document: nothing new can be made billable.</summary>
+    [Parameter] public bool Active { get; set; } = true;
+
+    [Parameter] public string? Error { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _lines = await Billables.LinesAsync(Kind, DocumentId);
+        }
+        catch (DomainException)
+        {
+            // Voided or not a spend: show what's billable already, nothing to mark.
+            _lines = [];
+        }
+
+        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _names = await CustomerService.FullNamesAsync();
+    }
+}

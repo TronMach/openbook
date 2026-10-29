@@ -3,11 +3,10 @@
 @inject CustomerService CustomerService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
-@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Estimate @(_estimate?.Number) · OpenBook</PageTitle>
 
-@if (_estimate is null || _customer is null || _company is null)
+@if (_estimate is null || _customer is null || _company is null || _progress is null)
 {
     <div class="card"><p>That estimate doesn't exist. <a href="/sales?show=estimates">Back to estimates</a>.</p></div>
     return;
@@ -27,17 +26,17 @@
         <a class="button secondary" href="/api/sales/estimates/@_estimate.Id/pdf" target="_blank">PDF</a>
         <a class="button secondary" href="/sales/email/estimates/@_estimate.Id">Email</a>
         <a class="button secondary" href="/audit?entityId=@_estimate.Id">History</a>
-        @if (_estimate.Status != EstimateStatus.Closed)
+        @if (_estimate.Status != EstimateStatus.Closed && !_progress.Started)
         {
             <a class="button secondary" href="/sales/estimates/@_estimate.Id/edit">Edit</a>
         }
     </div>
 
-    @if (_error is not null)
+    @if ((_error ?? Error) is { } error)
     {
-        <div class="alert error no-print" role="alert">@_error</div>
+        <div class="alert error no-print" role="alert">@error</div>
     }
-    @if (_estimate.InvoiceId is { } invoiceId)
+    @if (_estimate.InvoiceId is { } invoiceId && !_progress.Started)
     {
         <div class="alert notice no-print" role="status">Invoiced: <a href="/sales/invoices/@invoiceId">see the invoice</a>.</div>
     }
@@ -49,19 +48,33 @@
     <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Prepared for" Facts="Facts" Lines="_estimate.Lines"
                    Totals="Totals" Memo="@_estimate.Memo" />
 
+    @if (_progress.Invoices.Count > 0)
+    {
+        <h2 class="no-print">Invoices</h2>
+        <table class="data no-print">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Status</th><th class="num">Before tax</th></tr></thead>
+            <tbody>
+                @foreach (var i in _progress.Invoices)
+                {
+                    <tr class="@(i.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
+                        <td>@Labels.Date(i.Date)</td>
+                        <td>@(i.Status == DocumentStatus.Voided ? "Voided" : Labels.Status(i, today))</td>
+                        <td class="num">@Labels.Amount(i.Subtotal)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td colspan="3">Invoiced so far, of @Labels.Amount(_estimate.Subtotal)</td><td class="num">@Labels.Amount(_progress.InvoicedSubtotal)</td></tr>
+            </tfoot>
+        </table>
+    }
+
     @if (open)
     {
-        <div class="card no-print" style="margin-top: 1.5rem">
-            <h2>Turn into an invoice</h2>
-            <p class="muted">Creates an invoice with these lines and prices, dated today unless you choose another date, and closes the estimate.</p>
-            <form method="post" @formname="convert" @onsubmit="ConvertAsync" class="inline">
-                <AntiforgeryToken />
-                <label for="invoice-date">Invoice date</label>
-                <input id="invoice-date" type="date" name="InvoiceDate" value="@today.ToString("yyyy-MM-dd")" />
-                <button type="submit">Create invoice</button>
-            </form>
-            <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="ClosingPassword" />
-        </div>
+        <PartialInvoiceForm Lines="_estimate.Lines" Progress="_progress" Action="@($"/sales/estimates/{_estimate.Id}/invoice")" AllowPercent="true"
+                            Title="Turn into an invoice" Password="Password"
+                            Hint="Invoice it all at once, or in progress invoices (a percentage, or the quantities done so far). The estimate closes once everything is invoiced, and can't be edited after the first progress invoice." />
     }
     @if (_estimate.Status != EstimateStatus.Closed)
     {
@@ -85,16 +98,13 @@
     private Customer? _customer;
     private OpenBook.Domain.Companies.Company? _company;
     private string? _error;
-    private bool _needsClosingPassword;
+    private InvoicingProgress? _progress;
 
     [Parameter]
     public Guid Id { get; set; }
 
-    [SupplyParameterFromForm(FormName = "convert")]
-    private DateOnly? InvoiceDate { get; set; }
-
-    [SupplyParameterFromForm(FormName = "convert")]
-    private string? ClosingPassword { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
 
     [SupplyParameterFromForm(FormName = "status")]
     private EstimateStatus? NewStatus { get; set; }
@@ -120,21 +130,7 @@
             return;
         _customer = await CustomerService.GetAsync(_estimate.CustomerId);
         _company = await Settings.GetAsync();
-    }
-
-    private async Task ConvertAsync()
-    {
-        try
-        {
-            ClosingOverride.Password = ClosingPassword;
-            var invoice = await Estimates.ConvertToInvoiceAsync(Id, InvoiceDate ?? DateOnly.FromDateTime(DateTime.Today));
-            Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
-        }
-        catch (DomainException ex)
-        {
-            _error = ex.Message;
-            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
-        }
+        _progress = await Estimates.ProgressAsync(Id);
     }
 
     private async Task SetStatusAsync()

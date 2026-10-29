@@ -59,6 +59,7 @@ public sealed class BankingService(
     ILedgerStore ledger,
     AccountService accounts,
     PostingEngine engine,
+    Sales.ISalesStore sales,
     IClock clock,
     ICurrentUser user)
 {
@@ -160,7 +161,9 @@ public sealed class BankingService(
     {
         var transaction = await bank.GetTransactionAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(transaction);
-        // Entry first: it refuses reconciled transactions, and nothing should change in memory before that.
+        // Refuses costs already billed to a customer.
+        await Sales.BillableExpenseService.ReleaseAsync(sales, Domain.Sales.BillableSource.Expense, transaction.Id, clock, user, ct);
+        // Entry next: it refuses reconciled transactions, and the transaction shouldn't change in memory before that.
         await engine.StageVoidAsync(transaction.JournalEntryId, reason, fromDocument: true, ct);
         transaction.MarkVoided();
         bank.Add(Audit(AuditAction.Voided, transaction, before));

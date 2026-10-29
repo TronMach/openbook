@@ -29,6 +29,7 @@ public sealed class BillService(
     PostingEngine engine,
     InventoryService inventory,
     WarehouseService warehouses,
+    Sales.ISalesStore sales,
     IClock clock,
     ICurrentUser user)
 {
@@ -91,6 +92,7 @@ public sealed class BillService(
             throw new DomainException("bill.has_payments", "This bill has payments or credits applied. Void or remove those first.");
 
         var stock = await inventory.PlanReversalAsync(InventorySources.Bill, bill.Id, bill.Date, "this bill", ct);
+        await Sales.BillableExpenseService.ReleaseAsync(sales, Domain.Sales.BillableSource.Bill, bill.Id, clock, user, ct);
         var before = Snapshot(bill);
         await engine.StageVoidAsync(bill.JournalEntryId, reason, fromDocument: true, ct);
         inventory.Apply(stock, InventorySources.Bill, bill.Id);

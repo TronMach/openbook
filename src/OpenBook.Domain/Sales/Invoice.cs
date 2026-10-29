@@ -11,6 +11,7 @@ public sealed class Invoice
     public const string Source = "sales.invoice";
 
     private readonly List<SalesLine> _lines = [];
+    private readonly List<InvoiceSourceLine> _sourceLines = [];
 
     private Invoice() => Number = string.Empty;
 
@@ -54,6 +55,23 @@ public sealed class Invoice
     public Guid? RecurringInvoiceId { get; private set; }
 
     public DateTimeOffset? LastEmailedAt { get; private set; }
+
+    /// <summary>The sales order this invoice bills (part of).</summary>
+    public Guid? SalesOrderId { get; private set; }
+
+    /// <summary>
+    /// For an invoice made from a sales order or (progress) from an estimate: how much of each of its lines this
+    /// invoice bills. Empty for an estimate invoiced whole before progress invoicing existed.
+    /// </summary>
+    public IReadOnlyList<InvoiceSourceLine> SourceLines => _sourceLines;
+
+    public void SetSource(Guid? salesOrderId, IReadOnlyList<InvoiceSourceLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        SalesOrderId = salesOrderId;
+        _sourceLines.Clear();
+        _sourceLines.AddRange(lines);
+    }
 
     /// <summary>For a late fee invoice: the overdue invoice it charges the fee on.</summary>
     public Guid? LateFeeForInvoiceId { get; private set; }

@@ -93,6 +93,32 @@ public interface ISalesStore
     /// <summary>Untracked: every reminder sent.</summary>
     Task<IReadOnlyList<InvoiceReminder>> ListRemindersAsync(CancellationToken ct);
 
+    /// <summary>Tracked, with lines.</summary>
+    Task<SalesOrder?> GetSalesOrderAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, with lines, newest first.</summary>
+    Task<IReadOnlyList<SalesOrder>> ListSalesOrdersAsync(Guid? customerId, CancellationToken ct);
+
+    Task<IReadOnlyList<string>> ListSalesOrderNumbersAsync(CancellationToken ct);
+
+    /// <summary>Tracked, with applications and refunds.</summary>
+    Task<Retainer?> GetRetainerAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first; all customers when null.</summary>
+    Task<IReadOnlyList<Retainer>> ListRetainersAsync(Guid? customerId, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<BillableExpense>> GetBillableExpensesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Tracked: the billable lines of one bill or expense.</summary>
+    Task<IReadOnlyList<BillableExpense>> ListBillableForDocumentAsync(BillableSource kind, Guid documentId, CancellationToken ct);
+
+    /// <summary>Tracked: the billable expenses on an invoice.</summary>
+    Task<IReadOnlyList<BillableExpense>> ListBillableForInvoiceAsync(Guid invoiceId, CancellationToken ct);
+
+    /// <summary>Untracked, oldest first; all customers when null.</summary>
+    Task<IReadOnlyList<BillableExpense>> ListBillableExpensesAsync(Guid? customerId, CancellationToken ct);
+
     void Add(Customer customer);
     void Add(Item item);
     void Add(Invoice invoice);
@@ -104,6 +130,10 @@ public interface ISalesStore
     void Add(RecurringInvoice recurringInvoice);
     void Add(BankDeposit deposit);
     void Add(BadDebtWriteOff writeOff);
+    void Add(SalesOrder order);
+    void Add(Retainer retainer);
+    void Add(BillableExpense billable);
+    void Remove(BillableExpense billable);
     void Add(CollectionSettings settings);
     void Add(InvoiceReminder reminder);
     void Add(AuditRecord record);

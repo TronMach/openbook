@@ -59,6 +59,21 @@
 
             <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
+            @if (_billable.Count > 0)
+            {
+                <fieldset style="margin-top: 1rem">
+                    <legend>Billable expenses for this customer</legend>
+                    @foreach (var b in _billable)
+                    {
+                        <label class="check">
+                            <input type="checkbox" checked="@_chosenBillable.Contains(b.Id)" @onchange="e => ToggleBillable(b.Id, e)" />
+                            <span>@Labels.Date(b.Date) · @b.Description · @Labels.Amount(b.Amount)@(b.MarkupPercent > 0m ? $" (cost {Labels.Amount(b.Cost)} + {b.MarkupPercent:0.####}%)" : "")</span>
+                        </label>
+                    }
+                    <span class="hint">Ticked costs are added as "Billable Expenses" lines when you save: @Labels.Amount(BillableTotal) more on this invoice.</span>
+                </fieldset>
+            }
+
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             <div class="field" style="margin-top: 1rem">
@@ -111,7 +126,20 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
-    private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
+    private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) + BillableTotal > 0m && !string.IsNullOrWhiteSpace(_number);
+
+    private IReadOnlyList<BillableExpense> _billable = [];
+    private readonly HashSet<Guid> _chosenBillable = [];
+
+    private decimal BillableTotal => _billable.Where(b => _chosenBillable.Contains(b.Id)).Sum(b => b.Amount);
+
+    private void ToggleBillable(Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            _chosenBillable.Add(id);
+        else
+            _chosenBillable.Remove(id);
+    }
 
     private SegmentOptions _segments = SegmentOptions.None;
     private IReadOnlyList<Warehouse> _warehouses = [];
@@ -131,19 +159,23 @@
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
         if (PresetCustomer is { } preset)
-            SetCustomer(preset);
+            await SetCustomerAsync(preset);
         _loaded = true;
     }
 
-    private void PickCustomer(ChangeEventArgs e) => SetCustomer(Guid.TryParse(e.Value as string, out var id) ? id : null);
+    private Task PickCustomer(ChangeEventArgs e) => SetCustomerAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
 
-    private void SetCustomer(Guid? id)
+    private async Task SetCustomerAsync(Guid? id)
     {
         _customerId = id;
         _customer = _customers.FirstOrDefault(c => c.Id == id);
         if (_customer is not null)
             _dueDate = _customer.DueDateFor(_date);
         DefaultTaxCode();
+        _chosenBillable.Clear();
+        _billable = id is { } customerId
+            ? await Ops.RunAsync(sp => sp.GetRequiredService<BillableExpenseService>().OpenAsync(customerId))
+            : [];
     }
 
     private void ChangeDate(ChangeEventArgs e)
@@ -160,7 +192,8 @@
         _error = null;
         try
         {
-            var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId);
+            var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId,
+                BillableExpenseIds: [.. _chosenBillable]);
             var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
         }

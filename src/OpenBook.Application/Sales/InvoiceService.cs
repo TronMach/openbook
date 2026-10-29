@@ -12,6 +12,7 @@ namespace OpenBook.Application.Sales;
 /// <param name="Number">Defaults to the next number in sequence.</param>
 /// <param name="EstimateId">The estimate being invoiced; it's closed in the same save.</param>
 /// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
+/// <param name="BillableExpenseIds">Costs waiting to be billed to the customer, added as "Billable Expenses" lines.</param>
 public sealed record CreateInvoiceCommand(
     Guid CustomerId,
     DateOnly Date,
@@ -23,7 +24,11 @@ public sealed record CreateInvoiceCommand(
     Guid? TaxCodeId = null,
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
-    Guid? WarehouseId = null);
+    Guid? WarehouseId = null,
+    IReadOnlyList<Guid>? BillableExpenseIds = null);
+
+/// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
+internal sealed record InvoiceSource(Guid? SalesOrderId, IReadOnlyList<InvoiceSourceLine> Lines, bool Completes);
 
 public sealed class InvoiceService(
     ISalesStore store,
@@ -32,6 +37,7 @@ public sealed class InvoiceService(
     PostingEngine engine,
     InventoryService inventory,
     WarehouseService warehouses,
+    BillableExpenseService billables,
     IClock clock,
     ICurrentUser user)
 {
@@ -56,7 +62,9 @@ public sealed class InvoiceService(
 
     /// <param name="recurringInvoiceId">The template creating it, recorded on the invoice.</param>
     /// <param name="lateFeeFor">For a late fee: the overdue invoice it's charged on.</param>
-    internal async Task<Invoice> CreateAsync(CreateInvoiceCommand command, Guid? recurringInvoiceId, CancellationToken ct, Guid? lateFeeFor = null)
+    /// <param name="source">For an invoice made from a sales order or (progress) from an estimate.</param>
+    internal async Task<Invoice> CreateAsync(
+        CreateInvoiceCommand command, Guid? recurringInvoiceId, CancellationToken ct, Guid? lateFeeFor = null, InvoiceSource? source = null)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
@@ -77,11 +85,29 @@ public sealed class InvoiceService(
                 throw new DomainException("estimate.wrong_customer", $"Estimate {estimate.Number} is for a different customer.");
         }
 
+        SalesOrder? order = null;
+        if (source?.SalesOrderId is { } orderId)
+        {
+            order = await store.GetSalesOrderAsync(orderId, ct) ?? throw new EntityNotFoundException(SalesOrderService.EntityType, orderId);
+            if (order.Status != SalesOrderStatus.Open)
+                throw new DomainException("salesorder.not_open", $"Sales order {order.Number} is {order.Status.ToString().ToLowerInvariant()}.");
+            if (order.CustomerId != customer.Id)
+                throw new DomainException("salesorder.wrong_customer", $"Sales order {order.Number} is for a different customer.");
+        }
+
+        var drafts = command.Lines.ToList();
+        var billable = await billables.ForInvoiceAsync(customer.Id, command.BillableExpenseIds ?? [], ct);
+        if (billable.Count > 0)
+        {
+            var itemId = await billables.ItemIdAsync(ct);
+            drafts.AddRange(billable.Select(b => new SalesLineDraft(itemId, b.Description, 1m, b.Amount, PriceSource: BillableExpenseService.PriceSource)));
+        }
+
         var number = Invoice.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
 
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
@@ -101,9 +127,27 @@ public sealed class InvoiceService(
         invoice.SetWarehouse(warehouseId);
         if (lateFeeFor is { } overdue)
             invoice.MarkLateFeeFor(overdue);
+        if (source is not null)
+            invoice.SetSource(source.SalesOrderId, source.Lines);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
-        if (estimate is not null)
+        foreach (var b in billable)
+        {
+            var billableBefore = BillableExpenseService.Snapshot(b);
+            b.MarkInvoiced(invoice.Id);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, BillableExpenseService.EntityType, b.Id,
+                billableBefore, BillableExpenseService.Snapshot(b)));
+        }
+
+        if (order is not null && source!.Completes)
+        {
+            var orderBefore = SalesOrderService.Snapshot(order);
+            order.Close();
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SalesOrderService.EntityType, order.Id,
+                orderBefore, SalesOrderService.Snapshot(order)));
+        }
+
+        if (estimate is not null && (source?.Completes ?? true))
         {
             var estimateBefore = EstimateService.Snapshot(estimate);
             estimate.MarkInvoiced(invoice.Id);
@@ -130,13 +174,29 @@ public sealed class InvoiceService(
         invoice.Void();
         store.Add(Audit(AuditAction.Voided, invoice, before));
 
-        // The estimate can be invoiced again.
-        if (invoice.EstimateId is { } estimateId && await store.GetEstimateAsync(estimateId, ct) is { InvoiceId: var linked } estimate && linked == invoice.Id)
+        // The estimate, sales order and billable expenses can be invoiced again.
+        if (invoice.EstimateId is { } estimateId && await store.GetEstimateAsync(estimateId, ct) is { Status: EstimateStatus.Closed } estimate)
         {
             var estimateBefore = EstimateService.Snapshot(estimate);
             estimate.Reopen();
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EstimateService.EntityType, estimate.Id,
                 estimateBefore, EstimateService.Snapshot(estimate)));
+        }
+
+        if (invoice.SalesOrderId is { } orderId && await store.GetSalesOrderAsync(orderId, ct) is { Status: SalesOrderStatus.Closed } order)
+        {
+            var orderBefore = SalesOrderService.Snapshot(order);
+            order.Reopen();
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SalesOrderService.EntityType, order.Id,
+                orderBefore, SalesOrderService.Snapshot(order)));
+        }
+
+        foreach (var b in await store.ListBillableForInvoiceAsync(invoice.Id, ct))
+        {
+            var billableBefore = BillableExpenseService.Snapshot(b);
+            b.ClearInvoice();
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, BillableExpenseService.EntityType, b.Id,
+                billableBefore, BillableExpenseService.Snapshot(b)));
         }
 
         await store.SaveChangesAsync(ct);
@@ -163,6 +223,8 @@ public sealed class InvoiceService(
         i.EstimateId,
         i.RecurringInvoiceId,
         i.LateFeeForInvoiceId,
+        i.SalesOrderId,
+        SourceLines = i.SourceLines.Select(l => new { l.LineNumber, l.Quantity }),
         i.TaxCodeId,
         i.TaxExemption,
         Lines = i.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),

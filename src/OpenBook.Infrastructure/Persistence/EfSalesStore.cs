@@ -125,6 +125,40 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public async Task<IReadOnlyList<InvoiceReminder>> ListRemindersAsync(CancellationToken ct) =>
         await db.InvoiceReminders.AsNoTracking().ToListAsync(ct);
 
+    public Task<SalesOrder?> GetSalesOrderAsync(Guid id, CancellationToken ct) => db.SalesOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
+
+    public async Task<IReadOnlyList<SalesOrder>> ListSalesOrdersAsync(Guid? customerId, CancellationToken ct) =>
+        (await db.SalesOrders.AsNoTracking().Where(o => customerId == null || o.CustomerId == customerId).ToListAsync(ct))
+            .OrderByDescending(o => o.Date)
+            .ThenByDescending(o => o.CreatedAt)
+            .ToList();
+
+    public async Task<IReadOnlyList<string>> ListSalesOrderNumbersAsync(CancellationToken ct) =>
+        await db.SalesOrders.Select(o => o.Number).ToListAsync(ct);
+
+    public Task<Retainer?> GetRetainerAsync(Guid id, CancellationToken ct) => db.Retainers.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public async Task<IReadOnlyList<Retainer>> ListRetainersAsync(Guid? customerId, CancellationToken ct) =>
+        (await db.Retainers.AsNoTracking().Where(r => customerId == null || r.CustomerId == customerId).ToListAsync(ct))
+            .OrderByDescending(r => r.Date)
+            .ThenByDescending(r => r.CreatedAt)
+            .ToList();
+
+    public async Task<IReadOnlyList<BillableExpense>> GetBillableExpensesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        await db.BillableExpenses.Where(b => ids.Contains(b.Id)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<BillableExpense>> ListBillableForDocumentAsync(BillableSource kind, Guid documentId, CancellationToken ct) =>
+        await db.BillableExpenses.Where(b => b.Kind == kind && b.DocumentId == documentId).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<BillableExpense>> ListBillableForInvoiceAsync(Guid invoiceId, CancellationToken ct) =>
+        await db.BillableExpenses.Where(b => b.InvoiceId == invoiceId).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<BillableExpense>> ListBillableExpensesAsync(Guid? customerId, CancellationToken ct) =>
+        (await db.BillableExpenses.AsNoTracking().Where(b => customerId == null || b.CustomerId == customerId).ToListAsync(ct))
+            .OrderBy(b => b.Date)
+            .ThenBy(b => b.CreatedAt)
+            .ToList();
+
     public void Add(Customer customer) => db.Customers.Add(customer);
 
     public void Add(Item item) => db.Items.Add(item);
@@ -146,6 +180,14 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public void Add(BankDeposit deposit) => db.BankDeposits.Add(deposit);
 
     public void Add(BadDebtWriteOff writeOff) => db.BadDebtWriteOffs.Add(writeOff);
+
+    public void Add(SalesOrder order) => db.SalesOrders.Add(order);
+
+    public void Add(Retainer retainer) => db.Retainers.Add(retainer);
+
+    public void Add(BillableExpense billable) => db.BillableExpenses.Add(billable);
+
+    public void Remove(BillableExpense billable) => db.BillableExpenses.Remove(billable);
 
     public void Add(CollectionSettings settings) => db.CollectionSettings.Add(settings);
 

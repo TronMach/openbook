@@ -30,7 +30,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
-        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
+        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Retainer.ApplicationSource, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
 
     /// <summary>Every class, location and tag's full name.</summary>
     public async Task<IReadOnlyDictionary<Guid, string>> SegmentNamesAsync(CancellationToken ct = default) =>
@@ -112,6 +112,26 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 var unapplied = payment.Amount - payment.AmountApplied;
                 if (unapplied != 0m)
                     cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.ReceivableAccountId, -unapplied, memo, CustomerPayment.Source, payment.Id));
+            }
+        }
+
+        // A retainer applied to an invoice is the invoice being paid: the deposit liability goes down by the amount
+        // applied, and the invoice's income is recognized on the date it's applied.
+        var applications = (await sales.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted)
+            .SelectMany(r => r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)).Select(a => (Retainer: r, Application: a))).ToList();
+        if (applications.Count > 0)
+        {
+            var invoices = (await sales.ListInvoicesAsync(null, ct)).ToDictionary(i => i.Id);
+            foreach (var (retainer, application) in applications)
+            {
+                var number = entryNumbers.GetValueOrDefault(application.JournalEntryId);
+                var memo = lines.FirstOrDefault(l => l.JournalEntryId == application.JournalEntryId)?.EntryMemo;
+                cash.Add(Derived(application.JournalEntryId, number, application.AppliedOn, retainer.LiabilityAccountId, application.Amount, memo,
+                    Retainer.ApplicationSource, retainer.Id));
+                var invoice = invoices[application.InvoiceId];
+                foreach (var (accountId, classId, share) in AllocateByClass(application.Amount, IncomeLines(invoice.Lines)))
+                    cash.Add(Derived(application.JournalEntryId, number, application.AppliedOn, accountId, -share, memo, Retainer.ApplicationSource, retainer.Id,
+                        classId, invoice.LocationId));
             }
         }
 

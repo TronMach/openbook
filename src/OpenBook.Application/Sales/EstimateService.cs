@@ -54,6 +54,8 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (estimate.Status == EstimateStatus.Closed)
             throw new DomainException("estimate.closed", $"Estimate {estimate.Number} is already invoiced.");
+        if ((await ProgressAsync(estimate, ct)).Started)
+            throw new DomainException("estimate.invoiced", $"Estimate {estimate.Number} has progress invoices, so it can't be changed.");
         var customer = await ActiveCustomerAsync(command.CustomerId, ct);
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
 
@@ -76,15 +78,41 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
     }
 
     /// <summary>
-    /// Creates an invoice with the estimate's lines (priced as on the estimate) and tax code, and closes the
-    /// estimate. Tax is recalculated at today's rates and the customer's exemption on the invoice date.
+    /// Creates an invoice with what's left of the estimate's lines (priced as on the estimate) and its tax code, and
+    /// closes the estimate. Tax is recalculated at today's rates and the customer's exemption on the invoice date.
     /// </summary>
-    public async Task<Invoice> ConvertToInvoiceAsync(Guid id, DateOnly invoiceDate, CancellationToken ct = default)
+    public Task<Invoice> ConvertToInvoiceAsync(Guid id, DateOnly invoiceDate, CancellationToken ct = default) =>
+        ProgressInvoiceAsync(id, new InvoiceFromSourceCommand(invoiceDate), ct);
+
+    public async Task<InvoicingProgress> ProgressAsync(Guid id, CancellationToken ct = default) =>
+        await ProgressAsync(await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id), ct);
+
+    /// <summary>
+    /// Progress invoicing: bills a percentage of every line, chosen quantities, or everything left. The estimate
+    /// closes once it's all invoiced, and can't be edited after the first progress invoice.
+    /// </summary>
+    public async Task<Invoice> ProgressInvoiceAsync(Guid id, InvoiceFromSourceCommand command, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(command);
         var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
-        return await invoices.CreateAsync(new CreateInvoiceCommand(
-            estimate.CustomerId, invoiceDate, SalesLine.Drafts(estimate.Lines),
-            Memo: estimate.Memo, EstimateId: estimate.Id, TaxCodeId: estimate.TaxCodeId ?? Guid.Empty, LocationId: estimate.LocationId), ct);
+        if (estimate.Status == EstimateStatus.Closed)
+            throw new DomainException("estimate.closed", $"Estimate {estimate.Number} is already invoiced.");
+        if (estimate.Status == EstimateStatus.Declined)
+            throw new DomainException("estimate.declined", $"Estimate {estimate.Number} was declined.");
+        var progress = await ProgressAsync(estimate, ct);
+        var picks = SalesOrderService.Picks(estimate.Lines, progress.Remaining, command);
+        var (drafts, sources, completes) = PartialInvoicing.Build(estimate.Lines, progress.Remaining, picks);
+        return await invoices.CreateAsync(
+            new CreateInvoiceCommand(estimate.CustomerId, command.Date, drafts, command.DueDate, command.Number, estimate.Memo, estimate.Id,
+                TaxCodeId: estimate.TaxCodeId ?? Guid.Empty, LocationId: estimate.LocationId),
+            recurringInvoiceId: null, ct, source: new InvoiceSource(null, sources, completes));
+    }
+
+    private async Task<InvoicingProgress> ProgressAsync(Estimate estimate, CancellationToken ct)
+    {
+        var made = (await store.ListInvoicesAsync(estimate.CustomerId, ct)).Where(i => i.EstimateId == estimate.Id).OrderBy(i => i.Date).ToList();
+        var invoiced = PartialInvoicing.Invoiced(made);
+        return new InvoicingProgress(made, invoiced, PartialInvoicing.Remaining(estimate.Lines, invoiced));
     }
 
     private async Task<Customer> ActiveCustomerAsync(Guid customerId, CancellationToken ct)

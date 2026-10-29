@@ -1,0 +1,92 @@
+@page "/sales/retainers/new"
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+
+<PageTitle>Receive a retainer · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Receive a retainer</h1>
+        <a class="button secondary" href="/sales/retainers">Retainers</a>
+    </div>
+    <p class="muted">
+        For money received before you invoice: a deposit on an order, or a retainer for work to come. It goes into the bank and is held in
+        "@RetainerService.LiabilityAccountName" until you apply it to invoices. For payments of invoices already sent, <a href="/sales/payments/new">receive a payment</a> instead.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_banks.Count == 0)
+    {
+        <div class="card"><p>Retainers are deposited to a bank account. <a href="/accounts/new">Add one</a> first.</p></div>
+    }
+    else
+    {
+        <div class="card">
+            <form method="post" action="/sales/retainers" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="customer">Customer</label>
+                        <select id="customer" name="customerId" data-search required>
+                            <option value="">Choose a customer…</option>
+                            @foreach (var c in _customers)
+                            {
+                                <option value="@c.Customer.Id" selected="@(c.Customer.Id == Customer)">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="amount">Amount</label>
+                        <input id="amount" name="amount" class="amount" inputmode="decimal" required />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="field">
+                        <label for="account">Deposit to</label>
+                        <select id="account" name="accountId">
+                            @foreach (var a in _banks)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="reference">Reference <span class="muted">(optional)</span></label>
+                        <input id="reference" name="reference" maxlength="30" placeholder="Check or wire number" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" name="memo" maxlength="1000" />
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Receive retainer</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private List<Account> _banks = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private Guid? Customer { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _chart = await AccountService.GetChartAsync();
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
+    }
+}

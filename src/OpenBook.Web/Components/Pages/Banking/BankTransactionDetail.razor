@@ -112,12 +112,19 @@
 
     <EntryTags EntryId="_transaction.JournalEntryId" />
 
+    @if (_transaction.Kind == BankTransactionKind.Spend && _transaction.Status == BankTransactionStatus.Posted)
+    {
+        <BillableLinesPanel Kind="BillableSource.Expense" DocumentId="_transaction.Id" Back="@($"/banking/transactions/{_transaction.Id}")" Error="@BillableError" />
+    }
+
     <Attachments EntityType="bank_transaction" EntityId="_transaction.Id" />
 
     <Notes EntityType="bank_transaction" EntityId="_transaction.Id" />
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "billableError")] private string? BillableError { get; set; }
+
     private BankTransaction? _transaction;
     private JournalEntry? _entry;
     private ChartOfAccounts _chart = new([]);

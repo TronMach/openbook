@@ -1,0 +1,58 @@
+@page "/sales/retainers"
+@inject RetainerService RetainerService
+@inject CustomerService CustomerService
+
+<PageTitle>Retainers · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Retainers and deposits</h1>
+        <a class="button secondary" href="/sales">Back to sales</a>
+        <a class="button" href="/sales/retainers/new">Receive a retainer</a>
+    </div>
+    <p class="muted">
+        Money customers pay before the work is billed. It's held in "@RetainerService.LiabilityAccountName" (a liability, not income) until you
+        apply it to their invoices or refund it.
+    </p>
+
+    @if (_retainers.Count == 0)
+    {
+        <div class="card"><p>No retainers yet.</p></div>
+    }
+    else
+    {
+        <div class="summary-bar">
+            <div><span class="label">Held for customers</span><span class="value">@Labels.Amount(_retainers.Sum(r => r.Balance))</span></div>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Date</th><th>Customer</th><th>Reference</th><th class="num">Received</th><th class="num">Applied</th><th class="num">Refunded</th><th class="num">Left</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _retainers)
+                    {
+                        <tr class="@(r.Status == DocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/sales/retainers/@r.Id">@Labels.Date(r.Date)</a></td>
+                            <td>@_names.GetValueOrDefault(r.CustomerId)</td>
+                            <td>@r.Reference @(r.Status == DocumentStatus.Voided ? "(voided)" : "")</td>
+                            <td class="num">@Labels.Amount(r.Amount)</td>
+                            <td class="num">@Labels.AmountOrBlank(r.AmountApplied)</td>
+                            <td class="num">@Labels.AmountOrBlank(r.AmountRefunded)</td>
+                            <td class="num">@Labels.AmountOrBlank(r.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Retainer> _retainers = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _retainers = await RetainerService.ListAsync();
+        _names = await CustomerService.FullNamesAsync();
+    }
+}

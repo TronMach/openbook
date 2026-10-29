@@ -1,0 +1,69 @@
+@* Invoices part of a sales order or estimate: everything left, a percentage of every line, or chosen quantities.
+   Posts mode (rest/percent/lines), percent, qty:{lineNumber}, date and ClosingPassword to Action. *@
+
+<div class="card no-print" id="invoice">
+    <h2>@Title</h2>
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>Line</th><th class="num">Ordered</th><th class="num">Invoiced</th><th class="num">Left</th><th class="num">Invoice now</th></tr></thead>
+            <tbody>
+                @foreach (var line in Lines.Where(l => l.Kind == SalesLineKind.Item && l.ItemId is not null).OrderBy(l => l.LineNumber))
+                {
+                    var left = Progress.Remaining.GetValueOrDefault(line.LineNumber);
+                    <tr class="@(left == 0m ? "inactive" : null)">
+                        <td>@line.Description</td>
+                        <td class="num">@Labels.Quantity(line.Quantity)</td>
+                        <td class="num">@Labels.Quantity(Progress.Invoiced.GetValueOrDefault(line.LineNumber))</td>
+                        <td class="num">@Labels.Quantity(left)</td>
+                        <td class="num">
+                            @if (left != 0m)
+                            {
+                                <input form="@FormId" name="qty:@line.LineNumber" class="amount" inputmode="decimal" aria-label="Quantity to invoice now"
+                                       placeholder="@left.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <form id="@FormId" method="post" action="@Action" data-enhance="false">
+        <AntiforgeryToken />
+        <fieldset>
+            <legend>Invoice</legend>
+            <label class="check"><input type="radio" name="mode" value="rest" checked /> <span>Everything that's left</span></label>
+            @if (AllowPercent)
+            {
+                <label class="check">
+                    <input type="radio" name="mode" value="percent" />
+                    <span>This percentage of every line: <input name="percent" class="short" inputmode="decimal" aria-label="Percent" placeholder="25" />%</span>
+                </label>
+            }
+            <label class="check"><input type="radio" name="mode" value="lines" /> <span>The quantities entered above</span></label>
+        </fieldset>
+        <div class="row">
+            <div class="field">
+                <label for="partial-date">Invoice date</label>
+                <input id="partial-date" type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+        <p class="hint">@Hint</p>
+        <div class="actions"><button type="submit">Create invoice</button></div>
+    </form>
+</div>
+
+@code {
+    private const string FormId = "partial-invoice";
+
+    [Parameter, EditorRequired] public IReadOnlyList<SalesLine> Lines { get; set; } = [];
+    [Parameter, EditorRequired] public InvoicingProgress Progress { get; set; } = default!;
+    [Parameter, EditorRequired] public string Action { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "Invoice";
+    [Parameter] public bool AllowPercent { get; set; }
+    [Parameter] public bool Password { get; set; }
+
+    [Parameter]
+    public string Hint { get; set; } =
+        "Priced as on the document. An amount discount goes on the first invoice; percent discounts and notes go on each one. Tax is worked out on each invoice.";
+}

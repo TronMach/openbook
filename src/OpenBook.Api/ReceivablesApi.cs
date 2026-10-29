@@ -69,6 +69,37 @@ public sealed record ChargeLateFeesRequest(DateOnly? Date, IReadOnlyList<Guid>? 
 /// <param name="InvoiceIds">Null for every one due today.</param>
 public sealed record SendRemindersRequest(IReadOnlyList<Guid>? InvoiceIds);
 
+public sealed record SalesOrderResponse(
+    Guid Id, string Number, Guid CustomerId, DateOnly Date, DateOnly? ExpectedDate, string? CustomerReference, string? Memo, decimal Total,
+    SalesOrderStatus Status, Guid? TaxCodeId, IReadOnlyList<SalesLineResponse> Lines)
+{
+    public static SalesOrderResponse From(SalesOrder o) => new(
+        o.Id, o.Number, o.CustomerId, o.Date, o.ExpectedDate, o.CustomerReference, o.Memo, o.Total, o.Status, o.TaxCodeId,
+        o.Lines.Select(SalesLineResponse.From).ToList());
+}
+
+public sealed record InvoicingProgressResponse(IReadOnlyList<Guid> InvoiceIds, decimal InvoicedSubtotal, IReadOnlyDictionary<int, decimal> Invoiced, IReadOnlyDictionary<int, decimal> Remaining)
+{
+    public static InvoicingProgressResponse From(InvoicingProgress p) =>
+        new(p.Invoices.Select(i => i.Id).ToList(), p.InvoicedSubtotal, p.Invoiced, p.Remaining);
+}
+
+public sealed record RetainerResponse(
+    Guid Id, Guid CustomerId, DateOnly Date, decimal Amount, Guid DepositAccountId, Guid LiabilityAccountId, string? Reference, string? Memo,
+    DocumentStatus Status, decimal Balance, IReadOnlyList<RetainerApplication> Applications, IReadOnlyList<RetainerRefund> Refunds)
+{
+    public static RetainerResponse From(Retainer r) => new(
+        r.Id, r.CustomerId, r.Date, r.Amount, r.DepositAccountId, r.LiabilityAccountId, r.Reference, r.Memo, r.Status, r.Balance, r.Applications, r.Refunds);
+}
+
+public sealed record BillableExpenseResponse(
+    Guid Id, BillableSource Kind, Guid DocumentId, int LineNumber, Guid CustomerId, DateOnly Date, string Description, decimal Cost, decimal MarkupPercent,
+    decimal Amount, Guid? InvoiceId)
+{
+    public static BillableExpenseResponse From(BillableExpense b) =>
+        new(b.Id, b.Kind, b.DocumentId, b.LineNumber, b.CustomerId, b.Date, b.Description, b.Cost, b.MarkupPercent, b.Amount, b.InvoiceId);
+}
+
 public sealed record RecurringInvoiceResponse(
     Guid Id, string Name, Guid CustomerId, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
     int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool AutoEmail, bool IsActive, IReadOnlyList<SalesLineDraft> Lines)
@@ -167,6 +198,66 @@ internal static class ReceivablesApi
         });
         sales.MapPost("/refunds/{id:guid}/void", async (Guid id, VoidRequest r, CreditService s, CancellationToken ct) =>
             RefundResponse.From(await s.VoidRefundAsync(id, r.Reason, ct)));
+
+        sales.MapGet("/orders", async (Guid? customerId, SalesOrderService s, CancellationToken ct) =>
+            (await s.ListAsync(customerId, ct)).Select(SalesOrderResponse.From));
+        sales.MapGet("/orders/{id:guid}", async (Guid id, SalesOrderService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } o ? Results.Ok(SalesOrderResponse.From(o)) : Results.NotFound());
+        sales.MapPost("/orders", async (SaveSalesOrderCommand r, SalesOrderService s, CancellationToken ct) =>
+        {
+            var order = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/sales/orders/{order.Id}", SalesOrderResponse.From(order));
+        });
+        sales.MapPut("/orders/{id:guid}", async (Guid id, SaveSalesOrderCommand r, SalesOrderService s, CancellationToken ct) =>
+            SalesOrderResponse.From(await s.UpdateAsync(id, r, ct)));
+        sales.MapPost("/orders/{id:guid}/cancel", async (Guid id, SalesOrderService s, CancellationToken ct) => SalesOrderResponse.From(await s.CancelAsync(id, ct)));
+        sales.MapGet("/orders/{id:guid}/progress", async (Guid id, SalesOrderService s, CancellationToken ct) =>
+            InvoicingProgressResponse.From(await s.ProgressAsync(id, ct)));
+        sales.MapPost("/orders/{id:guid}/invoice", async (Guid id, InvoiceFromSourceCommand r, SalesOrderService s, CancellationToken ct) =>
+        {
+            var invoice = await s.InvoiceAsync(id, r, ct);
+            return Results.Created($"/api/sales/invoices/{invoice.Id}", InvoiceResponse.From(invoice));
+        });
+        sales.MapGet("/estimates/{id:guid}/progress", async (Guid id, EstimateService s, CancellationToken ct) =>
+            InvoicingProgressResponse.From(await s.ProgressAsync(id, ct)));
+        sales.MapPost("/estimates/{id:guid}/progress-invoice", async (Guid id, InvoiceFromSourceCommand r, EstimateService s, CancellationToken ct) =>
+        {
+            var invoice = await s.ProgressInvoiceAsync(id, r, ct);
+            return Results.Created($"/api/sales/invoices/{invoice.Id}", InvoiceResponse.From(invoice));
+        });
+
+        sales.MapGet("/retainers", async (Guid? customerId, RetainerService s, CancellationToken ct) =>
+            (await s.ListAsync(customerId, ct)).Select(RetainerResponse.From));
+        sales.MapGet("/retainers/{id:guid}", async (Guid id, RetainerService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } r ? Results.Ok(RetainerResponse.From(r)) : Results.NotFound());
+        sales.MapPost("/retainers", async (ReceiveRetainerCommand r, RetainerService s, CancellationToken ct) =>
+        {
+            var retainer = await s.ReceiveAsync(r, ct);
+            return Results.Created($"/api/sales/retainers/{retainer.Id}", RetainerResponse.From(retainer));
+        });
+        sales.MapPost("/retainers/{id:guid}/apply", async (Guid id, ApplyRetainerCommand r, RetainerService s, CancellationToken ct) => await s.ApplyAsync(id, r, ct));
+        sales.MapPost("/retainers/{id:guid}/refund", async (Guid id, RefundRetainerCommand r, RetainerService s, CancellationToken ct) => await s.RefundAsync(id, r, ct));
+        sales.MapPost("/retainers/{id:guid}/applications/{applicationId:guid}/void", async (Guid id, Guid applicationId, VoidRequest r, RetainerService s, CancellationToken ct) =>
+            RetainerResponse.From(await s.VoidApplicationAsync(id, applicationId, r.Reason, ct)));
+        sales.MapPost("/retainers/{id:guid}/refunds/{refundId:guid}/void", async (Guid id, Guid refundId, VoidRequest r, RetainerService s, CancellationToken ct) =>
+            RetainerResponse.From(await s.VoidRefundAsync(id, refundId, r.Reason, ct)));
+        sales.MapPost("/retainers/{id:guid}/void", async (Guid id, VoidRequest r, RetainerService s, CancellationToken ct) =>
+            RetainerResponse.From(await s.VoidAsync(id, r.Reason, ct)));
+
+        sales.MapGet("/billable-expenses", async (Guid? customerId, bool? openOnly, BillableExpenseService s, CancellationToken ct) =>
+            (await s.ListAsync(customerId, ct)).Where(b => openOnly != true || b.InvoiceId is null).Select(BillableExpenseResponse.From));
+        sales.MapGet("/billable-expenses/lines", async (BillableSource kind, Guid documentId, BillableExpenseService s, CancellationToken ct) =>
+            (await s.LinesAsync(kind, documentId, ct)).Select(l => new { l.LineNumber, l.AccountId, l.Description, l.Cost, BillableId = l.Billable?.Id }));
+        sales.MapPost("/billable-expenses", async (MarkBillableCommand r, BillableExpenseService s, CancellationToken ct) =>
+        {
+            var billable = await s.MarkAsync(r, ct);
+            return Results.Created($"/api/sales/billable-expenses/{billable.Id}", BillableExpenseResponse.From(billable));
+        });
+        sales.MapDelete("/billable-expenses/{id:guid}", async (Guid id, BillableExpenseService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(id, ct);
+            return Results.NoContent();
+        });
 
         sales.MapGet("/write-offs", async (Guid? customerId, WriteOffService s, CancellationToken ct) =>
             (await s.ListAsync(customerId, ct)).Select(WriteOffResponse.From));

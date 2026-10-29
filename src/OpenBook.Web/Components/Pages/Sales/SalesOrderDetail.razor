@@ -1,0 +1,103 @@
+@page "/sales/orders/{Id:guid}"
+@inject SalesOrderService Orders
+@inject CustomerService CustomerService
+@inject CompanySettingsService Settings
+
+<PageTitle>Sales order @(_order?.Number) · OpenBook</PageTitle>
+
+@if (_order is null || _customer is null || _company is null || _progress is null)
+{
+    <div class="card"><p>That sales order doesn't exist. <a href="/sales/orders">Back to sales orders</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Sales order @_order.Number</h1>
+        <span class="badge @(_order.Status == SalesOrderStatus.Closed ? "ok" : null)">@_order.Status</span>
+        <a class="button secondary" href="/sales/orders">Back to sales orders</a>
+        <a class="button secondary" href="/audit?entityId=@_order.Id">History</a>
+        @if (_order.Status == SalesOrderStatus.Open && !_progress.Started)
+        {
+            <a class="button secondary" href="/sales/orders/@_order.Id/edit">Edit</a>
+        }
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error no-print" role="alert">@Error</div>
+    }
+
+    <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Ordered by" Facts="Facts" Lines="_order.Lines" Totals="Totals" Memo="@_order.Memo" />
+
+    @if (_progress.Invoices.Count > 0)
+    {
+        <h2>Invoices</h2>
+        <table class="data">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Status</th><th class="num">Total</th></tr></thead>
+            <tbody>
+                @foreach (var i in _progress.Invoices)
+                {
+                    <tr class="@(i.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
+                        <td>@Labels.Date(i.Date)</td>
+                        <td>@(i.Status == DocumentStatus.Voided ? "Voided" : Labels.Status(i, DateOnly.FromDateTime(DateTime.Today)))</td>
+                        <td class="num">@Labels.Amount(i.Total)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_order.Status == SalesOrderStatus.Open)
+    {
+        <PartialInvoiceForm Lines="_order.Lines" Progress="_progress" Action="@($"/sales/orders/{_order.Id}/invoice")" Title="Invoice this order" Password="Password" />
+
+        <form method="post" action="/sales/orders/@_order.Id/cancel" data-enhance="false" class="no-print actions">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">Cancel the rest of the order</button>
+            <span class="muted">What's invoiced stays; nothing more can be invoiced from it.</span>
+        </form>
+    }
+
+    <Attachments EntityType="sales_order" EntityId="_order.Id" />
+
+    <Notes EntityType="sales_order" EntityId="_order.Id" />
+</div>
+
+@code {
+    private SalesOrder? _order;
+    private Customer? _customer;
+    private OpenBook.Domain.Companies.Company? _company;
+    private InvoicingProgress? _progress;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    private List<(string, decimal)> Totals =>
+        [.. FormService.TaxTotals(_order!.Lines, _order.TaxCodeId, _order.TaxExemption).Select(t => (t.Label, t.Amount)), ("Total", _order.Total)];
+
+    private List<(string, string)> Facts
+    {
+        get
+        {
+            var facts = new List<(string, string)> { ("Sales order", _order!.Number), ("Date", Labels.Date(_order.Date)) };
+            if (_order.ExpectedDate is { } expected)
+                facts.Add(("Expected", Labels.Date(expected)));
+            if (_order.CustomerReference is { } po)
+                facts.Add(("Your PO", po));
+            return facts;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _order = await Orders.GetAsync(Id);
+        if (_order is null)
+            return;
+        _customer = await CustomerService.GetAsync(_order.CustomerId);
+        _company = await Settings.GetAsync();
+        _progress = await Orders.ProgressAsync(Id);
+    }
+}

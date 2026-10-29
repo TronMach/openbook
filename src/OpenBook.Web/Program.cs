@@ -72,6 +72,7 @@ app.MapReportEndpoints();
 app.MapPricingEndpoints();
 app.MapSegmentEndpoints();
 app.MapCollectionEndpoints();
+app.MapSalesFlowEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

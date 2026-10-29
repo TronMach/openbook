@@ -153,12 +153,17 @@
 
     <EntryTags EntryId="_bill.JournalEntryId" />
 
+    <BillableLinesPanel Kind="BillableSource.Bill" DocumentId="_bill.Id" Back="@($"/purchases/bills/{_bill.Id}")"
+                        Active="@(_bill.Status == DocumentStatus.Posted)" Error="@BillableError" />
+
     <Attachments EntityType="bill" EntityId="_bill.Id" />
 
     <Notes EntityType="bill" EntityId="_bill.Id" />
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "billableError")] private string? BillableError { get; set; }
+
     private Func<StockPlace, string> _place = _ => "";
     private Bill? _bill;
     private Vendor? _vendor;

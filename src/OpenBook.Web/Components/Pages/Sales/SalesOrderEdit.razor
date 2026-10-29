@@ -1,0 +1,171 @@
+@page "/sales/orders/new"
+@page "/sales/orders/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id is null ? "New sales order" : $"Sales order {_number}") · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(Id is null ? "New sales order" : $"Edit sales order {_number}")</h1>
+        <a class="button secondary" href="@(Id is { } id ? $"/sales/orders/{id}" : "/sales/orders")">Cancel</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_notEditable)
+    {
+        <div class="card"><p>That sales order doesn't exist, isn't open, or has been invoiced. <a href="/sales/orders">Back to sales orders</a>.</p></div>
+    }
+    else if (_loaded && (_customers.Count == 0 || _items.Count == 0))
+    {
+        <div class="card"><p>Sales orders need a customer and at least one product or service. <a href="/customers/new">Add a customer</a> or <a href="/items/new">a product or service</a>.</p></div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer</label>
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" @bind-Value="_customerId" @bind-Value:after="DefaultTaxCode" Placeholder="Choose a customer…" />
+                </div>
+                <div class="field">
+                    <label for="number">Order number</label>
+                    <input id="number" @bind="_number" maxlength="20" disabled="@(Id is not null)" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="expected">Expected <span class="muted">(optional)</span></label>
+                    <input id="expected" type="date" @bind="_expectedDate" />
+                </div>
+                <div class="field">
+                    <label for="po">Customer PO number <span class="muted">(optional)</span></label>
+                    <input id="po" @bind="_customerReference" maxlength="30" />
+                </div>
+            </div>
+
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to customer <span class="muted">(optional, copied onto its invoices)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save sales order</button>
+                <span class="muted">Orders don't affect the books or hold stock; their invoices do.</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _customerId;
+    private string? _number;
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _expectedDate;
+    private string? _customerReference;
+    private string? _memo;
+    private Guid? _warehouseId;
+    private Guid? _locationId;
+    private List<SalesLineModel> _lines = [new()];
+    private bool _loaded;
+    private bool _notEditable;
+    private bool _busy;
+    private string? _error;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
+    private Guid? _taxCodeId;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
+
+    private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
+    private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
+    private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    private void DefaultTaxCode() =>
+        _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+
+    private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+        _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+        _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+        SalesOrder? order;
+        bool invoiced;
+        (_customers, _items, _number, order, invoiced) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync(),
+            await sp.GetRequiredService<SalesOrderService>().SuggestNumberAsync(),
+            Id is { } id ? await sp.GetRequiredService<SalesOrderService>().GetAsync(id) : null,
+            Id is { } id2 && (await sp.GetRequiredService<SalesOrderService>().ProgressAsync(id2)).Started));
+        _customerId = PresetCustomer;
+        DefaultTaxCode();
+
+        if (Id is not null)
+        {
+            if (order is null || order.Status != SalesOrderStatus.Open || invoiced)
+            {
+                _notEditable = true;
+                return;
+            }
+
+            _customerId = order.CustomerId;
+            _number = order.Number;
+            _date = order.Date;
+            _expectedDate = order.ExpectedDate;
+            _customerReference = order.CustomerReference;
+            _memo = order.Memo;
+            _lines = SalesLine.Drafts(order.Lines).Select(SalesLineModel.From).ToList();
+            _locationId = order.LocationId;
+            _warehouseId = order.WarehouseId;
+            _taxCodeId = order.TaxCodeId;
+        }
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new SaveSalesOrderCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expectedDate, _number, _customerReference, _memo,
+                _taxCodeId ?? Guid.Empty, _locationId, _warehouseId);
+            var order = await Ops.RunAsync<SalesOrderService, SalesOrder>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            Navigation.NavigateTo($"/sales/orders/{order.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

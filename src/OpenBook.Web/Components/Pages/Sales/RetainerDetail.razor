@@ -1,0 +1,209 @@
+@page "/sales/retainers/{Id:guid}"
+@inject RetainerService RetainerService
+@inject PaymentService Payments
+@inject CustomerService CustomerService
+@inject InvoiceService Invoices
+@inject AccountService AccountService
+
+<PageTitle>Retainer · OpenBook</PageTitle>
+
+@if (_retainer is null)
+{
+    <div class="card"><p>That retainer doesn't exist. <a href="/sales/retainers">Back to retainers</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Retainer from @_names.GetValueOrDefault(_retainer.CustomerId)</h1>
+        @if (_retainer.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a class="button secondary" href="/sales/retainers">Retainers</a>
+        <a class="button secondary" href="/customers/@_retainer.CustomerId">Customer</a>
+        <a class="button secondary" href="/audit?entityId=@_retainer.Id">History</a>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is { } done)
+    {
+        <div class="alert notice" role="status">@(done switch { "applied" => "Applied.", "refunded" => "Refunded.", "voided" => "Voided.", _ => "Saved." })</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_retainer.Date)</dd>
+            <dt>Received</dt><dd>@Labels.Amount(_retainer.Amount)</dd>
+            <dt>Deposited to</dt><dd>@_chart.FullName(_retainer.DepositAccountId)</dd>
+            <dt>Held in</dt><dd>@_chart.FullName(_retainer.LiabilityAccountId)</dd>
+            <dt>Left to use</dt><dd><strong>@Labels.Amount(_retainer.Balance)</strong></dd>
+            @if (_retainer.Reference is not null) { <dt>Reference</dt><dd>@_retainer.Reference</dd> }
+            @if (_retainer.Memo is not null) { <dt>Memo</dt><dd>@_retainer.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_retainer.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    @if (_retainer.Applications.Count + _retainer.Refunds.Count > 0)
+    {
+        <h2>Used</h2>
+        <table class="data">
+            <thead><tr><th>Date</th><th>What</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _retainer.Applications.OrderBy(a => a.AppliedOn))
+                {
+                    <tr class="@(a.IsVoided ? "inactive" : null)">
+                        <td>@Labels.Date(a.AppliedOn)</td>
+                        <td>Applied to <a href="/sales/invoices/@a.InvoiceId">invoice @_invoiceNumbers.GetValueOrDefault(a.InvoiceId)</a> @(a.IsVoided ? "(voided)" : "")</td>
+                        <td class="num">@Labels.Amount(a.Amount)</td>
+                        <td>
+                            @if (!a.IsVoided)
+                            {
+                                <form method="post" action="/sales/retainers/@_retainer.Id/applications/@a.Id/void" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="reason" value="Retainer application taken back" />
+                                    <button type="submit" class="secondary">Take back</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @foreach (var f in _retainer.Refunds.OrderBy(f => f.Date))
+                {
+                    <tr class="@(f.IsVoided ? "inactive" : null)">
+                        <td>@Labels.Date(f.Date)</td>
+                        <td>Refunded from @_chart.FullName(f.PaymentAccountId) @f.Reference @(f.IsVoided ? "(voided)" : "")</td>
+                        <td class="num">@Labels.Amount(f.Amount)</td>
+                        <td>
+                            @if (!f.IsVoided)
+                            {
+                                <form method="post" action="/sales/retainers/@_retainer.Id/refunds/@f.Id/void" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="reason" value="Retainer refund voided" />
+                                    <button type="submit" class="secondary">Void</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_retainer.Balance > 0m)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Apply to an invoice</h2>
+            @if (_openInvoices.Count == 0)
+            {
+                <p class="muted">No open invoices for this customer. <a href="/sales/invoices/new?customer=@_retainer.CustomerId">Create one</a>, then apply the retainer here.</p>
+            }
+            else
+            {
+                <form method="post" action="/sales/retainers/@_retainer.Id/apply" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field">
+                            <label for="invoice">Invoice</label>
+                            <select id="invoice" name="invoiceId">
+                                @foreach (var i in _openInvoices)
+                                {
+                                    <option value="@i.Id">@i.Number · @Labels.Date(i.Date) · @Labels.Amount(i.Balance) owed@(i.CustomerId == _retainer.CustomerId ? "" : $" · {_names.GetValueOrDefault(i.CustomerId)}")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="apply-amount">Amount <span class="muted">(blank: as much as fits)</span></label>
+                            <input id="apply-amount" name="amount" class="amount" inputmode="decimal" />
+                        </div>
+                        <div class="field">
+                            <label for="apply-date">Date</label>
+                            <input id="apply-date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        </div>
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">Apply</button></div>
+                </form>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Refund what's left</h2>
+            <form method="post" action="/sales/retainers/@_retainer.Id/refund" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="refund-amount">Amount</label>
+                        <input id="refund-amount" name="amount" class="amount" inputmode="decimal" value="@_retainer.Balance.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
+                    </div>
+                    <div class="field">
+                        <label for="refund-account">Paid from</label>
+                        <select id="refund-account" name="accountId">
+                            @foreach (var a in _payFrom)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="refund-date">Date</label>
+                        <input id="refund-date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="field">
+                        <label for="refund-ref">Check no. <span class="muted">(optional)</span></label>
+                        <input id="refund-ref" name="reference" maxlength="30" />
+                    </div>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">Refund</button></div>
+            </form>
+        </div>
+    }
+
+    @if (_retainer.Status == DocumentStatus.Posted && _retainer.AmountApplied == 0m && _retainer.AmountRefunded == 0m)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this retainer</h2>
+            <form method="post" action="/sales/retainers/@_retainer.Id/void" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <input id="reason" name="reason" required maxlength="500" />
+                </div>
+                <button type="submit" class="danger">Void retainer</button>
+            </form>
+        </div>
+    }
+
+    <Attachments EntityType="retainer" EntityId="_retainer.Id" />
+
+    <Notes EntityType="retainer" EntityId="_retainer.Id" />
+</div>
+
+@code {
+    private Retainer? _retainer;
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+    private IReadOnlyList<Invoice> _openInvoices = [];
+    private Dictionary<Guid, string> _invoiceNumbers = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _payFrom = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _retainer = await RetainerService.GetAsync(Id);
+        if (_retainer is null)
+            return;
+        _names = await CustomerService.FullNamesAsync();
+        _openInvoices = await Payments.OpenInvoicesAsync(_retainer.CustomerId);
+        _invoiceNumbers = (await Invoices.ListAsync()).Where(i => _retainer.Applications.Any(a => a.InvoiceId == i.Id)).ToDictionary(i => i.Id, i => i.Number);
+        _chart = await AccountService.GetChartAsync();
+        _payFrom = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+    }
+}

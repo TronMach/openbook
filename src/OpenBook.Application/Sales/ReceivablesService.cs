@@ -45,6 +45,9 @@ public enum StatementLineKind
     CreditMemo,
     Refund,
     WriteOff,
+
+    /// <summary>Retainer (deposit) money applied to an invoice.</summary>
+    Retainer,
 }
 
 /// <param name="Amount">Positive adds to what the customer owes.</param>
@@ -102,6 +105,10 @@ public sealed class ReceivablesService(ISalesStore store)
             activity.Add((i.Date, StatementLineKind.Invoice, i.Id, i.Number,
                 (i.LateFeeForInvoiceId is null ? "Invoice" : "Late fee") + $", due {i.DueDate.ToString("d", System.Globalization.CultureInfo.CurrentCulture)}{For(i.CustomerId)}",
                 i.Total, i.CreatedAt));
+        foreach (var r in data.Retainers.Where(r => r.Status == DocumentStatus.Posted && billed.Contains(r.CustomerId)))
+            foreach (var a in r.Applications.Where(a => !a.IsVoided))
+                activity.Add((a.AppliedOn, StatementLineKind.Retainer, r.Id, data.Invoices.FirstOrDefault(i => i.Id == a.InvoiceId)?.Number ?? "",
+                    $"Retainer applied{For(r.CustomerId)}", -a.Amount, r.CreatedAt));
         foreach (var w in data.WriteOffs.Where(w => w.Status == DocumentStatus.Posted && billed.Contains(w.CustomerId)))
             activity.Add((w.Date, StatementLineKind.WriteOff, w.Id, data.Invoices.FirstOrDefault(i => i.Id == w.InvoiceId)?.Number ?? "",
                 $"Written off{For(w.CustomerId)}", -w.Amount, w.CreatedAt));
@@ -143,6 +150,9 @@ public sealed class ReceivablesService(ISalesStore store)
                 settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Amount;
         foreach (var w in data.WriteOffs.Where(w => w.Status == DocumentStatus.Posted && w.Date <= asOf))
             settled[w.InvoiceId] = settled.GetValueOrDefault(w.InvoiceId) + w.Amount;
+        foreach (var r in data.Retainers.Where(r => r.Status == DocumentStatus.Posted))
+            foreach (var a in r.Applications.Where(a => !a.IsVoided && a.AppliedOn <= asOf))
+                settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Amount;
 
         var buckets = AgingBuckets.Zero;
         var invoices = new List<OpenInvoice>();
@@ -186,7 +196,8 @@ public sealed class ReceivablesService(ISalesStore store)
         await store.ListPaymentsAsync(null, ct),
         await store.ListCreditMemosAsync(null, ct),
         await store.ListRefundsAsync(null, ct),
-        await store.ListWriteOffsAsync(null, ct));
+        await store.ListWriteOffsAsync(null, ct),
+        await store.ListRetainersAsync(null, ct));
 
     private sealed record Ledger(
         IReadOnlyList<Customer> Customers,
@@ -194,5 +205,6 @@ public sealed class ReceivablesService(ISalesStore store)
         IReadOnlyList<CustomerPayment> Payments,
         IReadOnlyList<CreditMemo> CreditMemos,
         IReadOnlyList<CustomerRefund> Refunds,
-        IReadOnlyList<BadDebtWriteOff> WriteOffs);
+        IReadOnlyList<BadDebtWriteOff> WriteOffs,
+        IReadOnlyList<Retainer> Retainers);
 }
