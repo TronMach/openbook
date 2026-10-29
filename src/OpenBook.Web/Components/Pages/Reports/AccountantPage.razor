@@ -1,0 +1,84 @@
+@page "/accountant"
+@using OpenBook.Application.Reporting
+@inject AdjustingEntryService Adjusting
+@inject CompanySettingsService Settings
+
+<PageTitle>Accountant tools · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Accountant tools</h1>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <h2>Year-end package</h2>
+        <p class="muted">
+            One ZIP with the trial balance and worksheet, adjusting entries, financial statements, general ledger, journal, agings, fixed assets,
+            loans, 1099 summary and tax summary as Excel files, and the 1099 filing data.
+        </p>
+        <form method="get" action="/accountant/package" data-enhance="false" class="inline">
+            <label>From <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd")" /></label>
+            <label>To <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd")" /></label>
+            <button type="submit">Download package</button>
+        </form>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>1099 filing data</h2>
+        <p class="muted">
+            Every vendor over the 1099 threshold with full taxpayer ID, address, form, box and amount, as CSV. Copy the columns into the CSV
+            template you download from the IRS IRIS Taxpayer Portal (its headers must match the IRS's exactly), or upload it to your filing service.
+            The file holds full taxpayer IDs: keep it private. Downloads are recorded in the audit log.
+        </p>
+        <form method="get" action="/accountant/1099" data-enhance="false" class="inline">
+            <label>Tax year <input type="number" name="year" class="short" value="@(DateTime.Today.Year - 1)" /></label>
+            <button type="submit" class="secondary">Download 1099 data</button>
+        </form>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Adjusting entries</h2>
+        <p class="muted">Journal entries marked as adjusting entries show as their own columns on the trial balance worksheet.</p>
+        <p>
+            <a class="button" href="/journal/new?adjusting=true">Enter an adjusting entry</a>
+            <a class="button secondary" href="/reports/trial-balance-worksheet?asOf=@_to.ToString("yyyy-MM-dd")">Trial balance worksheet</a>
+            <a class="button secondary" href="/reports/adjusting-entries">Adjusting entries report</a>
+        </p>
+        @if (_entries.Count == 0)
+        {
+            <p class="muted">No adjusting entries this fiscal year.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>No.</th><th>Date</th><th>Memo</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var e in _entries)
+                    {
+                        <tr><td><a href="/journal/@e.Id">@e.Number</a></td><td>@Labels.Date(e.Date)</td><td>@e.Memo</td><td class="num">@Labels.Amount(e.TotalDebits.Amount)</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<JournalEntry> _entries = [];
+    private DateOnly _from;
+    private DateOnly _to;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var last = DateRanges.For(DatePreset.LastFiscalYear, today, company.FiscalYearStartMonth);
+        (_from, _to) = (last.From ?? today, last.To);
+        var current = DateRanges.For(DatePreset.ThisFiscalYearToDate, today, company.FiscalYearStartMonth);
+        _entries = await Adjusting.ListAsync(current.From, DateOnly.MaxValue);
+    }
+}

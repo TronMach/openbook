@@ -28,6 +28,9 @@ public enum AuditAction
 
     /// <summary>A note removed from the record.</summary>
     NoteRemoved,
+
+    /// <summary>Data taken out of OpenBook in a file (the accountant's package, with taxpayer IDs).</summary>
+    Exported,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

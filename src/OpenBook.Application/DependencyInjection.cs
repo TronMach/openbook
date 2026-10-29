@@ -129,6 +129,9 @@ public static class DependencyInjection
         services.AddScoped<KpiService>();
         services.AddScoped<ReportSubscriptionService>();
         services.AddScoped<DashboardService>();
+        services.AddScoped<ForecastService>();
+        services.AddScoped<AdjustingEntryService>();
+        services.AddScoped<AccountantPackageService>();
         return services;
     }
 }

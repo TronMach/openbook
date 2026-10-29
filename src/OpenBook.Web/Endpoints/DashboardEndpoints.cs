@@ -6,7 +6,7 @@ using OpenBook.Web.Components.Pages.Reports;
 
 namespace OpenBook.Web.Endpoints;
 
-/// <summary>Form posts from the dashboard and the scheduled reports page (antiforgery-checked, form-bound).</summary>
+/// <summary>Form posts and downloads from the dashboard, scheduled reports, cash-flow forecast and accountant pages (antiforgery-checked).</summary>
 public static class DashboardEndpoints
 {
     public static IEndpointRouteBuilder MapDashboardEndpoints(this IEndpointRouteBuilder app)
@@ -46,8 +46,94 @@ public static class DashboardEndpoints
                 return "Deleted.";
             })).RequireAuthorization();
 
+        app.MapPost("/reports/cash-forecast/scenarios", async (IFormCollection form, ForecastService forecasts, CancellationToken ct) =>
+            await Forecast(async () => (await forecasts.CreateScenarioAsync(Scenario(form), ct)).Id)).RequireAuthorization();
+
+        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}", async (Guid id, IFormCollection form, ForecastService forecasts, CancellationToken ct) =>
+            await Forecast(async () => (await forecasts.UpdateScenarioAsync(id, Scenario(form), ct)).Id)).RequireAuthorization();
+
+        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/items", async (Guid id, IFormCollection form, ForecastService forecasts, CancellationToken ct) =>
+            await Forecast(async () => (await forecasts.AddItemAsync(id, new ScenarioItemDetails(
+                form["description"].ToString(),
+                decimal.TryParse(form["amount"].ToString().Replace(",", "", StringComparison.Ordinal), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
+                    ? amount : throw new DomainException("scenario.amount_zero", "Enter an amount: positive for money in, negative for money out."),
+                Date(form["startDate"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                Enum.TryParse<ScenarioRecurrence>(form["recurrence"], out var recurrence) ? recurrence : ScenarioRecurrence.Once,
+                Date(form["endDate"])), ct)).Id)).RequireAuthorization();
+
+        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/items/{itemId:guid}/remove", async (Guid id, Guid itemId, ForecastService forecasts, CancellationToken ct) =>
+            await Forecast(async () => (await forecasts.RemoveItemAsync(id, itemId, ct)).Id)).RequireAuthorization();
+
+        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/delete", async (Guid id, ForecastService forecasts, CancellationToken ct) =>
+            await Forecast(async () =>
+            {
+                await forecasts.DeleteScenarioAsync(id, ct);
+                return (Guid?)null;
+            })).RequireAuthorization();
+
+        app.MapPost("/journal/{id:guid}/adjusting", async (Guid id, IFormCollection form, AdjustingEntryService adjusting, CancellationToken ct) =>
+        {
+            try
+            {
+                await adjusting.SetAsync(id, form["adjusting"] == "true", ct);
+                return Results.Redirect($"/journal/{id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/journal/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapGet("/accountant/package", async (DateOnly? from, DateOnly? to, AccountantPackageService packages, CancellationToken ct) =>
+        {
+            try
+            {
+                var end = to ?? DateOnly.FromDateTime(DateTime.Today);
+                var file = await packages.BuildAsync(from ?? new DateOnly(end.Year, 1, 1), end, ct);
+                var bytes = await File.ReadAllBytesAsync(file.Path, ct);
+                File.Delete(file.Path);
+                return Results.File(bytes, "application/zip", file.FileName);
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/accountant?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapGet("/accountant/1099", async (int? year, AccountantPackageService packages, CancellationToken ct) =>
+        {
+            var y = year ?? DateTime.Today.Year - 1;
+            try
+            {
+                return Results.File(await packages.Filing1099CsvAsync(y, audit: true, ct: ct), "text/csv", $"1099 filing data {y}.csv");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/accountant?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         return app;
     }
+
+    private static ForecastScenarioDetails Scenario(IFormCollection form) =>
+        new(form["name"].ToString(), Number(form["collectionDelay"]) is var c and >= -90 ? c : 0, Number(form["paymentDelay"]) is var d and >= -90 ? d : 0);
+
+    private static async Task<IResult> Forecast(Func<Task<Guid?>> change)
+    {
+        try
+        {
+            var id = await change();
+            return Results.Redirect(id is { } scenario ? $"/reports/cash-forecast?scenarioId={scenario}" : "/reports/cash-forecast");
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"/reports/cash-forecast?error={Uri.EscapeDataString(ex.Message)}");
+        }
+    }
+
+    private static DateOnly? Date(string? value) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
     private static async Task<IResult> Back(Func<Task<string>> change)
     {

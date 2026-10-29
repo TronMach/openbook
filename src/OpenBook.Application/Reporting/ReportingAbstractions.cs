@@ -23,6 +23,16 @@ public interface IReportingStore
 
     Task<DashboardPreference?> GetDashboardPreferenceAsync(string username, CancellationToken ct);
 
+    Task<IReadOnlyList<ForecastScenario>> ListScenariosAsync(CancellationToken ct);
+
+    Task<ForecastScenario?> GetScenarioAsync(Guid id, CancellationToken ct);
+
+    Task<IReadOnlyList<AdjustingEntry>> ListAdjustingEntriesAsync(CancellationToken ct);
+
+    void Add(ForecastScenario scenario);
+    void Remove(ForecastScenario scenario);
+    void Add(AdjustingEntry entry);
+    void Remove(AdjustingEntry entry);
     void Add(ReportSubscription subscription);
     void Remove(ReportSubscription subscription);
     void Add(DashboardPreference preference);

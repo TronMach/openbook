@@ -1,4 +1,5 @@
 @page "/journal/new"
+@using OpenBook.Application.Reporting
 @rendermode InteractiveServer
 @inject Operations Ops
 @inject NavigationManager Navigation
@@ -46,6 +47,9 @@
             </div>
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field">
+                <label class="check"><input type="checkbox" @bind="_adjusting" /> Adjusting entry <span class="muted">(an accountant's correction; shown apart on the trial balance worksheet)</span></label>
+            </div>
+            <div class="field">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
             </div>
@@ -84,6 +88,12 @@
 
     private Guid? _locationId;
 
+    /// <summary>On when the page is opened for adjusting entries (?adjusting=true, from the accountant page).</summary>
+    [SupplyParameterFromQuery(Name = "adjusting")]
+    private bool Adjusting { get; set; }
+
+    private bool _adjusting;
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -93,6 +103,7 @@
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
         _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _adjusting = Adjusting;
         _loaded = true;
     }
 
@@ -105,6 +116,8 @@
             var drafts = JournalLines.Drafts(_lines);
             var entry = await Ops.RunAsync<PostingEngine, JournalEntry>(
                 e => e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId)), _closingPassword);
+            if (_adjusting)
+                await Ops.RunAsync<AdjustingEntryService, bool>(async s => { await s.SetAsync(entry.Id, true); return true; });
             Navigation.NavigateTo($"/journal/{entry.Id}");
         }
         catch (DomainException ex)

@@ -78,6 +78,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Assets.Loan> Loans => Set<OpenBook.Domain.Assets.Loan>();
     public DbSet<ReportSubscription> ReportSubscriptions => Set<ReportSubscription>();
     public DbSet<DashboardPreference> DashboardPreferences => Set<DashboardPreference>();
+    public DbSet<ForecastScenario> ForecastScenarios => Set<ForecastScenario>();
+    public DbSet<AdjustingEntry> AdjustingEntries => Set<AdjustingEntry>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
     public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
@@ -1508,6 +1510,33 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.CreatedBy).HasMaxLength(100);
             b.Ignore(s => s.RecipientList);
             b.HasOne<SavedReport>().WithMany().HasForeignKey(s => s.SavedReportId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ForecastScenario>(b =>
+        {
+            b.ToTable("ForecastScenarios");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Name).HasMaxLength(100);
+            b.Property(s => s.Notes).HasMaxLength(1000);
+            b.OwnsMany(s => s.Items, i =>
+            {
+                i.ToTable("ForecastScenarioItems");
+                i.WithOwner().HasForeignKey("ForecastScenarioId");
+                i.HasKey(x => x.Id);
+                i.Property(x => x.Id).ValueGeneratedNever();
+                i.Property(x => x.Description).HasMaxLength(200);
+                i.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                i.Property(x => x.Recurrence).HasConversion<string>().HasMaxLength(20);
+            });
+            b.Navigation(s => s.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<AdjustingEntry>(b =>
+        {
+            b.ToTable("AdjustingEntries");
+            b.HasKey(a => a.JournalEntryId);
+            b.Property(a => a.MarkedBy).HasMaxLength(100);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(a => a.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<DashboardPreference>(b =>

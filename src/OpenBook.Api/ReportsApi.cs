@@ -115,6 +115,35 @@ internal static class ReportsApi
             };
         });
 
+        var accountant = api.MapGroup("/accountant");
+        accountant.MapGet("/forecast", async (DateOnly? asOf, int? weeks, Guid? scenarioId, ForecastService s, CancellationToken ct) =>
+            await s.ForecastAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), weeks ?? 13, scenarioId, ct));
+        accountant.MapGet("/scenarios", async (ForecastService s, CancellationToken ct) => await s.ListScenariosAsync(ct));
+        accountant.MapPost("/scenarios", async (ForecastScenarioDetails r, ForecastService s, CancellationToken ct) =>
+        {
+            var scenario = await s.CreateScenarioAsync(r, ct);
+            return Results.Created($"/api/accountant/scenarios/{scenario.Id}", scenario);
+        });
+        accountant.MapPut("/scenarios/{id:guid}", async (Guid id, ForecastScenarioDetails r, ForecastService s, CancellationToken ct) => await s.UpdateScenarioAsync(id, r, ct));
+        accountant.MapPost("/scenarios/{id:guid}/items", async (Guid id, ScenarioItemDetails r, ForecastService s, CancellationToken ct) => await s.AddItemAsync(id, r, ct));
+        accountant.MapDelete("/scenarios/{id:guid}/items/{itemId:guid}", async (Guid id, Guid itemId, ForecastService s, CancellationToken ct) => await s.RemoveItemAsync(id, itemId, ct));
+        accountant.MapDelete("/scenarios/{id:guid}", async (Guid id, ForecastService s, CancellationToken ct) =>
+        {
+            await s.DeleteScenarioAsync(id, ct);
+            return Results.NoContent();
+        });
+        accountant.MapGet("/adjusting-entries", async (DateOnly? from, DateOnly? to, AdjustingEntryService s, CancellationToken ct) =>
+            (await s.ListAsync(from, to ?? DateOnly.MaxValue, ct)).Select(e => new { e.Id, e.Number, e.Date, e.Memo }));
+        accountant.MapPut("/adjusting-entries/{entryId:guid}", async (Guid entryId, bool adjusting, AdjustingEntryService s, CancellationToken ct) =>
+        {
+            await s.SetAsync(entryId, adjusting, ct);
+            return Results.NoContent();
+        });
+        accountant.MapGet("/worksheet", async (DateOnly? asOf, ReportBasis? basis, AdjustingEntryService s, CompanySettingsService settings, CancellationToken ct) =>
+            await s.WorksheetAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), basis ?? (await settings.GetAsync(ct)).DefaultReportBasis, ct));
+        accountant.MapGet("/1099-filing", async (int year, AccountantPackageService s, CancellationToken ct) =>
+            Results.File(await s.Filing1099CsvAsync(year, audit: true, ct: ct), "text/csv", $"1099 filing data {year}.csv"));
+
         var saved = api.MapGroup("/saved-reports");
         saved.MapGet("/", async (SavedReportService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(SavedReportResponse.From));
         saved.MapPost("/", async (SaveReportRequest r, SavedReportService s, CancellationToken ct) =>

@@ -2635,6 +2635,24 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("VendorRefunds", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Reporting.AdjustingEntry", b =>
+                {
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("MarkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MarkedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("JournalEntryId");
+
+                    b.ToTable("AdjustingEntries", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2684,6 +2702,32 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasKey("Username");
 
                     b.ToTable("DashboardPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.ForecastScenario", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CollectionDelayDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("PaymentDelayDays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ForecastScenarios", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Reporting.ReportSubscription", b =>
@@ -5789,6 +5833,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Reporting.AdjustingEntry", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
                 {
                     b.HasOne("OpenBook.Domain.Segments.Segment", null)
@@ -5833,6 +5886,49 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.ForecastScenario", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Reporting.ScenarioItem", "Items", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Description")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<DateOnly?>("EndDate")
+                                .HasColumnType("date");
+
+                            b1.Property<Guid>("ForecastScenarioId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Recurrence")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<DateOnly>("StartDate")
+                                .HasColumnType("date");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("ForecastScenarioId");
+
+                            b1.ToTable("ForecastScenarioItems", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ForecastScenarioId");
+                        });
+
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Reporting.ReportSubscription", b =>

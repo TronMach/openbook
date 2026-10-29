@@ -1,0 +1,127 @@
+@page "/reports/cash-forecast"
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Reporting
+@inject ForecastService Forecasts
+@inject ReportCatalog Catalog
+@inject NavigationManager Navigation
+
+<PageTitle>Cash-flow forecast · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Cash-flow forecast</h1>
+    <p class="muted no-print">
+        Today's bank balance, week by week: open invoices collected and open bills paid on their due dates (overdue ones in the first week),
+        and loan payments. A scenario shifts when customers pay or you pay bills, and adds money in or out.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <form method="get" action="/reports/cash-forecast" class="inline no-print" data-enhance="false">
+        <label>From <input type="date" name="asOf" value="@_asOf.ToString("yyyy-MM-dd")" /></label>
+        <label>Weeks <input type="number" name="weeks" min="1" max="@ForecastService.MaxWeeks" class="short" value="@_weeks" /></label>
+        <select name="scenarioId" aria-label="Scenario">
+            <option value="">No scenario</option>
+            @foreach (var s in _scenarios)
+            {
+                <option value="@s.Id" selected="@(s.Id == ScenarioId)">@s.Name</option>
+            }
+        </select>
+        <button type="submit" class="secondary">Run</button>
+    </form>
+
+    @if (_forecast is not null && _forecast.LowestClosing < 0m)
+    {
+        <div class="alert error" role="alert">Cash goes below zero: the lowest week ends at @Labels.Amount(_forecast.LowestClosing).</div>
+    }
+    @if (_table is not null)
+    {
+        <ReportActions Key="cash-forecast" />
+        <ReportTableView Table="_table" />
+    }
+
+    <h2 class="no-print">Scenarios</h2>
+    @foreach (var s in _scenarios)
+    {
+        <div class="card no-print" style="margin-bottom: 1rem">
+            <h3>@s.Name</h3>
+            <form method="post" action="/reports/cash-forecast/scenarios/@s.Id" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <input name="name" value="@s.Name" maxlength="100" aria-label="Name" />
+                <label>Customers pay <input name="collectionDelay" type="number" class="short" value="@s.CollectionDelayDays" /> days late</label>
+                <label>Bills paid <input name="paymentDelay" type="number" class="short" value="@s.PaymentDelayDays" /> days late</label>
+                <button type="submit" class="secondary">Save</button>
+            </form>
+            @if (s.Items.Count > 0)
+            {
+                <table class="data">
+                    <thead><tr><th>Item</th><th class="num">Amount</th><th>From</th><th>How often</th><th>Until</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in s.Items)
+                        {
+                            <tr>
+                                <td>@i.Description</td><td class="num">@Labels.Amount(i.Amount)</td><td>@Labels.Date(i.StartDate)</td><td>@i.Recurrence</td>
+                                <td>@(i.EndDate is { } end ? Labels.Date(end) : "")</td>
+                                <td>
+                                    <form method="post" action="/reports/cash-forecast/scenarios/@s.Id/items/@i.Id/remove" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link">Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <form method="post" action="/reports/cash-forecast/scenarios/@s.Id/items" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <input name="description" placeholder="New hire, equipment, big order…" maxlength="200" required aria-label="Description" />
+                <input name="amount" class="amount" inputmode="decimal" placeholder="-4000.00" required aria-label="Amount (negative for money out)" />
+                <input name="startDate" type="date" value="@_asOf.AddDays(7).ToString("yyyy-MM-dd")" aria-label="From" />
+                <select name="recurrence" aria-label="How often">
+                    @foreach (var r in Enum.GetValues<ScenarioRecurrence>())
+                    {
+                        <option value="@r">@r</option>
+                    }
+                </select>
+                <input name="endDate" type="date" aria-label="Until" />
+                <button type="submit" class="secondary">Add</button>
+            </form>
+            <form method="post" action="/reports/cash-forecast/scenarios/@s.Id/delete" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <button type="submit" class="link">Delete scenario</button>
+            </form>
+        </div>
+    }
+    <form method="post" action="/reports/cash-forecast/scenarios" data-enhance="false" class="inline no-print">
+        <AntiforgeryToken />
+        <input name="name" placeholder="Scenario name" maxlength="100" required aria-label="Scenario name" />
+        <label>Customers pay <input name="collectionDelay" type="number" class="short" value="0" /> days late</label>
+        <label>Bills paid <input name="paymentDelay" type="number" class="short" value="0" /> days late</label>
+        <button type="submit" class="secondary">Add scenario</button>
+    </form>
+</div>
+
+@code {
+    private IReadOnlyList<ForecastScenario> _scenarios = [];
+    private CashForecast? _forecast;
+    private ReportTable? _table;
+    private DateOnly _asOf;
+    private int _weeks;
+
+    [SupplyParameterFromQuery] private string? AsOf { get; set; }
+    [SupplyParameterFromQuery] private int? Weeks { get; set; }
+    [SupplyParameterFromQuery] private Guid? ScenarioId { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _asOf = DateOnly.TryParse(AsOf, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        _weeks = Math.Clamp(Weeks ?? 13, 1, ForecastService.MaxWeeks);
+        _scenarios = await Forecasts.ListScenariosAsync();
+        var scenario = _scenarios.Any(s => s.Id == ScenarioId) ? ScenarioId : null;
+        _forecast = await Forecasts.ForecastAsync(_asOf, _weeks, scenario);
+        _table = await Catalog.RunAsync("cash-forecast", ReportParameters.Parse(new Uri(Navigation.Uri).Query));
+    }
+}

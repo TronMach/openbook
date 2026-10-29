@@ -94,6 +94,7 @@ public static class Links
         "warehouse" => "/inventory/warehouses",
         "saved_report" => "/reports",
         "report_subscription" => "/reports/schedules",
+        "forecast_scenario" => $"/reports/cash-forecast?scenarioId={id}",
         "price_level" => $"/pricing/levels/{id}",
         "price_rule" => $"/pricing/rules/{id}",
         "segment" => $"/segments/{id}",
