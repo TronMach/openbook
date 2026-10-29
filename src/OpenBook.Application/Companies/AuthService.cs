@@ -89,6 +89,21 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
     }
 
     /// <summary>
+    /// Signs the user out everywhere by giving them a new security stamp: every session's cookie carries the old one
+    /// and is refused on its next request. The host signs the current browser in again with the returned stamp.
+    /// API keys are separate and keep working.
+    /// </summary>
+    public async Task<AuthenticatedUser> EndOtherSessionsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId);
+        user.EndSessions();
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Username, AuditAction.Updated, "user", user.Id, null,
+            JsonSerializer.Serialize(new { Changed = "other sessions signed out" })));
+        await store.SaveChangesAsync(ct);
+        return Authenticated(user);
+    }
+
+    /// <summary>
     /// Sets a new password without the current one. Only offered on the server's command line, where the
     /// caller could already read or replace the company file. <paramref name="username"/> may be omitted
     /// when the file has a single user.

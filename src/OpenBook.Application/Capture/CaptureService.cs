@@ -90,6 +90,13 @@ public sealed class CaptureService(ICaptureStore store, IServiceScopeFactory sco
         await store.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Whether a device's access was removed, asked without signing in: a lost device whose sessions were ended can
+    /// still learn it must wipe itself. Unknown ids answer false, so it says nothing about which devices exist.
+    /// </summary>
+    public async Task<bool> IsRevokedAsync(Guid deviceId, CancellationToken ct = default) =>
+        await store.GetDeviceAsync(deviceId, ct) is { IsActive: false };
+
     /// <summary>The user's drafts that need attention (or every user's, for <paramref name="userId"/> null).</summary>
     public async Task<IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)>> NeedingAttentionAsync(Guid? userId, CancellationToken ct = default)
     {

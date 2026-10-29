@@ -194,12 +194,32 @@
         return id;
     }
 
+    async function revoked(device) {
+        try {
+            const response = await fetch('/capture/device-status/' + encodeURIComponent(device));
+            return response.ok && (await response.json()).revoked === true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    async function wiped() {
+        await wipe();
+        lists = null;
+        show('This device\'s access was removed in OpenBook, so everything it held has been cleared. Sign in again to keep capturing.', true);
+    }
+
     async function sync() {
         if (syncing || !navigator.onLine) return render();
         syncing = true;
         try {
             const device = await deviceId();
-            await refreshLists();
+            try {
+                await refreshLists();
+            } catch (e) {
+                if (e.signedOut && await revoked(device)) return wiped();
+                throw e;
+            }
             fillSelects();
             const waiting = (await loadDrafts()).filter(d => d.status === 'waiting');
             if (waiting.length) {
@@ -207,13 +227,12 @@
                     method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId: device, drafts: waiting.map(d => ({ id: d.id, kind: d.kind, capturedAt: d.capturedAt, payload: wire(d.payload) })) }),
                 });
-                if (response.status === 410) {
-                    await wipe();
-                    lists = null;
-                    show('This device\'s access was removed in OpenBook, so everything it held has been cleared. Sign in again to keep capturing.', true);
-                    return;
+                if (response.status === 410) return wiped();
+                if (response.status === 401) {
+                    // Signed out: perhaps on purpose, because this device was lost. Ask (without signing in) whether to wipe.
+                    if (await revoked(device)) return wiped();
+                    throw Object.assign(new Error('signed-out'), { signedOut: true });
                 }
-                if (response.status === 401) throw Object.assign(new Error('signed-out'), { signedOut: true });
                 if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'sync ' + response.status);
                 for (const outcome of await response.json()) {
                     const draft = waiting.find(d => d.id === outcome.id);

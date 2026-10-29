@@ -73,6 +73,7 @@
                             {
                                 <form method="post" action="/capture/devices/@d.Id/revoke" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
+                                    <label class="check"><input type="checkbox" name="endSessions" value="true" /> @L["also sign out my other sessions"]</label>
                                     <button type="submit" class="link">@L["Remove access"]</button>
                                 </form>
                             }
@@ -85,7 +86,7 @@
                 }
             </tbody>
         </table>
-        <p class="hint">@L["A device whose access is removed clears everything it holds the next time it connects. If the device is lost, also change your password: that signs it out, so it can't start capturing again."]</p>
+        <p class="hint">@L["A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick \"also sign out my other sessions\" so it can't start capturing again (this browser stays signed in)."]</p>
     }
 </div>
 

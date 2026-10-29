@@ -85,6 +85,9 @@ public sealed class User
 
     public void Reactivate() => IsActive = true;
 
+    /// <summary>Ends every session (each carries the old stamp); the caller signs the current one in again.</summary>
+    public void EndSessions() => SecurityStamp = NewStamp();
+
     public bool Can(UserRole needed) => IsActive && Role >= needed;
 
     private static UserRole ValidRole(UserRole role) =>

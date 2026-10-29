@@ -108,4 +108,18 @@ public sealed class CaptureTests : IAsyncLifetime
         await In<CaptureService, bool>(async s => { await s.RevokeDeviceAsync(_device, _userId); return true; });
         Assert.Equal("capture.device_revoked", (await Assert.ThrowsAsync<DomainException>(() => Sync())).Code);
     }
+
+    [Fact]
+    public async Task Ending_other_sessions_refuses_old_cookies_and_a_lost_device_can_still_learn_to_wipe()
+    {
+        var before = (await In<UserService, IReadOnlyList<Domain.Companies.User>>(s => s.ListAsync())).Single(u => u.Id == _userId).SecurityStamp;
+        var current = await In<AuthService, AuthenticatedUser>(s => s.EndOtherSessionsAsync(_userId));
+        Assert.False(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, before)));
+        Assert.True(await In<AuthService, bool>(s => s.IsSessionValidAsync(_userId, current.SecurityStamp)));
+
+        Assert.False(await In<CaptureService, bool>(s => s.IsRevokedAsync(_device)));
+        Assert.False(await In<CaptureService, bool>(s => s.IsRevokedAsync(Guid.NewGuid())));
+        await In<CaptureService, bool>(async s => { await s.RevokeDeviceAsync(_device, _userId); return true; });
+        Assert.True(await In<CaptureService, bool>(s => s.IsRevokedAsync(_device)));
+    }
 }

@@ -104,10 +104,25 @@ app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async
         return Results.Redirect("/capture?error=" + Uri.EscapeDataString(ex.Message));
     }
 }).RequireAuthorization();
-app.MapPost("/capture/devices/{id:guid}/revoke", async (Guid id, HttpContext http, OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
+app.MapPost("/capture/devices/{id:guid}/revoke", async (Guid id, IFormCollection form, HttpContext http, OpenBook.Application.Capture.CaptureService capture,
+    OpenBook.Application.Companies.AuthService auth, CancellationToken ct) =>
 {
     await capture.RevokeDeviceAsync(id, http.User.GetUserId(), ct);
+    if (form["endSessions"] == "true")
+        await WebSecurity.SignInAsync(http, await auth.EndOtherSessionsAsync(http.User.GetUserId(), ct));
     return Results.Redirect("/capture");
+}).RequireAuthorization();
+
+// Without signing in, on purpose: a signed-out lost device asks this to know it must wipe itself.
+app.MapGet("/capture/device-status/{id:guid}", async (Guid id, OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
+    Results.Json(new { revoked = await capture.IsRevokedAsync(id, ct) }));
+
+app.MapPost("/account/sessions/end-others", async (IFormCollection form, HttpContext http, OpenBook.Application.Companies.AuthService auth, CancellationToken ct) =>
+{
+    // The stamp changes, so this browser's cookie is issued again to keep it signed in.
+    await WebSecurity.SignInAsync(http, await auth.EndOtherSessionsAsync(http.User.GetUserId(), ct));
+    var back = form["back"].ToString();
+    return Results.Redirect((back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) ? back : "/account/password") + "?signedOut=true");
 }).RequireAuthorization();
 app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
 {

@@ -217,6 +217,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/api/reports/schedules", "POST", UserRole.Accountant)]
     [InlineData("/reports/builder", "GET", UserRole.ViewOnly)]
     [InlineData("/settings/plugins", "GET", UserRole.Admin)]
+    [InlineData("/account/sessions/end-others", "POST", UserRole.ViewOnly)]
     [InlineData("/settings/plugins/sample/disable", "POST", UserRole.Admin)]
     [InlineData("/accountant/package", "GET", UserRole.Accountant)]
     [InlineData("/api/accountant/1099-filing", "GET", UserRole.Accountant)]
@@ -298,5 +299,13 @@ public sealed class ApiAccessTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/vendors")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/api-keys", new { name = "escalate" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_device_can_ask_whether_it_was_removed_without_signing_in()
+    {
+        var response = await Client(null).GetAsync($"/capture/device-status/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("{\"revoked\":false}", await response.Content.ReadAsStringAsync());
     }
 }
