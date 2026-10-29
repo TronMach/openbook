@@ -25,15 +25,15 @@
     <div class="toolbar">
         <h1>Invoice @_invoice.Number</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
-        <a class="button secondary" href="/sales">Back to sales</a>
-        <a class="button secondary" href="/api/sales/invoices/@_invoice.Id/pdf" target="_blank">PDF</a>
-        <a class="button secondary" href="/sales/email/invoices/@_invoice.Id">Email</a>
-        <a class="button secondary" href="/audit?entityId=@_invoice.Id">History</a>
+        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
+        <a class="button secondary" href="/api/sales/invoices/@_invoice.Id/pdf" target="_blank">@L["PDF"]</a>
+        <a class="button secondary" href="/sales/email/invoices/@_invoice.Id">@L["Email"]</a>
+        <a class="button secondary" href="/audit?entityId=@_invoice.Id">@L["History"]</a>
         @if (_invoice.IsOpen)
         {
-            <a class="button secondary" href="/sales/credits/apply?customer=@_customer.Id">Apply credit</a>
-            <a class="button secondary" href="/sales/write-offs/new?invoice=@_invoice.Id">Write off</a>
-            <a class="button" href="/sales/payments/new?customer=@(_billTo ?? _customer.Id)">Receive payment</a>
+            <a class="button secondary" href="/sales/credits/apply?customer=@_customer.Id">@L["Apply credit"]</a>
+            <a class="button secondary" href="/sales/write-offs/new?invoice=@_invoice.Id">@L["Write off"]</a>
+            <a class="button" href="/sales/payments/new?customer=@(_billTo ?? _customer.Id)">@L["Receive payment"]</a>
         }
     </div>
 
@@ -56,41 +56,41 @@
                 @if (_company.Phone is not null) { <div>@_company.Phone</div> }
             </div>
             <dl class="facts">
-                <dt>Invoice</dt><dd>@_invoice.Number</dd>
-                <dt>Date</dt><dd>@Labels.Date(_invoice.Date)</dd>
-                <dt>Due</dt><dd>@Labels.Date(_invoice.DueDate)</dd>
+                <dt>@L["Invoice"]</dt><dd>@_invoice.Number</dd>
+                <dt>@L["Date"]</dt><dd>@Labels.Date(_invoice.Date)</dd>
+                <dt>@L["Due"]</dt><dd>@Labels.Date(_invoice.DueDate)</dd>
             @if (_invoice.WarehouseId is { } warehouseId)
             {
-                <dt>Warehouse</dt><dd>@_place(new StockPlace(warehouseId, null))</dd>
+                <dt>@L["Warehouse"]</dt><dd>@_place(new StockPlace(warehouseId, null))</dd>
             }
-                <dt>Terms</dt><dd>@Terms.Label</dd>
+                <dt>@L["Terms"]</dt><dd>@Terms.Label</dd>
                 @if (_invoice.EarlyPaymentDiscountDate is { } discountDate)
                 {
                     <dt>Discount</dt><dd>@Terms.DiscountPercent.ToString("0.##")% if paid by @Labels.Date(discountDate)</dd>
                 }
                 @if (_invoice.EstimateId is { } estimateId)
                 {
-                    <dt class="no-print">From</dt><dd class="no-print"><a href="/sales/estimates/@estimateId">Estimate</a></dd>
+                    <dt class="no-print">@L["From"]</dt><dd class="no-print"><a href="/sales/estimates/@estimateId">@L["Estimate"]</a></dd>
                 }
                 @if (_invoice.LateFeeForInvoiceId is { } overdueId)
                 {
-                    <dt class="no-print">Late fee on</dt><dd class="no-print"><a href="/sales/invoices/@overdueId">Overdue invoice</a></dd>
+                    <dt class="no-print">@L["Late fee on"]</dt><dd class="no-print"><a href="/sales/invoices/@overdueId">@L["Overdue invoice"]</a></dd>
                 }
                 @if (_invoice.RecurringInvoiceId is { } recurringId)
                 {
-                    <dt class="no-print">Created by</dt><dd class="no-print"><a href="/sales/recurring/@recurringId">Recurring invoice</a></dd>
+                    <dt class="no-print">@L["Created by"]</dt><dd class="no-print"><a href="/sales/recurring/@recurringId">@L["Recurring invoice"]</a></dd>
                 }
             </dl>
         </div>
         <div style="margin-top: 1rem">
-            <span class="muted">Bill to</span>
+            <span class="muted">@L["Bill to"]</span>
             <div><a href="/customers/@_customer.Id">@_customer.DisplayName</a></div>
             @if (_customer.CompanyName is not null && _customer.CompanyName != _customer.DisplayName) { <div>@_customer.CompanyName</div> }
             @if (_customer.BillingAddress is not null) { <div style="white-space: pre-line">@_customer.BillingAddress</div> }
         </div>
 
         <table class="data" style="margin-top: 1rem">
-            <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+            <thead><tr><th>@L["Description"]</th><th class="num">@L["Qty"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Amount"]</th></tr></thead>
             <tbody>
                 @foreach (var line in _invoice.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
                 {
@@ -113,15 +113,15 @@
                 {
                     <tr><td colspan="3">@t.Label</td><td class="num">@Labels.Amount(t.Amount)</td></tr>
                 }
-                <tr><td colspan="3">Total</td><td class="num">@Labels.Amount(_invoice.Total)</td></tr>
+                <tr><td colspan="3">@L["Total"]</td><td class="num">@Labels.Amount(_invoice.Total)</td></tr>
                 @if (_invoice.AmountPaid > 0m)
                 {
-                    <tr><td colspan="3">Paid and credited</td><td class="num">-@Labels.Amount(_invoice.AmountPaid)</td></tr>
+                    <tr><td colspan="3">@L["Paid and credited"]</td><td class="num">-@Labels.Amount(_invoice.AmountPaid)</td></tr>
                 }
-                <tr><td colspan="3">Balance due</td><td class="num">@Labels.Amount(_invoice.Balance)</td></tr>
+                <tr><td colspan="3">@L["Balance due"]</td><td class="num">@Labels.Amount(_invoice.Balance)</td></tr>
                 @if (FormService.Savings(_invoice.Lines) is var saved and > 0m)
                 {
-                    <tr class="muted"><td colspan="3">You saved</td><td class="num">@Labels.Amount(saved)</td></tr>
+                    <tr class="muted"><td colspan="3">@L["You saved"]</td><td class="num">@Labels.Amount(saved)</td></tr>
                 }
             </tfoot>
         </table>
@@ -134,9 +134,9 @@
     @if (_payments.Count > 0)
     {
         <div class="no-print">
-            <h2>Payments</h2>
+            <h2>@L["Payments"]</h2>
             <table class="data">
-                <thead><tr><th>Date</th><th>Ref</th><th class="num">Applied to this invoice</th><th></th></tr></thead>
+                <thead><tr><th>@L["Date"]</th><th>@L["Ref"]</th><th class="num">@L["Applied to this invoice"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var p in _payments)
                     {
@@ -155,9 +155,9 @@
     @if (_credits.Count > 0)
     {
         <div class="no-print">
-            <h2>Credits applied</h2>
+            <h2>@L["Credits applied"]</h2>
             <table class="data">
-                <thead><tr><th>Credit memo</th><th>Applied on</th><th class="num">Applied to this invoice</th></tr></thead>
+                <thead><tr><th>@L["Credit memo"]</th><th>@L["Applied on"]</th><th class="num">@L["Applied to this invoice"]</th></tr></thead>
                 <tbody>
                     @foreach (var c in _credits)
                     {
@@ -176,9 +176,9 @@
     @if (_writeOffs.Count > 0)
     {
         <div class="no-print">
-            <h2>Written off</h2>
+            <h2>@L["Written off"]</h2>
             <table class="data">
-                <thead><tr><th>Date</th><th>Status</th><th class="num">Amount</th></tr></thead>
+                <thead><tr><th>@L["Date"]</th><th>@L["Status"]</th><th class="num">@L["Amount"]</th></tr></thead>
                 <tbody>
                     @foreach (var w in _writeOffs)
                     {
@@ -200,12 +200,12 @@
         </p>
     }
 
-    <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">Journal entry</a></p>
+    <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">@L["Journal entry"]</a></p>
 
     @if (_invoice.Status == DocumentStatus.Posted)
     {
         <div class="card no-print">
-            <h2>Void this invoice</h2>
+            <h2>@L["Void this invoice"]</h2>
             <p class="muted">
                 @(_invoice.AmountPaid > 0m
                     ? "This invoice has payments, credits or write-offs applied. Void or remove those first."
@@ -216,12 +216,12 @@
                 <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
                     <DataAnnotationsValidator />
                     <div class="field">
-                        <label for="reason">Reason</label>
+                        <label for="reason">@L["Reason"]</label>
                         <InputText id="reason" @bind-Value="VoidInput.Reason" />
                         <ValidationMessage For="() => VoidInput.Reason" />
                     </div>
                     <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
-                    <button type="submit" class="danger">Void invoice</button>
+                    <button type="submit" class="danger">@L["Void invoice"]</button>
                 </EditForm>
             }
         </div>

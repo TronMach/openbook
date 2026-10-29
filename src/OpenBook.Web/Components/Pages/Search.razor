@@ -2,23 +2,23 @@
 @using OpenBook.Application.Search
 @inject SearchService SearchService
 
-<PageTitle>Search · OpenBook</PageTitle>
+<PageTitle>@L["Search"] · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>Search</h1>
+        <h1>@L["Search"]</h1>
         <form method="get" action="/search" data-enhance="false">
             <div class="field">
-                <label for="q" class="muted">Name, number, memo or amount</label>
+                <label for="q" class="muted">@L["Name, number, memo or amount"]</label>
                 <input id="q" name="q" value="@Q" autofocus />
             </div>
-            <button type="submit">Search</button>
+            <button type="submit">@L["Search"]</button>
         </form>
     </div>
 
     @if (_results is null || _results.Query.Length < 2)
     {
-        <p class="muted">Type at least two characters. Search finds customers, vendors, products, accounts, invoices, bills, payments, bank transactions and journal entries, by name, number, reference, memo or amount.</p>
+        <p class="muted">@L["Type at least two characters. Search finds customers, vendors, products, accounts, invoices, bills, payments, bank transactions and journal entries, by name, number, reference, memo or amount."]</p>
     }
     else if (_results.Hits.Count == 0)
     {

@@ -4,15 +4,15 @@
 @inject Operations Ops
 @inject NavigationManager Navigation
 
-<PageTitle>@(Id is null ? "New recurring entry" : _name) · OpenBook</PageTitle>
+<PageTitle>@(Id is null ? L["New recurring entry"].Value : _name) · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>@(Id is null ? "New recurring entry" : _name)</h1>
-        <a class="button secondary" href="/journal/recurring">Back to recurring entries</a>
+        <h1>@(Id is null ? L["New recurring entry"].Value : _name)</h1>
+        <a class="button secondary" href="/journal/recurring">@L["Back to recurring entries"]</a>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">History</a>
+            <a class="button secondary" href="/audit?entityId=@id">@L["History"]</a>
         }
     </div>
 
@@ -22,7 +22,7 @@
     }
     @if (_saved)
     {
-        <div class="alert notice" role="status">Saved.</div>
+        <div class="alert notice" role="status">@L["Saved."]</div>
     }
 
     @if (_notFound)
@@ -37,24 +37,24 @@
     {
         @if (!_active)
         {
-            <div class="alert notice" role="status">This recurring entry is inactive, so nothing posts from it.</div>
+            <div class="alert notice" role="status">@L["This recurring entry is inactive, so nothing posts from it."]</div>
         }
 
         <div class="card">
             <div class="row">
                 <div class="field">
-                    <label for="name">Name</label>
+                    <label for="name">@L["Name"]</label>
                     <input id="name" @bind="_name" maxlength="100" />
                 </div>
                 <div class="field">
-                    <label for="memo">Entry memo <span class="muted">(optional)</span></label>
+                    <label for="memo">@L["Entry memo"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="memo" @bind="_memo" maxlength="1000" />
-                    <span class="hint">Defaults to the name.</span>
+                    <span class="hint">@L["Defaults to the name."]</span>
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="interval">Repeat every</label>
+                    <label for="interval">@L["Repeat every"]</label>
                     <div class="inline">
                         <input id="interval" class="short" type="number" min="1" max="99" @bind="_interval" />
                         <select aria-label="Frequency" @bind="_frequency">
@@ -66,22 +66,22 @@
                     </div>
                 </div>
                 <div class="field">
-                    <label for="start">First date</label>
+                    <label for="start">@L["First date"]</label>
                     <input id="start" type="date" @bind="_startDate" />
-                    <span class="hint">Later dates keep its day of the month (the 31st falls back to the month's last day).</span>
+                    <span class="hint">@L["Later dates keep its day of the month (the 31st falls back to the month's last day)."]</span>
                 </div>
                 <div class="field">
-                    <label for="end">End date <span class="muted">(optional)</span></label>
+                    <label for="end">@L["End date"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="end" type="date" @bind="_endDate" />
                 </div>
                 <div class="field">
-                    <label for="max">Times <span class="muted">(optional)</span></label>
+                    <label for="max">@L["Times"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="max" class="short" type="number" min="1" @bind="_maxOccurrences" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="basis">Counts toward</label>
+                    <label for="basis">@L["Counts toward"]</label>
                     <select id="basis" @bind="_basis">
                         @foreach (var basis in Enum.GetValues<EntryBasis>())
                         {
@@ -92,7 +92,7 @@
             </div>
             <label class="check">
                 <input type="checkbox" @bind="_autoPost" />
-                <span>Post automatically when due</span>
+                <span>@L["Post automatically when due"]</span>
             </label>
 
             <div class="row">
@@ -103,7 +103,7 @@
             <JournalLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Accounts="_accounts" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
             <div class="actions">
-                <button type="button" @onclick="SaveAsync" disabled="@(!JournalLines.IsComplete(_lines) || _busy)">Save</button>
+                <button type="button" @onclick="SaveAsync" disabled="@(!JournalLines.IsComplete(_lines) || _busy)">@L["Save"]</button>
                 @if (Id is not null)
                 {
                     <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>
@@ -117,11 +117,11 @@
 
         @if (_posted.Count > 0)
         {
-            <h2 style="margin-top: 1.5rem">Posted entries</h2>
+            <h2 style="margin-top: 1.5rem">@L["Posted entries"]</h2>
             <div class="table-wrap">
                 <table class="data">
                     <thead>
-                        <tr><th>Entry</th><th>Date</th><th class="num">Amount</th><th>Status</th></tr>
+                        <tr><th>@L["Entry"]</th><th>@L["Date"]</th><th class="num">@L["Amount"]</th><th>@L["Status"]</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var entry in _posted)

@@ -3,12 +3,12 @@
 @inject Operations Ops
 @inject NavigationManager Navigation
 
-<PageTitle>New invoice · OpenBook</PageTitle>
+<PageTitle>@L["New invoice"] · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>New invoice</h1>
-        <a class="button secondary" href="/sales">Back to sales</a>
+        <h1>@L["New invoice"]</h1>
+        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
     </div>
 
     @if (_error is not null)
@@ -32,7 +32,7 @@
         <div class="card">
             <div class="row">
                 <div class="field">
-                    <label for="customer">Customer</label>
+                    <label for="customer">@L["Customer"]</label>
                     <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" Value="_customerId" OnChange="PickCustomer" Placeholder="Choose a customer…" />
                     @if (_customer?.BillingAddress is { } address)
                     {
@@ -40,13 +40,13 @@
                     }
                 </div>
                 <div class="field">
-                    <label for="number">Invoice number</label>
+                    <label for="number">@L["Invoice number"]</label>
                     <input id="number" @bind="_number" maxlength="20" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="date">Invoice date</label>
+                    <label for="date">@L["Invoice date"]</label>
                     <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
                 </div>
                 <div class="field">
@@ -62,7 +62,7 @@
             @if (_billable.Count > 0)
             {
                 <fieldset style="margin-top: 1rem">
-                    <legend>Billable expenses for this customer</legend>
+                    <legend>@L["Billable expenses for this customer"]</legend>
                     @foreach (var b in _billable)
                     {
                         <label class="check">
@@ -77,7 +77,7 @@
             @if (_time.Count > 0 || _trips.Count > 0)
             {
                 <fieldset style="margin-top: 1rem">
-                    <legend>Billable time and mileage for this customer</legend>
+                    <legend>@L["Billable time and mileage for this customer"]</legend>
                     @foreach (var t in _time)
                     {
                         <label class="check">
@@ -99,7 +99,7 @@
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             <div class="field" style="margin-top: 1rem">
-                <label for="memo">Message to customer <span class="muted">(optional, printed on the invoice)</span></label>
+                <label for="memo">@L["Message to customer"] <span class="muted">@L["(optional, printed on the invoice)"]</span></label>
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
             </div>
 
@@ -107,8 +107,8 @@
 
 
             <div class="actions">
-                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save invoice</button>
-                <a href="/sales">Cancel</a>
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@L["Save invoice"]</button>
+                <a href="/sales">@L["Cancel"]</a>
             </div>
         </div>
     }

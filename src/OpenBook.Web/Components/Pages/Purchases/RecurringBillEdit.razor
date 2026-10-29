@@ -4,15 +4,15 @@
 @inject Operations Ops
 @inject NavigationManager Navigation
 
-<PageTitle>@(Id is null ? "New recurring bill" : _name) · OpenBook</PageTitle>
+<PageTitle>@(Id is null ? L["New recurring bill"].Value : _name) · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>@(Id is null ? "New recurring bill" : _name)</h1>
-        <a class="button secondary" href="/purchases/recurring">Back to recurring bills</a>
+        <h1>@(Id is null ? L["New recurring bill"].Value : _name)</h1>
+        <a class="button secondary" href="/purchases/recurring">@L["Back to recurring bills"]</a>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">History</a>
+            <a class="button secondary" href="/audit?entityId=@id">@L["History"]</a>
         }
     </div>
 
@@ -22,7 +22,7 @@
     }
     @if (_saved)
     {
-        <div class="alert notice" role="status">Saved.</div>
+        <div class="alert notice" role="status">@L["Saved."]</div>
     }
 
     @if (_notFound)
@@ -37,23 +37,23 @@
     {
         @if (!_active)
         {
-            <div class="alert notice" role="status">This recurring bill is inactive, so no bills are entered from it.</div>
+            <div class="alert notice" role="status">@L["This recurring bill is inactive, so no bills are entered from it."]</div>
         }
 
         <div class="card">
             <div class="row">
                 <div class="field">
-                    <label for="name">Name</label>
+                    <label for="name">@L["Name"]</label>
                     <input id="name" @bind="_name" maxlength="100" />
                 </div>
                 <div class="field">
-                    <label for="vendor">Vendor</label>
+                    <label for="vendor">@L["Vendor"]</label>
                     <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="interval">Repeat every</label>
+                    <label for="interval">@L["Repeat every"]</label>
                     <div class="inline">
                         <input id="interval" class="short" type="number" min="1" max="99" @bind="_interval" />
                         <select aria-label="Frequency" @bind="_frequency">
@@ -65,21 +65,21 @@
                     </div>
                 </div>
                 <div class="field">
-                    <label for="start">First bill date</label>
+                    <label for="start">@L["First bill date"]</label>
                     <input id="start" type="date" @bind="_startDate" />
                 </div>
                 <div class="field">
-                    <label for="end">End date <span class="muted">(optional)</span></label>
+                    <label for="end">@L["End date"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="end" type="date" @bind="_endDate" />
                 </div>
                 <div class="field">
-                    <label for="max">Times <span class="muted">(optional)</span></label>
+                    <label for="max">@L["Times"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="max" class="short" type="number" min="1" @bind="_maxOccurrences" />
                 </div>
             </div>
             <label class="check">
                 <input type="checkbox" @bind="_autoCreate" />
-                <span>Enter bills automatically when due</span>
+                <span>@L["Enter bills automatically when due"]</span>
             </label>
 
             <div class="row">
@@ -90,12 +90,12 @@
             <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
             <div class="field" style="margin-top: 1rem">
-                <label for="memo">Memo <span class="muted">(optional; defaults to the name)</span></label>
+                <label for="memo">@L["Memo"] <span class="muted">@L["(optional; defaults to the name)"]</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
             </div>
 
             <div class="actions">
-                <button type="button" @onclick="SaveAsync" disabled="@(_vendorId is null || string.IsNullOrWhiteSpace(_name) || !BillLineModel.IsComplete(_lines) || _busy)">Save</button>
+                <button type="button" @onclick="SaveAsync" disabled="@(_vendorId is null || string.IsNullOrWhiteSpace(_name) || !BillLineModel.IsComplete(_lines) || _busy)">@L["Save"]</button>
                 @if (Id is not null)
                 {
                     <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>

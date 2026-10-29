@@ -1,13 +1,13 @@
 @page "/journal/recurring"
 @inject RecurringEntryService Recurring
 
-<PageTitle>Recurring entries · OpenBook</PageTitle>
+<PageTitle>@L["Recurring entries"] · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>Recurring entries</h1>
-        <a class="button secondary" href="/journal">Back to journal</a>
-        <a class="button" href="/journal/recurring/new">New recurring entry</a>
+        <h1>@L["Recurring entries"]</h1>
+        <a class="button secondary" href="/journal">@L["Back to journal"]</a>
+        <a class="button" href="/journal/recurring/new">@L["New recurring entry"]</a>
     </div>
     <p class="muted">
         Journal entries that repeat on a schedule, such as monthly depreciation or rent. Ones set to post automatically
@@ -45,7 +45,7 @@
             <form class="card" method="post" @formname="post-due" @onsubmit="PostDueAsync">
                 <AntiforgeryToken />
                 <p>@_dueCount recurring @(_dueCount == 1 ? "entry is" : "entries are") due.</p>
-                <button type="submit">Post due entries</button>
+                <button type="submit">@L["Post due entries"]</button>
             </form>
         }
 
@@ -53,12 +53,12 @@
             <table class="data">
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Schedule</th>
-                        <th class="num">Amount</th>
-                        <th>Next</th>
-                        <th class="num">Posted</th>
-                        <th>Posting</th>
+                        <th>@L["Name"]</th>
+                        <th>@L["Schedule"]</th>
+                        <th class="num">@L["Amount"]</th>
+                        <th>@L["Next"]</th>
+                        <th class="num">@L["Posted"]</th>
+                        <th>@L["Posting"]</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -71,19 +71,19 @@
                             <td>
                                 @if (!template.IsActive)
                                 {
-                                    <span class="muted">Inactive</span>
+                                    <span class="muted">@L["Inactive"]</span>
                                 }
                                 else if (template.NextDate is { } next)
                                 {
                                     @Labels.Date(next)
                                     @if (next <= Today)
                                     {
-                                        <span class="badge">Due</span>
+                                        <span class="badge">@L["Due"]</span>
                                     }
                                 }
                                 else
                                 {
-                                    <span class="muted">Finished</span>
+                                    <span class="muted">@L["Finished"]</span>
                                 }
                             </td>
                             <td class="num">@template.OccurrencesPosted</td>

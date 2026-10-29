@@ -2,13 +2,13 @@
 @inject RecurringInvoiceService Recurring
 @inject CustomerService CustomerService
 
-<PageTitle>Recurring invoices · OpenBook</PageTitle>
+<PageTitle>@L["Recurring invoices"] · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>Recurring invoices</h1>
-        <a class="button secondary" href="/sales">Back to sales</a>
-        <a class="button" href="/sales/recurring/new">New recurring invoice</a>
+        <h1>@L["Recurring invoices"]</h1>
+        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
+        <a class="button" href="/sales/recurring/new">@L["New recurring invoice"]</a>
     </div>
     <p class="muted">
         Invoices created on a schedule, such as a monthly retainer. Ones set to create automatically are created (and
@@ -54,14 +54,14 @@
             <form class="card" method="post" @formname="create-due" @onsubmit="CreateDueAsync">
                 <AntiforgeryToken />
                 <p>@_dueCount recurring @(_dueCount == 1 ? "invoice is" : "invoices are") due.</p>
-                <button type="submit">Create due invoices</button>
+                <button type="submit">@L["Create due invoices"]</button>
             </form>
         }
 
         <div class="table-wrap">
             <table class="data">
                 <thead>
-                    <tr><th>Name</th><th>Customer</th><th>Schedule</th><th>Next</th><th class="num">Created</th><th>Creating</th></tr>
+                    <tr><th>@L["Name"]</th><th>@L["Customer"]</th><th>@L["Schedule"]</th><th>@L["Next"]</th><th class="num">@L["Created"]</th><th>@L["Creating"]</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var template in _templates)
@@ -73,19 +73,19 @@
                             <td>
                                 @if (!template.IsActive)
                                 {
-                                    <span class="muted">Inactive</span>
+                                    <span class="muted">@L["Inactive"]</span>
                                 }
                                 else if (template.NextDate is { } next)
                                 {
                                     @Labels.Date(next)
                                     @if (next <= Today)
                                     {
-                                        <span class="badge">Due</span>
+                                        <span class="badge">@L["Due"]</span>
                                     }
                                 }
                                 else
                                 {
-                                    <span class="muted">Finished</span>
+                                    <span class="muted">@L["Finished"]</span>
                                 }
                             </td>
                             <td class="num">@template.OccurrencesPosted</td>

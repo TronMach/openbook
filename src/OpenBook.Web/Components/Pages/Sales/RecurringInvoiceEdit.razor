@@ -4,15 +4,15 @@
 @inject Operations Ops
 @inject NavigationManager Navigation
 
-<PageTitle>@(Id is null ? "New recurring invoice" : _name) · OpenBook</PageTitle>
+<PageTitle>@(Id is null ? L["New recurring invoice"].Value : _name) · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>@(Id is null ? "New recurring invoice" : _name)</h1>
-        <a class="button secondary" href="/sales/recurring">Back to recurring invoices</a>
+        <h1>@(Id is null ? L["New recurring invoice"].Value : _name)</h1>
+        <a class="button secondary" href="/sales/recurring">@L["Back to recurring invoices"]</a>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">History</a>
+            <a class="button secondary" href="/audit?entityId=@id">@L["History"]</a>
         }
     </div>
 
@@ -22,7 +22,7 @@
     }
     @if (_saved)
     {
-        <div class="alert notice" role="status">Saved.</div>
+        <div class="alert notice" role="status">@L["Saved."]</div>
     }
 
     @if (_notFound)
@@ -31,29 +31,29 @@
     }
     else if (_loaded && (_customers.Count == 0 || _items.Count == 0))
     {
-        <div class="card"><p>Recurring invoices need a customer and at least one product or service.</p></div>
+        <div class="card"><p>@L["Recurring invoices need a customer and at least one product or service."]</p></div>
     }
     else if (_loaded)
     {
         @if (!_active)
         {
-            <div class="alert notice" role="status">This recurring invoice is inactive, so no invoices are created from it.</div>
+            <div class="alert notice" role="status">@L["This recurring invoice is inactive, so no invoices are created from it."]</div>
         }
 
         <div class="card">
             <div class="row">
                 <div class="field">
-                    <label for="name">Name</label>
+                    <label for="name">@L["Name"]</label>
                     <input id="name" @bind="_name" maxlength="100" />
                 </div>
                 <div class="field">
-                    <label for="customer">Customer</label>
+                    <label for="customer">@L["Customer"]</label>
                     <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" @bind-Value="_customerId" Placeholder="Choose a customer…" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="interval">Repeat every</label>
+                    <label for="interval">@L["Repeat every"]</label>
                     <div class="inline">
                         <input id="interval" class="short" type="number" min="1" max="99" @bind="_interval" />
                         <select aria-label="Frequency" @bind="_frequency">
@@ -65,25 +65,25 @@
                     </div>
                 </div>
                 <div class="field">
-                    <label for="start">First invoice date</label>
+                    <label for="start">@L["First invoice date"]</label>
                     <input id="start" type="date" @bind="_startDate" />
                 </div>
                 <div class="field">
-                    <label for="end">End date <span class="muted">(optional)</span></label>
+                    <label for="end">@L["End date"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="end" type="date" @bind="_endDate" />
                 </div>
                 <div class="field">
-                    <label for="max">Times <span class="muted">(optional)</span></label>
+                    <label for="max">@L["Times"] <span class="muted">@L["(optional)"]</span></label>
                     <input id="max" class="short" type="number" min="1" @bind="_maxOccurrences" />
                 </div>
             </div>
             <label class="check">
                 <input type="checkbox" @bind="_autoCreate" @bind:after="() => _autoEmail &= _autoCreate" />
-                <span>Create invoices automatically when due</span>
+                <span>@L["Create invoices automatically when due"]</span>
             </label>
             <label class="check">
                 <input type="checkbox" @bind="_autoEmail" disabled="@(!_autoCreate)" />
-                <span>Email each invoice to the customer when it's created</span>
+                <span>@L["Email each invoice to the customer when it's created"]</span>
             </label>
 
             <div class="row">
@@ -92,15 +92,15 @@
             <TagChecks Options="_segments" Value="_tags" />
 
             <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="DateOnly.FromDateTime(DateTime.Today)" />
-            <p class="hint">Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</p>
+            <p class="hint">@L["Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting."]</p>
 
             <div class="field" style="margin-top: 1rem">
-                <label for="memo">Message to customer <span class="muted">(optional, printed on each invoice)</span></label>
+                <label for="memo">@L["Message to customer"] <span class="muted">@L["(optional, printed on each invoice)"]</span></label>
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
             </div>
 
             <div class="actions">
-                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save</button>
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@L["Save"]</button>
                 @if (Id is not null)
                 {
                     <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>

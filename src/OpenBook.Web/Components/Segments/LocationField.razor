@@ -4,7 +4,7 @@
     <div class="field">
         <label for="location">@Options.LocationLabel</label>
         <select id="location" value="@Value" @onchange="PickAsync">
-            <option value="">(none)</option>
+            <option value="">@L["(none)"]</option>
             @foreach (var l in Options.Locations)
             {
                 <option value="@l.Segment.Id">@(new string(' ', l.Depth * 3))@l.Segment.Name</option>

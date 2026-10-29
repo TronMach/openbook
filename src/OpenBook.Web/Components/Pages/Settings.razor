@@ -3,14 +3,14 @@
 @using OpenBook.Domain.Companies
 @inject CompanySettingsService SettingsService
 
-<PageTitle>Settings · OpenBook</PageTitle>
+<PageTitle>@L["Settings"] · OpenBook</PageTitle>
 
 <div class="card">
-    <h1>Company settings</h1>
+    <h1>@L["Company settings"]</h1>
 
     @if (_saved)
     {
-        <div class="alert notice" role="status">Settings saved.</div>
+        <div class="alert notice" role="status">@L["Settings saved."]</div>
     }
     @if (_error is not null)
     {
@@ -21,21 +21,21 @@
         <DataAnnotationsValidator />
 
         <fieldset>
-            <legend>Company</legend>
+            <legend>@L["Company"]</legend>
             <div class="row">
                 <div class="field">
-                    <label for="name">Company name</label>
+                    <label for="name">@L["Company name"]</label>
                     <InputText id="name" @bind-Value="Input.Name" />
                     <ValidationMessage For="() => Input.Name" />
                 </div>
                 <div class="field">
-                    <label for="legal-name">Legal name <span class="muted">(optional)</span></label>
+                    <label for="legal-name">@L["Legal name"] <span class="muted">@L["(optional)"]</span></label>
                     <InputText id="legal-name" @bind-Value="Input.LegalName" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="business-type">Business type</label>
+                    <label for="business-type">@L["Business type"]</label>
                     <InputSelect id="business-type" @bind-Value="Input.BusinessType">
                         @foreach (var type in Enum.GetValues<BusinessType>())
                         {
@@ -44,83 +44,83 @@
                     </InputSelect>
                 </div>
                 <div class="field">
-                    <label for="email">Email <span class="muted">(optional)</span></label>
+                    <label for="email">@L["Email"] <span class="muted">@L["(optional)"]</span></label>
                     <InputText id="email" type="email" @bind-Value="Input.Email" />
                     <ValidationMessage For="() => Input.Email" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
-                    <label for="phone">Phone <span class="muted">(optional)</span></label>
+                    <label for="phone">@L["Phone"] <span class="muted">@L["(optional)"]</span></label>
                     <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
                 </div>
             </div>
             <div class="field">
-                <label for="address">Address <span class="muted">(optional)</span></label>
+                <label for="address">@L["Address"] <span class="muted">@L["(optional)"]</span></label>
                 <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
             </div>
         </fieldset>
 
         <fieldset>
-            <legend>Books</legend>
+            <legend>@L["Books"]</legend>
             <div class="row">
                 <div class="field">
-                    <label for="fiscal-month">Fiscal year starts in</label>
+                    <label for="fiscal-month">@L["Fiscal year starts in"]</label>
                     <InputSelect id="fiscal-month" @bind-Value="Input.FiscalYearStartMonth">
                         @for (var month = 1; month <= 12; month++)
                         {
                             <option value="@month">@Labels.Month(month)</option>
                         }
                     </InputSelect>
-                    <span class="hint">Sets the reporting year. Changing it doesn't alter any transactions.</span>
+                    <span class="hint">@L["Sets the reporting year. Changing it doesn't alter any transactions."]</span>
                 </div>
                 <div class="field">
-                    <label for="basis">Reports open on</label>
+                    <label for="basis">@L["Reports open on"]</label>
                     <InputSelect id="basis" @bind-Value="Input.DefaultReportBasis">
                         @foreach (var basis in Enum.GetValues<ReportBasis>())
                         {
                             <option value="@basis">@Labels.For(basis)</option>
                         }
                     </InputSelect>
-                    <span class="hint">Each report can still switch basis.</span>
+                    <span class="hint">@L["Each report can still switch basis."]</span>
                 </div>
             </div>
             <label class="check">
                 <InputCheckbox @bind-Value="Input.UseAccountNumbers" />
-                <span>Use account numbers</span>
+                <span>@L["Use account numbers"]</span>
             </label>
             <dl class="facts">
-                <dt>Home currency</dt>
-                <dd>@_currency <span class="muted">(set at setup; can't be changed)</span></dd>
+                <dt>@L["Home currency"]</dt>
+                <dd>@_currency <span class="muted">@L["(set at setup; can't be changed)"]</span></dd>
             </dl>
         </fieldset>
 
-        <button type="submit">Save settings</button>
+        <button type="submit">@L["Save settings"]</button>
     </EditForm>
 </div>
 
 <div class="card" style="margin-top: 1.5rem">
-    <h2>Books</h2>
+    <h2>@L["Books"]</h2>
     <ul class="links">
-        <li><a href="/settings/close-books">Close the books</a> <span class="muted">closing date, closing password and year-end close</span></li>
-        <li><a href="/journal/opening-balances">Opening balances</a> <span class="muted">starting balances when moving to OpenBook</span></li>
-        <li><a href="/journal/recurring">Recurring entries</a> <span class="muted">journal entries that post on a schedule</span></li>
-        <li><a href="/audit">Audit log</a> <span class="muted">every change, who made it and when</span></li>
-        <li><a href="/journal/import">Import transactions</a> <span class="muted">journal entries or opening balances from a CSV file</span></li>
-        <li><a href="/import/migrate">Move in from another program</a> <span class="muted">QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks</span></li>
-        <li><a href="/settings/forms">Invoice style</a> <span class="muted">template, accent color and footer for PDF forms</span></li>
-        <li><a href="/settings/email">Email</a> <span class="muted">how invoices and statements are sent</span></li>
-        <li><a href="/settings/online-payments">Online payments</a> <span class="muted">card payments for invoices through Stripe (admins)</span></li>
+        <li><a href="/settings/close-books">@L["Close the books"]</a> <span class="muted">@L["closing date, closing password and year-end close"]</span></li>
+        <li><a href="/journal/opening-balances">@L["Opening balances"]</a> <span class="muted">@L["starting balances when moving to OpenBook"]</span></li>
+        <li><a href="/journal/recurring">@L["Recurring entries"]</a> <span class="muted">@L["journal entries that post on a schedule"]</span></li>
+        <li><a href="/audit">@L["Audit log"]</a> <span class="muted">@L["every change, who made it and when"]</span></li>
+        <li><a href="/journal/import">@L["Import transactions"]</a> <span class="muted">@L["journal entries or opening balances from a CSV file"]</span></li>
+        <li><a href="/import/migrate">@L["Move in from another program"]</a> <span class="muted">@L["QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks"]</span></li>
+        <li><a href="/settings/forms">@L["Invoice style"]</a> <span class="muted">@L["template, accent color and footer for PDF forms"]</span></li>
+        <li><a href="/settings/email">@L["Email"]</a> <span class="muted">@L["how invoices and statements are sent"]</span></li>
+        <li><a href="/settings/online-payments">@L["Online payments"]</a> <span class="muted">@L["card payments for invoices through Stripe (admins)"]</span></li>
     </ul>
 </div>
 
 <div class="card" style="margin-top: 1.5rem">
-    <h2>People and connections</h2>
+    <h2>@L["People and connections"]</h2>
     <ul class="links">
-        <li><a href="/settings/users">Users</a> <span class="muted">who can sign in, and their roles (admins)</span></li>
+        <li><a href="/settings/users">@L["Users"]</a> <span class="muted">@L["who can sign in, and their roles (admins)"]</span></li>
         <li><a href="/settings/api-keys">API keys</a> <span class="muted">your keys for the <a href="/api/openapi/v1.json">REST API</a></span></li>
-        <li><a href="/settings/webhooks">Webhooks</a> <span class="muted">tell other systems about changes as they happen (admins)</span></li>
-        <li><a href="/settings/plugins">Add-ins</a> <span class="muted">reports and import formats added to OpenBook (admins)</span></li>
+        <li><a href="/settings/webhooks">@L["Webhooks"]</a> <span class="muted">@L["tell other systems about changes as they happen (admins)"]</span></li>
+        <li><a href="/settings/plugins">@L["Add-ins"]</a> <span class="muted">@L["reports and import formats added to OpenBook (admins)"]</span></li>
     </ul>
 </div>
 
