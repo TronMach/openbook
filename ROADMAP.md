@@ -137,6 +137,25 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 **L6 slice 4 status (2026-10-29): complete, so L6 is done.** A cash-flow forecast by week (up to a year): today's bank balance, open invoices collected and open bills paid on their due dates, loan payments, with a warning when cash would go below zero. Scenarios shift when customers pay and when bills are paid and add one-off, weekly or monthly money in or out. Adjusting entries: journal entries marked as an accountant's adjustments (from the entry or the journal form), an adjusting entries report and a trial balance worksheet with unadjusted, adjustment and adjusted columns. An accountant's year-end package: one ZIP of fifteen reports as Excel files plus the 1099 filing data. 1099 filing data: every vendor over the threshold with full tax ID, address, form, box and amount as CSV, for the IRS IRIS upload template or a filing service; downloads are audited (new audit action `Exported`). API for all of it. Not done: direct 1099 e-filing (IRIS takes uploads only through its portal's own CSV template or the A2A XML interface, which needs a transmitter control code), recurring invoices and bills in the forecast (add them to a scenario), an accountant's own login type (that's L7).
 
+**L9 plan (suggested 2026-10-29, not started):** four slices, lowest risk first. Two decisions are open before starting: how far plugins reach, and whether offline capture goes ahead.
+(1) CLI and PWA: a proper command-line tool over the API (imports, exports, backups, running reports, posting entries; it grows from the commands the web app already has), and an installable app (manifest, icon, its own window, cached app shell).
+(2) Plugins, kept narrow: plugins add reports, import formats, payment and bank-feed providers and reactions to events, through the extension points that already exist (report catalog, migration readers, payment gateway, bank connection client, webhooks). Plugins that add pages or write to the books directly are out of scope; everything still posts through the posting engine.
+(3) Localization: pull page text into resources, format dates and numbers by locale, ship English first and add languages later. Other currencies and other countries' tax rules stay with L2 (on hold).
+(4) Offline capture, last, as designed below (or set aside like L2 and L10).
+
+**Offline capture design (suggested 2026-10-29):** the device never keeps its own copy of the books; it collects drafts that the server enters when the connection returns.
+- Offline work is a draft, never a posting. On sync the server enters each draft through the same services as the online forms, so every ledger rule applies (posting engine, closed periods, stock checks, approvals, audit). Nothing is merged.
+- A draft that can't be entered (date now in a closed period, item out of stock, customer deactivated) goes to a "needs attention" review list with the reason, like the bank feed review queue, instead of becoming a conflict.
+- Each draft carries an ID made on the device; the server ignores a draft it has already entered, so retries never duplicate.
+- Document numbers (invoices, checks) are given out by the server at sync; the device shows "Draft" until then.
+- Offline only creates records, never edits or voids existing ones.
+- Offline: expenses and receipt photos (through the existing receipt reader), time and timers, mileage, notes, new customers and vendors, estimates and invoice drafts. Online only: payments and applying credits, reconciliation, stock transfers, builds and adjustments, closing the books, editing or voiding, reports beyond a cached snapshot.
+- Forms check drafts on the device with the same Domain rules (the Domain project has no database or web dependencies, so it can run in the browser), so most drafts sync cleanly.
+- The device caches what forms need (customers, vendors, items, prices, accounts, projects) and a few balances labelled with when they were updated; never bank details or tax IDs.
+- Sync is automatic when the connection returns, with a "3 waiting to send" badge, a send-now button and a status on each draft (sent, waiting, needs attention).
+- Cache and drafts are encrypted on the device; each device has its own sign-in that can be revoked from Settings, which also clears what it holds next time it connects. The audit log records the device a draft came from.
+- First version: time, mileage, expenses and receipt photos; invoice drafts after. Medium size. It matters mostly for the Server edition (L13's Desktop edition is local and never offline).
+
 **Order (decided 2026-10-26):** L13 Desktop and Server editions and L7 Security come last, once the features have settled; they package and harden what the other modules build.
 
 ## Phase 3 — LATER (pick by audience)
@@ -151,7 +170,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | L6 | Reporting advanced | Custom report builder, scheduled emails, dashboards, KPIs, cash-flow forecasting, scenarios; 1099 e-file, accountant package & adjusting mode |
 | L7 | Security | Granular permissions, OIDC/SSO, 2FA, accountant invite |
 | L8 | Migration | QBO API / QBXML, GnuCash, Xero/Wave/FreshBooks, scheduled cloud backups |
-| L9 | Platform | Plugin system, PWA, offline sync, CLI, localization |
+| L9 | Platform | Plugin system, PWA, offline capture (drafts that sync), CLI, localization. Plan and offline design below the table notes |
 | L10 | Payroll — **on hold indefinitely (decided 2026-10-25)** | Not planned; don’t start without a new decision. If revived: recommend the **"payroll journal import"** option first (import totals from Gusto/ADP). Full payroll needs yearly tax-table maintenance indefinitely |
 | L11 | Industry editions | Nonprofit, contractor, retail, professional services, manufacturing, e-commerce, property management; each is a mini-product |
 | L12 | Advanced pricing | Price levels per customer (fixed percentage or per-item prices) as the baseline; price rules for promotions and exceptions (items, customers or levels, quantity range, date range, percent/amount/set price, priority, exclusive); quantity breaks per item; rounding; a defined order of application; list price and pricing source kept on every line; last price sold; price list and discounts-given reports. Researched from QuickBooks Enterprise Advanced Pricing, fixing its gaps (undocumented precedence, quantity breaks ignoring split lines) |
