@@ -28,6 +28,9 @@ public static class Links
         (OpenBook.Domain.Inventory.AssemblyBuild.Source, { } id) => $"/inventory/builds/{id}",
         (OpenBook.Domain.Inventory.LandedCost.Source, { } id) => $"/inventory/landed-costs/{id}",
         (BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource, { } id) => $"/banking/transactions/{id}",
+        (OpenBook.Domain.Assets.DepreciationRun.Source, { } id) => $"/assets/runs/{id}",
+        (OpenBook.Domain.Assets.FixedAsset.DisposalSource, { } id) => $"/assets/{id}",
+        (OpenBook.Domain.Assets.Loan.Source or OpenBook.Domain.Assets.Loan.PaymentSource, { } id) => $"/loans/{id}",
         _ => $"/journal/{journalEntryId}",
     };
 
@@ -61,6 +64,9 @@ public static class Links
         "retainer" => $"/sales/retainers/{id}",
         "billable_expense" => "/sales/billable",
         "project" => $"/projects/{id}",
+        "fixed_asset" => $"/assets/{id}",
+        "depreciation_run" => $"/assets/runs/{id}",
+        "loan" => $"/loans/{id}",
         "time_entry" => $"/time/{id}/edit",
         "worker" => $"/time/people?edit={id}",
         "mileage_trip" => "/mileage",
@@ -120,6 +126,10 @@ public static class Links
         OpenBook.Domain.Inventory.AssemblyBuild.Source => "assembly build",
         OpenBook.Domain.Inventory.LandedCost.Source => "landed cost",
         BankTransaction.SpendSource or BankTransaction.ReceiveSource or BankTransaction.TransferSource => "bank transaction",
+        OpenBook.Domain.Assets.DepreciationRun.Source => "depreciation",
+        OpenBook.Domain.Assets.FixedAsset.DisposalSource => "asset disposal",
+        OpenBook.Domain.Assets.Loan.Source => "loan",
+        OpenBook.Domain.Assets.Loan.PaymentSource => "loan payment",
         _ when JournalEntry.IsJournalSource(source) => null,
         _ => "document",
     };

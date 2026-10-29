@@ -66,6 +66,205 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("Accounts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Assets.DepreciationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId")
+                        .IsUnique();
+
+                    b.ToTable("DepreciationRuns", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.FixedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccumulatedAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssetAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Cost")
+                        .HasColumnType("bigint")
+                        .HasColumnName("CostMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DecliningPercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("DecliningPercentTenThousandths");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("DisposalDepreciation")
+                        .HasColumnType("bigint")
+                        .HasColumnName("DisposalDepreciationMinor");
+
+                    b.Property<Guid?>("DisposalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("DisposedOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("InServiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("LifeMonths")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MacrsClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<long>("PriorDepreciation")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PriorDepreciationMinor");
+
+                    b.Property<DateOnly?>("PriorThrough")
+                        .HasColumnType("date");
+
+                    b.Property<long>("Proceeds")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ProceedsMinor");
+
+                    b.Property<Guid?>("ProceedsAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Salvage")
+                        .HasColumnType("bigint")
+                        .HasColumnName("SalvageMinor");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccumulatedAccountId");
+
+                    b.HasIndex("AssetAccountId");
+
+                    b.HasIndex("DisposalEntryId");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("ProceedsAccountId");
+
+                    b.ToTable("FixedAssets", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.Loan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AnnualRatePercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AnnualRatePercentTenThousandths");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("FirstPaymentDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("InterestAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LenderVendorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("PaymentAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PaymentAmountMinor");
+
+                    b.Property<int>("Payments")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Principal")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PrincipalMinor");
+
+                    b.Property<Guid?>("ProceedsAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("ProceedsDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("ProceedsEntryId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InterestAccountId");
+
+                    b.HasIndex("LenderVendorId");
+
+                    b.HasIndex("LiabilityAccountId");
+
+                    b.HasIndex("ProceedsAccountId");
+
+                    b.HasIndex("ProceedsEntryId");
+
+                    b.ToTable("Loans", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Attachments.Attachment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4034,6 +4233,173 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany()
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.DepreciationRun", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Assets.DepreciationRunLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("DepreciationRunId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid>("AssetId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("DepreciationRunId", "LineNumber");
+
+                            b1.HasIndex("AssetId");
+
+                            b1.ToTable("DepreciationRunLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Assets.FixedAsset", null)
+                                .WithMany()
+                                .HasForeignKey("AssetId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("DepreciationRunId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.FixedAsset", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccumulatedAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("DisposalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ProceedsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.Loan", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("InterestAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("LenderVendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ProceedsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ProceedsEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Assets.LoanPayment", "PaymentsMade", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<long>("Interest")
+                                .HasColumnType("bigint")
+                                .HasColumnName("InterestMinor");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("boolean");
+
+                            b1.Property<Guid>("JournalEntryId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("LoanId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("PaymentAccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Principal")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PrincipalMinor");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("JournalEntryId")
+                                .IsUnique();
+
+                            b1.HasIndex("LoanId");
+
+                            b1.HasIndex("PaymentAccountId");
+
+                            b1.ToTable("LoanPayments", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("JournalEntryId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoanId");
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("PaymentAccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+                        });
+
+                    b.Navigation("PaymentsMade");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Attachments.AttachmentContent", b =>

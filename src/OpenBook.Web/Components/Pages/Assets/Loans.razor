@@ -1,0 +1,103 @@
+@page "/loans"
+@inject LoanService LoanService
+@inject AccountService AccountService
+
+<PageTitle>Loans · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Loans</h1>
+        <a class="button secondary" href="/assets">Fixed assets</a>
+        <a class="button secondary" href="/reports/loans">Loans report</a>
+    </div>
+    <p class="muted">Loans and other debts repaid monthly. Each payment is split into interest (an expense) and principal (paying down the loan account).</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_loans.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>Loan</th><th class="num">Rate</th><th class="num">Payment</th><th class="num">Balance</th></tr></thead>
+            <tbody>
+                @foreach (var l in _loans)
+                {
+                    <tr class="@(l.IsPaidOff ? "muted" : "")">
+                        <td><a href="/loans/@l.Id">@l.Name</a></td>
+                        <td class="num">@Labels.Percent(l.AnnualRatePercent)</td>
+                        <td class="num">@Labels.Amount(l.PaymentAmount)</td>
+                        <td class="num">@(l.IsPaidOff ? "Paid off" : Labels.Amount(l.Balance))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_liabilities.Count == 0)
+    {
+        <div class="card"><p>Loans are kept in a Long-term liability or Other current liability account (such as "Bank Loan"). <a href="/accounts/new">Add one</a> first.</p></div>
+    }
+    else
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Add a loan</h2>
+            <form method="post" action="/loans" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field"><label for="name">Name</label><input id="name" name="name" maxlength="200" required placeholder="Van loan" /></div>
+                    <div class="field">
+                        <label for="liability">Loan account</label>
+                        <select id="liability" name="liabilityAccountId">
+                            @foreach (var a in _liabilities)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field"><label for="principal">Amount borrowed (or still owed)</label><input id="principal" name="principal" class="amount" inputmode="decimal" required /></div>
+                    <div class="field"><label for="rate">Interest rate % a year</label><input id="rate" name="rate" class="short" inputmode="decimal" required /></div>
+                    <div class="field"><label for="payments">Monthly payments (left)</label><input id="payments" name="payments" class="short" inputmode="numeric" required /></div>
+                    <div class="field"><label for="first">First payment</label><input id="first" name="firstPaymentDate" type="date" required /></div>
+                    <div class="field"><label for="payment">Payment <span class="muted">(blank: worked out)</span></label><input id="payment" name="paymentAmount" class="amount" inputmode="decimal" /></div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="proceeds">Record the money received in <span class="muted">(blank if it's already in the books)</span></label>
+                        <select id="proceeds" name="proceedsAccountId">
+                            <option value="">Already recorded</option>
+                            @foreach (var a in _proceedsAccounts)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field"><label for="proceedsDate">Received on</label><input id="proceedsDate" name="proceedsDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Add loan</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Loan> _loans = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _liabilities = [];
+    private List<Account> _proceedsAccounts = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loans = await LoanService.ListAsync();
+        _chart = await AccountService.GetChartAsync();
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _liabilities = active.Where(a => a.Type is AccountType.LongTermLiability or AccountType.OtherCurrentLiability).ToList();
+        _proceedsAccounts = active.Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset or AccountType.FixedAsset or AccountType.OtherAsset).ToList();
+    }
+}

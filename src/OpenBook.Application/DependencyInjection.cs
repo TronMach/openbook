@@ -120,6 +120,11 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Projects.MileageService>();
         services.AddScoped<OpenBook.Application.Projects.ProjectBilling>();
         services.AddScoped<OpenBook.Application.Projects.ProjectReports>();
+        services.AddScoped<OpenBook.Application.Assets.AssetAccounts>();
+        services.AddScoped<OpenBook.Application.Assets.FixedAssetService>();
+        services.AddScoped<OpenBook.Application.Assets.DepreciationService>();
+        services.AddScoped<OpenBook.Application.Assets.LoanService>();
+        services.AddScoped<OpenBook.Application.Assets.AssetReports>();
         return services;
     }
 }

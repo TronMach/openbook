@@ -1,0 +1,128 @@
+@page "/loans/{Id:guid}"
+@inject LoanService LoanService
+@inject AccountService AccountService
+
+<PageTitle>@(_loan?.Name ?? "Loan") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_loan is null)
+    {
+        <h1>Loan not found</h1>
+        <p><a href="/loans">Back to loans</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_loan.Name</h1>
+            <a class="button secondary" href="/loans">Loans</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <dl class="facts">
+            <dt>Borrowed</dt><dd>@Labels.Amount(_loan.Principal) in @_chart.FullName(_loan.LiabilityAccountId)</dd>
+            <dt>Rate</dt><dd>@Labels.Percent(_loan.AnnualRatePercent) a year</dd>
+            <dt>Payment</dt><dd>@Labels.Amount(_loan.PaymentAmount) a month, @_loan.Payments payments from @Labels.Date(_loan.FirstPaymentDate)</dd>
+            <dt>Interest to</dt><dd>@_chart.FullName(_loan.InterestAccountId)</dd>
+            <dt>Balance</dt><dd>@Labels.Amount(_loan.Balance)</dd>
+        </dl>
+
+        @if (!_loan.IsPaidOff)
+        {
+            <div class="card">
+                <h2>Record a payment</h2>
+                <form method="post" action="/loans/@_loan.Id/pay" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@(_remaining.Count > 0 ? _remaining[0].Date.ToString("yyyy-MM-dd") : DateTime.Today.ToString("yyyy-MM-dd"))" /></div>
+                        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" value="@_loan.NextPayment.ToString("0.00")" /></div>
+                        <div class="field">
+                            <label for="from">Paid from</label>
+                            <select id="from" name="paymentAccountId">
+                                @foreach (var a in _payFrom)
+                                {
+                                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <p class="hint">Interest is a month on the balance owed; anything above the interest pays down the loan.</p>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">Record payment</button></div>
+                </form>
+            </div>
+        }
+
+        @if (_loan.PaymentsMade.Count > 0)
+        {
+            <h2>Payments</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th class="num">Amount</th><th class="num">Interest</th><th class="num">Principal</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _loan.PaymentsMade.OrderBy(p => p.Date))
+                    {
+                        <tr class="@(p.IsVoided ? "muted" : "")">
+                            <td><a href="/journal/@p.JournalEntryId">@Labels.Date(p.Date)</a></td>
+                            <td class="num">@Labels.Amount(p.Amount)</td>
+                            <td class="num">@Labels.Amount(p.Interest)</td>
+                            <td class="num">@Labels.Amount(p.Principal)</td>
+                            <td>
+                                @if (p.IsVoided)
+                                {
+                                    <span>Voided</span>
+                                }
+                                else if (_loan.LatestPayment?.Id == p.Id)
+                                {
+                                    <form method="post" action="/loans/@_loan.Id/payments/@p.Id/void" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <input name="reason" required placeholder="Reason" aria-label="Reason" maxlength="500" />
+                                        <button type="submit" class="secondary">Void</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (_remaining.Count > 0)
+        {
+            <h2>What's left</h2>
+            <table class="data">
+                <thead><tr><th>No.</th><th>Date</th><th class="num">Payment</th><th class="num">Interest</th><th class="num">Principal</th><th class="num">Balance</th></tr></thead>
+                <tbody>
+                    @foreach (var i in _remaining)
+                    {
+                        <tr>
+                            <td>@i.Number</td><td>@Labels.Date(i.Date)</td><td class="num">@Labels.Amount(i.Payment)</td><td class="num">@Labels.Amount(i.Interest)</td>
+                            <td class="num">@Labels.Amount(i.Principal)</td><td class="num">@Labels.Amount(i.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_remaining.Sum(i => i.Payment))</td><td class="num">@Labels.Amount(_remaining.Sum(i => i.Interest))</td><td class="num">@Labels.Amount(_remaining.Sum(i => i.Principal))</td><td></td></tr></tfoot>
+            </table>
+        }
+    }
+</div>
+
+@code {
+    private Loan? _loan;
+    private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<Installment> _remaining = [];
+    private List<Account> _payFrom = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loan = await LoanService.GetAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+        if (_loan is not null)
+            _remaining = LoanService.RemainingSchedule(_loan);
+        _payFrom = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+    }
+}

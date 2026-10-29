@@ -73,6 +73,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
     public DbSet<OpenBook.Domain.Projects.MileageRate> MileageRates => Set<OpenBook.Domain.Projects.MileageRate>();
+    public DbSet<OpenBook.Domain.Assets.FixedAsset> FixedAssets => Set<OpenBook.Domain.Assets.FixedAsset>();
+    public DbSet<OpenBook.Domain.Assets.DepreciationRun> DepreciationRuns => Set<OpenBook.Domain.Assets.DepreciationRun>();
+    public DbSet<OpenBook.Domain.Assets.Loan> Loans => Set<OpenBook.Domain.Assets.Loan>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
     public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
@@ -635,6 +638,89 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(d => new { d.Status, d.NextAttemptAt });
             b.HasIndex(d => new { d.SubscriptionId, d.CreatedAt });
             b.HasOne<WebhookSubscription>().WithMany().HasForeignKey(d => d.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    private static void ConfigureAssets(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<OpenBook.Domain.Assets.FixedAsset>(b =>
+        {
+            b.ToTable("FixedAssets");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Name).HasMaxLength(200);
+            b.Property(a => a.Number).HasMaxLength(30);
+            b.Property(a => a.Description).HasMaxLength(1000);
+            b.Property(a => a.Cost).HasColumnName("CostMinor").HasConversion(MinorUnits);
+            b.Property(a => a.Salvage).HasColumnName("SalvageMinor").HasConversion(MinorUnits);
+            b.Property(a => a.PriorDepreciation).HasColumnName("PriorDepreciationMinor").HasConversion(MinorUnits);
+            b.Property(a => a.Proceeds).HasColumnName("ProceedsMinor").HasConversion(MinorUnits);
+            b.Property(a => a.DisposalDepreciation).HasColumnName("DisposalDepreciationMinor").HasConversion(MinorUnits);
+            b.Property(a => a.DecliningPercent).HasColumnName("DecliningPercentTenThousandths").HasConversion(TenThousandths);
+            b.Property(a => a.Method).HasConversion<string>().HasMaxLength(20);
+            b.Property(a => a.MacrsClass).HasConversion<string>().HasMaxLength(20);
+            b.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(a => a.IsDisposed);
+            b.Ignore(a => a.Base);
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.AssetAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.AccumulatedAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(a => a.ProceedsAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(a => a.DisposalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Assets.DepreciationRun>(b =>
+        {
+            b.ToTable("DepreciationRuns");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => r.JournalEntryId).IsUnique();
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(r => r.Total);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Lines, l =>
+            {
+                l.ToTable("DepreciationRunLines");
+                l.WithOwner().HasForeignKey("DepreciationRunId");
+                l.HasKey("DepreciationRunId", nameof(OpenBook.Domain.Assets.DepreciationRunLine.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasIndex(x => x.AssetId);
+                l.HasOne<OpenBook.Domain.Assets.FixedAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Assets.Loan>(b =>
+        {
+            b.ToTable("Loans");
+            b.HasKey(l => l.Id);
+            b.Property(l => l.Name).HasMaxLength(200);
+            b.Property(l => l.Notes).HasMaxLength(1000);
+            b.Property(l => l.Principal).HasColumnName("PrincipalMinor").HasConversion(MinorUnits);
+            b.Property(l => l.PaymentAmount).HasColumnName("PaymentAmountMinor").HasConversion(MinorUnits);
+            b.Property(l => l.AnnualRatePercent).HasColumnName("AnnualRatePercentTenThousandths").HasConversion(TenThousandths);
+            b.Ignore(l => l.MonthlyRate);
+            b.Ignore(l => l.Balance);
+            b.Ignore(l => l.IsPaidOff);
+            b.Ignore(l => l.NextPayment);
+            b.Ignore(l => l.LatestPayment);
+            b.HasOne<Account>().WithMany().HasForeignKey(l => l.LiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(l => l.InterestAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(l => l.ProceedsAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(l => l.LenderVendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(l => l.ProceedsEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(l => l.PaymentsMade, p =>
+            {
+                p.ToTable("LoanPayments");
+                p.WithOwner().HasForeignKey("LoanId");
+                p.HasKey(x => x.Id);
+                p.Property(x => x.Id).ValueGeneratedNever();
+                p.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                p.Property(x => x.Interest).HasColumnName("InterestMinor").HasConversion(MinorUnits);
+                p.Property(x => x.Principal).HasColumnName("PrincipalMinor").HasConversion(MinorUnits);
+                p.HasIndex(x => x.JournalEntryId).IsUnique();
+                p.HasOne<Account>().WithMany().HasForeignKey(x => x.PaymentAccountId).OnDelete(DeleteBehavior.Restrict);
+                p.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(l => l.PaymentsMade).HasField("_payments").UsePropertyAccessMode(PropertyAccessMode.Field);
         });
     }
 
@@ -1407,6 +1493,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         });
 
         ConfigureProjects(modelBuilder);
+        ConfigureAssets(modelBuilder);
 
         modelBuilder.Entity<CollectionSettings>(b =>
         {

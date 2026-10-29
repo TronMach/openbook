@@ -1,0 +1,151 @@
+@page "/assets/new"
+@page "/assets/{Id:guid}/edit"
+@inject FixedAssetService AssetService
+@inject AccountService AccountService
+
+<PageTitle>@(Id is null ? "Add an asset" : "Edit asset") · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(Id is null ? "Add a fixed asset" : $"Edit {_asset?.Name}")</h1>
+        <a class="button secondary" href="@(Id is null ? "/assets" : $"/assets/{Id}")">Cancel</a>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (_assetAccounts.Count == 0)
+    {
+        <div class="card"><p>Fixed assets are kept in a Fixed asset account (such as "Equipment"). <a href="/accounts/new">Add one</a> first.</p></div>
+    }
+    else
+    {
+        <div class="card">
+            <form method="post" action="@(Id is null ? "/assets" : $"/assets/{Id}")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="name">Name</label>
+                        <input id="name" name="name" maxlength="200" required value="@_asset?.Name" placeholder="Delivery van" />
+                    </div>
+                    <div class="field">
+                        <label for="number">Asset number <span class="muted">(optional)</span></label>
+                        <input id="number" name="number" maxlength="30" value="@_asset?.Number" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="cost">Cost</label>
+                        <input id="cost" name="cost" class="amount" inputmode="decimal" required value="@_asset?.Cost.ToString("0.00")" />
+                    </div>
+                    <div class="field">
+                        <label for="inService">Placed in service</label>
+                        <input id="inService" name="inServiceDate" type="date" required value="@((_asset?.InServiceDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <div class="field">
+                        <label for="assetAccount">Asset account</label>
+                        <select id="assetAccount" name="assetAccountId">
+                            @foreach (var a in _assetAccounts)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == _asset?.AssetAccountId)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="method">Depreciation</label>
+                        <select id="method" name="method">
+                            <option value="StraightLine" selected="@(_asset?.Method is null or DepreciationMethod.StraightLine)">Straight-line</option>
+                            <option value="DecliningBalance" selected="@(_asset?.Method == DepreciationMethod.DecliningBalance)">Declining balance</option>
+                            <option value="Macrs" selected="@(_asset?.Method == DepreciationMethod.Macrs)">MACRS (US tax)</option>
+                            <option value="None" selected="@(_asset?.Method == DepreciationMethod.None)">Not depreciated (land)</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="life">Useful life in years <span class="muted">(straight-line, declining)</span></label>
+                        <input id="life" name="lifeYears" class="short" inputmode="decimal" value="@(_asset is { LifeMonths: > 0 } withLife ? (withLife.LifeMonths / 12m).ToString("0.##") : "")" />
+                    </div>
+                    <div class="field">
+                        <label for="salvage">Salvage value</label>
+                        <input id="salvage" name="salvage" class="amount" inputmode="decimal" value="@_asset?.Salvage.ToString("0.00")" />
+                    </div>
+                    <div class="field">
+                        <label for="declining">Declining rate %</label>
+                        <input id="declining" name="decliningPercent" class="short" inputmode="decimal" value="@(_asset is { DecliningPercent: > 0 } d ? d.DecliningPercent.ToString("0.##") : "200")" />
+                    </div>
+                    <div class="field">
+                        <label for="macrs">MACRS class</label>
+                        <select id="macrs" name="macrsClass">
+                            @foreach (var c in Enum.GetValues<MacrsClass>())
+                            {
+                                <option value="@c" selected="@(c == (_asset?.MacrsClass ?? MacrsClass.Year7))">@Depreciation.Label(c)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="accumulated">Accumulated depreciation account</label>
+                        <select id="accumulated" name="accumulatedAccountId">
+                            <option value="">@AssetAccounts.AccumulatedName (created if needed)</option>
+                            @foreach (var a in _assetAccounts)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == _asset?.AccumulatedAccountId)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="expense">Depreciation expense account</label>
+                        <select id="expense" name="expenseAccountId">
+                            <option value="">@AssetAccounts.ExpenseName (created if needed)</option>
+                            @foreach (var a in _expenseAccounts)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == _asset?.ExpenseAccountId)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <fieldset>
+                    <legend>Bought before you started with OpenBook?</legend>
+                    <div class="row">
+                        <div class="field">
+                            <label for="prior">Depreciation already recorded</label>
+                            <input id="prior" name="priorDepreciation" class="amount" inputmode="decimal" value="@(_asset is { PriorDepreciation: > 0 } p ? p.PriorDepreciation.ToString("0.00") : "")" />
+                        </div>
+                        <div class="field">
+                            <label for="priorThrough">Through</label>
+                            <input id="priorThrough" name="priorThrough" type="date" value="@_asset?.PriorThrough?.ToString("yyyy-MM-dd")" />
+                        </div>
+                    </div>
+                    <p class="hint">Depreciation continues on the schedule after that date.</p>
+                </fieldset>
+                <div class="field">
+                    <label for="description">Description <span class="muted">(optional)</span></label>
+                    <input id="description" name="description" maxlength="1000" value="@_asset?.Description" />
+                </div>
+                <div class="actions"><button type="submit">Save</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private FixedAsset? _asset;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _assetAccounts = [];
+    private List<Account> _expenseAccounts = [];
+
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is { } id)
+            _asset = (await AssetService.GetAsync(id))?.Asset;
+        _chart = await AccountService.GetChartAsync();
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _assetAccounts = active.Where(a => a.Type is AccountType.FixedAsset or AccountType.OtherAsset).ToList();
+        _expenseAccounts = active.Where(a => a.Type is AccountType.Expense or AccountType.OtherExpense).ToList();
+    }
+}

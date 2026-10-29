@@ -1,0 +1,118 @@
+@page "/assets"
+@inject FixedAssetService AssetService
+@inject DepreciationService DepreciationService
+
+<PageTitle>Fixed assets · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Fixed assets</h1>
+        <a class="button" href="/assets/new">Add an asset</a>
+        <a class="button secondary" href="/loans">Loans</a>
+        <a class="button secondary" href="/reports/fixed-assets">Register report</a>
+        <a class="button secondary" href="/reports/depreciation-schedule">Depreciation schedule</a>
+    </div>
+    <p class="muted">
+        Equipment, vehicles, furniture and buildings the business uses for more than a year. Record the purchase the usual way (a bill,
+        expense or journal entry to the asset account), add the asset here, and run depreciation each month, quarter or year.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_assets.Count == 0)
+    {
+        <div class="card"><p>No fixed assets yet.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Asset</th><th>In service</th><th>Method</th><th class="num">Cost</th><th class="num">Depreciated</th><th class="num">Book value</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var p in _assets)
+                {
+                    <tr class="@(p.Asset.IsDisposed ? "muted" : "")">
+                        <td><a href="/assets/@p.Asset.Id">@(p.Asset.Number is { } n ? $"{n} " : "")@p.Asset.Name</a></td>
+                        <td>@Labels.Date(p.Asset.InServiceDate)</td>
+                        <td>@AssetReports.Method(p.Asset)</td>
+                        <td class="num">@Labels.Amount(p.Asset.Cost)</td>
+                        <td class="num">@Labels.Amount(p.Accumulated)</td>
+                        <td class="num">@(p.Asset.IsDisposed ? "" : Labels.Amount(p.BookValue))</td>
+                        <td>@(p.Asset.IsDisposed ? $"Disposed {Labels.Date(p.Asset.DisposedOn!.Value)}" : "Active")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Run depreciation</h2>
+        <form method="get" class="inline">
+            <label>Through <input type="date" name="through" value="@_through.ToString("yyyy-MM-dd")" /></label>
+            <button type="submit" class="secondary">Preview</button>
+        </form>
+        @if (_due.Count == 0)
+        {
+            <p class="muted">Nothing is due through @Labels.Date(_through).</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Asset</th><th class="num">Depreciation due</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _due)
+                    {
+                        <tr><td>@d.Asset.Name</td><td class="num">@Labels.Amount(d.Amount)</td></tr>
+                    }
+                </tbody>
+                <tfoot><tr><td>Total</td><td class="num">@Labels.Amount(_due.Sum(d => d.Amount))</td></tr></tfoot>
+            </table>
+            <form method="post" action="/assets/depreciation" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="through" value="@_through.ToString("yyyy-MM-dd")" />
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Post depreciation through @Labels.Date(_through)</button></div>
+            </form>
+        }
+    </div>
+
+    @if (_runs.Count > 0)
+    {
+        <h2>Depreciation posted</h2>
+        <table class="data">
+            <thead><tr><th>Through</th><th class="num">Assets</th><th class="num">Amount</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var r in _runs)
+                {
+                    <tr class="@(r.Status == DocumentStatus.Voided ? "muted" : "")">
+                        <td><a href="/assets/runs/@r.Id">@Labels.Date(r.Date)</a></td>
+                        <td class="num">@r.Lines.Count</td>
+                        <td class="num">@Labels.Amount(r.Total)</td>
+                        <td>@r.Status</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<AssetPosition> _assets = [];
+    private IReadOnlyList<DepreciationDue> _due = [];
+    private IReadOnlyList<DepreciationRun> _runs = [];
+    private DateOnly _through;
+
+    [SupplyParameterFromQuery] private string? Through { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _through = DateOnly.TryParse(Through, out var t) ? t : new DateOnly(today.Year, today.Month, 1).AddDays(-1);
+        _assets = await AssetService.ListAsync();
+        _due = await DepreciationService.PreviewAsync(_through);
+        _runs = await DepreciationService.ListRunsAsync();
+    }
+}

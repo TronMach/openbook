@@ -61,6 +61,205 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("Accounts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Assets.DepreciationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId")
+                        .IsUnique();
+
+                    b.ToTable("DepreciationRuns", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.FixedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccumulatedAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AssetAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Cost")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CostMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DecliningPercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DecliningPercentTenThousandths");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DisposalDepreciation")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DisposalDepreciationMinor");
+
+                    b.Property<Guid?>("DisposalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DisposedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("InServiceDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LifeMonths")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MacrsClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PriorDepreciation")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PriorDepreciationMinor");
+
+                    b.Property<DateOnly?>("PriorThrough")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Proceeds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ProceedsMinor");
+
+                    b.Property<Guid?>("ProceedsAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Salvage")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("SalvageMinor");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccumulatedAccountId");
+
+                    b.HasIndex("AssetAccountId");
+
+                    b.HasIndex("DisposalEntryId");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("ProceedsAccountId");
+
+                    b.ToTable("FixedAssets", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.Loan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AnnualRatePercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AnnualRatePercentTenThousandths");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("FirstPaymentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InterestAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LenderVendorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PaymentAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PaymentAmountMinor");
+
+                    b.Property<int>("Payments")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Principal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PrincipalMinor");
+
+                    b.Property<Guid?>("ProceedsAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ProceedsDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProceedsEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InterestAccountId");
+
+                    b.HasIndex("LenderVendorId");
+
+                    b.HasIndex("LiabilityAccountId");
+
+                    b.HasIndex("ProceedsAccountId");
+
+                    b.HasIndex("ProceedsEntryId");
+
+                    b.ToTable("Loans", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Attachments.Attachment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4027,6 +4226,171 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.DepreciationRun", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Assets.DepreciationRunLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("DepreciationRunId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid>("AssetId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("DepreciationRunId", "LineNumber");
+
+                            b1.HasIndex("AssetId");
+
+                            b1.ToTable("DepreciationRunLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Assets.FixedAsset", null)
+                                .WithMany()
+                                .HasForeignKey("AssetId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("DepreciationRunId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.FixedAsset", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccumulatedAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("DisposalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ProceedsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Assets.Loan", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("InterestAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("LenderVendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ProceedsAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ProceedsEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Assets.LoanPayment", "PaymentsMade", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Interest")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("InterestMinor");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<Guid>("JournalEntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("LoanId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("PaymentAccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Principal")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PrincipalMinor");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("JournalEntryId")
+                                .IsUnique();
+
+                            b1.HasIndex("LoanId");
+
+                            b1.HasIndex("PaymentAccountId");
+
+                            b1.ToTable("LoanPayments", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("JournalEntryId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoanId");
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("PaymentAccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+                        });
+
+                    b.Navigation("PaymentsMade");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Attachments.AttachmentContent", b =>

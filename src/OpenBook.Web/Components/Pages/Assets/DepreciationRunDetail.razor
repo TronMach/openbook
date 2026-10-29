@@ -1,0 +1,67 @@
+@page "/assets/runs/{Id:guid}"
+@inject DepreciationService DepreciationService
+@inject FixedAssetService AssetService
+
+<PageTitle>Depreciation · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_run is null)
+    {
+        <h1>Depreciation not found</h1>
+        <p><a href="/assets">Back to fixed assets</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>Depreciation through @Labels.Date(_run.Date)</h1>
+            @if (_run.Status == DocumentStatus.Voided)
+            {
+                <span class="badge">Voided</span>
+            }
+            <a class="button secondary" href="/journal/@_run.JournalEntryId">Journal entry</a>
+            <a class="button secondary" href="/assets">Fixed assets</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <table class="data">
+            <thead><tr><th>Asset</th><th class="num">Depreciation</th></tr></thead>
+            <tbody>
+                @foreach (var line in _run.Lines)
+                {
+                    <tr><td><a href="/assets/@line.AssetId">@_names.GetValueOrDefault(line.AssetId)</a></td><td class="num">@Labels.Amount(line.Amount)</td></tr>
+                }
+            </tbody>
+            <tfoot><tr><td>Total</td><td class="num">@Labels.Amount(_run.Total)</td></tr></tfoot>
+        </table>
+        @if (_run.Status == DocumentStatus.Posted)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Void</h2>
+                <p class="muted">Only the latest depreciation can be voided. Its amounts come due again in the next run.</p>
+                <form method="post" action="/assets/runs/@_run.Id/void" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger">Void</button></div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private DepreciationRun? _run;
+    private Dictionary<Guid, string> _names = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _run = await DepreciationService.GetRunAsync(Id);
+        _names = (await AssetService.ListAsync()).ToDictionary(p => p.Asset.Id, p => p.Asset.Name);
+    }
+}

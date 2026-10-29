@@ -79,6 +79,9 @@ public static class AccessRules
         ("/api/pricing/rounding", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/import", UserRole.Accountant, UserRole.Accountant),
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/assets", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/assets", UserRole.ViewOnly, UserRole.Accountant),
+        ("/loans", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/projects/mileage-rates", UserRole.ViewOnly, UserRole.Accountant),
     ];
 

@@ -1,0 +1,150 @@
+@page "/assets/{Id:guid}"
+@inject FixedAssetService AssetService
+@inject DepreciationService DepreciationService
+@inject AccountService AccountService
+
+<PageTitle>@(_position?.Asset.Name ?? "Asset") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_position is null)
+    {
+        <h1>Asset not found</h1>
+        <p><a href="/assets">Back to fixed assets</a></p>
+    }
+    else
+    {
+        var a = _position.Asset;
+        <div class="toolbar">
+            <h1>@(a.Number is { } n ? $"{n} " : "")@a.Name</h1>
+            @if (!a.IsDisposed)
+            {
+                <a class="button secondary" href="/assets/@a.Id/edit">Edit</a>
+            }
+            <a class="button secondary" href="/assets">Fixed assets</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <dl class="facts">
+            <dt>Cost</dt><dd>@Labels.Amount(a.Cost) in @_chart.FullName(a.AssetAccountId)</dd>
+            <dt>In service</dt><dd>@Labels.Date(a.InServiceDate)</dd>
+            <dt>Depreciation</dt><dd>@AssetReports.Method(a)@(a.Salvage > 0m ? $", salvage {Labels.Amount(a.Salvage)}" : "")</dd>
+            <dt>Accounts</dt><dd>@_chart.FullName(a.ExpenseAccountId) / @_chart.FullName(a.AccumulatedAccountId)</dd>
+            <dt>Depreciated</dt><dd>@Labels.Amount(_position.Accumulated)@(a.PriorDepreciation > 0m ? $" (including {Labels.Amount(a.PriorDepreciation)} before OpenBook)" : "")</dd>
+            <dt>Book value</dt><dd>@Labels.Amount(_position.BookValue)</dd>
+            @if (a.IsDisposed)
+            {
+                <dt>Disposed</dt><dd>@Labels.Date(a.DisposedOn!.Value)@(a.Proceeds > 0m ? $" for {Labels.Amount(a.Proceeds)}" : "") · <a href="/journal/@a.DisposalEntryId">entry</a></dd>
+            }
+            @if (a.Description is { } description)
+            {
+                <dt>Description</dt><dd>@description</dd>
+            }
+        </dl>
+
+        @if (_years.Count > 0)
+        {
+            <h2>Schedule</h2>
+            <table class="data">
+                <thead><tr><th>Year</th><th class="num">Depreciation</th><th class="num">Accumulated</th><th class="num">Book value</th></tr></thead>
+                <tbody>
+                    @foreach (var (year, amount, accumulated) in _years)
+                    {
+                        <tr><td>@year</td><td class="num">@Labels.Amount(amount)</td><td class="num">@Labels.Amount(accumulated)</td><td class="num">@Labels.Amount(a.Cost - accumulated)</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (_runs.Count > 0)
+        {
+            <h2>Depreciation posted</h2>
+            <table class="data">
+                <thead><tr><th>Through</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var (run, amount) in _runs)
+                    {
+                        <tr><td><a href="/assets/runs/@run.Id">@Labels.Date(run.Date)</a></td><td class="num">@Labels.Amount(amount)</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (a.IsDisposed)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Undo the disposal</h2>
+                <form method="post" action="/assets/@a.Id/undispose" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger">Undo disposal</button></div>
+                </form>
+            </div>
+        }
+        else
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Sell or dispose of it</h2>
+                <p class="muted">Depreciation through the disposal date is posted with it; the cost and accumulated depreciation come off the books and the difference from what it sold for is a gain or loss.</p>
+                <form method="post" action="/assets/@a.Id/dispose" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                        <div class="field"><label for="proceeds">Sold for</label><input id="proceeds" name="proceeds" class="amount" inputmode="decimal" placeholder="0.00" /></div>
+                        <div class="field">
+                            <label for="proceedsAccount">Money went to</label>
+                            <select id="proceedsAccount" name="proceedsAccountId">
+                                <option value="">—</option>
+                                @foreach (var acc in _proceedsAccounts)
+                                {
+                                    <option value="@acc.Id">@_chart.FullName(acc.Id)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">Dispose</button></div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private AssetPosition? _position;
+    private ChartOfAccounts _chart = new([]);
+    private List<(int Year, decimal Amount, decimal Accumulated)> _years = [];
+    private List<(DepreciationRun Run, decimal Amount)> _runs = [];
+    private List<Account> _proceedsAccounts = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _position = await AssetService.GetAsync(Id);
+        _chart = await AccountService.GetChartAsync();
+        if (_position is null)
+            return;
+        var asset = _position.Asset;
+        var schedule = Depreciation.Schedule(asset);
+        if (schedule.Count > 0)
+        {
+            foreach (var year in schedule.Select(p => p.PeriodEnd.Year).Distinct())
+            {
+                var end = new DateOnly(year, 12, 31);
+                var start = new DateOnly(year - 1, 12, 31);
+                var through = Depreciation.ScheduledThrough(asset, end);
+                _years.Add((year, through - Depreciation.ScheduledThrough(asset, start), through));
+            }
+        }
+
+        _runs = (await DepreciationService.ListRunsAsync()).Where(r => r.Status == DocumentStatus.Posted)
+            .SelectMany(r => r.Lines.Where(l => l.AssetId == asset.Id).Select(l => (r, l.Amount))).ToList();
+        _proceedsAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(x => x.Type is AccountType.Bank or AccountType.OtherCurrentAsset).ToList();
+    }
+}
