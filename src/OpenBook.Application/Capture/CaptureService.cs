@@ -52,6 +52,7 @@ public sealed record CaptureLists(
     IReadOnlyList<CaptureChoice> PayFrom,
     IReadOnlyList<CaptureChoice> Categories,
     IReadOnlyList<CaptureChoice> Vendors,
+    IReadOnlyList<CaptureChoice> Items,
     decimal MileageRate,
     DateTimeOffset AsOf);
 
@@ -188,6 +189,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
             active.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList(),
             active.Where(a => a.Type.ClassOf() == AccountClass.Expense).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList(),
             vendors.Select(v => new CaptureChoice(v.Vendor.Id, v.Vendor.DisplayName)).ToList(),
+            items.Select(i => new CaptureChoice(i.Id, i.Name)).ToList(),
             rates.GetValueOrDefault(today.Year),
             clock.UtcNow);
     }
@@ -249,6 +251,24 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
                         }
                     }
 
+                    break;
+                }
+
+                case CaptureKind.Invoice:
+                {
+                    var s = Read<SalePayload>(draft);
+                    var invoice = await sp.GetRequiredService<InvoiceService>().CreateAsync(
+                        new CreateInvoiceCommand(s.CustomerId, s.Date, s.Drafts(), Memo: s.Memo), ct);
+                    draft.Entered("invoice", invoice.Id);
+                    break;
+                }
+
+                case CaptureKind.Estimate:
+                {
+                    var s = Read<SalePayload>(draft);
+                    var estimate = await sp.GetRequiredService<EstimateService>().CreateAsync(
+                        new SaveEstimateCommand(s.CustomerId, s.Date, s.Drafts(), Memo: s.Memo), ct);
+                    draft.Entered("estimate", estimate.Id);
                     break;
                 }
 
@@ -320,6 +340,15 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
         DateOnly Date, decimal Amount, Guid AccountId, Guid CategoryId, Guid? VendorId, string? Payee, string? Memo, PhotoPayload? Photo);
 
     private sealed record ReceiptPayload(PhotoPayload? Photo);
+
+    /// <summary>An invoice or estimate; a line without a rate is priced for the customer as the online form would.</summary>
+    private sealed record SalePayload(Guid CustomerId, DateOnly Date, IReadOnlyList<SaleLinePayload>? Lines, string? Memo)
+    {
+        public List<SalesLineDraft> Drafts() =>
+            (Lines ?? []).Select(l => new SalesLineDraft(l.ItemId, l.Description, l.Quantity, l.Rate ?? 0m, AutoPrice: l.Rate is null)).ToList();
+    }
+
+    private sealed record SaleLinePayload(Guid ItemId, decimal Quantity, decimal? Rate, string? Description);
 
     private sealed record PhotoPayload(string? FileName, string? Base64);
 }

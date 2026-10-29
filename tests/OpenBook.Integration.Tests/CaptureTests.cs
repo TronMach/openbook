@@ -5,10 +5,12 @@ using OpenBook.Application.Attachments;
 using OpenBook.Application.Capture;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Projects;
+using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Capture;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Projects;
+using OpenBook.Domain.Sales;
 
 namespace OpenBook.Integration.Tests;
 
@@ -172,4 +174,36 @@ public sealed class CaptureTests : IAsyncLifetime
     [InlineData("", null)]
     public void Sessions_are_named_after_the_browser(string userAgent, string? expected) =>
         Assert.Equal(expected, OpenBook.Web.Security.UserAgents.Describe(userAgent));
+
+    [Fact]
+    public async Task Invoices_and_estimates_drafted_offline_are_numbered_priced_and_entered_on_sync()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var widget = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Widget", ItemType.Service, sales.Id, 100m)));
+        var acme = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Acme")));
+        var lists = await In<CaptureService, CaptureLists>(s => s.ListsAsync());
+        Assert.Contains(lists.Items, i => i.Id == widget.Id);
+
+        var outcomes = await Sync(
+            Draft(CaptureKind.Invoice, new
+            {
+                customerId = acme.Id, date = "2026-03-10", memo = "Thanks",
+                lines = new object[] { new { itemId = widget.Id, quantity = 2, rate = (decimal?)null }, new { itemId = widget.Id, quantity = 1, rate = 80m, description = "Discounted" } },
+            }),
+            Draft(CaptureKind.Estimate, new { customerId = acme.Id, date = "2026-03-11", lines = new object[] { new { itemId = widget.Id, quantity = 3 } } }),
+            Draft(CaptureKind.Invoice, new { customerId = acme.Id, date = "2026-03-12", lines = Array.Empty<object>() }));
+
+        Assert.Equal(CaptureStatus.Entered, outcomes[0].Status);
+        Assert.Equal("invoice", outcomes[0].ResultType);
+        var invoice = (await In<InvoiceService, Invoice?>(s => s.GetAsync(outcomes[0].ResultId!.Value)))!;
+        Assert.Equal(280m, invoice.Total);
+        Assert.Equal("Thanks", invoice.Memo);
+        Assert.False(string.IsNullOrEmpty(invoice.Number));
+
+        Assert.Equal(CaptureStatus.Entered, outcomes[1].Status);
+        Assert.Equal("estimate", outcomes[1].ResultType);
+
+        Assert.Equal(CaptureStatus.NeedsAttention, outcomes[2].Status);
+        Assert.NotNull(outcomes[2].Error);
+    }
 }

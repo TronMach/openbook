@@ -44,6 +44,12 @@ public enum CaptureKind
 
     /// <summary>A receipt photo for the receipts inbox, read on the server.</summary>
     Receipt,
+
+    /// <summary>An invoice, numbered, priced and taxed by the server when it's entered (which posts it).</summary>
+    Invoice,
+
+    /// <summary>An estimate; posts nothing.</summary>
+    Estimate,
 }
 
 public enum CaptureStatus

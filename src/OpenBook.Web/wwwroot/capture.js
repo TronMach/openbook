@@ -136,6 +136,15 @@
                 if (!decimals(p.amount, 2) || +p.amount <= 0) return 'Enter the amount, above zero, to the cent.';
                 if (!p.accountId || !p.categoryId) return 'Choose the account it was paid from and its category.';
                 return null;
+            case 'Invoice':
+            case 'Estimate':
+                if (!p.customerId) return 'Choose the customer.';
+                if (!p.lines.length) return 'Add at least one line with a product or service.';
+                for (const l of p.lines) {
+                    if (!decimals(l.quantity, 4) || +l.quantity <= 0) return 'Quantities are above zero, with at most 4 decimals.';
+                    if (l.rate != null && !decimals(l.rate, 4)) return 'Rates have at most 4 decimals (leave one blank to price it automatically).';
+                }
+                return null;
             default:
                 return p.photo ? null : 'Take or choose the receipt photo.';
         }
@@ -161,6 +170,14 @@
             p[el.name] = el.type === 'checkbox' ? el.checked : (data.get(el.name) || '').toString();
         }
         p.photo = await readPhoto(form.elements.photo);
+        // Invoice and estimate lines: rows without a product or service are left out.
+        if (form.querySelector('.sale-line')) {
+            p.lines = [...form.querySelectorAll('.sale-line')].map(row => {
+                const field = name => row.querySelector(`[data-field=${name}]`).value.trim();
+                return { itemId: field('itemId'), quantity: field('quantity'), rate: field('rate') || null, description: field('description') || null };
+            }).filter(l => l.itemId);
+            delete p.kind;
+        }
         // The server takes numbers and nulls, not empty text.
         ['hours', 'miles', 'amount', 'billRate'].forEach(n => { if (n in p) p[n] = p[n] === '' ? null : p[n]; });
         ['customerId', 'itemId', 'vendorId', 'workerId', 'payee', 'memo', 'notes'].forEach(n => { if (p[n] === '') p[n] = null; });
@@ -170,6 +187,7 @@
     function wire(p) {
         const out = { ...p };
         ['hours', 'miles', 'amount', 'billRate'].forEach(n => { if (out[n] != null) out[n] = Number(out[n]); });
+        if (out.lines) out.lines = out.lines.map(l => ({ ...l, quantity: Number(l.quantity), rate: l.rate == null ? null : Number(l.rate) }));
         if (!out.photo) delete out.photo;
         return out;
     }
@@ -272,6 +290,12 @@
             case 'Time': return `Time · ${p.date} · ${p.hours} h${p.notes ? ' · ' + p.notes : ''}`;
             case 'Mileage': return `Mileage · ${p.date} · ${p.miles} mi · ${p.purpose}`;
             case 'Expense': return `Expense · ${p.date} · ${p.amount}${p.payee ? ' · ' + p.payee : ''}${p.photo ? ' · photo' : ''}`;
+            case 'Invoice':
+            case 'Estimate': {
+                const customer = ((lists && lists.customers) || []).find(c => c.id === p.customerId);
+                const count = p.lines.length;
+                return `${d.kind} · ${p.date}${customer ? ' · ' + customer.name : ''} · ${count} ${count === 1 ? 'line' : 'lines'}`;
+            }
             default: return `Receipt photo · ${new Date(d.capturedAt).toLocaleDateString()}`;
         }
     }
@@ -301,6 +325,20 @@
         try { localStorage.setItem('ob-capture-tab', tab); } catch (e) { /* private mode */ }
     }
 
+    function addLine() {
+        const rows = $('sale-lines').querySelectorAll('.sale-line');
+        const row = rows[0].cloneNode(true);
+        row.querySelectorAll('[data-field]').forEach(el => { el.value = el.dataset.field === 'quantity' ? '1' : ''; });
+        rows[rows.length - 1].after(row);
+    }
+
+    function resetSale(form) {
+        form.querySelectorAll('.sale-line').forEach((row, i) => {
+            if (i > 0) row.remove();
+            else row.querySelectorAll('[data-field]').forEach(el => { el.value = el.dataset.field === 'quantity' ? '1' : ''; });
+        });
+    }
+
     async function start() {
         document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => pick(b.dataset.tab)));
         let tab = 'time';
@@ -313,11 +351,14 @@
         document.querySelectorAll('form[data-kind]').forEach(form => form.addEventListener('submit', async e => {
             e.preventDefault();
             try {
+                // The invoice form makes invoices or estimates.
+                const kind = form.elements.kind ? form.elements.kind.value : form.dataset.kind;
                 const payload = await payloadOf(form);
-                const problem = check(form.dataset.kind, payload);
+                const problem = check(kind, payload);
                 if (problem) return show(problem, true);
-                await saveDraft({ id: crypto.randomUUID(), kind: form.dataset.kind, capturedAt: new Date().toISOString(), status: 'waiting', payload });
-                form.querySelectorAll('input:not([type=date]):not([type=checkbox]):not([name=billRate])').forEach(i => { i.value = ''; });
+                await saveDraft({ id: crypto.randomUUID(), kind, capturedAt: new Date().toISOString(), status: 'waiting', payload });
+                form.querySelectorAll('input[name]:not([type=date]):not([type=checkbox]):not([name=billRate])').forEach(i => { i.value = ''; });
+                if (form.querySelector('.sale-line')) resetSale(form);
                 show(navigator.onLine ? 'Saved. Sending…' : 'Saved on this device. It will be sent when you\'re back online.');
                 await render();
                 sync();
@@ -326,6 +367,7 @@
             }
         }));
 
+        $('add-line').addEventListener('click', addLine);
         $('sync').addEventListener('click', sync);
         window.addEventListener('online', sync);
         window.addEventListener('offline', render);

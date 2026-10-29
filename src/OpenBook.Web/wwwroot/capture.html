@@ -19,12 +19,14 @@
         .capture form .field { margin-bottom: 0.75rem; }
         .capture input, .capture select, .capture textarea { width: 100%; box-sizing: border-box; }
         .capture label.check input { width: auto; }
+        .capture .sale-line { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.5rem; padding: 0.5rem 0; border-top: 1px solid var(--border); }
+        .capture .sale-line .wide-field { grid-column: 1 / -1; }
     </style>
 </head>
 <body>
     <main class="capture">
         <h1>Capture</h1>
-        <p class="muted">Time, mileage, expenses and receipt photos, with or without a connection. They wait on this device and are entered in OpenBook when it's back online, by the same rules as the online forms.</p>
+        <p class="muted">Time, mileage, expenses, receipt photos, invoices and estimates, with or without a connection. They wait on this device and are entered in OpenBook when it's back online, by the same rules as the online forms.</p>
 
         <div class="card status">
             <span id="online"></span>
@@ -39,6 +41,7 @@
             <button type="button" role="tab" data-tab="mileage">Mileage</button>
             <button type="button" role="tab" data-tab="expense">Expense</button>
             <button type="button" role="tab" data-tab="receipt">Receipt</button>
+            <button type="button" role="tab" data-tab="sale">Invoice</button>
         </div>
 
         <form id="form-time" class="card" data-kind="Time" hidden>
@@ -77,6 +80,25 @@
         <form id="form-receipt" class="card" data-kind="Receipt" hidden>
             <p class="muted">The photo goes to the receipts inbox, where OpenBook reads the vendor, date and total for you to record.</p>
             <div class="field"><label>Receipt photo <input name="photo" type="file" accept="image/*,application/pdf" capture="environment" required /></label></div>
+            <button type="submit">Save</button>
+        </form>
+
+        <form id="form-sale" class="card" data-kind="Invoice" hidden>
+            <div class="field"><label>Make <select name="kind"><option value="Invoice">An invoice</option><option value="Estimate">An estimate</option></select></label></div>
+            <div class="field"><label>Customer <select name="customerId" data-list="customers" required></select></label></div>
+            <div class="field"><label>Date <input name="date" type="date" required /></label></div>
+            <fieldset id="sale-lines">
+                <legend>Lines</legend>
+                <div class="sale-line">
+                    <label>Product or service <select data-field="itemId" data-list="items" data-optional></select></label>
+                    <label>Quantity <input data-field="quantity" inputmode="decimal" value="1" /></label>
+                    <label>Rate <input data-field="rate" inputmode="decimal" placeholder="Auto" /></label>
+                    <label class="wide-field">Description <input data-field="description" maxlength="1000" /></label>
+                </div>
+            </fieldset>
+            <div class="field"><button type="button" class="secondary" id="add-line">Add line</button></div>
+            <div class="field"><label>Message to the customer <input name="memo" maxlength="1000" /></label></div>
+            <p class="hint">OpenBook numbers it, prices lines left without a rate ("Auto") for the customer, and adds the customer's sales tax when it's sent. An invoice is posted then; an estimate posts nothing.</p>
             <button type="submit">Save</button>
         </form>
 
