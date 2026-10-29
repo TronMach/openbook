@@ -41,7 +41,8 @@ public sealed class SqliteFactAttribute : FactAttribute
 
 public sealed class PostgresTests : IAsyncLifetime
 {
-    private readonly string _database = $"openbook_test_{Guid.NewGuid():N}";
+    // Not "openbook_test_": LedgerDatabase drops leftovers with that prefix when a run starts.
+    private readonly string _database = $"openbook_pgtest_{Guid.NewGuid():N}";
     private ServiceProvider? _services;
 
     public async Task InitializeAsync()

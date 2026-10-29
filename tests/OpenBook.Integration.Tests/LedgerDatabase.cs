@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenBook.Application;
@@ -17,6 +18,9 @@ namespace OpenBook.Integration.Tests;
 /// with a company already set up unless the test opts out. With OPENBOOK_TEST_ALL_ON_POSTGRES=1 (and
 /// OPENBOOK_TEST_POSTGRES set, see <see cref="PostgresFactAttribute"/>) each test gets a new PostgreSQL database
 /// instead, so the whole suite runs on that provider; tests of SQLite-only features are then expected to fail.
+/// Migrating (and setting up the company) happens once per test run into a template database, which each test then
+/// copies: the SQLite backup API in memory, <c>CREATE DATABASE … TEMPLATE</c> on PostgreSQL. Tests that need
+/// migrations to run for real (<c>MigrationTests</c>) make their own databases.
 /// </summary>
 public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 {
@@ -25,6 +29,11 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     public static bool OnPostgres =>
         Environment.GetEnvironmentVariable("OPENBOOK_TEST_ALL_ON_POSTGRES") == "1" && PostgresFactAttribute.ConnectionString is { Length: > 0 };
+
+    // One template per kind (with and without a company), made on first use and kept for the whole run.
+    private static readonly SemaphoreSlim TemplateLock = new(1, 1);
+    private static readonly Dictionary<bool, SqliteConnection> SqliteTemplates = [];
+    private static readonly Dictionary<bool, string> PostgresTemplates = [];
 
     private readonly string _postgresDatabase = $"openbook_test_{Guid.NewGuid():N}";
     private readonly string _connectionString = OnPostgres
@@ -49,35 +58,26 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        var connectionString = _connectionString;
-        var provider = DatabaseProvider.Sqlite;
+        string connectionString;
+        DatabaseProvider provider;
         if (OnPostgres)
         {
-            // A whole suite creates hundreds of databases at once; give connections longer than the default 15 s to get through.
-            connectionString = new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Database = _postgresDatabase, Timeout = 120, CommandTimeout = 120 }.ToString();
+            await CreatePostgresDatabaseAsync(_postgresDatabase, await PostgresTemplateAsync(setUpCompany));
+            connectionString = PostgresConnection(_postgresDatabase);
             provider = DatabaseProvider.Postgres;
         }
         else
         {
             _keepAlive = new SqliteConnection(_connectionString);
             await _keepAlive.OpenAsync();
+            await CopySqliteTemplateAsync(setUpCompany, _keepAlive);
+            connectionString = _connectionString;
+            provider = DatabaseProvider.Sqlite;
         }
 
-        Services = new ServiceCollection()
-            .AddOpenBookApplication()
-            .AddOpenBookInfrastructure(connectionString, BackupDirectory, provider: provider)
-            .AddSingleton<IClock>(Clock)
-            .AddSingleton<ICurrentUser, TestUser>()
-            .AddSingleton<ISecretProtector, TestSecrets>()
-            .AddSingleton<IEmailSender>(Mail)
-            .AddSingleton<OpenBook.Application.Webhooks.IWebhookSender>(Webhooks)
-            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Banking.IBankConnectionClient>(new OpenBook.Infrastructure.Banking.SimpleFinClient(Bridge)))
-            .BuildServiceProvider(validateScopes: true);
-
-        await Services.MigrateOpenBookDatabaseAsync();
-
+        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory);
         if (setUpCompany)
-            Owner = await SetUpCompany();
+            Owner = await InDb(db => db.Users.SingleAsync(u => u.Username == OwnerUsername));
     }
 
     public async Task DisposeAsync()
@@ -101,7 +101,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     /// </summary>
     internal static async Task DropPostgresDatabaseAsync(string database)
     {
-        await using var admin = new Npgsql.NpgsqlConnection(new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Timeout = 120, CommandTimeout = 120 }.ToString());
+        await using var admin = new Npgsql.NpgsqlConnection(AdminConnection());
         await admin.OpenAsync();
         for (var attempt = 1; ; attempt++)
         {
@@ -136,6 +136,139 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     public Task<Account> CreateAccount(string name, AccountType type, string? number = null) =>
         InScope(sp => sp.GetRequiredService<AccountService>().CreateAsync(new CreateAccountCommand(name, type, number)));
+
+    private static ServiceProvider BuildServices(
+        string connectionString, DatabaseProvider provider, FixedClock clock, RecordingEmailSender mail, RecordingWebhookSender webhooks,
+        FakeSimpleFinBridge bridge, string backupDirectory) =>
+        new ServiceCollection()
+            .AddOpenBookApplication()
+            .AddOpenBookInfrastructure(connectionString, backupDirectory, provider: provider)
+            .AddSingleton<IClock>(clock)
+            .AddSingleton<ICurrentUser, TestUser>()
+            .AddSingleton<ISecretProtector, TestSecrets>()
+            .AddSingleton<IEmailSender>(mail)
+            .AddSingleton<OpenBook.Application.Webhooks.IWebhookSender>(webhooks)
+            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Banking.IBankConnectionClient>(new OpenBook.Infrastructure.Banking.SimpleFinClient(bridge)))
+            .BuildServiceProvider(validateScopes: true);
+
+    /// <summary>Migrates a database (and sets up the company), exactly as each test used to do for itself.</summary>
+    private static async Task PrepareAsync(string connectionString, DatabaseProvider provider, bool withCompany)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"openbook-template-{Guid.NewGuid():N}");
+        await using (var services = BuildServices(
+            connectionString, provider, new FixedClock(), new RecordingEmailSender(), new RecordingWebhookSender(), new FakeSimpleFinBridge(), directory))
+        {
+            await services.MigrateOpenBookDatabaseAsync();
+            if (withCompany)
+            {
+                await using var scope = services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<CompanySetupService>().SetUpAsync(
+                    new SetUpCompanyCommand("Test Co", BusinessType.SingleMemberLlc, "USD", 1, OwnerUsername, OwnerPassword));
+            }
+        }
+
+        if (Directory.Exists(directory))
+            Directory.Delete(directory, recursive: true);
+    }
+
+    /// <summary>Copies the migrated in-memory template into the test's database (held open by <paramref name="target"/>).</summary>
+    private static async Task CopySqliteTemplateAsync(bool withCompany, SqliteConnection target)
+    {
+        await TemplateLock.WaitAsync();
+        try
+        {
+            if (!SqliteTemplates.TryGetValue(withCompany, out var template))
+            {
+                var connectionString = $"Data Source=file:openbook-template-{Guid.NewGuid():N}?mode=memory&cache=shared";
+                template = new SqliteConnection(connectionString);
+                await template.OpenAsync();
+                await PrepareAsync(connectionString, DatabaseProvider.Sqlite, withCompany);
+                SqliteTemplates[withCompany] = template;
+            }
+
+            // A connection isn't thread-safe, so copies go one at a time (each takes milliseconds).
+            template.BackupDatabase(target);
+        }
+        finally
+        {
+            TemplateLock.Release();
+        }
+    }
+
+    /// <summary>This run's template database, migrated on first use and dropped when the test process exits.</summary>
+    private static async Task<string> PostgresTemplateAsync(bool withCompany)
+    {
+        await TemplateLock.WaitAsync();
+        try
+        {
+            if (PostgresTemplates.TryGetValue(withCompany, out var existing))
+                return existing;
+            if (PostgresTemplates.Count == 0)
+                await DropLeftoversAsync();
+            var name = $"openbook_test_template_{Guid.NewGuid():N}";
+            await CreatePostgresDatabaseAsync(name, template: null);
+            await PrepareAsync(PostgresConnection(name), DatabaseProvider.Postgres, withCompany);
+            // A database can only be copied while nobody is connected to it.
+            Npgsql.NpgsqlConnection.ClearAllPools();
+            PostgresTemplates[withCompany] = name;
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => DropPostgresDatabaseAsync(name).GetAwaiter().GetResult();
+            return name;
+        }
+        finally
+        {
+            TemplateLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Test databases (and templates) an earlier run left behind, e.g. when it was stopped part-way: dropped before this
+    /// run makes its first template, while none of its own exist yet. Only databases this login owns.
+    /// </summary>
+    private static async Task DropLeftoversAsync()
+    {
+        var names = new List<string>();
+        await using (var admin = new Npgsql.NpgsqlConnection(AdminConnection()))
+        {
+            await admin.OpenAsync();
+            await using var list = new Npgsql.NpgsqlCommand(
+                "SELECT datname FROM pg_database WHERE datname LIKE 'openbook\\_test\\_%' AND datdba = (SELECT oid FROM pg_roles WHERE rolname = current_user)", admin);
+            await using var reader = await list.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                names.Add(reader.GetString(0));
+        }
+
+        foreach (var name in names)
+            await DropPostgresDatabaseAsync(name);
+    }
+
+    /// <summary>A whole suite creates hundreds of databases at once, so connections get longer than the default 15 s.</summary>
+    private static string PostgresConnection(string database) =>
+        new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Database = database, Timeout = 120, CommandTimeout = 120 }.ToString();
+
+    private static string AdminConnection() =>
+        new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Timeout = 120, CommandTimeout = 120 }.ToString();
+
+    /// <summary>Creates an empty database, or a copy of <paramref name="template"/>; retried while something still holds the template.</summary>
+    private static async Task CreatePostgresDatabaseAsync(string database, string? template)
+    {
+        await using var admin = new Npgsql.NpgsqlConnection(AdminConnection());
+        await admin.OpenAsync();
+        var sql = template is null ? $"""CREATE DATABASE "{database}";""" : $"""CREATE DATABASE "{database}" TEMPLATE "{template}";""";
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var create = new Npgsql.NpgsqlCommand(sql, admin);
+                await create.ExecuteNonQueryAsync();
+                return;
+            }
+            catch (Npgsql.PostgresException ex) when (ex.SqlState == "55006" && attempt < 40)
+            {
+                // "Source database is being accessed by other users": an autovacuum worker or a closing connection.
+                await Task.Delay(250);
+            }
+        }
+    }
 }
 
 public sealed class FixedClock : IClock
