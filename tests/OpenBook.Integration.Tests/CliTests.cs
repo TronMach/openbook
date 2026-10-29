@@ -128,5 +128,11 @@ public sealed class CliTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/sw.js")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/offline.html")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/icons/icon-512.png")).StatusCode);
+
+        // Every file the service worker caches at install must exist, or installing it fails.
+        var worker = await (await client.GetAsync("/sw.js")).Content.ReadAsStringAsync();
+        var shell = System.Text.RegularExpressions.Regex.Match(worker, @"const SHELL = \[(.*?)\];").Groups[1].Value;
+        foreach (var path in shell.Split(',').Select(p => p.Trim().Trim('\'')))
+            Assert.True((await client.GetAsync(path)).StatusCode == HttpStatusCode.OK, path);
     }
 }

@@ -13,6 +13,7 @@
     { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
+    { "name": "Capture time, mileage and expenses", "url": "/capture.html" },
     { "name": "New invoice", "url": "/sales/invoices/new" },
     { "name": "Receipts", "url": "/purchases/receipts" },
     { "name": "Time", "url": "/time" },

@@ -64,6 +64,8 @@ public static class Links
         "retainer" => $"/sales/retainers/{id}",
         "billable_expense" => "/sales/billable",
         "project" => $"/projects/{id}",
+        "capture_draft" => "/capture",
+        "capture_device" => "/capture",
         "fixed_asset" => $"/assets/{id}",
         "depreciation_run" => $"/assets/runs/{id}",
         "loan" => $"/loans/{id}",

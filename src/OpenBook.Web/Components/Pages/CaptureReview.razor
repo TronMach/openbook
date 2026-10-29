@@ -1,0 +1,105 @@
+@page "/capture"
+@using OpenBook.Application.Capture
+@using OpenBook.Domain.Capture
+@inject CaptureService Capture
+
+<PageTitle>@L["Capture"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Capture"]</h1>
+        <a class="button" href="/capture.html">@L["Open the capture page"]</a>
+    </div>
+    <p class="muted">
+        @L["The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below."]
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <h2>@L["Needs attention"]</h2>
+    @if (_waiting.Count == 0)
+    {
+        <p class="muted">@L["Nothing is waiting."]</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>@L["Captured"]</th><th>@L["What"]</th><th>@L["Device"]</th><th>@L["Why it wasn't entered"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var (draft, device) in _waiting)
+                {
+                    <tr>
+                        <td>@draft.CapturedAt.ToLocalTime().ToString("g")</td>
+                        <td>@draft.Kind</td>
+                        <td>@device.Name</td>
+                        <td>@draft.Error</td>
+                        <td>
+                            <form method="post" action="/capture/drafts/@draft.Id/retry" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary">@L["Try again"]</button>
+                            </form>
+                            <form method="post" action="/capture/drafts/@draft.Id/dismiss" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link">@L["Dismiss"]</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="hint">@L["Fix what stopped a draft (reopen the period, reactivate the customer) and try again, or dismiss it and enter it by hand."]</p>
+    }
+
+    <h2>@L["Your devices"]</h2>
+    @if (_devices.Count == 0)
+    {
+        <p class="muted">@L["No device has used the capture page yet."]</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>@L["Device"]</th><th>@L["Since"]</th><th>@L["Last sent"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in _devices)
+                {
+                    <tr class="@(d.IsActive ? null : "inactive")">
+                        <td>@d.Name</td>
+                        <td>@Labels.Date(DateOnly.FromDateTime(d.CreatedAt.LocalDateTime))</td>
+                        <td>@(d.LastSyncAt?.ToLocalTime().ToString("g") ?? "")</td>
+                        <td>
+                            @if (d.IsActive)
+                            {
+                                <form method="post" action="/capture/devices/@d.Id/revoke" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="link">@L["Remove access"]</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="badge">@L["Removed"]</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="hint">@L["A device whose access is removed clears everything it holds the next time it connects."]</p>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)> _waiting = [];
+    private IReadOnlyList<CaptureDevice> _devices = [];
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = (await AuthState).User.GetUserId();
+        _waiting = await Capture.NeedingAttentionAsync(userId);
+        _devices = (await Capture.ListDevicesAsync(userId)).OrderByDescending(d => d.CreatedAt).ToList();
+    }
+}

@@ -1,8 +1,9 @@
 // OpenBook's service worker: makes the app installable and keeps static files (styles, scripts, icons) cached so
 // it opens quickly. Pages and API responses hold the company's data and are never cached: they always come from
-// the server, and when it can't be reached the offline page is shown instead.
-const VERSION = 'openbook-v1';
-const SHELL = ['/offline.html', '/icons/icon-192.png', '/icons/favicon-32.png', '/manifest.webmanifest'];
+// the server, and when it can't be reached the offline page is shown instead. The one exception is the capture
+// page, a static shell with no data in it (its drafts and lists live encrypted in IndexedDB), so it opens offline.
+const VERSION = 'openbook-v2';
+const SHELL = ['/offline.html', '/capture.html', '/capture.js', '/app.css', '/icons/icon-192.png', '/icons/favicon-32.png', '/manifest.webmanifest'];
 const STATIC = /\.(css|js|png|svg|ico|woff2?|webmanifest)$/i;
 
 self.addEventListener('install', event => {
@@ -22,8 +23,9 @@ self.addEventListener('fetch', event => {
         return;
 
     if (request.mode === 'navigate') {
-        // Always the network for pages; the offline page only when the server can't be reached.
-        event.respondWith(fetch(request).catch(() => caches.match('/offline.html')));
+        // Always the network for pages; when the server can't be reached, the capture page from the cache, else the offline page.
+        const fallback = url.pathname === '/capture.html' ? '/capture.html' : '/offline.html';
+        event.respondWith(fetch(request).catch(() => caches.match(fallback)));
         return;
     }
 

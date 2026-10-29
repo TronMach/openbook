@@ -135,6 +135,7 @@ public static class DependencyInjection
         services.AddScoped<ForecastService>();
         services.AddScoped<AdjustingEntryService>();
         services.AddScoped<AccountantPackageService>();
+        services.AddScoped<OpenBook.Application.Capture.CaptureService>();
         return services;
     }
 }

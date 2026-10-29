@@ -790,6 +790,82 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("ReconciliationLines", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CaptureDevices", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ResultId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultType")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId", "Status");
+
+                    b.ToTable("CaptureDrafts", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.ApiKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4708,6 +4784,24 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany("Lines")
                         .HasForeignKey("ReconciliationId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDevice", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Companies.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDraft", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Capture.CaptureDevice", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

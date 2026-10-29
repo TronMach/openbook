@@ -88,6 +88,27 @@ app.MapProjectEndpoints();
 app.MapAssetEndpoints();
 app.MapDashboardEndpoints();
 app.MapPluginEndpoints();
+app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async (Guid id, string action, HttpContext http,
+    OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
+{
+    try
+    {
+        if (action == "retry")
+            await capture.RetryAsync(id, http.User.GetUserId(), ct);
+        else
+            await capture.DismissAsync(id, http.User.GetUserId(), ct);
+        return Results.Redirect("/capture");
+    }
+    catch (OpenBook.Domain.Common.DomainException ex)
+    {
+        return Results.Redirect("/capture?error=" + Uri.EscapeDataString(ex.Message));
+    }
+}).RequireAuthorization();
+app.MapPost("/capture/devices/{id:guid}/revoke", async (Guid id, HttpContext http, OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
+{
+    await capture.RevokeDeviceAsync(id, http.User.GetUserId(), ct);
+    return Results.Redirect("/capture");
+}).RequireAuthorization();
 app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
 {
     if (OpenBook.Web.Localization.AppCulture.CookieValue(form["region"], form["language"]) is { } value)

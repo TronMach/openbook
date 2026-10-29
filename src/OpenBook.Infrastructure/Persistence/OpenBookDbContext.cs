@@ -80,6 +80,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<DashboardPreference> DashboardPreferences => Set<DashboardPreference>();
     public DbSet<ForecastScenario> ForecastScenarios => Set<ForecastScenario>();
     public DbSet<AdjustingEntry> AdjustingEntries => Set<AdjustingEntry>();
+    public DbSet<OpenBook.Domain.Capture.CaptureDevice> CaptureDevices => Set<OpenBook.Domain.Capture.CaptureDevice>();
+    public DbSet<OpenBook.Domain.Capture.CaptureDraft> CaptureDrafts => Set<OpenBook.Domain.Capture.CaptureDraft>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
     public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
@@ -1531,6 +1533,29 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 i.Property(x => x.Recurrence).HasConversion<string>().HasMaxLength(20);
             });
             b.Navigation(s => s.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Capture.CaptureDevice>(b =>
+        {
+            b.ToTable("CaptureDevices");
+            b.HasKey(d => d.Id);
+            b.HasIndex(d => d.UserId);
+            b.Property(d => d.Name).HasMaxLength(100);
+            b.Ignore(d => d.IsActive);
+            b.HasOne<User>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Capture.CaptureDraft>(b =>
+        {
+            b.ToTable("CaptureDrafts");
+            b.HasKey(d => d.Id);
+            b.Property(d => d.Id).ValueGeneratedNever();
+            b.HasIndex(d => new { d.DeviceId, d.Status });
+            b.Property(d => d.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.Error).HasMaxLength(500);
+            b.Property(d => d.ResultType).HasMaxLength(50);
+            b.HasOne<OpenBook.Domain.Capture.CaptureDevice>().WithMany().HasForeignKey(d => d.DeviceId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AdjustingEntry>(b =>

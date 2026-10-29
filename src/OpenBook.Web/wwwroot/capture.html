@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Capture · OpenBook</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1f6f5c" />
+    <link rel="icon" type="image/png" href="/icons/favicon-32.png" />
+    <link rel="stylesheet" href="/app.css" />
+    <style>
+        .capture { max-width: 40rem; margin: 0 auto; padding: 1rem; }
+        .capture .tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; margin: 1rem 0; }
+        .capture .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); }
+        .capture .status { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .capture .badge { display: inline-block; }
+        .capture li { margin: 0.4rem 0; }
+        .capture .problem { color: var(--danger); }
+        .capture form .field { margin-bottom: 0.75rem; }
+        .capture input, .capture select, .capture textarea { width: 100%; box-sizing: border-box; }
+        .capture label.check input { width: auto; }
+    </style>
+</head>
+<body>
+    <main class="capture">
+        <h1>Capture</h1>
+        <p class="muted">Time, mileage, expenses and receipt photos, with or without a connection. They wait on this device and are entered in OpenBook when it's back online, by the same rules as the online forms.</p>
+
+        <div class="card status">
+            <span id="online"></span>
+            <span id="waiting" class="badge"></span>
+            <button type="button" id="sync">Send now</button>
+            <a href="/">Open OpenBook</a>
+        </div>
+        <div id="message" class="alert" role="status" hidden></div>
+
+        <div class="tabs" role="tablist">
+            <button type="button" role="tab" data-tab="time">Time</button>
+            <button type="button" role="tab" data-tab="mileage">Mileage</button>
+            <button type="button" role="tab" data-tab="expense">Expense</button>
+            <button type="button" role="tab" data-tab="receipt">Receipt</button>
+        </div>
+
+        <form id="form-time" class="card" data-kind="Time" hidden>
+            <div class="field"><label>Person <select name="workerId" data-list="workers" required></select></label></div>
+            <div class="field"><label>Date <input name="date" type="date" required /></label></div>
+            <div class="field"><label>Hours <input name="hours" inputmode="decimal" required placeholder="1.5" /></label></div>
+            <div class="field"><label>Customer or project <select name="customerId" data-list="customers" data-optional></select></label></div>
+            <div class="field"><label>Service <select name="itemId" data-list="services" data-optional></select></label></div>
+            <div class="field"><label class="check"><input name="billable" type="checkbox" /> Billable</label></div>
+            <div class="field"><label>Notes <input name="notes" maxlength="1000" /></label></div>
+            <button type="submit">Save</button>
+        </form>
+
+        <form id="form-mileage" class="card" data-kind="Mileage" hidden>
+            <div class="field"><label>Date <input name="date" type="date" required /></label></div>
+            <div class="field"><label>Miles <input name="miles" inputmode="decimal" required /></label></div>
+            <div class="field"><label>Business purpose <input name="purpose" maxlength="500" required /></label></div>
+            <div class="field"><label>Customer or project <select name="customerId" data-list="customers" data-optional></select></label></div>
+            <div class="field"><label class="check"><input name="billable" type="checkbox" /> Billable</label></div>
+            <div class="field"><label>Bill per mile <input name="billRate" inputmode="decimal" /></label></div>
+            <button type="submit">Save</button>
+        </form>
+
+        <form id="form-expense" class="card" data-kind="Expense" hidden>
+            <div class="field"><label>Date <input name="date" type="date" required /></label></div>
+            <div class="field"><label>Amount <input name="amount" inputmode="decimal" required /></label></div>
+            <div class="field"><label>Paid from <select name="accountId" data-list="payFrom" required></select></label></div>
+            <div class="field"><label>Category <select name="categoryId" data-list="categories" required></select></label></div>
+            <div class="field"><label>Vendor <select name="vendorId" data-list="vendors" data-optional></select></label></div>
+            <div class="field"><label>Payee <span class="muted">(if not a vendor)</span> <input name="payee" maxlength="200" /></label></div>
+            <div class="field"><label>Memo <input name="memo" maxlength="1000" /></label></div>
+            <div class="field"><label>Receipt photo <input name="photo" type="file" accept="image/*,application/pdf" capture="environment" /></label></div>
+            <button type="submit">Save</button>
+        </form>
+
+        <form id="form-receipt" class="card" data-kind="Receipt" hidden>
+            <p class="muted">The photo goes to the receipts inbox, where OpenBook reads the vendor, date and total for you to record.</p>
+            <div class="field"><label>Receipt photo <input name="photo" type="file" accept="image/*,application/pdf" capture="environment" required /></label></div>
+            <button type="submit">Save</button>
+        </form>
+
+        <h2>On this device</h2>
+        <ul id="drafts"></ul>
+        <p class="hint">Drafts are kept encrypted on this device until they're entered. Entered and dismissed drafts are removed from it; ones that need attention are listed in OpenBook under Capture.</p>
+    </main>
+    <script src="/capture.js"></script>
+</body>
+</html>

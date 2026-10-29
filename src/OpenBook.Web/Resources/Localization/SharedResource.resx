@@ -14,6 +14,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="A device whose access is removed clears everything it holds the next time it connects." xml:space="preserve">
+    <value>A device whose access is removed clears everything it holds the next time it connects.</value>
+  </data>
   <data name="Accounts" xml:space="preserve">
     <value>Accounts</value>
   </data>
@@ -37,6 +40,12 @@
   </data>
   <data name="Business type" xml:space="preserve">
     <value>Business type</value>
+  </data>
+  <data name="Capture" xml:space="preserve">
+    <value>Capture</value>
+  </data>
+  <data name="Captured" xml:space="preserve">
+    <value>Captured</value>
   </data>
   <data name="Cash at month end" xml:space="preserve">
     <value>Cash at month end</value>
@@ -65,8 +74,17 @@
   <data name="Days to get paid" xml:space="preserve">
     <value>Days to get paid</value>
   </data>
+  <data name="Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Dismiss" xml:space="preserve">
+    <value>Dismiss</value>
+  </data>
   <data name="Fiscal year" xml:space="preserve">
     <value>Fiscal year</value>
+  </data>
+  <data name="Fix what stopped a draft (reopen the period, reactivate the customer) and try again, or dismiss it and enter it by hand." xml:space="preserve">
+    <value>Fix what stopped a draft (reopen the period, reactivate the customer) and try again, or dismiss it and enter it by hand.</value>
   </data>
   <data name="Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one." xml:space="preserve">
     <value>Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one.</value>
@@ -107,14 +125,29 @@
   <data name="Language and region" xml:space="preserve">
     <value>Language and region</value>
   </data>
+  <data name="Last sent" xml:space="preserve">
+    <value>Last sent</value>
+  </data>
   <data name="Legal name" xml:space="preserve">
     <value>Legal name</value>
   </data>
   <data name="More languages, and regions that write decimals with a comma, are on the way." xml:space="preserve">
     <value>More languages, and regions that write decimals with a comma, are on the way.</value>
   </data>
+  <data name="Needs attention" xml:space="preserve">
+    <value>Needs attention</value>
+  </data>
   <data name="Net income, year to date" xml:space="preserve">
     <value>Net income, year to date</value>
+  </data>
+  <data name="No device has used the capture page yet." xml:space="preserve">
+    <value>No device has used the capture page yet.</value>
+  </data>
+  <data name="Nothing is waiting." xml:space="preserve">
+    <value>Nothing is waiting.</value>
+  </data>
+  <data name="Open the capture page" xml:space="preserve">
+    <value>Open the capture page</value>
   </data>
   <data name="Password" xml:space="preserve">
     <value>Password</value>
@@ -139,6 +172,12 @@
   </data>
   <data name="Region" xml:space="preserve">
     <value>Region</value>
+  </data>
+  <data name="Remove access" xml:space="preserve">
+    <value>Remove access</value>
+  </data>
+  <data name="Removed" xml:space="preserve">
+    <value>Removed</value>
   </data>
   <data name="Reports" xml:space="preserve">
     <value>Reports</value>
@@ -167,10 +206,28 @@
   <data name="Sign out" xml:space="preserve">
     <value>Sign out</value>
   </data>
+  <data name="Since" xml:space="preserve">
+    <value>Since</value>
+  </data>
+  <data name="The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below." xml:space="preserve">
+    <value>The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below.</value>
+  </data>
+  <data name="Try again" xml:space="preserve">
+    <value>Try again</value>
+  </data>
   <data name="Username" xml:space="preserve">
     <value>Username</value>
   </data>
+  <data name="What" xml:space="preserve">
+    <value>What</value>
+  </data>
+  <data name="Why it wasn't entered" xml:space="preserve">
+    <value>Why it wasn't entered</value>
+  </data>
   <data name="You owe vendors" xml:space="preserve">
     <value>You owe vendors</value>
+  </data>
+  <data name="Your devices" xml:space="preserve">
+    <value>Your devices</value>
   </data>
 </root>

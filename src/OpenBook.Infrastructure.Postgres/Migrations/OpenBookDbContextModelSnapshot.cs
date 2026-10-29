@@ -797,6 +797,82 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("ReconciliationLines", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CaptureDevices", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId", "Status");
+
+                    b.ToTable("CaptureDrafts", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.ApiKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4717,6 +4793,24 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany("Lines")
                         .HasForeignKey("ReconciliationId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDevice", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Companies.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Capture.CaptureDraft", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Capture.CaptureDevice", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
