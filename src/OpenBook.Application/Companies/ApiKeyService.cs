@@ -8,6 +8,9 @@ namespace OpenBook.Application.Companies;
 /// <summary>A new key and its token, shown once.</summary>
 public sealed record CreatedApiKey(ApiKey Key, string Token);
 
+/// <summary>Who an API key signs in as, and the scopes it's limited to (null: everything the user may do).</summary>
+public sealed record ApiKeyUser(AuthenticatedUser User, IReadOnlyList<string>? Scopes);
+
 /// <summary>
 /// API keys: bearer tokens acting as their user, with the user's role. Users manage their own keys; admins can
 /// also see and revoke everyone's.
@@ -19,12 +22,13 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
     /// <param name="userId">Null for every user's keys (admins).</param>
     public Task<IReadOnlyList<ApiKey>> ListAsync(Guid? userId, CancellationToken ct = default) => store.ListApiKeysAsync(userId, ct);
 
-    public async Task<CreatedApiKey> CreateAsync(Guid userId, string name, DateOnly? expiresOn = null, CancellationToken ct = default)
+    /// <param name="scopes">"area:read" / "area:write" (<see cref="ApiScopes"/>); null for a key that can do everything its user can.</param>
+    public async Task<CreatedApiKey> CreateAsync(Guid userId, string name, DateOnly? expiresOn = null, IReadOnlyCollection<string>? scopes = null, CancellationToken ct = default)
     {
         var user = await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId);
         var now = clock.UtcNow;
         DateTimeOffset? expires = expiresOn is { } d ? new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) : null;
-        var (key, token) = ApiKey.Create(user.Id, name, now, expires);
+        var (key, token) = ApiKey.Create(user.Id, name, now, expires, scopes);
         store.Add(key);
         store.Add(AuditRecord.Create(now, currentUser.Actor, AuditAction.Created, EntityType, key.Id, null, Snapshot(key, user)));
         await store.SaveChangesAsync(ct);
@@ -46,7 +50,11 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
     }
 
     /// <summary>The key's user, if the token belongs to a usable key of an active user.</summary>
-    public async Task<AuthenticatedUser?> AuthenticateAsync(string? token, CancellationToken ct = default)
+    public async Task<AuthenticatedUser?> AuthenticateAsync(string? token, CancellationToken ct = default) =>
+        (await AuthenticateKeyAsync(token, ct))?.User;
+
+    /// <summary>The key's user and the scopes the key is limited to.</summary>
+    public async Task<ApiKeyUser?> AuthenticateKeyAsync(string? token, CancellationToken ct = default)
     {
         if (token is null || !token.StartsWith(ApiKey.TokenPrefix, StringComparison.Ordinal) || token.Length > 200)
             return null;
@@ -56,7 +64,7 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
             return null;
         if (key.RecordUse(now))
             await store.SaveChangesAsync(ct);
-        return AuthService.Authenticated(user);
+        return new ApiKeyUser(AuthService.Authenticated(user), key.ScopeList);
     }
 
     private static string Snapshot(ApiKey k, User? user) => JsonSerializer.Serialize(new
@@ -65,6 +73,7 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
         User = user?.Username,
         k.Hint,
         k.ExpiresAt,
+        k.Scopes,
         Revoked = k.RevokedAt is not null,
     });
 }

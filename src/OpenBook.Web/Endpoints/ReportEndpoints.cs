@@ -14,10 +14,10 @@ public static class ReportEndpoints
 {
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/reports/saved", async (IFormCollection form, SavedReportService service, CancellationToken ct) =>
+        app.MapPost("/reports/saved", async (IFormCollection form, SavedReportService service, ReportCatalog catalog, CancellationToken ct) =>
         {
             var key = form["report"].ToString();
-            var path = ReportCatalog.Find(key)?.Path ?? "/reports";
+            var path = catalog.Find(key)?.Path ?? "/reports";
             var query = form["query"].ToString();
             var back = query.Length > 0 ? $"{path}?{query}&" : $"{path}?";
             try

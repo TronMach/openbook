@@ -825,6 +825,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Scopes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)

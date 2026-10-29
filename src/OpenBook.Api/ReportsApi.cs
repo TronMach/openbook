@@ -97,7 +97,7 @@ internal static class ReportsApi
         });
 
         // Every report in the catalog, as a table or a file. Query parameters are the report page's own.
-        reports.MapGet("/catalog", () => ReportCatalog.All);
+        reports.MapGet("/catalog", (ReportCatalog catalog) => catalog.All);
 
         reports.MapGet("/{key}/table", async (string key, HttpContext http, ReportCatalog catalog, CancellationToken ct) =>
             await catalog.RunAsync(key, Parameters(http), ct));
@@ -105,7 +105,7 @@ internal static class ReportsApi
         reports.MapGet("/{key}/export", async (string key, string? format, HttpContext http, ReportCatalog catalog, IReportExporter exporter, CancellationToken ct) =>
         {
             var table = await catalog.RunAsync(key, Parameters(http), ct);
-            var name = $"{ReportCatalog.Find(key)!.Key}-{DateTime.Today:yyyyMMdd}";
+            var name = $"{catalog.Find(key)!.Key}-{DateTime.Today:yyyyMMdd}";
             return (format ?? "csv").ToLowerInvariant() switch
             {
                 "xlsx" => Results.File(exporter.ToXlsx(table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{name}.xlsx"),

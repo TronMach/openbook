@@ -36,6 +36,7 @@ public static class AccessRules
         ("/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/settings/users", UserRole.Admin, UserRole.Admin),
+        ("/settings/plugins", UserRole.Admin, UserRole.Admin),
         ("/api/users", UserRole.Admin, UserRole.Admin),
         ("/settings/webhooks", UserRole.Admin, UserRole.Admin),
         ("/api/webhooks", UserRole.Admin, UserRole.Admin),
@@ -135,6 +136,18 @@ public sealed class AccessMiddleware(RequestDelegate next)
         if (http.User.Identity?.IsAuthenticated == true)
         {
             var needed = AccessRules.Required(http.Request.Path, http.Request.Method);
+            if (http.User.HasClaim(ApiKeyAuthenticationHandler.ScopedClaim, "true"))
+            {
+                var scopes = http.User.FindAll(ApiKeyAuthenticationHandler.ScopeClaim).Select(c => c.Value).ToList();
+                var write = !(HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method));
+                if (!http.Request.Path.StartsWithSegments("/api") || !ApiScopes.Allows(scopes, http.Request.Path.Value ?? "/", write))
+                {
+                    http.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await http.Response.WriteAsJsonAsync(new { code = "auth.scope", message = "This API key isn't allowed to do that. Its areas: " + string.Join(", ", scopes) + "." });
+                    return;
+                }
+            }
+
             if (!http.User.Can(needed))
             {
                 if (http.Request.Path.StartsWithSegments("/api"))
@@ -169,16 +182,22 @@ public sealed class ApiKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSc
 {
     public const string SchemeName = "ApiKey";
 
+    /// <summary>On a principal signed in with a key limited to some areas; the areas are <see cref="ScopeClaim"/>s.</summary>
+    public const string ScopedClaim = "obk:scoped";
+    public const string ScopeClaim = "obk:scope";
+
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
         if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             return AuthenticateResult.NoResult();
-        var user = await keys.AuthenticateAsync(header["Bearer ".Length..].Trim(), Context.RequestAborted);
-        if (user is null)
+        var signedIn = await keys.AuthenticateKeyAsync(header["Bearer ".Length..].Trim(), Context.RequestAborted);
+        if (signedIn is null)
             return AuthenticateResult.Fail("Invalid, expired or revoked API key.");
 
-        var identity = new ClaimsIdentity(WebSecurity.Claims(user), SchemeName);
+        var identity = new ClaimsIdentity(WebSecurity.Claims(signedIn.User), SchemeName);
+        if (signedIn.Scopes is { } scopes)
+            identity.AddClaims([new Claim(ScopedClaim, "true"), .. scopes.Select(s => new Claim(ScopeClaim, s))]);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
     }
 

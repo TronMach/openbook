@@ -818,6 +818,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Scopes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)

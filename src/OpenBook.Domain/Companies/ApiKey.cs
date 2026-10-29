@@ -34,8 +34,13 @@ public sealed class ApiKey
     public DateTimeOffset? LastUsedAt { get; private set; }
     public DateTimeOffset? RevokedAt { get; private set; }
 
+    /// <summary>What the key may do, as "area:read" / "area:write" (<see cref="ApiScopes"/>); null for everything its user may do.</summary>
+    public string? Scopes { get; private set; }
+
+    public IReadOnlyList<string>? ScopeList => Scopes?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
     /// <returns>The key and its token, which can't be recovered later.</returns>
-    public static (ApiKey Key, string Token) Create(Guid userId, string name, DateTimeOffset createdAt, DateTimeOffset? expiresAt = null)
+    public static (ApiKey Key, string Token) Create(Guid userId, string name, DateTimeOffset createdAt, DateTimeOffset? expiresAt = null, IEnumerable<string>? scopes = null)
     {
         if (expiresAt is { } expiry && expiry <= createdAt)
             throw new DomainException("apikey.expiry_past", "The expiry date must be in the future.");
@@ -49,6 +54,7 @@ public sealed class ApiKey
             Hint = token[..(TokenPrefix.Length + 6)] + "…",
             CreatedAt = createdAt.ToUniversalTime(),
             ExpiresAt = expiresAt?.ToUniversalTime(),
+            Scopes = scopes is null ? null : string.Join(',', ApiScopes.Normalize(scopes)),
         };
         return (key, token);
     }
@@ -67,5 +73,55 @@ public sealed class ApiKey
             return false;
         LastUsedAt = now.ToUniversalTime();
         return true;
+    }
+}
+
+/// <summary>
+/// Areas of the API a key can be limited to. "area:read" allows reading (GET), "area:write" also changing. A limited
+/// key can reach only its areas' paths (plus <c>/api/me</c>), never users, keys or webhooks, and never more than its
+/// user's role allows.
+/// </summary>
+public static class ApiScopes
+{
+    public static readonly IReadOnlyDictionary<string, (string Label, string[] Paths)> Areas = new Dictionary<string, (string, string[])>(StringComparer.Ordinal)
+    {
+        ["ledger"] = ("Accounts and journal", ["/api/accounts", "/api/journal-entries", "/api/recurring-entries", "/api/opening-balances", "/api/closing", "/api/segments", "/api/chart-templates", "/api/company", "/api/settings"]),
+        ["sales"] = ("Customers, items and sales", ["/api/sales", "/api/customers", "/api/items", "/api/pricing", "/api/sales-tax"]),
+        ["purchases"] = ("Vendors and purchases", ["/api/purchases", "/api/vendors"]),
+        ["banking"] = ("Banking", ["/api/banking"]),
+        ["inventory"] = ("Inventory", ["/api/inventory"]),
+        ["projects"] = ("Projects, time and mileage", ["/api/projects"]),
+        ["assets"] = ("Fixed assets and loans", ["/api/assets"]),
+        ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),
+        ["data"] = ("Imports, exports and backups", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search"]),
+    };
+
+    /// <summary>Checks and orders scopes; "area:write" makes "area:read" redundant.</summary>
+    public static IReadOnlyList<string> Normalize(IEnumerable<string> scopes)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+        var levels = new SortedDictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var scope in scopes.Select(s => s.Trim()).Where(s => s.Length > 0))
+        {
+            var parts = scope.Split(':');
+            if (parts.Length != 2 || !Areas.ContainsKey(parts[0]) || parts[1] is not ("read" or "write"))
+                throw new DomainException("apikey.scope_invalid", $"'{scope}' isn't a scope. Use area:read or area:write, with areas {string.Join(", ", Areas.Keys)}.");
+            levels[parts[0]] = levels.GetValueOrDefault(parts[0]) || parts[1] == "write";
+        }
+
+        if (levels.Count == 0)
+            throw new DomainException("apikey.scope_required", "A limited key needs at least one area.");
+        return levels.Select(kv => $"{kv.Key}:{(kv.Value ? "write" : "read")}").ToList();
+    }
+
+    /// <summary>Whether a key with these scopes may make this request (its user's role is checked separately).</summary>
+    public static bool Allows(IReadOnlyCollection<string> scopes, string path, bool write)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+        ArgumentNullException.ThrowIfNull(path);
+        if (path.Equals("/api/me", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/openapi", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var area = Areas.FirstOrDefault(a => a.Value.Paths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase) || path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase))).Key;
+        return area is not null && (scopes.Contains($"{area}:write") || (!write && scopes.Contains($"{area}:read")));
     }
 }

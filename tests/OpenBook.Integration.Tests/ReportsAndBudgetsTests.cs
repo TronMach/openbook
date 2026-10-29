@@ -348,7 +348,7 @@ public sealed class ReportsAndBudgetsTests : IAsyncLifetime
     {
         var budget = await Run(sp => sp.GetRequiredService<BudgetService>().CreateAsync(new CreateBudgetCommand("2026 plan", 2026)));
         var exporter = _db.Services.GetRequiredService<IReportExporter>();
-        foreach (var definition in ReportCatalog.All)
+        foreach (var definition in ReportCatalog.BuiltIn)
         {
             var table = await Catalog(definition.Key,
                 $"preset=Custom&from=2026-01-01&to=2026-12-31&asOf=2026-12-31&year=2026&detail=true&budgetId={budget.Id}&compare=PreviousYear");

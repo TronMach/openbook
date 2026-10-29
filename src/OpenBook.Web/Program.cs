@@ -10,7 +10,9 @@ using OpenBook.Web.Security;
 var isResetPassword = args is [ResetPasswordCommand.Name, ..];
 var encryptionCommand = args is [EncryptionCommands.Encrypt or EncryptionCommands.Decrypt, ..] ? args[0] : null;
 
-var builder = WebApplication.CreateBuilder(args);
+// "--safe-mode" starts without add-ins (for one that stops OpenBook starting); it isn't a configuration key.
+var safeModeArgument = args.Contains("--safe-mode", StringComparer.OrdinalIgnoreCase);
+var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)).ToArray());
 if (isResetPassword || encryptionCommand is not null)
     builder.Logging.ClearProviders();
 
@@ -26,6 +28,10 @@ var connectionString = builder.Configuration.GetConnectionString("OpenBook") ?? 
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
     new OpenBook.Infrastructure.Payments.ReceiptTextExtractor(builder.Configuration["OpenBook:Ocr:TesseractPath"]));
+// Add-ins load before the services that use them (the report catalog, the importer).
+builder.Services.AddSingleton(OpenBook.Web.Plugins.PluginLoader.Load(
+    Path.GetFullPath(builder.Configuration["OpenBook:Plugins:Path"] ?? "plugins"),
+    safeModeArgument || builder.Configuration.GetValue<bool>("OpenBook:Plugins:SafeMode")));
 builder.Services
     .AddOpenBookApplication()
     .AddOpenBookInfrastructure(
@@ -79,6 +85,7 @@ app.MapSalesFlowEndpoints();
 app.MapProjectEndpoints();
 app.MapAssetEndpoints();
 app.MapDashboardEndpoints();
+app.MapPluginEndpoints();
 app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
 app.MapPortabilityEndpoints();

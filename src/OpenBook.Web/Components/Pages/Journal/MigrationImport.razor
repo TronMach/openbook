@@ -22,9 +22,9 @@
             <div class="field">
                 <label for="source">From</label>
                 <select id="source" value="@_source" @onchange="PickSource" disabled="@_busy">
-                    @foreach (var source in Enum.GetValues<MigrationSource>())
+                    @foreach (var (key, label) in _sources)
                     {
-                        <option value="@source">@MigrationReaders.Describe(source)</option>
+                        <option value="@key">@label</option>
                     }
                 </select>
             </div>
@@ -106,20 +106,30 @@
 
     private byte[]? _content;
     private string? _fileName;
-    private MigrationSource _source = MigrationSource.QuickBooksIif;
+    // A built-in source's name, or an add-in's import format key.
+    private string _source = nameof(MigrationSource.QuickBooksIif);
+    private IReadOnlyList<(string Key, string Label)> _sources = [];
+    private IReadOnlyList<OpenBook.Application.Plugins.PluginImporter> _importers = [];
 
     [SupplyParameterFromQuery(Name = "from")]
     private string? From { get; set; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (Enum.TryParse<MigrationSource>(From, ignoreCase: true, out var source))
-            _source = source;
+        (_sources, _importers) = await Ops.RunAsync(sp => Task.FromResult((
+            sp.GetRequiredService<MigrationImportService>().Sources(),
+            sp.GetRequiredService<OpenBook.Application.Plugins.PluginRegistry>().Importers)));
+        if (_sources.FirstOrDefault(s => string.Equals(s.Key, From, StringComparison.OrdinalIgnoreCase)) is { Key: { } key })
+            _source = key;
     }
+
+    private MigrationSource? BuiltIn => Enum.TryParse<MigrationSource>(_source, out var s) ? s : null;
+
+    private OpenBook.Application.Plugins.PluginImporter? Importer => _importers.FirstOrDefault(i => i.Key == _source);
 
     private void PickSource(ChangeEventArgs e)
     {
-        if (Enum.TryParse<MigrationSource>(e.Value as string, out var source))
+        if (e.Value is string source && _sources.Any(s => s.Key == source))
             _source = source;
         _preview = null;
         _imported = null;
@@ -127,7 +137,7 @@
         _error = null;
     }
 
-    private string Accept => _source switch
+    private string Accept => Importer?.Accept ?? BuiltIn switch
     {
         MigrationSource.QuickBooksIif => ".iif,text/plain",
         MigrationSource.QuickBooksQbxml => ".xml,.qbxml,text/xml",
@@ -136,7 +146,7 @@
         _ => ".csv,text/csv",
     };
 
-    private string Help => _source switch
+    private string Help => Importer?.Help ?? BuiltIn switch
     {
         MigrationSource.QuickBooksIif => "QuickBooks Desktop: File › Utilities › Export › Lists to IIF Files (transactions as exported by QuickBooks or another tool). Reads accounts, customers, vendors, products and services, and transactions; estimates and orders are skipped.",
         MigrationSource.QuickBooksQbxml => "QuickBooks Desktop SDK responses (qbXML) from a query tool: accounts, customers, vendors, items and journal entries. Jobs and other transaction types are listed but not imported.",

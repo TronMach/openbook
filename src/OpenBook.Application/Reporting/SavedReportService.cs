@@ -6,7 +6,7 @@ using OpenBook.Domain.Reporting;
 namespace OpenBook.Application.Reporting;
 
 /// <summary>Reports kept under a name with their settings. Saving under an existing name updates it.</summary>
-public sealed class SavedReportService(IReportingStore store, IClock clock, ICurrentUser user)
+public sealed class SavedReportService(IReportingStore store, ReportCatalog catalog, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "saved_report";
 
@@ -15,7 +15,7 @@ public sealed class SavedReportService(IReportingStore store, IClock clock, ICur
 
     public async Task<SavedReport> SaveAsync(string name, string reportKey, string? query, CancellationToken ct = default)
     {
-        if (ReportCatalog.Find(reportKey) is null)
+        if (catalog.Find(reportKey) is null)
             throw new DomainException("report.unknown", "Unknown report.");
         var normalized = SavedReport.NormalizeName(name);
         var existing = (await store.ListSavedReportsAsync(ct)).FirstOrDefault(r => string.Equals(r.Name, normalized, StringComparison.OrdinalIgnoreCase));

@@ -32,7 +32,7 @@
     else
     {
         <table class="data">
-            <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Expires</th><th>Last used</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Key</th><th>Can</th><th>Created</th><th>Expires</th><th>Last used</th><th></th></tr></thead>
             <tbody>
                 @foreach (var key in _keys)
                 {
@@ -40,6 +40,7 @@
                     <tr class="@(usable ? null : "inactive")">
                         <td>@key.Name</td>
                         <td><code>@key.Hint</code></td>
+                        <td>@(key.ScopeList is { } scopes ? string.Join(", ", scopes) : "Everything you can")</td>
                         <td>@Day(key.CreatedAt)</td>
                         <td>@(key.ExpiresAt is { } e ? Day(e) : "never")</td>
                         <td>@(key.LastUsedAt is { } u ? Day(u) : "never")</td>
@@ -77,6 +78,29 @@
                     <InputDate id="expires" @bind-Value="Input.ExpiresOn" />
                 </div>
             </div>
+            <fieldset>
+                <legend>What the key can do</legend>
+                <label class="check"><input type="radio" name="Input.Access" value="full" checked="@(Input.Access != "limited")" /> Everything you can do</label>
+                <label class="check"><input type="radio" name="Input.Access" value="limited" checked="@(Input.Access == "limited")" /> Only these areas (best for connected apps):</label>
+                <table class="data">
+                    <tbody>
+                        @foreach (var (area, (label, _)) in ApiScopes.Areas)
+                        {
+                            <tr>
+                                <td>@label</td>
+                                <td>
+                                    <select name="Input.Levels[@area]" aria-label="@label">
+                                        <option value="">No access</option>
+                                        <option value="read" selected="@(Input.Levels.GetValueOrDefault(area) == "read")">Read</option>
+                                        <option value="write" selected="@(Input.Levels.GetValueOrDefault(area) == "write")">Read and change</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <p class="hint">A limited key never reaches users, keys or webhooks, and never does more than your role allows.</p>
+            </fieldset>
             <div class="actions"><button type="submit">Create key</button></div>
         </EditForm>
     </div>
@@ -105,7 +129,10 @@
         try
         {
             // Shown on this response only; never stored or put in a URL.
-            _created = await Keys.CreateAsync(_userId, Input.Name, Input.ExpiresOn);
+            var scopes = Input.Access == "limited"
+                ? Input.Levels.Where(l => l.Value is "read" or "write").Select(l => $"{l.Key}:{l.Value}").ToList()
+                : null;
+            _created = await Keys.CreateAsync(_userId, Input.Name, Input.ExpiresOn, scopes);
             Input = new KeyModel();
             _keys = await Keys.ListAsync(_userId);
         }
@@ -130,5 +157,11 @@
         public string Name { get; set; } = string.Empty;
 
         public DateOnly? ExpiresOn { get; set; }
+
+        /// <summary>"full" or "limited".</summary>
+        public string Access { get; set; } = "full";
+
+        /// <summary>Area → "read" or "write" for a limited key.</summary>
+        public Dictionary<string, string> Levels { get; set; } = [];
     }
 }

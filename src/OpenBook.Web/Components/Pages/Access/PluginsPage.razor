@@ -1,0 +1,86 @@
+@page "/settings/plugins"
+@using OpenBook.Application.Plugins
+@inject PluginRegistry Plugins
+
+<PageTitle>Add-ins · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Add-ins</h1>
+    <p class="muted">
+        Add-ins add reports and import formats. Each one is a folder of DLLs under <code>@Plugins.Folder</code>; it runs inside OpenBook with
+        full access to the server, so only install add-ins you trust. Changes here take effect when OpenBook restarts. If an add-in stops
+        OpenBook from starting, start it with <code>--safe-mode</code> (or <code>OpenBook:Plugins:SafeMode=true</code>) and turn the add-in off here.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is not null)
+    {
+        <div class="alert notice" role="status">@Done Restart OpenBook to apply it.</div>
+    }
+    @if (Plugins.SafeMode)
+    {
+        <div class="alert notice" role="status">OpenBook is running in safe mode: no add-ins were loaded.</div>
+    }
+
+    @if (_folders.Count == 0)
+    {
+        <div class="card"><p>No add-ins are installed.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Folder</th><th>Add-in</th><th>Version</th><th>Status</th><th>Adds</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var folder in _folders)
+                {
+                    var info = Plugins.Plugins.Where(p => p.Folder == folder).ToList();
+                    var disabled = File.Exists(Path.Combine(Plugins.Folder!, folder, OpenBook.Web.Plugins.PluginLoader.DisabledMarker));
+                    <tr>
+                        <td><code>@folder</code></td>
+                        <td>@string.Join(", ", info.Select(i => i.Name).OfType<string>())@(info.FirstOrDefault()?.Description is { } d ? $" · {d}" : "")</td>
+                        <td>@string.Join(", ", info.Select(i => i.Version).OfType<string>())</td>
+                        <td>
+                            @if (info.Count == 0)
+                            {
+                                <span>@(Plugins.SafeMode ? "Not loaded (safe mode)" : "Added since start")</span>
+                            }
+                            @foreach (var i in info)
+                            {
+                                <div>@State(i.State)@(i.Error is { } error ? $": {error}" : "")</div>
+                            }
+                        </td>
+                        <td>@string.Join("; ", info.SelectMany(i => i.Adds))</td>
+                        <td>
+                            <form method="post" action="/settings/plugins/@folder/@(disabled ? "enable" : "disable")" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary">@(disabled ? "Turn on" : "Turn off")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<string> _folders = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (Plugins.Folder is { } folder && Directory.Exists(folder))
+            _folders = Directory.GetDirectories(folder).Select(d => Path.GetFileName(d)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static string State(PluginState state) => state switch
+    {
+        PluginState.Loaded => "On",
+        PluginState.Disabled => "Off",
+        _ => "Failed to load",
+    };
+}

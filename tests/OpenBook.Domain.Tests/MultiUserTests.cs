@@ -97,3 +97,22 @@ public class MultiUserTests
         Assert.Null(delivery.LastError);
     }
 }
+
+public class ApiScopeTests
+{
+    [Fact]
+    public void Scopes_are_normalised_and_checked_by_path()
+    {
+        Assert.Equal(["reports:read", "sales:write"], OpenBook.Domain.Companies.ApiScopes.Normalize(["sales:read", "sales:write", " reports:read "]));
+        Assert.Equal("apikey.scope_invalid", Assert.Throws<OpenBook.Domain.Common.DomainException>(() => OpenBook.Domain.Companies.ApiScopes.Normalize(["sales:admin"])).Code);
+        Assert.Equal("apikey.scope_required", Assert.Throws<OpenBook.Domain.Common.DomainException>(() => OpenBook.Domain.Companies.ApiScopes.Normalize([])).Code);
+
+        string[] scopes = ["sales:read", "projects:write"];
+        Assert.True(OpenBook.Domain.Companies.ApiScopes.Allows(scopes, "/api/sales/invoices", write: false));
+        Assert.False(OpenBook.Domain.Companies.ApiScopes.Allows(scopes, "/api/sales/invoices", write: true));
+        Assert.True(OpenBook.Domain.Companies.ApiScopes.Allows(scopes, "/api/projects/time", write: true));
+        Assert.False(OpenBook.Domain.Companies.ApiScopes.Allows(scopes, "/api/salesfoo", write: false));
+        Assert.False(OpenBook.Domain.Companies.ApiScopes.Allows(scopes, "/api/webhooks", write: false));
+        Assert.True(OpenBook.Domain.Companies.ApiScopes.Allows(scopes, "/api/me", write: false));
+    }
+}

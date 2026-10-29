@@ -122,12 +122,13 @@ public sealed class ReportParameters
 /// Every report that can be shown as a table, exported and saved, by key. Report pages and the export
 /// endpoint both run reports through here, so a download always matches the screen.
 /// </summary>
-public sealed class ReportCatalog(IServiceProvider services, ICompanyStore companies)
+public sealed class ReportCatalog(IServiceProvider services, ICompanyStore companies, Plugins.PluginRegistry plugins)
 {
     private static readonly Comparison[] PeriodComparisons =
         [Comparison.None, Comparison.PreviousPeriod, Comparison.PreviousYear, Comparison.Months, Comparison.Quarters];
 
-    public static readonly IReadOnlyList<ReportDefinition> All =
+    /// <summary>The reports OpenBook itself has; add-ins add more (<see cref="All"/>).</summary>
+    public static readonly IReadOnlyList<ReportDefinition> BuiltIn =
     [
         new("profit-and-loss", "Profit and loss", "Income and expenses over a period and the net income they leave. Compare periods, months or quarters.",
             "Financial statements", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Compare | ReportInputs.Segments, Comparisons: PeriodComparisons),
@@ -202,7 +203,12 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Budgets", ReportInputs.Budget | ReportInputs.Basis),
     ];
 
-    public static ReportDefinition? Find(string? key) => All.FirstOrDefault(d => string.Equals(d.Key, key, StringComparison.OrdinalIgnoreCase));
+    public static ReportDefinition? FindBuiltIn(string? key) => BuiltIn.FirstOrDefault(d => string.Equals(d.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Every report: the built-in ones, then the add-ins'.</summary>
+    public IReadOnlyList<ReportDefinition> All => [.. BuiltIn, .. plugins.Reports.Select(r => r.Definition)];
+
+    public ReportDefinition? Find(string? key) => FindBuiltIn(key) ?? plugins.Report(key)?.Definition;
 
     public async Task<ReportTable> RunAsync(string key, ReportParameters p, CancellationToken ct = default)
     {
@@ -254,7 +260,9 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, ct),
             "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
             "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetNumber("year") ?? today.Year, ct),
-            _ => throw new DomainException("report.unknown", "Unknown report."),
+            _ => plugins.Report(definition.Key) is { } plugin
+                ? await plugin.Run(services, p, ct)
+                : throw new DomainException("report.unknown", "Unknown report."),
         };
     }
 

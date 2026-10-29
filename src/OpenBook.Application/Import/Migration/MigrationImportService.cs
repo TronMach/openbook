@@ -60,7 +60,8 @@ public sealed class MigrationImportService(
     IPurchasesStore purchases,
     PostingEngine engine,
     ICompanyStore companies,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    Plugins.PluginRegistry plugins)
 {
     /// <summary>Largest export accepted (decompressed).</summary>
     public const int MaxBytes = 20 * 1024 * 1024;
@@ -70,6 +71,39 @@ public sealed class MigrationImportService(
 
     public async Task<MigrationResult> ImportAsync(MigrationSource source, byte[] content, CancellationToken ct = default) =>
         await ImportAsync(MigrationReaders.Read(source, content, await HomeCurrencyAsync(ct)), ct);
+
+    /// <summary>The formats to move in from: the built-in ones (by <see cref="MigrationSource"/> name), then add-ins' (by key).</summary>
+    public IReadOnlyList<(string Key, string Label)> Sources() =>
+        [.. Enum.GetValues<MigrationSource>().Select(s => (s.ToString(), MigrationReaders.Describe(s))), .. plugins.Importers.Select(i => (i.Key, i.Label))];
+
+    /// <summary>A built-in source by its name, or an add-in's import format by its key.</summary>
+    public async Task<MigrationResult> PreviewAsync(string source, byte[] content, CancellationToken ct = default) =>
+        (await PlanAsync(await ReadAsync(source, content, ct), ct)).Result;
+
+    public async Task<MigrationResult> ImportAsync(string source, byte[] content, CancellationToken ct = default) =>
+        await ImportAsync(await ReadAsync(source, content, ct), ct);
+
+    private async Task<MigrationData> ReadAsync(string source, byte[] content, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        var currency = await HomeCurrencyAsync(ct);
+        if (Enum.TryParse<MigrationSource>(source, ignoreCase: true, out var builtIn) && Enum.IsDefined(builtIn))
+            return MigrationReaders.Read(builtIn, content, currency);
+        var importer = plugins.Importer(source)
+            ?? throw new DomainException("import.source_unknown", $"Unknown source '{source}'. Use one of: {string.Join(", ", Sources().Select(s => s.Key))}.");
+        if (content.Length == 0)
+            throw new DomainException("import.empty", "The file is empty.");
+        if (content.Length > MaxBytes)
+            throw new DomainException("import.too_large", "The file is larger than 20 MB. Export in smaller parts.");
+        try
+        {
+            return importer.Read(content, currency);
+        }
+        catch (Exception ex) when (ex is not DomainException and not OutOfMemoryException)
+        {
+            throw new DomainException("import.plugin_failed", $"The {importer.Label} add-in couldn't read the file: {ex.Message}");
+        }
+    }
 
     public async Task<MigrationResult> PreviewAsync(MigrationData data, CancellationToken ct = default) => (await PlanAsync(data, ct)).Result;
 

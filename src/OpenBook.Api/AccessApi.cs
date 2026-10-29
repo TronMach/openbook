@@ -20,15 +20,18 @@ public sealed record ChangeRoleRequest(UserRole Role);
 
 public sealed record ResetPasswordRequest(string NewPassword);
 
-public sealed record ApiKeyResponse(Guid Id, Guid UserId, string Name, string Hint, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt)
+public sealed record ApiKeyResponse(
+    Guid Id, Guid UserId, string Name, string Hint, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt,
+    IReadOnlyList<string>? Scopes = null)
 {
-    public static ApiKeyResponse From(ApiKey k) => new(k.Id, k.UserId, k.Name, k.Hint, k.CreatedAt, k.ExpiresAt, k.LastUsedAt, k.RevokedAt);
+    public static ApiKeyResponse From(ApiKey k) => new(k.Id, k.UserId, k.Name, k.Hint, k.CreatedAt, k.ExpiresAt, k.LastUsedAt, k.RevokedAt, k.ScopeList);
 }
 
 /// <param name="Token">Shown only in this response; store it somewhere safe.</param>
 public sealed record CreatedApiKeyResponse(ApiKeyResponse Key, string Token);
 
-public sealed record CreateApiKeyRequest(string Name, DateOnly? ExpiresOn = null);
+/// <param name="Scopes">"area:read" / "area:write"; omit for a key that can do everything you can.</param>
+public sealed record CreateApiKeyRequest(string Name, DateOnly? ExpiresOn = null, IReadOnlyList<string>? Scopes = null);
 
 public sealed record WebhookResponse(Guid Id, string Url, string Events, string? Description, bool IsActive, DateTimeOffset CreatedAt)
 {
@@ -65,7 +68,7 @@ internal static class AccessApi
             (await s.ListAsync(UserId(principal), ct)).Select(ApiKeyResponse.From));
         keys.MapPost("/", async (CreateApiKeyRequest r, ClaimsPrincipal principal, ApiKeyService s, CancellationToken ct) =>
         {
-            var created = await s.CreateAsync(UserId(principal), r.Name, r.ExpiresOn, ct);
+            var created = await s.CreateAsync(UserId(principal), r.Name, r.ExpiresOn, r.Scopes, ct);
             return Results.Created($"/api/api-keys/{created.Key.Id}", new CreatedApiKeyResponse(ApiKeyResponse.From(created.Key), created.Token));
         });
         keys.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal principal, ApiKeyService s, CancellationToken ct) =>

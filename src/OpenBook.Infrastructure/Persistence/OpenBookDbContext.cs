@@ -620,6 +620,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(k => k.Hint).HasMaxLength(20);
             b.HasIndex(k => k.UserId);
             b.HasOne<User>().WithMany().HasForeignKey(k => k.UserId).OnDelete(DeleteBehavior.Restrict);
+            b.Property(k => k.Scopes).HasMaxLength(500);
+            b.Ignore(k => k.ScopeList);
         });
 
         modelBuilder.Entity<WebhookSubscription>(b =>

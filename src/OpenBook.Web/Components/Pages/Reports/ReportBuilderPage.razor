@@ -97,7 +97,7 @@
         var company = await Settings.GetAsync();
         var today = DateOnly.FromDateTime(DateTime.Today);
         _parameters = ReportParameters.Parse(new Uri(Navigation.Uri).Query);
-        var definition = ReportCatalog.Find("builder")!;
+        var definition = ReportCatalog.FindBuiltIn("builder")!;
         var (preset, range) = _parameters.Period(company, definition.DefaultPreset, today);
         _basis = _parameters.Basis(company);
         _query = new ReportQuery(preset, range, _basis);

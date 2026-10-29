@@ -216,6 +216,8 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/reports/schedules", "GET", UserRole.Accountant)]
     [InlineData("/api/reports/schedules", "POST", UserRole.Accountant)]
     [InlineData("/reports/builder", "GET", UserRole.ViewOnly)]
+    [InlineData("/settings/plugins", "GET", UserRole.Admin)]
+    [InlineData("/settings/plugins/sample/disable", "POST", UserRole.Admin)]
     [InlineData("/accountant/package", "GET", UserRole.Accountant)]
     [InlineData("/api/accountant/1099-filing", "GET", UserRole.Accountant)]
     [InlineData("/reports/trial-balance-worksheet", "GET", UserRole.Accountant)]
@@ -272,5 +274,29 @@ public sealed class ApiAccessTests : IAsyncLifetime
         var response = await Client(UserRole.ViewOnly).GetAsync("/settings/users");
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/access-denied?needed=Admin", response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_limited_key_reaches_only_its_areas()
+    {
+        string token;
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var owner = (await sp.GetRequiredService<UserService>().ListAsync()).Single(u => u.Username == "owner");
+            token = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(owner.Id, "shop", scopes: ["sales:read", "reports:write"])).Token;
+        }
+
+        var client = Client(null);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/reports/catalog")).StatusCode);
+        var refused = await client.PostAsJsonAsync("/api/customers", new { displayName = "Not allowed" });
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Contains("auth.scope", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/vendors")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/api-keys", new { name = "escalate" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
     }
 }

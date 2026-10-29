@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Attachments;
 using OpenBook.Application.Auditing;
@@ -22,6 +23,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddOpenBookApplication(this IServiceCollection services)
     {
+        // The host registers the add-ins it loaded first; otherwise there are none.
+        services.TryAddSingleton<OpenBook.Application.Plugins.PluginRegistry>();
         services.AddScoped<ClosedPeriodOverride>();
         services.AddScoped<PostingEngine>();
         services.AddScoped<TrialBalanceQuery>();

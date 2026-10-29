@@ -166,7 +166,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _definition = ReportCatalog.Find(Key);
+        _definition = Catalog.Find(Key);
         if (_definition is null)
             return;
 
