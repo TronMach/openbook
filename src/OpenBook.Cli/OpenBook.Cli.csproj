@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>openbook</AssemblyName>
+    <RootNamespace>OpenBook.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>openbook</ToolCommandName>
+    <PackageId>OpenBook.Cli</PackageId>
+    <Description>Command-line client for an OpenBook server, over its API with an API key.</Description>
+  </PropertyGroup>
+
+</Project>

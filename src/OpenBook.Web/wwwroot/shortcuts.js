@@ -94,6 +94,10 @@
         }
     });
 
+    // Installable app: the service worker caches static files and shows an offline page (never your data).
+    if ('serviceWorker' in navigator && window.isSecureContext)
+        navigator.serviceWorker.register('/sw.js').catch(() => { });
+
     applyTheme();
     if (window.Blazor && typeof window.Blazor.addEventListener === 'function')
         window.Blazor.addEventListener('enhancedload', applyTheme);
