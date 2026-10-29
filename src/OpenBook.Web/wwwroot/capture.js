@@ -72,7 +72,11 @@
 
     const removeDraft = id => tx('drafts', 'readwrite', s => s.delete(id));
 
+    // Empties both stores first (that works even while another tab holds the database open, which holds up deleting
+    // it), then deletes the database, key included.
     async function wipe() {
+        await tx('drafts', 'readwrite', s => s.clear());
+        await tx('meta', 'readwrite', s => s.clear());
         await new Promise(resolve => { const r = indexedDB.deleteDatabase(DB); r.onsuccess = r.onerror = r.onblocked = () => resolve(); });
     }
 
@@ -98,7 +102,10 @@
             const items = (lists && lists[select.dataset.list]) || [];
             const current = select.value;
             select.replaceChildren();
-            if (select.hasAttribute('data-optional') || items.length === 0) select.add(new Option(items.length ? 'None' : 'Nothing yet: open OpenBook online once', ''));
+            // No lists yet (never online) is different from an empty list (nothing set up in OpenBook).
+            const empty = !lists ? 'Nothing yet: open this page online once'
+                : select.dataset.list === 'workers' ? 'No people yet: add them under Time › People and rates' : 'None set up in OpenBook';
+            if (select.hasAttribute('data-optional') || items.length === 0) select.add(new Option(items.length || select.hasAttribute('data-optional') ? 'None' : empty, ''));
             items.forEach(i => select.add(new Option(i.name, i.id)));
             if (current) select.value = current;
         });
@@ -267,7 +274,10 @@
     }
 
     function pick(tab) {
-        document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+        document.querySelectorAll('[data-tab]').forEach(b => {
+            b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+            b.classList.toggle('secondary', b.dataset.tab !== tab);
+        });
         document.querySelectorAll('form[data-kind]').forEach(f => { f.hidden = f.id !== 'form-' + tab; });
         try { localStorage.setItem('ob-capture-tab', tab); } catch (e) { /* private mode */ }
     }
