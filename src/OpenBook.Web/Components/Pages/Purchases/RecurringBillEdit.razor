@@ -82,7 +82,12 @@
                 <span>Enter bills automatically when due</span>
             </label>
 
-            <BillLinesEditor Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+            <div class="row">
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+            </div>
+            <TagChecks Options="_segments" Value="_tags" />
+
+            <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional; defaults to the name)</span></label>
@@ -127,6 +132,9 @@
     private bool _active = true;
     private int _created;
     private List<BillLineModel> _lines = [new()];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid? _locationId;
+    private HashSet<Guid> _tags = [];
 
     [Parameter]
     public Guid? Id { get; set; }
@@ -140,6 +148,7 @@
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
             Id is { } id ? await sp.GetRequiredService<RecurringBillService>().GetAsync(id) : null));
         _categories = BillLineModel.Categories(_chart);
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
 
         if (Id is not null)
         {
@@ -169,6 +178,8 @@
         _active = t.IsActive;
         _created = t.OccurrencesPosted;
         _lines = t.Lines.OrderBy(l => l.LineNumber).Select(l => BillLineModel.From(l.ToDraft())).ToList();
+        _locationId = t.LocationId;
+        _tags = t.TagIds.ToHashSet();
     }
 
     private async Task SaveAsync()
@@ -179,7 +190,7 @@
         try
         {
             var details = new RecurringBillDetails(_name, _vendorId!.Value, BillLineModel.Drafts(_lines), _frequency, _startDate, _interval,
-                _endDate, _maxOccurrences, _autoCreate, _memo);
+                _endDate, _maxOccurrences, _autoCreate, _memo, _locationId, _tags.ToList());
             if (Id is { } id)
             {
                 Show(await Ops.RunAsync<RecurringBillService, RecurringBill>(s => s.UpdateAsync(id, details)));

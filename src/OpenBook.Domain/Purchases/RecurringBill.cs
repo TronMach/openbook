@@ -13,14 +13,16 @@ public sealed class RecurringBillLine
         AccountId = line.AccountId;
         Amount = line.Amount;
         Description = line.Description;
+        ClassId = line.ClassId;
     }
 
     public int LineNumber { get; private set; }
     public Guid AccountId { get; private set; }
     public decimal Amount { get; private set; }
     public string? Description { get; private set; }
+    public Guid? ClassId { get; private set; }
 
-    public BillLineDraft ToDraft() => new(AccountId, Amount, Description);
+    public BillLineDraft ToDraft() => new(AccountId, Amount, Description, ClassId: ClassId);
 }
 
 /// <summary>A bill entered on a schedule, such as rent or a subscription.</summary>
@@ -47,6 +49,14 @@ public sealed class RecurringBill
     public bool IsActive { get; private set; }
     public Guid? LastBillId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>The location every document or entry made from this template gets.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Tag ids, comma separated: a template sits outside the ledger, so it keeps them as text.</summary>
+    public string? Tags { get; private set; }
+
+    public IReadOnlyList<Guid> TagIds => Recurrence.ParseTags(Tags);
 
     public IReadOnlyList<RecurringBillLine> Lines => _lines;
 
@@ -79,6 +89,8 @@ public sealed class RecurringBill
         EndDate = details.EndDate;
         MaxOccurrences = details.MaxOccurrences;
         AutoCreate = details.AutoCreate;
+        LocationId = details.LocationId == Guid.Empty ? null : details.LocationId;
+        Tags = Recurrence.JoinTags(details.TagIds);
         _lines.Clear();
         _lines.AddRange(lines.Select((l, i) => new RecurringBillLine(i + 1, l)));
     }
@@ -106,4 +118,6 @@ public sealed record RecurringBillDetails(
     DateOnly? EndDate = null,
     int? MaxOccurrences = null,
     bool AutoCreate = false,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);

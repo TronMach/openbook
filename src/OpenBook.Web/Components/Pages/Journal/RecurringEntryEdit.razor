@@ -95,7 +95,12 @@
                 <span>Post automatically when due</span>
             </label>
 
-            <JournalLinesEditor Lines="_lines" Accounts="_accounts" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+            <div class="row">
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+            </div>
+            <TagChecks Options="_segments" Value="_tags" />
+
+            <JournalLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Accounts="_accounts" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
             <div class="actions">
                 <button type="button" @onclick="SaveAsync" disabled="@(!JournalLines.IsComplete(_lines) || _busy)">Save</button>
@@ -158,6 +163,9 @@
     private int _occurrencesPosted;
     private List<JournalLineModel> _lines = [new(), new()];
     private IReadOnlyList<JournalEntry> _posted = [];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid? _locationId;
+    private HashSet<Guid> _tags = [];
 
     [Parameter]
     public Guid? Id { get; set; }
@@ -168,6 +176,7 @@
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
         _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
 
         if (Id is { } id)
         {
@@ -201,6 +210,8 @@
         _active = template.IsActive;
         _occurrencesPosted = template.OccurrencesPosted;
         _lines = template.Lines.OrderBy(l => l.LineNumber).Select(l => JournalLineModel.From(l.ToDraft())).ToList();
+        _locationId = template.LocationId;
+        _tags = template.TagIds.ToHashSet();
     }
 
     private async Task SaveAsync()
@@ -210,7 +221,8 @@
         _saved = false;
         try
         {
-            var details = new RecurringEntryDetails(_name, JournalLines.Drafts(_lines), _frequency, _startDate, _interval, _endDate, _maxOccurrences, _autoPost, _memo, _basis);
+            var details = new RecurringEntryDetails(_name, JournalLines.Drafts(_lines), _frequency, _startDate, _interval, _endDate, _maxOccurrences, _autoPost, _memo, _basis,
+                _locationId, _tags.ToList());
             if (Id is { } id)
             {
                 Show(await Ops.RunAsync<RecurringEntryService, RecurringEntry>(s => s.UpdateAsync(id, details)));

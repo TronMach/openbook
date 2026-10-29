@@ -1693,6 +1693,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("LastPostedEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("MaxOccurrences")
                         .HasColumnType("integer");
 
@@ -1711,7 +1714,13 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Tags")
+                        .HasMaxLength(800)
+                        .HasColumnType("character varying(800)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
 
                     b.ToTable("RecurringEntries", (string)null);
                 });
@@ -2469,6 +2478,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("LastBillId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("MaxOccurrences")
                         .HasColumnType("integer");
 
@@ -2487,10 +2499,16 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Tags")
+                        .HasMaxLength(800)
+                        .HasColumnType("character varying(800)");
+
                     b.Property<Guid>("VendorId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("VendorId");
 
@@ -3870,6 +3888,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("LastInvoiceId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("MaxOccurrences")
                         .HasColumnType("integer");
 
@@ -3888,9 +3909,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Tags")
+                        .HasMaxLength(800)
+                        .HasColumnType("character varying(800)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("LocationId");
 
                     b.ToTable("RecurringInvoices", (string)null);
                 });
@@ -5206,6 +5233,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Ledger.RecurringEntry", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.OwnsMany("OpenBook.Domain.Ledger.RecurringEntryLine", "Lines", b1 =>
                         {
                             b1.Property<Guid>("RecurringEntryId")
@@ -5218,6 +5250,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
 
                             b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("ClassId")
                                 .HasColumnType("uuid");
 
                             b1.Property<long>("Credit")
@@ -5236,6 +5271,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasIndex("AccountId");
 
+                            b1.HasIndex("ClassId");
+
                             b1.ToTable("RecurringEntryLines", (string)null);
 
                             b1.HasOne("OpenBook.Domain.Accounts.Account", null)
@@ -5243,6 +5280,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("AccountId")
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.WithOwner()
                                 .HasForeignKey("RecurringEntryId");
@@ -5707,6 +5749,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.RecurringBill", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
                         .WithMany()
                         .HasForeignKey("VendorId")
@@ -5731,6 +5778,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
 
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
@@ -5739,6 +5789,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasIndex("AccountId");
 
+                            b1.HasIndex("ClassId");
+
                             b1.ToTable("RecurringBillLines", (string)null);
 
                             b1.HasOne("OpenBook.Domain.Accounts.Account", null)
@@ -5746,6 +5798,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("AccountId")
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.WithOwner()
                                 .HasForeignKey("RecurringBillId");
@@ -6863,6 +6920,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.OwnsMany("OpenBook.Domain.Sales.RecurringInvoiceLine", "Lines", b1 =>
                         {
                             b1.Property<Guid>("RecurringInvoiceId")
@@ -6873,6 +6935,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("integer");
 
                             NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
@@ -6896,9 +6961,16 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasKey("RecurringInvoiceId", "LineNumber");
 
+                            b1.HasIndex("ClassId");
+
                             b1.HasIndex("ItemId");
 
                             b1.ToTable("RecurringInvoiceLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Sales.Item", null)
                                 .WithMany()

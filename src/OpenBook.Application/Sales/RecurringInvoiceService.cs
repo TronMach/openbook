@@ -1,7 +1,9 @@
 using System.Text.Json;
 using OpenBook.Application.Forms;
+using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
@@ -10,7 +12,7 @@ namespace OpenBook.Application.Sales;
 public sealed record RecurringInvoiceResult(RecurringInvoice Template, IReadOnlyList<Invoice> Created, string? Error, int Emailed = 0, string? EmailError = null);
 
 /// <summary>Recurring invoices: templates that create an invoice on a schedule, optionally emailing it.</summary>
-public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService invoices, EmailService email, IClock clock, ICurrentUser user)
+public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService invoices, EmailService email, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "recurring_invoice";
     public const int MaxCatchUp = 60;
@@ -23,6 +25,7 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
     {
         ArgumentNullException.ThrowIfNull(details);
         await EnsureCustomerAsync(details.CustomerId, ct);
+        await EnsureSegmentsAsync(details, ct);
         var template = RecurringInvoice.Create(details, clock.UtcNow);
         store.Add(template);
         store.Add(Audit(AuditAction.Created, template, before: null));
@@ -35,6 +38,7 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
         ArgumentNullException.ThrowIfNull(details);
         var template = await store.GetRecurringInvoiceAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         await EnsureCustomerAsync(details.CustomerId, ct);
+        await EnsureSegmentsAsync(details, ct);
         var before = Snapshot(template);
         template.Update(details);
         store.Add(Audit(AuditAction.Updated, template, before));
@@ -76,7 +80,8 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
                 {
                     var date = template.NextDate!.Value;
                     var invoice = await invoices.CreateAsync(new CreateInvoiceCommand(
-                        template.CustomerId, date, template.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList(), Memo: template.Memo),
+                        template.CustomerId, date, template.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList(), Memo: template.Memo,
+                        LocationId: template.LocationId, TagIds: template.TagIds),
                         template.Id, ct);
                     template.RecordCreated(invoice.Id);
                     await store.SaveChangesAsync(ct);
@@ -125,6 +130,10 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
             throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
     }
 
+    private Task EnsureSegmentsAsync(RecurringInvoiceDetails details, CancellationToken ct) =>
+        engine.EnsureSegmentsAsync((details.Lines ?? []).Select(l => l.ClassId), details.LocationId == Guid.Empty ? null : details.LocationId,
+            Recurrence.ParseTags(Recurrence.JoinTags(details.TagIds)), ct);
+
     private AuditRecord Audit(AuditAction action, RecurringInvoice t, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, t.Id, before, Snapshot(t));
 
@@ -141,6 +150,8 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
         t.AutoCreate,
         t.AutoEmail,
         t.IsActive,
-        Lines = t.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate }),
+        t.LocationId,
+        t.Tags,
+        Lines = t.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.ClassId }),
     });
 }

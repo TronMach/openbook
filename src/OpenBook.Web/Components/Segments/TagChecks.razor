@@ -1,0 +1,29 @@
+@* Tags to put on what a template makes, for interactive forms; the parent owns the set. Nothing when there are no tags. *@
+@if (Options.Tags.Count > 0 || Value.Count > 0)
+{
+    <fieldset class="field">
+        <legend>Tags <span class="muted">(optional)</span></legend>
+        <div class="tag-picker">
+            @foreach (var tag in Options.Tags)
+            {
+                <label class="tag-option"><input type="checkbox" checked="@Value.Contains(tag.Segment.Id)" @onchange="e => Toggle(tag.Segment.Id, e)" /> @tag.FullName</label>
+            }
+        </div>
+    </fieldset>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public SegmentOptions Options { get; set; } = SegmentOptions.None;
+
+    [Parameter, EditorRequired]
+    public HashSet<Guid> Value { get; set; } = [];
+
+    private void Toggle(Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            Value.Add(id);
+        else
+            Value.Remove(id);
+    }
+}

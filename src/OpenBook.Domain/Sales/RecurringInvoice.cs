@@ -16,6 +16,7 @@ public sealed class RecurringInvoiceLine
         Description = Text.Optional(draft.Description, 1000, "sales.line_description_too_long", "Line description");
         Quantity = SalesLine.ValidQuantity(draft.Quantity);
         Rate = SalesLine.ValidRate(draft.Rate);
+        ClassId = draft.ClassId == Guid.Empty ? null : draft.ClassId;
     }
 
     public int LineNumber { get; private set; }
@@ -24,8 +25,9 @@ public sealed class RecurringInvoiceLine
     public string? Description { get; private set; }
     public decimal Quantity { get; private set; }
     public decimal Rate { get; private set; }
+    public Guid? ClassId { get; private set; }
 
-    public SalesLineDraft ToDraft() => new(ItemId, Description, Quantity, Rate, Kind);
+    public SalesLineDraft ToDraft() => new(ItemId, Description, Quantity, Rate, Kind, ClassId: ClassId);
 }
 
 /// <summary>An invoice created on a schedule, such as a monthly retainer.</summary>
@@ -58,6 +60,14 @@ public sealed class RecurringInvoice
     public bool IsActive { get; private set; }
     public Guid? LastInvoiceId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>The location every document or entry made from this template gets.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Tag ids, comma separated: a template sits outside the ledger, so it keeps them as text.</summary>
+    public string? Tags { get; private set; }
+
+    public IReadOnlyList<Guid> TagIds => Recurrence.ParseTags(Tags);
 
     public IReadOnlyList<RecurringInvoiceLine> Lines => _lines;
 
@@ -94,6 +104,8 @@ public sealed class RecurringInvoice
         MaxOccurrences = details.MaxOccurrences;
         AutoCreate = details.AutoCreate;
         AutoEmail = details.AutoEmail;
+        LocationId = details.LocationId == Guid.Empty ? null : details.LocationId;
+        Tags = Recurrence.JoinTags(details.TagIds);
         _lines.Clear();
         _lines.AddRange(details.Lines.Select((l, i) => new RecurringInvoiceLine(i + 1, l)));
     }
@@ -122,4 +134,6 @@ public sealed record RecurringInvoiceDetails(
     int? MaxOccurrences = null,
     bool AutoCreate = false,
     bool AutoEmail = false,
-    string? Memo = null);
+    string? Memo = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);

@@ -569,6 +569,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         modelBuilder.Entity<RecurringEntry>(b =>
         {
             b.ToTable("RecurringEntries");
+            b.Property(r => r.Tags).HasMaxLength(800);
+            b.Ignore(r => r.TagIds);
+            b.HasOne<Segment>().WithMany().HasForeignKey(r => r.LocationId).OnDelete(DeleteBehavior.Restrict);
             b.HasKey(r => r.Id);
             b.Property(r => r.Name).HasMaxLength(100);
             b.Property(r => r.Memo).HasMaxLength(1000);
@@ -578,6 +581,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.OwnsMany(r => r.Lines, l =>
             {
                 l.ToTable("RecurringEntryLines");
+                l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
                 l.WithOwner().HasForeignKey("RecurringEntryId");
                 l.HasKey("RecurringEntryId", nameof(RecurringEntryLine.LineNumber));
                 l.Property(x => x.Debit).HasColumnName("DebitMinor").HasConversion(MinorUnits);
@@ -1600,6 +1604,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         modelBuilder.Entity<RecurringInvoice>(b =>
         {
             b.ToTable("RecurringInvoices");
+            b.Property(r => r.Tags).HasMaxLength(800);
+            b.Ignore(r => r.TagIds);
+            b.HasOne<Segment>().WithMany().HasForeignKey(r => r.LocationId).OnDelete(DeleteBehavior.Restrict);
             b.HasKey(r => r.Id);
             b.Property(r => r.Name).HasMaxLength(100);
             b.Property(r => r.Memo).HasMaxLength(1000);
@@ -1609,6 +1616,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.OwnsMany(r => r.Lines, l =>
             {
                 l.ToTable("RecurringInvoiceLines");
+                l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
                 l.WithOwner().HasForeignKey("RecurringInvoiceId");
                 l.HasKey("RecurringInvoiceId", nameof(RecurringInvoiceLine.LineNumber));
                 l.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
@@ -1766,6 +1774,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         modelBuilder.Entity<RecurringBill>(b =>
         {
             b.ToTable("RecurringBills");
+            b.Property(x => x.Tags).HasMaxLength(800);
+            b.Ignore(x => x.TagIds);
+            b.HasOne<Segment>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).HasMaxLength(100);
             b.Property(x => x.Memo).HasMaxLength(1000);
@@ -1775,6 +1786,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.OwnsMany(x => x.Lines, l =>
             {
                 l.ToTable("RecurringBillLines");
+                l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
                 l.WithOwner().HasForeignKey("RecurringBillId");
                 l.HasKey("RecurringBillId", nameof(RecurringBillLine.LineNumber));
                 l.Property(x => x.Description).HasMaxLength(1000);

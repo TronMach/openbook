@@ -86,7 +86,12 @@
                 <span>Email each invoice to the customer when it's created</span>
             </label>
 
-            <SalesLinesEditor Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="DateOnly.FromDateTime(DateTime.Today)" />
+            <div class="row">
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+            </div>
+            <TagChecks Options="_segments" Value="_tags" />
+
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="DateOnly.FromDateTime(DateTime.Today)" />
             <p class="hint">Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</p>
 
             <div class="field" style="margin-top: 1rem">
@@ -131,6 +136,9 @@
     private bool _active = true;
     private int _created;
     private List<SalesLineModel> _lines = [new()];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid? _locationId;
+    private HashSet<Guid> _tags = [];
 
     [Parameter]
     public Guid? Id { get; set; }
@@ -145,6 +153,7 @@
             await sp.GetRequiredService<ItemService>().ListAsync(),
             Id is { } id ? await sp.GetRequiredService<RecurringInvoiceService>().GetAsync(id) : null));
 
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         if (Id is not null)
         {
             if (template is null)
@@ -174,6 +183,8 @@
         _active = t.IsActive;
         _created = t.OccurrencesPosted;
         _lines = t.Lines.OrderBy(l => l.LineNumber).Select(l => SalesLineModel.From(l.ToDraft())).ToList();
+        _locationId = t.LocationId;
+        _tags = t.TagIds.ToHashSet();
     }
 
     private async Task SaveAsync()
@@ -184,7 +195,7 @@
         try
         {
             var details = new RecurringInvoiceDetails(_name, _customerId!.Value, SalesLineModel.Drafts(_lines), _frequency, _startDate, _interval,
-                _endDate, _maxOccurrences, _autoCreate, _autoEmail, _memo);
+                _endDate, _maxOccurrences, _autoCreate, _autoEmail, _memo, _locationId, _tags.ToList());
             if (Id is { } id)
             {
                 Show(await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.UpdateAsync(id, details)));

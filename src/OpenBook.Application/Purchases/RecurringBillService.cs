@@ -1,6 +1,8 @@
 using System.Text.Json;
 using OpenBook.Domain.Auditing;
+using OpenBook.Application.Ledger;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
@@ -8,7 +10,7 @@ namespace OpenBook.Application.Purchases;
 public sealed record RecurringBillResult(RecurringBill Template, IReadOnlyList<Bill> Created, string? Error);
 
 /// <summary>Recurring bills: templates that enter a bill on a schedule, such as rent.</summary>
-public sealed class RecurringBillService(IPurchasesStore store, BillService bills, IClock clock, ICurrentUser user)
+public sealed class RecurringBillService(IPurchasesStore store, BillService bills, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "recurring_bill";
     public const int MaxCatchUp = 60;
@@ -21,6 +23,7 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
     {
         ArgumentNullException.ThrowIfNull(details);
         await EnsureVendorAsync(details.VendorId, ct);
+        await EnsureSegmentsAsync(details, ct);
         var template = RecurringBill.Create(details, clock.UtcNow);
         store.Add(template);
         store.Add(Audit(AuditAction.Created, template, before: null));
@@ -33,6 +36,7 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
         ArgumentNullException.ThrowIfNull(details);
         var template = await store.GetRecurringBillAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         await EnsureVendorAsync(details.VendorId, ct);
+        await EnsureSegmentsAsync(details, ct);
         var before = Snapshot(template);
         template.Update(details);
         store.Add(Audit(AuditAction.Updated, template, before));
@@ -74,7 +78,7 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
                 {
                     var bill = await bills.CreateAsync(new CreateBillCommand(
                         template.VendorId, template.NextDate!.Value, template.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList(),
-                        Memo: template.Memo ?? template.Name), template.Id, ct);
+                        Memo: template.Memo ?? template.Name, LocationId: template.LocationId, TagIds: template.TagIds), template.Id, ct);
                     template.RecordCreated(bill.Id);
                     await store.SaveChangesAsync(ct);
                     created.Add(bill);
@@ -99,6 +103,10 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
             throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
     }
 
+    private Task EnsureSegmentsAsync(RecurringBillDetails details, CancellationToken ct) =>
+        engine.EnsureSegmentsAsync((details.Lines ?? []).Select(l => l.ClassId), details.LocationId == Guid.Empty ? null : details.LocationId,
+            Recurrence.ParseTags(Recurrence.JoinTags(details.TagIds)), ct);
+
     private AuditRecord Audit(AuditAction action, RecurringBill t, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, t.Id, before, Snapshot(t));
 
@@ -114,6 +122,8 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
         t.MaxOccurrences,
         t.AutoCreate,
         t.IsActive,
-        Lines = t.Lines.Select(l => new { l.AccountId, l.Amount, l.Description }),
+        t.LocationId,
+        t.Tags,
+        Lines = t.Lines.Select(l => new { l.AccountId, l.Amount, l.Description, l.ClassId }),
     });
 }

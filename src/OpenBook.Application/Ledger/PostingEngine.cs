@@ -150,7 +150,7 @@ public sealed class PostingEngine(
     }
 
     /// <summary>Classes, the location and tags must exist, be the right kind and be active.</summary>
-    private async Task EnsureSegmentsAsync(IEnumerable<Guid?> classIds, Guid? locationId, IReadOnlyCollection<Guid> tagIds, CancellationToken ct)
+    internal async Task EnsureSegmentsAsync(IEnumerable<Guid?> classIds, Guid? locationId, IReadOnlyCollection<Guid> tagIds, CancellationToken ct)
     {
         var wanted = classIds.Where(c => c is not null && c != Guid.Empty).Select(c => (c!.Value, SegmentKind.Class))
             .Concat(locationId is { } l ? [(l, SegmentKind.Location)] : [])

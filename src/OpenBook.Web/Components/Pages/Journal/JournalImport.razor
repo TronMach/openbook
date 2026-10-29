@@ -35,7 +35,9 @@
             <p>
                 A CSV with a header row: <strong>date</strong>, <strong>account</strong> (full name like <code>Utilities:Electric</code>, or number),
                 and either <strong>debit</strong> and <strong>credit</strong> columns or one signed <strong>amount</strong> (positive = debit).
-                Optional: an <strong>entry</strong> number to group lines (otherwise lines group until they balance) and a <strong>memo</strong>.
+                Optional: an <strong>entry</strong> number to group lines (otherwise lines group until they balance), a <strong>memo</strong>,
+                a <strong>class</strong> per line, a <strong>location</strong> per entry and <strong>tags</strong> separated by semicolons
+                (segments by full name, like <code>East:Retail</code>; they must already exist).
                 Every entry must balance; nothing is imported unless every entry is valid. Entries can be voided from the journal like any other.
             </p>
             <details>

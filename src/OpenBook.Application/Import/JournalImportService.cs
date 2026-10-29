@@ -2,16 +2,22 @@ using System.Globalization;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Segments;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Application.Import;
 
-public sealed record ImportedLine(string Account, Guid? AccountId, decimal Debit, decimal Credit, string? Memo);
+public sealed record ImportedLine(string Account, Guid? AccountId, decimal Debit, decimal Credit, string? Memo, Guid? ClassId = null);
 
 /// <param name="Key">The file's entry number, or "#n" when entries were grouped by balancing.</param>
-public sealed record ImportedEntry(int Line, string Key, DateOnly? Date, string? Memo, IReadOnlyList<ImportedLine> Lines, string? Error)
+/// <param name="LocationId">The entry's location (every line naming one must agree).</param>
+/// <param name="TagIds">Every tag named on any of its lines.</param>
+public sealed record ImportedEntry(
+    int Line, string Key, DateOnly? Date, string? Memo, IReadOnlyList<ImportedLine> Lines, string? Error,
+    Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null)
 {
     public decimal Total => Lines.Sum(l => l.Debit);
     public bool IsValid => Error is null;
@@ -36,9 +42,11 @@ public sealed record OpeningBalanceImportResult(IReadOnlyList<ImportedBalance> R
 /// Journal entries and opening balances from CSV, with a preview, all-or-nothing. Accounts are matched by full
 /// name ("Parent:Child", any case) or number. Dates in any common order (year first, month first or day first,
 /// detected from the whole column). Amounts as debit/credit columns, or one signed amount (positive = debit).
-/// Without an entry number column, consecutive lines form an entry until they balance.
+/// Without an entry number column, consecutive lines form an entry until they balance. Optional class (per line),
+/// location (per entry) and tags ("Rent; 2026") columns name active segments by full name, any case.
 /// </summary>
-public sealed class JournalImportService(AccountService accounts, PostingEngine engine, OpeningBalanceService openingBalances, ICompanyStore companies)
+public sealed class JournalImportService(
+    AccountService accounts, PostingEngine engine, OpeningBalanceService openingBalances, ICompanyStore companies, SegmentService segments)
 {
     public const int MaxRows = 5000;
 
@@ -50,6 +58,9 @@ public sealed class JournalImportService(AccountService accounts, PostingEngine 
     private static readonly string[] AmountHeaders = ["amount", "value"];
     private static readonly string[] MemoHeaders = ["memo", "description", "linememo", "details", "narration"];
     private static readonly string[] BalanceHeaders = ["balance", "openingbalance", "amount"];
+    private static readonly string[] ClassHeaders = ["class", "classname"];
+    private static readonly string[] LocationHeaders = ["location", "locationname", "department"];
+    private static readonly string[] TagHeaders = ["tags", "tag"];
 
     public async Task<JournalImportResult> PreviewEntriesAsync(string csv, CancellationToken ct = default) => await PlanEntriesAsync(csv, ct);
 
@@ -63,8 +74,9 @@ public sealed class JournalImportService(AccountService accounts, PostingEngine 
         var batch = Guid.CreateVersion7();
         foreach (var entry in result.Entries)
         {
-            var lines = entry.Lines.Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit, l.Credit, l.Memo)).ToList();
-            await engine.StageAsync(new PostJournalEntryCommand(entry.Date!.Value, lines, entry.Memo, JournalEntry.ImportSource, batch), ct);
+            var lines = entry.Lines.Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit, l.Credit, l.Memo, l.ClassId)).ToList();
+            await engine.StageAsync(new PostJournalEntryCommand(entry.Date!.Value, lines, entry.Memo, JournalEntry.ImportSource, batch,
+                LocationId: entry.LocationId, TagIds: entry.TagIds), ct);
         }
 
         await engine.SaveAsync(ct);
@@ -95,6 +107,8 @@ public sealed class JournalImportService(AccountService accounts, PostingEngine 
             : (int?)null;
         var entryColumn = columns.Find(EntryHeaders);
         var memoColumn = columns.Find(MemoHeaders);
+        var segmentColumns = new SegmentColumns(columns.Find(ClassHeaders), columns.Find(LocationHeaders), columns.Find(TagHeaders),
+            await SegmentNamesAsync(SegmentKind.Class, ct), await SegmentNamesAsync(SegmentKind.Location, ct), await SegmentNamesAsync(SegmentKind.Tag, ct));
 
         var warnings = new List<string>();
         var order = DateOrderOf(rows.Select(r => CsvColumns.Field(r, dateColumn)), warnings);
@@ -124,17 +138,27 @@ public sealed class JournalImportService(AccountService accounts, PostingEngine 
             running += LineAmount(row, debitColumn, creditColumn, amountColumn) ?? 0m;
         }
 
-        var entries = groups.Select(g => PlanEntry(g.Key, g.Rows, chart, company, order, dateColumn, accountColumn, debitColumn, creditColumn, amountColumn, memoColumn)).ToList();
+        var entries = groups.Select(g => PlanEntry(g.Key, g.Rows, chart, company, order, dateColumn, accountColumn, debitColumn, creditColumn, amountColumn, memoColumn, segmentColumns)).ToList();
         return new JournalImportResult(entries, warnings);
     }
 
+    /// <summary>Active segments of a kind by full name ("Parent:Child"), ignoring case.</summary>
+    private async Task<IReadOnlyDictionary<string, Guid>> SegmentNamesAsync(SegmentKind kind, CancellationToken ct) =>
+        (await segments.ListAsync(kind, includeInactive: false, ct)).ToDictionary(s => s.FullName, s => s.Segment.Id, StringComparer.OrdinalIgnoreCase);
+
+    private sealed record SegmentColumns(
+        int? Class, int? Location, int? Tags,
+        IReadOnlyDictionary<string, Guid> Classes, IReadOnlyDictionary<string, Guid> Locations, IReadOnlyDictionary<string, Guid> TagNames);
+
     private static ImportedEntry PlanEntry(
         string key, List<CsvRecord> rows, ChartOfAccounts chart, Domain.Companies.Company company, DateOrder order,
-        int dateColumn, int accountColumn, int? debitColumn, int? creditColumn, int? amountColumn, int? memoColumn)
+        int dateColumn, int accountColumn, int? debitColumn, int? creditColumn, int? amountColumn, int? memoColumn, SegmentColumns segments)
     {
         var errors = new List<string>();
         var lines = new List<ImportedLine>();
         DateOnly? date = null;
+        Guid? locationId = null;
+        var tagIds = new List<Guid>();
         foreach (var row in rows)
         {
             if (!StatementValues.TryParseDate(CsvColumns.Field(row, dateColumn), order, out var d))
@@ -154,7 +178,35 @@ public sealed class JournalImportService(AccountService accounts, PostingEngine 
             var amount = LineAmount(row, debitColumn, creditColumn, amountColumn);
             if (amount is null)
                 errors.Add($"line {row.Line}: the amount can't be read (or both debit and credit are filled in)");
-            lines.Add(new ImportedLine(name, account?.Id, amount is > 0m ? amount.Value : 0m, amount is < 0m ? -amount.Value : 0m, CsvColumns.Field(row, memoColumn)));
+
+            Guid? classId = null;
+            if (CsvColumns.Field(row, segments.Class) is { } className)
+            {
+                if (segments.Classes.TryGetValue(className.Trim(), out var c))
+                    classId = c;
+                else
+                    errors.Add($"line {row.Line}: no active class '{className}'");
+            }
+
+            if (CsvColumns.Field(row, segments.Location) is { } locationName)
+            {
+                if (!segments.Locations.TryGetValue(locationName.Trim(), out var l))
+                    errors.Add($"line {row.Line}: no active location '{locationName}'");
+                else if (locationId is { } other && other != l)
+                    errors.Add($"line {row.Line}: a different location from the rest of the entry");
+                else
+                    locationId = l;
+            }
+
+            foreach (var tagName in (CsvColumns.Field(row, segments.Tags) ?? string.Empty).Split([';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (!segments.TagNames.TryGetValue(tagName, out var t))
+                    errors.Add($"line {row.Line}: no active tag '{tagName}'");
+                else if (!tagIds.Contains(t))
+                    tagIds.Add(t);
+            }
+
+            lines.Add(new ImportedLine(name, account?.Id, amount is > 0m ? amount.Value : 0m, amount is < 0m ? -amount.Value : 0m, CsvColumns.Field(row, memoColumn), classId));
         }
 
         if (lines.Count < 2)
@@ -166,7 +218,7 @@ public sealed class JournalImportService(AccountService accounts, PostingEngine 
             errors.Add($"{on:yyyy-MM-dd} is on or before the closing date");
 
         return new ImportedEntry(rows[0].Line, key, date, lines.Select(l => l.Memo).FirstOrDefault(m => m is not null), lines,
-            errors.Count == 0 ? null : string.Join("; ", errors.Distinct()));
+            errors.Count == 0 ? null : string.Join("; ", errors.Distinct()), locationId, tagIds);
     }
 
     private async Task<OpeningBalanceImportResult> PlanBalancesAsync(string csv, CancellationToken ct)

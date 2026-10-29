@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Banking;
+using OpenBook.Application.Import;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
@@ -206,5 +207,69 @@ public sealed class SegmentFlowTests : IAsyncLifetime
         Assert.True(tracking.Classes);
         var byLocation = await Report("profit-and-loss-by-location", "preset=Custom&from=2026-03-01&to=2026-03-31");
         Assert.Equal("Profit and loss by department", byLocation.Title);
+    }
+
+    private Task<IReadOnlyList<Guid>> Tags(Guid entryId) =>
+        _db.InDb<IReadOnlyList<Guid>>(async db => await db.EntryTags.AsNoTracking().Where(t => t.JournalEntryId == entryId).Select(t => t.TagId).ToListAsync());
+
+    [Fact]
+    public async Task Recurring_templates_keep_segments_and_give_them_to_what_they_make()
+    {
+        var journal = await In<RecurringEntryService, RecurringEntry>(s => s.CreateAsync(new RecurringEntryDetails("Accrual",
+            [JournalLineDraft.Dr(_rent.Id, 10m, classId: _online.Id), JournalLineDraft.Cr(_checking.Id, 10m)], RecurrenceFrequency.Monthly, Mar10,
+            MaxOccurrences: 1, LocationId: _east.Id, TagIds: [_promo.Id])));
+        Assert.Equal([_promo.Id], journal.TagIds);
+        var posted = Assert.Single(Assert.Single(await In<RecurringEntryService, IReadOnlyList<RecurringPostResult>>(s => s.PostDueAsync(Mar20, false))).Posted);
+        var rows = await Segments(posted.Id);
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.Equal(_east.Id, r.LocationId));
+        Assert.Single(rows, r => r.ClassId == _online.Id);
+        Assert.Equal([_promo.Id], await Tags(posted.Id));
+
+        await In<RecurringInvoiceService, RecurringInvoice>(s => s.CreateAsync(new RecurringInvoiceDetails("Monthly", _acme.Id,
+            [Widgets(1, _retail)], RecurrenceFrequency.Monthly, Mar10, MaxOccurrences: 1, LocationId: _east.Id, TagIds: [_promo.Id])));
+        var invoice = Assert.Single(Assert.Single(await In<RecurringInvoiceService, IReadOnlyList<RecurringInvoiceResult>>(s => s.CreateDueAsync(Mar20, false))).Created);
+        Assert.Equal(_east.Id, invoice.LocationId);
+        Assert.Equal(_retail.Id, Assert.Single(invoice.Lines).ClassId);
+        Assert.Equal([_promo.Id], await Tags(invoice.JournalEntryId));
+
+        await In<RecurringBillService, RecurringBill>(s => s.CreateAsync(new RecurringBillDetails("Rent", _landlord.Id,
+            [new BillLineDraft(_rent.Id, 500m, ClassId: _retail.Id)], RecurrenceFrequency.Monthly, Mar10, MaxOccurrences: 1, LocationId: _east.Id, TagIds: [_promo.Id])));
+        var bill = Assert.Single(Assert.Single(await In<RecurringBillService, IReadOnlyList<RecurringBillResult>>(s => s.CreateDueAsync(Mar20, false))).Created);
+        Assert.Equal(_east.Id, bill.LocationId);
+        Assert.Equal(_retail.Id, Assert.Single(bill.Lines).ClassId);
+        Assert.Equal([_promo.Id], await Tags(bill.JournalEntryId));
+
+        // Checked when the template is saved, not only when it runs.
+        Assert.Equal("segment.kind_mismatch", (await Assert.ThrowsAsync<DomainException>(() => In<RecurringBillService, RecurringBill>(s => s.CreateAsync(
+            new RecurringBillDetails("Bad", _landlord.Id, [new BillLineDraft(_rent.Id, 1m)], RecurrenceFrequency.Monthly, Mar10, LocationId: _retail.Id))))).Code);
+    }
+
+    [Fact]
+    public async Task Journal_imports_take_class_location_and_tag_columns()
+    {
+        var web = await Seg(s => s.CreateAsync(SegmentKind.Class, "Web", _online.Id));
+        const string head = "Entry,Date,Account,Debit,Credit,Class,Location,Tags\n";
+        var csv = head
+            + "1,2026-03-10,Rent,25,,online:web,East,Spring promo\n"
+            + "1,2026-03-10,Checking,,25,,,\n";
+        var result = await In<JournalImportService, JournalImportResult>(s => s.ImportEntriesAsync(csv));
+        var imported = Assert.Single(result.Entries);
+        Assert.Equal(_east.Id, imported.LocationId);
+
+        var (entries, _) = await In<PostingEngine, (IReadOnlyList<JournalEntry>, int)>(e => e.ListAsync(new Application.JournalEntryFilter(Source: JournalEntry.ImportSource)));
+        var entry = Assert.Single(entries);
+        var rows = await Segments(entry.Id);
+        Assert.Single(rows, r => r.ClassId == web.Id);
+        Assert.All(rows, r => Assert.Equal(_east.Id, r.LocationId));
+        Assert.Equal([_promo.Id], await Tags(entry.Id));
+
+        var bad = await In<JournalImportService, JournalImportResult>(s => s.PreviewEntriesAsync(head
+            + "1,2026-03-10,Rent,5,,Nowhere,East,\n"
+            + "1,2026-03-10,Checking,,5,,Retail,Missing\n"));
+        var error = Assert.Single(bad.Entries).Error!;
+        Assert.Contains("no active class 'Nowhere'", error, StringComparison.Ordinal);
+        Assert.Contains("no active location 'Retail'", error, StringComparison.Ordinal);
+        Assert.Contains("no active tag 'Missing'", error, StringComparison.Ordinal);
     }
 }

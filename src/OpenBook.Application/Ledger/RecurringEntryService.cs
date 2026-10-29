@@ -22,6 +22,8 @@ public sealed class RecurringEntryService(ILedgerStore store, PostingEngine engi
 
     public async Task<RecurringEntry> CreateAsync(RecurringEntryDetails details, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(details);
+        await EnsureSegmentsAsync(details, ct);
         var entry = RecurringEntry.Create(details, clock.UtcNow);
         store.Add(entry);
         store.Add(Audit(AuditAction.Created, entry, before: null));
@@ -31,7 +33,9 @@ public sealed class RecurringEntryService(ILedgerStore store, PostingEngine engi
 
     public async Task<RecurringEntry> UpdateAsync(Guid id, RecurringEntryDetails details, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(details);
         var entry = await store.GetRecurringAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        await EnsureSegmentsAsync(details, ct);
         var before = Snapshot(entry);
         entry.Update(details);
         store.Add(Audit(AuditAction.Updated, entry, before));
@@ -79,7 +83,9 @@ public sealed class RecurringEntryService(ILedgerStore store, PostingEngine engi
                         template.Memo ?? template.Name,
                         JournalEntry.RecurringSource,
                         template.Id,
-                        template.Basis), ct);
+                        template.Basis,
+                        LocationId: template.LocationId,
+                        TagIds: template.TagIds), ct);
                     template.RecordPosted(entry.Id);
                     await store.SaveChangesAsync(ct);
                     posted.Add(entry);
@@ -97,6 +103,10 @@ public sealed class RecurringEntryService(ILedgerStore store, PostingEngine engi
         return results;
     }
 
+    private Task EnsureSegmentsAsync(RecurringEntryDetails details, CancellationToken ct) =>
+        engine.EnsureSegmentsAsync((details.Lines ?? []).Select(l => l.ClassId), details.LocationId == Guid.Empty ? null : details.LocationId,
+            Recurrence.ParseTags(Recurrence.JoinTags(details.TagIds)), ct);
+
     private AuditRecord Audit(AuditAction action, RecurringEntry e, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, e.Id, before, Snapshot(e));
 
@@ -112,6 +122,8 @@ public sealed class RecurringEntryService(ILedgerStore store, PostingEngine engi
         e.OccurrencesPosted,
         e.AutoPost,
         e.IsActive,
-        Lines = e.Lines.Select(l => new { l.AccountId, l.Debit, l.Credit, l.Memo }),
+        e.LocationId,
+        e.Tags,
+        Lines = e.Lines.Select(l => new { l.AccountId, l.Debit, l.Credit, l.Memo, l.ClassId }),
     });
 }

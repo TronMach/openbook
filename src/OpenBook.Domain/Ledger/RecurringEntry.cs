@@ -22,6 +22,7 @@ public sealed class RecurringEntryLine
         Debit = draft.Debit;
         Credit = draft.Credit;
         Memo = draft.Memo;
+        ClassId = draft.ClassId == Guid.Empty ? null : draft.ClassId;
     }
 
     public int LineNumber { get; private set; }
@@ -29,8 +30,9 @@ public sealed class RecurringEntryLine
     public decimal Debit { get; private set; }
     public decimal Credit { get; private set; }
     public string? Memo { get; private set; }
+    public Guid? ClassId { get; private set; }
 
-    public JournalLineDraft ToDraft() => new(AccountId, Debit, Credit, Memo);
+    public JournalLineDraft ToDraft() => new(AccountId, Debit, Credit, Memo, ClassId);
 }
 
 /// <summary>
@@ -61,6 +63,14 @@ public sealed class RecurringEntry
     public bool IsActive { get; private set; }
     public Guid? LastPostedEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>The location every document or entry made from this template gets.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>Tag ids, comma separated: a template sits outside the ledger, so it keeps them as text.</summary>
+    public string? Tags { get; private set; }
+
+    public IReadOnlyList<Guid> TagIds => Recurrence.ParseTags(Tags);
 
     public IReadOnlyList<RecurringEntryLine> Lines => _lines;
 
@@ -95,6 +105,8 @@ public sealed class RecurringEntry
         EndDate = details.EndDate;
         MaxOccurrences = details.MaxOccurrences;
         AutoPost = details.AutoPost;
+        LocationId = details.LocationId == Guid.Empty ? null : details.LocationId;
+        Tags = Recurrence.JoinTags(details.TagIds);
         _lines.Clear();
         _lines.AddRange(details.Lines.Select((l, i) => new RecurringEntryLine(i + 1, l)));
     }
@@ -122,7 +134,9 @@ public sealed record RecurringEntryDetails(
     int? MaxOccurrences = null,
     bool AutoPost = false,
     string? Memo = null,
-    EntryBasis Basis = EntryBasis.Both);
+    EntryBasis Basis = EntryBasis.Both,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 /// <summary>Schedule arithmetic shared by recurring journal entries and recurring invoices.</summary>
 public static class Recurrence
@@ -147,6 +161,20 @@ public static class Recurrence
         var next = OccurrenceDate(frequency, interval, start, posted);
         return end is { } e && next > e ? null : next;
     }
+
+    public const int MaxTags = 20;
+
+    /// <summary>Tag ids as a template stores them (null when there are none).</summary>
+    public static string? JoinTags(IEnumerable<Guid>? tagIds)
+    {
+        var tags = (tagIds ?? []).Where(t => t != Guid.Empty).Distinct().ToList();
+        if (tags.Count > MaxTags)
+            throw new DomainException("recurring.too_many_tags", $"A template can have at most {MaxTags} tags.");
+        return tags.Count == 0 ? null : string.Join(',', tags);
+    }
+
+    public static IReadOnlyList<Guid> ParseTags(string? tags) =>
+        string.IsNullOrEmpty(tags) ? [] : tags.Split(',').Select(Guid.Parse).ToList();
 
     public static void Validate(int interval, DateOnly start, DateOnly? end, int? max)
     {
