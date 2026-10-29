@@ -117,6 +117,23 @@ public static class ProjectsApi
             await s.DeleteAsync(id, ct);
             return Results.NoContent();
         });
+        projects.MapGet("/rates", async (BillingRateService s, CancellationToken ct) => await s.ListAsync(ct));
+        projects.MapPost("/rates", async (BillingRateDetails r, BillingRateService s, CancellationToken ct) =>
+        {
+            var rate = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/projects/rates/{rate.Id}", rate);
+        });
+        projects.MapPut("/rates/{id:guid}", async (Guid id, BillingRateDetails r, BillingRateService s, CancellationToken ct) => await s.UpdateAsync(id, r, ct));
+        projects.MapDelete("/rates/{id:guid}", async (Guid id, BillingRateService s, CancellationToken ct) =>
+        {
+            await s.DeleteAsync(id, ct);
+            return Results.NoContent();
+        });
+
+        // The rate time would get from the rate card, and where it comes from.
+        projects.MapGet("/time/rate", async (Guid workerId, Guid? customerId, Guid? itemId, DateOnly? date, TimeService s, CancellationToken ct) =>
+            await s.QuoteRateAsync(workerId, customerId, itemId, date ?? DateOnly.FromDateTime(DateTime.Today), ct));
+
         projects.MapGet("/mileage-rates", async (MileageService s, CancellationToken ct) =>
             (await s.RatesAsync(ct)).Select(kv => new MileageRateRequest(kv.Key, kv.Value)));
         projects.MapPut("/mileage-rates", async (MileageRateRequest r, MileageService s, CancellationToken ct) =>

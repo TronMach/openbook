@@ -7,6 +7,19 @@
 {
     <h1>@_company.Name</h1>
 
+    @if (Editions.Shortcuts(_company.Edition) is { Count: > 0 } shortcuts)
+    {
+        <div class="report-list" style="margin-bottom: 1.5rem">
+            @foreach (var s in shortcuts)
+            {
+                <a class="card" href="@s.Href">
+                    <h3>@s.Label</h3>
+                    <p class="muted">@s.Hint</p>
+                </a>
+            }
+        </div>
+    }
+
     <div class="card">
         <h2>@L["Company"]</h2>
         <dl class="facts">

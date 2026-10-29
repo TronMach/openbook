@@ -86,7 +86,10 @@ public sealed class Project
 /// <param name="CostRate">What an hour of their time costs the business (wages and burden, or a contractor's rate).</param>
 /// <param name="BillRate">Their default hourly rate to customers; null uses the service's price.</param>
 /// <param name="Username">The OpenBook user who is this person, so their timer and time sheet know them.</param>
-public sealed record WorkerDetails(string Name, decimal CostRate = 0m, decimal? BillRate = null, string? Username = null, Guid? VendorId = null);
+/// <param name="Role">Their role for billing ("Partner", "Associate"): rate card lines can be for a role.</param>
+/// <param name="WeeklyHours">Hours they're available a week, for the utilization report; null leaves them out of it.</param>
+public sealed record WorkerDetails(
+    string Name, decimal CostRate = 0m, decimal? BillRate = null, string? Username = null, Guid? VendorId = null, string? Role = null, decimal? WeeklyHours = null);
 
 /// <summary>Someone whose time is tracked: an employee, an owner or a contractor (optionally linked to their vendor record).</summary>
 public sealed class Worker
@@ -97,8 +100,12 @@ public sealed class Worker
     public string Name { get; private set; }
     public decimal CostRate { get; private set; }
     public decimal? BillRate { get; private set; }
+    public const int MaxRoleLength = 50;
+
     public string? Username { get; private set; }
     public Guid? VendorId { get; private set; }
+    public string? Role { get; private set; }
+    public decimal? WeeklyHours { get; private set; }
     public bool IsActive { get; private set; }
 
     public static Worker Create(WorkerDetails details)
@@ -118,8 +125,12 @@ public sealed class Worker
             TimeEntry.CheckRate(bill, "Bill rate");
         CostRate = details.CostRate;
         BillRate = details.BillRate;
+        if (details.WeeklyHours is { } weekly && (weekly <= 0m || weekly > 168m || decimal.Round(weekly, 2) != weekly))
+            throw new DomainException("worker.weekly_hours_invalid", "Hours a week are above 0 and at most 168, with at most 2 decimals.");
         Username = Text.Optional(details.Username, 100, "worker.username_too_long", "User");
         VendorId = details.VendorId;
+        Role = Text.Optional(details.Role, MaxRoleLength, "worker.role_too_long", "Role");
+        WeeklyHours = details.WeeklyHours;
     }
 
     public void Deactivate() => IsActive = false;
@@ -163,6 +174,9 @@ public sealed class TimeEntry
     /// <summary>Per hour charged to the customer (0 when not billable).</summary>
     public decimal BillRate { get; private set; }
 
+    /// <summary>Where the bill rate came from ("Acme · Partner", "Entered"); null when not billable.</summary>
+    public string? RateSource { get; private set; }
+
     /// <summary>The worker's cost rate when the time was entered.</summary>
     public decimal CostRate { get; private set; }
 
@@ -180,18 +194,18 @@ public sealed class TimeEntry
 
     public decimal Cost => decimal.Round(Hours * CostRate, 2, MidpointRounding.AwayFromZero);
 
-    public static TimeEntry Create(TimeEntryDetails details, decimal billRate, decimal costRate, DateTimeOffset createdAt)
+    public static TimeEntry Create(TimeEntryDetails details, decimal billRate, decimal costRate, DateTimeOffset createdAt, string? rateSource = null)
     {
         var entry = new TimeEntry { Id = Guid.CreateVersion7(), CreatedAt = createdAt.ToUniversalTime() };
-        entry.Set(details, billRate, costRate, running: false);
+        entry.Set(details, billRate, costRate, running: false, rateSource);
         return entry;
     }
 
     /// <summary>A running timer: hours are filled in by <see cref="Stop"/>.</summary>
-    public static TimeEntry Start(TimeEntryDetails details, decimal billRate, decimal costRate, DateTimeOffset startedAt)
+    public static TimeEntry Start(TimeEntryDetails details, decimal billRate, decimal costRate, DateTimeOffset startedAt, string? rateSource = null)
     {
         var entry = new TimeEntry { Id = Guid.CreateVersion7(), CreatedAt = startedAt.ToUniversalTime() };
-        entry.Set(details with { Hours = 0m }, billRate, costRate, running: true);
+        entry.Set(details with { Hours = 0m }, billRate, costRate, running: true, rateSource);
         entry.StartedAt = startedAt.ToUniversalTime();
         return entry;
     }
@@ -206,10 +220,10 @@ public sealed class TimeEntry
         StartedAt = null;
     }
 
-    public void Update(TimeEntryDetails details, decimal billRate, decimal costRate)
+    public void Update(TimeEntryDetails details, decimal billRate, decimal costRate, string? rateSource = null)
     {
         EnsureEditable();
-        Set(details, billRate, costRate, running: IsRunning);
+        Set(details, billRate, costRate, running: IsRunning, rateSource);
     }
 
     public void EnsureEditable()
@@ -235,7 +249,7 @@ public sealed class TimeEntry
             throw new DomainException("time.rate_invalid", $"{name} is an amount from 0 with at most 4 decimals.");
     }
 
-    private void Set(TimeEntryDetails details, decimal billRate, decimal costRate, bool running)
+    private void Set(TimeEntryDetails details, decimal billRate, decimal costRate, bool running, string? rateSource)
     {
         ArgumentNullException.ThrowIfNull(details);
         if (!running && (details.Hours <= 0m || details.Hours > MaxHours || decimal.Round(details.Hours, 2) != details.Hours))
@@ -251,6 +265,7 @@ public sealed class TimeEntry
         ItemId = details.ItemId;
         Billable = details.Billable;
         BillRate = details.Billable ? billRate : 0m;
+        RateSource = details.Billable && rateSource is { Length: > 0 } source ? (source.Length > 100 ? source[..100] : source) : null;
         CostRate = costRate;
         Notes = Text.Optional(details.Notes, 1000, "time.notes_too_long", "Notes");
     }

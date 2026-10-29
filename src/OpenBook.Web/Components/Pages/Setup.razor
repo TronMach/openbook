@@ -42,6 +42,16 @@
                     </InputSelect>
                 </div>
             </div>
+            <div class="field">
+                <label for="edition">What kind of business is this?</label>
+                <InputSelect id="edition" @bind-Value="Input.Edition">
+                    @foreach (var edition in Enum.GetValues<Edition>())
+                    {
+                        <option value="@edition">@Editions.Label(edition): @Editions.Description(edition)</option>
+                    }
+                </InputSelect>
+                <span class="hint">Sets the menu and home page to suit. You can change it later in Settings; everything stays available either way.</span>
+            </div>
             <div class="row">
                 <div class="field">
                     <label for="email">Email <span class="muted">(optional)</span></label>
@@ -133,7 +143,8 @@
                 Input.LegalName,
                 Input.Email,
                 Input.Phone,
-                Input.Address), HttpContext.RequestAborted);
+                Input.Address,
+                Input.Edition), HttpContext.RequestAborted);
 
             State.MarkSetUp();
             await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp, owner.Role));
@@ -156,6 +167,8 @@
         public string? LegalName { get; set; }
 
         public BusinessType BusinessType { get; set; } = BusinessType.SoleProprietorship;
+
+        public Edition Edition { get; set; }
 
         // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
         [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]

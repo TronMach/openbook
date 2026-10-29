@@ -72,6 +72,12 @@ internal sealed class EfProjectStore(OpenBookDbContext db) : IProjectStore
 
     public void Add(MileageRate rate) => db.MileageRates.Add(rate);
 
+    public async Task<IReadOnlyList<BillingRate>> ListBillingRatesAsync(CancellationToken ct) => await db.BillingRates.ToListAsync(ct);
+
+    public void Add(BillingRate rate) => db.BillingRates.Add(rate);
+
+    public void Remove(BillingRate rate) => db.BillingRates.Remove(rate);
+
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 
     public void Remove(TimeEntry entry) => db.TimeEntries.Remove(entry);

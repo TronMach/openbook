@@ -1,21 +1,16 @@
 @using OpenBook.Domain.Companies
 @inherits LayoutComponentBase
+@inject OpenBook.Application.Companies.ICompanyStore Companies
 
 <AuthorizeView>
     <Authorized>
         <header class="topbar">
             <a class="brand" href="/">OpenBook</a>
             <nav>
-                <NavLink href="/" Match="NavLinkMatch.All">@L["Home"]</NavLink>
-                <NavLink href="/accounts">@L["Accounts"]</NavLink>
-                <NavLink href="/banking">@L["Banking"]</NavLink>
-                <NavLink href="/sales">@L["Sales"]</NavLink>
-                <NavLink href="/purchases">@L["Purchases"]</NavLink>
-                <NavLink href="/inventory">@L["Inventory"]</NavLink>
-                <NavLink href="/projects">@L["Projects"]</NavLink>
-                <NavLink href="/journal">@L["Journal"]</NavLink>
-                <NavLink href="/reports">@L["Reports"]</NavLink>
-                <NavLink href="/dashboard">@L["Dashboard"]</NavLink>
+                @foreach (var href in Editions.Menu(_edition))
+                {
+                    @MenuLink(href)
+                }
                 @if (context.User.Can(UserRole.Accountant))
                 {
                     <NavLink href="/settings">@L["Settings"]</NavLink>
@@ -48,3 +43,29 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private Edition _edition;
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _edition = (await Companies.GetCompanyAsync(HttpContext?.RequestAborted ?? default))?.Edition ?? Edition.General;
+
+    // Each label is written out so the string catalog finds it.
+    private RenderFragment MenuLink(string href) => href switch
+    {
+        "/" => @<NavLink href="/" Match="NavLinkMatch.All">@L["Home"]</NavLink>,
+        "/accounts" => @<NavLink href="/accounts">@L["Accounts"]</NavLink>,
+        "/banking" => @<NavLink href="/banking">@L["Banking"]</NavLink>,
+        "/sales" => @<NavLink href="/sales">@L["Sales"]</NavLink>,
+        "/purchases" => @<NavLink href="/purchases">@L["Purchases"]</NavLink>,
+        "/inventory" => @<NavLink href="/inventory">@L["Inventory"]</NavLink>,
+        "/projects" => @<NavLink href="/projects">@L["Projects"]</NavLink>,
+        "/time" => @<NavLink href="/time">@L["Time"]</NavLink>,
+        "/journal" => @<NavLink href="/journal">@L["Journal"]</NavLink>,
+        "/reports" => @<NavLink href="/reports">@L["Reports"]</NavLink>,
+        _ => @<NavLink href="/dashboard">@L["Dashboard"]</NavLink>,
+    };
+}

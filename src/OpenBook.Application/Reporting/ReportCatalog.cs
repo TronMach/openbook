@@ -193,6 +193,10 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Projects and time", ReportInputs.Period, DatePreset.ThisMonth),
         new("mileage-log", "Mileage log", "Business trips in a year with miles driven and their value at the standard mileage rate.",
             "Projects and time", ReportInputs.Year),
+        new("unbilled-work", "Unbilled work", "Billable time, mileage and expenses not invoiced yet, by client and project, with the oldest work waiting.",
+            "Projects and time", ReportInputs.AsOf | ReportInputs.Detail),
+        new("utilization", "Utilization", "Each person's billable and other hours, against the hours they're available, with what the billable time is worth.",
+            "Projects and time", ReportInputs.Period, DatePreset.LastMonth),
         new("fixed-assets", "Fixed asset register", "Each fixed asset's cost, accumulated depreciation and book value on a date.",
             "Fixed assets and loans", ReportInputs.AsOf),
         new("depreciation-schedule", "Depreciation schedule", "Each asset's scheduled depreciation for a year, by quarter.",
@@ -260,6 +264,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, ct),
             "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
             "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetNumber("year") ?? today.Year, ct),
+            "unbilled-work" => await Get<Projects.ProjectReports>().UnbilledWorkAsync(asOf, p.GetFlag("detail"), ct),
+            "utilization" => await Get<Projects.ProjectReports>().UtilizationAsync(from, range.To, ct),
             _ => plugins.Report(definition.Key) is { } plugin
                 ? await plugin.Run(services, p, ct)
                 : throw new DomainException("report.unknown", "Unknown report."),

@@ -1032,6 +1032,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("Edition")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
@@ -1891,6 +1896,46 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("PriceRules", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Projects.BillingRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Rate")
+                        .HasColumnType("bigint")
+                        .HasColumnName("RateTenThousandths");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateOnly?>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("WorkerId");
+
+                    b.ToTable("BillingRates", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Projects.MileageRate", b =>
                 {
                     b.Property<int>("Year")
@@ -2054,6 +2099,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("RateSource")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2095,12 +2144,20 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("Role")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Username")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<Guid?>("VendorId")
                         .HasColumnType("uuid");
+
+                    b.Property<long?>("WeeklyHours")
+                        .HasColumnType("bigint")
+                        .HasColumnName("WeeklyHoursTenThousandths");
 
                     b.HasKey("Id");
 
@@ -5399,6 +5456,24 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Targets");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Projects.BillingRate", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Sales.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Projects.Worker", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Projects.MileageTrip", b =>

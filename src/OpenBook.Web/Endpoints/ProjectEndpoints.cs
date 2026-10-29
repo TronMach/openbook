@@ -91,6 +91,15 @@ public static class ProjectEndpoints
         app.MapPost("/mileage/{id:guid}/delete", async (Guid id, MileageService mileage, CancellationToken ct) =>
             await Back("/mileage", () => mileage.DeleteAsync(id, ct))).RequireAuthorization();
 
+        app.MapPost("/time/rates", async (IFormCollection form, BillingRateService rates, CancellationToken ct) =>
+            await Back("/time/rates", async () => await rates.CreateAsync(RateDetails(form), ct))).RequireAuthorization();
+
+        app.MapPost("/time/rates/{id:guid}", async (Guid id, IFormCollection form, BillingRateService rates, CancellationToken ct) =>
+            await Back("/time/rates", async () => await rates.UpdateAsync(id, RateDetails(form), ct))).RequireAuthorization();
+
+        app.MapPost("/time/rates/{id:guid}/delete", async (Guid id, BillingRateService rates, CancellationToken ct) =>
+            await Back("/time/rates", () => rates.DeleteAsync(id, ct))).RequireAuthorization();
+
         app.MapPost("/mileage/rates", async (IFormCollection form, MileageService mileage, CancellationToken ct) =>
             await Back("/mileage", () => mileage.SetRateAsync(
                 int.TryParse(form["year"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var year) ? year : 0,
@@ -123,7 +132,23 @@ public static class ProjectEndpoints
         Number(form["costRate"]) ?? 0m,
         Number(form["billRate"]),
         Text(form["username"]),
-        Id(form["vendorId"]));
+        Id(form["vendorId"]),
+        Text(form["role"]),
+        Number(form["weeklyHours"]));
+
+    /// <summary>The "for" field is one choice: worker:{id}, role:{name}, item:{id}, or blank for the client alone.</summary>
+    private static BillingRateDetails RateDetails(IFormCollection form)
+    {
+        var target = form["for"].ToString();
+        var (kind, value) = target.IndexOf(':', StringComparison.Ordinal) is var i and > 0 ? (target[..i], target[(i + 1)..]) : ("", "");
+        return new BillingRateDetails(
+            Number(form["rate"]) ?? throw new DomainException("rate.rate_required", "Enter the hourly rate."),
+            Id(form["customerId"]),
+            kind == "worker" ? Id(value) : null,
+            kind == "role" ? Text(value) : null,
+            kind == "item" ? Id(value) : null,
+            Date(form["startsOn"]));
+    }
 
     private static async Task<IResult> Back(string page, Func<Task> change)
     {

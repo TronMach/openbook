@@ -4,6 +4,18 @@ using OpenBook.Domain.Pricing;
 
 namespace OpenBook.Domain.Companies;
 
+/// <summary>
+/// Which kind of business the books are set up for. An edition only changes defaults and what's shown first (menu
+/// order, home page shortcuts, which reports lead); every feature works in every edition and no data depends on it.
+/// </summary>
+public enum Edition
+{
+    General,
+    ProfessionalServices,
+    ECommerce,
+    Nonprofit,
+}
+
 public enum BusinessType
 {
     SoleProprietorship,
@@ -167,6 +179,11 @@ public sealed class Company
     public void ClearClosingPassword() => ClosingPasswordHash = null;
 
     public bool IsClosed(DateOnly date) => ClosingDate is { } closing && date <= closing;
+
+    public Edition Edition { get; private set; }
+
+    public void SetEdition(Edition edition) =>
+        Edition = Enum.IsDefined(edition) ? edition : throw new DomainException("company.edition_invalid", $"Unknown edition {edition}.");
 
     public void SetDefaultReportBasis(ReportBasis basis) =>
         DefaultReportBasis = Enum.IsDefined(basis)

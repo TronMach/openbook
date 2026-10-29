@@ -121,6 +121,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Projects.WorkerService>();
         services.AddScoped<OpenBook.Application.Projects.TimeService>();
         services.AddScoped<OpenBook.Application.Projects.MileageService>();
+        services.AddScoped<OpenBook.Application.Projects.BillingRateService>();
         services.AddScoped<OpenBook.Application.Projects.ProjectBilling>();
         services.AddScoped<OpenBook.Application.Projects.ProjectReports>();
         services.AddScoped<OpenBook.Application.Assets.AssetAccounts>();

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Projects;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
@@ -189,5 +190,93 @@ public sealed class ProjectsTests : IAsyncLifetime
             In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Ben", Username: LedgerDatabase.OwnerUsername)))));
         await In<WorkerService, Worker>(s => s.SetActiveAsync(_ana.Id, false));
         Assert.Equal("worker.inactive", await Refused(() => In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m)))));
+    }
+
+    private Task<ReportTable> Report(string key, string query) =>
+        _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync(key, ReportParameters.Parse(query)));
+
+    private static object? Cell(ReportTable table, string label, int column) =>
+        table.Rows.Single(r => r.Cells[0].Value as string == label).Cells[column].Value;
+
+    [Fact]
+    public async Task Time_takes_its_rate_from_the_rate_card_and_remembers_where_from()
+    {
+        var project = await NewProject();
+        var ben = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Ben", 30m, Role: "Associate", WeeklyHours: 40m)));
+        await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(150m, CustomerId: _acme.Id)));
+        await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(95m, CustomerId: _acme.Id, Role: "associate")));
+        await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(105m, CustomerId: _acme.Id, Role: "Associate", StartsOn: Mar2.AddDays(7))));
+
+        // The project inherits Acme's rates; Ben's role rate beats Acme's general one, and rises from the 9th.
+        var anaTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m, project.CustomerId, _consulting.Id, Billable: true)));
+        Assert.Equal((150m, "Acme Corp"), (anaTime.BillRate, anaTime.RateSource));
+        var benTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(ben.Id, Mar2, 2m, project.CustomerId, _consulting.Id, Billable: true)));
+        Assert.Equal((95m, "Acme Corp · Associate"), (benTime.BillRate, benTime.RateSource));
+        var later = await In<TimeService, ResolvedRate>(s => s.QuoteRateAsync(ben.Id, project.CustomerId, _consulting.Id, Mar2.AddDays(7)));
+        Assert.Equal(105m, later.Rate);
+
+        var typed = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(ben.Id, Mar2, 1m, project.CustomerId, _consulting.Id, Billable: true, BillRate: 80m)));
+        Assert.Equal((80m, "Entered"), (typed.BillRate, typed.RateSource));
+        var internalTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(ben.Id, Mar2, 1m, Notes: "Admin")));
+        Assert.Null(internalTime.RateSource);
+
+        Assert.Equal("rate.duplicate", await Refused(() => In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(99m, CustomerId: _acme.Id)))));
+        Assert.Equal(["Associate"], await In<BillingRateService, IReadOnlyList<string>>(s => s.RolesAsync()));
+    }
+
+    [Fact]
+    public async Task Unbilled_work_counts_what_wasnt_invoiced_by_the_date()
+    {
+        var project = await NewProject();
+        var early = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 2m, project.CustomerId, _consulting.Id, Billable: true)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2.AddDays(1), 1m, project.CustomerId, _consulting.Id, Billable: true)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 3m, project.CustomerId, Notes: "Not billable")));
+        await In<MileageService, MileageTrip>(s => s.CreateAsync(new MileageDetails(Mar2, 10m, "Site visit", CustomerId: project.CustomerId, Billable: true, BillRate: 0.7m)));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(project.CustomerId, Mar2.AddDays(10), [], TimeEntryIds: [early.Id])));
+
+        // On the 5th the invoice of the 12th didn't exist yet: all three hours were waiting.
+        var before = await Report("unbilled-work", "asOf=2026-03-05");
+        Assert.Equal(3m, Cell(before, "Acme Corp:Kitchen remodel", 1));
+        Assert.Equal(367m, Cell(before, "Acme Corp:Kitchen remodel", 5));
+        Assert.Equal(Mar2, Cell(before, "Acme Corp:Kitchen remodel", 6));
+
+        var after = await Report("unbilled-work", "asOf=2026-03-31&detail=true");
+        Assert.Equal(1m, Cell(after, "Total", 1));
+        Assert.Equal(127m, Cell(after, "Total", 5));
+        Assert.Contains(after.Rows, r => r.Cells[0].Value as string == "10 miles: Site visit");
+    }
+
+    [Fact]
+    public async Task Utilization_compares_billable_hours_with_available_hours()
+    {
+        await In<WorkerService, Worker>(s => s.UpdateAsync(_ana.Id, new WorkerDetails("Ana", 40m, 120m, LedgerDatabase.OwnerUsername, Role: "Partner", WeeklyHours: 20m)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 6m, _acme.Id, _consulting.Id, Billable: true)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2.AddDays(1), 2m, Notes: "Admin")));
+
+        // Mar 2-6, 2026 is Monday to Friday: 20 hours a week available.
+        var table = await Report("utilization", "preset=Custom&from=2026-03-02&to=2026-03-08");
+        Assert.Equal(5, ProjectReports.Weekdays(Mar2, Mar2.AddDays(6)));
+        Assert.Equal("Partner", Cell(table, "Ana", 1));
+        Assert.Equal(20m, Cell(table, "Ana", 2));
+        Assert.Equal(8m, Cell(table, "Ana", 3));
+        Assert.Equal(75m, Cell(table, "Ana", 6));
+        Assert.Equal(30m, Cell(table, "Ana", 7));
+        Assert.Equal(720m, Cell(table, "Ana", 8));
+    }
+
+    [Fact]
+    public async Task The_edition_is_saved_and_changes_nothing_else()
+    {
+        var settings = (Func<IServiceProvider, CompanySettingsService>)(sp => sp.GetRequiredService<CompanySettingsService>());
+        var company = await _db.InScope(sp => settings(sp).GetAsync());
+        Assert.Equal(Domain.Companies.Edition.General, company.Edition);
+        await _db.InScope(sp => settings(sp).UpdateAsync(new UpdateCompanySettingsCommand(company.Name, company.BusinessType, company.LegalName, company.Email,
+            company.Phone, company.Address, company.FiscalYearStartMonth, company.UseAccountNumbers, company.DefaultReportBasis, Domain.Companies.Edition.ProfessionalServices)));
+        Assert.Equal(Domain.Companies.Edition.ProfessionalServices, (await _db.InScope(sp => settings(sp).GetAsync())).Edition);
+
+        // Leaving it out keeps it.
+        await _db.InScope(sp => settings(sp).UpdateAsync(new UpdateCompanySettingsCommand(company.Name, company.BusinessType, company.LegalName, company.Email,
+            company.Phone, company.Address, company.FiscalYearStartMonth, true, company.DefaultReportBasis)));
+        Assert.Equal(Domain.Companies.Edition.ProfessionalServices, (await _db.InScope(sp => settings(sp).GetAsync())).Edition);
     }
 }

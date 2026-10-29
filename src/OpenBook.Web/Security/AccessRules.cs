@@ -81,6 +81,7 @@ public static class AccessRules
         ("/api/pricing/rounding", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/import", UserRole.Accountant, UserRole.Accountant),
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/time/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/reports/schedules", UserRole.Accountant, UserRole.Accountant),
         ("/accountant", UserRole.Accountant, UserRole.Accountant),
         ("/api/accountant", UserRole.Accountant, UserRole.Accountant),
@@ -91,6 +92,7 @@ public static class AccessRules
         ("/api/assets", UserRole.ViewOnly, UserRole.Accountant),
         ("/loans", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/projects/mileage-rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/projects/rates", UserRole.ViewOnly, UserRole.Accountant),
     ];
 
     /// <summary>Path segments of pages that exist to change something (forms, imports, interactive editors).</summary>

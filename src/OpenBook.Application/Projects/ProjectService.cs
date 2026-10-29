@@ -167,7 +167,7 @@ public sealed class WorkerService(IProjectStore store, IClock clock, ICurrentUse
     private AuditRecord Audit(AuditAction action, Worker w, string? before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, EntityType, w.Id, before, Snapshot(w));
 
-    private static string Snapshot(Worker w) => JsonSerializer.Serialize(new { w.Name, w.CostRate, w.BillRate, w.Username, w.VendorId, w.IsActive });
+    private static string Snapshot(Worker w) => JsonSerializer.Serialize(new { w.Name, w.CostRate, w.BillRate, w.Username, w.VendorId, w.Role, w.WeeklyHours, w.IsActive });
 }
 
 /// <summary>
@@ -193,8 +193,8 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
     public async Task<TimeEntry> CreateAsync(TimeEntryDetails details, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(details);
-        var (billRate, costRate) = await RatesAsync(details, ct);
-        var entry = TimeEntry.Create(details, billRate, costRate, clock.UtcNow);
+        var (billRate, costRate, source) = await RatesAsync(details, ct);
+        var entry = TimeEntry.Create(details, billRate, costRate, clock.UtcNow, source);
         store.Add(entry);
         store.Add(Audit(AuditAction.Created, entry, null));
         await store.SaveChangesAsync(ct);
@@ -209,8 +209,8 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
             throw new DomainException("time.timer_running", "That person already has a timer running. Stop it first.");
         var now = clock.UtcNow;
         details = details with { Date = DateOnly.FromDateTime(now.ToLocalTime().Date) };
-        var (billRate, costRate) = await RatesAsync(details, ct);
-        var entry = TimeEntry.Start(details, billRate, costRate, now);
+        var (billRate, costRate, source) = await RatesAsync(details, ct);
+        var entry = TimeEntry.Start(details, billRate, costRate, now, source);
         store.Add(entry);
         store.Add(Audit(AuditAction.Created, entry, null));
         await store.SaveChangesAsync(ct);
@@ -233,8 +233,8 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         entry.EnsureEditable();
         var before = Snapshot(entry);
-        var (billRate, costRate) = await RatesAsync(details, ct, existing: entry);
-        entry.Update(details, billRate, costRate);
+        var (billRate, costRate, source) = await RatesAsync(details, ct, existing: entry);
+        entry.Update(details, billRate, costRate, source);
         store.Add(Audit(AuditAction.Updated, entry, before));
         await store.SaveChangesAsync(ct);
         return entry;
@@ -249,7 +249,31 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         await store.SaveChangesAsync(ct);
     }
 
-    private async Task<(decimal Bill, decimal Cost)> RatesAsync(TimeEntryDetails details, CancellationToken ct, TimeEntry? existing = null)
+    /// <summary>The rate a time entry would get from the rate card (for showing on the time form before saving).</summary>
+    public async Task<ResolvedRate> QuoteRateAsync(Guid workerId, Guid? customerId, Guid? itemId, DateOnly date, CancellationToken ct = default)
+    {
+        var worker = await store.GetWorkerAsync(workerId, ct) ?? throw new EntityNotFoundException(WorkerService.EntityType, workerId);
+        var item = itemId is { } id ? (await sales.GetItemsAsync([id], ct)).GetValueOrDefault(id) : null;
+        return await ResolveAsync(worker, customerId, item, date, ct);
+    }
+
+    private async Task<ResolvedRate> ResolveAsync(Worker worker, Guid? customerId, Item? item, DateOnly date, CancellationToken ct)
+    {
+        // The client and its parents, nearest first: a project uses its own rates, then its client's.
+        var clients = new List<(Guid, string)>();
+        for (var id = customerId; id is { } current && clients.Count < 6;)
+        {
+            var customer = await sales.GetCustomerAsync(current, ct);
+            if (customer is null)
+                break;
+            clients.Add((customer.Id, customer.DisplayName));
+            id = customer.ParentId;
+        }
+
+        return BillingRates.Resolve(await store.ListBillingRatesAsync(ct), clients, worker, item?.Id, item?.Name, item?.Rate, date);
+    }
+
+    private async Task<(decimal Bill, decimal Cost, string? Source)> RatesAsync(TimeEntryDetails details, CancellationToken ct, TimeEntry? existing = null)
     {
         var worker = await store.GetWorkerAsync(details.WorkerId, ct) ?? throw new EntityNotFoundException(WorkerService.EntityType, details.WorkerId);
         if (!worker.IsActive && existing?.WorkerId != worker.Id)
@@ -271,9 +295,11 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
                 throw new DomainException("item.inactive", $"{item.Name} is inactive.");
         }
 
-        var bill = details.BillRate ?? worker.BillRate ?? item?.Rate ?? 0m;
         var cost = existing is not null && existing.WorkerId == worker.Id ? existing.CostRate : worker.CostRate;
-        return (bill, cost);
+        if (details.BillRate is { } typed)
+            return (typed, cost, "Entered");
+        var resolved = await ResolveAsync(worker, details.CustomerId, item, details.Date, ct);
+        return (resolved.Rate, cost, resolved.Source);
     }
 
     internal AuditRecord Audit(AuditAction action, TimeEntry t, string? before) =>
@@ -288,6 +314,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         t.ItemId,
         t.Billable,
         t.BillRate,
+        t.RateSource,
         t.CostRate,
         t.Notes,
         t.StartedAt,

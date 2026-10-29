@@ -74,6 +74,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
     public DbSet<OpenBook.Domain.Projects.MileageRate> MileageRates => Set<OpenBook.Domain.Projects.MileageRate>();
+    public DbSet<OpenBook.Domain.Projects.BillingRate> BillingRates => Set<OpenBook.Domain.Projects.BillingRate>();
     public DbSet<OpenBook.Domain.Assets.FixedAsset> FixedAssets => Set<OpenBook.Domain.Assets.FixedAsset>();
     public DbSet<OpenBook.Domain.Assets.DepreciationRun> DepreciationRuns => Set<OpenBook.Domain.Assets.DepreciationRun>();
     public DbSet<OpenBook.Domain.Assets.Loan> Loans => Set<OpenBook.Domain.Assets.Loan>();
@@ -251,6 +252,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Phone).HasMaxLength(50);
             b.Property(c => c.Address).HasMaxLength(1000);
             b.Property(c => c.DefaultReportBasis).HasConversion<string>().HasMaxLength(20);
+            b.Property(c => c.Edition).HasConversion<string>().HasMaxLength(30);
             b.Property(c => c.ClosingPasswordHash).HasMaxLength(500);
             b.Property(c => c.FormTemplate).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.FormAccentColor).HasMaxLength(7);
@@ -772,7 +774,21 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(w => w.Username).HasMaxLength(100);
             b.Property(w => w.CostRate).HasColumnName("CostRateTenThousandths").HasConversion(TenThousandths);
             b.Property(w => w.BillRate).HasColumnName("BillRateTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(w => w.Role).HasMaxLength(OpenBook.Domain.Projects.Worker.MaxRoleLength);
+            b.Property(w => w.WeeklyHours).HasColumnName("WeeklyHoursTenThousandths").HasConversion(NullableTenThousandths);
             b.HasOne<Vendor>().WithMany().HasForeignKey(w => w.VendorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.BillingRate>(b =>
+        {
+            b.ToTable("BillingRates");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Role).HasMaxLength(OpenBook.Domain.Projects.Worker.MaxRoleLength);
+            b.Property(r => r.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
+            b.HasIndex(r => r.CustomerId);
+            b.HasOne<Customer>().WithMany().HasForeignKey(r => r.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(r => r.WorkerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Item>().WithMany().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.TimeEntry>(b =>
@@ -786,6 +802,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(t => t.BillRate).HasColumnName("BillRateTenThousandths").HasConversion(TenThousandths);
             b.Property(t => t.CostRate).HasColumnName("CostRateTenThousandths").HasConversion(TenThousandths);
             b.Property(t => t.Notes).HasMaxLength(1000);
+            b.Property(t => t.RateSource).HasMaxLength(100);
             b.Ignore(t => t.IsRunning);
             b.Ignore(t => t.Amount);
             b.Ignore(t => t.Cost);

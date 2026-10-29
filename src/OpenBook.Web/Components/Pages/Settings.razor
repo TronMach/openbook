@@ -62,6 +62,30 @@
         </fieldset>
 
         <fieldset>
+            <legend>@L["Edition"]</legend>
+            <div class="field">
+                <label for="edition">@L["What kind of business is this?"]</label>
+                <InputSelect id="edition" @bind-Value="Input.Edition">
+                    @foreach (var edition in Enum.GetValues<Edition>())
+                    {
+                        <option value="@edition">@Editions.Label(edition)</option>
+                    }
+                </InputSelect>
+                <span class="hint">@Editions.Description(Input.Edition) @L["It only changes the menu, the home page and which reports come first; everything stays available."]</span>
+            </div>
+            @if (Editions.Menu(Edition.General).Except(Editions.Menu(Input.Edition)).ToList() is { Count: > 0 } left)
+            {
+                <p class="muted">
+                    @L["Not in the menu for this edition:"]
+                    @foreach (var href in left)
+                    {
+                        <a href="@href" style="margin-right: 0.5rem">@href.TrimStart('/')</a>
+                    }
+                </p>
+            }
+        </fieldset>
+
+        <fieldset>
             <legend>@L["Books"]</legend>
             <div class="row">
                 <div class="field">
@@ -147,6 +171,7 @@
             FiscalYearStartMonth = company.FiscalYearStartMonth,
             UseAccountNumbers = company.UseAccountNumbers,
             DefaultReportBasis = company.DefaultReportBasis,
+            Edition = company.Edition,
         };
     }
 
@@ -156,7 +181,7 @@
         {
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition));
             _saved = true;
         }
         catch (DomainException ex)
@@ -192,5 +217,7 @@
         public bool UseAccountNumbers { get; set; }
 
         public ReportBasis DefaultReportBasis { get; set; }
+
+        public Edition Edition { get; set; }
     }
 }

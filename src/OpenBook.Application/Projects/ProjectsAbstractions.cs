@@ -31,11 +31,16 @@ public interface IProjectStore
 
     Task<IReadOnlyList<MileageRate>> ListMileageRatesAsync(CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<BillingRate>> ListBillingRatesAsync(CancellationToken ct);
+
     void Add(Project project);
     void Add(Worker worker);
     void Add(TimeEntry entry);
     void Add(MileageTrip trip);
     void Add(MileageRate rate);
+    void Add(BillingRate rate);
+    void Remove(BillingRate rate);
     void Add(AuditRecord record);
     void Remove(TimeEntry entry);
     void Remove(MileageTrip trip);

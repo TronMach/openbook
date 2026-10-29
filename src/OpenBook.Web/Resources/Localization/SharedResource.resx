@@ -38,6 +38,12 @@
   <data name="Accounts" xml:space="preserve">
     <value>Accounts</value>
   </data>
+  <data name="Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Add a rate" xml:space="preserve">
+    <value>Add a rate</value>
+  </data>
   <data name="Add-ins" xml:space="preserve">
     <value>Add-ins</value>
   </data>
@@ -49,6 +55,9 @@
   </data>
   <data name="Amount" xml:space="preserve">
     <value>Amount</value>
+  </data>
+  <data name="an hour" xml:space="preserve">
+    <value>an hour</value>
   </data>
   <data name="Applied on" xml:space="preserve">
     <value>Applied on</value>
@@ -137,11 +146,23 @@
   <data name="Cash in the bank" xml:space="preserve">
     <value>Cash in the bank</value>
   </data>
+  <data name="Change a rate" xml:space="preserve">
+    <value>Change a rate</value>
+  </data>
   <data name="Change password" xml:space="preserve">
     <value>Change password</value>
   </data>
+  <data name="Check" xml:space="preserve">
+    <value>Check</value>
+  </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
+  </data>
+  <data name="Client" xml:space="preserve">
+    <value>Client</value>
+  </data>
+  <data name="Client or project" xml:space="preserve">
+    <value>Client or project</value>
   </data>
   <data name="Close the books" xml:space="preserve">
     <value>Close the books</value>
@@ -209,6 +230,9 @@
   <data name="Defaults to the name." xml:space="preserve">
     <value>Defaults to the name.</value>
   </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
   <data name="Description" xml:space="preserve">
     <value>Description</value>
   </data>
@@ -226,6 +250,12 @@
   </data>
   <data name="Each report can still switch basis." xml:space="preserve">
     <value>Each report can still switch basis.</value>
+  </data>
+  <data name="Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Edition" xml:space="preserve">
+    <value>Edition</value>
   </data>
   <data name="Email" xml:space="preserve">
     <value>Email</value>
@@ -284,6 +314,9 @@
   <data name="Fix what stopped a draft (reopen the period, reactivate the customer) and try again, or dismiss it and enter it by hand." xml:space="preserve">
     <value>Fix what stopped a draft (reopen the period, reactivate the customer) and try again, or dismiss it and enter it by hand.</value>
   </data>
+  <data name="For" xml:space="preserve">
+    <value>For</value>
+  </data>
   <data name="Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one." xml:space="preserve">
     <value>Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one.</value>
   </data>
@@ -292,6 +325,9 @@
   </data>
   <data name="Getting started" xml:space="preserve">
     <value>Getting started</value>
+  </data>
+  <data name="Give people a role under People and rates to set rates by role." xml:space="preserve">
+    <value>Give people a role under People and rates to set rates by role.</value>
   </data>
   <data name="Gross margin" xml:space="preserve">
     <value>Gross margin</value>
@@ -340,6 +376,9 @@
   </data>
   <data name="Invoice style" xml:space="preserve">
     <value>Invoice style</value>
+  </data>
+  <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
+    <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
   </data>
   <data name="Journal" xml:space="preserve">
     <value>Journal</value>
@@ -419,11 +458,17 @@
   <data name="No device has used the capture page yet." xml:space="preserve">
     <value>No device has used the capture page yet.</value>
   </data>
+  <data name="No rates yet: time uses each person's bill rate, else the service's price." xml:space="preserve">
+    <value>No rates yet: time uses each person's bill rate, else the service's price.</value>
+  </data>
   <data name="Not allowed" xml:space="preserve">
     <value>Not allowed</value>
   </data>
   <data name="Not Found" xml:space="preserve">
     <value>Not Found</value>
+  </data>
+  <data name="Not in the menu for this edition:" xml:space="preserve">
+    <value>Not in the menu for this edition:</value>
   </data>
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
@@ -460,6 +505,12 @@
   </data>
   <data name="People and connections" xml:space="preserve">
     <value>People and connections</value>
+  </data>
+  <data name="People and rates" xml:space="preserve">
+    <value>People and rates</value>
+  </data>
+  <data name="Person" xml:space="preserve">
+    <value>Person</value>
   </data>
   <data name="Phone" xml:space="preserve">
     <value>Phone</value>
@@ -502,6 +553,12 @@
   </data>
   <data name="Rate" xml:space="preserve">
     <value>Rate</value>
+  </data>
+  <data name="Rate card" xml:space="preserve">
+    <value>Rate card</value>
+  </data>
+  <data name="Rate per hour" xml:space="preserve">
+    <value>Rate per hour</value>
   </data>
   <data name="Ratios" xml:space="preserve">
     <value>Ratios</value>
@@ -575,6 +632,9 @@
   <data name="Search…" xml:space="preserve">
     <value>Search…</value>
   </data>
+  <data name="Service" xml:space="preserve">
+    <value>Service</value>
+  </data>
   <data name="Sets the reporting year. Changing it doesn't alter any transactions." xml:space="preserve">
     <value>Sets the reporting year. Changing it doesn't alter any transactions.</value>
   </data>
@@ -608,6 +668,9 @@
   <data name="starting balances when moving to OpenBook" xml:space="preserve">
     <value>starting balances when moving to OpenBook</value>
   </data>
+  <data name="Starts" xml:space="preserve">
+    <value>Starts</value>
+  </data>
   <data name="Status" xml:space="preserve">
     <value>Status</value>
   </data>
@@ -637,6 +700,9 @@
   </data>
   <data name="This recurring invoice is inactive, so no invoices are created from it." xml:space="preserve">
     <value>This recurring invoice is inactive, so no invoices are created from it.</value>
+  </data>
+  <data name="Time" xml:space="preserve">
+    <value>Time</value>
   </data>
   <data name="Times" xml:space="preserve">
     <value>Times</value>
@@ -677,8 +743,14 @@
   <data name="What" xml:space="preserve">
     <value>What</value>
   </data>
+  <data name="What kind of business is this?" xml:space="preserve">
+    <value>What kind of business is this?</value>
+  </data>
   <data name="Where you're signed in" xml:space="preserve">
     <value>Where you're signed in</value>
+  </data>
+  <data name="Which rate applies?" xml:space="preserve">
+    <value>Which rate applies?</value>
   </data>
   <data name="who can sign in, and their roles (admins)" xml:space="preserve">
     <value>who can sign in, and their roles (admins)</value>

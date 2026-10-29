@@ -9,10 +9,12 @@
     <div class="toolbar">
         <h1>People and rates</h1>
         <a class="button secondary" href="/time">Time</a>
+        <a class="button secondary" href="/time/rates">Rate card</a>
     </div>
     <p class="muted">
         Everyone whose time you track: employees, owners and contractors. The cost rate is what an hour of their time costs the business
-        and counts toward project profitability; the bill rate is what customers pay by default (blank uses the service's price).
+        and counts toward project profitability; the bill rate is what clients pay by default (blank uses the service's price), unless
+        the <a href="/time/rates">rate card</a> has a rate for the client, their role or the service. Hours a week feed the utilization report.
         Link a person to their OpenBook user so their own timer knows them.
     </p>
     @if (Error is not null)
@@ -23,14 +25,16 @@
     @if (_workers.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>Name</th><th class="num">Cost rate</th><th class="num">Bill rate</th><th>User</th><th>Vendor</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Role</th><th class="num">Cost rate</th><th class="num">Bill rate</th><th class="num">Hours a week</th><th>User</th><th>Vendor</th><th></th></tr></thead>
             <tbody>
                 @foreach (var w in _workers)
                 {
                     <tr class="@(w.IsActive ? "" : "muted")">
                         <td>@w.Name@(w.IsActive ? "" : " (inactive)")</td>
+                        <td>@w.Role</td>
                         <td class="num">@Labels.Price(w.CostRate)</td>
                         <td class="num">@(w.BillRate is { } b ? Labels.Price(b) : "")</td>
+                        <td class="num">@w.WeeklyHours?.ToString("0.##")</td>
                         <td>@w.Username</td>
                         <td>@(w.VendorId is { } v ? _vendors.FirstOrDefault(x => x.Id == v)?.DisplayName : "")</td>
                         <td><a href="/time/people?edit=@w.Id#edit">Edit</a></td>
@@ -56,6 +60,22 @@
                 <div class="field">
                     <label for="bill">Bill rate per hour <span class="muted">(optional)</span></label>
                     <input id="bill" name="billRate" class="amount" inputmode="decimal" value="@_editing?.BillRate?.ToString("0.00##")" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="role">Role <span class="muted">(optional, e.g. Partner)</span></label>
+                    <input id="role" name="role" maxlength="50" list="roles" value="@_editing?.Role" />
+                    <datalist id="roles">
+                        @foreach (var r in _workers.Select(w => w.Role).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+                        {
+                            <option value="@r"></option>
+                        }
+                    </datalist>
+                </div>
+                <div class="field">
+                    <label for="weekly">Hours a week <span class="muted">(optional, for utilization)</span></label>
+                    <input id="weekly" name="weeklyHours" class="amount" inputmode="decimal" value="@_editing?.WeeklyHours?.ToString("0.##")" />
                 </div>
             </div>
             <div class="row">

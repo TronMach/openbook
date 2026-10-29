@@ -2,6 +2,7 @@
 @using OpenBook.Application.Reporting
 @inject SavedReportService SavedReports
 @inject ReportCatalog Catalog
+@inject OpenBook.Application.Companies.ICompanyStore Companies
 
 <PageTitle>Reports · OpenBook</PageTitle>
 
@@ -45,7 +46,7 @@
         </table>
     }
 
-    @foreach (var group in Catalog.All.GroupBy(d => d.Group))
+    @foreach (var group in Catalog.All.GroupBy(d => d.Group).OrderBy(g => _first.IndexOf(g.Key) is var i and >= 0 ? i : int.MaxValue))
     {
         <h2>@group.Key</h2>
         <div class="report-list">
@@ -83,8 +84,14 @@
 
 @code {
     private IReadOnlyList<OpenBook.Domain.Reporting.SavedReport> _saved = [];
+    private List<string> _first = [];
 
-    protected override async Task OnInitializedAsync() => _saved = await SavedReports.ListAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _saved = await SavedReports.ListAsync();
+        if (await Companies.GetCompanyAsync(default) is { } company)
+            _first = Editions.ReportGroupsFirst(company.Edition).ToList();
+    }
 
     private string Href(OpenBook.Domain.Reporting.SavedReport report) =>
         (Catalog.Find(report.ReportKey)?.Path ?? "/reports") + (report.Query.Length > 0 ? "?" + report.Query : "");

@@ -174,6 +174,142 @@ public sealed class ProjectReports(
             Note: "The standard mileage rate covers the cost of running the car; parking and tolls are deducted separately. Check the rate for the year before filing.");
     }
 
+    /// <summary>
+    /// Work in progress: billable time, mileage and expenses not invoiced on <paramref name="asOf"/> (an invoice dated
+    /// later counts as not yet), by client and project, with the oldest work waiting. Detail lists each piece.
+    /// </summary>
+    public async Task<ReportTable> UnbilledWorkAsync(DateOnly asOf, bool detail, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var time = (await store.ListTimeAsync(new TimeFilter(To: asOf), ct)).Where(t => t.Billable && !t.IsRunning && t.CustomerId is not null).ToList();
+        var trips = (await store.ListMileageAsync(null, asOf, null, ct)).Where(t => t.Billable && t.CustomerId is not null).ToList();
+        var expenses = (await sales.ListBillableExpensesAsync(null, ct)).Where(e => e.IsBillable && e.Date <= asOf).ToList();
+        var invoiceIds = time.Select(t => t.InvoiceId).Concat(trips.Select(t => t.InvoiceId)).Concat(expenses.Select(e => e.InvoiceId)).OfType<Guid>().Distinct().ToList();
+        var invoiceDates = (await sales.GetInvoicesAsync(invoiceIds, ct)).ToDictionary(i => i.Id, i => i.Date);
+        bool Waiting(Guid? invoiceId) => invoiceId is not { } id || invoiceDates.GetValueOrDefault(id, DateOnly.MaxValue) > asOf;
+
+        var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
+        var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
+        var pieces = time.Where(t => Waiting(t.InvoiceId))
+            .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{workers[t.WorkerId].Name}{(t.Notes is null ? "" : ": " + t.Notes)}", t.Hours, t.Amount, 0m, 0m))
+            .Concat(trips.Where(t => Waiting(t.InvoiceId))
+                .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{t.Miles:0.#} miles: {t.Purpose}", 0m, 0m, t.Amount, 0m)))
+            .Concat(expenses.Where(e => Waiting(e.InvoiceId))
+                .Select(e => new UnbilledPiece(e.CustomerId, e.Date, e.Description, 0m, 0m, 0m, e.Amount)))
+            .ToList();
+
+        var rows = new List<ReportTableRow>();
+        foreach (var group in pieces.GroupBy(x => x.CustomerId).OrderBy(g => customers.GetValueOrDefault(g.Key, ""), StringComparer.OrdinalIgnoreCase))
+        {
+            var link = new ReportLink("customer", group.Key);
+            var name = customers.GetValueOrDefault(group.Key, "Unknown client");
+            if (detail)
+            {
+                rows.Add(new ReportTableRow([new ReportCell(name, link)], 0, ReportRowStyle.Section));
+                rows.AddRange(group.OrderBy(x => x.Date).Select(x => new ReportTableRow(
+                [
+                    x.Description, x.Hours == 0m ? ReportCell.Empty : new ReportCell(x.Hours), Money(x.Time), Money(x.Mileage), Money(x.Expenses), x.Total, new ReportCell(x.Date),
+                ], 1)));
+            }
+
+            rows.Add(new ReportTableRow(
+            [
+                detail ? $"Total for {name}" : new ReportCell(name, link), new ReportCell(group.Sum(x => x.Hours)), group.Sum(x => x.Time), group.Sum(x => x.Mileage),
+                group.Sum(x => x.Expenses), group.Sum(x => x.Total), new ReportCell(group.Min(x => x.Date)),
+            ], 0, detail ? ReportRowStyle.Subtotal : ReportRowStyle.Normal));
+        }
+
+        rows.Add(new ReportTableRow(
+        [
+            "Total", new ReportCell(pieces.Sum(x => x.Hours)), pieces.Sum(x => x.Time), pieces.Sum(x => x.Mileage), pieces.Sum(x => x.Expenses), pieces.Sum(x => x.Total),
+            pieces.Count == 0 ? ReportCell.Empty : new ReportCell(pieces.Min(x => x.Date)),
+        ], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Unbilled work",
+            [company.Name, $"As of {asOf:MMM d, yyyy}"],
+            [
+                new(detail ? "Client and work" : "Client"), new("Hours", ColumnFormat.Number), new("Time", ColumnFormat.Money), new("Mileage", ColumnFormat.Money),
+                new("Expenses", ColumnFormat.Money), new("Total", ColumnFormat.Money), new(detail ? "Date" : "Oldest", ColumnFormat.Date),
+            ],
+            rows,
+            Note: "Billable time, mileage and expenses (with markup) not on an invoice dated on or before this date, at the rates they'll be billed at. Retainers held aren't subtracted.");
+
+        static ReportCell Money(decimal amount) => amount == 0m ? ReportCell.Empty : new ReportCell(amount);
+    }
+
+    /// <summary>
+    /// Each person's hours over a period: billable and not, the billable share, and their utilization (billable hours
+    /// against their weekly hours over the period's weekdays), with what the billable time is worth and how much of
+    /// it is on invoices.
+    /// </summary>
+    public async Task<ReportTable> UtilizationAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var time = (await store.ListTimeAsync(new TimeFilter(from, to), ct)).Where(t => !t.IsRunning).ToLookup(t => t.WorkerId);
+        var weekdays = Weekdays(from, to);
+        var people = (await store.ListWorkersAsync(ct))
+            .Where(w => time[w.Id].Any() || (w.IsActive && w.WeeklyHours is not null))
+            .OrderBy(w => w.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var rows = new List<ReportTableRow>();
+        decimal totalCapacity = 0m, totalHours = 0m, totalBillable = 0m, totalValue = 0m, totalInvoiced = 0m;
+        foreach (var w in people)
+        {
+            var entries = time[w.Id].ToList();
+            var hours = entries.Sum(t => t.Hours);
+            var billable = entries.Where(t => t.Billable).Sum(t => t.Hours);
+            var capacity = w.WeeklyHours is { } weekly ? decimal.Round(weekly * weekdays / 5m, 2, MidpointRounding.AwayFromZero) : (decimal?)null;
+            var value = entries.Sum(t => t.Amount);
+            var invoiced = entries.Where(t => t.InvoiceId is not null).Sum(t => t.Amount);
+            rows.Add(new ReportTableRow(
+            [
+                w.Name, w.Role, capacity is { } c ? new ReportCell(c) : ReportCell.Empty, new ReportCell(hours), new ReportCell(billable), new ReportCell(hours - billable),
+                Percent(billable, hours), capacity is { } cap ? Percent(billable, cap) : ReportCell.Empty, value, invoiced,
+            ]));
+            totalCapacity += capacity ?? 0m;
+            totalHours += hours;
+            totalBillable += billable;
+            totalValue += value;
+            totalInvoiced += invoiced;
+        }
+
+        var withCapacity = people.Where(w => w.WeeklyHours is not null).Sum(w => time[w.Id].Where(t => t.Billable).Sum(t => t.Hours));
+        rows.Add(new ReportTableRow(
+        [
+            "Total", null, new ReportCell(totalCapacity), new ReportCell(totalHours), new ReportCell(totalBillable), new ReportCell(totalHours - totalBillable),
+            Percent(totalBillable, totalHours), Percent(withCapacity, totalCapacity), totalValue, totalInvoiced,
+        ], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Utilization",
+            [company.Name, Comparisons.Describe(from, to), $"{weekdays} weekdays"],
+            [
+                new("Person"), new("Role"), new("Available hours", ColumnFormat.Number), new("Hours", ColumnFormat.Number), new("Billable hours", ColumnFormat.Number),
+                new("Other hours", ColumnFormat.Number), new("Billable share", ColumnFormat.Percent), new("Utilization", ColumnFormat.Percent),
+                new("Billable value", ColumnFormat.Money), new("Invoiced", ColumnFormat.Money),
+            ],
+            rows,
+            Note: "Available hours are each person's hours a week spread over the period's weekdays (holidays aren't taken out). Utilization is billable hours against available hours; people without hours a week are listed without it.");
+
+        static ReportCell Percent(decimal part, decimal whole) =>
+            whole == 0m ? ReportCell.Empty : new ReportCell(decimal.Round(part / whole * 100m, 1, MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>Monday to Friday days from <paramref name="from"/> to <paramref name="to"/>, both included.</summary>
+    public static int Weekdays(DateOnly from, DateOnly to)
+    {
+        var count = 0;
+        for (var d = from; d <= to; d = d.AddDays(1))
+            if (d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+                count++;
+        return count;
+    }
+
+    private sealed record UnbilledPiece(Guid CustomerId, DateOnly Date, string Description, decimal Hours, decimal Time, decimal Mileage, decimal Expenses)
+    {
+        public decimal Total => Time + Mileage + Expenses;
+    }
+
     public static string Status(ProjectStatus status) => status switch
     {
         ProjectStatus.NotStarted => "Not started",

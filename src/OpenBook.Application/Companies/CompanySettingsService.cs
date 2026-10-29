@@ -14,7 +14,8 @@ public sealed record UpdateCompanySettingsCommand(
     string? Address,
     int FiscalYearStartMonth,
     bool UseAccountNumbers,
-    ReportBasis DefaultReportBasis);
+    ReportBasis DefaultReportBasis,
+    Edition? Edition = null);
 
 /// <summary>Company details and book settings, edited after setup. Home currency is fixed.</summary>
 public sealed class CompanySettingsService(ICompanyStore store, IClock clock, ICurrentUser user)
@@ -48,6 +49,8 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         company.SetFiscalYearStartMonth(command.FiscalYearStartMonth);
         company.SetAccountNumbering(command.UseAccountNumbers);
         company.SetDefaultReportBasis(command.DefaultReportBasis);
+        if (command.Edition is { } edition)
+            company.SetEdition(edition);
 
         var after = Snapshot(company);
         if (after != before)
@@ -70,5 +73,6 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         c.FiscalYearStartMonth,
         c.UseAccountNumbers,
         DefaultReportBasis = c.DefaultReportBasis.ToString(),
+        Edition = c.Edition.ToString(),
     });
 }

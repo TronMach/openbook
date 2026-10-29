@@ -87,7 +87,7 @@
                         <input id="hours" name="hours" class="short" inputmode="decimal" placeholder="1.5" />
                     </div>
                     <div class="field">
-                        <label for="rate">Rate per hour <span class="muted">(blank: the person's or the service's)</span></label>
+                        <label for="rate">Rate per hour <span class="muted">(blank: from the <a href="/time/rates">rate card</a>)</span></label>
                         <input id="rate" name="rate" class="amount" inputmode="decimal" />
                     </div>
                     <div class="field">
@@ -144,7 +144,7 @@
                         <td>@(t.ItemId is { } i ? _itemNames.GetValueOrDefault(i) : "")</td>
                         <td>@t.Notes</td>
                         <td class="num">@(t.IsRunning ? "running" : Labels.Quantity(t.Hours))</td>
-                        <td class="num">@(t.Billable ? Labels.Amount(t.Amount) : "")</td>
+                        <td class="num" title="@(t.Billable ? $"{Labels.Price(t.BillRate)} an hour: {t.RateSource ?? "rate"}" : null)">@(t.Billable ? Labels.Amount(t.Amount) : "")</td>
                         <td>
                             @if (t.InvoiceId is { } invoiceId)
                             {

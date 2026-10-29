@@ -1,0 +1,208 @@
+@page "/time/rates"
+@inject BillingRateService Rates
+@inject WorkerService WorkerService
+@inject TimeService TimeService
+@inject CustomerService CustomerService
+@inject ItemService ItemService
+
+<PageTitle>@L["Rate card"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Rate card"]</h1>
+        <a class="button secondary" href="/time/people">@L["People and rates"]</a>
+        <a class="button secondary" href="/time">@L["Time"]</a>
+    </div>
+    <p class="muted">
+        Hourly rates for clients, people, roles and services. Time takes the most specific rate when it's entered: a rate for the client
+        (or a project's client) with the person, their role or the service comes first, then the client's own rate, then rates for every
+        client by person, role or service, then the person's bill rate, then the service's price. A rate with a start date applies to
+        time from that date, so a yearly increase is a new line, not a change. Changing the card doesn't reprice time already entered.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_rates.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>@L["Client"]</th><th>@L["For"]</th><th class="num">@L["Rate"]</th><th>@L["Starts"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _rates)
+                {
+                    <tr>
+                        <td>@(r.CustomerId is { } c ? _customers.GetValueOrDefault(c, "?") : "Every client")</td>
+                        <td>@Target(r)</td>
+                        <td class="num">@Labels.Price(r.Rate)</td>
+                        <td>@(r.StartsOn is { } s ? Labels.Date(s) : "")</td>
+                        <td class="num">
+                            <a href="/time/rates?edit=@r.Id#edit">@L["Edit"]</a>
+                            <form method="post" action="/time/rates/@r.Id/delete" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link">@L["Delete"]</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="card"><p class="muted">@L["No rates yet: time uses each person's bill rate, else the service's price."]</p></div>
+    }
+
+    <div class="card" id="edit" style="margin-top: 1.5rem">
+        <h2>@(_editing is null ? L["Add a rate"] : L["Change a rate"])</h2>
+        <form method="post" action="@(_editing is null ? "/time/rates" : $"/time/rates/{_editing.Id}")" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="customer">@L["Client or project"]</label>
+                    <select id="customer" name="customerId" data-search>
+                        <option value="">Every client</option>
+                        @foreach (var (id, name) in _customers.OrderBy(c => c.Value, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <option value="@id" selected="@(id == _editing?.CustomerId)">@name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="for">@L["For"]</label>
+                    <select id="for" name="for">
+                        <option value="">The client's own rate (anyone, any service)</option>
+                        <optgroup label="Person">
+                            @foreach (var w in _workers)
+                            {
+                                <option value="worker:@w.Id" selected="@(w.Id == _editing?.WorkerId)">@w.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Role">
+                            @foreach (var role in _roles)
+                            {
+                                <option value="role:@role" selected="@(string.Equals(role, _editing?.Role, StringComparison.OrdinalIgnoreCase))">@role</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Service">
+                            @foreach (var item in _services)
+                            {
+                                <option value="item:@item.Id" selected="@(item.Id == _editing?.ItemId)">@item.Name</option>
+                            }
+                        </optgroup>
+                    </select>
+                    @if (_roles.Count == 0)
+                    {
+                        <span class="hint">@L["Give people a role under People and rates to set rates by role."]</span>
+                    }
+                </div>
+                <div class="field">
+                    <label for="rate">@L["Rate per hour"]</label>
+                    <input id="rate" name="rate" class="amount" inputmode="decimal" required value="@_editing?.Rate.ToString("0.00##")" />
+                </div>
+                <div class="field">
+                    <label for="starts">@L["Starts"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="starts" name="startsOn" type="date" value="@_editing?.StartsOn?.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit">@(_editing is null ? L["Add"] : L["Save"])</button>
+                @if (_editing is not null)
+                {
+                    <a href="/time/rates">@L["Cancel"]</a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Which rate applies?"]</h2>
+        <form method="get" action="/time/rates" data-enhance="false">
+            <div class="row">
+                <div class="field">
+                    <label for="try-worker">@L["Person"]</label>
+                    <select id="try-worker" name="tryWorker">
+                        @foreach (var w in _workers)
+                        {
+                            <option value="@w.Id" selected="@(w.Id == TryWorker)">@w.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="try-customer">@L["Client or project"]</label>
+                    <select id="try-customer" name="tryCustomer" data-search>
+                        <option value="">None</option>
+                        @foreach (var (id, name) in _customers.OrderBy(c => c.Value, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <option value="@id" selected="@(id == TryCustomer)">@name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="try-item">@L["Service"]</label>
+                    <select id="try-item" name="tryItem">
+                        <option value="">None</option>
+                        @foreach (var item in _services)
+                        {
+                            <option value="@item.Id" selected="@(item.Id == TryItem)">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="try-date">@L["Date"]</label>
+                    <input id="try-date" name="tryDate" type="date" value="@((TryDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit" class="secondary" disabled="@(_workers.Count == 0)">@L["Check"]</button></div>
+        </form>
+        @if (_quote is not null)
+        {
+            <p><strong>@Labels.Price(_quote.Rate)</strong> @L["an hour"] <span class="muted">(@_quote.Source)</span></p>
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<BillingRate> _rates = [];
+    private IReadOnlyList<Worker> _workers = [];
+    private IReadOnlyList<string> _roles = [];
+    private IReadOnlyList<Item> _services = [];
+    private IReadOnlyDictionary<Guid, string> _customers = new Dictionary<Guid, string>();
+    private BillingRate? _editing;
+    private ResolvedRate? _quote;
+
+    [SupplyParameterFromQuery] private Guid? Edit { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private Guid? TryWorker { get; set; }
+    [SupplyParameterFromQuery] private Guid? TryCustomer { get; set; }
+    [SupplyParameterFromQuery] private Guid? TryItem { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? TryDate { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _rates = await Rates.ListAsync();
+        _editing = _rates.FirstOrDefault(r => r.Id == Edit);
+        _workers = await WorkerService.ListAsync(includeInactive: true);
+        _roles = await Rates.RolesAsync();
+        _services = (await ItemService.ListAsync()).Where(i => i.Type is ItemType.Service or ItemType.NonInventory).ToList();
+        _customers = (await CustomerService.ListAsync(today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
+        if (TryWorker is { } worker)
+        {
+            try
+            {
+                _quote = await TimeService.QuoteRateAsync(worker, TryCustomer, TryItem, TryDate ?? today);
+            }
+            catch (DomainException ex)
+            {
+                Error = ex.Message;
+            }
+        }
+    }
+
+    private string Target(BillingRate r) =>
+        r.WorkerId is { } w ? _workers.FirstOrDefault(x => x.Id == w)?.Name ?? "?"
+        : r.Role is { } role ? $"Role: {role}"
+        : r.ItemId is { } i ? _services.FirstOrDefault(x => x.Id == i)?.Name ?? "?"
+        : "Anyone, any service";
+}

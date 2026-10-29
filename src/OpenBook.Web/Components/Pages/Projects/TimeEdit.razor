@@ -72,8 +72,12 @@
                         </div>
                     }
                     <div class="field">
-                        <label for="rate">Rate per hour</label>
-                        <input id="rate" name="rate" class="amount" inputmode="decimal" value="@(_entry.Billable ? _entry.BillRate.ToString("0.00##") : "")" />
+                        <label for="rate">Rate per hour <span class="muted">(blank: from the rate card)</span></label>
+                        <input id="rate" name="rate" class="amount" inputmode="decimal" value="@(_entry.Billable && _entry.RateSource is null or "Entered" ? _entry.BillRate.ToString("0.00##") : "")" />
+                        @if (_entry.Billable && _entry.RateSource is { } source && source != "Entered")
+                        {
+                            <span class="hint">Now @Labels.Price(_entry.BillRate) from @source. Saving looks the rate up again.</span>
+                        }
                     </div>
                     <div class="field">
                         <label><input type="checkbox" name="billable" value="true" checked="@_entry.Billable" /> Billable</label>
