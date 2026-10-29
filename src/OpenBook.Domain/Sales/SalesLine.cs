@@ -30,7 +30,7 @@ public enum SalesLineKind
 /// <param name="PriceSource">Set by the line builder for automatic prices, or kept when copying a line.</param>
 public sealed record SalesLineDraft(
     Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null,
-    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null, string? Lots = null)
+    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null, string? Lots = null, string? Group = null)
 {
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 }
@@ -86,6 +86,12 @@ public sealed class SalesLine
     public string? Lots { get; private set; }
 
     /// <summary>Records the lots or serials the sale actually took (or the return brought back).</summary>
+    /// <summary>
+    /// A heading the line is shown under with its neighbours, with a subtotal (on screen and on the PDF): the project
+    /// when a client is billed for several projects' work at once. Shown only; postings and tax ignore it.
+    /// </summary>
+    public string? Group { get; private set; }
+
     public void RecordLots(string? lots) => Lots = string.IsNullOrWhiteSpace(lots) ? null : lots.Length > 1000 ? lots[..1000] : lots;
 
     /// <param name="item">The draft's item, already looked up; null for a note line.</param>
@@ -131,6 +137,7 @@ public sealed class SalesLine
             PriceSource = item is null ? null
                 : Text.Optional(draft.PriceSource, 200, "sales.price_source_too_long", "Price source") ?? (rate == item.Rate ? null : ManualPrice),
             Lots = item is null ? null : Text.Optional(draft.Lots, 1000, "sales.lots_too_long", "Lot or serial numbers"),
+            Group = Text.Optional(draft.Group, 100, "sales.group_too_long", "Line group"),
         };
     }
 
@@ -251,9 +258,45 @@ public sealed class SalesLine
         Kind == SalesLineKind.Tax
             ? throw new InvalidOperationException("Tax lines are recalculated, not copied.")
             : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null,
-                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId, Lots: Lots);
+                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId, Lots: Lots, Group: Group);
 
     /// <summary>The drafts for a document's lines, leaving out its tax lines.</summary>
     public static List<SalesLineDraft> Drafts(IEnumerable<SalesLine> lines) =>
         lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList();
+}
+
+/// <summary>A line as shown: a heading before a group, the line itself, or the group's subtotal after it.</summary>
+public sealed record ShownSalesLine(SalesLine? Line, string? Heading, decimal? Subtotal)
+{
+    public static ShownSalesLine Of(SalesLine line) => new(line, null, null);
+}
+
+public static class SalesLineGroups
+{
+    /// <summary>
+    /// The document's lines (tax lines left out) in order, with a heading before each run of lines in the same group
+    /// and a subtotal after it. Lines without a group are shown as they are.
+    /// </summary>
+    public static IReadOnlyList<ShownSalesLine> Arrange(IEnumerable<SalesLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var ordered = lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).ToList();
+        var shown = new List<ShownSalesLine>();
+        for (var i = 0; i < ordered.Count;)
+        {
+            if (ordered[i].Group is not { } group)
+            {
+                shown.Add(ShownSalesLine.Of(ordered[i++]));
+                continue;
+            }
+
+            var run = ordered.Skip(i).TakeWhile(l => l.Group == group).ToList();
+            shown.Add(new ShownSalesLine(null, group, null));
+            shown.AddRange(run.Select(ShownSalesLine.Of));
+            shown.Add(new ShownSalesLine(null, $"Total for {group}", run.Sum(l => l.Amount)));
+            i += run.Count;
+        }
+
+        return shown;
+    }
 }

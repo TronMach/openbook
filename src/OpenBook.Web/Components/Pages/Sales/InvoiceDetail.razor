@@ -92,8 +92,16 @@
         <table class="data" style="margin-top: 1rem">
             <thead><tr><th>@L["Description"]</th><th class="num">@L["Qty"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Amount"]</th></tr></thead>
             <tbody>
-                @foreach (var line in _invoice.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
+                @foreach (var shown in SalesLineGroups.Arrange(_invoice.Lines))
                 {
+                    if (shown.Line is not { } line)
+                    {
+                        <tr class="@(shown.Subtotal is null ? "section" : "subtotal")">
+                            <td colspan="3"><strong>@shown.Heading</strong></td>
+                            <td class="num">@(shown.Subtotal is { } subtotal ? Labels.Amount(subtotal) : "")</td>
+                        </tr>
+                        continue;
+                    }
                     <tr>
                         <td>
                             @line.Description

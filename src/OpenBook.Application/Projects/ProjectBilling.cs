@@ -22,7 +22,8 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
     public const string MileagePriceSource = "Billable mileage";
     public const string MileageItemName = "Mileage";
 
-    internal async Task<ProjectCharges> ForInvoiceAsync(Guid customerId, IReadOnlyList<Guid> timeIds, IReadOnlyList<Guid> mileageIds, CancellationToken ct)
+    /// <param name="billed">The invoice's customer and the sub-customers (projects) billed with it.</param>
+    internal async Task<ProjectCharges> ForInvoiceAsync(IReadOnlySet<Guid> billed, IReadOnlyList<Guid> timeIds, IReadOnlyList<Guid> mileageIds, CancellationToken ct)
     {
         IReadOnlyList<TimeEntry> time = [];
         if (timeIds.Count > 0)
@@ -33,7 +34,7 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
                 throw new EntityNotFoundException(TimeService.EntityType, ids.First(id => time.All(t => t.Id != id)));
             foreach (var t in time)
             {
-                if (t.CustomerId != customerId)
+                if (t.CustomerId is not { } c || !billed.Contains(c))
                     throw new DomainException("time.wrong_customer", "Some of that time is for a different customer.");
                 if (!t.Billable || t.IsRunning)
                     throw new DomainException("time.not_billable", "Only stopped, billable time can be invoiced.");
@@ -51,7 +52,7 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
                 throw new EntityNotFoundException(MileageService.EntityType, ids.First(id => mileage.All(t => t.Id != id)));
             foreach (var m in mileage)
             {
-                if (m.CustomerId != customerId)
+                if (m.CustomerId is not { } c || !billed.Contains(c))
                     throw new DomainException("mileage.wrong_customer", "Some of that mileage is for a different customer.");
                 if (!m.Billable)
                     throw new DomainException("mileage.not_billable", "Only billable mileage can be invoiced.");
@@ -65,22 +66,24 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
             mileage.OrderBy(m => m.Date).ThenBy(m => m.CreatedAt).ToList());
     }
 
-    internal async Task<IReadOnlyList<SalesLineDraft>> DraftsAsync(ProjectCharges charges, CancellationToken ct)
+    /// <param name="groups">The line group for each customer's work (null when everything is the invoice customer's own).</param>
+    internal async Task<IReadOnlyList<SalesLineDraft>> DraftsAsync(ProjectCharges charges, IReadOnlyDictionary<Guid, string>? groups, CancellationToken ct)
     {
+        string? Group(Guid? customerId) => groups is not null && customerId is { } c ? groups.GetValueOrDefault(c) : null;
         var drafts = new List<SalesLineDraft>();
         if (charges.Time.Count > 0)
         {
             var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
             drafts.AddRange(charges.Time.Select(t => new SalesLineDraft(
                 t.ItemId, $"{t.Date:MMM d, yyyy} · {workers[t.WorkerId].Name}{(t.Notes is { } n ? ": " + n : "")}", t.Hours, t.BillRate,
-                PriceSource: TimePriceSource)));
+                PriceSource: TimePriceSource, Group: Group(t.CustomerId))));
         }
 
         if (charges.Mileage.Count > 0)
         {
             var itemId = await MileageItemIdAsync(ct);
             drafts.AddRange(charges.Mileage.Select(m => new SalesLineDraft(
-                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.BillRate, Taxable: false, PriceSource: MileagePriceSource)));
+                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.BillRate, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId))));
         }
 
         return drafts;

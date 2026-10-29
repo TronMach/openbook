@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Forms;
 using OpenBook.Application.Projects;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
@@ -81,8 +82,9 @@ public sealed class ProjectsTests : IAsyncLifetime
             In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 25m)))));
 
         Assert.Equal([billable.Id], (await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.OpenAsync(project.CustomerId))).Select(t => t.Id));
+        var stranger = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Stranger")));
         Assert.Equal("time.wrong_customer", await Refused(() => In<InvoiceService, Invoice>(s =>
-            s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [], TimeEntryIds: [billable.Id])))));
+            s.CreateAsync(new CreateInvoiceCommand(stranger.Id, Mar2, [], TimeEntryIds: [billable.Id])))));
 
         var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(project.CustomerId, Mar2.AddDays(1), [], TimeEntryIds: [billable.Id])));
         var line = Assert.Single(invoice.Lines);
@@ -278,5 +280,42 @@ public sealed class ProjectsTests : IAsyncLifetime
         await _db.InScope(sp => settings(sp).UpdateAsync(new UpdateCompanySettingsCommand(company.Name, company.BusinessType, company.LegalName, company.Email,
             company.Phone, company.Address, company.FiscalYearStartMonth, true, company.DefaultReportBasis)));
         Assert.Equal(Domain.Companies.Edition.ProfessionalServices, (await _db.InScope(sp => settings(sp).GetAsync())).Edition);
+    }
+
+    [Fact]
+    public async Task A_client_is_invoiced_for_several_projects_at_once_grouped_by_project()
+    {
+        var remodel = await NewProject("Remodel");
+        var deck = await NewProject("Deck");
+        var other = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Other Co")));
+        var deckTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m, deck.CustomerId, _consulting.Id, Billable: true)));
+        var remodelTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 2m, remodel.CustomerId, _consulting.Id, Billable: true)));
+        var acmeTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 0.5m, _acme.Id, _consulting.Id, Billable: true)));
+        var trip = await In<MileageService, MileageTrip>(s => s.CreateAsync(new MileageDetails(Mar2, 10m, "Site visit", CustomerId: deck.CustomerId, Billable: true, BillRate: 0.7m)));
+        var otherTime = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m, other.Id, _consulting.Id, Billable: true)));
+
+        // The client's open work includes its projects', but not another customer's.
+        var open = await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.OpenAsync(_acme.Id));
+        Assert.Equal(3, open.Count);
+        Assert.Single(await In<MileageService, IReadOnlyList<MileageTrip>>(s => s.OpenAsync(_acme.Id)));
+        Assert.Equal("time.wrong_customer", await Refused(() => In<InvoiceService, Invoice>(s =>
+            s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [], TimeEntryIds: [otherTime.Id])))));
+
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [],
+            TimeEntryIds: [deckTime.Id, remodelTime.Id, acmeTime.Id], MileageTripIds: [trip.Id])));
+        Assert.Equal(427m, invoice.Total);
+        var lines = invoice.Lines.OrderBy(l => l.LineNumber).ToList();
+        Assert.Equal(["Acme Corp", "Deck", "Deck", "Remodel"], lines.Select(l => l.Group));
+
+        var shown = SalesLineGroups.Arrange(invoice.Lines);
+        Assert.Equal(["Acme Corp", null, "Total for Acme Corp", "Deck", null, null, "Total for Deck", "Remodel", null, "Total for Remodel"], shown.Select(x => x.Heading));
+        Assert.Equal(127m, shown.Single(x => x.Heading == "Total for Deck").Subtotal);
+        var form = await In<FormService, SalesForm>(s => s.BuildAsync(FormKind.Invoice, invoice.Id));
+        Assert.Equal(FormLineStyle.Subtotal, form.Lines.Single(l => l.Description == "Total for Remodel").Style);
+
+        // An invoice for one project alone isn't grouped.
+        var more = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m, deck.CustomerId, _consulting.Id, Billable: true)));
+        var single = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(deck.CustomerId, Mar2, [], TimeEntryIds: [more.Id])));
+        Assert.Null(Assert.Single(single.Lines, l => l.Kind != SalesLineKind.Tax).Group);
     }
 }

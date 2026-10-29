@@ -67,7 +67,7 @@
                     {
                         <label class="check">
                             <input type="checkbox" checked="@_chosenBillable.Contains(b.Id)" @onchange="e => ToggleBillable(b.Id, e)" />
-                            <span>@Labels.Date(b.Date) · @b.Description · @Labels.Amount(b.Amount)@(b.MarkupPercent > 0m ? $" (cost {Labels.Amount(b.Cost)} + {b.MarkupPercent:0.####}%)" : "")</span>
+                            <span>@Whose(b.CustomerId)@Labels.Date(b.Date) · @b.Description · @Labels.Amount(b.Amount)@(b.MarkupPercent > 0m ? $" (cost {Labels.Amount(b.Cost)} + {b.MarkupPercent:0.####}%)" : "")</span>
                         </label>
                     }
                     <span class="hint">Ticked costs are added as "Billable Expenses" lines when you save: @Labels.Amount(BillableTotal) more on this invoice.</span>
@@ -82,17 +82,17 @@
                     {
                         <label class="check">
                             <input type="checkbox" checked="@_chosenTime.Contains(t.Id)" @onchange="e => Toggle(_chosenTime, t.Id, e)" />
-                            <span>@Labels.Date(t.Date) · @(_workerNames.GetValueOrDefault(t.WorkerId)) · @Labels.Quantity(t.Hours) h × @Labels.Price(t.BillRate) = @Labels.Amount(t.Amount)@(t.Notes is { } n ? $" · {n}" : "")</span>
+                            <span>@Whose(t.CustomerId)@Labels.Date(t.Date) · @(_workerNames.GetValueOrDefault(t.WorkerId)) · @Labels.Quantity(t.Hours) h × @Labels.Price(t.BillRate) = @Labels.Amount(t.Amount)@(t.Notes is { } n ? $" · {n}" : "")</span>
                         </label>
                     }
                     @foreach (var m in _trips)
                     {
                         <label class="check">
                             <input type="checkbox" checked="@_chosenTrips.Contains(m.Id)" @onchange="e => Toggle(_chosenTrips, m.Id, e)" />
-                            <span>@Labels.Date(m.Date) · @m.Purpose · @Labels.Quantity(m.Miles) mi × @Labels.Price(m.BillRate) = @Labels.Amount(m.Amount)</span>
+                            <span>@Whose(m.CustomerId)@Labels.Date(m.Date) · @m.Purpose · @Labels.Quantity(m.Miles) mi × @Labels.Price(m.BillRate) = @Labels.Amount(m.Amount)</span>
                         </label>
                     }
-                    <span class="hint">Ticked time and trips are added as lines when you save: @Labels.Amount(ProjectTotal) more on this invoice.</span>
+                    <span class="hint">Ticked time and trips are added as lines when you save: @Labels.Amount(ProjectTotal) more on this invoice. Work for more than one project is grouped by project, each with a subtotal.</span>
                 </fieldset>
             }
 
@@ -202,6 +202,10 @@
     }
 
     private Task PickCustomer(ChangeEventArgs e) => SetCustomerAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
+
+    /// <summary>"Remodel · " before a project's work on its client's invoice (lines are grouped by project).</summary>
+    private string Whose(Guid? customerId) =>
+        customerId is { } c && c != _customerId ? (_customers.FirstOrDefault(x => x.Id == c)?.DisplayName ?? "Project") + " · " : "";
 
     private async Task SetCustomerAsync(Guid? id)
     {

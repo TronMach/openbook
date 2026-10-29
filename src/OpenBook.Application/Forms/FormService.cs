@@ -153,16 +153,16 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         return totals;
     }
 
-    private static List<FormLine> Lines(IEnumerable<SalesLine> lines) => lines
-        .Where(l => l.Kind != SalesLineKind.Tax)
-        .OrderBy(l => l.LineNumber)
-        .Select(l => l.Kind switch
-        {
-            SalesLineKind.Note => new FormLine(l.Description, null, null, null),
-            SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount),
-            // Lot and serial numbers follow the description, so a customer's copy shows what was shipped.
-            _ => new FormLine(l.Lots is { } lots ? $"{l.Description} · {lots}" : l.Description, l.Quantity, l.Rate, l.Amount),
-        })
+    private static List<FormLine> Lines(IEnumerable<SalesLine> lines) => SalesLineGroups.Arrange(lines)
+        .Select(shown => shown.Line is not { } l
+            ? new FormLine(shown.Heading, null, null, shown.Subtotal, shown.Subtotal is null ? FormLineStyle.Heading : FormLineStyle.Subtotal)
+            : l.Kind switch
+            {
+                SalesLineKind.Note => new FormLine(l.Description, null, null, null),
+                SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount),
+                // Lot and serial numbers follow the description, so a customer's copy shows what was shipped.
+                _ => new FormLine(l.Lots is { } lots ? $"{l.Description} · {lots}" : l.Description, l.Quantity, l.Rate, l.Amount),
+            })
         .ToList();
 
     private async Task<Customer> RequiredCustomerAsync(Guid id, CancellationToken ct) =>

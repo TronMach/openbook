@@ -40,8 +40,12 @@ public sealed class BillableExpenseService(
     }
 
     /// <summary>Costs waiting to be billed to the customer, oldest first.</summary>
-    public async Task<IReadOnlyList<BillableExpense>> OpenAsync(Guid customerId, CancellationToken ct = default) =>
-        (await store.ListBillableExpensesAsync(customerId, ct)).Where(b => b.IsBillable && b.InvoiceId is null).ToList();
+    /// <summary>Costs waiting to be billed to the customer, including those of sub-customers (projects) billed with it.</summary>
+    public async Task<IReadOnlyList<BillableExpense>> OpenAsync(Guid customerId, CancellationToken ct = default)
+    {
+        var billed = CustomerTree.Billed(customerId, (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id));
+        return (await store.ListBillableExpensesAsync(null, ct)).Where(b => billed.Contains(b.CustomerId) && b.IsBillable && b.InvoiceId is null).ToList();
+    }
 
     public Task<IReadOnlyList<BillableExpense>> ListAsync(Guid? customerId = null, CancellationToken ct = default) => store.ListBillableExpensesAsync(customerId, ct);
 
@@ -77,7 +81,8 @@ public sealed class BillableExpenseService(
     }
 
     /// <summary>The billable expenses chosen for a new invoice of the customer, checked and tracked.</summary>
-    internal async Task<IReadOnlyList<BillableExpense>> ForInvoiceAsync(Guid customerId, IReadOnlyList<Guid> ids, CancellationToken ct)
+    /// <param name="billed">The invoice's customer and the sub-customers (projects) billed with it.</param>
+    internal async Task<IReadOnlyList<BillableExpense>> ForInvoiceAsync(IReadOnlySet<Guid> billed, IReadOnlyList<Guid> ids, CancellationToken ct)
     {
         if (ids.Count == 0)
             return [];
@@ -86,7 +91,7 @@ public sealed class BillableExpenseService(
             throw new EntityNotFoundException(EntityType, ids.First(id => found.All(b => b.Id != id)));
         foreach (var b in found)
         {
-            if (b.CustomerId != customerId)
+            if (!billed.Contains(b.CustomerId))
                 throw new DomainException("billable.wrong_customer", $"'{b.Description}' is billable to a different customer.");
             if (!b.IsBillable)
                 throw new DomainException("billable.not_billable", $"'{b.Description}' is a project cost, not billable.");

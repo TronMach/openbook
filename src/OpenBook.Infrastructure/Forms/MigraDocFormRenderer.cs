@@ -40,11 +40,13 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         Heading(table, look, ("Description", false), ("Qty", true), ("Rate", true), ("Amount", true));
         foreach (var line in form.Lines)
         {
-            Body(table, 1,
+            var row = Body(table, 1,
                 line.Description ?? "",
                 line.Quantity is { } q ? q.ToString("0.####", CultureInfo.CurrentCulture) : "",
                 line.Rate is { } r ? r.ToString("#,0.00##", CultureInfo.CurrentCulture) : "",
                 line.Amount is { } a ? Amount(a) : "");
+            if (line.Style != FormLineStyle.Normal)
+                row.Format.Font.Bold = true;
         }
 
         Totals(section, look, form);

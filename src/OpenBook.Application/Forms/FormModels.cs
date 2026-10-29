@@ -8,7 +8,18 @@ public sealed record FormParty(string Name, string? Address = null, string? Emai
 public sealed record FormStyle(FormTemplate Template, string AccentColor, string? Footer);
 
 /// <param name="Quantity">Null for notes and discount lines.</param>
-public sealed record FormLine(string? Description, decimal? Quantity, decimal? Rate, decimal? Amount);
+public enum FormLineStyle
+{
+    Normal,
+
+    /// <summary>A group's name before its lines.</summary>
+    Heading,
+
+    /// <summary>A group's total after its lines.</summary>
+    Subtotal,
+}
+
+public sealed record FormLine(string? Description, decimal? Quantity, decimal? Rate, decimal? Amount, FormLineStyle Style = FormLineStyle.Normal);
 
 public sealed record FormTotal(string Label, decimal Amount, bool Emphasis = false);
 

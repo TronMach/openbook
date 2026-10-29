@@ -101,15 +101,31 @@ public sealed class InvoiceService(
         }
 
         var drafts = command.Lines.ToList();
-        var billable = await billables.ForInvoiceAsync(customer.Id, command.BillableExpenseIds ?? [], ct);
+        // A client's invoice can take the work of projects (sub-customers) billed with it.
+        var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var billed = CustomerTree.Billed(customer.Id, customers);
+        var billable = await billables.ForInvoiceAsync(billed, command.BillableExpenseIds ?? [], ct);
+        var charges = await projectBilling.ForInvoiceAsync(billed, command.TimeEntryIds ?? [], command.MileageTripIds ?? [], ct);
+
+        // Work for more than one of them is grouped by whose it is, each with a subtotal.
+        var owners = billable.Select(b => (Guid?)b.CustomerId).Concat(charges.Time.Select(t => t.CustomerId)).Concat(charges.Mileage.Select(m => m.CustomerId)).Distinct().ToList();
+        var groups = owners.Count > 1 || owners.Any(o => o != customer.Id)
+            ? owners.OfType<Guid>().ToDictionary(o => o, o => customers.TryGetValue(o, out var c) ? c.DisplayName : "Other")
+            : null;
         if (billable.Count > 0)
         {
             var itemId = await billables.ItemIdAsync(ct);
-            drafts.AddRange(billable.Select(b => new SalesLineDraft(itemId, b.Description, 1m, b.Amount, PriceSource: BillableExpenseService.PriceSource)));
+            drafts.AddRange(billable.Select(b => new SalesLineDraft(itemId, b.Description, 1m, b.Amount, PriceSource: BillableExpenseService.PriceSource,
+                Group: groups?.GetValueOrDefault(b.CustomerId))));
         }
 
-        var charges = await projectBilling.ForInvoiceAsync(customer.Id, command.TimeEntryIds ?? [], command.MileageTripIds ?? [], ct);
-        drafts.AddRange(await projectBilling.DraftsAsync(charges, ct));
+        drafts.AddRange(await projectBilling.DraftsAsync(charges, groups, ct));
+        if (groups is not null)
+        {
+            // Keep each group's lines together (the invoice's own lines first), in the order they were added.
+            var groupOrder = groups.OrderBy(g => g.Key == customer.Id ? 0 : 1).ThenBy(g => g.Value, StringComparer.CurrentCultureIgnoreCase).Select(g => g.Value).Distinct().ToList();
+            drafts = [.. drafts.Select((d, i) => (d, i)).OrderBy(x => x.d.Group is { } g ? groupOrder.IndexOf(g) + 1 : 0).ThenBy(x => x.i).Select(x => x.d)];
+        }
 
         var number = Invoice.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))

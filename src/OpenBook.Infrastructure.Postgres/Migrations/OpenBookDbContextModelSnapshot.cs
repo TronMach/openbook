@@ -6424,6 +6424,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
 
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("uuid");
 
@@ -6666,6 +6670,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
 
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("uuid");
 
@@ -6818,6 +6826,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
+
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
 
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("uuid");
@@ -7281,6 +7293,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
 
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("uuid");
 
@@ -7417,6 +7433,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
+
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
 
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("uuid");

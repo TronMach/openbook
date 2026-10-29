@@ -6391,6 +6391,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("TEXT");
 
@@ -6631,6 +6635,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("TEXT");
 
@@ -6780,6 +6788,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
                                 .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("IncomeAccountId")
@@ -7238,6 +7250,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<Guid?>("IncomeAccountId")
                                 .HasColumnType("TEXT");
 
@@ -7371,6 +7387,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.Property<string>("Description")
                                 .HasMaxLength(1000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Group")
+                                .HasMaxLength(100)
                                 .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("IncomeAccountId")

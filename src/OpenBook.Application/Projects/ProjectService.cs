@@ -186,9 +186,13 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
     public async Task<IReadOnlyList<TimeEntry>> RunningAsync(Guid? workerId = null, CancellationToken ct = default) =>
         (await store.ListTimeAsync(new TimeFilter(WorkerId: workerId), ct)).Where(t => t.IsRunning).ToList();
 
-    /// <summary>Billable time for the customer waiting to be invoiced, oldest first.</summary>
-    public async Task<IReadOnlyList<TimeEntry>> OpenAsync(Guid customerId, CancellationToken ct = default) =>
-        (await store.ListTimeAsync(new TimeFilter(CustomerId: customerId), ct)).Where(t => t.Billable && !t.IsRunning && t.InvoiceId is null).ToList();
+    /// <summary>Billable time for the customer (and sub-customers billed with it) waiting to be invoiced, oldest first.</summary>
+    public async Task<IReadOnlyList<TimeEntry>> OpenAsync(Guid customerId, CancellationToken ct = default)
+    {
+        var billed = CustomerTree.Billed(customerId, (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id));
+        return (await store.ListTimeAsync(new TimeFilter(), ct))
+            .Where(t => t.CustomerId is { } c && billed.Contains(c) && t.Billable && !t.IsRunning && t.InvoiceId is null).ToList();
+    }
 
     public async Task<TimeEntry> CreateAsync(TimeEntryDetails details, CancellationToken ct = default)
     {
@@ -336,8 +340,12 @@ public sealed class MileageService(IProjectStore store, ISalesStore sales, ICloc
 
     public Task<MileageTrip?> GetAsync(Guid id, CancellationToken ct = default) => store.GetMileageAsync(id, ct);
 
-    public async Task<IReadOnlyList<MileageTrip>> OpenAsync(Guid customerId, CancellationToken ct = default) =>
-        (await store.ListMileageAsync(null, null, customerId, ct)).Where(t => t.Billable && t.InvoiceId is null).ToList();
+    /// <summary>Billable trips for the customer (and sub-customers billed with it) waiting to be invoiced.</summary>
+    public async Task<IReadOnlyList<MileageTrip>> OpenAsync(Guid customerId, CancellationToken ct = default)
+    {
+        var billed = CustomerTree.Billed(customerId, (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id));
+        return (await store.ListMileageAsync(null, null, null, ct)).Where(t => t.CustomerId is { } c && billed.Contains(c) && t.Billable && t.InvoiceId is null).ToList();
+    }
 
     /// <summary>The rate for each year: the IRS standard rates, replaced or added to by rates saved here.</summary>
     public async Task<IReadOnlyDictionary<int, decimal>> RatesAsync(CancellationToken ct = default)
