@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenBook.Application;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
@@ -84,6 +85,8 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.FolderBackupTarget>();
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.S3BackupTarget>();
         services.AddSingleton<OpenBook.Application.Banking.IBankConnectionClient, Banking.SimpleFinClient>();
+        services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway, Payments.StripeGateway>();
+        services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();

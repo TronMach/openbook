@@ -1,0 +1,107 @@
+@page "/portal/{Token}"
+@attribute [AllowAnonymous]
+@layout OpenBook.Web.Components.Layout.PortalLayout
+@inject CustomerPortalService Portal
+
+<PageTitle>@(_view is null ? "Account" : $"{_view.Company.Name} · your account")</PageTitle>
+
+@if (_view is null)
+{
+    <div class="card narrow">
+        <h1>This link doesn't work</h1>
+        <p>It may have been replaced or switched off. Ask the business that sent it for a new one.</p>
+    </div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(_view.Company.LegalName ?? _view.Company.Name)</h1>
+    </div>
+    <p class="muted">Account of <strong>@_view.Customer.DisplayName</strong>@(_view.Company.Email is { } email ? $". Questions? Write to {email}." : ".")</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="summary-bar">
+        <div><span class="label">You owe</span><span class="value">@Labels.Amount(_view.OpenInvoices.Sum(i => i.Balance))</span></div>
+        <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_view.OpenInvoices.Where(i => i.IsOverdue(_today)).Sum(i => i.Balance))</span></div>
+    </div>
+
+    <h2>Open invoices</h2>
+    @if (_view.OpenInvoices.Count == 0)
+    {
+        <div class="card"><p>Nothing to pay. Thank you!</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Balance</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var i in _view.OpenInvoices)
+                {
+                    <tr>
+                        <td><a href="/portal/@Token/invoices/@i.Id/pdf" target="_blank">@i.Number</a></td>
+                        <td>@Labels.Date(i.Date)</td>
+                        <td class="@(i.IsOverdue(_today) ? "out-of-balance" : null)">@Labels.Date(i.DueDate)</td>
+                        <td class="num">@Labels.Amount(i.Total)</td>
+                        <td class="num">@Labels.Amount(i.Balance)</td>
+                        <td>
+                            @if (_view.CanPayOnline)
+                            {
+                                <form method="post" action="/portal/@Token/invoices/@i.Id/pay" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit">Pay now</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h2>Recent activity</h2>
+    <table class="data">
+        <thead><tr><th>Date</th><th>What</th><th>Ref</th><th class="num">Amount</th><th class="num">Balance</th></tr></thead>
+        <tbody>
+            <tr class="muted"><td>@Labels.Date(_view.Statement.From)</td><td>Balance brought forward</td><td></td><td></td><td class="num">@Labels.Amount(_view.Statement.OpeningBalance)</td></tr>
+            @foreach (var line in _view.Statement.Lines)
+            {
+                <tr>
+                    <td>@Labels.Date(line.Date)</td>
+                    <td>@line.Description</td>
+                    <td>@line.Reference</td>
+                    <td class="num">@Labels.Amount(line.Amount)</td>
+                    <td class="num">@Labels.Amount(line.Balance)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_view.PaidInvoices.Count > 0)
+    {
+        <h2>Paid invoices</h2>
+        <table class="data">
+            <thead><tr><th>Invoice</th><th>Date</th><th class="num">Total</th></tr></thead>
+            <tbody>
+                @foreach (var i in _view.PaidInvoices)
+                {
+                    <tr><td><a href="/portal/@Token/invoices/@i.Id/pdf" target="_blank">@i.Number</a></td><td>@Labels.Date(i.Date)</td><td class="num">@Labels.Amount(i.Total)</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private PortalView? _view;
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+
+    [Parameter] public string Token { get; set; } = "";
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() => _view = await Portal.ViewAsync(Token);
+}

@@ -50,6 +50,7 @@ public static class WebSecurity
 
         services.AddHttpContextAccessor();
         services.AddScoped<CircuitUser>();
+        services.AddScoped<OnlinePaymentActor>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, UserCircuitHandler>());
         services.AddScoped<ICurrentUser, WebCurrentUser>();
         services.AddScoped<Operations>();
@@ -147,6 +148,19 @@ public sealed class SetupGateMiddleware(RequestDelegate next)
 
         await next(http);
     }
+}
+
+/// <summary>
+/// Names the actor "online payment" for the requests customers and the payment provider make without signing in
+/// (webhooks, the portal's "Pay now", the page after paying), so the audit log says where those payments came from.
+/// </summary>
+internal sealed class OnlinePaymentActor(CircuitUser circuit)
+{
+    public const string Name = "online payment";
+
+    private static readonly ClaimsPrincipal Principal = new(new ClaimsIdentity([new Claim(ClaimTypes.Name, Name)], authenticationType: "online-payment"));
+
+    public void Use() => circuit.Principal = Principal;
 }
 
 /// <summary>The signed-in user of an interactive circuit, where there is no HttpContext.</summary>

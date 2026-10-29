@@ -1,0 +1,143 @@
+@page "/purchases/receipts/{Id:guid}"
+@inject ReceiptService ReceiptService
+@inject AccountService AccountService
+@inject VendorService VendorService
+
+<PageTitle>Receipt · OpenBook</PageTitle>
+
+@if (_receipt is null)
+{
+    <div class="card"><p>That receipt doesn't exist. <a href="/purchases/receipts">Back to receipts</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Receipt: @_receipt.FileName</h1>
+        <a class="button secondary" href="/purchases/receipts">Receipts</a>
+        <a class="button secondary" href="/audit?entityId=@_receipt.Id">History</a>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_receipt.Status == ReceiptStatus.Recorded && _receipt.BankTransactionId is { } spendId)
+    {
+        <div class="alert notice" role="status">Recorded: <a href="/banking/transactions/@spendId">see the expense</a>.</div>
+    }
+    else if (_receipt.Status == ReceiptStatus.Dismissed)
+    {
+        <div class="alert notice" role="status">Dismissed.</div>
+    }
+    else
+    {
+        <div class="card">
+            <h2>Record as an expense</h2>
+            @if (_receipt.Text is null)
+            {
+                <p class="muted">Nothing could be read from this file; fill in the details from the receipt below.</p>
+            }
+            else
+            {
+                <p class="muted">Filled in from the receipt; check them against it below.@(_receipt.Tax is { } tax ? $" Tax on it: {Labels.Amount(tax)}." : "")</p>
+            }
+            <form method="post" action="/purchases/receipts/@_receipt.Id/record" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="vendor">Vendor</label>
+                        <select id="vendor" name="vendorId" data-search>
+                            <option value="">None (use the payee below)</option>
+                            @foreach (var v in _vendors)
+                            {
+                                <option value="@v.Id" selected="@(v.Id == _receipt.VendorId)">@v.DisplayName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="payee">Payee <span class="muted">(without a vendor)</span></label>
+                        <input id="payee" name="payee" maxlength="100" value="@(_receipt.VendorId is null ? _receipt.VendorName : null)" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="account">Paid from</label>
+                        <select id="account" name="accountId" required>
+                            @foreach (var a in _payFrom)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="category">Category</label>
+                        <select id="category" name="categoryId" data-search>
+                            <option value="">The vendor's default category</option>
+                            @foreach (var a in _categories)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input id="date" type="date" name="date" value="@((_receipt.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <div class="field">
+                        <label for="amount">Amount</label>
+                        <input id="amount" name="amount" class="amount" inputmode="decimal" required
+                               value="@(_receipt.Total?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
+                    </div>
+                    <div class="field">
+                        <label for="memo">Memo <span class="muted">(optional)</span></label>
+                        <input id="memo" name="memo" maxlength="1000" />
+                    </div>
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Record expense</button></div>
+            </form>
+            <form method="post" action="/purchases/receipts/@_receipt.Id/dismiss" data-enhance="false" class="actions">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Dismiss (not an expense, or entered already)</button>
+            </form>
+        </div>
+    }
+
+    <Attachments EntityType="receipt" EntityId="_receipt.Id" />
+
+    @if (_receipt.Text is { } text)
+    {
+        <details class="card" style="margin-top: 1rem">
+            <summary>Text read from the receipt</summary>
+            <pre style="white-space: pre-wrap">@text</pre>
+        </details>
+    }
+</div>
+
+@code {
+    private ReceiptCapture? _receipt;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _payFrom = [];
+    private List<Account> _categories = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _receipt = await ReceiptService.GetAsync(Id);
+        if (_receipt is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _payFrom = accounts.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+        _categories = accounts.Where(a => a.Type.ClassOf() is AccountClass.Expense || a.Type is AccountType.CostOfGoodsSold or AccountType.OtherCurrentAsset or AccountType.FixedAsset).ToList();
+        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(v => v.Vendor).ToList();
+    }
+}

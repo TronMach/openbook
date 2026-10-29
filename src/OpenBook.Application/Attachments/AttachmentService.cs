@@ -31,7 +31,7 @@ public sealed class AttachmentService(IAttachmentStore store, IClock clock, ICur
     /// <summary>What files can be attached to: the audit entity types of documents and records.</summary>
     public static readonly IReadOnlySet<string> EntityTypes = new HashSet<string>(StringComparer.Ordinal)
     {
-        "invoice", "payment", "sales_receipt", "estimate", "credit_memo", "refund", "deposit", "write_off", "sales_order", "retainer", "purchase_order",
+        "invoice", "payment", "sales_receipt", "estimate", "credit_memo", "refund", "deposit", "write_off", "sales_order", "retainer", "purchase_order", "receipt",
         "bill", "bill_payment", "vendor_credit", "vendor_refund", "sales_tax_payment",
         "bank_transaction", "journal_entry", "reconciliation", "customer", "vendor", "inventory_adjustment", "assembly_build", "landed_cost", "stock_transfer",
     };

@@ -159,6 +159,22 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .ThenBy(b => b.CreatedAt)
             .ToList();
 
+    public Task<OnlinePaymentSettings?> GetOnlinePaymentSettingsAsync(CancellationToken ct) => db.OnlinePaymentSettings.FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<PaymentLink>> ListPaymentLinksAsync(Guid invoiceId, CancellationToken ct) =>
+        await db.PaymentLinks.Where(l => l.InvoiceId == invoiceId).ToListAsync(ct);
+
+    public Task<PaymentLink?> GetPaymentLinkAsync(Guid id, CancellationToken ct) => db.PaymentLinks.SingleOrDefaultAsync(l => l.Id == id, ct);
+
+    public Task<PaymentLink?> FindPaymentLinkAsync(string sessionId, CancellationToken ct) => db.PaymentLinks.SingleOrDefaultAsync(l => l.SessionId == sessionId, ct);
+
+    public async Task<IReadOnlyList<PortalAccess>> ListPortalAccessAsync(Guid customerId, CancellationToken ct) =>
+        await db.PortalAccess.AsNoTracking().Where(a => a.CustomerId == customerId).ToListAsync(ct);
+
+    public Task<PortalAccess?> GetPortalAccessAsync(Guid id, CancellationToken ct) => db.PortalAccess.SingleOrDefaultAsync(a => a.Id == id, ct);
+
+    public Task<PortalAccess?> FindPortalAccessAsync(string tokenHash, CancellationToken ct) => db.PortalAccess.SingleOrDefaultAsync(a => a.TokenHash == tokenHash, ct);
+
     public void Add(Customer customer) => db.Customers.Add(customer);
 
     public void Add(Item item) => db.Items.Add(item);
@@ -182,6 +198,12 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public void Add(BadDebtWriteOff writeOff) => db.BadDebtWriteOffs.Add(writeOff);
 
     public void Add(SalesOrder order) => db.SalesOrders.Add(order);
+
+    public void Add(OnlinePaymentSettings settings) => db.OnlinePaymentSettings.Add(settings);
+
+    public void Add(PaymentLink link) => db.PaymentLinks.Add(link);
+
+    public void Add(PortalAccess access) => db.PortalAccess.Add(access);
 
     public void Add(Retainer retainer) => db.Retainers.Add(retainer);
 

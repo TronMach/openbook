@@ -1,0 +1,48 @@
+@page "/pay/done"
+@page "/pay/cancelled"
+@attribute [AllowAnonymous]
+@layout OpenBook.Web.Components.Layout.PortalLayout
+@inject OnlinePaymentService Online
+@inject NavigationManager Navigation
+@inject OpenBook.Web.Security.OnlinePaymentActor Actor
+
+<PageTitle>Payment · OpenBook</PageTitle>
+
+<div class="card narrow">
+    @if (Navigation.Uri.Contains("/pay/cancelled", StringComparison.Ordinal))
+    {
+        <h1>Payment cancelled</h1>
+        <p>Nothing was charged. You can pay from the link again whenever you're ready.</p>
+    }
+    else
+    {
+        <h1>Thank you</h1>
+        <p>@(_recorded ? "Your payment has been received." : "Your payment is being processed; it will show on your account shortly.")</p>
+    }
+</div>
+
+@code {
+    private bool _recorded;
+
+    [SupplyParameterFromQuery] private Guid? Invoice { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Invoice is not { } invoiceId || Navigation.Uri.Contains("/pay/cancelled", StringComparison.Ordinal))
+            return;
+        // Records the payment now if the provider's webhook hasn't (or can't reach this server).
+        Actor.Use();
+        try
+        {
+            foreach (var link in await Online.LinksAsync(invoiceId))
+                if (link.Status == PaymentLinkStatus.Open)
+                    _recorded |= (await Online.CheckAsync(link.Id)).Status == PaymentLinkStatus.Paid;
+                else
+                    _recorded |= link.Status == PaymentLinkStatus.Paid;
+        }
+        catch (DomainException)
+        {
+            // The webhook will record it; the customer needn't see why this check failed.
+        }
+    }
+}

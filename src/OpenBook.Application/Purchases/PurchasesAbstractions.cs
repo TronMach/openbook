@@ -72,6 +72,12 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first, without their file content.</summary>
     Task<IReadOnlyList<AchBatch>> ListAchBatchesAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<ReceiptCapture?> GetReceiptAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first.</summary>
+    Task<IReadOnlyList<ReceiptCapture>> ListReceiptsAsync(CancellationToken ct);
+
     void Add(Vendor vendor);
     void Add(Bill bill);
     void Add(BillPayment payment);
@@ -79,6 +85,7 @@ public interface IPurchasesStore
     void Add(VendorRefund refund);
     void Add(RecurringBill recurringBill);
     void Add(PurchaseOrder order);
+    void Add(ReceiptCapture receipt);
     void Add(PurchasingSettings settings);
     void Add(VendorBankAccount account);
     void Remove(VendorBankAccount account);

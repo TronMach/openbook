@@ -1,0 +1,67 @@
+@page "/purchases/receipts"
+@inject ReceiptService ReceiptService
+
+<PageTitle>Receipts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Receipts</h1>
+        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <a class="button secondary" href="@(ShowAll ? "/purchases/receipts" : "/purchases/receipts?showAll=true")">@(ShowAll ? "Waiting only" : "Show all")</a>
+    </div>
+    <p class="muted">
+        Upload receipts as they come in; OpenBook reads the vendor, date, total and tax from PDFs and text@(ReceiptService.CanReadImages ? " and photos" : "")
+        (on this computer: nothing is sent anywhere), and you record each as an expense with the receipt attached.
+        @if (!ReceiptService.CanReadImages)
+        {
+            <span>Photos are kept but not read until Tesseract OCR is installed and <code>OpenBook:Ocr:TesseractPath</code> points at it.</span>
+        }
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <form method="post" action="/purchases/receipts/upload" enctype="multipart/form-data" data-enhance="false" class="inline">
+            <AntiforgeryToken />
+            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt" required aria-label="Receipt file" />
+            <button type="submit">Upload receipt</button>
+        </form>
+    </div>
+
+    @if (_receipts.Count == 0)
+    {
+        <div class="card"><p>@(ShowAll ? "No receipts yet." : "No receipts waiting.")</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Uploaded</th><th>File</th><th>Vendor</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var r in _receipts)
+                {
+                    <tr class="@(r.Status == ReceiptStatus.Dismissed ? "inactive" : null)">
+                        <td>@r.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td><a href="/purchases/receipts/@r.Id">@r.FileName</a></td>
+                        <td>@r.VendorName</td>
+                        <td>@(r.Date is { } d ? Labels.Date(d) : "")</td>
+                        <td class="num">@(r.Total is { } t ? Labels.Amount(t) : "")</td>
+                        <td>@(r.Status == ReceiptStatus.New ? "To record" : r.Status.ToString())</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ReceiptCapture> _receipts = [];
+
+    [SupplyParameterFromQuery] private bool ShowAll { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _receipts = (await ReceiptService.ListAsync()).Where(r => ShowAll || r.Status == ReceiptStatus.New).ToList();
+}

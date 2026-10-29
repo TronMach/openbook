@@ -1,0 +1,98 @@
+@page "/settings/online-payments"
+@inject OnlinePaymentService Online
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+
+<PageTitle>Online payments · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Online payments</h1>
+        <a class="button secondary" href="/settings">Settings</a>
+        <a class="button secondary" href="/audit?entityType=online_payment_settings">History</a>
+    </div>
+    <p class="muted">
+        Let customers pay invoices by card through Stripe Checkout: from a link on the invoice, its email, or their portal. Each payment is
+        recorded as a customer payment into the account below, usually Undeposited Funds, so Stripe's payouts can be grouped into bank deposits.
+        Stripe's fees aren't recorded automatically; enter them as an expense from its payout statement.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+
+    <div class="card">
+        <form method="post" action="/settings/online-payments" data-enhance="false">
+            <AntiforgeryToken />
+            <label class="check">
+                <input type="checkbox" name="enabled" value="true" checked="@_settings.Enabled" />
+                <span>Take payments online</span>
+            </label>
+            <div class="row">
+                <div class="field">
+                    <label for="secret">Stripe secret key</label>
+                    <input id="secret" name="secretKey" type="password" autocomplete="off" placeholder="@(_settings.ProtectedSecretKey is null ? "sk_live_… or sk_test_…" : "Saved; enter a new one to change it")" />
+                    @if (_settings.ProtectedSecretKey is not null)
+                    {
+                        <label class="check"><input type="checkbox" name="clearSecretKey" value="true" /> <span>Remove the saved key</span></label>
+                    }
+                </div>
+                <div class="field">
+                    <label for="hook">Webhook signing secret</label>
+                    <input id="hook" name="webhookSecret" type="password" autocomplete="off" placeholder="@(_settings.ProtectedWebhookSecret is null ? "whsec_…" : "Saved; enter a new one to change it")" />
+                    @if (_settings.ProtectedWebhookSecret is not null)
+                    {
+                        <label class="check"><input type="checkbox" name="clearWebhookSecret" value="true" /> <span>Remove the saved secret</span></label>
+                    }
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="deposit">Deposit payments to</label>
+                    <select id="deposit" name="depositAccountId">
+                        <option value="">Choose…</option>
+                        @foreach (var a in _deposit)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _settings.DepositAccountId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="url">Public address of OpenBook</label>
+                    <input id="url" name="publicUrl" value="@(_settings.PublicUrl ?? _here)" maxlength="200" />
+                    <span class="hint">Where customers come back to after paying, and the start of portal links.</span>
+                </div>
+            </div>
+            <p class="hint">
+                In Stripe's dashboard, add a webhook endpoint at <code>@(_settings.PublicUrl ?? _here)/hooks/stripe</code> for the events
+                <code>checkout.session.completed</code>, <code>checkout.session.async_payment_succeeded</code> and <code>checkout.session.expired</code>,
+                and paste its signing secret above. Without it (say, OpenBook isn't reachable from the internet), payments are recorded when
+                the customer comes back to the thank-you page or when you check the link on the invoice.
+            </p>
+            <div class="actions"><button type="submit">Save</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private OnlinePaymentSettings _settings = default!;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _deposit = [];
+    private string _here = "";
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await Online.GetSettingsAsync();
+        _chart = await AccountService.GetChartAsync();
+        _deposit = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).ToList();
+        _here = Navigation.BaseUri.TrimEnd('/');
+    }
+}

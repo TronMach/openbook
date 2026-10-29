@@ -62,6 +62,9 @@ public static class DependencyInjection
         services.AddScoped<PurchaseOrderService>();
         services.AddScoped<BillApprovalService>();
         services.AddScoped<AchService>();
+        services.AddScoped<OnlinePaymentService>();
+        services.AddScoped<CustomerPortalService>();
+        services.AddScoped<ReceiptService>();
         services.AddScoped<RetainerService>();
         services.AddScoped<BillableExpenseService>();
         services.AddScoped<CollectionService>();

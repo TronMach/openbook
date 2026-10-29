@@ -1,0 +1,72 @@
+@* An invoice's online payment links: make one to send the customer, see whether it's been paid, or check with the provider. *@
+@inject OnlinePaymentService Online
+
+@if (_ready || _links.Count > 0)
+{
+    <div class="card no-print" id="online" style="margin-top: 1.5rem">
+        <h2>Online payment</h2>
+        @if (_links.Count == 0)
+        {
+            <p class="muted">No payment link yet. Emailing the invoice adds one automatically.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Made</th><th class="num">Amount</th><th>Status</th><th>Link</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var link in _links)
+                    {
+                        <tr class="@(link.Status == PaymentLinkStatus.Expired ? "inactive" : null)">
+                            <td>@link.CreatedAt.ToLocalTime().ToString("g")</td>
+                            <td class="num">@Labels.Amount(link.Amount)</td>
+                            <td>
+                                @link.Status
+                                @if (link.CustomerPaymentId is { } paymentId)
+                                {
+                                    <span> · <a href="/sales/payments/@paymentId">payment</a></span>
+                                }
+                            </td>
+                            <td>
+                                @if (link.Status == PaymentLinkStatus.Open)
+                                {
+                                    <input readonly value="@link.Url" aria-label="Payment link" onclick="this.select()" />
+                                }
+                            </td>
+                            <td>
+                                @if (link.Status == PaymentLinkStatus.Open)
+                                {
+                                    <form method="post" action="/sales/payment-links/@link.Id/check" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="invoiceId" value="@InvoiceId" />
+                                        <button type="submit" class="secondary">Check if paid</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @if (_ready && IsOpen)
+        {
+            <form method="post" action="/sales/invoices/@InvoiceId/payment-link" data-enhance="false" class="actions">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Get a payment link for the balance</button>
+            </form>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<PaymentLink> _links = [];
+    private bool _ready;
+
+    [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _ready = (await Online.GetSettingsAsync()).IsReady;
+        _links = await Online.LinksAsync(InvoiceId);
+    }
+}

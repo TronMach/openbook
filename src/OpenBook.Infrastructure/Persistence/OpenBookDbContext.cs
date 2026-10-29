@@ -58,6 +58,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<BadDebtWriteOff> BadDebtWriteOffs => Set<BadDebtWriteOff>();
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<OnlinePaymentSettings> OnlinePaymentSettings => Set<OnlinePaymentSettings>();
+    public DbSet<PaymentLink> PaymentLinks => Set<PaymentLink>();
+    public DbSet<PortalAccess> PortalAccess => Set<PortalAccess>();
+    public DbSet<ReceiptCapture> ReceiptCaptures => Set<ReceiptCapture>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
     public DbSet<AchSettings> AchSettings => Set<AchSettings>();
@@ -1104,6 +1108,62 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(w => w.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(w => w.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(w => w.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OnlinePaymentSettings>(b =>
+        {
+            b.ToTable("OnlinePaymentSettings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Provider).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.ProtectedSecretKey).HasMaxLength(2000);
+            b.Property(s => s.ProtectedWebhookSecret).HasMaxLength(2000);
+            b.Property(s => s.PublicUrl).HasMaxLength(200);
+            b.Ignore(s => s.IsReady);
+            b.HasOne<Account>().WithMany().HasForeignKey(s => s.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PaymentLink>(b =>
+        {
+            b.ToTable("PaymentLinks");
+            b.HasKey(l => l.Id);
+            b.Property(l => l.Provider).HasConversion<string>().HasMaxLength(20);
+            b.Property(l => l.SessionId).HasMaxLength(200);
+            b.HasIndex(l => l.SessionId).IsUnique();
+            b.Property(l => l.Url).HasMaxLength(2000);
+            b.Property(l => l.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(l => l.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(l => l.PaymentReference).HasMaxLength(200);
+            b.HasIndex(l => l.InvoiceId);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(l => l.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<CustomerPayment>().WithMany().HasForeignKey(l => l.CustomerPaymentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PortalAccess>(b =>
+        {
+            b.ToTable("PortalAccess");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.TokenHash).HasMaxLength(64);
+            b.HasIndex(a => a.TokenHash).IsUnique();
+            b.Property(a => a.Hint).HasMaxLength(10);
+            b.Property(a => a.CreatedBy).HasMaxLength(200);
+            b.Ignore(a => a.IsActive);
+            b.HasIndex(a => a.CustomerId);
+            b.HasOne<Customer>().WithMany().HasForeignKey(a => a.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ReceiptCapture>(b =>
+        {
+            b.ToTable("ReceiptCaptures");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.FileName).HasMaxLength(255);
+            b.Property(r => r.CreatedBy).HasMaxLength(200);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.Text).HasMaxLength(ReceiptCapture.MaxTextLength);
+            b.Property(r => r.VendorName).HasMaxLength(200);
+            b.Property(r => r.Total).HasColumnName("TotalMinor").HasConversion(NullableMinorUnits);
+            b.Property(r => r.Tax).HasColumnName("TaxMinor").HasConversion(NullableMinorUnits);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(r => r.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<BankTransaction>().WithMany().HasForeignKey(r => r.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PurchaseOrder>(b =>

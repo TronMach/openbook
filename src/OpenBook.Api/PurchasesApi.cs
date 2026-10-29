@@ -145,6 +145,18 @@ internal static class PurchasesApi
             return Results.Created($"/api/purchases/bills/{bill.Id}", BillResponse.From(bill));
         });
 
+        purchases.MapGet("/receipts", async (ReceiptService s, CancellationToken ct) => await s.ListAsync(ct));
+        purchases.MapGet("/receipts/{id:guid}", async (Guid id, ReceiptService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } r ? Results.Ok(r) : Results.NotFound());
+        purchases.MapPost("/receipts", async (HttpRequest request, string fileName, ReceiptService s, CancellationToken ct) =>
+        {
+            var receipt = await s.UploadAsync(fileName, request.Body, ct);
+            return Results.Created($"/api/purchases/receipts/{receipt.Id}", receipt);
+        });
+        purchases.MapPost("/receipts/{id:guid}/record", async (Guid id, RecordReceiptCommand r, ReceiptService s, CancellationToken ct) =>
+            new { BankTransactionId = (await s.RecordAsync(id, r, ct)).Id });
+        purchases.MapPost("/receipts/{id:guid}/dismiss", async (Guid id, ReceiptService s, CancellationToken ct) => await s.DismissAsync(id, ct));
+
         purchases.MapGet("/approvals", async (BillApprovalService s, CancellationToken ct) => (await s.PendingAsync(ct)).Select(BillResponse.From));
         purchases.MapPost("/approvals/{billId:guid}/approve", async (Guid billId, ApprovalRequest r, BillApprovalService s, CancellationToken ct) =>
             BillResponse.From(await s.ApproveAsync(billId, r.Note, ct)));

@@ -100,6 +100,17 @@ public sealed record BillableExpenseResponse(
         new(b.Id, b.Kind, b.DocumentId, b.LineNumber, b.CustomerId, b.Date, b.Description, b.Cost, b.MarkupPercent, b.Amount, b.InvoiceId);
 }
 
+public sealed record OnlinePaymentSettingsResponse(PaymentProvider Provider, bool Enabled, Guid? DepositAccountId, string? PublicUrl, bool HasSecretKey, bool HasWebhookSecret)
+{
+    public static OnlinePaymentSettingsResponse From(OnlinePaymentSettings s) =>
+        new(s.Provider, s.Enabled, s.DepositAccountId, s.PublicUrl, s.ProtectedSecretKey is not null, s.ProtectedWebhookSecret is not null);
+}
+
+public sealed record PaymentLinkResponse(Guid Id, Guid InvoiceId, PaymentProvider Provider, string Url, decimal Amount, PaymentLinkStatus Status, DateTimeOffset CreatedAt, Guid? CustomerPaymentId)
+{
+    public static PaymentLinkResponse From(PaymentLink l) => new(l.Id, l.InvoiceId, l.Provider, l.Url, l.Amount, l.Status, l.CreatedAt, l.CustomerPaymentId);
+}
+
 public sealed record RecurringInvoiceResponse(
     Guid Id, string Name, Guid CustomerId, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
     int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool AutoEmail, bool IsActive, IReadOnlyList<SalesLineDraft> Lines)
@@ -258,6 +269,16 @@ internal static class ReceivablesApi
             await s.RemoveAsync(id, ct);
             return Results.NoContent();
         });
+
+        sales.MapGet("/invoices/{id:guid}/payment-links", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+            (await s.LinksAsync(id, ct)).Select(PaymentLinkResponse.From));
+        sales.MapPost("/invoices/{id:guid}/payment-links", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+            PaymentLinkResponse.From(await s.LinkForInvoiceAsync(id, ct)));
+        sales.MapPost("/payment-links/{id:guid}/check", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+            PaymentLinkResponse.From(await s.CheckAsync(id, ct)));
+        api.MapGet("/settings/online-payments", async (OnlinePaymentService s, CancellationToken ct) => OnlinePaymentSettingsResponse.From(await s.GetSettingsAsync(ct)));
+        api.MapPut("/settings/online-payments", async (OnlinePaymentSettingsCommand r, OnlinePaymentService s, CancellationToken ct) =>
+            OnlinePaymentSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
 
         sales.MapGet("/write-offs", async (Guid? customerId, WriteOffService s, CancellationToken ct) =>
             (await s.ListAsync(customerId, ct)).Select(WriteOffResponse.From));

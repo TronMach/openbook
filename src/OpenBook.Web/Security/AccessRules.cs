@@ -26,7 +26,14 @@ public static class AccessRules
         ("/reports/saved", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/api/saved-reports", UserRole.ViewOnly, UserRole.ViewOnly),
 
+        // Customers and the payment provider, without signing in (the portal checks its token, the webhook its signature).
+        ("/portal", UserRole.ViewOnly, UserRole.ViewOnly),
+        ("/pay/", UserRole.ViewOnly, UserRole.ViewOnly),
+        ("/hooks", UserRole.ViewOnly, UserRole.ViewOnly),
+
         // Admins: people, data as a whole, outgoing connections.
+        ("/settings/online-payments", UserRole.Admin, UserRole.Admin),
+        ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/settings/users", UserRole.Admin, UserRole.Admin),
         ("/api/users", UserRole.Admin, UserRole.Admin),
         ("/settings/webhooks", UserRole.Admin, UserRole.Admin),

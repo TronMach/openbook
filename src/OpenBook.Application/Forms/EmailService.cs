@@ -29,6 +29,7 @@ public sealed class EmailService(
     FormService forms,
     IEmailSender sender,
     ISecretProtector secrets,
+    Sales.OnlinePaymentService online,
     IClock clock,
     ICurrentUser user)
 {
@@ -89,7 +90,24 @@ public sealed class EmailService(
                 : throw new EntityNotFoundException("sales_receipt", id),
         };
         var email = await sales.GetCustomerAsync(customerId, ct) is { Email: { } e2 } ? e2 : "";
+        if (kind == FormKind.Invoice && await PayLinkAsync(id, ct) is { } url)
+            body += $"\n\nPay online: {url}";
         return new EmailDraft(email, subject, $"Hello,\n\n{body}\n\nThank you,\n{company.Name}");
+    }
+
+    /// <summary>A payment link for an open invoice when online payments are on; null otherwise or if the provider can't be reached.</summary>
+    private async Task<string?> PayLinkAsync(Guid invoiceId, CancellationToken ct)
+    {
+        if (!(await online.GetSettingsAsync(ct)).IsReady || await sales.GetInvoiceAsync(invoiceId, ct) is not { IsOpen: true })
+            return null;
+        try
+        {
+            return (await online.LinkForInvoiceAsync(invoiceId, ct)).Url;
+        }
+        catch (DomainException)
+        {
+            return null;
+        }
     }
 
     public async Task<EmailDraft> DraftStatementAsync(Guid customerId, DateOnly to, CancellationToken ct = default)

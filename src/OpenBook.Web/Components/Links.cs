@@ -53,6 +53,8 @@ public static class Links
         "write_off" => $"/sales/write-offs/{id}",
         "sales_order" => $"/sales/orders/{id}",
         "purchase_order" => $"/purchases/orders/{id}",
+        "receipt" => $"/purchases/receipts/{id}",
+        "online_payment_settings" => "/settings/online-payments",
         "purchasing_settings" => "/purchases/approvals/settings",
         "ach_batch" => "/purchases/ach",
         "ach_settings" => $"/purchases/ach?accountId={id}",

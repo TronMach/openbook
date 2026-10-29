@@ -119,6 +119,27 @@ public interface ISalesStore
     /// <summary>Untracked, oldest first; all customers when null.</summary>
     Task<IReadOnlyList<BillableExpense>> ListBillableExpensesAsync(Guid? customerId, CancellationToken ct);
 
+    /// <summary>Tracked; null until first saved.</summary>
+    Task<OnlinePaymentSettings?> GetOnlinePaymentSettingsAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<PaymentLink>> ListPaymentLinksAsync(Guid invoiceId, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<PaymentLink?> GetPaymentLinkAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked: the link for a provider's checkout id.</summary>
+    Task<PaymentLink?> FindPaymentLinkAsync(string sessionId, CancellationToken ct);
+
+    /// <summary>Untracked.</summary>
+    Task<IReadOnlyList<PortalAccess>> ListPortalAccessAsync(Guid customerId, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<PortalAccess?> GetPortalAccessAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked: the link with this token hash.</summary>
+    Task<PortalAccess?> FindPortalAccessAsync(string tokenHash, CancellationToken ct);
+
     void Add(Customer customer);
     void Add(Item item);
     void Add(Invoice invoice);
@@ -131,6 +152,9 @@ public interface ISalesStore
     void Add(BankDeposit deposit);
     void Add(BadDebtWriteOff writeOff);
     void Add(SalesOrder order);
+    void Add(OnlinePaymentSettings settings);
+    void Add(PaymentLink link);
+    void Add(PortalAccess access);
     void Add(Retainer retainer);
     void Add(BillableExpense billable);
     void Remove(BillableExpense billable);

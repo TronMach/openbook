@@ -23,6 +23,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var connectionString = builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db";
+// Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
+builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
+    new OpenBook.Infrastructure.Payments.ReceiptTextExtractor(builder.Configuration["OpenBook:Ocr:TesseractPath"]));
 builder.Services
     .AddOpenBookApplication()
     .AddOpenBookInfrastructure(
@@ -74,6 +77,7 @@ app.MapSegmentEndpoints();
 app.MapCollectionEndpoints();
 app.MapSalesFlowEndpoints();
 app.MapPurchasingEndpoints();
+app.MapOnlineEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

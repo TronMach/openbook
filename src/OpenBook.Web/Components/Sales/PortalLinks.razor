@@ -1,0 +1,79 @@
+@* A customer's portal links: make one (shown once) or turn one off. *@
+@inject CustomerPortalService Portal
+@inject NavigationManager Navigation
+
+<div class="card no-print" id="portal" style="margin-top: 1.5rem">
+    <h2>Customer portal</h2>
+    <p class="muted">
+        A private link where @CustomerName can see their open invoices and statement, download invoices and (with online payments on) pay.
+        No account is needed, so share it only with them; turn it off if it might have leaked.
+    </p>
+    @if (_token is not null)
+    {
+        <div class="alert notice" role="status">
+            <p>Copy this link now: it won't be shown again.</p>
+            <p><code class="secret">@(Navigation.BaseUri.TrimEnd('/'))/portal/@_token</code></p>
+        </div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_links.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>Link</th><th>Made</th><th>Last opened</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var link in _links)
+                {
+                    <tr class="@(link.IsActive ? null : "inactive")">
+                        <td><code>@link.Hint…</code></td>
+                        <td>@link.CreatedAt.ToLocalTime().ToString("g") by @link.CreatedBy</td>
+                        <td>@(link.LastUsedAt?.ToLocalTime().ToString("g") ?? "Never")</td>
+                        <td>
+                            @if (link.IsActive)
+                            {
+                                <form method="post" action="/customers/@CustomerId/portal/@link.Id/revoke" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary">Turn off</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="muted">Off</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    <form method="post" @formname="portal-link" @onsubmit="CreateAsync" class="actions">
+        <AntiforgeryToken />
+        <button type="submit" class="secondary">Make a portal link</button>
+    </form>
+</div>
+
+@code {
+    private IReadOnlyList<PortalAccess> _links = [];
+    private string? _token;
+    private string? _error;
+
+    [Parameter, EditorRequired] public Guid CustomerId { get; set; }
+    [Parameter] public string? CustomerName { get; set; }
+
+    protected override async Task OnParametersSetAsync() => _links = await Portal.ListAsync(CustomerId);
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            (_, _token) = await Portal.CreateAsync(CustomerId);
+            _links = await Portal.ListAsync(CustomerId);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

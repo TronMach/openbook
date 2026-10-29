@@ -125,6 +125,8 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 **L3 slice 3 status (2026-10-29): complete.** Purchase orders for inventory items and categories, goods received against them (and taken back), and the vendor's bill entered from the order, in parts if need be, closing the order when it's all billed. 3-way match: bills that bill more than was ordered or received, or cost more than the order beyond a tolerance, are held for approval with the reasons listed. Bill approvals above a set limit, approved or rejected by someone other than the person who entered the bill (unless allowed), and held bills can't be paid. ACH payments: vendors' bank details (encrypted, shown as the last four digits), the bank's ACH details per bank account, and NACHA files (CCD credits) of chosen bill payments, each payment sent once, kept for download again. API for all of it. Not done: purchase order PDFs and emailing, stock received before the bill (item receipts posting to an accrual), approvals for purchase orders and expenses, ACH debits and prenotes, positive pay for ACH.
 
+**L3 slice 4 status (2026-10-29): complete, so L3 is done.** Online card payments through Stripe Checkout: payment links on invoices and in invoice emails, recorded as customer payments into the chosen account by Stripe's signed webhook, the thank-you page or a "check if paid" button, each exactly once. A customer portal: a private link per customer (shown once, revocable) to see open and paid invoices and a 90-day statement, download invoice PDFs and pay online, with no account and no app navigation. Receipt capture: upload receipts, have the vendor, date, total and tax read from PDFs and text on the server (photos through Tesseract when installed), and record each as an expense with the file attached. API for all of it. Not done: Square and PayPal (need developer accounts; they'd go behind the same payment gateway interface), recording Stripe's fees and payouts, receipts by email, OCR without Tesseract.
+
 **Order (decided 2026-10-26):** L13 Desktop and Server editions and L7 Security come last, once the features have settled; they package and harden what the other modules build.
 
 ## Phase 3 — LATER (pick by audience)
@@ -153,6 +155,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | Fixed-width positive pay | Each bank uses its own layout. Today's positive pay file is CSV. |
 | Partial and pending builds (decided and built 2026-10-26) | A build that's short can be saved as **pending** (posts nothing, touches no stock; a pending list shows what's short) and finished later with "Build now", posting on that date. When short, the build page also offers to **build what you can** now and leave the rest pending. Components are **not** reserved. |
 | Kits with their own stock (decided and built 2026-10-26) | Bundles stay stockless; pre-packed kits are **assemblies**, and the item page says so. New per-assembly option **auto-build on sale**: a sale short of finished units builds the shortfall from components in the same save. Bundles don't get their own stock. |
+| Square and PayPal payment links (from L3) | They need developer accounts. Stripe uses the payment gateway interface, so each becomes another provider behind it. |
 
 ---
 
