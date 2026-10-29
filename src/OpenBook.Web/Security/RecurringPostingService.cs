@@ -9,8 +9,9 @@ namespace OpenBook.Web.Security;
 
 /// <summary>
 /// Posts recurring journal entries and enters recurring invoices and bills set to run automatically (emailing invoices
-/// set to be emailed): at startup, then every hour, so whatever is due today happens even if nobody opens
-/// the app. The audit log names the actor "system".
+/// set to be emailed), and charges late fees and sends payment reminders when those are set to be automatic: at
+/// startup, then every hour, so whatever is due today happens even if nobody opens the app. The audit log names
+/// the actor "system".
 /// </summary>
 internal sealed partial class RecurringPostingService(
     IServiceScopeFactory scopes, SetupState setup, ILogger<RecurringPostingService> logger) : BackgroundService
@@ -71,6 +72,8 @@ internal sealed partial class RecurringPostingService(
                 if (result.Error is not null)
                     LogStopped(result.Template.Name, result.Error);
             }
+
+            await CollectAsync(scope.ServiceProvider, ct);
         }
         catch (Exception ex) when (ex is DomainException or InvalidOperationException or System.Data.Common.DbException)
         {
@@ -78,6 +81,45 @@ internal sealed partial class RecurringPostingService(
             LogFailed(ex);
         }
     }
+
+    private async Task CollectAsync(IServiceProvider services, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var settings = await services.GetRequiredService<CollectionService>().GetAsync(ct);
+        if (settings.LateFeesAutomatic)
+        {
+            try
+            {
+                var fees = await services.GetRequiredService<LateFeeService>().ChargeAsync(today, ct: ct);
+                if (fees.Count > 0)
+                    LogFeesCharged(fees.Count);
+            }
+            catch (DomainException ex)
+            {
+                LogCollectionFailed("Late fees", ex.Message);
+            }
+        }
+
+        if (settings.RemindersEnabled)
+        {
+            var results = await services.GetRequiredService<ReminderService>().SendAsync(today, ct: ct);
+            var failed = results.FirstOrDefault(r => r.Error is not null);
+            var sent = results.Count(r => r.Error is null);
+            if (sent > 0)
+                LogRemindersSent(sent);
+            if (failed is not null)
+                LogCollectionFailed("Reminders", failed.Error!);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} late fees.")]
+    private partial void LogFeesCharged(int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sent {Count} payment reminders.")]
+    private partial void LogRemindersSent(int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{What} stopped: {Error}")]
+    private partial void LogCollectionFailed(string what, string error);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Posted {Count} recurring entries from '{Template}'.")]
     private partial void LogPosted(int count, string template);

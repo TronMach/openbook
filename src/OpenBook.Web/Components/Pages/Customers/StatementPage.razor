@@ -90,6 +90,7 @@
         StatementLineKind.Invoice => $"/sales/invoices/{line.DocumentId}",
         StatementLineKind.CreditMemo => $"/sales/credit-memos/{line.DocumentId}",
         StatementLineKind.Refund => $"/sales/refunds/{line.DocumentId}",
+        StatementLineKind.WriteOff => $"/sales/write-offs/{line.DocumentId}",
         _ => $"/sales/payments/{line.DocumentId}",
     };
 }

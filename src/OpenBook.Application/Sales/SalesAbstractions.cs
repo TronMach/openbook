@@ -81,6 +81,18 @@ public interface ISalesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<BankDeposit>> ListDepositsAsync(CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<BadDebtWriteOff?> GetWriteOffAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Untracked, newest first; all customers when null.</summary>
+    Task<IReadOnlyList<BadDebtWriteOff>> ListWriteOffsAsync(Guid? customerId, CancellationToken ct);
+
+    /// <summary>Tracked; null until collections are first set up.</summary>
+    Task<CollectionSettings?> GetCollectionSettingsAsync(CancellationToken ct);
+
+    /// <summary>Untracked: every reminder sent.</summary>
+    Task<IReadOnlyList<InvoiceReminder>> ListRemindersAsync(CancellationToken ct);
+
     void Add(Customer customer);
     void Add(Item item);
     void Add(Invoice invoice);
@@ -91,6 +103,9 @@ public interface ISalesStore
     void Add(CustomerRefund refund);
     void Add(RecurringInvoice recurringInvoice);
     void Add(BankDeposit deposit);
+    void Add(BadDebtWriteOff writeOff);
+    void Add(CollectionSettings settings);
+    void Add(InvoiceReminder reminder);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

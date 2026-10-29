@@ -44,6 +44,7 @@ public enum StatementLineKind
     Discount,
     CreditMemo,
     Refund,
+    WriteOff,
 }
 
 /// <param name="Amount">Positive adds to what the customer owes.</param>
@@ -60,11 +61,11 @@ public sealed class ReceivablesService(ISalesStore store)
 {
     public async Task<AgingReport> AgingAsync(DateOnly asOf, CancellationToken ct = default)
     {
-        var data = await LoadAsync(null, ct);
+        var data = await LoadAsync(ct);
         var result = new List<CustomerAging>();
-        foreach (var customer in data.Customers.OrderBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase))
+        foreach (var (customer, _) in CustomerTree.Ordered(data.Customers))
         {
-            var aging = AgingFor(customer, data, asOf);
+            var aging = AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf);
             if (aging.Invoices.Count > 0 || aging.Credits.Count > 0)
                 result.Add(aging);
         }
@@ -74,23 +75,37 @@ public sealed class ReceivablesService(ISalesStore store)
 
     public async Task<CustomerAging> CustomerAgingAsync(Guid customerId, DateOnly asOf, CancellationToken ct = default)
     {
-        var data = await LoadAsync(customerId, ct);
-        var customer = data.Customers.SingleOrDefault() ?? throw new EntityNotFoundException("customer", customerId);
-        return AgingFor(customer, data, asOf);
+        var data = await LoadAsync(ct);
+        var customer = data.Customers.SingleOrDefault(c => c.Id == customerId) ?? throw new EntityNotFoundException("customer", customerId);
+        return AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf);
     }
 
-    /// <summary>Activity between the dates with a running balance, and the aging on the closing date.</summary>
+    /// <summary>
+    /// Activity between the dates with a running balance, and the aging on the closing date. A sub-customer billed
+    /// with its parent gets the parent's statement, which includes the sub-customers billed to it.
+    /// </summary>
     public async Task<CustomerStatement> StatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         if (to < from)
             throw new DomainException("statement.dates_invalid", "The statement's end date is before its start date.");
-        var data = await LoadAsync(customerId, ct);
-        var customer = data.Customers.SingleOrDefault() ?? throw new EntityNotFoundException("customer", customerId);
+        var data = await LoadAsync(ct);
+        var byId = data.Customers.ToDictionary(c => c.Id);
+        if (!byId.ContainsKey(customerId))
+            throw new EntityNotFoundException("customer", customerId);
+        var customer = byId[CustomerTree.BillTo(customerId, byId)];
+        var billed = CustomerTree.Billed(customer.Id, byId);
+        var names = CustomerTree.FullNames(data.Customers);
+        string For(Guid id) => id == customer.Id ? "" : $" · {names[id]}";
 
         var activity = new List<(DateOnly Date, StatementLineKind Kind, Guid Id, string Reference, string Description, decimal Amount, DateTimeOffset Order)>();
-        foreach (var i in data.Invoices.Where(i => i.Status == DocumentStatus.Posted))
-            activity.Add((i.Date, StatementLineKind.Invoice, i.Id, i.Number, $"Invoice, due {i.DueDate.ToString("d", System.Globalization.CultureInfo.CurrentCulture)}", i.Total, i.CreatedAt));
-        foreach (var p in data.Payments.Where(p => p.Status == DocumentStatus.Posted))
+        foreach (var i in data.Invoices.Where(i => i.Status == DocumentStatus.Posted && billed.Contains(i.CustomerId)))
+            activity.Add((i.Date, StatementLineKind.Invoice, i.Id, i.Number,
+                (i.LateFeeForInvoiceId is null ? "Invoice" : "Late fee") + $", due {i.DueDate.ToString("d", System.Globalization.CultureInfo.CurrentCulture)}{For(i.CustomerId)}",
+                i.Total, i.CreatedAt));
+        foreach (var w in data.WriteOffs.Where(w => w.Status == DocumentStatus.Posted && billed.Contains(w.CustomerId)))
+            activity.Add((w.Date, StatementLineKind.WriteOff, w.Id, data.Invoices.FirstOrDefault(i => i.Id == w.InvoiceId)?.Number ?? "",
+                $"Written off{For(w.CustomerId)}", -w.Amount, w.CreatedAt));
+        foreach (var p in data.Payments.Where(p => p.Status == DocumentStatus.Posted && billed.Contains(p.CustomerId)))
         {
             if (p.Amount > 0m)
                 activity.Add((p.Date, StatementLineKind.Payment, p.Id, p.Reference ?? "", "Payment received, thank you", -p.Amount, p.CreatedAt));
@@ -98,10 +113,10 @@ public sealed class ReceivablesService(ISalesStore store)
                 activity.Add((p.Date, StatementLineKind.Discount, p.Id, p.Reference ?? "", "Early payment discount", -p.DiscountTaken, p.CreatedAt));
         }
 
-        foreach (var c in data.CreditMemos.Where(c => c.Status == DocumentStatus.Posted))
-            activity.Add((c.Date, StatementLineKind.CreditMemo, c.Id, c.Number, "Credit memo", -c.Total, c.CreatedAt));
-        foreach (var r in data.Refunds.Where(r => r.Status == DocumentStatus.Posted))
-            activity.Add((r.Date, StatementLineKind.Refund, r.Id, r.Reference ?? "", "Refund paid to you", r.Amount, r.CreatedAt));
+        foreach (var c in data.CreditMemos.Where(c => c.Status == DocumentStatus.Posted && billed.Contains(c.CustomerId)))
+            activity.Add((c.Date, StatementLineKind.CreditMemo, c.Id, c.Number, $"Credit memo{For(c.CustomerId)}", -c.Total, c.CreatedAt));
+        foreach (var r in data.Refunds.Where(r => r.Status == DocumentStatus.Posted && billed.Contains(r.CustomerId)))
+            activity.Add((r.Date, StatementLineKind.Refund, r.Id, r.Reference ?? "", $"Refund paid to you{For(r.CustomerId)}", r.Amount, r.CreatedAt));
 
         var opening = activity.Where(a => a.Date < from).Sum(a => a.Amount);
         var balance = opening;
@@ -112,23 +127,26 @@ public sealed class ReceivablesService(ISalesStore store)
             lines.Add(new StatementLine(a.Date, a.Kind, a.Id, a.Reference, a.Description, a.Amount, balance));
         }
 
-        return new CustomerStatement(customer, from, to, opening, lines, balance, AgingFor(customer, data, to).Buckets);
+        return new CustomerStatement(customer, from, to, opening, lines, balance, AgingFor(customer, billed, data, to).Buckets);
     }
 
-    private static CustomerAging AgingFor(Customer customer, Ledger data, DateOnly asOf)
+    /// <param name="customerIds">Whose invoices and credits count: the customer, plus sub-customers billed to it on a statement.</param>
+    private static CustomerAging AgingFor(Customer customer, IReadOnlySet<Guid> customerIds, Ledger data, DateOnly asOf)
     {
-        // Settlements by invoice up to the as-of date.
+        // Settlements by invoice up to the as-of date, from anyone (a parent can pay a sub-customer's invoice).
         var settled = new Dictionary<Guid, decimal>();
-        foreach (var p in data.Payments.Where(p => p.CustomerId == customer.Id && p.Status == DocumentStatus.Posted))
+        foreach (var p in data.Payments.Where(p => p.Status == DocumentStatus.Posted))
             foreach (var a in p.Applications.Where(a => a.AppliedOn <= asOf))
                 settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Settled;
-        foreach (var c in data.CreditMemos.Where(c => c.CustomerId == customer.Id && c.Status == DocumentStatus.Posted))
+        foreach (var c in data.CreditMemos.Where(c => c.Status == DocumentStatus.Posted))
             foreach (var a in c.Applications.Where(a => a.AppliedOn <= asOf))
                 settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Amount;
+        foreach (var w in data.WriteOffs.Where(w => w.Status == DocumentStatus.Posted && w.Date <= asOf))
+            settled[w.InvoiceId] = settled.GetValueOrDefault(w.InvoiceId) + w.Amount;
 
         var buckets = AgingBuckets.Zero;
         var invoices = new List<OpenInvoice>();
-        foreach (var invoice in data.Invoices.Where(i => i.CustomerId == customer.Id && i.Status == DocumentStatus.Posted && i.Date <= asOf)
+        foreach (var invoice in data.Invoices.Where(i => customerIds.Contains(i.CustomerId) && i.Status == DocumentStatus.Posted && i.Date <= asOf)
                      .OrderBy(i => i.DueDate).ThenBy(i => i.Number, StringComparer.Ordinal))
         {
             var balance = invoice.Total - settled.GetValueOrDefault(invoice.Id);
@@ -139,9 +157,9 @@ public sealed class ReceivablesService(ISalesStore store)
             buckets = buckets.Add(daysPastDue, balance);
         }
 
-        var refunds = data.Refunds.Where(r => r.CustomerId == customer.Id && r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
+        var refunds = data.Refunds.Where(r => customerIds.Contains(r.CustomerId) && r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
         var credits = new List<OpenCredit>();
-        foreach (var c in data.CreditMemos.Where(c => c.CustomerId == customer.Id && c.Status == DocumentStatus.Posted && c.Date <= asOf))
+        foreach (var c in data.CreditMemos.Where(c => customerIds.Contains(c.CustomerId) && c.Status == DocumentStatus.Posted && c.Date <= asOf))
         {
             var left = c.Total - c.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
                 - refunds.Where(r => r.CreditMemoId == c.Id).Sum(r => r.Amount);
@@ -149,7 +167,7 @@ public sealed class ReceivablesService(ISalesStore store)
                 credits.Add(new OpenCredit(CreditKind.CreditMemo, c.Id, $"Credit memo {c.Number}", c.Date, left));
         }
 
-        foreach (var p in data.Payments.Where(p => p.CustomerId == customer.Id && p.Status == DocumentStatus.Posted && p.Date <= asOf))
+        foreach (var p in data.Payments.Where(p => customerIds.Contains(p.CustomerId) && p.Status == DocumentStatus.Posted && p.Date <= asOf))
         {
             var left = p.Amount - p.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
                 - refunds.Where(r => r.CustomerPaymentId == p.Id).Sum(r => r.Amount);
@@ -162,23 +180,19 @@ public sealed class ReceivablesService(ISalesStore store)
         return new CustomerAging(customer, buckets, invoices, credits.OrderBy(c => c.Date).ToList());
     }
 
-    private async Task<Ledger> LoadAsync(Guid? customerId, CancellationToken ct)
-    {
-        var customers = customerId is { } id
-            ? (await store.GetCustomerAsync(id, ct)) is { } c ? [c] : []
-            : await store.ListCustomersAsync(ct);
-        return new Ledger(
-            customers,
-            await store.ListInvoicesAsync(customerId, ct),
-            await store.ListPaymentsAsync(customerId, ct),
-            await store.ListCreditMemosAsync(customerId, ct),
-            await store.ListRefundsAsync(customerId, ct));
-    }
+    private async Task<Ledger> LoadAsync(CancellationToken ct) => new(
+        await store.ListCustomersAsync(ct),
+        await store.ListInvoicesAsync(null, ct),
+        await store.ListPaymentsAsync(null, ct),
+        await store.ListCreditMemosAsync(null, ct),
+        await store.ListRefundsAsync(null, ct),
+        await store.ListWriteOffsAsync(null, ct));
 
     private sealed record Ledger(
         IReadOnlyList<Customer> Customers,
         IReadOnlyList<Invoice> Invoices,
         IReadOnlyList<CustomerPayment> Payments,
         IReadOnlyList<CreditMemo> CreditMemos,
-        IReadOnlyList<CustomerRefund> Refunds);
+        IReadOnlyList<CustomerRefund> Refunds,
+        IReadOnlyList<BadDebtWriteOff> WriteOffs);
 }

@@ -55,6 +55,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Estimate> Estimates => Set<Estimate>();
     public DbSet<CreditMemo> CreditMemos => Set<CreditMemo>();
     public DbSet<CustomerRefund> CustomerRefunds => Set<CustomerRefund>();
+    public DbSet<BadDebtWriteOff> BadDebtWriteOffs => Set<BadDebtWriteOff>();
+    public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
+    public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
     public DbSet<BankDeposit> BankDeposits => Set<BankDeposit>();
     public DbSet<EmailSettings> EmailConfigurations => Set<EmailSettings>();
@@ -638,6 +641,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.ExemptionCertificate).HasMaxLength(50);
             b.Property(c => c.ExemptionReason).HasConversion<string>().HasMaxLength(20);
             b.HasOne<PriceLevel>().WithMany().HasForeignKey(c => c.PriceLevelId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Customer>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PriceLevel>(b =>
@@ -939,6 +943,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.EarlyPaymentDiscountPercent).HasColumnName("EarlyPaymentDiscountPercentTenThousandths").HasConversion(TenThousandths);
             b.HasOne<Estimate>().WithMany().HasForeignKey(i => i.EstimateId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<RecurringInvoice>().WithMany().HasForeignKey(i => i.RecurringInvoiceId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(i => i.LateFeeForInvoiceId).OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(i => i.JournalEntryId).IsUnique();
             b.HasOne<Customer>().WithMany().HasForeignKey(i => i.CustomerId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(i => i.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -1065,6 +1070,45 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<CreditMemo>().WithMany().HasForeignKey(r => r.CreditMemoId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<CustomerPayment>().WithMany().HasForeignKey(r => r.CustomerPaymentId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BadDebtWriteOff>(b =>
+        {
+            b.ToTable("BadDebtWriteOffs");
+            b.HasKey(w => w.Id);
+            b.Property(w => w.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(w => w.Memo).HasMaxLength(1000);
+            b.Property(w => w.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(w => new { w.CustomerId, w.Date });
+            b.HasIndex(w => w.InvoiceId);
+            b.HasIndex(w => w.JournalEntryId).IsUnique();
+            b.HasOne<Customer>().WithMany().HasForeignKey(w => w.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(w => w.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(w => w.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(w => w.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(w => w.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CollectionSettings>(b =>
+        {
+            b.ToTable("CollectionSettings");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.LateFeePercent).HasColumnName("LateFeePercentTenThousandths").HasConversion(TenThousandths);
+            b.Property(c => c.LateFeeAmount).HasColumnName("LateFeeAmountMinor").HasConversion(MinorUnits);
+            b.HasOne<Item>().WithMany().HasForeignKey(c => c.LateFeeItemId).OnDelete(DeleteBehavior.Restrict);
+            b.Property(c => c.ReminderSchedule).HasMaxLength(100);
+            b.Property(c => c.ReminderSubject).HasMaxLength(300);
+            b.Property(c => c.ReminderBody).HasMaxLength(4000);
+            b.Ignore(c => c.ReminderSteps);
+        });
+
+        modelBuilder.Entity<InvoiceReminder>(b =>
+        {
+            b.ToTable("InvoiceReminders");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => new { r.InvoiceId, r.Step }).IsUnique();
+            b.Property(r => r.To).HasMaxLength(320);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(r => r.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RecurringInvoice>(b =>

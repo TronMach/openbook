@@ -37,9 +37,20 @@ public sealed class PaymentService(
 
     public Task<IReadOnlyList<CustomerPayment>> ListAsync(Guid? customerId = null, CancellationToken ct = default) => store.ListPaymentsAsync(customerId, ct);
 
-    /// <summary>The customer's unpaid invoices, oldest due first: the order payments are usually applied in.</summary>
-    public async Task<IReadOnlyList<Invoice>> OpenInvoicesAsync(Guid customerId, CancellationToken ct = default) =>
-        (await store.ListInvoicesAsync(customerId, ct)).Where(i => i.IsOpen).OrderBy(i => i.DueDate).ThenBy(i => i.Date).ToList();
+    /// <summary>
+    /// The customer's unpaid invoices, and those of sub-customers billed with it, oldest due first: the order
+    /// payments are usually applied in.
+    /// </summary>
+    public async Task<IReadOnlyList<Invoice>> OpenInvoicesAsync(Guid customerId, CancellationToken ct = default)
+    {
+        var billed = await BilledAsync(store, customerId, ct);
+        var invoices = billed.Count == 1 ? await store.ListInvoicesAsync(customerId, ct) : await store.ListInvoicesAsync(null, ct);
+        return invoices.Where(i => i.IsOpen && billed.Contains(i.CustomerId)).OrderBy(i => i.DueDate).ThenBy(i => i.Date).ToList();
+    }
+
+    /// <summary>The customer and the sub-customers billed with it: whose invoices its payments and credits can settle.</summary>
+    internal static async Task<IReadOnlySet<Guid>> BilledAsync(ISalesStore store, Guid customerId, CancellationToken ct) =>
+        CustomerTree.Billed(customerId, (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id));
 
     public async Task<CustomerPayment> ReceiveAsync(ReceivePaymentCommand command, CancellationToken ct = default)
     {
@@ -55,11 +66,12 @@ public sealed class PaymentService(
 
         var invoices = (await store.GetInvoicesAsync(applications.Select(a => a.InvoiceId).ToList(), ct)).ToDictionary(i => i.Id);
         var receivableIds = new HashSet<Guid>();
+        var billed = await BilledAsync(store, customer.Id, ct);
         foreach (var application in applications)
         {
             if (!invoices.TryGetValue(application.InvoiceId, out var invoice))
                 throw new EntityNotFoundException("invoice", application.InvoiceId);
-            if (invoice.CustomerId != customer.Id)
+            if (!billed.Contains(invoice.CustomerId))
                 throw new DomainException("payment.wrong_customer", $"Invoice {invoice.Number} belongs to a different customer.");
             if (invoice.Status != DocumentStatus.Posted)
                 throw new DomainException("invoice.voided", $"Invoice {invoice.Number} is voided.");

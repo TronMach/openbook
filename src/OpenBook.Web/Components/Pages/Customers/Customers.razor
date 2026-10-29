@@ -38,8 +38,8 @@
                     @foreach (var s in _customers)
                     {
                         <tr class="@(s.Customer.IsActive ? null : "inactive")">
-                            <td>
-                                <a href="/customers/@s.Customer.Id">@s.Customer.DisplayName</a>
+                            <td style="@(s.Level > 0 ? $"padding-left: {0.5 + s.Level * 1.25}rem" : null)">
+                                <a href="/customers/@s.Customer.Id" title="@s.FullName">@s.Customer.DisplayName</a>
                                 @if (!s.Customer.IsActive)
                                 {
                                     <span class="badge">Inactive</span>

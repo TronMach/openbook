@@ -55,6 +55,11 @@ public sealed class Invoice
 
     public DateTimeOffset? LastEmailedAt { get; private set; }
 
+    /// <summary>For a late fee invoice: the overdue invoice it charges the fee on.</summary>
+    public Guid? LateFeeForInvoiceId { get; private set; }
+
+    public void MarkLateFeeFor(Guid invoiceId) => LateFeeForInvoiceId = invoiceId;
+
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
 

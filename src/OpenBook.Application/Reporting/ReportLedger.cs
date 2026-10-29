@@ -30,7 +30,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
-        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
+        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
 
     /// <summary>Every class, location and tag's full name.</summary>
     public async Task<IReadOnlyDictionary<Guid, string>> SegmentNamesAsync(CancellationToken ct = default) =>

@@ -1,0 +1,91 @@
+@page "/sales/write-offs/{Id:guid}"
+@inject WriteOffService WriteOffs
+@inject InvoiceService Invoices
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+
+<PageTitle>Bad debt write-off · OpenBook</PageTitle>
+
+@if (_writeOff is null)
+{
+    <div class="card"><p>That write-off doesn't exist. <a href="/sales/collections">Back to collections</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Bad debt: invoice @_invoice?.Number</h1>
+        @if (_writeOff.Status == DocumentStatus.Voided)
+        {
+            <span class="badge">Voided</span>
+        }
+        <a class="button secondary" href="/customers/@_writeOff.CustomerId">Customer</a>
+        <a class="button secondary" href="/audit?entityId=@_writeOff.Id">History</a>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "voided")
+    {
+        <div class="alert notice" role="status">Voided. The balance is back on the invoice.</div>
+    }
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Customer</dt><dd><a href="/customers/@_writeOff.CustomerId">@_customerName</a></dd>
+            <dt>Invoice</dt><dd><a href="/sales/invoices/@_writeOff.InvoiceId">@_invoice?.Number</a> (balance now @Labels.Amount(_invoice?.Balance ?? 0m))</dd>
+            <dt>Date</dt><dd>@Labels.Date(_writeOff.Date)</dd>
+            <dt>Amount written off</dt><dd>@Labels.Amount(_writeOff.Amount)</dd>
+            <dt>Expense account</dt><dd>@_chart.FullName(_writeOff.ExpenseAccountId)</dd>
+            @if (_writeOff.Memo is not null) { <dt>Memo</dt><dd>@_writeOff.Memo</dd> }
+            <dt>Journal entry</dt><dd><a href="/journal/@_writeOff.JournalEntryId">View</a></dd>
+        </dl>
+    </div>
+
+    @if (_writeOff.Status == DocumentStatus.Posted)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Void this write-off</h2>
+            <p class="muted">For when the customer pays after all: voiding reverses the expense and puts the balance back on the invoice, ready for the payment.</p>
+            <form method="post" action="/sales/write-offs/@_writeOff.Id/void" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="reason">Reason</label>
+                    <input id="reason" name="reason" required maxlength="500" />
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <button type="submit" class="danger">Void write-off</button>
+            </form>
+        </div>
+    }
+
+    <Attachments EntityType="write_off" EntityId="_writeOff.Id" />
+
+    <Notes EntityType="write_off" EntityId="_writeOff.Id" />
+</div>
+
+@code {
+    private BadDebtWriteOff? _writeOff;
+    private Invoice? _invoice;
+    private string? _customerName;
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _writeOff = await WriteOffs.GetAsync(Id);
+        if (_writeOff is null)
+            return;
+        _invoice = await Invoices.GetAsync(_writeOff.InvoiceId);
+        _customerName = (await CustomerService.FullNamesAsync()).GetValueOrDefault(_writeOff.CustomerId);
+        _chart = await AccountService.GetChartAsync();
+    }
+}

@@ -26,6 +26,7 @@
         }
         @if (_customer is { IsActive: true })
         {
+            <a class="button secondary" href="/customers/new?parent=@_customer.Id">New sub-customer</a>
             <a class="button secondary" href="/sales/estimates/new?customer=@_customer.Id">New estimate</a>
             <a class="button secondary" href="/sales/credit-memos/new?customer=@_customer.Id">Credit memo</a>
             <a class="button secondary" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
@@ -33,6 +34,10 @@
         }
     </div>
 
+    @if (_customer?.ParentId is { } parentId && _names.TryGetValue(parentId, out var parentName))
+    {
+        <p class="muted">Sub-customer of <a href="/customers/@parentId">@parentName</a>@(_customer.BillWithParent ? ", billed with it" : "")</p>
+    }
     @if (_error is not null)
     {
         <div class="alert error" role="alert">@_error</div>
@@ -85,6 +90,24 @@
                 </table>
             </div>
         </div>
+    }
+
+    @if (_children.Count > 0)
+    {
+        <h2>Sub-customers</h2>
+        <table class="data">
+            <thead><tr><th>Name</th><th>Billed with parent</th><th class="num">Balance</th></tr></thead>
+            <tbody>
+                @foreach (var c in _children)
+                {
+                    <tr class="@(c.Customer.IsActive ? null : "inactive")">
+                        <td style="@(c.Level - _level > 1 ? $"padding-left: {0.5 + (c.Level - _level - 1) * 1.25}rem" : null)"><a href="/customers/@c.Customer.Id">@c.Customer.DisplayName</a></td>
+                        <td>@(c.Customer.BillWithParent ? "Yes" : "")</td>
+                        <td class="num">@Labels.AmountOrBlank(c.Balance)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 
     <div class="card" style="margin-top: 1.5rem">
@@ -155,6 +178,36 @@
                 </InputSelect>
                 <span class="hint">Their pricing baseline on new sales; <a href="/pricing">price rules</a> can add promotions on top.</span>
             </div>
+            <fieldset>
+                <legend>Sub-customer</legend>
+                <div class="field">
+                    <label for="parent">Sub-customer of <span class="muted">(optional)</span></label>
+                    <InputSelect id="parent" @bind-Value="Input.ParentId" data-search>
+                        <option value="">Nobody (a top-level customer)</option>
+                        @foreach (var c in _all.Where(c => c.Customer.Id != _customer?.Id && !_descendants.Contains(c.Customer.Id)
+                                                          && (c.Customer.IsActive || c.Customer.Id == Input.ParentId)))
+                        {
+                            <option value="@c.Customer.Id">@c.FullName@(c.Customer.IsActive ? "" : " (inactive)")</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">For a job, project or location of another customer, up to @CustomerTree.MaxDepth levels.</span>
+                </div>
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.BillWithParent" />
+                    <span>Bill with the parent: its payments and credits can settle these invoices, and they go on its statement and reminders</span>
+                </label>
+            </fieldset>
+            <fieldset>
+                <legend>Collections</legend>
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.NoReminders" />
+                    <span>Don't send automatic payment reminders</span>
+                </label>
+                <label class="check">
+                    <InputCheckbox @bind-Value="Input.NoLateFees" />
+                    <span>Don't charge late fees</span>
+                </label>
+            </fieldset>
             <fieldset>
                 <legend>Sales tax</legend>
                 <div class="row">
@@ -227,10 +280,18 @@
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<TaxCode> _taxCodes = [];
     private IReadOnlyList<PriceLevel> _levels = [];
+    private IReadOnlyList<CustomerSummary> _all = [];
+    private IReadOnlyList<CustomerSummary> _children = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+    private IReadOnlySet<Guid> _descendants = new HashSet<Guid>();
+    private int _level;
     private string? _error;
 
     [Parameter]
     public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "parent")]
+    private Guid? ParentQuery { get; set; }
 
     [SupplyParameterFromForm(FormName = "customer")]
     private CustomerModel Input { get; set; } = default!;
@@ -239,17 +300,22 @@
     {
         _taxCodes = await Taxes.ListCodesAsync();
         _levels = await Pricing.ListLevelsAsync();
+        _all = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true);
+        _names = _all.ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
         if (Id is { } id)
         {
             _customer = await CustomerService.GetAsync(id);
             if (_customer is null)
                 return;
+            _descendants = CustomerTree.Descendants(id, _all.Select(c => c.Customer));
+            _level = _all.FirstOrDefault(c => c.Customer.Id == id)?.Level ?? 0;
+            _children = _all.Where(c => _descendants.Contains(c.Customer.Id)).ToList();
             _invoices = await Invoices.ListAsync(id);
             _payments = await Payments.ListAsync(id);
         }
 
         Input ??= _customer is null
-            ? new CustomerModel()
+            ? new CustomerModel { ParentId = ParentQuery }
             : new CustomerModel
             {
                 DisplayName = _customer.DisplayName,
@@ -267,6 +333,10 @@
                 ExemptionReason = _customer.ExemptionReason,
                 ExemptionExpiresOn = _customer.ExemptionExpiresOn,
                 PriceLevelId = _customer.PriceLevelId,
+                ParentId = _customer.ParentId,
+                BillWithParent = _customer.BillWithParent,
+                NoReminders = _customer.NoReminders,
+                NoLateFees = _customer.NoLateFees,
             };
     }
 
@@ -277,7 +347,8 @@
             var details = new CustomerDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone,
                 Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
                 Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
-                Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty);
+                Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty,
+                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
         }
@@ -342,5 +413,10 @@
         public DateOnly? ExemptionExpiresOn { get; set; }
 
         public Guid? PriceLevelId { get; set; }
+
+        public Guid? ParentId { get; set; }
+        public bool BillWithParent { get; set; }
+        public bool NoReminders { get; set; }
+        public bool NoLateFees { get; set; }
     }
 }

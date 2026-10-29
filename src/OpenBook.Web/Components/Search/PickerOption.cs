@@ -46,8 +46,17 @@ public static class PickerOptions
             .ToList();
     }
 
-    public static IReadOnlyList<PickerOption> Customers(IEnumerable<Customer> customers) =>
-        customers.Select(c => new PickerOption(c.Id, c.DisplayName, Keywords: string.Join(' ', new[] { c.CompanyName, c.Email }.OfType<string>()))).ToList();
+    /// <summary>Sub-customers show the parent they belong to as the detail.</summary>
+    public static IReadOnlyList<PickerOption> Customers(IEnumerable<Customer> customers)
+    {
+        var list = customers.ToList();
+        var names = CustomerTree.FullNames(list);
+        return list.Select(c =>
+        {
+            var parent = c.ParentId is { } p && names.TryGetValue(p, out var n) ? n : null;
+            return new PickerOption(c.Id, c.DisplayName, parent, Keywords: string.Join(' ', new[] { c.CompanyName, c.Email, parent }.OfType<string>()));
+        }).ToList();
+    }
 
     public static IReadOnlyList<PickerOption> Vendors(IEnumerable<Vendor> vendors) =>
         vendors.Select(v => new PickerOption(v.Id, v.DisplayName, Keywords: string.Join(' ', new[] { v.CompanyName, v.Email, v.AccountNumber }.OfType<string>()))).ToList();

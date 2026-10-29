@@ -39,6 +39,36 @@ public sealed record RefundResponse(
         r.Id, r.CustomerId, r.Date, r.Amount, r.PaymentAccountId, r.CreditMemoId, r.CustomerPaymentId, r.Reference, r.Memo, r.Status, r.JournalEntryId);
 }
 
+public sealed record WriteOffResponse(
+    Guid Id, Guid CustomerId, Guid InvoiceId, DateOnly Date, decimal Amount, Guid ExpenseAccountId, string? Memo, DocumentStatus Status, Guid JournalEntryId)
+{
+    public static WriteOffResponse From(BadDebtWriteOff w) =>
+        new(w.Id, w.CustomerId, w.InvoiceId, w.Date, w.Amount, w.ExpenseAccountId, w.Memo, w.Status, w.JournalEntryId);
+}
+
+public sealed record WriteOffCandidateResponse(Guid InvoiceId, string Number, Guid CustomerId, DateOnly DueDate, int DaysPastDue, decimal Balance);
+
+public sealed record CollectionSettingsResponse(
+    bool LateFeesEnabled, bool LateFeesAutomatic, decimal LateFeePercent, decimal LateFeeAmount, int LateFeeGraceDays, int LateFeeRepeatDays,
+    Guid? LateFeeItemId, bool RemindersEnabled, IReadOnlyList<int> ReminderSchedule, string ReminderSubject, string ReminderBody)
+{
+    public static CollectionSettingsResponse From(CollectionSettings s) => new(
+        s.LateFeesEnabled, s.LateFeesAutomatic, s.LateFeePercent, s.LateFeeAmount, s.LateFeeGraceDays, s.LateFeeRepeatDays, s.LateFeeItemId,
+        s.RemindersEnabled, s.ReminderSteps, s.ReminderSubject, s.ReminderBody);
+}
+
+public sealed record LateFeeDueResponse(Guid InvoiceId, string Number, Guid CustomerId, int DaysPastDue, DateOnly? LastFee, decimal Balance, decimal Fee);
+
+public sealed record ReminderDueResponse(Guid InvoiceId, string Number, Guid CustomerId, int Step, string To);
+
+public sealed record ReminderResultResponse(Guid InvoiceId, string Number, int Step, string? Error);
+
+/// <param name="InvoiceIds">Null for every one due.</param>
+public sealed record ChargeLateFeesRequest(DateOnly? Date, IReadOnlyList<Guid>? InvoiceIds);
+
+/// <param name="InvoiceIds">Null for every one due today.</param>
+public sealed record SendRemindersRequest(IReadOnlyList<Guid>? InvoiceIds);
+
 public sealed record RecurringInvoiceResponse(
     Guid Id, string Name, Guid CustomerId, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
     int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool AutoEmail, bool IsActive, IReadOnlyList<SalesLineDraft> Lines)
@@ -137,6 +167,33 @@ internal static class ReceivablesApi
         });
         sales.MapPost("/refunds/{id:guid}/void", async (Guid id, VoidRequest r, CreditService s, CancellationToken ct) =>
             RefundResponse.From(await s.VoidRefundAsync(id, r.Reason, ct)));
+
+        sales.MapGet("/write-offs", async (Guid? customerId, WriteOffService s, CancellationToken ct) =>
+            (await s.ListAsync(customerId, ct)).Select(WriteOffResponse.From));
+        sales.MapGet("/write-offs/candidates", async (DateOnly? asOf, int? days, WriteOffService s, CancellationToken ct) =>
+            (await s.CandidatesAsync(asOf ?? Today(), days ?? 90, ct))
+                .Select(c => new WriteOffCandidateResponse(c.Invoice.Id, c.Invoice.Number, c.Customer.Id, c.Invoice.DueDate, c.DaysPastDue, c.Invoice.Balance)));
+        sales.MapGet("/write-offs/{id:guid}", async (Guid id, WriteOffService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } w ? Results.Ok(WriteOffResponse.From(w)) : Results.NotFound());
+        sales.MapPost("/write-offs", async (WriteOffCommand r, WriteOffService s, CancellationToken ct) =>
+            (await s.WriteOffAsync(r, ct)).Select(WriteOffResponse.From).ToList());
+        sales.MapPost("/write-offs/{id:guid}/void", async (Guid id, VoidRequest r, WriteOffService s, CancellationToken ct) =>
+            WriteOffResponse.From(await s.VoidAsync(id, r.Reason, ct)));
+
+        sales.MapGet("/collections/settings", async (CollectionService s, CancellationToken ct) => CollectionSettingsResponse.From(await s.GetAsync(ct)));
+        sales.MapPut("/collections/settings/late-fees", async (LateFeeSettingsCommand r, CollectionService s, CancellationToken ct) =>
+            CollectionSettingsResponse.From(await s.SaveLateFeesAsync(r, ct)));
+        sales.MapPut("/collections/settings/reminders", async (ReminderSettingsCommand r, CollectionService s, CancellationToken ct) =>
+            CollectionSettingsResponse.From(await s.SaveRemindersAsync(r, ct)));
+        sales.MapGet("/late-fees", async (DateOnly? date, LateFeeService s, CancellationToken ct) =>
+            (await s.DueAsync(date ?? Today(), ct))
+                .Select(f => new LateFeeDueResponse(f.Invoice.Id, f.Invoice.Number, f.Customer.Id, f.DaysPastDue, f.LastFee, f.Invoice.Balance, f.Fee)));
+        sales.MapPost("/late-fees/charge", async (ChargeLateFeesRequest r, LateFeeService s, CancellationToken ct) =>
+            (await s.ChargeAsync(r.Date ?? Today(), r.InvoiceIds, ct)).Select(InvoiceResponse.From).ToList());
+        sales.MapGet("/reminders", async (DateOnly? date, ReminderService s, CancellationToken ct) =>
+            (await s.DueAsync(date ?? Today(), ct)).Select(d => new ReminderDueResponse(d.Invoice.Id, d.Invoice.Number, d.Invoice.CustomerId, d.Step, d.To)));
+        sales.MapPost("/reminders/send", async (SendRemindersRequest r, ReminderService s, CancellationToken ct) =>
+            (await s.SendAsync(Today(), r.InvoiceIds, ct)).Select(x => new ReminderResultResponse(x.Invoice.Id, x.Invoice.Number, x.Step, x.Error)).ToList());
 
         sales.MapGet("/recurring-invoices", async (RecurringInvoiceService s, CancellationToken ct) =>
             (await s.ListAsync(ct)).Select(RecurringInvoiceResponse.From));

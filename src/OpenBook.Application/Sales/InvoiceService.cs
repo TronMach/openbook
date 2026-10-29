@@ -55,7 +55,8 @@ public sealed class InvoiceService(
         CreateAsync(command, recurringInvoiceId: null, ct);
 
     /// <param name="recurringInvoiceId">The template creating it, recorded on the invoice.</param>
-    internal async Task<Invoice> CreateAsync(CreateInvoiceCommand command, Guid? recurringInvoiceId, CancellationToken ct)
+    /// <param name="lateFeeFor">For a late fee: the overdue invoice it's charged on.</param>
+    internal async Task<Invoice> CreateAsync(CreateInvoiceCommand command, Guid? recurringInvoiceId, CancellationToken ct, Guid? lateFeeFor = null)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
@@ -98,6 +99,8 @@ public sealed class InvoiceService(
             lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId, taxCodeId, exemption);
         invoice.SetLocation(command.LocationId);
         invoice.SetWarehouse(warehouseId);
+        if (lateFeeFor is { } overdue)
+            invoice.MarkLateFeeFor(overdue);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
         if (estimate is not null)
@@ -159,6 +162,7 @@ public sealed class InvoiceService(
         i.EarlyPaymentDiscountDate,
         i.EstimateId,
         i.RecurringInvoiceId,
+        i.LateFeeForInvoiceId,
         i.TaxCodeId,
         i.TaxExemption,
         Lines = i.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),

@@ -2006,6 +2006,62 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("SavedReports", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Sales.BadDebtWriteOff", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ReceivableAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("JournalEntryId")
+                        .IsUnique();
+
+                    b.HasIndex("ReceivableAccountId");
+
+                    b.HasIndex("CustomerId", "Date");
+
+                    b.ToTable("BadDebtWriteOffs", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Sales.BankDeposit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2045,6 +2101,60 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsUnique();
 
                     b.ToTable("BankDeposits", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.CollectionSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("LateFeeAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("LateFeeAmountMinor");
+
+                    b.Property<int>("LateFeeGraceDays")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("LateFeeItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("LateFeePercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("LateFeePercentTenThousandths");
+
+                    b.Property<int>("LateFeeRepeatDays")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("LateFeesAutomatic")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("LateFeesEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReminderBody")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ReminderSchedule")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ReminderSubject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("RemindersEnabled")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LateFeeItemId");
+
+                    b.ToTable("CollectionSettings", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.CreditMemo", b =>
@@ -2130,6 +2240,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("BillWithParent")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("BillingAddress")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -2168,9 +2281,18 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("NoLateFees")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NoReminders")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("PaymentTermsDays")
                         .HasColumnType("integer");
@@ -2193,6 +2315,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("DisplayName")
                         .IsUnique();
+
+                    b.HasIndex("ParentId");
 
                     b.HasIndex("PriceLevelId");
 
@@ -2434,6 +2558,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("LastEmailedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LateFeeForInvoiceId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("uuid");
 
@@ -2478,6 +2605,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
 
+                    b.HasIndex("LateFeeForInvoiceId");
+
                     b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
@@ -2494,6 +2623,34 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("CustomerId", "Date");
 
                     b.ToTable("Invoices", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.InvoiceReminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Step")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId", "Step")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceReminders", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.Item", b =>
@@ -4170,6 +4327,39 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Sales.BadDebtWriteOff", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReceivableAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Sales.BankDeposit", b =>
                 {
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
@@ -4229,6 +4419,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.CollectionSettings", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Item", null)
+                        .WithMany()
+                        .HasForeignKey("LateFeeItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.CreditMemo", b =>
@@ -4399,6 +4597,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Sales.Customer", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Pricing.PriceLevel", null)
                         .WithMany()
                         .HasForeignKey("PriceLevelId")
@@ -4651,6 +4854,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("LateFeeForInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Segments.Segment", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
@@ -4773,6 +4981,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.InvoiceReminder", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.Item", b =>

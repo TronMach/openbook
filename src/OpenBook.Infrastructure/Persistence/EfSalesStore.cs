@@ -112,6 +112,19 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .ThenByDescending(d => d.CreatedAt)
             .ToList();
 
+    public Task<BadDebtWriteOff?> GetWriteOffAsync(Guid id, CancellationToken ct) => db.BadDebtWriteOffs.SingleOrDefaultAsync(w => w.Id == id, ct);
+
+    public async Task<IReadOnlyList<BadDebtWriteOff>> ListWriteOffsAsync(Guid? customerId, CancellationToken ct) =>
+        (await db.BadDebtWriteOffs.AsNoTracking().Where(w => customerId == null || w.CustomerId == customerId).ToListAsync(ct))
+            .OrderByDescending(w => w.Date)
+            .ThenByDescending(w => w.CreatedAt)
+            .ToList();
+
+    public Task<CollectionSettings?> GetCollectionSettingsAsync(CancellationToken ct) => db.CollectionSettings.FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<InvoiceReminder>> ListRemindersAsync(CancellationToken ct) =>
+        await db.InvoiceReminders.AsNoTracking().ToListAsync(ct);
+
     public void Add(Customer customer) => db.Customers.Add(customer);
 
     public void Add(Item item) => db.Items.Add(item);
@@ -131,6 +144,12 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public void Add(RecurringInvoice recurringInvoice) => db.RecurringInvoices.Add(recurringInvoice);
 
     public void Add(BankDeposit deposit) => db.BankDeposits.Add(deposit);
+
+    public void Add(BadDebtWriteOff writeOff) => db.BadDebtWriteOffs.Add(writeOff);
+
+    public void Add(CollectionSettings settings) => db.CollectionSettings.Add(settings);
+
+    public void Add(InvoiceReminder reminder) => db.InvoiceReminders.Add(reminder);
 
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 

@@ -59,6 +59,8 @@ public static class AccessRules
         ("/banking/connections", UserRole.Accountant, UserRole.Accountant),
         ("/api/banking/connections", UserRole.Accountant, UserRole.Accountant),
         ("/pricing/rounding", UserRole.Accountant, UserRole.Accountant),
+        ("/sales/collections/settings", UserRole.Accountant, UserRole.Accountant),
+        ("/api/sales/collections/settings", UserRole.ViewOnly, UserRole.Accountant),
         ("/segments/tracking", UserRole.Accountant, UserRole.Accountant),
         ("/segments/reclassify", UserRole.Accountant, UserRole.Accountant),
         ("/api/segments/tracking", UserRole.ViewOnly, UserRole.Accountant),

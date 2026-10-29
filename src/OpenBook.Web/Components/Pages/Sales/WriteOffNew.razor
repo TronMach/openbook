@@ -1,0 +1,142 @@
+@page "/sales/write-offs/new"
+@inject WriteOffService WriteOffs
+@inject InvoiceService Invoices
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+
+<PageTitle>Write off bad debt · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Write off bad debt</h1>
+        <a class="button secondary" href="/sales/collections">Collections</a>
+    </div>
+    <p class="muted">
+        Writes off what's left of invoices you won't collect: the balance moves from accounts receivable to a bad debt expense, and the
+        invoice shows as settled. If the customer pays after all, void the write-off and receive the payment as usual.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is > 0)
+    {
+        <div class="alert notice" role="status">Wrote off @Done @(Done == 1 ? "invoice" : "invoices").</div>
+    }
+
+    @if (Invoice is null)
+    {
+        <form class="card filters" method="get" data-enhance="false">
+            <div class="row">
+                <div class="field">
+                    <label for="days">At least this many days past due</label>
+                    <input id="days" name="days" type="number" min="0" value="@_days" />
+                </div>
+                <div class="field">
+                    <label for="as-of">As of</label>
+                    <input id="as-of" name="asOf" type="date" value="@_asOf.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">Show invoices</button></div>
+        </form>
+    }
+
+    @if (_candidates.Count == 0)
+    {
+        <div class="card"><p>@(Invoice is null ? $"No open invoices are {_days} or more days past due." : "That invoice has nothing left to write off.")</p></div>
+    }
+    else
+    {
+        <form method="post" action="/sales/write-offs" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="back" value="@_back" />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="check"></th><th>Invoice</th><th>Customer</th><th>Due</th><th class="num">Days late</th><th class="num">Balance</th><th class="num">Write off</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _candidates)
+                        {
+                            <tr>
+                                <td class="check"><input type="checkbox" name="invoice" value="@c.Invoice.Id" checked="@(Invoice is not null)" aria-label="Write off invoice @c.Invoice.Number" /></td>
+                                <td><a href="/sales/invoices/@c.Invoice.Id">@c.Invoice.Number</a></td>
+                                <td>@_names.GetValueOrDefault(c.Customer.Id)</td>
+                                <td>@Labels.Date(c.Invoice.DueDate)</td>
+                                <td class="num">@c.DaysPastDue</td>
+                                <td class="num">@Labels.Amount(c.Invoice.Balance)</td>
+                                <td class="num"><input name="amount:@c.Invoice.Id" class="amount" inputmode="decimal" placeholder="@c.Invoice.Balance.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" aria-label="Amount to write off" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="hint">Leave the amount blank to write off the whole balance.</p>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" name="date" type="date" value="@_asOf.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field">
+                    <label for="account">Expense account</label>
+                    <select id="account" name="accountId" data-search>
+                        @if (_badDebts is null)
+                        {
+                            <option value="">@WriteOffService.BadDebtsAccountName (created on first use)</option>
+                        }
+                        @foreach (var a in _expenses)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _badDebts?.Id)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" name="memo" maxlength="1000" placeholder="Why it won't be collected" />
+            </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <p class="hint">Sales tax already charged on these invoices stays owed in OpenBook; adjust it on your return if your state allows a bad debt deduction.</p>
+            <div class="actions"><button type="submit" class="danger">Write off ticked invoices</button></div>
+        </form>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<WriteOffCandidate> _candidates = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+    private List<Account> _expenses = [];
+    private Account? _badDebts;
+    private ChartOfAccounts _chart = new([]);
+    private int _days = 90;
+    private DateOnly _asOf = DateOnly.FromDateTime(DateTime.Today);
+    private string _back = "/sales/write-offs/new";
+
+    [SupplyParameterFromQuery] private Guid? Invoice { get; set; }
+    [SupplyParameterFromQuery] private int? Days { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? AsOf { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private int? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _days = Math.Max(0, Days ?? 90);
+        _asOf = AsOf ?? _asOf;
+        _names = await CustomerService.FullNamesAsync();
+        _chart = await AccountService.GetChartAsync();
+        _expenses = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Expense or AccountType.OtherExpense).ToList();
+        _badDebts = _expenses.FirstOrDefault(a => string.Equals(a.Name, WriteOffService.BadDebtsAccountName, StringComparison.OrdinalIgnoreCase));
+
+        if (Invoice is { } id)
+        {
+            _back = $"/sales/write-offs/new?invoice={id}";
+            _candidates = (await WriteOffs.CandidatesAsync(DateOnly.MaxValue, int.MinValue)).Where(c => c.Invoice.Id == id)
+                .Select(c => c with { DaysPastDue = Math.Max(0, _asOf.DayNumber - c.Invoice.DueDate.DayNumber) }).ToList();
+        }
+        else
+        {
+            _back = $"/sales/write-offs/new?days={_days}&asOf={_asOf:yyyy-MM-dd}";
+            _candidates = await WriteOffs.CandidatesAsync(_asOf, _days);
+        }
+    }
+}

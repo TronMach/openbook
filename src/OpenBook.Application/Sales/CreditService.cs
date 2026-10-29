@@ -149,6 +149,7 @@ public sealed class CreditService(
             memos[memoId] = await store.GetCreditMemoAsync(memoId, ct) ?? throw new EntityNotFoundException(CreditMemoType, memoId);
 
         // Check everything first, so a refusal leaves nothing changed in memory.
+        var billed = await PaymentService.BilledAsync(store, customerId, ct);
         var invoiceTotals = new Dictionary<Guid, decimal>();
         var sourceTotals = new Dictionary<Guid, decimal>();
         foreach (var line in lines)
@@ -157,7 +158,7 @@ public sealed class CreditService(
             if (line.Amount < 0m)
                 throw new DomainException("credit.amount_not_positive", "Enter an amount above zero.");
             var invoice = invoiceById.GetValueOrDefault(line.InvoiceId) ?? throw new EntityNotFoundException("invoice", line.InvoiceId);
-            if (invoice.CustomerId != customerId || invoice.Status != DocumentStatus.Posted)
+            if (!billed.Contains(invoice.CustomerId) || invoice.Status != DocumentStatus.Posted)
                 throw new DomainException("credit.invoice_invalid", $"Invoice {invoice.Number} isn't an open invoice for this customer.");
 
             var (available, sourceCustomer, sourceDate, receivable) = line.Kind switch

@@ -6,6 +6,8 @@
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
 @inject OpenBook.Application.Inventory.WarehouseService WarehouseService
+@inject WriteOffService WriteOffs
+@inject ReminderService Reminders
 
 <PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
 
@@ -30,7 +32,8 @@
         @if (_invoice.IsOpen)
         {
             <a class="button secondary" href="/sales/credits/apply?customer=@_customer.Id">Apply credit</a>
-            <a class="button" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
+            <a class="button secondary" href="/sales/write-offs/new?invoice=@_invoice.Id">Write off</a>
+            <a class="button" href="/sales/payments/new?customer=@(_billTo ?? _customer.Id)">Receive payment</a>
         }
     </div>
 
@@ -68,6 +71,10 @@
                 @if (_invoice.EstimateId is { } estimateId)
                 {
                     <dt class="no-print">From</dt><dd class="no-print"><a href="/sales/estimates/@estimateId">Estimate</a></dd>
+                }
+                @if (_invoice.LateFeeForInvoiceId is { } overdueId)
+                {
+                    <dt class="no-print">Late fee on</dt><dd class="no-print"><a href="/sales/invoices/@overdueId">Overdue invoice</a></dd>
                 }
                 @if (_invoice.RecurringInvoiceId is { } recurringId)
                 {
@@ -166,6 +173,33 @@
         </div>
     }
 
+    @if (_writeOffs.Count > 0)
+    {
+        <div class="no-print">
+            <h2>Written off</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th>Status</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var w in _writeOffs)
+                    {
+                        <tr class="@(w.Status == DocumentStatus.Voided ? "inactive" : null)">
+                            <td><a href="/sales/write-offs/@w.Id">@Labels.Date(w.Date)</a></td>
+                            <td>@(w.Status == DocumentStatus.Voided ? "Voided" : "Bad debt")</td>
+                            <td class="num">@Labels.Amount(w.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_reminders.Count > 0)
+    {
+        <p class="muted no-print">
+            Payment reminders sent: @string.Join("; ", _reminders.Select(r => $"{r.SentAt.ToLocalTime():g} to {r.To}")).
+        </p>
+    }
+
     <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">Journal entry</a></p>
 
     @if (_invoice.Status == DocumentStatus.Posted)
@@ -174,7 +208,7 @@
             <h2>Void this invoice</h2>
             <p class="muted">
                 @(_invoice.AmountPaid > 0m
-                    ? "This invoice has payments applied. Void those payments first."
+                    ? "This invoice has payments, credits or write-offs applied. Void or remove those first."
                     : "Voiding reverses its journal entry on the same date and removes it from the customer's balance.")
             </p>
             @if (_invoice.AmountPaid == 0m)
@@ -208,6 +242,9 @@
     private IReadOnlyList<CustomerPayment> _payments = [];
     private string? _error;
     private IReadOnlyList<CreditMemo> _credits = [];
+    private IReadOnlyList<BadDebtWriteOff> _writeOffs = [];
+    private IReadOnlyList<InvoiceReminder> _reminders = [];
+    private Guid? _billTo;
     private bool _needsClosingPassword;
 
     [Parameter]
@@ -227,6 +264,10 @@
         _company = await Settings.GetAsync();
         _payments = await Invoices.ListPaymentsAsync(Id);
         _credits = await Invoices.ListCreditsAsync(Id);
+        _writeOffs = await WriteOffs.ListForInvoiceAsync(Id);
+        _reminders = await Reminders.ForInvoiceAsync(Id);
+        if (_customer is { BillWithParent: true, ParentId: { } parentId })
+            _billTo = parentId;
     }
 
     private PaymentTerms Terms => new(

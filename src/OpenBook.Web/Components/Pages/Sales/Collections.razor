@@ -1,0 +1,201 @@
+@page "/sales/collections"
+@inject CollectionService CollectionService
+@inject LateFeeService LateFees
+@inject ReminderService Reminders
+@inject WriteOffService WriteOffs
+@inject CustomerService CustomerService
+
+<PageTitle>Collections · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Collections</h1>
+        <a class="button secondary" href="/reports/ar-aging">A/R aging</a>
+        <a class="button secondary" href="/sales/write-offs/new">Write off bad debt</a>
+        @if (User.Can(OpenBook.Domain.Companies.UserRole.Accountant))
+        {
+            <a class="button secondary" href="/sales/collections/settings">Settings</a>
+        }
+    </div>
+    <p class="muted">
+        Late fees and payment reminders for overdue invoices. With automatic charging or sending switched on in the settings,
+        OpenBook does this every hour by itself; here you can see what's due today and do it now.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "fees")
+    {
+        <div class="alert notice" role="status">Charged @Count late @(Count == 1 ? "fee" : "fees").</div>
+    }
+    @if (Done == "reminders")
+    {
+        <div class="alert notice" role="status">Sent @Count @(Count == 1 ? "reminder" : "reminders").</div>
+    }
+
+    <h2 id="reminders">Payment reminders due today</h2>
+    @if (_settings.ReminderSteps.Count == 0)
+    {
+        <div class="card"><p>No reminder schedule yet. @SettingsLink("Set one up")</p></div>
+    }
+    else
+    {
+        <p class="muted">
+            Schedule: @string.Join(", ", _settings.ReminderSteps.Select(Step)) · automatic sending is @(_settings.RemindersEnabled ? "on" : "off").
+            Each reminder emails the invoice with its balance; a customer billed through a parent is reminded through the parent.
+        </p>
+        @if (_reminders.Count == 0)
+        {
+            <div class="card"><p>Nothing to send today.</p></div>
+        }
+        else
+        {
+            <form method="post" action="/sales/collections/reminders" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th class="check"></th><th>Invoice</th><th>Customer</th><th>To</th><th>Due</th><th>Reminder</th><th class="num">Balance</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _reminders)
+                            {
+                                <tr>
+                                    <td class="check"><input type="checkbox" name="invoice" value="@r.Invoice.Id" checked aria-label="Send for invoice @r.Invoice.Number" /></td>
+                                    <td><a href="/sales/invoices/@r.Invoice.Id">@r.Invoice.Number</a></td>
+                                    <td>@Name(r.Invoice.CustomerId)</td>
+                                    <td>@r.To</td>
+                                    <td>@Labels.Date(r.Invoice.DueDate)</td>
+                                    <td>@Step(r.Step)</td>
+                                    <td class="num">@Labels.Amount(r.Invoice.Balance)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="actions"><button type="submit">Send ticked reminders</button></div>
+            </form>
+        }
+    }
+
+    <h2 id="late-fees">Late fees due today</h2>
+    @if (!_settings.LateFeesEnabled)
+    {
+        <div class="card"><p>Late fees are off. @SettingsLink("Switch them on")</p></div>
+    }
+    else
+    {
+        <p class="muted">
+            @FeeRule() · automatic charging is @(_settings.LateFeesAutomatic ? "on" : "off").
+            Each fee is an invoice of its own for the "Late Fee" item, due on receipt.
+        </p>
+        @if (_fees.Count == 0)
+        {
+            <div class="card"><p>No fees due today.</p></div>
+        }
+        else
+        {
+            <form method="post" action="/sales/collections/late-fees" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="date" value="@_today.ToString("yyyy-MM-dd")" />
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th class="check"></th><th>Invoice</th><th>Customer</th><th>Due</th><th class="num">Days late</th><th>Last fee</th><th class="num">Balance</th><th class="num">Fee</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in _fees)
+                            {
+                                <tr>
+                                    <td class="check"><input type="checkbox" name="invoice" value="@f.Invoice.Id" checked aria-label="Charge a fee on invoice @f.Invoice.Number" /></td>
+                                    <td><a href="/sales/invoices/@f.Invoice.Id">@f.Invoice.Number</a></td>
+                                    <td>@Name(f.Customer.Id)</td>
+                                    <td>@Labels.Date(f.Invoice.DueDate)</td>
+                                    <td class="num">@f.DaysPastDue</td>
+                                    <td>@(f.LastFee is { } last ? Labels.Date(last) : "")</td>
+                                    <td class="num">@Labels.Amount(f.Invoice.Balance)</td>
+                                    <td class="num">@Labels.Amount(f.Fee)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Charge ticked fees</button></div>
+            </form>
+        }
+    }
+
+    <h2>Bad debt written off</h2>
+    @if (_writeOffs.Count == 0)
+    {
+        <div class="card"><p>None yet. Invoices you won't collect can be <a href="/sales/write-offs/new">written off</a> to a bad debt expense.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Customer</th><th>Status</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+                @foreach (var w in _writeOffs.Take(20))
+                {
+                    <tr class="@(w.Status == DocumentStatus.Voided ? "inactive" : null)">
+                        <td><a href="/sales/write-offs/@w.Id">@Labels.Date(w.Date)</a></td>
+                        <td>@Name(w.CustomerId)</td>
+                        <td>@(w.Status == DocumentStatus.Voided ? "Voided" : "")</td>
+                        <td class="num">@Labels.Amount(w.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private CollectionSettings _settings = default!;
+    private IReadOnlyList<ReminderDue> _reminders = [];
+    private IReadOnlyList<LateFeeDue> _fees = [];
+    private IReadOnlyList<BadDebtWriteOff> _writeOffs = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    private System.Security.Claims.ClaimsPrincipal User { get; set; } = new();
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private int Count { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        User = (await AuthState).User;
+        _settings = await CollectionService.GetAsync();
+        _reminders = await Reminders.DueAsync(_today);
+        _fees = await LateFees.DueAsync(_today);
+        _writeOffs = await WriteOffs.ListAsync();
+        _names = await CustomerService.FullNamesAsync();
+    }
+
+    private string Name(Guid id) => _names.GetValueOrDefault(id) ?? "";
+
+    private RenderFragment SettingsLink(string text) => User.Can(OpenBook.Domain.Companies.UserRole.Accountant)
+        ? @<a href="/sales/collections/settings">@text</a>
+        : @<span>An accountant can set this up.</span>;
+
+    private static string Step(int days) => days switch
+    {
+        < 0 => $"{-days} days before due",
+        0 => "on the due date",
+        _ => $"{days} days late",
+    };
+
+    private string FeeRule()
+    {
+        var parts = new List<string>();
+        if (_settings.LateFeePercent > 0m)
+            parts.Add($"{_settings.LateFeePercent.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)}% of the overdue balance");
+        if (_settings.LateFeeAmount > 0m)
+            parts.Add(Labels.Amount(_settings.LateFeeAmount));
+        var when = _settings.LateFeeGraceDays == 0 ? "from the day after the due date" : $"after a {_settings.LateFeeGraceDays}-day grace period";
+        var repeat = _settings.LateFeeRepeatDays == 0 ? "once" : $"again every {_settings.LateFeeRepeatDays} days while unpaid";
+        return $"{string.Join(" + ", parts)}, {when}, {repeat}";
+    }
+}
