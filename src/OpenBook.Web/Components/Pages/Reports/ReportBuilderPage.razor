@@ -1,0 +1,123 @@
+@page "/reports/builder"
+@using OpenBook.Application.Reporting
+@inject ReportCatalog Catalog
+@inject CompanySettingsService Settings
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+@* The custom transaction report: every setting is in the query string, so it saves, exports and emails like any report. *@
+
+<PageTitle>Custom transaction report · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Custom transaction report</h1>
+    <p class="muted no-print">Pick the columns, filter the lines and group them. Save it to run again, or email it on a schedule.</p>
+
+    <div class="toolbar">
+        <ReportFilter Action="/reports/builder" Query="_query" Basis="_basis">
+            <SegmentFilterFields ClassId="@_parameters.Get("classId")" LocationId="@_parameters.Get("locationId")" TagId="@_parameters.Get("tagId")" />
+            <div class="field">
+                <label for="groupBy">Group by</label>
+                <select id="groupBy" name="groupBy">
+                    @foreach (var g in Enum.GetValues<BuilderGrouping>())
+                    {
+                        <option value="@g" selected="@(g == _options.GroupBy)">@GroupLabel(g)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="accountClass">Accounts of class</label>
+                <select id="accountClass" name="accountClass">
+                    <option value="">Any</option>
+                    @foreach (var c in Enum.GetValues<AccountClass>())
+                    {
+                        <option value="@c" selected="@(c == _options.AccountClass)">@Labels.For(c)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="accounts">Account <span class="muted">(and its subaccounts)</span></label>
+                <select id="accounts" name="accounts" data-search>
+                    <option value="">Any</option>
+                    @foreach (var (account, _) in _chart.Ordered(includeInactive: true))
+                    {
+                        <option value="@account.Id" selected="@(_options.AccountIds?.Contains(account.Id) == true)">@_chart.FullName(account.Id)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="types">Type</label>
+                <select id="types" name="types">
+                    <option value="">Any</option>
+                    @foreach (var t in ReportBuilder.TypeNames)
+                    {
+                        <option value="@t" selected="@(_options.Types?.Contains(t, StringComparer.OrdinalIgnoreCase) == true)">@t</option>
+                    }
+                </select>
+            </div>
+            <div class="field"><label for="name">Name contains</label><input id="name" name="name" value="@_options.NameContains" /></div>
+            <div class="field"><label for="memo">Memo contains</label><input id="memo" name="memo" value="@_options.MemoContains" /></div>
+            <div class="field"><label for="min">Amount from</label><input id="min" name="min" class="short" inputmode="decimal" value="@_options.MinAmount" /></div>
+            <div class="field"><label for="max">to</label><input id="max" name="max" class="short" inputmode="decimal" value="@_options.MaxAmount" /></div>
+            <div class="field"><label for="title">Title</label><input id="title" name="title" maxlength="100" value="@_options.Title" placeholder="Transaction report" /></div>
+            <fieldset class="field columns">
+                <legend>Columns</legend>
+                @* The boxes have no name: the hidden list keeps the URL short and readable. *@
+                <input type="hidden" name="columns" id="columns" value="@string.Join(',', _options.Columns)" />
+                @foreach (var c in Enum.GetValues<BuilderColumn>())
+                {
+                    <label class="check"><input type="checkbox" value="@c" checked="@_options.Columns.Contains(c)" onchange="this.form.columns.value=Array.from(this.form.querySelectorAll('fieldset.columns input[type=checkbox]')).filter(b=>b.checked).map(b=>b.value).join(',')" /> @ReportBuilder.Header(c)</label>
+                }
+            </fieldset>
+        </ReportFilter>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    else if (_table is not null)
+    {
+        <ReportActions Key="builder" />
+        <ReportTableView Table="_table" />
+    }
+</div>
+
+
+@code {
+    private ReportParameters _parameters = ReportParameters.Parse(null);
+    private ReportQuery _query = null!;
+    private ReportBasis _basis;
+    private BuilderOptions _options = new(BuilderOptions.DefaultColumns);
+    private ChartOfAccounts _chart = new([]);
+    private ReportTable? _table;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Settings.GetAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _parameters = ReportParameters.Parse(new Uri(Navigation.Uri).Query);
+        var definition = ReportCatalog.Find("builder")!;
+        var (preset, range) = _parameters.Period(company, definition.DefaultPreset, today);
+        _basis = _parameters.Basis(company);
+        _query = new ReportQuery(preset, range, _basis);
+        _options = BuilderOptions.Parse(_parameters);
+        _chart = await AccountService.GetChartAsync();
+        try
+        {
+            _table = await Catalog.RunAsync("builder", _parameters);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string GroupLabel(BuilderGrouping g) => g switch
+    {
+        BuilderGrouping.None => "Nothing",
+        BuilderGrouping.AccountType => "Account type",
+        BuilderGrouping.Name => "Customer or vendor",
+        _ => g.ToString(),
+    };
+}

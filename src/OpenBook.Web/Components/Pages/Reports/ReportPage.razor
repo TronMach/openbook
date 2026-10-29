@@ -88,7 +88,7 @@
             @if (Has(ReportInputs.Year))
             {
                 <div class="field">
-                    <label for="year">Tax year</label>
+                    <label for="year">Year</label>
                     <input id="year" name="year" type="number" min="2000" max="2100" value="@_year" />
                 </div>
             }
@@ -178,7 +178,8 @@
         _query = new ReportQuery(preset, range, _basis);
         _asOf = _parameters.GetDate("asOf") ?? today;
         _compare = _parameters.GetEnum<Comparison>("compare") ?? Comparison.None;
-        _year = _parameters.GetNumber("year") ?? today.Year - 1;
+        // 1099s are for last year; the mileage log and depreciation schedule default to this year.
+        _year = _parameters.GetNumber("year") ?? (_definition.Key.StartsWith("1099", StringComparison.Ordinal) ? today.Year - 1 : today.Year);
         if (Has(ReportInputs.PriceFor))
         {
             _customers = (await Customers.ListAsync(today)).Select(c => c.Customer).ToList();

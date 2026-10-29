@@ -15,6 +15,19 @@ internal sealed class EfReportingStore(OpenBookDbContext db) : IReportingStore
 
     public Task<SavedReport?> GetSavedReportAsync(Guid id, CancellationToken ct) => db.SavedReports.SingleOrDefaultAsync(r => r.Id == id, ct);
 
+    public async Task<IReadOnlyList<ReportSubscription>> ListSubscriptionsAsync(CancellationToken ct) => await db.ReportSubscriptions.ToListAsync(ct);
+
+    public Task<ReportSubscription?> GetSubscriptionAsync(Guid id, CancellationToken ct) => db.ReportSubscriptions.SingleOrDefaultAsync(s => s.Id == id, ct);
+
+    public Task<DashboardPreference?> GetDashboardPreferenceAsync(string username, CancellationToken ct) =>
+        db.DashboardPreferences.SingleOrDefaultAsync(p => p.Username == username, ct);
+
+    public void Add(ReportSubscription subscription) => db.ReportSubscriptions.Add(subscription);
+
+    public void Remove(ReportSubscription subscription) => db.ReportSubscriptions.Remove(subscription);
+
+    public void Add(DashboardPreference preference) => db.DashboardPreferences.Add(preference);
+
     public void Add(Budget budget) => db.Budgets.Add(budget);
 
     public void Remove(Budget budget) => db.Budgets.Remove(budget);

@@ -74,6 +74,14 @@ internal sealed partial class RecurringPostingService(
             }
 
             await CollectAsync(scope.ServiceProvider, ct);
+
+            foreach (var run in await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Reporting.ReportSubscriptionService>().SendDueAsync(ct))
+            {
+                if (run.Error is null)
+                    LogReportSent(run.ReportName, run.Subscription.Recipients);
+                else
+                    LogCollectionFailed($"Report '{run.ReportName}'", run.Error);
+            }
         }
         catch (Exception ex) when (ex is DomainException or InvalidOperationException or System.Data.Common.DbException)
         {
@@ -111,6 +119,9 @@ internal sealed partial class RecurringPostingService(
                 LogCollectionFailed("Reminders", failed.Error!);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Emailed report '{Report}' to {Recipients}.")]
+    private partial void LogReportSent(string report, string recipients);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} late fees.")]
     private partial void LogFeesCharged(int count);

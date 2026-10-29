@@ -76,6 +76,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Assets.FixedAsset> FixedAssets => Set<OpenBook.Domain.Assets.FixedAsset>();
     public DbSet<OpenBook.Domain.Assets.DepreciationRun> DepreciationRuns => Set<OpenBook.Domain.Assets.DepreciationRun>();
     public DbSet<OpenBook.Domain.Assets.Loan> Loans => Set<OpenBook.Domain.Assets.Loan>();
+    public DbSet<ReportSubscription> ReportSubscriptions => Set<ReportSubscription>();
+    public DbSet<DashboardPreference> DashboardPreferences => Set<DashboardPreference>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
     public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
@@ -1494,6 +1496,28 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 
         ConfigureProjects(modelBuilder);
         ConfigureAssets(modelBuilder);
+
+        modelBuilder.Entity<ReportSubscription>(b =>
+        {
+            b.ToTable("ReportSubscriptions");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Recipients).HasMaxLength(4000);
+            b.Property(s => s.Frequency).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.Format).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.LastError).HasMaxLength(500);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Ignore(s => s.RecipientList);
+            b.HasOne<SavedReport>().WithMany().HasForeignKey(s => s.SavedReportId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DashboardPreference>(b =>
+        {
+            b.ToTable("DashboardPreferences");
+            b.HasKey(p => p.Username);
+            b.Property(p => p.Username).HasMaxLength(100);
+            b.Property(p => p.HiddenPanels).HasMaxLength(1000);
+            b.Ignore(p => p.Hidden);
+        });
 
         modelBuilder.Entity<CollectionSettings>(b =>
         {

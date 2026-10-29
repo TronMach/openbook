@@ -24,6 +24,7 @@ public static class AccessRules
         ("/api/me", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/logout", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/reports/saved", UserRole.ViewOnly, UserRole.ViewOnly),
+        ("/dashboard", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/api/saved-reports", UserRole.ViewOnly, UserRole.ViewOnly),
 
         // Customers and the payment provider, without signing in (the portal checks its token, the webhook its signature).
@@ -79,6 +80,8 @@ public static class AccessRules
         ("/api/pricing/rounding", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/import", UserRole.Accountant, UserRole.Accountant),
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/reports/schedules", UserRole.Accountant, UserRole.Accountant),
+        ("/api/reports/schedules", UserRole.Accountant, UserRole.Accountant),
         ("/assets", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/assets", UserRole.ViewOnly, UserRole.Accountant),
         ("/loans", UserRole.ViewOnly, UserRole.Accountant),

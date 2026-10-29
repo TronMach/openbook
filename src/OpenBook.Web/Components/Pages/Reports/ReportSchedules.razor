@@ -1,0 +1,158 @@
+@page "/reports/schedules"
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Reporting
+@inject ReportSubscriptionService Subscriptions
+@inject SavedReportService SavedReports
+
+<PageTitle>Scheduled reports · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Scheduled reports</h1>
+        <a class="button secondary" href="/reports">Reports</a>
+    </div>
+    <p class="muted">
+        Saved reports emailed as PDF, Excel or CSV every day, week or month (server time). Dates in a saved report stay relative, so
+        "last month" is always the month before the send. Email has to be set up in Settings.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is not null)
+    {
+        <div class="alert notice" role="status">@Done</div>
+    }
+
+    @if (_subscriptions.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>Report</th><th>To</th><th>When</th><th>Format</th><th>Last sent</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _subscriptions)
+                {
+                    <tr class="@(s.IsActive ? "" : "muted")">
+                        <td>@(_names.GetValueOrDefault(s.SavedReportId) ?? "(deleted)")</td>
+                        <td>@s.Recipients</td>
+                        <td>@When(s)@(s.IsActive ? "" : " (paused)")</td>
+                        <td>@s.Format</td>
+                        <td>
+                            @if (s.LastRunAt is { } at)
+                            {
+                                <span>@at.ToLocalTime().ToString("g")</span>
+                                @if (s.LastRunFailed)
+                                {
+                                    <div class="muted">Failed: @s.LastError</div>
+                                }
+                            }
+                        </td>
+                        <td>
+                            <form method="post" action="/reports/schedules/@s.Id/send" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary">Send now</button>
+                            </form>
+                            <form method="post" action="/reports/schedules/@s.Id/delete" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_saved.Count == 0)
+    {
+        <div class="card"><p>Save a report first: run it, then use "Save report" above the table.</p></div>
+    }
+    else
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Email a report on a schedule</h2>
+            <form method="post" action="/reports/schedules" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="report">Saved report</label>
+                        <select id="report" name="savedReportId">
+                            @foreach (var r in _saved)
+                            {
+                                <option value="@r.Id">@r.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="to">To <span class="muted">(commas between addresses)</span></label>
+                        <input id="to" name="recipients" required maxlength="4000" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="frequency">How often</label>
+                        <select id="frequency" name="frequency">
+                            <option value="Daily">Every day</option>
+                            <option value="Weekly">Every week on…</option>
+                            <option value="Monthly" selected>Every month on day…</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="weekday">Day of the week</label>
+                        <select id="weekday" name="weekday">
+                            @foreach (var d in Enum.GetValues<DayOfWeek>())
+                            {
+                                <option value="@((int)d)" selected="@(d == DayOfWeek.Monday)">@d</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="monthday">Day of the month</label>
+                        <input id="monthday" name="monthday" type="number" min="1" max="28" value="1" class="short" />
+                    </div>
+                    <div class="field">
+                        <label for="hour">Hour</label>
+                        <select id="hour" name="hour">
+                            @for (var h = 0; h < 24; h++)
+                            {
+                                <option value="@h" selected="@(h == 7)">@($"{h:00}:00")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="format">Format</label>
+                        <select id="format" name="format">
+                            @foreach (var f in Enum.GetValues<ReportFileFormat>())
+                            {
+                                <option value="@f">@f</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="actions"><button type="submit">Schedule</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ReportSubscription> _subscriptions = [];
+    private IReadOnlyList<SavedReport> _saved = [];
+    private Dictionary<Guid, string> _names = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _subscriptions = await Subscriptions.ListAsync();
+        _saved = await SavedReports.ListAsync();
+        _names = _saved.ToDictionary(r => r.Id, r => r.Name);
+    }
+
+    private static string When(ReportSubscription s) => s.Frequency switch
+    {
+        ReportFrequency.Daily => $"Daily at {s.Hour:00}:00",
+        ReportFrequency.Weekly => $"{(DayOfWeek)s.Day}s at {s.Hour:00}:00",
+        _ => $"Monthly on day {s.Day} at {s.Hour:00}:00",
+    };
+}

@@ -17,6 +17,15 @@ public interface IReportingStore
     /// <summary>Tracked.</summary>
     Task<SavedReport?> GetSavedReportAsync(Guid id, CancellationToken ct);
 
+    Task<IReadOnlyList<ReportSubscription>> ListSubscriptionsAsync(CancellationToken ct);
+
+    Task<ReportSubscription?> GetSubscriptionAsync(Guid id, CancellationToken ct);
+
+    Task<DashboardPreference?> GetDashboardPreferenceAsync(string username, CancellationToken ct);
+
+    void Add(ReportSubscription subscription);
+    void Remove(ReportSubscription subscription);
+    void Add(DashboardPreference preference);
     void Add(Budget budget);
     void Remove(Budget budget);
     void Add(SavedReport report);

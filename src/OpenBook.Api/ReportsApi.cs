@@ -32,6 +32,27 @@ internal static class ReportsApi
     {
         var reports = api.MapGroup("/reports");
 
+        reports.MapGet("/kpis", async (DateOnly? asOf, KpiService s, CancellationToken ct) =>
+            await s.SnapshotAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), ct));
+        reports.MapGet("/schedules", async (ReportSubscriptionService s, CancellationToken ct) => await s.ListAsync(ct));
+        reports.MapPost("/schedules", async (ReportSubscriptionDetails r, ReportSubscriptionService s, CancellationToken ct) =>
+        {
+            var subscription = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/reports/schedules/{subscription.Id}", subscription);
+        });
+        reports.MapPut("/schedules/{id:guid}", async (Guid id, ReportSubscriptionDetails r, ReportSubscriptionService s, CancellationToken ct) =>
+            await s.UpdateAsync(id, r, ct));
+        reports.MapDelete("/schedules/{id:guid}", async (Guid id, ReportSubscriptionService s, CancellationToken ct) =>
+        {
+            await s.DeleteAsync(id, ct);
+            return Results.NoContent();
+        });
+        reports.MapPost("/schedules/{id:guid}/send", async (Guid id, ReportSubscriptionService s, CancellationToken ct) =>
+        {
+            var run = await s.SendNowAsync(id, ct);
+            return run.Error is { } error ? Results.BadRequest(new { code = "subscription.send_failed", message = error }) : Results.Ok(run.Subscription);
+        });
+
         // Either a preset (thisMonth, lastFiscalYear, ...) or explicit from/to.
         reports.MapGet("/profit-and-loss", async (DatePreset? preset, DateOnly? from, DateOnly? to, ReportBasis? basis,
             FinancialReports r, CompanySettingsService settings, CancellationToken ct) =>

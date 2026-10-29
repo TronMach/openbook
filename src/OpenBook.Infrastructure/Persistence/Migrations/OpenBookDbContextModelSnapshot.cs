@@ -2663,6 +2663,80 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("Budgets", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Reporting.DashboardPreference", b =>
+                {
+                    b.Property<string>("Username")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HiddenPanels")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Username");
+
+                    b.ToTable("DashboardPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.ReportSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Hour")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastRunAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("LastRunFailed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Recipients")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SavedReportId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SavedReportId");
+
+                    b.ToTable("ReportSubscriptions", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Reporting.SavedReport", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5730,6 +5804,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Reporting.ReportSubscription", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Reporting.SavedReport", null)
+                        .WithMany()
+                        .HasForeignKey("SavedReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.BadDebtWriteOff", b =>

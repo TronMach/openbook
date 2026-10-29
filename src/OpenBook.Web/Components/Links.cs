@@ -93,6 +93,7 @@ public static class Links
         "pending_build" => "/inventory#pending",
         "warehouse" => "/inventory/warehouses",
         "saved_report" => "/reports",
+        "report_subscription" => "/reports/schedules",
         "price_level" => $"/pricing/levels/{id}",
         "price_rule" => $"/pricing/rules/{id}",
         "segment" => $"/segments/{id}",

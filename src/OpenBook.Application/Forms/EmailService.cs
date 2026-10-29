@@ -161,6 +161,9 @@ public sealed class EmailService(
         return new EmailMessage(to, subject, draft.Body ?? "", [new EmailAttachment(rendered.FileName, "application/pdf", rendered.Pdf)]);
     }
 
+    /// <summary>Sends a message as it is (for scheduled reports); the caller records the send.</summary>
+    internal Task SendMessageAsync(EmailMessage message, CancellationToken ct) => SendAsync(message, ct);
+
     private async Task SendAsync(EmailMessage message, CancellationToken ct)
     {
         var settings = await GetSettingsAsync(ct);

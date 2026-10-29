@@ -1,0 +1,206 @@
+@page "/dashboard"
+@using System.Globalization
+@using OpenBook.Application.Reporting
+@inject KpiService Kpis
+@inject DashboardService Preferences
+
+<PageTitle>Dashboard · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Dashboard</h1>
+        <form method="get" class="inline">
+            <label>As of <input type="date" name="asOf" value="@_asOf.ToString("yyyy-MM-dd")" /></label>
+            <button type="submit" class="secondary">Show</button>
+        </form>
+        <a class="button secondary" href="/reports/kpis?asOf=@_asOf.ToString("yyyy-MM-dd")">As a report</a>
+    </div>
+
+    @if (_k is not null)
+    {
+        <p class="muted">@Labels.For(_k.Basis), the company's default. Year to date is the fiscal year from @Labels.Date(_yearStart).</p>
+
+        @if (Show("position"))
+        {
+            <h2>Position</h2>
+            <div class="tiles">
+                <div class="tile"><a href="/banking"><div class="label">Cash in the bank</div><div class="value">@Labels.Amount(_k.Cash)</div></a></div>
+                <div class="tile"><a href="/reports/ar-aging?asOf=@Iso(_asOf)"><div class="label">Customers owe</div><div class="value">@Labels.Amount(_k.Receivables)</div><div class="sub">@Labels.Amount(_k.OverdueReceivables) overdue</div></a></div>
+                <div class="tile"><a href="/reports/ap-aging?asOf=@Iso(_asOf)"><div class="label">You owe vendors</div><div class="value">@Labels.Amount(_k.Payables)</div><div class="sub">@Labels.Amount(_k.OverduePayables) overdue</div></a></div>
+            </div>
+        }
+
+        @if (Show("income"))
+        {
+            <h2>Profit</h2>
+            <div class="tiles">
+                <div class="tile"><div class="label">Income this month</div><div class="value">@Labels.Amount(_k.IncomeMonth)</div><div class="sub">expenses @Labels.Amount(_k.ExpensesMonth)</div></div>
+                <div class="tile"><a href="/reports/profit-and-loss?preset=ThisFiscalYearToDate"><div class="label">Net income, year to date</div><div class="value">@Labels.Amount(_k.NetIncomeYear)</div><div class="sub">same period last year @Labels.Amount(_k.NetIncomePriorYear)</div></a></div>
+                <div class="tile"><div class="label">Income, year to date</div><div class="value">@Labels.Amount(_k.IncomeYear)</div><div class="sub">@Change(_k.IncomeYear, _k.IncomePriorYear) on last year</div></div>
+            </div>
+        }
+
+        @if (Show("ratios"))
+        {
+            <h2>Ratios</h2>
+            <div class="tiles">
+                <div class="tile"><div class="label">Gross margin</div><div class="value">@(_k.GrossMarginPercent is { } g ? Labels.Percent(g) : "—")</div><div class="sub">income less cost of goods, year to date</div></div>
+                <div class="tile"><div class="label">Current ratio</div><div class="value">@(_k.CurrentRatio?.ToString("0.00", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">current assets ÷ current liabilities</div></div>
+                <div class="tile"><div class="label">Quick ratio</div><div class="value">@(_k.QuickRatio?.ToString("0.00", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">cash and A/R ÷ current liabilities</div></div>
+                <div class="tile"><div class="label">Days to get paid</div><div class="value">@(_k.DaysSalesOutstanding?.ToString("0", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">days sales outstanding</div></div>
+            </div>
+        }
+
+        @if (Show("trend"))
+        {
+            var max = Math.Max(1m, _k.Months.Max(m => Math.Max(m.Income, m.Expenses)));
+            <h2>Income and expenses by month</h2>
+            <div class="legend" aria-hidden="true">
+                <span><span class="key" style="background: var(--series-1)"></span>Income</span>
+                <span><span class="key" style="background: var(--series-2)"></span>Expenses</span>
+            </div>
+            <svg class="chart" viewBox="0 0 760 240" role="img" aria-label="Income and expenses for the last twelve months; the table below has the figures.">
+                @foreach (var f in new[] { 0m, 0.5m, 1m })
+                {
+                    var y = Y(max * f, max);
+                    <g>
+                        <line class="grid" x1="@Left" x2="750" y1="@N(y)" y2="@N(y)" />
+                        <text class="axis" x="@(Left - 6)" y="@N(y + 4)" text-anchor="end">@Short(max * f)</text>
+                    </g>
+                }
+                @for (var i = 0; i < _k.Months.Count; i++)
+                {
+                    var m = _k.Months[i];
+                    var slot = (750m - Left) / _k.Months.Count;
+                    var x = Left + slot * i;
+                    var bar = (slot - 14m) / 2m;
+                    <g class="month">
+                        <title>@m.Month.ToString("MMMM yyyy", CultureInfo.CurrentCulture): income @Labels.Amount(m.Income), expenses @Labels.Amount(m.Expenses), net @Labels.Amount(m.NetIncome)</title>
+                        <rect class="hit" x="@N(x)" y="10" width="@N(slot)" height="190" />
+                        <rect class="bar-1" x="@N(x + 6)" y="@N(Y(Math.Max(0m, m.Income), max))" width="@N(bar)" height="@N(Bottom - Y(Math.Max(0m, m.Income), max))" rx="2" />
+                        <rect class="bar-2" x="@N(x + 8 + bar)" y="@N(Y(Math.Max(0m, m.Expenses), max))" width="@N(bar)" height="@N(Bottom - Y(Math.Max(0m, m.Expenses), max))" rx="2" />
+                        <text class="axis" x="@N(x + slot / 2)" y="220" text-anchor="middle">@m.Month.ToString("MMM", CultureInfo.CurrentCulture)</text>
+                    </g>
+                }
+            </svg>
+            <details>
+                <summary>Show as a table</summary>
+                <table class="data">
+                    <thead><tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Net income</th><th class="num">Cash at month end</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _k.Months)
+                        {
+                            <tr><td>@m.Month.ToString("MMM yyyy", CultureInfo.CurrentCulture)</td><td class="num">@Labels.Amount(m.Income)</td><td class="num">@Labels.Amount(m.Expenses)</td><td class="num">@Labels.Amount(m.NetIncome)</td><td class="num">@Labels.Amount(m.Cash)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        }
+
+        @if (Show("cash"))
+        {
+            var low = Math.Min(0m, _k.Months.Min(m => m.Cash));
+            var high = Math.Max(1m, _k.Months.Max(m => m.Cash));
+            var step = (750m - Left) / _k.Months.Count;
+            <h2>Cash at month end</h2>
+            <svg class="chart" viewBox="0 0 760 240" role="img" aria-label="Cash in the bank at the end of each of the last twelve months; the table above has the figures.">
+                @foreach (var f in new[] { 0m, 0.5m, 1m })
+                {
+                    var value = low + (high - low) * f;
+                    var y = YRange(value, low, high);
+                    <g>
+                        <line class="grid" x1="@Left" x2="750" y1="@N(y)" y2="@N(y)" />
+                        <text class="axis" x="@(Left - 6)" y="@N(y + 4)" text-anchor="end">@Short(value)</text>
+                    </g>
+                }
+                <polyline class="line-1" points="@string.Join(' ', _k.Months.Select((m, i) => $"{N(Left + step * i + step / 2)},{N(YRange(m.Cash, low, high))}"))" />
+                @for (var i = 0; i < _k.Months.Count; i++)
+                {
+                    var m = _k.Months[i];
+                    var x = Left + step * i;
+                    <g class="month">
+                        <title>@m.Month.ToString("MMMM yyyy", CultureInfo.CurrentCulture): @Labels.Amount(m.Cash)</title>
+                        <rect class="hit" x="@N(x)" y="10" width="@N(step)" height="190" />
+                        <circle class="dot-1" cx="@N(x + step / 2)" cy="@N(YRange(m.Cash, low, high))" r="4" />
+                        <text class="axis" x="@N(x + step / 2)" y="220" text-anchor="middle">@m.Month.ToString("MMM", CultureInfo.CurrentCulture)</text>
+                    </g>
+                }
+            </svg>
+        }
+
+        @if (Show("expenses") && _k.TopExpenses.Count > 0)
+        {
+            <h2>Biggest expenses, year to date</h2>
+            <table class="data">
+                <tbody>
+                    @foreach (var e in _k.TopExpenses)
+                    {
+                        <tr><td>@e.Name</td><td class="num">@Labels.Amount(e.Amount)</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <details style="margin-top: 2rem" class="no-print">
+            <summary>Choose what the dashboard shows</summary>
+            <form method="post" action="/dashboard/panels" data-enhance="false">
+                <AntiforgeryToken />
+                @foreach (var (key, label) in Panels)
+                {
+                    <label class="check"><input type="checkbox" name="show" value="@key" checked="@Show(key)" /> @label</label>
+                }
+                <div class="actions"><button type="submit" class="secondary">Save</button></div>
+            </form>
+        </details>
+    }
+</div>
+
+@code {
+    private const decimal Left = 64m;
+    private const decimal Bottom = 200m;
+
+    public static readonly IReadOnlyList<(string Key, string Label)> Panels =
+    [
+        ("position", "Cash, receivables and payables"),
+        ("income", "Income and net income"),
+        ("ratios", "Ratios"),
+        ("trend", "Income and expenses by month"),
+        ("cash", "Cash at month end"),
+        ("expenses", "Biggest expenses"),
+    ];
+
+    private KpiSnapshot? _k;
+    private IReadOnlySet<string> _hidden = new HashSet<string>();
+    private DateOnly _asOf;
+    private DateOnly _yearStart;
+
+    [SupplyParameterFromQuery] private string? AsOf { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _asOf = DateOnly.TryParse(AsOf, CultureInfo.InvariantCulture, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        _k = await Kpis.SnapshotAsync(_asOf);
+        _yearStart = _k.YearStart;
+        _hidden = await Preferences.HiddenAsync();
+    }
+
+    private bool Show(string key) => !_hidden.Contains(key);
+
+    private static decimal Y(decimal value, decimal max) => Bottom - value / max * 190m;
+
+    private static decimal YRange(decimal value, decimal low, decimal high) => Bottom - (value - low) / (high - low) * 190m;
+
+    private static string N(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static string Short(decimal value) => Math.Abs(value) switch
+    {
+        >= 1_000_000m => (value / 1_000_000m).ToString("0.#", CultureInfo.CurrentCulture) + "M",
+        >= 1_000m => (value / 1_000m).ToString("0.#", CultureInfo.CurrentCulture) + "k",
+        _ => value.ToString("0", CultureInfo.CurrentCulture),
+    };
+
+    private static string Change(decimal now, decimal before) =>
+        before == 0m ? "no figure" : (now >= before ? "+" : "") + decimal.Round((now - before) / Math.Abs(before) * 100m, 1).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+}

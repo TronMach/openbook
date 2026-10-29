@@ -125,6 +125,10 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Assets.DepreciationService>();
         services.AddScoped<OpenBook.Application.Assets.LoanService>();
         services.AddScoped<OpenBook.Application.Assets.AssetReports>();
+        services.AddScoped<ReportBuilder>();
+        services.AddScoped<KpiService>();
+        services.AddScoped<ReportSubscriptionService>();
+        services.AddScoped<DashboardService>();
         return services;
     }
 }
