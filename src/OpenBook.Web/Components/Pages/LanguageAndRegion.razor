@@ -1,0 +1,44 @@
+@page "/account/region"
+@using System.Globalization
+@using OpenBook.Web.Localization
+
+<PageTitle>@L["Language and region"] · OpenBook</PageTitle>
+
+<h1>@L["Language and region"]</h1>
+<p class="muted">@L["How dates and numbers are shown to you, and the language of the screens. This is kept in this browser."]</p>
+
+<div class="card">
+    <form method="post" action="/account/region" data-enhance="false">
+        <AntiforgeryToken />
+        <input type="hidden" name="back" value="@Back" />
+        <div class="row">
+            <div class="field">
+                <label for="region">@L["Region"]</label>
+                <select id="region" name="region">
+                    @foreach (var region in AppCulture.Regions)
+                    {
+                        var culture = CultureInfo.GetCultureInfo(region);
+                        <option value="@region" selected="@(region == CultureInfo.CurrentCulture.Name)">@AppCulture.RegionName(region): @Today.ToString("d", culture), @(1234.56m.ToString("N2", culture))</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="language">@L["Language"]</label>
+                <select id="language" name="language">
+                    @foreach (var language in AppCulture.Languages)
+                    {
+                        <option value="@language" selected="@(language == CultureInfo.CurrentUICulture.TwoLetterISOLanguageName)">@AppCulture.LanguageName(language)</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <p class="hint">@L["More languages, and regions that write decimals with a comma, are on the way."]</p>
+        <div class="actions"><button type="submit">@L["Save"]</button></div>
+    </form>
+</div>
+
+@code {
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    [SupplyParameterFromQuery] private string? Back { get; set; }
+}

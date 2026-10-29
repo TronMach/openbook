@@ -4,14 +4,14 @@
 @inject AuthService Auth
 @inject NavigationManager Navigation
 
-<PageTitle>Sign in · OpenBook</PageTitle>
+<PageTitle>@L["Sign in"] · OpenBook</PageTitle>
 
 <div class="card narrow">
-    <h1>Sign in</h1>
+    <h1>@L["Sign in"]</h1>
 
     @if (Restored)
     {
-        <div class="alert notice" role="status">Backup restored. Sign in with an account from the restored file.</div>
+        <div class="alert notice" role="status">@L["Backup restored. Sign in with an account from the restored file."]</div>
     }
     @if (_error is not null)
     {
@@ -21,18 +21,18 @@
     <EditForm Model="Input" FormName="login" OnValidSubmit="SignInAsync" method="post">
         <DataAnnotationsValidator />
         <div class="field">
-            <label for="username">Username</label>
+            <label for="username">@L["Username"]</label>
             <InputText id="username" @bind-Value="Input.Username" autocomplete="username" />
             <ValidationMessage For="() => Input.Username" />
         </div>
         <div class="field">
-            <label for="password">Password</label>
+            <label for="password">@L["Password"]</label>
             <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="current-password" />
             <ValidationMessage For="() => Input.Password" />
         </div>
-        <button type="submit">Sign in</button>
+        <button type="submit">@L["Sign in"]</button>
     </EditForm>
-    <p class="hint muted">Forgot your password? On the computer running OpenBook, run it with <code>reset-password</code> to set a new one.</p>
+    <p class="hint muted">@L["Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one."]</p>
 </div>
 
 @code {

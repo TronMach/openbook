@@ -4,16 +4,16 @@
 @inject KpiService Kpis
 @inject DashboardService Preferences
 
-<PageTitle>Dashboard · OpenBook</PageTitle>
+<PageTitle>@L["Dashboard"] · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>Dashboard</h1>
+        <h1>@L["Dashboard"]</h1>
         <form method="get" class="inline">
-            <label>As of <input type="date" name="asOf" value="@_asOf.ToString("yyyy-MM-dd")" /></label>
-            <button type="submit" class="secondary">Show</button>
+            <label>@L["As of"] <input type="date" name="asOf" value="@_asOf.ToString("yyyy-MM-dd")" /></label>
+            <button type="submit" class="secondary">@L["Show"]</button>
         </form>
-        <a class="button secondary" href="/reports/kpis?asOf=@_asOf.ToString("yyyy-MM-dd")">As a report</a>
+        <a class="button secondary" href="/reports/kpis?asOf=@_asOf.ToString("yyyy-MM-dd")">@L["As a report"]</a>
     </div>
 
     @if (_k is not null)
@@ -22,39 +22,39 @@
 
         @if (Show("position"))
         {
-            <h2>Position</h2>
+            <h2>@L["Position"]</h2>
             <div class="tiles">
-                <div class="tile"><a href="/banking"><div class="label">Cash in the bank</div><div class="value">@Labels.Amount(_k.Cash)</div></a></div>
-                <div class="tile"><a href="/reports/ar-aging?asOf=@Iso(_asOf)"><div class="label">Customers owe</div><div class="value">@Labels.Amount(_k.Receivables)</div><div class="sub">@Labels.Amount(_k.OverdueReceivables) overdue</div></a></div>
-                <div class="tile"><a href="/reports/ap-aging?asOf=@Iso(_asOf)"><div class="label">You owe vendors</div><div class="value">@Labels.Amount(_k.Payables)</div><div class="sub">@Labels.Amount(_k.OverduePayables) overdue</div></a></div>
+                <div class="tile"><a href="/banking"><div class="label">@L["Cash in the bank"]</div><div class="value">@Labels.Amount(_k.Cash)</div></a></div>
+                <div class="tile"><a href="/reports/ar-aging?asOf=@Iso(_asOf)"><div class="label">@L["Customers owe"]</div><div class="value">@Labels.Amount(_k.Receivables)</div><div class="sub">@Labels.Amount(_k.OverdueReceivables) overdue</div></a></div>
+                <div class="tile"><a href="/reports/ap-aging?asOf=@Iso(_asOf)"><div class="label">@L["You owe vendors"]</div><div class="value">@Labels.Amount(_k.Payables)</div><div class="sub">@Labels.Amount(_k.OverduePayables) overdue</div></a></div>
             </div>
         }
 
         @if (Show("income"))
         {
-            <h2>Profit</h2>
+            <h2>@L["Profit"]</h2>
             <div class="tiles">
-                <div class="tile"><div class="label">Income this month</div><div class="value">@Labels.Amount(_k.IncomeMonth)</div><div class="sub">expenses @Labels.Amount(_k.ExpensesMonth)</div></div>
-                <div class="tile"><a href="/reports/profit-and-loss?preset=ThisFiscalYearToDate"><div class="label">Net income, year to date</div><div class="value">@Labels.Amount(_k.NetIncomeYear)</div><div class="sub">same period last year @Labels.Amount(_k.NetIncomePriorYear)</div></a></div>
-                <div class="tile"><div class="label">Income, year to date</div><div class="value">@Labels.Amount(_k.IncomeYear)</div><div class="sub">@Change(_k.IncomeYear, _k.IncomePriorYear) on last year</div></div>
+                <div class="tile"><div class="label">@L["Income this month"]</div><div class="value">@Labels.Amount(_k.IncomeMonth)</div><div class="sub">expenses @Labels.Amount(_k.ExpensesMonth)</div></div>
+                <div class="tile"><a href="/reports/profit-and-loss?preset=ThisFiscalYearToDate"><div class="label">@L["Net income, year to date"]</div><div class="value">@Labels.Amount(_k.NetIncomeYear)</div><div class="sub">same period last year @Labels.Amount(_k.NetIncomePriorYear)</div></a></div>
+                <div class="tile"><div class="label">@L["Income, year to date"]</div><div class="value">@Labels.Amount(_k.IncomeYear)</div><div class="sub">@Change(_k.IncomeYear, _k.IncomePriorYear) on last year</div></div>
             </div>
         }
 
         @if (Show("ratios"))
         {
-            <h2>Ratios</h2>
+            <h2>@L["Ratios"]</h2>
             <div class="tiles">
-                <div class="tile"><div class="label">Gross margin</div><div class="value">@(_k.GrossMarginPercent is { } g ? Labels.Percent(g) : "—")</div><div class="sub">income less cost of goods, year to date</div></div>
-                <div class="tile"><div class="label">Current ratio</div><div class="value">@(_k.CurrentRatio?.ToString("0.00", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">current assets ÷ current liabilities</div></div>
-                <div class="tile"><div class="label">Quick ratio</div><div class="value">@(_k.QuickRatio?.ToString("0.00", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">cash and A/R ÷ current liabilities</div></div>
-                <div class="tile"><div class="label">Days to get paid</div><div class="value">@(_k.DaysSalesOutstanding?.ToString("0", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">days sales outstanding</div></div>
+                <div class="tile"><div class="label">@L["Gross margin"]</div><div class="value">@(_k.GrossMarginPercent is { } g ? Labels.Percent(g) : "—")</div><div class="sub">income less cost of goods, year to date</div></div>
+                <div class="tile"><div class="label">@L["Current ratio"]</div><div class="value">@(_k.CurrentRatio?.ToString("0.00", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">current assets ÷ current liabilities</div></div>
+                <div class="tile"><div class="label">@L["Quick ratio"]</div><div class="value">@(_k.QuickRatio?.ToString("0.00", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">cash and A/R ÷ current liabilities</div></div>
+                <div class="tile"><div class="label">@L["Days to get paid"]</div><div class="value">@(_k.DaysSalesOutstanding?.ToString("0", CultureInfo.CurrentCulture) ?? "—")</div><div class="sub">days sales outstanding</div></div>
             </div>
         }
 
         @if (Show("trend"))
         {
             var max = Math.Max(1m, _k.Months.Max(m => Math.Max(m.Income, m.Expenses)));
-            <h2>Income and expenses by month</h2>
+            <h2>@L["Income and expenses by month"]</h2>
             <div class="legend" aria-hidden="true">
                 <span><span class="key" style="background: var(--series-1)"></span>Income</span>
                 <span><span class="key" style="background: var(--series-2)"></span>Expenses</span>
@@ -102,7 +102,7 @@
             var low = Math.Min(0m, _k.Months.Min(m => m.Cash));
             var high = Math.Max(1m, _k.Months.Max(m => m.Cash));
             var step = (750m - Left) / _k.Months.Count;
-            <h2>Cash at month end</h2>
+            <h2>@L["Cash at month end"]</h2>
             <svg class="chart" viewBox="0 0 760 240" role="img" aria-label="Cash in the bank at the end of each of the last twelve months; the table above has the figures.">
                 @foreach (var f in new[] { 0m, 0.5m, 1m })
                 {
@@ -130,7 +130,7 @@
 
         @if (Show("expenses") && _k.TopExpenses.Count > 0)
         {
-            <h2>Biggest expenses, year to date</h2>
+            <h2>@L["Biggest expenses, year to date"]</h2>
             <table class="data">
                 <tbody>
                     @foreach (var e in _k.TopExpenses)
@@ -142,7 +142,7 @@
         }
 
         <details style="margin-top: 2rem" class="no-print">
-            <summary>Choose what the dashboard shows</summary>
+            <summary>@L["Choose what the dashboard shows"]</summary>
             <form method="post" action="/dashboard/panels" data-enhance="false">
                 <AntiforgeryToken />
                 @foreach (var (key, label) in Panels)

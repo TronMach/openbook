@@ -6,33 +6,34 @@
         <header class="topbar">
             <a class="brand" href="/">OpenBook</a>
             <nav>
-                <NavLink href="/" Match="NavLinkMatch.All">Home</NavLink>
-                <NavLink href="/accounts">Accounts</NavLink>
-                <NavLink href="/banking">Banking</NavLink>
-                <NavLink href="/sales">Sales</NavLink>
-                <NavLink href="/purchases">Purchases</NavLink>
-                <NavLink href="/inventory">Inventory</NavLink>
-                <NavLink href="/projects">Projects</NavLink>
-                <NavLink href="/journal">Journal</NavLink>
-                <NavLink href="/reports">Reports</NavLink>
-                <NavLink href="/dashboard">Dashboard</NavLink>
+                <NavLink href="/" Match="NavLinkMatch.All">@L["Home"]</NavLink>
+                <NavLink href="/accounts">@L["Accounts"]</NavLink>
+                <NavLink href="/banking">@L["Banking"]</NavLink>
+                <NavLink href="/sales">@L["Sales"]</NavLink>
+                <NavLink href="/purchases">@L["Purchases"]</NavLink>
+                <NavLink href="/inventory">@L["Inventory"]</NavLink>
+                <NavLink href="/projects">@L["Projects"]</NavLink>
+                <NavLink href="/journal">@L["Journal"]</NavLink>
+                <NavLink href="/reports">@L["Reports"]</NavLink>
+                <NavLink href="/dashboard">@L["Dashboard"]</NavLink>
                 @if (context.User.Can(UserRole.Accountant))
                 {
-                    <NavLink href="/settings">Settings</NavLink>
+                    <NavLink href="/settings">@L["Settings"]</NavLink>
                 }
                 @if (context.User.Can(UserRole.Admin))
                 {
-                    <NavLink href="/backup">Backup</NavLink>
+                    <NavLink href="/backup">@L["Backup"]</NavLink>
                 }
             </nav>
             <form class="search" method="get" action="/search" data-enhance="false" role="search">
-                <input name="q" type="search" placeholder="Search…" aria-label="Search" />
+                <input name="q" type="search" placeholder="@L["Search…"]" aria-label="@L["Search"]" />
             </form>
-            <a class="muted" href="/account/password" title="Change password · @AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)">@context.User.Identity?.Name</a>
+            <a class="muted" href="/account/password" title="@L["Change password"] · @AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)">@context.User.Identity?.Name</a>
+            <a class="muted" href="/account/region" title="@L["Language and region"]">@System.Globalization.CultureInfo.CurrentCulture.Name</a>
             <button type="button" id="theme-toggle" class="link theme-toggle" aria-label="Theme">Theme: auto</button>
             <form method="post" action="/logout">
                 <AntiforgeryToken />
-                <button type="submit" class="link">Sign out</button>
+                <button type="submit" class="link">@L["Sign out"]</button>
             </form>
         </header>
     </Authorized>

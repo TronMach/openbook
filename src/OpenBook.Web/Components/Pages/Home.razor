@@ -8,24 +8,24 @@
     <h1>@_company.Name</h1>
 
     <div class="card">
-        <h2>Company</h2>
+        <h2>@L["Company"]</h2>
         <dl class="facts">
             @if (_company.LegalName is not null)
             {
-                <dt>Legal name</dt>
+                <dt>@L["Legal name"]</dt>
                 <dd>@_company.LegalName</dd>
             }
-            <dt>Business type</dt>
+            <dt>@L["Business type"]</dt>
             <dd>@Labels.For(_company.BusinessType)</dd>
-            <dt>Home currency</dt>
+            <dt>@L["Home currency"]</dt>
             <dd>@_company.HomeCurrency</dd>
-            <dt>Fiscal year</dt>
-            <dd>Starts in @Labels.Month(_company.FiscalYearStartMonth); current year began @_company.FiscalYearStart(DateOnly.FromDateTime(DateTime.Today)).ToString("d")</dd>
+            <dt>@L["Fiscal year"]</dt>
+            <dd>@L["Starts in {0}; current year began {1}", Labels.Month(_company.FiscalYearStartMonth), _company.FiscalYearStart(DateOnly.FromDateTime(DateTime.Today)).ToString("d")]</dd>
         </dl>
     </div>
 
     <div class="card">
-        <h2>Getting started</h2>
+        <h2>@L["Getting started"]</h2>
         <ol>
             <li>Set up your <a href="/accounts">chart of accounts</a>: add accounts one by one, or <a href="/accounts/import">import a CSV</a> (there's a starter chart to download).</li>
             <li>Add your <a href="/customers">customers</a>, <a href="/vendors">vendors</a> and <a href="/items">products and services</a>, or import them.</li>

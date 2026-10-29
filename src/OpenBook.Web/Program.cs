@@ -21,6 +21,7 @@ if (encryptionCommand is not null)
     return await EncryptionCommands.RunAsync(builder.Configuration, builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db", encryptionCommand);
 
 // Add services to the container.
+builder.Services.AddLocalization(o => o.ResourcesPath = "Resources");
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -59,6 +60,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+app.UseRequestLocalization(OpenBook.Web.Localization.AppCulture.Options());
 
 app.UseMiddleware<SetupGateMiddleware>();
 app.UseAuthentication();
@@ -86,6 +88,14 @@ app.MapProjectEndpoints();
 app.MapAssetEndpoints();
 app.MapDashboardEndpoints();
 app.MapPluginEndpoints();
+app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
+{
+    if (OpenBook.Web.Localization.AppCulture.CookieValue(form["region"], form["language"]) is { } value)
+        http.Response.Cookies.Append(Microsoft.AspNetCore.Localization.CookieRequestCultureProvider.DefaultCookieName, value,
+            new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1), HttpOnly = true, SameSite = SameSiteMode.Lax, IsEssential = true, Secure = http.Request.IsHttps });
+    var back = form["back"].ToString();
+    return Results.Redirect(back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) ? back : "/account/region");
+}).RequireAuthorization();
 app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
 app.MapPortabilityEndpoints();
