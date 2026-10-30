@@ -51,6 +51,24 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
     // ---- Purchase orders and 3-way match ----
 
     [Fact]
+    public async Task An_order_prints_as_a_pdf_and_is_emailed_to_the_vendor()
+    {
+        var order = await Order();
+        var pdf = await In<PurchaseOrderForms, OpenBook.Application.Forms.RenderedForm>(f => f.RenderAsync(order.Id));
+        Assert.Equal("%PDF"u8.ToArray(), pdf.Pdf[..4]);
+        Assert.Equal("Purchase order 1001", pdf.Title);
+
+        var draft = await In<PurchaseOrderForms, OpenBook.Application.Forms.EmailDraft>(f => f.DraftAsync(order.Id));
+        Assert.Equal("email.to_required", await Refused(() => In<PurchaseOrderForms, bool>(async f => { await f.SendAsync(order.Id, draft); return true; })));
+        await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Forms.EmailService>().SaveSettingsAsync(new OpenBook.Application.Forms.EmailSettingsCommand(
+            Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "s3cret", false, "books@studio.test", "Studio", null)));
+        await In<PurchaseOrderForms, bool>(async f => { await f.SendAsync(order.Id, draft with { To = "orders@parts.test" }); return true; });
+        var sent = Assert.Single(_db.Mail.Sent);
+        Assert.Equal(("orders@parts.test", "application/pdf"), (sent.Message.To, sent.Message.Attachments.Single().ContentType));
+        Assert.Contains(await _db.InDb(db => db.AuditRecords.Where(a => a.EntityId == order.Id).Select(a => a.Action).ToListAsync()), a => a == Domain.Auditing.AuditAction.Emailed);
+    }
+
+    [Fact]
     public async Task Orders_are_received_and_billed_in_parts_and_bills_beyond_receipts_wait_for_approval()
     {
         var order = await Order();

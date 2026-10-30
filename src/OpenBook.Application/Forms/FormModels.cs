@@ -23,8 +23,9 @@ public sealed record FormLine(string? Description, decimal? Quantity, decimal? R
 
 public sealed record FormTotal(string Label, decimal Amount, bool Emphasis = false);
 
-/// <summary>An invoice, estimate, credit memo or sales receipt, ready to render.</summary>
+/// <summary>An invoice, estimate, credit memo, sales receipt or purchase order, ready to render.</summary>
 /// <param name="Facts">Label/value pairs under the title: date, due date, terms…</param>
+/// <param name="PartyLabel">The heading over the other party ("BILL TO"; "VENDOR" on a purchase order).</param>
 public sealed record SalesForm(
     string Title,
     string Number,
@@ -35,7 +36,8 @@ public sealed record SalesForm(
     IReadOnlyList<FormTotal> Totals,
     string? Message,
     string Currency,
-    FormStyle Style);
+    FormStyle Style,
+    string PartyLabel = "BILL TO");
 
 public sealed record StatementFormLine(DateOnly Date, string Activity, string Reference, decimal Amount, decimal Balance);
 

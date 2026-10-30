@@ -52,6 +52,22 @@ public static class PurchasingEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapGet("/purchases/orders/{id:guid}/pdf", async (Guid id, PurchaseOrderForms forms, CancellationToken ct) =>
+            Results.File((await forms.RenderAsync(id, ct)).Pdf, "application/pdf")).RequireAuthorization();
+
+        app.MapPost("/purchases/orders/{id:guid}/email", async (Guid id, IFormCollection form, PurchaseOrderForms forms, CancellationToken ct) =>
+        {
+            try
+            {
+                await forms.SendAsync(id, new OpenBook.Application.Forms.EmailDraft(form["to"].ToString(), form["subject"].ToString(), form["body"].ToString()), ct);
+                return Results.Redirect($"/purchases/orders/{id}?done=emailed");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/purchases/orders/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/purchases/orders/{id:guid}/cancel", async (Guid id, PurchaseOrderService orders, CancellationToken ct) =>
             await Back($"/purchases/orders/{id}", async () =>
             {

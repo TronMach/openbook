@@ -34,7 +34,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var (document, section) = NewDocument(look, form.Style.Footer);
 
         Header(section, look, form.Company, $"{form.Title.ToUpperInvariant()} {form.Number}", form.Facts);
-        BillTo(section, look, form.Customer);
+        BillTo(section, look, form.Customer, form.PartyLabel);
 
         var table = Table(section, look, [5, 1, 1.4, 1.4]);
         Heading(table, look, ("Description", false), ("Qty", true), ("Rate", true), ("Amount", true));
@@ -335,9 +335,9 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         }
     }
 
-    private static void BillTo(Section section, Look look, FormParty customer)
+    private static void BillTo(Section section, Look look, FormParty customer, string heading = "BILL TO")
     {
-        var label = section.AddParagraph("BILL TO");
+        var label = section.AddParagraph(heading);
         label.Format.SpaceBefore = 16;
         label.Format.Font.Size = look.Small;
         label.Format.Font.Bold = true;

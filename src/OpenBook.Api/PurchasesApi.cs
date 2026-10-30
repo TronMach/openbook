@@ -133,6 +133,16 @@ internal static class PurchasesApi
         });
         purchases.MapPut("/orders/{id:guid}", async (Guid id, SavePurchaseOrderCommand r, PurchaseOrderService s, CancellationToken ct) =>
             PurchaseOrderResponse.From(await s.UpdateAsync(id, r, ct)));
+        purchases.MapGet("/orders/{id:guid}/pdf", async (Guid id, PurchaseOrderForms f, CancellationToken ct) =>
+        {
+            var pdf = await f.RenderAsync(id, ct);
+            return Results.File(pdf.Pdf, "application/pdf", pdf.FileName);
+        });
+        purchases.MapPost("/orders/{id:guid}/email", async (Guid id, OpenBook.Application.Forms.EmailDraft r, PurchaseOrderForms f, CancellationToken ct) =>
+        {
+            await f.SendAsync(id, r, ct);
+            return Results.NoContent();
+        });
         purchases.MapPost("/orders/{id:guid}/cancel", async (Guid id, PurchaseOrderService s, CancellationToken ct) =>
             PurchaseOrderResponse.From(await s.CancelAsync(id, ct)));
         purchases.MapPost("/orders/{id:guid}/receipts", async (Guid id, ReceiveGoodsCommand r, PurchaseOrderService s, CancellationToken ct) =>
