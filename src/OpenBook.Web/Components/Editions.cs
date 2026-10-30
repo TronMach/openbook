@@ -2,6 +2,17 @@ using OpenBook.Domain.Companies;
 
 namespace OpenBook.Web.Components;
 
+/// <summary>What an edition calls customers: donors (nonprofit), clients (professional services), customers otherwise.</summary>
+public sealed record EditionTerms(string Customer, string Customers)
+{
+    /// <summary>"customer" in the middle of a sentence.</summary>
+    public string LowerCustomer => Customer.ToLowerInvariant();
+
+    public string LowerCustomers => Customers.ToLowerInvariant();
+
+    public static EditionTerms Default { get; } = new("Customer", "Customers");
+}
+
 /// <summary>A shortcut on the home page: where it goes and what it says (English; translated where it's shown).</summary>
 public sealed record EditionShortcut(string Href, string Label, string Hint);
 
@@ -11,6 +22,17 @@ public sealed record EditionShortcut(string Href, string Label, string Hint);
 /// </summary>
 public static class Editions
 {
+    public static EditionTerms Terms(Edition edition) => edition switch
+    {
+        Edition.Nonprofit => new("Donor", "Donors"),
+        Edition.ProfessionalServices => new("Client", "Clients"),
+        _ => new("Customer", "Customers"),
+    };
+
+    /// <summary>The company's terms, for pages that name customers.</summary>
+    public static async Task<EditionTerms> TermsAsync(OpenBook.Application.Companies.ICompanyStore companies) =>
+        Terms((await companies.GetCompanyAsync(default))?.Edition ?? Edition.General);
+
     public static string Label(Edition edition) => edition switch
     {
         Edition.ProfessionalServices => "Professional services",
@@ -30,9 +52,9 @@ public static class Editions
     /// <summary>The main menu's links, in order (paths; the layout knows each one's label).</summary>
     public static IReadOnlyList<string> Menu(Edition edition) => edition switch
     {
-        Edition.ProfessionalServices => ["/", "/projects", "/time", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
+        Edition.ProfessionalServices => ["/", "/projects", "/time", "/customers", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
         Edition.ECommerce => ["/", "/sales", "/inventory", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
-        Edition.Nonprofit => ["/", "/nonprofit", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
+        Edition.Nonprofit => ["/", "/nonprofit", "/customers", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
         _ => ["/", "/accounts", "/banking", "/sales", "/purchases", "/inventory", "/projects", "/journal", "/reports", "/dashboard"],
     };
 

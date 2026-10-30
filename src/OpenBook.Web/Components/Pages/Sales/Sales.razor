@@ -1,5 +1,6 @@
 @page "/sales"
 @inject InvoiceService Invoices
+@inject OpenBook.Application.Companies.ICompanyStore Companies
 @inject PaymentService Payments
 @inject SalesReceiptService Receipts
 @inject CustomerService CustomerService
@@ -11,7 +12,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Sales</h1>
-        <a class="button secondary" href="/customers">Customers</a>
+        <a class="button secondary" href="/customers">@_terms.Customers</a>
         <a class="button secondary" href="/items">Products and services</a>
         <a class="button secondary" href="/sales/recurring">Recurring</a>
         <a class="button secondary" href="/sales/collections">Collections</a>
@@ -177,6 +178,8 @@
 </div>
 
 @code {
+    private EditionTerms _terms = EditionTerms.Default;
+
     private static readonly (string Key, string Label)[] Tabs =
         [("open", "Unpaid invoices"), ("all-invoices", "All invoices"), ("estimates", "Estimates"), ("payments", "Payments"), ("credits", "Credits and refunds"), ("receipts", "Sales receipts")];
 
@@ -196,6 +199,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _terms = await Editions.TermsAsync(Companies);
         Show ??= "open";
         _invoices = await Invoices.ListAsync();
         _payments = await Payments.ListAsync();

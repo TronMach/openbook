@@ -185,6 +185,9 @@
   <data name="Client or project" xml:space="preserve">
     <value>Client or project</value>
   </data>
+  <data name="Clients" xml:space="preserve">
+    <value>Clients</value>
+  </data>
   <data name="Close the books" xml:space="preserve">
     <value>Close the books</value>
   </data>
@@ -239,6 +242,9 @@
   <data name="Customer" xml:space="preserve">
     <value>Customer</value>
   </data>
+  <data name="Customers" xml:space="preserve">
+    <value>Customers</value>
+  </data>
   <data name="Customers owe" xml:space="preserve">
     <value>Customers owe</value>
   </data>
@@ -268,6 +274,9 @@
   </data>
   <data name="Dismiss" xml:space="preserve">
     <value>Dismiss</value>
+  </data>
+  <data name="Donors" xml:space="preserve">
+    <value>Donors</value>
   </data>
   <data name="Due" xml:space="preserve">
     <value>Due</value>

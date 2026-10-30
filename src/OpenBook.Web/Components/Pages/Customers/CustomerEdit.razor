@@ -2,13 +2,14 @@
 @page "/customers/{Id:guid}"
 @using System.ComponentModel.DataAnnotations
 @inject CustomerService CustomerService
+@inject OpenBook.Application.Companies.ICompanyStore Companies
 @inject InvoiceService Invoices
 @inject PaymentService Payments
 @inject SalesTaxService Taxes
 @inject PricingService Pricing
 @inject NavigationManager Navigation
 
-<PageTitle>@(_customer?.DisplayName ?? "New customer") · OpenBook</PageTitle>
+<PageTitle>@(_customer?.DisplayName ?? $"New {_terms.LowerCustomer}") · OpenBook</PageTitle>
 
 @if (Id is not null && _customer is null)
 {
@@ -18,7 +19,7 @@
 
 <div class="wide">
     <div class="toolbar">
-        <h1>@(_customer?.DisplayName ?? "New customer")</h1>
+        <h1>@(_customer?.DisplayName ?? $"New {_terms.LowerCustomer}")</h1>
         @if (_customer is not null)
         {
             <a class="button secondary" href="/customers/@_customer.Id/statement">Statement</a>
@@ -277,6 +278,8 @@
 </div>
 
 @code {
+    private EditionTerms _terms = EditionTerms.Default;
+
     private Customer? _customer;
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
@@ -300,6 +303,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _terms = await Editions.TermsAsync(Companies);
         _taxCodes = await Taxes.ListCodesAsync();
         _levels = await Pricing.ListLevelsAsync();
         _all = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true);
