@@ -1,0 +1,93 @@
+@using System.Globalization
+@* A small SVG chart above a report's table (which stays the full record). Series colors and styles are the dashboard's. *@
+
+@if (Spec is { } spec)
+{
+    var max = Math.Max(1m, spec.Series.SelectMany(s => s.Values).Select(v => Math.Abs(v)).DefaultIfEmpty(0m).Max());
+    <figure class="report-chart">
+        @if (spec.Series.Count > 1)
+        {
+            <div class="legend">
+                @for (var s = 0; s < spec.Series.Count; s++)
+                {
+                    <span><span class="key" style="background: var(--series-@(s + 1))"></span>@spec.Series[s].Name</span>
+                }
+            </div>
+        }
+        @if (spec.Horizontal)
+        {
+            var values = spec.Series[0].Values;
+            var height = 24 * spec.Categories.Count + 10;
+            <svg class="chart" viewBox="0 0 760 @height" role="img" aria-label="@spec.Label; the table below has the figures.">
+                @for (var i = 0; i < spec.Categories.Count; i++)
+                {
+                    var y = 5 + 24 * i;
+                    var width = (BarRight - LabelRight) * values[i] / max;
+                    <g class="month">
+                        <title>@spec.Categories[i]: @Labels.Amount(values[i])</title>
+                        <rect class="hit" x="0" y="@y" width="760" height="24" />
+                        <text class="axis" x="@(LabelRight - 8)" y="@(y + 16)" text-anchor="end">@Clip(spec.Categories[i], 32)</text>
+                        <rect class="bar-1" x="@LabelRight" y="@(y + 5)" width="@N(Math.Max(2m, width))" height="14" rx="4" />
+                        <text class="axis" x="@N(LabelRight + Math.Max(2m, width) + 6)" y="@(y + 16)">@Short(values[i])</text>
+                    </g>
+                }
+            </svg>
+        }
+        else
+        {
+            var low = Math.Min(0m, spec.Series.SelectMany(s => s.Values).DefaultIfEmpty(0m).Min());
+            var high = Math.Max(1m, spec.Series.SelectMany(s => s.Values).DefaultIfEmpty(0m).Max());
+            var slot = (750m - Left) / spec.Categories.Count;
+            var bar = Math.Min(28m, (slot - 12m) / spec.Series.Count);
+            <svg class="chart" viewBox="0 0 760 240" role="img" aria-label="@spec.Label for each column; the table below has the figures.">
+                @foreach (var f in new[] { 0m, 0.5m, 1m })
+                {
+                    var value = low + (high - low) * f;
+                    <g>
+                        <line class="grid" x1="@Left" x2="750" y1="@N(Y(value, low, high))" y2="@N(Y(value, low, high))" />
+                        <text class="axis" x="@(Left - 6)" y="@N(Y(value, low, high) + 4)" text-anchor="end">@Short(value)</text>
+                    </g>
+                }
+                @for (var i = 0; i < spec.Categories.Count; i++)
+                {
+                    var x = Left + slot * i;
+                    var start = x + (slot - bar * spec.Series.Count - 2m * (spec.Series.Count - 1)) / 2m;
+                    <g class="month">
+                        <title>@spec.Categories[i]: @string.Join(", ", spec.Series.Select(s => $"{s.Name.ToLowerInvariant()} {Labels.Amount(s.Values[i])}"))</title>
+                        <rect class="hit" x="@N(x)" y="10" width="@N(slot)" height="190" />
+                        @for (var s = 0; s < spec.Series.Count; s++)
+                        {
+                            var v = spec.Series[s].Values[i];
+                            var top = Y(Math.Max(v, 0m), low, high);
+                            var bottom = Y(Math.Min(v, 0m), low, high);
+                            <rect class="bar-@(s + 1)" x="@N(start + (bar + 2m) * s)" y="@N(top)" width="@N(bar)" height="@N(Math.Max(1m, bottom - top))" rx="2" />
+                        }
+                        <text class="axis" x="@N(x + slot / 2)" y="220" text-anchor="middle">@Clip(spec.Categories[i], (int)(slot / 7m))</text>
+                    </g>
+                }
+            </svg>
+        }
+    </figure>
+}
+
+@code {
+    private const decimal Left = 70m;
+    private const decimal Bottom = 200m;
+    private const int LabelRight = 240;
+    private const int BarRight = 680;
+
+    [Parameter] public ReportChartSpec? Spec { get; set; }
+
+    private static decimal Y(decimal value, decimal low, decimal high) => Bottom - (value - low) / (high - low) * 190m;
+
+    private static string N(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static string Clip(string text, int length) => length < 2 ? "" : text.Length <= length ? text : text[..(length - 1)] + "…";
+
+    private static string Short(decimal value) => Math.Abs(value) switch
+    {
+        >= 1_000_000m => (value / 1_000_000m).ToString("0.#", CultureInfo.CurrentCulture) + "M",
+        >= 1_000m => (value / 1_000m).ToString("0.#", CultureInfo.CurrentCulture) + "k",
+        _ => value.ToString("0", CultureInfo.CurrentCulture),
+    };
+}

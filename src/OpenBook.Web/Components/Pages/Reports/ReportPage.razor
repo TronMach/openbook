@@ -139,6 +139,7 @@
     else if (_table is not null)
     {
         <ReportActions Key="@_definition.Key" />
+        <ReportChart Spec="ReportCharts.Pick(_definition.Key, _table)" />
         <ReportTableView Table="_table" />
     }
 </div>
