@@ -268,6 +268,26 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/grants/{id}", () => grants.VoidAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
+        // Recurring gifts. Fields: donorId, amount, depositAccountId, frequency, interval, startDate, endDate, maxOccurrences,
+        // pledgeId, incomeAccountId, classId, memo, autoCreate.
+        app.MapPost("/nonprofit/recurring", async (IFormCollection form, RecurringGiftService recurring, CancellationToken ct) =>
+            await Back("/nonprofit/recurring", () => recurring.CreateAsync(RecurringDetails(form), ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/recurring/{id:guid}", async (Guid id, IFormCollection form, RecurringGiftService recurring, CancellationToken ct) =>
+            await Back("/nonprofit/recurring", () => recurring.UpdateAsync(id, RecurringDetails(form), ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/recurring/{id:guid}/active", async (Guid id, IFormCollection form, RecurringGiftService recurring, CancellationToken ct) =>
+            await Back("/nonprofit/recurring", () => recurring.SetActiveAsync(id, form["active"] == "true", ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/recurring/record", async (IFormCollection form, RecurringGiftService recurring, CancellationToken ct) =>
+        {
+            var results = await recurring.CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: false, ct: ct);
+            var created = results.Sum(r => r.Created.Count);
+            var errors = results.Where(r => r.Error is not null).Select(r => r.Error!).ToList();
+            var done = $"{created} gift(s) recorded." + (errors.Count > 0 ? $" Stopped: {string.Join("; ", errors)}" : "");
+            return Results.Redirect($"/nonprofit/recurring?done={Uri.EscapeDataString(done)}");
+        }).RequireAuthorization();
+
         // On a class's page; "" clears the area (the parent's applies).
         app.MapPost("/segments/{id:guid}/functional-area", async (Guid id, IFormCollection form, SegmentService segments, CancellationToken ct) =>
         {
@@ -298,6 +318,21 @@ public static class NonprofitEndpoints
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}");
         }
     }
+
+    private static RecurringGiftDetails RecurringDetails(IFormCollection form) => new(
+        Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
+        Number(form["amount"]) ?? 0m,
+        Id(form["depositAccountId"]) ?? throw new DomainException("donation.account_required", "Choose the bank account it goes into."),
+        Enum.TryParse<OpenBook.Domain.Ledger.RecurrenceFrequency>(form["frequency"], out var frequency) ? frequency : OpenBook.Domain.Ledger.RecurrenceFrequency.Monthly,
+        Date(form["startDate"]) ?? DateOnly.FromDateTime(DateTime.Today),
+        int.TryParse(form["interval"], out var interval) ? interval : 1,
+        Date(form["endDate"]),
+        int.TryParse(form["maxOccurrences"], out var max) ? max : null,
+        form["autoCreate"] == "true",
+        Id(form["incomeAccountId"]),
+        Id(form["classId"]),
+        Id(form["pledgeId"]),
+        form["memo"]);
 
     private static string Reason(IFormCollection form) =>
         form["reason"].ToString().Trim() is { Length: > 0 } reason ? reason : throw new DomainException("void.reason_required", "Say why.");

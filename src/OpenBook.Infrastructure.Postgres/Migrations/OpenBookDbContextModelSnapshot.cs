@@ -2294,6 +2294,82 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("Pledges", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.RecurringGift", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<bool>("AutoCreate")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepositAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DonorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("IncomeAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LastGiftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("MaxOccurrences")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("OccurrencesPosted")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PledgeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClassId");
+
+                    b.HasIndex("DepositAccountId");
+
+                    b.HasIndex("DonorId");
+
+                    b.HasIndex("IncomeAccountId");
+
+                    b.HasIndex("PledgeId");
+
+                    b.ToTable("RecurringGifts", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.RestrictionRelease", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6468,6 +6544,36 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("ReceivableAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.RecurringGift", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DepositAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("IncomeAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Nonprofit.Pledge", null)
+                        .WithMany()
+                        .HasForeignKey("PledgeId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.RestrictionRelease", b =>

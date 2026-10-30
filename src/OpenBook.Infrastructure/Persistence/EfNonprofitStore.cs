@@ -29,6 +29,12 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     public void Add(Grant grant) => db.Grants.Add(grant);
 
+    public async Task<IReadOnlyList<RecurringGift>> ListRecurringGiftsAsync(CancellationToken ct) => await db.RecurringGifts.ToListAsync(ct);
+
+    public Task<RecurringGift?> GetRecurringGiftAsync(Guid id, CancellationToken ct) => db.RecurringGifts.SingleOrDefaultAsync(t => t.Id == id, ct);
+
+    public void Add(RecurringGift recurringGift) => db.RecurringGifts.Add(recurringGift);
+
     public void Add(RestrictionRelease release) => db.RestrictionReleases.Add(release);
 
     public void Add(Donation donation) => db.Donations.Add(donation);

@@ -39,6 +39,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Nonprofit.Pledge> Pledges => Set<OpenBook.Domain.Nonprofit.Pledge>();
     public DbSet<OpenBook.Domain.Nonprofit.GiftSettings> GiftSettings => Set<OpenBook.Domain.Nonprofit.GiftSettings>();
     public DbSet<OpenBook.Domain.Nonprofit.Grant> Grants => Set<OpenBook.Domain.Nonprofit.Grant>();
+    public DbSet<OpenBook.Domain.Nonprofit.RecurringGift> RecurringGifts => Set<OpenBook.Domain.Nonprofit.RecurringGift>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
@@ -971,6 +972,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Navigation(g => g.Budget).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Navigation(g => g.Receipts).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Navigation(g => g.Recognitions).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.RecurringGift>(b =>
+        {
+            b.ToTable("RecurringGifts");
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(t => t.Frequency).HasConversion<string>().HasMaxLength(20);
+            b.Property(t => t.Memo).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);
+            b.Ignore(t => t.NextDate);
+            b.HasIndex(t => t.DonorId);
+            b.HasOne<Customer>().WithMany().HasForeignKey(t => t.DonorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(t => t.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(t => t.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(t => t.ClassId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<OpenBook.Domain.Nonprofit.Pledge>().WithMany().HasForeignKey(t => t.PledgeId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.GiftSettings>(b =>

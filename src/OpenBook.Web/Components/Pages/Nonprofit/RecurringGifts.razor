@@ -1,0 +1,195 @@
+@page "/nonprofit/recurring"
+@using System.Globalization
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Ledger
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject RecurringGiftService Recurring
+@inject GiftService Gifts
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject SegmentService Segments
+
+<PageTitle>Recurring gifts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Recurring gifts</h1>
+        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+        @if (_templates.Any(t => t.IsDue(_today)))
+        {
+            <form method="post" action="/nonprofit/recurring/record" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <button type="submit">Record what's due (@_templates.Count(t => t.IsDue(_today)))</button>
+            </form>
+        }
+    </div>
+    <p class="muted">Monthly card gifts, standing transfers and pledges paid in installments. Each one becomes an ordinary gift on its date, by hand here or automatically within the hour.</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is not null)
+    {
+        <div class="alert notice" role="status">@Done</div>
+    }
+
+    @if (_templates.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>Donor</th><th class="num">Amount</th><th>Every</th><th>Next</th><th>Recorded</th><th>Automatic</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _templates)
+                {
+                    <tr class="@(t.IsActive ? "" : "muted")">
+                        <td><a href="/customers/@t.DonorId">@_names.GetValueOrDefault(t.DonorId)</a>@(t.PledgeId is null ? "" : " (pledge)")</td>
+                        <td class="num">@Labels.Amount(t.Amount)</td>
+                        <td>@Every(t)</td>
+                        <td>@(t.NextDate is { } next ? Labels.Date(next) : "ended")</td>
+                        <td>@t.OccurrencesPosted</td>
+                        <td>@(t.AutoCreate ? "Yes" : "No")</td>
+                        <td>
+                            <a href="/nonprofit/recurring?edit=@t.Id">Edit</a>
+                            <form method="post" action="/nonprofit/recurring/@t.Id/active" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="active" value="@(t.IsActive ? "false" : "true")" />
+                                <button type="submit" class="secondary">@(t.IsActive ? "Stop" : "Restart")</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@(_editing is null ? "Add a recurring gift" : "Edit the recurring gift")</h2>
+        <form method="post" action="@(_editing is null ? "/nonprofit/recurring" : $"/nonprofit/recurring/{_editing.Id}")" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="donor">Donor</label>
+                    <select id="donor" name="donorId" data-search required>
+                        <option value="">Choose a donor…</option>
+                        @foreach (var c in _donors)
+                        {
+                            <option value="@c.Customer.Id" selected="@(c.Customer.Id == _editing?.DonorId)">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" required value="@_editing?.Amount.ToString("0.00", CultureInfo.InvariantCulture)" /></div>
+                <div class="field">
+                    <label for="deposit">Deposited to</label>
+                    <select id="deposit" name="depositAccountId">
+                        @foreach (var a in _deposit)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _editing?.DepositAccountId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="frequency">Every</label>
+                    <div class="inline">
+                        <input name="interval" type="number" min="1" max="99" value="@(_editing?.Interval ?? 1)" style="width: 4rem" aria-label="How many" />
+                        <select id="frequency" name="frequency">
+                            @foreach (var f in Enum.GetValues<RecurrenceFrequency>())
+                            {
+                                <option value="@f" selected="@(f == (_editing?.Frequency ?? RecurrenceFrequency.Monthly))">@Unit(f)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="field"><label for="start">Starting</label><input id="start" name="startDate" type="date" value="@((_editing?.StartDate ?? _today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" /></div>
+                <div class="field"><label for="end">Ending <span class="muted">(optional)</span></label><input id="end" name="endDate" type="date" value="@_editing?.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></div>
+                <div class="field"><label for="max">Or after <span class="muted">(gifts)</span></label><input id="max" name="maxOccurrences" type="number" min="1" value="@_editing?.MaxOccurrences" style="width: 6rem" /></div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="pledge">Paying a pledge <span class="muted">(optional)</span></label>
+                    <select id="pledge" name="pledgeId" data-search>
+                        <option value="">(no)</option>
+                        @foreach (var p in _pledges)
+                        {
+                            <option value="@p.Pledge.Id" selected="@(p.Pledge.Id == _editing?.PledgeId)">Pledge @p.Pledge.Number · @p.Donor · @Labels.Amount(p.Balance) left</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="income">Contribution account <span class="muted">(optional)</span></label>
+                    <select id="income" name="incomeAccountId" data-search>
+                        <option value="">(@GiftService.ContributionsName)</option>
+                        @foreach (var a in _income)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _editing?.IncomeAccountId)">@_chart.FullName(a.Id)@(a.DonorRestricted ? " (restricted)" : "")</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="class">Purpose (class) <span class="muted">(optional)</span></label>
+                    <select id="class" name="classId" data-search>
+                        <option value="">(none)</option>
+                        @foreach (var c in _classes)
+                        {
+                            <option value="@c.Segment.Id" selected="@(c.Segment.Id == _editing?.ClassId)">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field"><label for="memo">Memo <span class="muted">(optional)</span></label><input id="memo" name="memo" maxlength="@Donation.MaxTextLength" value="@_editing?.Memo" /></div>
+            <div class="field"><label><input type="checkbox" name="autoCreate" value="true" checked="@(_editing?.AutoCreate == true)" /> Record each gift automatically on its date</label></div>
+            <div class="actions">
+                <button type="submit">@(_editing is null ? "Add" : "Save")</button>
+                @if (_editing is not null)
+                {
+                    <a href="/nonprofit/recurring">Cancel</a>
+                }
+            </div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<RecurringGift> _templates = [];
+    private RecurringGift? _editing;
+    private Dictionary<Guid, string> _names = [];
+    private IReadOnlyList<CustomerSummary> _donors = [];
+    private List<Account> _deposit = [];
+    private List<Account> _income = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private List<PledgeBalance> _pledges = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private Guid? Edit { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _templates = await Recurring.ListAsync();
+        _editing = _templates.FirstOrDefault(t => t.Id == Edit);
+        var customers = await CustomerService.ListAsync(_today);
+        _names = customers.ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
+        _donors = customers.Where(c => c.Customer.IsActive).ToList();
+        _chart = await AccountService.GetChartAsync();
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _deposit = active.Where(a => a.Type == AccountType.Bank
+                                     || (a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, "Undeposited Funds", StringComparison.OrdinalIgnoreCase))).ToList();
+        _income = active.Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+        _pledges = (await Gifts.ListPledgesAsync()).Where(p => p.Balance > 0m).ToList();
+    }
+
+    private static string Unit(RecurrenceFrequency f) => f switch
+    {
+        RecurrenceFrequency.Weekly => "week(s)",
+        RecurrenceFrequency.Monthly => "month(s)",
+        RecurrenceFrequency.Quarterly => "quarter(s)",
+        _ => "year(s)",
+    };
+
+    private static string Every(RecurringGift t) => t.Interval == 1 ? Unit(t.Frequency).Replace("(s)", "", StringComparison.Ordinal) : $"{t.Interval} {Unit(t.Frequency).Replace("(s)", "s", StringComparison.Ordinal)}";
+}

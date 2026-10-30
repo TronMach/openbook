@@ -122,6 +122,18 @@ internal static class NonprofitApi
             return PledgeResponse.From((await s.GetPledgeAsync(id, ct))!);
         });
 
+        nonprofit.MapGet("/recurring-gifts", (RecurringGiftService s, CancellationToken ct) => s.ListAsync(ct));
+        nonprofit.MapPost("/recurring-gifts", async (RecurringGiftDetails r, RecurringGiftService s, CancellationToken ct) =>
+        {
+            var template = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/nonprofit/recurring-gifts/{template.Id}", template);
+        });
+        nonprofit.MapPut("/recurring-gifts/{id:guid}", (Guid id, RecurringGiftDetails r, RecurringGiftService s, CancellationToken ct) => s.UpdateAsync(id, r, ct));
+        nonprofit.MapPut("/recurring-gifts/{id:guid}/active", (Guid id, SetActiveRequest r, RecurringGiftService s, CancellationToken ct) => s.SetActiveAsync(id, r.Active, ct));
+        nonprofit.MapPost("/recurring-gifts/record", async (RecurringGiftService s, CancellationToken ct) =>
+            (await s.CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: false, ct: ct))
+                .Select(r => new { TemplateId = r.Template.Id, Created = r.Created.Select(g => g.Id), r.Error }));
+
         nonprofit.MapGet("/settings", async (GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.GetSettingsAsync(ct)));
         nonprofit.MapPut("/settings", async (GiftSettingsCommand r, GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
 

@@ -211,6 +211,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/nonprofit", "GET", UserRole.ViewOnly)]
     [InlineData("/nonprofit/releases", "POST", UserRole.Accountant)]
     [InlineData("/nonprofit/gifts", "POST", UserRole.Standard)]
+    [InlineData("/nonprofit/recurring", "POST", UserRole.Standard)]
     [InlineData("/nonprofit/pledges/new", "GET", UserRole.Standard)]
     [InlineData("/nonprofit/settings", "POST", UserRole.Accountant)]
     [InlineData("/nonprofit/grants/new", "GET", UserRole.Accountant)]

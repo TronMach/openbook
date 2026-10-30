@@ -93,6 +93,8 @@ public static class AccessRules
         ("/nonprofit/gifts", UserRole.ViewOnly, UserRole.Standard),
         ("/nonprofit/pledges", UserRole.ViewOnly, UserRole.Standard),
         ("/nonprofit/thanks", UserRole.ViewOnly, UserRole.Standard),
+        ("/nonprofit/recurring", UserRole.ViewOnly, UserRole.Standard),
+        ("/api/nonprofit/recurring-gifts", UserRole.ViewOnly, UserRole.Standard),
         ("/nonprofit/statements", UserRole.ViewOnly, UserRole.Standard),
         ("/api/nonprofit/gifts", UserRole.ViewOnly, UserRole.Standard),
         ("/api/nonprofit/pledges", UserRole.ViewOnly, UserRole.Standard),

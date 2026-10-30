@@ -89,6 +89,7 @@ public static class Links
         "pledge" => $"/nonprofit/pledges/{id}",
         "grant" => $"/nonprofit/grants/{id}",
         "gift_settings" => "/nonprofit/settings",
+        "recurring_gift" => "/nonprofit/recurring",
         "sales_channel" => $"/sales/channels/{id}",
         "channel_payout" => $"/sales/channels/payouts/{id}",
         "channel_orders" => $"/sales/channels/orders/{id}",

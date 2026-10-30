@@ -73,6 +73,14 @@ internal sealed partial class RecurringPostingService(
                     LogStopped(result.Template.Name, result.Error);
             }
 
+            var gifts = await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Nonprofit.RecurringGiftService>()
+                .CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: true, ct: ct);
+            foreach (var result in gifts)
+            {
+                if (result.Error is not null)
+                    LogStopped($"recurring gift {result.Template.Id}", result.Error);
+            }
+
             await CollectAsync(scope.ServiceProvider, ct);
 
             foreach (var run in await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Reporting.ReportSubscriptionService>().SendDueAsync(ct))

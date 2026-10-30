@@ -24,6 +24,8 @@ public interface INonprofitStore
     Task<Pledge?> GetPledgeAsync(Guid id, CancellationToken ct);
     Task<GiftSettings?> GetSettingsAsync(CancellationToken ct);
     Task<IReadOnlyList<Grant>> ListGrantsAsync(CancellationToken ct);
+    Task<IReadOnlyList<RecurringGift>> ListRecurringGiftsAsync(CancellationToken ct);
+    Task<RecurringGift?> GetRecurringGiftAsync(Guid id, CancellationToken ct);
     Task<Grant?> GetGrantAsync(Guid id, CancellationToken ct);
 
     void Add(RestrictionRelease release);
@@ -31,6 +33,7 @@ public interface INonprofitStore
     void Add(Pledge pledge);
     void Add(GiftSettings settings);
     void Add(Grant grant);
+    void Add(RecurringGift recurringGift);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

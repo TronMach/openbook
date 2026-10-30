@@ -255,6 +255,32 @@ public sealed class NonprofitTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Recurring_gifts_record_each_occurrence_and_can_pay_off_a_pledge()
+    {
+        var sam = await Donor("Sam Monthly");
+        var pledge = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, new DateOnly(2026, 1, 1), 300m)));
+        var template = await In<RecurringGiftService, RecurringGift>(s => s.CreateAsync(new RecurringGiftDetails(sam.Id, 100m, Account("Checking"),
+            Domain.Ledger.RecurrenceFrequency.Monthly, new DateOnly(2026, 1, 31), PledgeId: pledge.Id, AutoCreate: true)));
+        Assert.Equal(new DateOnly(2026, 1, 31), template.NextDate);
+
+        var results = await In<RecurringGiftService, IReadOnlyList<RecurringGiftResult>>(s => s.CreateDueAsync(new DateOnly(2026, 3, 31), automaticOnly: true));
+        var run = Assert.Single(results);
+        Assert.Equal([new DateOnly(2026, 1, 31), new DateOnly(2026, 2, 28), new DateOnly(2026, 3, 31)], run.Created.Select(g => g.Date));
+        Assert.All(run.Created, g => Assert.Equal(pledge.Id, g.PledgeId));
+        Assert.Null(run.Error);
+        Assert.Equal(0m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
+
+        // The pledge is paid, so the next one stops the template with the reason.
+        var stopped = Assert.Single(await In<RecurringGiftService, IReadOnlyList<RecurringGiftResult>>(s => s.CreateDueAsync(new DateOnly(2026, 4, 30), automaticOnly: true)));
+        Assert.Empty(stopped.Created);
+        Assert.NotNull(stopped.Error);
+
+        var other = await Donor("Someone Else");
+        Assert.Equal("donation.pledge_donor", (await Assert.ThrowsAsync<DomainException>(() => In<RecurringGiftService, RecurringGift>(s =>
+            s.CreateAsync(new RecurringGiftDetails(other.Id, 10m, Account("Checking"), Domain.Ledger.RecurrenceFrequency.Monthly, Jan1, PledgeId: pledge.Id))))).Code);
+    }
+
+    [Fact]
     public async Task Gifts_and_retainers_wait_in_undeposited_funds_until_deposited()
     {
         var pat = await Donor("Pat Giver");
