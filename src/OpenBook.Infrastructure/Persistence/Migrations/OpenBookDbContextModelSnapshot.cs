@@ -2097,6 +2097,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("AdvanceAccountId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Amount")
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountMinor");
@@ -2150,6 +2153,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdvanceAccountId");
 
                     b.HasIndex("AwardEntryId");
 
@@ -6142,6 +6147,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Grant", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AdvanceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("AwardEntryId")
@@ -6212,6 +6222,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("INTEGER");
 
+                            b1.Property<long>("AdvancePart")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AdvancePartMinor");
+
                             b1.Property<long>("Amount")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("AmountMinor");
@@ -6260,6 +6274,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<int>("LineNumber")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("INTEGER");
+
+                            b1.Property<long>("AdvancePart")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AdvancePartMinor");
 
                             b1.Property<long>("Amount")
                                 .HasColumnType("INTEGER")

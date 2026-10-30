@@ -931,6 +931,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Ignore(g => g.Received);
             b.Ignore(g => g.Recognized);
             b.Ignore(g => g.Due);
+            b.Ignore(g => g.Advance);
+            b.Ignore(g => g.Receivable);
+            b.HasOne<Account>().WithMany().HasForeignKey(g => g.AdvanceAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(g => g.FunderId);
             b.HasOne<Customer>().WithMany().HasForeignKey(g => g.FunderId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Segment>().WithMany().HasForeignKey(g => g.ClassId).OnDelete(DeleteBehavior.Restrict);
@@ -951,6 +954,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.WithOwner().HasForeignKey("GrantId");
                 l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantReceipt.LineNumber));
                 l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.AdvancePart).HasColumnName("AdvancePartMinor").HasConversion(MinorUnits);
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
                 l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
             });
@@ -960,6 +964,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.WithOwner().HasForeignKey("GrantId");
                 l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantRecognition.LineNumber));
                 l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.AdvancePart).HasColumnName("AdvancePartMinor").HasConversion(MinorUnits);
                 l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(g => g.Budget).UsePropertyAccessMode(PropertyAccessMode.Field);

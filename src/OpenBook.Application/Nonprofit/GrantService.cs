@@ -55,6 +55,7 @@ public sealed class GrantService(
     public const string EntityType = "grant";
     public const string GrantsIncomeName = "Grants";
     public const string ReceivableName = "Grants Receivable";
+    public const string AdvanceName = "Refundable Advances";
 
     public async Task<IReadOnlyList<Grant>> ListAsync(CancellationToken ct = default) =>
         (await store.ListGrantsAsync(ct)).OrderBy(g => g.Status).ThenByDescending(g => g.StartsOn).ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -141,11 +142,20 @@ public sealed class GrantService(
         var bank = (await accounts.GetChartAsync(ct)).Find(bankAccountId);
         if (bank is not { Type: AccountType.Bank, IsActive: true })
             throw new DomainException("grant.bank", "Choose the bank account it went into.");
+        grant.CheckReceipt(amount);
         var before = Snapshot(grant);
         var memo = $"Grant payment: {grant.Name}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(date,
-            [JournalLineDraft.Dr(bank.Id, amount, memo), JournalLineDraft.Cr(grant.ReceivableAccountId, amount, memo, grant.ClassId)],
-            memo, Grant.ReceiptSource, grant.Id), ct);
+        var advance = grant.AdvancePartOf(amount);
+        var lines = new List<JournalLineDraft> { JournalLineDraft.Dr(bank.Id, amount, memo) };
+        if (amount - advance > 0m)
+            lines.Add(JournalLineDraft.Cr(grant.ReceivableAccountId, amount - advance, memo, grant.ClassId));
+        if (advance > 0m)
+        {
+            grant.UseAdvanceAccount((await AdvanceAccountAsync(ct)).Id);
+            lines.Add(JournalLineDraft.Cr(grant.AdvanceAccountId!.Value, advance, $"{memo} (paid ahead)", grant.ClassId));
+        }
+
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(date, lines, memo, Grant.ReceiptSource, grant.Id), ct);
         grant.AddReceipt(date, amount, bank.Id, entry.Id);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
@@ -163,10 +173,15 @@ public sealed class GrantService(
             throw new DomainException("grant.nothing_to_recognize", "Nothing spent on this grant is waiting to be recognized.");
         var before = Snapshot(grant);
         var memo = $"Grant income earned: {grant.Name}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(through,
-            [JournalLineDraft.Dr(grant.ReceivableAccountId, position.ReadyToRecognize, memo, grant.ClassId),
-                JournalLineDraft.Cr(grant.IncomeAccountId, position.ReadyToRecognize, memo, grant.ClassId)],
-            memo, Grant.RecognitionSource, grant.Id), ct);
+        var amount = position.ReadyToRecognize;
+        var fromAdvance = grant.AdvanceUsedBy(amount);
+        var lines = new List<JournalLineDraft>();
+        if (fromAdvance > 0m)
+            lines.Add(JournalLineDraft.Dr(grant.AdvanceAccountId!.Value, fromAdvance, memo, grant.ClassId));
+        if (amount - fromAdvance > 0m)
+            lines.Add(JournalLineDraft.Dr(grant.ReceivableAccountId, amount - fromAdvance, memo, grant.ClassId));
+        lines.Add(JournalLineDraft.Cr(grant.IncomeAccountId, amount, memo, grant.ClassId));
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(through, lines, memo, Grant.RecognitionSource, grant.Id), ct);
         grant.AddRecognition(through, position.ReadyToRecognize, entry.Id);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
@@ -178,10 +193,8 @@ public sealed class GrantService(
         var grant = await RequiredAsync(id, ct, activeOnly: false);
         var receipt = grant.Receipts.FirstOrDefault(r => r.LineNumber == line) ?? throw new EntityNotFoundException("grant_receipt", id);
         var before = Snapshot(grant);
-        if (receipt.IsVoided)
-            throw new DomainException("grant.receipt_voided", "This payment is already voided.");
+        grant.VoidReceipt(line); // checks before the reversal is staged
         await engine.StageVoidAsync(receipt.EntryId, reason, fromDocument: true, ct);
-        receipt.Void();
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -192,10 +205,8 @@ public sealed class GrantService(
         var grant = await RequiredAsync(id, ct, activeOnly: false);
         var recognition = grant.Recognitions.FirstOrDefault(r => r.LineNumber == line) ?? throw new EntityNotFoundException("grant_recognition", id);
         var before = Snapshot(grant);
-        if (recognition.IsVoided)
-            throw new DomainException("grant.recognition_voided", "This is already voided.");
+        grant.VoidRecognition(line); // checks before the reversal is staged
         await engine.StageVoidAsync(recognition.EntryId, reason, fromDocument: true, ct);
-        recognition.Void();
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -286,6 +297,12 @@ public sealed class GrantService(
                ?? await accounts.CreateAsync(new CreateAccountCommand(GrantsIncomeName, AccountType.Income), ct);
     }
 
+    private async Task<Account> AdvanceAccountAsync(CancellationToken ct) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.OtherCurrentLiability && string.Equals(a.Name, AdvanceName, StringComparison.OrdinalIgnoreCase))
+        ?? await accounts.CreateAsync(new CreateAccountCommand(AdvanceName, AccountType.OtherCurrentLiability,
+            Description: "Conditional grant money received before it was earned; refundable if the conditions aren't met."), ct);
+
     /// <summary>"Grants Receivable": an existing one (other current asset or A/R), else a new other current asset.</summary>
     private async Task<Account> ReceivableAsync(ChartOfAccounts chart, CancellationToken ct) =>
         chart.Ordered(includeInactive: false).Select(x => x.Account)
@@ -310,7 +327,7 @@ public sealed class GrantService(
         g.Terms,
         Status = g.Status.ToString(),
         Budget = g.Budget.Select(b => new { b.AccountId, b.Amount }),
-        Receipts = g.Receipts.Select(r => new { r.Date, r.Amount, r.IsVoided }),
-        Recognitions = g.Recognitions.Select(r => new { r.Date, r.Amount, r.IsVoided }),
+        Receipts = g.Receipts.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
+        Recognitions = g.Recognitions.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
     });
 }

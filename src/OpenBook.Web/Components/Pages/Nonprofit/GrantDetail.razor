@@ -43,7 +43,11 @@
             <dt>Income account</dt><dd>@_chart.FullName(g.IncomeAccountId)</dd>
             <dt>Income so far</dt><dd>@Labels.Amount(g.Recognized)</dd>
             <dt>Received</dt><dd>@Labels.Amount(g.Received)</dd>
-            <dt>Due from funder</dt><dd>@Labels.Amount(g.Due)@(g.Due < 0m ? " (paid ahead of spending)" : "")</dd>
+            <dt>Due from funder</dt><dd>@Labels.Amount(Math.Max(0m, g.Due))</dd>
+            @if (g.Advance > 0m)
+            {
+                <dt>Paid ahead</dt><dd>@Labels.Amount(g.Advance) held in @_chart.FullName(g.AdvanceAccountId!.Value) until earned</dd>
+            }
             <dt>Spent so far</dt><dd>@Labels.Amount(_position.Spent) (@Labels.Amount(_position.Unspent) left)</dd>
             @if (g.Terms is { } terms)
             {

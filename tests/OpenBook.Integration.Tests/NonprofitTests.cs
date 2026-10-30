@@ -351,6 +351,32 @@ public sealed class NonprofitTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Money_paid_ahead_on_a_conditional_grant_is_a_refundable_advance_until_earned()
+    {
+        var city = await Donor("City Arts Council");
+        var checking = Account("Checking");
+        var grant = await NewGrant(new GrantCommand("Mural project", city.Id, 3000m, Jan1, Jan1, Dec31, ClassId: _scholarships, Conditional: true));
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 2, 1), 2000m, checking));
+        var advances = (await In<AccountService, ChartOfAccounts>(s => s.GetChartAsync())).FindByFullName(GrantService.AdvanceName)!;
+        Assert.Equal(AccountType.OtherCurrentLiability, advances.Type);
+        async Task<decimal> Balance(Guid account) =>
+            (await _db.InScope(sp => sp.GetRequiredService<ReportLedger>().LinesAsync(ReportBasis.Accrual, null, Dec31))).Where(l => l.AccountId == account).Sum(l => l.Amount);
+        Assert.Equal((-2000m, 0m), (await Balance(advances.Id), await Balance(grant.ReceivableAccountId)));
+
+        await Post(new DateOnly(2026, 3, 1), Dr(Account("Program Supplies"), 2600m, classId: _scholarships), Cr(checking, 2600m));
+        var earned = await In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, new DateOnly(2026, 3, 31)));
+        Assert.Equal((0m, 600m, 2600m), (earned.Advance, earned.Receivable, earned.Recognized));
+        Assert.Equal((0m, 600m), (await Balance(advances.Id), await Balance(grant.ReceivableAccountId)));
+
+        Assert.Equal("grant.advance_used", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.VoidReceiptAsync(grant.Id, 1, "Wrong grant")))).Code);
+        var paid = await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 4, 1), 1000m, checking));
+        Assert.Equal((400m, 0m), (paid.Advance, paid.Receivable));
+        Assert.Equal("grant.recognition_paid", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.VoidRecognitionAsync(grant.Id, 1, "Too early")))).Code);
+    }
+
+    [Fact]
     public async Task Form_990_part_ix_splits_mapped_lines_by_function()
     {
         Assert.Equal("n.9.7", _chart.FindByFullName("Salaries and Wages")!.TaxLineKey);

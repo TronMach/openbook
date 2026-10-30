@@ -18,7 +18,9 @@ public enum GrantStatus
 /// within the grant period counts against it and its budget. An unconditional grant is income when awarded (Dr the
 /// receivable / Cr the grant income account on the class). A conditional grant, such as cost reimbursement, is income
 /// only as its condition is met: each recognition posts what's been spent and not yet recognized, up to the award.
-/// Payments from the funder reduce the receivable. Recognitions and receipts are voided, never edited.
+/// Payments from the funder reduce the receivable; on a conditional grant, what's paid beyond the income recognized so
+/// far is a refundable advance (a liability), which later recognitions draw down before the receivable. Recognitions
+/// and receipts are voided, never edited.
 /// </summary>
 public sealed class Grant
 {
@@ -61,6 +63,9 @@ public sealed class Grant
     /// <summary>The award entry of an unconditional grant.</summary>
     public Guid? AwardEntryId { get; private set; }
 
+    /// <summary>Conditional grants: the liability for money paid ahead of the income ("Refundable Advances"), set when first needed.</summary>
+    public Guid? AdvanceAccountId { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
     public IReadOnlyList<GrantBudgetLine> Budget => _budget;
     public IReadOnlyList<GrantReceipt> Receipts => _receipts;
@@ -73,6 +78,22 @@ public sealed class Grant
 
     /// <summary>What the funder still owes for income recognized; negative when they've paid ahead.</summary>
     public decimal Due => Recognized - Received;
+
+    /// <summary>Money held as a refundable advance: paid ahead and not yet earned.</summary>
+    public decimal Advance =>
+        _receipts.Where(r => !r.IsVoided).Sum(r => r.AdvancePart) - _recognitions.Where(r => !r.IsVoided).Sum(r => r.AdvancePart);
+
+    /// <summary>The receivable's balance for this grant: income recognized (or awarded) and not yet paid.</summary>
+    public decimal Receivable => (Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount - r.AdvancePart) : Recognized)
+                                 - _receipts.Where(r => !r.IsVoided).Sum(r => r.Amount - r.AdvancePart);
+
+    /// <summary>How much of a payment would be a refundable advance: what's beyond the receivable (conditional grants only).</summary>
+    public decimal AdvancePartOf(decimal amount) => Conditional ? Math.Max(0m, amount - Math.Max(0m, Receivable)) : 0m;
+
+    /// <summary>How much of a recognition would come out of the advance before the receivable.</summary>
+    public decimal AdvanceUsedBy(decimal amount) => Math.Min(amount, Math.Max(0m, Advance));
+
+    public void UseAdvanceAccount(Guid accountId) => AdvanceAccountId ??= accountId;
 
     public static Grant Create(
         Guid id, string name, Guid funderId, string? reference, decimal amount, DateOnly awardedOn, DateOnly startsOn, DateOnly endsOn,
@@ -137,14 +158,20 @@ public sealed class Grant
         _budget.AddRange(lines.Where(l => l.Amount != 0m).Select((l, i) => new GrantBudgetLine(i + 1, l.AccountId, l.Amount)));
     }
 
-    public GrantReceipt AddReceipt(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId)
+    /// <summary>Refuses a payment that isn't whole cents above zero or would pay more than the award.</summary>
+    public void CheckReceipt(decimal amount)
     {
         EnsureActive();
         if (amount <= 0m || decimal.Round(amount, 2) != amount)
             throw new DomainException("grant.receipt_amount", "Enter an amount above zero, in cents.");
         if (Received + amount > Amount)
             throw new DomainException("grant.overpaid", $"That would be more than the {Amount:N2} awarded.");
-        var receipt = new GrantReceipt(_receipts.Count + 1, date, amount, bankAccountId, entryId);
+    }
+
+    public GrantReceipt AddReceipt(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId)
+    {
+        CheckReceipt(amount);
+        var receipt = new GrantReceipt(_receipts.Count + 1, date, amount, bankAccountId, entryId, AdvancePartOf(amount));
         _receipts.Add(receipt);
         return receipt;
     }
@@ -156,9 +183,27 @@ public sealed class Grant
             throw new DomainException("grant.unconditional", "An unconditional grant was income when awarded.");
         if (amount <= 0m || Recognized + amount > Amount)
             throw new DomainException("grant.recognize_amount", "Nothing more to recognize, or more than the award.");
-        var recognition = new GrantRecognition(_recognitions.Count + 1, date, amount, entryId);
+        var recognition = new GrantRecognition(_recognitions.Count + 1, date, amount, entryId, AdvanceUsedBy(amount));
         _recognitions.Add(recognition);
         return recognition;
+    }
+
+    /// <summary>A payment can be voided unless its advance has since been earned (void that recognition first).</summary>
+    public void VoidReceipt(int line)
+    {
+        var receipt = _receipts.FirstOrDefault(r => r.LineNumber == line) ?? throw new DomainException("grant.receipt_unknown", "There's no such payment.");
+        if (!receipt.IsVoided && receipt.AdvancePart > Advance)
+            throw new DomainException("grant.advance_used", "Income has been recognized from this payment since. Void that first.");
+        receipt.Void();
+    }
+
+    /// <summary>A recognition can be voided unless the funder has since paid what it made receivable (void that payment first).</summary>
+    public void VoidRecognition(int line)
+    {
+        var recognition = _recognitions.FirstOrDefault(r => r.LineNumber == line) ?? throw new DomainException("grant.recognition_unknown", "There's no such recognition.");
+        if (!recognition.IsVoided && recognition.Amount - recognition.AdvancePart > Receivable)
+            throw new DomainException("grant.recognition_paid", "The funder has paid against this income since. Void that payment first.");
+        recognition.Void();
     }
 
     public void Close()
@@ -208,20 +253,21 @@ public sealed class GrantBudgetLine
     public decimal Amount { get; private set; }
 }
 
-/// <summary>Money from the funder: Dr the bank / Cr the grant's receivable.</summary>
+/// <summary>Money from the funder: Dr the bank / Cr the grant's receivable, and the refundable advance for anything paid ahead.</summary>
 public sealed class GrantReceipt
 {
     private GrantReceipt()
     {
     }
 
-    internal GrantReceipt(int lineNumber, DateOnly date, decimal amount, Guid bankAccountId, Guid entryId)
+    internal GrantReceipt(int lineNumber, DateOnly date, decimal amount, Guid bankAccountId, Guid entryId, decimal advancePart)
     {
         LineNumber = lineNumber;
         Date = date;
         Amount = amount;
         BankAccountId = bankAccountId;
         EntryId = entryId;
+        AdvancePart = advancePart;
     }
 
     public int LineNumber { get; private set; }
@@ -229,6 +275,10 @@ public sealed class GrantReceipt
     public decimal Amount { get; private set; }
     public Guid BankAccountId { get; private set; }
     public Guid EntryId { get; private set; }
+
+    /// <summary>The part paid ahead of the income, credited to the refundable advance rather than the receivable.</summary>
+    public decimal AdvancePart { get; private set; }
+
     public bool IsVoided { get; private set; }
 
     public void Void()
@@ -239,25 +289,29 @@ public sealed class GrantReceipt
     }
 }
 
-/// <summary>Income recognized on a conditional grant as its condition was met: Dr the receivable / Cr the grant income.</summary>
+/// <summary>Income recognized on a conditional grant as its condition was met: Dr the advance (as far as it goes) and the receivable / Cr the grant income.</summary>
 public sealed class GrantRecognition
 {
     private GrantRecognition()
     {
     }
 
-    internal GrantRecognition(int lineNumber, DateOnly date, decimal amount, Guid entryId)
+    internal GrantRecognition(int lineNumber, DateOnly date, decimal amount, Guid entryId, decimal advancePart)
     {
         LineNumber = lineNumber;
         Date = date;
         Amount = amount;
         EntryId = entryId;
+        AdvancePart = advancePart;
     }
 
     public int LineNumber { get; private set; }
     public DateOnly Date { get; private set; }
     public decimal Amount { get; private set; }
     public Guid EntryId { get; private set; }
+
+    /// <summary>The part taken out of the refundable advance rather than added to the receivable.</summary>
+    public decimal AdvancePart { get; private set; }
     public bool IsVoided { get; private set; }
 
     public void Void()

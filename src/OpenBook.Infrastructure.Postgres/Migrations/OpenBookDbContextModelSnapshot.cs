@@ -2104,6 +2104,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AdvanceAccountId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("Amount")
                         .HasColumnType("bigint")
                         .HasColumnName("AmountMinor");
@@ -2157,6 +2160,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdvanceAccountId");
 
                     b.HasIndex("AwardEntryId");
 
@@ -6165,6 +6170,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Grant", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AdvanceAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("AwardEntryId")
@@ -6239,6 +6249,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
 
+                            b1.Property<long>("AdvancePart")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AdvancePartMinor");
+
                             b1.Property<long>("Amount")
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
@@ -6289,6 +6303,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("integer");
 
                             NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<long>("AdvancePart")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AdvancePartMinor");
 
                             b1.Property<long>("Amount")
                                 .HasColumnType("bigint")
