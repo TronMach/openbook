@@ -2,6 +2,10 @@ using System.Globalization;
 using System.Text.Json;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Inventory;
+using OpenBook.Application.Ledger;
+using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Inventory;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Purchases;
@@ -31,7 +35,9 @@ public sealed record BillOrderLine(int LineNumber, decimal Quantity, decimal? Un
 public sealed record BillFromOrderCommand(DateOnly Date, string? Reference = null, IReadOnlyList<BillOrderLine>? Lines = null, DateOnly? DueDate = null, string? Memo = null);
 
 /// <summary>A purchase order line with what's been received and billed of it.</summary>
-public sealed record PurchaseOrderLineStatus(PurchaseOrderLine Line, decimal Received, decimal BilledQuantity, decimal BilledAmount)
+/// <param name="BilledFromStock">Units billed that had come into stock on delivery; <paramref name="BilledFromStockAmount"/> is their received value.</param>
+public sealed record PurchaseOrderLineStatus(
+    PurchaseOrderLine Line, decimal Received, decimal BilledQuantity, decimal BilledAmount, decimal BilledFromStock = 0m, decimal BilledFromStockAmount = 0m)
 {
     /// <summary>Units (or, on a category line, the amount) still to bill.</summary>
     public decimal ToBill => Line.IsItem ? Line.Quantity - BilledQuantity : Line.Amount - BilledAmount;
@@ -50,9 +56,13 @@ public sealed record PurchaseOrderProgress(IReadOnlyList<Bill> Bills, IReadOnlyL
 /// both (3-way match): differences hold the bill for approval.
 /// </summary>
 public sealed class PurchaseOrderService(
-    IPurchasesStore store, Sales.ISalesStore sales, AccountService accounts, WarehouseService warehouses, BillService bills, IClock clock, ICurrentUser user)
+    IPurchasesStore store, Sales.ISalesStore sales, AccountService accounts, WarehouseService warehouses, BillService bills,
+    InventoryService inventory, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "purchase_order";
+    public const string ReceiptSource = "purchases.receipt";
+    public const string ReceivedNotBilledName = "Received Not Billed";
+    public const string PriceVarianceName = "Purchase Price Variance";
 
     public async Task<string> SuggestNumberAsync(CancellationToken ct = default) =>
         Sales.SalesAccounts.NextNumber(await store.ListPurchaseOrderNumbersAsync(ct));
@@ -106,6 +116,8 @@ public sealed class PurchaseOrderService(
         var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(order);
         var number = order.Receive(command.Date, (command.Lines ?? []).Select(l => (l.LineNumber, l.Quantity)).ToList(), command.Note);
+        if ((await store.GetPurchasingSettingsAsync(ct))?.ReceiveIntoStock == true)
+            await PutInStockAsync(order, number, command.Date, ct);
         store.Add(Audit(AuditAction.Updated, order, before));
         await store.SaveChangesAsync(ct);
         return number;
@@ -115,6 +127,24 @@ public sealed class PurchaseOrderService(
     {
         var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(order);
+        var rows = order.Receipts.Where(r => r.ReceiptNumber == receiptNumber && !r.IsVoided).ToList();
+        if (rows.FirstOrDefault(r => r.InStock) is { StockSourceId: { } stockId } first)
+        {
+            // Units already billed against "Received Not Billed" must stay covered by deliveries in stock.
+            var progress = await ProgressAsync(order, ct);
+            foreach (var line in rows.GroupBy(r => r.LineNumber))
+            {
+                var billed = progress.Lines.First(l => l.Line.LineNumber == line.Key).BilledFromStock;
+                if (order.InStock(line.Key).Quantity - line.Sum(r => r.Quantity) < billed)
+                    throw new DomainException("purchaseorder.receipt_billed", "Part of this delivery has been billed. Void that bill first.");
+            }
+
+            var stock = await inventory.PlanReversalAsync(InventorySources.PurchaseReceipt, stockId, first.Date, $"delivery {receiptNumber}", ct);
+            if (first.JournalEntryId is { } entryId)
+                await engine.StageVoidAsync(entryId, $"Delivery {receiptNumber} of PO {order.Number} taken back", fromDocument: true, ct);
+            inventory.Apply(stock, InventorySources.PurchaseReceipt, stockId);
+        }
+
         order.VoidReceipt(receiptNumber);
         store.Add(Audit(AuditAction.Updated, order, before));
         await store.SaveChangesAsync(ct);
@@ -162,8 +192,26 @@ public sealed class PurchaseOrderService(
                 if (cost < 0m || decimal.Round(cost, 4) != cost)
                     throw new DomainException("purchaseorder.cost_invalid", "Unit costs are zero or more with up to 4 decimals.");
                 var amount = decimal.Round(pick.Quantity * cost, 2, MidpointRounding.AwayFromZero);
-                drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount, line.Description, line.ItemId, pick.Quantity));
-                sources.Add(new BillSourceLine(line.LineNumber, pick.Quantity, amount));
+                // Units already in stock from deliveries clear "Received Not Billed" at the value they came in at; the rest
+                // go into stock with the bill.
+                var (inStock, inStockValue) = order.InStock(line.LineNumber);
+                var accruedQuantity = Math.Min(pick.Quantity, Math.Max(0m, inStock - status.BilledFromStock));
+                var accruedAmount = 0m;
+                if (accruedQuantity > 0m)
+                {
+                    accruedAmount = accruedQuantity == inStock - status.BilledFromStock
+                        ? inStockValue - status.BilledFromStockAmount
+                        : decimal.Round(accruedQuantity * line.UnitCost, 2, MidpointRounding.AwayFromZero);
+                    var accruedBilled = accruedQuantity == pick.Quantity ? amount : decimal.Round(accruedQuantity * cost, 2, MidpointRounding.AwayFromZero);
+                    drafts.Add(new Domain.Purchases.BillLineDraft((await ReceivedNotBilledAsync(ct)).Id, accruedAmount, $"{line.Description} (received)"));
+                    if (accruedBilled != accruedAmount)
+                        drafts.Add(new Domain.Purchases.BillLineDraft((await PriceVarianceAsync(ct)).Id, accruedBilled - accruedAmount, $"{line.Description}: price difference"));
+                    if (pick.Quantity > accruedQuantity)
+                        drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount - accruedBilled, line.Description, line.ItemId, pick.Quantity - accruedQuantity));
+                }
+                else
+                    drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount, line.Description, line.ItemId, pick.Quantity));
+                sources.Add(new BillSourceLine(line.LineNumber, pick.Quantity, amount, accruedQuantity, accruedAmount));
 
                 var billed = status.BilledQuantity + pick.Quantity;
                 if (billed > line.Quantity)
@@ -198,6 +246,44 @@ public sealed class PurchaseOrderService(
             recurringBillId: null, ct, new BillSource(order.Id, sources, exceptions, completes));
     }
 
+    /// <summary>
+    /// Puts delivery <paramref name="number"/> in stock at the order's unit costs, in the order's warehouse (one layer per
+    /// row): Dr each item's inventory asset / Cr "Received Not Billed". Lot and serial items are refused (their numbers go on the bill).
+    /// </summary>
+    private async Task PutInStockAsync(PurchaseOrder order, int number, DateOnly date, CancellationToken ct)
+    {
+        var rows = order.Receipts.Where(r => r.ReceiptNumber == number).ToList();
+        var lines = order.Lines.ToDictionary(l => l.LineNumber);
+        var values = rows.ToDictionary(r => r.Id, r => decimal.Round(r.Quantity * lines[r.LineNumber].UnitCost, 2, MidpointRounding.AwayFromZero));
+        var drafts = rows.Select(r => new Domain.Purchases.BillLineDraft(Guid.Empty, values[r.Id], lines[r.LineNumber].Description, lines[r.LineNumber].ItemId, r.Quantity)).ToList();
+        var (posted, plan) = await inventory.PlanPurchaseAsync(drafts, date, order.WarehouseId, ct);
+
+        var stockId = Guid.CreateVersion7();
+        Guid? entryId = null;
+        var total = values.Values.Sum();
+        if (total != 0m)
+        {
+            var memo = $"PO {order.Number} delivery {number}";
+            var postings = posted.Where(d => d.Amount != 0m).Select(d => JournalLineDraft.Dr(d.AccountId, d.Amount, d.Description)).ToList();
+            postings.Add(JournalLineDraft.Cr((await ReceivedNotBilledAsync(ct)).Id, total, memo));
+            entryId = (await engine.StageAsync(new PostJournalEntryCommand(date, postings, memo, ReceiptSource, stockId, LocationId: order.LocationId), ct)).Id;
+        }
+
+        inventory.Apply(plan, InventorySources.PurchaseReceipt, stockId);
+        order.MarkInStock(number, stockId, entryId, values);
+    }
+
+    private Task<Account> ReceivedNotBilledAsync(CancellationToken ct) =>
+        GetOrCreateAsync(ReceivedNotBilledName, AccountType.OtherCurrentLiability, "Goods received into stock that the vendor hasn't billed yet.", ct);
+
+    private Task<Account> PriceVarianceAsync(CancellationToken ct) =>
+        GetOrCreateAsync(PriceVarianceName, AccountType.CostOfGoodsSold, "What bills cost more (or less) than goods were received at.", ct);
+
+    private async Task<Account> GetOrCreateAsync(string name, AccountType type, string description, CancellationToken ct) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == type && string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))
+        ?? await accounts.CreateAsync(new CreateAccountCommand(name, type, Description: description), ct);
+
     /// <summary>What's received and not billed; or, with nothing received, everything left.</summary>
     private static List<BillOrderLine> DefaultPicks(PurchaseOrder order, PurchaseOrderProgress progress)
     {
@@ -216,7 +302,8 @@ public sealed class PurchaseOrderService(
         var billed = made.Where(b => b.Status == DocumentStatus.Posted).SelectMany(b => b.SourceLines).ToLookup(s => s.LineNumber);
         var received = order.Received;
         return new PurchaseOrderProgress(made, order.Lines.OrderBy(l => l.LineNumber)
-            .Select(l => new PurchaseOrderLineStatus(l, received.GetValueOrDefault(l.LineNumber), billed[l.LineNumber].Sum(s => s.Quantity), billed[l.LineNumber].Sum(s => s.Amount)))
+            .Select(l => new PurchaseOrderLineStatus(l, received.GetValueOrDefault(l.LineNumber), billed[l.LineNumber].Sum(s => s.Quantity), billed[l.LineNumber].Sum(s => s.Amount),
+                billed[l.LineNumber].Sum(s => s.AccruedQuantity), billed[l.LineNumber].Sum(s => s.AccruedAmount)))
             .ToList());
     }
 
@@ -260,6 +347,6 @@ public sealed class PurchaseOrderService(
         o.WarehouseId,
         o.LocationId,
         Lines = o.Lines.Select(l => new { l.LineNumber, l.ItemId, l.AccountId, l.Description, l.Quantity, l.UnitCost, l.Amount }),
-        Receipts = o.Receipts.Select(r => new { r.ReceiptNumber, r.Date, r.LineNumber, r.Quantity, r.Note, r.IsVoided }),
+        Receipts = o.Receipts.Select(r => new { r.ReceiptNumber, r.Date, r.LineNumber, r.Quantity, r.Note, r.IsVoided, r.InStock, r.Value }),
     });
 }

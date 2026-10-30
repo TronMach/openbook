@@ -81,11 +81,29 @@ public sealed class PurchaseOrderReceipt
     public string? Note { get; private set; }
     public bool IsVoided { get; private set; }
 
+    /// <summary>
+    /// Set when the delivery went into stock (purchasing setting <see cref="PurchasingSettings.ReceiveIntoStock"/>): the
+    /// id its stock movements and journal entry carry (shared by every row of the delivery).
+    /// </summary>
+    public Guid? StockSourceId { get; private set; }
+
+    /// <summary>The entry Dr inventory / Cr "Received Not Billed"; null when nothing had a cost.</summary>
+    public Guid? JournalEntryId { get; private set; }
+
+    /// <summary>What this row added to stock and to "Received Not Billed" (quantity × the order's unit cost, to the cent).</summary>
+    public decimal Value { get; private set; }
+
+    public bool InStock => StockSourceId is not null;
+
     internal void Void() => IsVoided = true;
+
+    internal void Posted(Guid stockSourceId, Guid? entryId, decimal value) => (StockSourceId, JournalEntryId, Value) = (stockSourceId, entryId, value);
 }
 
 /// <summary>
-/// An order to a vendor. Posts nothing: receiving records what arrived (stock still enters the books with the bill),
+/// An order to a vendor. Posts nothing itself. Receiving records what arrived; with the purchasing setting
+/// <see cref="PurchasingSettings.ReceiveIntoStock"/> it also puts it in stock against "Received Not Billed", otherwise
+/// stock enters the books with the bill,
 /// and bills made from it say which lines they bill (<see cref="Bill.SourceLines"/>), so the order, the goods received
 /// and the bill can be matched (3-way match).
 /// </summary>
@@ -202,6 +220,19 @@ public sealed class PurchaseOrder
         return receiptNumber;
     }
 
+    /// <summary>Records that delivery <paramref name="receiptNumber"/> went into stock, with each row's value.</summary>
+    public void MarkInStock(int receiptNumber, Guid stockSourceId, Guid? entryId, IReadOnlyDictionary<Guid, decimal> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        foreach (var row in _receipts.Where(r => r.ReceiptNumber == receiptNumber && !r.IsVoided))
+            row.Posted(stockSourceId, entryId, values.GetValueOrDefault(row.Id));
+    }
+
+    /// <summary>Units and value of a line that went into stock on receipt (deliveries not taken back).</summary>
+    public (decimal Quantity, decimal Value) InStock(int lineNumber) =>
+        (_receipts.Where(r => r.LineNumber == lineNumber && r.InStock && !r.IsVoided).Sum(r => r.Quantity),
+         _receipts.Where(r => r.LineNumber == lineNumber && r.InStock && !r.IsVoided).Sum(r => r.Value));
+
     /// <summary>Takes a receiving event back (entered by mistake).</summary>
     public void VoidReceipt(int receiptNumber)
     {
@@ -240,7 +271,9 @@ public sealed class PurchaseOrder
 /// <summary>What a bill made from a purchase order bills of one of its lines.</summary>
 /// <param name="Quantity">Units billed (item lines); 1 on category lines.</param>
 /// <param name="Amount">The bill line's amount.</param>
-public sealed record BillSourceLine(int LineNumber, decimal Quantity, decimal Amount);
+/// <param name="AccruedQuantity">Units of it that were already in stock from a delivery (billed against "Received Not Billed").</param>
+/// <param name="AccruedAmount">The value those units were received at, cleared from "Received Not Billed".</param>
+public sealed record BillSourceLine(int LineNumber, decimal Quantity, decimal Amount, decimal AccruedQuantity = 0m, decimal AccruedAmount = 0m);
 
 /// <summary>
 /// How bills, approvals and ACH payments work for the company (one row; created with approvals off).
@@ -266,9 +299,15 @@ public sealed class PurchasingSettings
     /// <summary>Let the person who entered a bill approve it too (for one-person offices).</summary>
     public bool AllowSelfApproval { get; private set; }
 
+    /// <summary>
+    /// Receiving goods on a purchase order puts them in stock right away, at the order's cost, against "Received Not
+    /// Billed"; the bill then clears that, with any price difference to "Purchase Price Variance".
+    /// </summary>
+    public bool ReceiveIntoStock { get; private set; }
+
     public static PurchasingSettings Create() => new() { Id = Guid.CreateVersion7(), RequireReceipt = true };
 
-    public void Update(decimal? approvalThreshold, decimal priceTolerancePercent, bool requireReceipt, bool allowSelfApproval)
+    public void Update(decimal? approvalThreshold, decimal priceTolerancePercent, bool requireReceipt, bool allowSelfApproval, bool? receiveIntoStock = null)
     {
         if (approvalThreshold is { } t)
         {
@@ -283,6 +322,7 @@ public sealed class PurchasingSettings
         PriceTolerancePercent = priceTolerancePercent;
         RequireReceipt = requireReceipt;
         AllowSelfApproval = allowSelfApproval;
+        ReceiveIntoStock = receiveIntoStock ?? ReceiveIntoStock;
     }
 
     /// <summary>The most a billed cost may be against the ordered one before it's an exception.</summary>

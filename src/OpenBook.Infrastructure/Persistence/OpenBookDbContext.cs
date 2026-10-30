@@ -1659,6 +1659,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 r.Property(x => x.Id).ValueGeneratedNever();
                 r.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
                 r.Property(x => x.Note).HasMaxLength(500);
+                r.Property(x => x.Value).HasColumnName("ValueMinor").HasConversion(MinorUnits);
+                r.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(o => o.Receipts).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
@@ -2001,6 +2003,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.HasKey("BillId", nameof(BillSourceLine.LineNumber));
                 l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
                 l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.AccruedQuantity).HasColumnName("AccruedQuantityTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.AccruedAmount).HasColumnName("AccruedAmountMinor").HasConversion(MinorUnits);
             });
             b.Navigation(x => x.SourceLines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });

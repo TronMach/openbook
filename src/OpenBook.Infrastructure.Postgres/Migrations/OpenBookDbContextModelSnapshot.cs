@@ -3122,6 +3122,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("PriceTolerancePercentTenThousandths");
 
+                    b.Property<bool>("ReceiveIntoStock")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("RequireReceipt")
                         .HasColumnType("boolean");
 
@@ -6860,6 +6863,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
 
+                            b1.Property<long>("AccruedAmount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AccruedAmountMinor");
+
+                            b1.Property<long>("AccruedQuantity")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AccruedQuantityTenThousandths");
+
                             b1.Property<long>("Amount")
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
@@ -7017,6 +7028,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<bool>("IsVoided")
                                 .HasColumnType("boolean");
 
+                            b1.Property<Guid?>("JournalEntryId")
+                                .HasColumnType("uuid");
+
                             b1.Property<int>("LineNumber")
                                 .HasColumnType("integer");
 
@@ -7034,11 +7048,25 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<int>("ReceiptNumber")
                                 .HasColumnType("integer");
 
+                            b1.Property<Guid?>("StockSourceId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Value")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ValueMinor");
+
                             b1.HasKey("Id");
+
+                            b1.HasIndex("JournalEntryId");
 
                             b1.HasIndex("PurchaseOrderId");
 
                             b1.ToTable("PurchaseOrderReceipts", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("JournalEntryId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.WithOwner()
                                 .HasForeignKey("PurchaseOrderId");

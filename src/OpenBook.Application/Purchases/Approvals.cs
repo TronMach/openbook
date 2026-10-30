@@ -8,7 +8,8 @@ using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
 
-public sealed record PurchasingSettingsCommand(decimal? ApprovalThreshold, decimal PriceTolerancePercent, bool RequireReceipt, bool AllowSelfApproval);
+/// <param name="ReceiveIntoStock">Null keeps the current setting.</param>
+public sealed record PurchasingSettingsCommand(decimal? ApprovalThreshold, decimal PriceTolerancePercent, bool RequireReceipt, bool AllowSelfApproval, bool? ReceiveIntoStock = null);
 
 /// <summary>
 /// Bill approvals: bills at or over the threshold, or with 3-way match differences, wait for an accountant's approval
@@ -33,7 +34,7 @@ public sealed class BillApprovalService(IPurchasesStore store, ICompanyStore com
         }
 
         var before = Snapshot(settings);
-        settings.Update(command.ApprovalThreshold, command.PriceTolerancePercent, command.RequireReceipt, command.AllowSelfApproval);
+        settings.Update(command.ApprovalThreshold, command.PriceTolerancePercent, command.RequireReceipt, command.AllowSelfApproval, command.ReceiveIntoStock);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SettingsEntity, company.Id, before, Snapshot(settings)));
         await store.SaveChangesAsync(ct);
         return settings;
@@ -70,6 +71,7 @@ public sealed class BillApprovalService(IPurchasesStore store, ICompanyStore com
         s.PriceTolerancePercent,
         s.RequireReceipt,
         s.AllowSelfApproval,
+        s.ReceiveIntoStock,
     });
 }
 

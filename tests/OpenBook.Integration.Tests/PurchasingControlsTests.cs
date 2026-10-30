@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpenBook.Application.Accounts;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
@@ -49,6 +50,38 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
         In<BillApprovalService, PurchasingSettings>(s => s.SaveSettingsAsync(new PurchasingSettingsCommand(threshold, tolerance, requireReceipt, selfApproval)));
 
     // ---- Purchase orders and 3-way match ----
+
+    [Fact]
+    public async Task Received_goods_go_into_stock_and_the_bill_clears_received_not_billed()
+    {
+        await In<BillApprovalService, PurchasingSettings>(s => s.SaveSettingsAsync(new PurchasingSettingsCommand(null, 0m, false, false, ReceiveIntoStock: true)));
+        var order = await Order();
+        await In<PurchaseOrderService, int>(s => s.ReceiveAsync(order.Id, new ReceiveGoodsCommand(Mar1.AddDays(2), [new ReceiveLine(1, 6m)])));
+        Assert.Equal(6m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!.Quantity);
+
+        var chart = await In<AccountService, ChartOfAccounts>(s => s.GetChartAsync());
+        var accrual = chart.FindByFullName(PurchaseOrderService.ReceivedNotBilledName)!.Id;
+        async Task<decimal> Balance(Guid account) =>
+            (await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Reporting.ReportLedger>().LinesAsync(OpenBook.Domain.Ledger.ReportBasis.Accrual, null, Mar1.AddDays(60))))
+            .Where(l => l.AccountId == account).Sum(l => l.Amount);
+        Assert.Equal((-30m, 30m), (await Balance(accrual), await Balance(_widget.InventoryAssetAccountId!.Value)));
+
+        // Billing the 6 received at 5.50 clears the accrual at 30 and puts 3 into price variance; 2 more not yet received go into stock with the bill.
+        var bill = await In<PurchaseOrderService, Bill>(s => s.CreateBillAsync(order.Id, new BillFromOrderCommand(Mar1.AddDays(5), "INV-9", [new BillOrderLine(1, 8m, 5.5m)])));
+        Assert.Equal(44m, bill.Total);
+        var variance = (await In<AccountService, ChartOfAccounts>(s => s.GetChartAsync())).FindByFullName(PurchaseOrderService.PriceVarianceName)!.Id;
+        Assert.Equal((0m, 3m), (await Balance(accrual), await Balance(variance)));
+        Assert.Equal(8m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!.Quantity);
+        Assert.Equal(41m, await Balance(_widget.InventoryAssetAccountId!.Value));
+        Assert.Equal(("1", 8m, 6m, 30m), ("1", bill.SourceLines.Single(l => l.LineNumber == 1).Quantity, bill.SourceLines.Single(l => l.LineNumber == 1).AccruedQuantity, bill.SourceLines.Single(l => l.LineNumber == 1).AccruedAmount));
+
+        Assert.Equal("purchaseorder.receipt_billed", await Refused(() => In<PurchaseOrderService, PurchaseOrder>(s => s.VoidReceiptAsync(order.Id, 1))));
+        await In<BillService, Bill>(s => s.VoidAsync(bill.Id, "Wrong price"));
+        Assert.Equal((-30m, 0m), (await Balance(accrual), await Balance(variance)));
+        await In<PurchaseOrderService, PurchaseOrder>(s => s.VoidReceiptAsync(order.Id, 1));
+        Assert.Equal(0m, await Balance(accrual));
+        Assert.Equal(0m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))?.Quantity ?? 0m);
+    }
 
     [Fact]
     public async Task An_order_prints_as_a_pdf_and_is_emailed_to_the_vendor()

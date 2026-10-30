@@ -97,7 +97,17 @@
                         <td>@group.Key @(voided ? "(taken back)" : "")</td>
                         <td>@Labels.Date(group.First().Date)</td>
                         <td>@string.Join(", ", group.Select(r => $"{Labels.Quantity(r.Quantity)} × {_order.Lines.First(l => l.LineNumber == r.LineNumber).Description}"))</td>
-                        <td>@group.First().Note</td>
+                        <td>
+                            @group.First().Note
+                            @if (group.First() is { InStock: true } posted)
+                            {
+                                <span class="muted">In stock at @Labels.Amount(group.Sum(r => r.Value))</span>
+                                @if (posted.JournalEntryId is { } entryId)
+                                {
+                                    <a href="/journal/@entryId">entry</a>
+                                }
+                            }
+                        </td>
                         <td>
                             @if (!voided && open)
                             {

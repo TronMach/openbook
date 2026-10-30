@@ -44,6 +44,10 @@
                 <input type="checkbox" name="allowSelfApproval" value="true" checked="@_settings.AllowSelfApproval" />
                 <span>Let the person who entered a bill approve it too (for one-person offices)</span>
             </label>
+            <label class="check">
+                <input type="checkbox" name="receiveIntoStock" value="true" checked="@_settings.ReceiveIntoStock" />
+                <span>Put goods in stock when they're received on a purchase order, at the order's cost, against "Received Not Billed"; the bill then clears it, with any price difference to "Purchase Price Variance" (not for lot or serial items)</span>
+            </label>
             <div class="actions"><button type="submit">Save</button></div>
         </form>
     </div>
