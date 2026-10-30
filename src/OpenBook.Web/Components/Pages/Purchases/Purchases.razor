@@ -13,6 +13,7 @@
         <h1>Purchases</h1>
         <a class="button secondary" href="/purchases/orders">Purchase orders</a>
         <a class="button secondary" href="/purchases/receipts">Receipts</a>
+        <a class="button secondary" href="/documents">Document inbox</a>
         <AuthorizeView>
             @if (context.User.Can(OpenBook.Domain.Companies.UserRole.Accountant))
             {

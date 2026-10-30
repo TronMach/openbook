@@ -136,6 +136,7 @@ app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
 }).RequireAuthorization();
 app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
+app.MapDocumentEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

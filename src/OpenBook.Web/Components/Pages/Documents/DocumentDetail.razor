@@ -1,0 +1,282 @@
+@page "/documents/{Id:guid}"
+@using OpenBook.Application.Attachments
+@using OpenBook.Application.Documents
+@using OpenBook.Domain.Documents
+@inject DocumentCaptureService DocumentService
+@inject AttachmentService AttachmentService
+@inject VendorService VendorService
+@inject CustomerService CustomerService
+@inject ItemService ItemService
+@inject PurchaseOrderService Orders
+
+<PageTitle>Document · OpenBook</PageTitle>
+
+@if (_document is null)
+{
+    <div class="card"><p>That document doesn't exist. <a href="/documents">Back to the inbox</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@DocumentKinds.Label(_document.Kind): @_document.FileName</h1>
+        <a class="button secondary" href="/documents">Inbox</a>
+        <a class="button secondary" href="/audit?entityId=@_document.Id">History</a>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is "saved")
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+    else if (Done is "read")
+    {
+        <div class="alert notice" role="status">Read again; the fields below are the new reading.</div>
+    }
+
+    @if (_document.Status == CapturedDocumentStatus.Done && _document.ResultId is { } resultId)
+    {
+        <div class="alert notice" role="status">Done: <a href="@Links.ForAuditEntity(_document.ResultType!, resultId)">see the record it became</a>.</div>
+    }
+    else if (_document.Status == CapturedDocumentStatus.Dismissed)
+    {
+        <div class="alert notice" role="status">
+            Dismissed.
+            <form method="post" action="/documents/@_document.Id/restore" data-enhance="false" style="display:inline">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Put it back in the inbox</button>
+            </form>
+        </div>
+    }
+
+    <p class="muted">
+        @(_document.ReadBy switch
+        {
+            DocumentReadMethods.Claude => "Read by Claude.",
+            DocumentReadMethods.Ocr => "Read on this server with OCR; scans can be misread, so check every figure.",
+            DocumentReadMethods.Text => "Read from the file's text on this server.",
+            _ => "Nothing was read from this file.",
+        })
+        @_document.ReadNote
+    </p>
+
+    @if (_file is not null)
+    {
+        <details class="card" open>
+            <summary>The document</summary>
+            @if (_file.ContentType == "application/pdf")
+            {
+                <iframe src="/attachments/@_file.Id" title="The document" style="width: 100%; height: 36rem; border: 0"></iframe>
+            }
+            else if (_file.ContentType.StartsWith("image/", StringComparison.Ordinal))
+            {
+                <img src="/attachments/@_file.Id" alt="The document" style="max-width: 100%" />
+            }
+            else
+            {
+                <p><a href="/attachments/@_file.Id">Open @_file.FileName</a></p>
+            }
+        </details>
+    }
+
+    @if (_document.Status == CapturedDocumentStatus.New)
+    {
+        <div class="card">
+            <h2>Check what was read</h2>
+            <form method="post" action="/documents/@_document.Id/review" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="partyId">@(_fromVendor ? "Vendor" : "Customer")</label>
+                        <select id="partyId" name="partyId" data-search>
+                            <option value="">Not chosen</option>
+                            @foreach (var (id, name) in _parties)
+                            {
+                                <option value="@id" selected="@(id == (_document.VendorId ?? _document.CustomerId))">@name</option>
+                            }
+                        </select>
+                        @if (_document.Party is { } printed && (_document.VendorId ?? _document.CustomerId) is null)
+                        {
+                            <span class="hint">The document names "@printed"; choose it above if it's on the list.</span>
+                        }
+                        <input type="hidden" name="party" value="@_document.Party" />
+                    </div>
+                    <div class="field">
+                        <label for="number">@DocumentKinds.NumberLabel(_document.Kind)</label>
+                        <input id="number" name="number" maxlength="50" value="@_document.Number" />
+                    </div>
+                    @if (_fromVendor && _document.Kind != DocumentKind.VendorQuote)
+                    {
+                        <div class="field">
+                            <label for="po">Our purchase order</label>
+                            <select id="po" name="purchaseOrderId" data-search>
+                                <option value="">None</option>
+                                @foreach (var o in _orders)
+                                {
+                                    <option value="@o.Id" selected="@(o.Id == _document.PurchaseOrderId)">@o.Number · @(_names.GetValueOrDefault(o.VendorId)) · @Labels.Date(o.Date)</option>
+                                }
+                            </select>
+                            @if (_document.OrderReference is { } reference)
+                            {
+                                <span class="hint">The document refers to order "@reference".</span>
+                            }
+                            <input type="hidden" name="orderReference" value="@_document.OrderReference" />
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input id="date" type="date" name="date" value="@_document.Date?.ToString("yyyy-MM-dd")" />
+                    </div>
+                    @if (_document.Kind == DocumentKind.VendorInvoice)
+                    {
+                        <div class="field">
+                            <label for="due">Due</label>
+                            <input id="due" type="date" name="dueDate" value="@_document.DueDate?.ToString("yyyy-MM-dd")" />
+                        </div>
+                    }
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <th>Code</th><th>Description</th><th>Item</th><th class="num">Quantity</th>
+                                @if (_prices)
+                                {
+                                    <th class="num">Unit price</th><th class="num">Amount</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _rows; i++)
+                            {
+                                var line = i < _document.Lines.Count ? _document.Lines[i] : null;
+                                <tr>
+                                    <td><input name="sku:@i" maxlength="50" value="@line?.Sku" aria-label="Code, line @(i + 1)" style="width: 8rem" /></td>
+                                    <td><input name="desc:@i" maxlength="500" value="@line?.Description" aria-label="Description, line @(i + 1)" style="min-width: 16rem" /></td>
+                                    <td>
+                                        <select name="item:@i" data-search aria-label="Item, line @(i + 1)">
+                                            <option value="">None</option>
+                                            @foreach (var item in _items)
+                                            {
+                                                <option value="@item.Id" selected="@(item.Id == line?.ItemId)" data-keywords="@item.Barcode">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="num"><input name="qty:@i" class="amount" style="width: 6rem" inputmode="decimal" value="@Plain(line?.Quantity)" aria-label="Quantity, line @(i + 1)" /></td>
+                                    @if (_prices)
+                                    {
+                                        <td class="num"><input name="price:@i" class="amount" style="width: 6rem" inputmode="decimal" value="@Price(line?.UnitPrice)" aria-label="Unit price, line @(i + 1)" /></td>
+                                        <td class="num"><input name="amount:@i" class="amount" style="width: 6rem" inputmode="decimal" value="@Money(line?.Amount)" aria-label="Amount, line @(i + 1)" /></td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <input type="hidden" name="rows" value="@_rows" />
+
+                @if (_prices)
+                {
+                    <div class="row">
+                        <div class="field"><label for="subtotal">Subtotal</label><input id="subtotal" name="subtotal" class="amount" inputmode="decimal" value="@Money(_document.Subtotal)" /></div>
+                        <div class="field"><label for="tax">Tax</label><input id="tax" name="tax" class="amount" inputmode="decimal" value="@Money(_document.Tax)" /></div>
+                        <div class="field"><label for="shipping">Shipping</label><input id="shipping" name="shipping" class="amount" inputmode="decimal" value="@Money(_document.Shipping)" /></div>
+                        <div class="field"><label for="total">Total</label><input id="total" name="total" class="amount" inputmode="decimal" value="@Money(_document.Total)" /></div>
+                    </div>
+                    @if (_linesTotal is { } sum && _document.Total is { } total && sum + (_document.Tax ?? 0m) + (_document.Shipping ?? 0m) != total)
+                    {
+                        <p class="hint">The lines add up to @Labels.Amount(sum)@(_document.Tax is not null || _document.Shipping is not null ? " before tax and shipping" : ""), against a total of @Labels.Amount(total): check for a missed or misread line.</p>
+                    }
+                }
+                <div class="actions"><button type="submit">Save</button></div>
+            </form>
+
+            <div class="actions">
+                @if (_settings.IsReady)
+                {
+                    <form method="post" action="/documents/@_document.Id/read" data-enhance="false" style="display:inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="with" value="claude" />
+                        <button type="submit" class="secondary">Read again with Claude</button>
+                    </form>
+                }
+                <form method="post" action="/documents/@_document.Id/read" data-enhance="false" style="display:inline">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="with" value="server" />
+                    <button type="submit" class="secondary">Read again on the server</button>
+                </form>
+                <form method="post" action="/documents/@_document.Id/dismiss" data-enhance="false" style="display:inline">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary">Dismiss</button>
+                </form>
+            </div>
+            <p class="hint">Reading again replaces the fields above, including anything you corrected.</p>
+        </div>
+    }
+
+    <Notes EntityType="captured_document" EntityId="_document.Id" />
+
+    @if (_document.Text is { } text)
+    {
+        <details class="card" style="margin-top: 1rem">
+            <summary>Text read from the file</summary>
+            <pre style="white-space: pre-wrap">@text</pre>
+        </details>
+    }
+</div>
+
+@code {
+    private CapturedDocument? _document;
+    private OpenBook.Domain.Attachments.Attachment? _file;
+    private DocumentReadingSettings _settings = default!;
+    private bool _fromVendor;
+    private bool _prices;
+    private int _rows;
+    private decimal? _linesTotal;
+    private List<(Guid Id, string Name)> _parties = [];
+    private Dictionary<Guid, string> _names = [];
+    private List<PurchaseOrder> _orders = [];
+    private List<Item> _items = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _document = await DocumentService.GetAsync(Id);
+        if (_document is null)
+            return;
+        _settings = await DocumentService.GetSettingsAsync();
+        var files = await AttachmentService.ListAsync(DocumentCaptureService.EntityType, _document.Id);
+        _file = files.Count > 0 ? files[0] : null;
+        _fromVendor = DocumentKinds.IsFromVendor(_document.Kind);
+        _prices = DocumentKinds.HasPrices(_document.Kind);
+        _rows = _document.Lines.Count + 5;
+        _linesTotal = _document.Lines.Any(l => l.Amount is not null) ? _document.Lines.Sum(l => l.Amount ?? 0m) : null;
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var vendors = (await VendorService.ListAsync(today)).Select(v => (v.Vendor.Id, v.Vendor.DisplayName)).ToList();
+        _names = vendors.ToDictionary(v => v.Id, v => v.DisplayName);
+        _parties = _fromVendor ? vendors : (await CustomerService.ListAsync(today)).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList();
+        _items = (await ItemService.ListAsync()).Where(i => i.IsActive || _document.Lines.Any(l => l.ItemId == i.Id)).OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        if (_fromVendor)
+        {
+            _orders = (await Orders.ListAsync(_document.VendorId))
+                .Where(o => o.Status != PurchaseOrderStatus.Cancelled || o.Id == _document.PurchaseOrderId)
+                .OrderByDescending(o => o.Date).ToList();
+        }
+    }
+
+    private static string? Plain(decimal? value) => value?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string? Price(decimal? value) => value?.ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string? Money(decimal? value) => value?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+}

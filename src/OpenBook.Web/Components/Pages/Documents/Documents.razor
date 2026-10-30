@@ -1,0 +1,120 @@
+@page "/documents"
+@using OpenBook.Application.Documents
+@using OpenBook.Domain.Documents
+@inject DocumentCaptureService DocumentService
+@inject VendorService VendorService
+@inject CustomerService CustomerService
+
+<PageTitle>Document inbox · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Document inbox</h1>
+        <a class="button secondary" href="@(ShowAll ? "/documents" : "/documents?showAll=true")">@(ShowAll ? "Waiting only" : "Show all")</a>
+        @if (_admin)
+        {
+            <a class="button secondary" href="/settings/document-reading">Reading settings</a>
+        }
+    </div>
+    <p class="muted">
+        Upload a vendor's invoice, a customer's purchase order, a packing slip or a vendor's quote as a PDF, scan or photo. OpenBook reads
+        who it's from, its number, dates, totals and lines, matches them to your vendors or customers, purchase orders and items, and you
+        check them against the document before turning it into a record.
+        @if (_settings.IsReady)
+        {
+            <span>Reading with Claude is on: files you tick below are sent to Anthropic to read.</span>
+        }
+        else
+        {
+            <span>Documents are read on this server only@(DocumentService.CanReadImages ? "" : "; photos and scans aren't read until an OCR engine is installed or an admin switches on reading with Claude").</span>
+        }
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <form method="post" action="/documents/upload" enctype="multipart/form-data" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="kind">What is it?</label>
+                    <select id="kind" name="kind" required>
+                        @foreach (var kind in Enum.GetValues<DocumentKind>())
+                        {
+                            <option value="@kind">@DocumentKinds.Label(kind)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="file">File</label>
+                    <input id="file" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt,.csv" required />
+                </div>
+            </div>
+            @if (_settings.IsReady)
+            {
+                <label class="check">
+                    <input type="checkbox" name="claude" value="true" checked />
+                    <span>Read it with Claude (sent to Anthropic)</span>
+                </label>
+            }
+            <div class="actions"><button type="submit">Upload and read</button></div>
+        </form>
+    </div>
+
+    @if (_documents.Count == 0)
+    {
+        <div class="card"><p>@(ShowAll ? "No documents yet." : "Nothing waiting to be checked.")</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Uploaded</th><th>Kind</th><th>File</th><th>From</th><th>Number</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var d in _documents)
+                {
+                    <tr class="@(d.Status == CapturedDocumentStatus.Dismissed ? "inactive" : null)">
+                        <td>@d.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td>@DocumentKinds.Label(d.Kind)</td>
+                        <td><a href="/documents/@d.Id">@d.FileName</a></td>
+                        <td>@From(d)</td>
+                        <td>@d.Number</td>
+                        <td>@(d.Date is { } date ? Labels.Date(date) : "")</td>
+                        <td class="num">@(d.Total is { } t ? Labels.Amount(t) : "")</td>
+                        <td>@(d.Status switch { CapturedDocumentStatus.New => "To check", CapturedDocumentStatus.Done => "Done", _ => "Dismissed" })</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CapturedDocument> _documents = [];
+    private DocumentReadingSettings _settings = default!;
+    private Dictionary<Guid, string> _names = [];
+
+    private bool _admin;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [SupplyParameterFromQuery] private bool ShowAll { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _admin = AuthState is not null && (await AuthState).User.Can(OpenBook.Domain.Companies.UserRole.Admin);
+        _settings = await DocumentService.GetSettingsAsync();
+        _documents = (await DocumentService.ListAsync()).Where(d => ShowAll || d.Status == CapturedDocumentStatus.New).ToList();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        foreach (var v in await VendorService.ListAsync(today))
+            _names[v.Vendor.Id] = v.Vendor.DisplayName;
+        foreach (var c in await CustomerService.ListAsync(today))
+            _names[c.Customer.Id] = c.Customer.DisplayName;
+    }
+
+    private string? From(CapturedDocument d) =>
+        (d.VendorId ?? d.CustomerId) is { } id && _names.TryGetValue(id, out var name) ? name : d.Party;
+}

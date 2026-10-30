@@ -122,24 +122,25 @@ public static partial class ReceiptParser
         return new ReceiptFields(vendor, FindDate(text), total, tax);
     }
 
-    private static List<decimal> Amounts(string line) =>
+    internal static List<decimal> Amounts(string line) =>
         AmountPattern().Matches(line)
             .Select(m => decimal.TryParse(m.Groups[1].Value.Replace(",", "", StringComparison.Ordinal), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : (decimal?)null)
             .Where(d => d is > 0m and < 10_000_000m)
             .Select(d => d!.Value)
             .ToList();
 
-    private static DateOnly? FindDate(string text)
+    private static DateOnly? FindDate(string text) => Dates(text).Select(d => (DateOnly?)d).FirstOrDefault();
+
+    /// <summary>The dates written in the text, in order (ISO, US month/day, or with the month's name).</summary>
+    internal static IEnumerable<DateOnly> Dates(string text)
     {
         foreach (Match m in DatePattern().Matches(text))
         {
             var value = m.Value.Replace(",", "", StringComparison.Ordinal).Replace(".", "", StringComparison.Ordinal);
             if (DateOnly.TryParseExact(value, ["yyyy-MM-dd", "M/d/yyyy", "M/d/yy", "MMM d yyyy", "MMMM d yyyy", "d MMM yyyy", "d MMMM yyyy", "yyyy/MM/dd"],
                     CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var date))
-                return date;
+                yield return date;
         }
-
-        return null;
     }
 
     [GeneratedRegex(@"(?<![\d.])\$?\s?(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})(?!\d)")]

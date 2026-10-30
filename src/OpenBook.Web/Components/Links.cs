@@ -74,6 +74,8 @@ public static class Links
         "sales_order" => $"/sales/orders/{id}",
         "purchase_order" => $"/purchases/orders/{id}",
         "receipt" => $"/purchases/receipts/{id}",
+        "captured_document" => $"/documents/{id}",
+        "document_reading_settings" => "/settings/document-reading",
         "online_payment_settings" => "/settings/online-payments",
         "purchasing_settings" => "/purchases/approvals/settings",
         "ach_batch" => "/purchases/ach",

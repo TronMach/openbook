@@ -275,6 +275,9 @@
   <data name="Dismiss" xml:space="preserve">
     <value>Dismiss</value>
   </data>
+  <data name="Document reading" xml:space="preserve">
+    <value>Document reading</value>
+  </data>
   <data name="Donors" xml:space="preserve">
     <value>Donors</value>
   </data>
@@ -388,6 +391,9 @@
   </data>
   <data name="how invoices and statements are sent" xml:space="preserve">
     <value>how invoices and statements are sent</value>
+  </data>
+  <data name="how the document inbox reads scans and PDFs, and whether Claude may read them (admins)" xml:space="preserve">
+    <value>how the document inbox reads scans and PDFs, and whether Claude may read them (admins)</value>
   </data>
   <data name="Import" xml:space="preserve">
     <value>Import</value>

@@ -1469,6 +1469,135 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("UserSessions", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Documents.CapturedDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("DoneAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrderReference")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Party")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadBy")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ResultId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultType")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("Shipping")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ShippingMinor");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("Subtotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("SubtotalMinor");
+
+                    b.Property<long?>("Tax")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("TaxMinor");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("Total")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("TotalMinor");
+
+                    b.Property<Guid?>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("CapturedDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Documents.DocumentReadingSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedApiKey")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("UseClaude")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DocumentReadingSettings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Inventory.AssemblyBuild", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5890,6 +6019,72 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Documents.CapturedDocument", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Purchases.PurchaseOrder", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Documents.CapturedDocumentLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("CapturedDocumentId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long?>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Description")
+                                .HasMaxLength(500)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("ItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("Quantity")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.Property<string>("Sku")
+                                .HasMaxLength(50)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("UnitPrice")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("UnitPriceTenThousandths");
+
+                            b1.HasKey("CapturedDocumentId", "LineNumber");
+
+                            b1.HasIndex("ItemId");
+
+                            b1.ToTable("CapturedDocumentLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("CapturedDocumentId");
+
+                            b1.HasOne("OpenBook.Domain.Sales.Item", null)
+                                .WithMany()
+                                .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict);
+                        });
+
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Inventory.AssemblyBuild", b =>

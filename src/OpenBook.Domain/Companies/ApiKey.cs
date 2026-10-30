@@ -88,6 +88,7 @@ public static class ApiScopes
         ["ledger"] = ("Accounts and journal", ["/api/accounts", "/api/journal-entries", "/api/recurring-entries", "/api/opening-balances", "/api/closing", "/api/segments", "/api/chart-templates", "/api/company", "/api/settings"]),
         ["sales"] = ("Customers, items and sales", ["/api/sales", "/api/customers", "/api/items", "/api/pricing", "/api/sales-tax"]),
         ["purchases"] = ("Vendors and purchases", ["/api/purchases", "/api/vendors"]),
+        ["documents"] = ("Document inbox (vendor invoices, customer POs, packing slips, quotes)", ["/api/documents"]),
         ["banking"] = ("Banking", ["/api/banking"]),
         ["inventory"] = ("Inventory", ["/api/inventory"]),
         ["projects"] = ("Projects, time and mileage", ["/api/projects"]),

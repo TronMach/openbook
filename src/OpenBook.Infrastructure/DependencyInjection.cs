@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Channels.IChannelOrderStore, EfChannelOrderStore>();
         services.AddScoped<OpenBook.Application.Nonprofit.INonprofitStore, EfNonprofitStore>();
         services.AddScoped<OpenBook.Application.Capture.ICaptureStore, EfCaptureStore>();
+        services.AddScoped<OpenBook.Application.Documents.IDocumentStore, EfDocumentStore>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IDataExporter, DataExporter>();
         services.AddSingleton<OpenBook.Application.Webhooks.IWebhookSender, HttpWebhookSender>();
@@ -94,6 +95,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway, Payments.StripeGateway>();
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
+        services.TryAddSingleton<OpenBook.Application.Documents.IClaudeDocumentReader, Documents.ClaudeDocumentReader>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();

@@ -1,0 +1,72 @@
+@page "/settings/document-reading"
+@using OpenBook.Application.Documents
+@using OpenBook.Domain.Documents
+@inject DocumentCaptureService DocumentService
+
+<PageTitle>Document reading · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Document reading</h1>
+        <a class="button secondary" href="/settings">Settings</a>
+        <a class="button secondary" href="/documents">Document inbox</a>
+        <a class="button secondary" href="/audit?entityType=document_reading_settings">History</a>
+    </div>
+    <p class="muted">
+        Documents in the inbox are read on this server: the text inside PDFs exactly, and photos and scans through Tesseract OCR
+        @(DocumentService.CanReadImages ? "(installed)" : "(not installed, so photos and scans aren't read)").
+        OCR often misreads tables, so line items from scans need checking. Claude, Anthropic's AI model, reads scans, photos and tables
+        much better.
+    </p>
+    <p class="muted">
+        With Claude switched on, each document someone chooses to read with it is sent to Anthropic's API with your API key and billed
+        to your Anthropic account. Read Anthropic's commercial terms and data retention policy, and check your own obligations for
+        the documents you handle, before switching it on. Whoever uploads a document can still keep it on
+        the server by unticking "Read it with Claude".
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+
+    <div class="card">
+        <form method="post" action="/settings/document-reading" data-enhance="false">
+            <AntiforgeryToken />
+            <label class="check">
+                <input type="checkbox" name="useClaude" value="true" checked="@_settings.UseClaude" />
+                <span>Let documents be read by Claude</span>
+            </label>
+            <div class="row">
+                <div class="field">
+                    <label for="key">Anthropic API key</label>
+                    <input id="key" name="apiKey" type="password" autocomplete="off" placeholder="@(_settings.ProtectedApiKey is null ? "sk-ant-…" : "Saved; enter a new one to change it")" />
+                    @if (_settings.ProtectedApiKey is not null)
+                    {
+                        <label class="check"><input type="checkbox" name="clearApiKey" value="true" /> <span>Remove the saved key</span></label>
+                    }
+                    <span class="hint">Create one in the Anthropic Console. It's stored encrypted and never shown again.</span>
+                </div>
+                <div class="field">
+                    <label for="model">Model</label>
+                    <input id="model" name="model" maxlength="100" value="@_settings.Model" />
+                    <span class="hint">@DocumentReadingSettings.DefaultModel unless you have a reason to pick another.</span>
+                </div>
+            </div>
+            <div class="actions"><button type="submit">Save</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private DocumentReadingSettings _settings = default!;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync() => _settings = await DocumentService.GetSettingsAsync();
+}

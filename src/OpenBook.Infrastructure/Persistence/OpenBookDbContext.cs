@@ -74,6 +74,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<PaymentLink> PaymentLinks => Set<PaymentLink>();
     public DbSet<PortalAccess> PortalAccess => Set<PortalAccess>();
     public DbSet<ReceiptCapture> ReceiptCaptures => Set<ReceiptCapture>();
+    public DbSet<OpenBook.Domain.Documents.CapturedDocument> CapturedDocuments => Set<OpenBook.Domain.Documents.CapturedDocument>();
+    public DbSet<OpenBook.Domain.Documents.DocumentReadingSettings> DocumentReadingSettings => Set<OpenBook.Domain.Documents.DocumentReadingSettings>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
     public DbSet<AchSettings> AchSettings => Set<AchSettings>();
@@ -1624,6 +1626,54 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.Tax).HasColumnName("TaxMinor").HasConversion(NullableMinorUnits);
             b.HasOne<Vendor>().WithMany().HasForeignKey(r => r.VendorId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<BankTransaction>().WithMany().HasForeignKey(r => r.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Documents.CapturedDocument>(b =>
+        {
+            b.ToTable("CapturedDocuments");
+            b.HasKey(d => d.Id);
+            b.HasIndex(d => d.Status);
+            b.Property(d => d.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.FileName).HasMaxLength(255);
+            b.Property(d => d.CreatedBy).HasMaxLength(200);
+            b.Property(d => d.Text).HasMaxLength(OpenBook.Domain.Documents.CapturedDocument.MaxTextLength);
+            b.Property(d => d.ReadBy).HasMaxLength(20);
+            b.Property(d => d.ReadNote).HasMaxLength(1000);
+            b.Property(d => d.Party).HasMaxLength(200);
+            b.Property(d => d.Number).HasMaxLength(50);
+            b.Property(d => d.OrderReference).HasMaxLength(50);
+            b.Property(d => d.Subtotal).HasColumnName("SubtotalMinor").HasConversion(NullableMinorUnits);
+            b.Property(d => d.Tax).HasColumnName("TaxMinor").HasConversion(NullableMinorUnits);
+            b.Property(d => d.Shipping).HasColumnName("ShippingMinor").HasConversion(NullableMinorUnits);
+            b.Property(d => d.Total).HasColumnName("TotalMinor").HasConversion(NullableMinorUnits);
+            b.Property(d => d.ResultType).HasMaxLength(50);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(d => d.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Customer>().WithMany().HasForeignKey(d => d.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<PurchaseOrder>().WithMany().HasForeignKey(d => d.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(d => d.Lines, l =>
+            {
+                l.ToTable("CapturedDocumentLines");
+                l.WithOwner().HasForeignKey("CapturedDocumentId");
+                l.HasKey("CapturedDocumentId", nameof(OpenBook.Domain.Documents.CapturedDocumentLine.LineNumber));
+                l.Property(x => x.LineNumber).ValueGeneratedNever();
+                l.Property(x => x.Description).HasMaxLength(500);
+                l.Property(x => x.Sku).HasMaxLength(50);
+                l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(NullableTenThousandths);
+                l.Property(x => x.UnitPrice).HasColumnName("UnitPriceTenThousandths").HasConversion(NullableTenThousandths);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(NullableMinorUnits);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(d => d.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Documents.DocumentReadingSettings>(b =>
+        {
+            b.ToTable("DocumentReadingSettings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.ProtectedApiKey).HasMaxLength(2000);
+            b.Property(s => s.Model).HasMaxLength(100);
+            b.Ignore(s => s.IsReady);
         });
 
         modelBuilder.Entity<PurchaseOrder>(b =>
