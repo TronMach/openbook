@@ -33,6 +33,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Channels.ChannelPayout> ChannelPayouts => Set<OpenBook.Domain.Channels.ChannelPayout>();
     public DbSet<OpenBook.Domain.Channels.ChannelOrderBatch> ChannelOrderBatches => Set<OpenBook.Domain.Channels.ChannelOrderBatch>();
     public DbSet<OpenBook.Domain.Channels.ChannelSku> ChannelSkus => Set<OpenBook.Domain.Channels.ChannelSku>();
+    public DbSet<OpenBook.Domain.Channels.ChannelReturn> ChannelReturns => Set<OpenBook.Domain.Channels.ChannelReturn>();
     public DbSet<OpenBook.Domain.Nonprofit.RestrictionRelease> RestrictionReleases => Set<OpenBook.Domain.Nonprofit.RestrictionRelease>();
     public DbSet<OpenBook.Domain.Nonprofit.Donation> Donations => Set<OpenBook.Domain.Nonprofit.Donation>();
     public DbSet<OpenBook.Domain.Nonprofit.Pledge> Pledges => Set<OpenBook.Domain.Nonprofit.Pledge>();
@@ -980,6 +981,26 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.SignerName).HasMaxLength(100);
             b.Property(s => s.SignerTitle).HasMaxLength(100);
             b.Property(s => s.Intro).HasMaxLength(OpenBook.Domain.Nonprofit.GiftSettings.MaxTextLength);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Channels.ChannelReturn>(b =>
+        {
+            b.ToTable("ChannelReturns");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => r.BatchId);
+            b.Property(r => r.Memo).HasMaxLength(OpenBook.Domain.Channels.ChannelReturn.MaxMemoLength);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<OpenBook.Domain.Channels.SalesChannel>().WithMany().HasForeignKey(r => r.ChannelId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<OpenBook.Domain.Channels.ChannelOrderBatch>().WithMany().HasForeignKey(r => r.BatchId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Lines, l =>
+            {
+                l.ToTable("ChannelReturnLines");
+                l.WithOwner().HasForeignKey("ChannelReturnId");
+                l.HasKey("ChannelReturnId", nameof(OpenBook.Domain.Channels.ChannelReturnLine.LineNumber));
+                l.Property(x => x.Quantity).HasColumnName("QuantityTenThousandths").HasConversion(TenThousandths);
+            });
+            b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelSku>(b =>

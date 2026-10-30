@@ -1,3 +1,4 @@
+using OpenBook.Application.Ledger;
 using OpenBook.Application.Channels;
 using OpenBook.Domain.Channels;
 using OpenBook.Domain.Common;
@@ -110,6 +111,25 @@ public static class ChannelEndpoints
         app.MapPost("/sales/channels/orders/{id:guid}/void", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
             await Back($"/sales/channels/orders/{id}", () => orders.VoidAsync(id, form["reason"].ToString() is { Length: > 0 } r ? r : "Orders voided", ct)))
             .RequireAuthorization();
+
+        // Fields: date, memo, qty:{orderLine}.
+        app.MapPost("/sales/channels/orders/{id:guid}/returns", async (Guid id, IFormCollection form, ChannelOrderService orders, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            var lines = form.Keys.Where(k => k.StartsWith("qty:", StringComparison.Ordinal))
+                .Select(k => (Line: int.TryParse(k[4..], out var n) ? n : 0,
+                    Quantity: decimal.TryParse(form[k], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) ? q : 0m))
+                .Where(l => l.Line > 0 && l.Quantity != 0m).ToList();
+            var date = DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)
+                ? d : DateOnly.FromDateTime(DateTime.Today);
+            return await Back($"/sales/channels/orders/{id}", () => orders.ReturnAsync(id, date, lines, form["memo"], ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/sales/channels/returns/{id:guid}/void", async (Guid id, IFormCollection form, ChannelOrderService orders, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/sales/channels/returns/{id}", () => orders.VoidReturnAsync(id, form["reason"].ToString() is { Length: > 0 } r ? r : "Return voided", ct));
+        }).RequireAuthorization();
 
         app.MapPost("/sales/channels/orders/{id:guid}/dismiss", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
             await Back($"/sales/channels/orders/{id}", () => orders.SetDismissedAsync(id, form["restore"] != "true", ct))).RequireAuthorization();

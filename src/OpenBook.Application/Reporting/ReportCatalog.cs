@@ -562,6 +562,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Nonprofit.Grant.RecognitionSource => "Grant income earned",
         Domain.Channels.ChannelPayout.Source => "Channel payout",
         Domain.Channels.ChannelOrderBatch.Source => "Channel orders",
+        Domain.Channels.ChannelReturn.Source => "Channel return",
         Domain.Assets.FixedAsset.DisposalSource => "Asset disposal",
         Domain.Assets.Loan.Source => "Loan",
         Domain.Assets.Loan.PaymentSource => "Loan payment",

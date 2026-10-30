@@ -21,7 +21,14 @@ internal sealed class EfChannelOrderStore(OpenBookDbContext db) : IChannelOrderS
     public async Task<IReadOnlyList<ChannelSku>> ListSkusAsync(Guid channelId, CancellationToken ct) =>
         await db.ChannelSkus.Where(s => s.ChannelId == channelId).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<ChannelReturn>> ListReturnsAsync(Guid batchId, CancellationToken ct) =>
+        (await db.ChannelReturns.Where(r => r.BatchId == batchId).ToListAsync(ct)).OrderBy(r => r.Date).ThenBy(r => r.CreatedAt).ToList();
+
+    public Task<ChannelReturn?> GetReturnAsync(Guid id, CancellationToken ct) => db.ChannelReturns.SingleOrDefaultAsync(r => r.Id == id, ct);
+
     public void Add(ChannelOrderBatch batch) => db.ChannelOrderBatches.Add(batch);
+
+    public void Add(ChannelReturn channelReturn) => db.ChannelReturns.Add(channelReturn);
 
     public void Add(ChannelSku sku) => db.ChannelSkus.Add(sku);
 

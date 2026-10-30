@@ -311,6 +311,19 @@ public sealed class ChannelTests : IAsyncLifetime
         Assert.Equal(10m, entry.Lines.Where(l => l.AccountId == mug.CostAccountId).Sum(l => l.Amount));
         Assert.Equal(8m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);
 
+        // One mug comes back: into stock at its sale cost, off cost of goods sold.
+        var mugLine = mugDay.Lines.Single(l => l.Sku == "MUG-1").LineNumber;
+        Assert.Equal("channel.return_too_many", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ChannelOrderService, ChannelReturn>(s => s.ReturnAsync(mugDay.Id, new DateOnly(2026, 3, 5), [(mugLine, 3m)])))).Code);
+        var back = await In<ChannelOrderService, ChannelReturn>(s => s.ReturnAsync(mugDay.Id, new DateOnly(2026, 3, 5), [(mugLine, 1m)], "Chipped in transit"));
+        var backEntry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(back.JournalEntryId!.Value)))!;
+        Assert.Equal(-5m, backEntry.Lines.Where(l => l.AccountId == mug.CostAccountId).Sum(l => l.Amount));
+        Assert.Equal(9m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);
+        Assert.Equal("channel.orders_have_returns", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ChannelOrderService, ChannelOrderBatch>(s => s.VoidAsync(mugDay.Id, "Wrong day")))).Code);
+        await In<ChannelOrderService, ChannelReturn>(s => s.VoidReturnAsync(back.Id, "Not actually back"));
+        Assert.Equal(8m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);
+
         var voided = await In<ChannelOrderService, ChannelOrderBatch>(s => s.VoidAsync(mugDay.Id, "Wrong day"));
         Assert.Equal(PayoutStatus.Pending, voided.Status);
         Assert.Equal(10m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);

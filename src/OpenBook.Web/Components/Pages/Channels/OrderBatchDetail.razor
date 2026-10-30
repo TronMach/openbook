@@ -98,6 +98,49 @@
                 </tbody>
             </table>
         </div>
+
+        @if (_batch.Status == PayoutStatus.Posted)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Returns</h2>
+                <p class="muted">Items that came back go into stock at their latest sale cost. The refund itself comes in with the channel's payout.</p>
+                @if (_returns.Count > 0)
+                {
+                    <ul>
+                        @foreach (var r in _returns)
+                        {
+                            <li><a href="/sales/channels/returns/@r.Id">@Labels.Date(r.Date): @r.Lines.Sum(l => l.Quantity).ToString("0.####") item(s)</a>@(r.Status == DocumentStatus.Voided ? " (voided)" : "")</li>
+                        }
+                    </ul>
+                }
+                @if (_batch.Lines.Any(l => l.Quantity - _returned.GetValueOrDefault(l.LineNumber) > 0m))
+                {
+                    <form method="post" action="/sales/channels/orders/@_batch.Id/returns" data-enhance="false">
+                        <AntiforgeryToken />
+                        <table class="data">
+                            <thead><tr><th>Order</th><th>SKU</th><th class="num">Sold</th><th class="num">Back already</th><th class="num">Came back now</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in _batch.Lines.Where(l => l.Quantity - _returned.GetValueOrDefault(l.LineNumber) > 0m))
+                                {
+                                    <tr>
+                                        <td>@l.OrderId</td>
+                                        <td>@l.Sku</td>
+                                        <td class="num">@Labels.Quantity(l.Quantity)</td>
+                                        <td class="num">@Labels.Quantity(_returned.GetValueOrDefault(l.LineNumber))</td>
+                                        <td class="num"><input name="qty:@l.LineNumber" inputmode="decimal" size="5" aria-label="Returned from order @l.OrderId" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="row">
+                            <div class="field"><label for="return-date">Date</label><input id="return-date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                            <div class="field"><label for="return-memo">Memo <span class="muted">(optional)</span></label><input id="return-memo" name="memo" maxlength="@ChannelReturn.MaxMemoLength" /></div>
+                        </div>
+                        <div class="actions"><button type="submit" class="secondary">Put the returns in stock</button></div>
+                    </form>
+                }
+            </div>
+        }
     }
 </div>
 
@@ -105,6 +148,8 @@
     private ChannelOrderBatch? _batch;
     private SalesChannel? _channel;
     private IReadOnlyList<string> _unmapped = [];
+    private IReadOnlyList<ChannelReturn> _returns = [];
+    private IReadOnlyDictionary<int, decimal> _returned = new Dictionary<int, decimal>();
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -115,6 +160,8 @@
         if (_batch is null)
             return;
         _channel = await ChannelService.GetAsync(_batch.ChannelId);
+        _returns = await Orders.ListReturnsAsync(_batch.Id);
+        _returned = await Orders.ReturnedAsync(_batch.Id);
         var skus = (await Orders.SkusAsync(_batch.ChannelId)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
         _unmapped = _batch.Lines.Select(l => l.Sku ?? "(no SKU)").Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(s => !skus.TryGetValue(s, out var m) || !m.Mapped).ToList();

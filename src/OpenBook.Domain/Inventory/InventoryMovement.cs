@@ -15,6 +15,7 @@ public static class InventorySources
     public const string LandedCost = "landed_cost";
     public const string Transfer = "stock_transfer";
     public const string ChannelOrders = "channel_orders";
+    public const string ChannelReturn = "channel_return";
 }
 
 /// <summary>

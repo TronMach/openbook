@@ -1,0 +1,78 @@
+@page "/sales/channels/returns/{Id:guid}"
+@using OpenBook.Application.Channels
+@using OpenBook.Domain.Channels
+@inject ChannelOrderService Orders
+
+<PageTitle>Channel return · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_return is null || _batch is null)
+    {
+        <h1>Return not found</h1>
+        <p><a href="/sales/channels">Back to sales channels</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>Returns of @Labels.Date(_return.Date)</h1>
+            @if (_return.Status == DocumentStatus.Voided)
+            {
+                <span class="badge">Voided</span>
+            }
+            @if (_return.JournalEntryId is { } entry)
+            {
+                <a class="button secondary" href="/journal/@entry">Journal entry</a>
+            }
+            <a class="button secondary" href="/sales/channels/orders/@_batch.Id">The orders</a>
+            <a class="button secondary" href="/audit?entityId=@_return.Id">History</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (_return.Memo is { } memo)
+        {
+            <p>@memo</p>
+        }
+        <table class="data">
+            <thead><tr><th>Order</th><th>SKU</th><th>Item</th><th class="num">Back in stock</th></tr></thead>
+            <tbody>
+                @foreach (var l in _return.Lines)
+                {
+                    var order = _batch.Lines.FirstOrDefault(o => o.LineNumber == l.OrderLine);
+                    <tr><td>@order?.OrderId</td><td>@order?.Sku</td><td>@order?.Title</td><td class="num">@Labels.Quantity(l.Quantity)</td></tr>
+                }
+            </tbody>
+        </table>
+
+        @if (_return.Status == DocumentStatus.Posted)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Void</h2>
+                <p class="muted">Takes the items out of stock again (refused once they've been sold or moved since).</p>
+                <form method="post" action="/sales/channels/returns/@_return.Id/void" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger">Void</button></div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private ChannelReturn? _return;
+    private ChannelOrderBatch? _batch;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _return = await Orders.GetReturnAsync(Id);
+        if (_return is not null)
+            _batch = await Orders.GetBatchAsync(_return.BatchId);
+    }
+}

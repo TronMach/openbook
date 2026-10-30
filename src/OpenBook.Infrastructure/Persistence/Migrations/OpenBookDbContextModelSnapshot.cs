@@ -952,6 +952,47 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("ChannelPayouts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelReturn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("ChannelId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("ChannelReturns", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Channels.ChannelSku", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5583,6 +5624,52 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("ChannelPayoutId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Channels.ChannelReturn", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Channels.ChannelOrderBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Channels.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Channels.ChannelReturnLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("ChannelReturnId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("OrderLine")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Quantity")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.HasKey("ChannelReturnId", "LineNumber");
+
+                            b1.ToTable("ChannelReturnLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ChannelReturnId");
                         });
 
                     b.Navigation("Lines");

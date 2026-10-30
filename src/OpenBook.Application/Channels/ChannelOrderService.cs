@@ -19,7 +19,11 @@ public interface IChannelOrderStore
     Task<IReadOnlySet<string>> OrderIdsAsync(Guid channelId, CancellationToken ct);
     Task<IReadOnlyList<ChannelSku>> ListSkusAsync(Guid channelId, CancellationToken ct);
 
+    Task<IReadOnlyList<ChannelReturn>> ListReturnsAsync(Guid batchId, CancellationToken ct);
+    Task<ChannelReturn?> GetReturnAsync(Guid id, CancellationToken ct);
+
     void Add(ChannelOrderBatch batch);
+    void Add(ChannelReturn channelReturn);
     void Add(ChannelSku sku);
     void Add(AuditRecord record);
     Task SaveChangesAsync(CancellationToken ct);
@@ -147,6 +151,8 @@ public sealed class ChannelOrderService(
         var channel = await RequiredChannelAsync(batch.ChannelId, ct);
         if (batch.Status != PayoutStatus.Posted)
             throw new DomainException("channel.orders_not_posted", "Those orders aren't posted.");
+        if ((await store.ListReturnsAsync(batch.Id, ct)).Any(r => r.Status == DocumentStatus.Posted))
+            throw new DomainException("channel.orders_have_returns", "Returns from these orders are recorded. Void them first.");
         var before = Snapshot(batch, channel);
         var stock = await inventory.PlanReversalAsync(InventorySources.ChannelOrders, batch.Id, batch.Date, $"{channel.Name} orders of {batch.Date:MMM d}", ct);
         if (batch.JournalEntryId is { } entryId)
@@ -157,6 +163,92 @@ public sealed class ChannelOrderService(
         await store.SaveChangesAsync(ct);
         return batch;
     }
+
+    public const string ReturnEntity = "channel_return";
+
+    /// <summary>What's been returned so far from each order line of the batch (posted returns).</summary>
+    public async Task<IReadOnlyDictionary<int, decimal>> ReturnedAsync(Guid batchId, CancellationToken ct = default) =>
+        (await store.ListReturnsAsync(batchId, ct)).Where(r => r.Status == DocumentStatus.Posted).SelectMany(r => r.Lines)
+            .GroupBy(l => l.OrderLine).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+
+    public Task<IReadOnlyList<ChannelReturn>> ListReturnsAsync(Guid batchId, CancellationToken ct = default) => store.ListReturnsAsync(batchId, ct);
+
+    public Task<ChannelReturn?> GetReturnAsync(Guid id, CancellationToken ct = default) => store.GetReturnAsync(id, ct);
+
+    /// <summary>
+    /// Puts returned items back in stock (default warehouse) at each item's latest sale cost: Dr inventory asset / Cr cost
+    /// of goods sold. Only posted orders, stocked SKUs, items without lot or serial tracking (use a credit memo or an
+    /// adjustment for those), and no more than was sold on each line less what's already back.
+    /// </summary>
+    public async Task<ChannelReturn> ReturnAsync(Guid batchId, DateOnly date, IReadOnlyList<(int OrderLine, decimal Quantity)> lines, string? memo = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var batch = await store.GetBatchAsync(batchId, ct) ?? throw new EntityNotFoundException(BatchEntity, batchId);
+        var channel = await RequiredChannelAsync(batch.ChannelId, ct);
+        if (batch.Status != PayoutStatus.Posted)
+            throw new DomainException("channel.orders_not_posted", "Post the orders before recording returns from them.");
+        if (date < batch.Date)
+            throw new DomainException("channel.return_before_order", "Items can't come back before they were sold.");
+
+        var mapping = (await SkusAsync(channel.Id, ct)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
+        var returned = await ReturnedAsync(batch.Id, ct);
+        var wanted = lines.Where(l => l.Quantity != 0m).ToList();
+        var byItem = new List<(Guid ItemId, decimal Quantity)>();
+        foreach (var (orderLine, quantity) in wanted)
+        {
+            var line = batch.Lines.FirstOrDefault(l => l.LineNumber == orderLine) ?? throw new DomainException("channel.return_line", "That order line isn't in these orders.");
+            if (quantity < 0m || quantity > line.Quantity - returned.GetValueOrDefault(orderLine))
+                throw new DomainException("channel.return_too_many", $"Order {line.OrderId}: at most {line.Quantity - returned.GetValueOrDefault(orderLine):0.####} can come back.");
+            if (line.Sku is null || !mapping.TryGetValue(line.Sku, out var sku) || sku.ItemId is not { } itemId)
+                throw new DomainException("channel.return_not_stocked", $"Order {line.OrderId}: {line.Sku ?? line.Title} isn't a stocked item.");
+            byItem.Add((itemId, quantity));
+        }
+
+        var stocked = byItem.GroupBy(b => b.ItemId).Select(g => (ItemId: g.Key, Quantity: g.Sum(b => b.Quantity))).ToList();
+        var items = await sales.GetItemsAsync(stocked.Select(s => s.ItemId).ToList(), ct);
+        if (items.Values.FirstOrDefault(i => i.Tracking != ItemTracking.None) is { } tracked)
+            throw new DomainException("channel.return_tracked", $"{tracked.Name} is tracked by lot or serial number: record its return with a credit memo or an inventory adjustment.");
+        var salesLines = stocked.Select((s, i) => SalesLine.Create(i + 1, new SalesLineDraft(s.ItemId, null, s.Quantity, 0m), items.GetValueOrDefault(s.ItemId))).ToList();
+
+        var id = Guid.CreateVersion7();
+        ChannelReturn.Create(id, channel.Id, batch.Id, date, wanted, memo, null, clock.UtcNow); // checks before anything is staged
+        var plan = salesLines.Count == 0 ? InventoryPlan.None : await inventory.PlanReturnAsync(salesLines, date, null, ct);
+        Guid? entryId = null;
+        if (plan.Postings.Count > 0)
+            entryId = (await engine.StageAsync(new PostJournalEntryCommand(date, plan.Postings, $"{channel.Name} returns", ChannelReturn.Source, id), ct)).Id;
+        inventory.Apply(plan, InventorySources.ChannelReturn, id);
+        var channelReturn = ChannelReturn.Create(id, channel.Id, batch.Id, date, wanted, memo, entryId, clock.UtcNow);
+        store.Add(channelReturn);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, ReturnEntity, id, null, ReturnSnapshot(channelReturn)));
+        await store.SaveChangesAsync(ct);
+        return channelReturn;
+    }
+
+    /// <summary>Takes the returned stock out again (refused once it has been sold or moved).</summary>
+    public async Task<ChannelReturn> VoidReturnAsync(Guid id, string reason, CancellationToken ct = default)
+    {
+        var channelReturn = await store.GetReturnAsync(id, ct) ?? throw new EntityNotFoundException(ReturnEntity, id);
+        if (channelReturn.Status == DocumentStatus.Voided)
+            throw new DomainException("channel.return_voided", "This return is already voided.");
+        var before = ReturnSnapshot(channelReturn);
+        var stock = await inventory.PlanReversalAsync(InventorySources.ChannelReturn, id, channelReturn.Date, "the channel return", ct);
+        if (channelReturn.JournalEntryId is { } entryId)
+            await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
+        inventory.Apply(stock, InventorySources.ChannelReturn, id);
+        channelReturn.Void();
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Voided, ReturnEntity, id, before, ReturnSnapshot(channelReturn)));
+        await store.SaveChangesAsync(ct);
+        return channelReturn;
+    }
+
+    private static string ReturnSnapshot(ChannelReturn r) => JsonSerializer.Serialize(new
+    {
+        r.BatchId,
+        r.Date,
+        r.Memo,
+        Status = r.Status.ToString(),
+        Lines = r.Lines.Select(l => new { l.OrderLine, l.Quantity }),
+    });
 
     public async Task<ChannelOrderBatch> SetDismissedAsync(Guid batchId, bool dismissed, CancellationToken ct = default)
     {
