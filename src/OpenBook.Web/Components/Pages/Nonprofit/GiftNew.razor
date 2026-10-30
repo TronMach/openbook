@@ -60,7 +60,7 @@
                 <div class="field">
                     <label for="debit">Deposited to, or recorded to (in kind)</label>
                     <select id="debit" name="debitAccountId" data-search required>
-                        <optgroup label="Bank accounts (money)">
+                        <optgroup label="Bank accounts or Undeposited Funds (money)">
                             @foreach (var a in _banks)
                             {
                                 <option value="@a.Id">@_chart.FullName(a.Id)</option>
@@ -161,7 +161,9 @@
         _donors = (await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Where(c => c.Customer.IsActive).ToList();
         _chart = await AccountService.GetChartAsync();
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        // Money goes to a bank account, or waits in Undeposited Funds for Make deposit.
         _banks = active.Where(a => a.Type == AccountType.Bank).ToList();
+        _banks.AddRange(active.Where(a => a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, "Undeposited Funds", StringComparison.OrdinalIgnoreCase)));
         _inKind = active.Where(a => a.Type is AccountType.OtherCurrentAsset or AccountType.FixedAsset or AccountType.OtherAsset
                                     || a.Type.ClassOf() == AccountClass.Expense).ToList();
         _income = active.Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();

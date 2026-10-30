@@ -131,6 +131,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Nonprofit.GiftService>();
         services.AddScoped<OpenBook.Application.Nonprofit.GiftReports>();
         services.AddScoped<OpenBook.Application.Nonprofit.GrantService>();
+        services.AddScoped<OpenBook.Application.Sales.IUndepositedSource, OpenBook.Application.Nonprofit.GiftDeposits>();
         services.AddScoped<OpenBook.Application.Projects.ProjectBilling>();
         services.AddScoped<OpenBook.Application.Projects.ProjectReports>();
         services.AddScoped<OpenBook.Application.Assets.AssetAccounts>();

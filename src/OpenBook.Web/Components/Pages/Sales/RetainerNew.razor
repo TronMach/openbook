@@ -87,6 +87,9 @@
     {
         _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
         _chart = await AccountService.GetChartAsync();
-        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
+        // A bank account, or Undeposited Funds to group it into a deposit later.
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type == AccountType.Bank || (a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, "Undeposited Funds", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
     }
 }

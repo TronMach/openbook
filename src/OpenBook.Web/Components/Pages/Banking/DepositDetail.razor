@@ -45,8 +45,8 @@
             {
                 <tr>
                     <td>
-                        <a href="@(line.Kind == DepositedKind.Payment ? $"/sales/payments/{line.SourceId}" : $"/sales/receipts/{line.SourceId}")">
-                            @(line.Kind == DepositedKind.Payment ? "Customer payment" : "Sales receipt")
+                        <a href="@Links.ForDeposited(line.Kind, line.SourceId)">
+                            @DepositService.Describe(line.Kind)
                         </a>
                     </td>
                     <td class="muted">@_chart.FullName(line.FromAccountId)</td>

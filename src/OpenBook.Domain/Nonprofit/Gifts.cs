@@ -34,8 +34,11 @@ public sealed class Donation
     public GiftKind Kind { get; private set; }
     public decimal Amount { get; private set; }
 
-    /// <summary>Cash: the bank account it went into. In kind: the asset or expense account it was recorded to.</summary>
+    /// <summary>Cash: the bank account it went into (or a holding account such as Undeposited Funds). In kind: the asset or expense account it was recorded to.</summary>
     public Guid DebitAccountId { get; private set; }
+
+    /// <summary>The bank deposit that took it out of the holding account.</summary>
+    public Guid? DepositId { get; private set; }
 
     /// <summary>The contribution account (for a pledge payment, the pledge's).</summary>
     public Guid IncomeAccountId { get; private set; }
@@ -118,10 +121,23 @@ public sealed class Donation
 
     public void MarkAcknowledged(DateTimeOffset at) => AcknowledgedAt ??= at.ToUniversalTime();
 
+    public void MarkDeposited(Guid depositId)
+    {
+        if (Status != DocumentStatus.Posted || Kind != GiftKind.Cash)
+            throw new DomainException("donation.not_depositable", "Only posted money gifts are deposited.");
+        if (DepositId is not null)
+            throw new DomainException("deposit.already_deposited", "This gift is already in a deposit.");
+        DepositId = depositId;
+    }
+
+    public void ClearDeposit() => DepositId = null;
+
     public void Void()
     {
         if (Status == DocumentStatus.Voided)
             throw new DomainException("donation.already_voided", "This gift is already voided.");
+        if (DepositId is not null)
+            throw new DomainException("donation.deposited", "This gift is in a bank deposit. Void the deposit first.");
         Status = DocumentStatus.Voided;
     }
 }

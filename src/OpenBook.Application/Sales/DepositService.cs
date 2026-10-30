@@ -11,14 +11,39 @@ namespace OpenBook.Application.Sales;
 /// <summary>A payment or sales receipt sitting in an undeposited funds account.</summary>
 public sealed record UndepositedItem(DepositedKind Kind, Guid Id, DateOnly Date, Guid? CustomerId, string Label, string? Reference, Guid AccountId, decimal Amount);
 
+/// <summary>
+/// Another kind of document that can wait in undeposited funds (nonprofit gifts), so the deposit service needn't know it.
+/// Changes are saved with the deposit (same unit of work).
+/// </summary>
+public interface IUndepositedSource
+{
+    DepositedKind Kind { get; }
+
+    /// <summary>Posted documents of this kind in a holding account and not deposited.</summary>
+    Task<IReadOnlyList<UndepositedItem>> WaitingAsync(Func<Guid, bool> holding, IReadOnlyDictionary<Guid, string> customers, CancellationToken ct);
+
+    Task MarkAsync(IReadOnlyCollection<Guid> ids, Guid depositId, CancellationToken ct);
+
+    Task ClearAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+}
+
 public sealed record MakeDepositCommand(Guid BankAccountId, DateOnly Date, IReadOnlyList<(DepositedKind Kind, Guid Id)> Items, string? Memo = null);
 
 /// <summary>
 /// Undeposited funds: payments and receipts recorded to an "other current asset" holding account, then
 /// grouped into one bank deposit to match the statement.
 /// </summary>
-public sealed class DepositService(ISalesStore store, AccountService accounts, PostingEngine engine, IClock clock, ICurrentUser user)
+public sealed class DepositService(
+    ISalesStore store, AccountService accounts, PostingEngine engine, IEnumerable<IUndepositedSource> sources, IClock clock, ICurrentUser user)
 {
+    public static string Describe(DepositedKind kind) => kind switch
+    {
+        DepositedKind.Payment => "Customer payment",
+        DepositedKind.SalesReceipt => "Sales receipt",
+        DepositedKind.Retainer => "Retainer",
+        _ => "Gift",
+    };
+
     private const string EntityType = "deposit";
 
     public Task<BankDeposit?> GetAsync(Guid id, CancellationToken ct = default) => store.GetDepositAsync(id, ct);
@@ -41,7 +66,14 @@ public sealed class DepositService(ISalesStore store, AccountService accounts, P
             .Select(r => new UndepositedItem(DepositedKind.SalesReceipt, r.Id, r.Date, r.CustomerId,
                 r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}",
                 r.Reference, r.DepositAccountId, r.Total));
-        return payments.Concat(receipts).OrderBy(i => i.Date).ToList();
+        var retainers = (await store.ListRetainersAsync(null, ct))
+            .Where(r => r.Status == DocumentStatus.Posted && r.DepositId is null && Holding(r.DepositAccountId))
+            .Select(r => new UndepositedItem(DepositedKind.Retainer, r.Id, r.Date, r.CustomerId,
+                $"Retainer from {customers.GetValueOrDefault(r.CustomerId)}", r.Reference, r.DepositAccountId, r.Amount));
+        var others = new List<UndepositedItem>();
+        foreach (var source in sources)
+            others.AddRange(await source.WaitingAsync(Holding, customers, ct));
+        return payments.Concat(receipts).Concat(retainers).Concat(others).OrderBy(i => i.Date).ToList();
     }
 
     public async Task<BankDeposit> DepositAsync(MakeDepositCommand command, CancellationToken ct = default)
@@ -79,8 +111,17 @@ public sealed class DepositService(ISalesStore store, AccountService accounts, P
         {
             if (item.Kind == DepositedKind.Payment)
                 payments[item.SourceId].MarkDeposited(id);
-            else
+            else if (item.Kind == DepositedKind.SalesReceipt)
                 receipts[item.SourceId].MarkDeposited(id);
+            else if (item.Kind == DepositedKind.Retainer)
+                (await store.GetRetainerAsync(item.SourceId, ct))!.MarkDeposited(id);
+        }
+
+        foreach (var source in sources)
+        {
+            var ids = items.Where(i => i.Kind == source.Kind).Select(i => i.SourceId).ToList();
+            if (ids.Count > 0)
+                await source.MarkAsync(ids, id, ct);
         }
 
         store.Add(deposit);
@@ -105,6 +146,14 @@ public sealed class DepositService(ISalesStore store, AccountService accounts, P
             payment.ClearDeposit();
         foreach (var receipt in receipts)
             receipt.ClearDeposit();
+        foreach (var line in deposit.Lines.Where(l => l.Kind == DepositedKind.Retainer))
+            (await store.GetRetainerAsync(line.SourceId, ct))?.ClearDeposit();
+        foreach (var source in sources)
+        {
+            var ids = deposit.Lines.Where(l => l.Kind == source.Kind).Select(l => l.SourceId).ToList();
+            if (ids.Count > 0)
+                await source.ClearAsync(ids, ct);
+        }
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Voided, EntityType, id, before, Snapshot(deposit)));
         await store.SaveChangesAsync(ct);
         return deposit;

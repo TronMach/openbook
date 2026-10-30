@@ -2000,6 +2000,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("DebitAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("DepositId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -4543,6 +4546,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("date");
 
                     b.Property<Guid>("DepositAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DepositId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("JournalEntryId")

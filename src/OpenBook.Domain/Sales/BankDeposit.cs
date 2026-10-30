@@ -7,6 +7,10 @@ public enum DepositedKind
 {
     Payment,
     SalesReceipt,
+    Retainer,
+
+    /// <summary>A nonprofit's gift (<c>Domain.Nonprofit.Donation</c>).</summary>
+    Gift,
 }
 
 /// <summary>One payment or sales receipt taken out of undeposited funds.</summary>

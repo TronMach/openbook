@@ -63,7 +63,7 @@
                             <td><input type="checkbox" aria-label="Deposit @row.Item.Label" @bind="row.Selected" /></td>
                             <td>@Labels.Date(row.Item.Date)</td>
                             <td>
-                                <a href="@(row.Item.Kind == DepositedKind.Payment ? $"/sales/payments/{row.Item.Id}" : $"/sales/receipts/{row.Item.Id}")" target="_blank">@row.Item.Label</a>
+                                <a href="@Links.ForDeposited(row.Item.Kind, row.Item.Id)" target="_blank">@row.Item.Label</a>
                             </td>
                             <td>@row.Item.Reference</td>
                             <td class="muted">@_chart.FullName(row.Item.AccountId)</td>

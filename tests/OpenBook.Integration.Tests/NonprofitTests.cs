@@ -230,6 +230,29 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Null(lapsed.Find("Pat Giver", 2));
     }
 
+    [Fact]
+    public async Task Gifts_and_retainers_wait_in_undeposited_funds_until_deposited()
+    {
+        var pat = await Donor("Pat Giver");
+        var undeposited = Account("Undeposited Funds");
+        var gift = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 5, 1), 80m, undeposited, Reference: "1201"));
+        var retainer = await In<RetainerService, Retainer>(s => s.ReceiveAsync(new ReceiveRetainerCommand(pat.Id, new DateOnly(2026, 5, 2), undeposited, 500m)));
+
+        var waiting = await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync());
+        Assert.Equal([DepositedKind.Gift, DepositedKind.Retainer], waiting.Select(i => i.Kind));
+
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(Account("Checking"), new DateOnly(2026, 5, 3),
+            waiting.Select(i => (i.Kind, i.Id)).ToList())));
+        Assert.Equal(580m, deposit.Total);
+        Assert.Empty(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()));
+        Assert.Equal("donation.deposited", (await Assert.ThrowsAsync<DomainException>(() => In<GiftService, Donation>(s => s.VoidAsync(gift.Id, "x")))).Code);
+        Assert.Equal("retainer.deposited", (await Assert.ThrowsAsync<DomainException>(() => In<RetainerService, Retainer>(s => s.VoidAsync(retainer.Id, "x")))).Code);
+
+        await In<DepositService, BankDeposit>(s => s.VoidAsync(deposit.Id, "Wrong day"));
+        Assert.Equal(2, (await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync())).Count);
+        Assert.Equal(DocumentStatus.Voided, (await In<GiftService, Donation>(s => s.VoidAsync(gift.Id, "Bounced"))).Status);
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));

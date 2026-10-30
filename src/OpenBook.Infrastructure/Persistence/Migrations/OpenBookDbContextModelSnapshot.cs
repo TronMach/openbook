@@ -1993,6 +1993,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DebitAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("DepositId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -4536,6 +4539,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("DepositAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DepositId")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("JournalEntryId")

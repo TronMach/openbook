@@ -40,6 +40,15 @@ public static class Links
         _ => $"/journal/{journalEntryId}",
     };
 
+    /// <summary>The page of something put into a bank deposit.</summary>
+    public static string ForDeposited(OpenBook.Domain.Sales.DepositedKind kind, Guid id) => kind switch
+    {
+        OpenBook.Domain.Sales.DepositedKind.Payment => $"/sales/payments/{id}",
+        OpenBook.Domain.Sales.DepositedKind.SalesReceipt => $"/sales/receipts/{id}",
+        OpenBook.Domain.Sales.DepositedKind.Retainer => $"/sales/retainers/{id}",
+        _ => $"/nonprofit/gifts/{id}",
+    };
+
     /// <summary>The page for something named in the audit log, or null when it has none.</summary>
     public static string? ForAuditEntity(string entityType, Guid id) => entityType switch
     {

@@ -24,8 +24,11 @@ public sealed class Retainer
     public DateOnly Date { get; private set; }
     public decimal Amount { get; private set; }
 
-    /// <summary>The bank account it was deposited to.</summary>
+    /// <summary>The bank account it was deposited to, or a holding account such as Undeposited Funds.</summary>
     public Guid DepositAccountId { get; private set; }
+
+    /// <summary>The bank deposit that took it out of the holding account.</summary>
+    public Guid? DepositId { get; private set; }
 
     /// <summary>Where it's held until used ("Customer Deposits").</summary>
     public Guid LiabilityAccountId { get; private set; }
@@ -97,10 +100,23 @@ public sealed class Retainer
         return refund;
     }
 
+    public void MarkDeposited(Guid depositId)
+    {
+        if (Status != DocumentStatus.Posted)
+            throw new DomainException("retainer.voided", "This retainer is voided.");
+        if (DepositId is not null)
+            throw new DomainException("deposit.already_deposited", "This retainer is already in a deposit.");
+        DepositId = depositId;
+    }
+
+    public void ClearDeposit() => DepositId = null;
+
     public void Void()
     {
         if (Status == DocumentStatus.Voided)
             throw new DomainException("retainer.already_voided", "This retainer is already voided.");
+        if (DepositId is not null)
+            throw new DomainException("retainer.deposited", "This retainer is in a bank deposit. Void the deposit first.");
         if (AmountApplied > 0m || AmountRefunded > 0m)
             throw new DomainException("retainer.used", "This retainer has been applied or refunded. Void those first.");
         Status = DocumentStatus.Voided;

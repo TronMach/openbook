@@ -46,8 +46,8 @@ public sealed class RetainerService(ISalesStore store, SalesAccounts salesAccoun
         if (!customer.IsActive)
             throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
         var bank = (await accounts.GetChartAsync(ct)).Get(command.DepositAccountId);
-        if (bank.Type != AccountType.Bank || !bank.IsActive)
-            throw new DomainException("retainer.deposit_account", $"'{bank.Name}' isn't an active bank account.");
+        if (bank.Type is not (AccountType.Bank or AccountType.OtherCurrentAsset) || !bank.IsActive)
+            throw new DomainException("retainer.deposit_account", $"'{bank.Name}' isn't an active bank or undeposited funds account.");
 
         var id = Guid.CreateVersion7();
         // Validates the amount before anything is staged or created.

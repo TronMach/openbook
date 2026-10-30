@@ -105,8 +105,8 @@ public sealed class GiftService(
             command.Kind == GiftKind.Cash ? "Choose the bank account it went into." : "Choose the account the gift was recorded to.");
         if (!debit.IsActive)
             throw new DomainException("donation.account_inactive", $"'{debit.Name}' is inactive.");
-        if (command.Kind == GiftKind.Cash && debit.Type != AccountType.Bank)
-            throw new DomainException("donation.deposit_bank", "Money gifts go into a bank account.");
+        if (command.Kind == GiftKind.Cash && debit.Type is not (AccountType.Bank or AccountType.OtherCurrentAsset))
+            throw new DomainException("donation.deposit_bank", "Money gifts go into a bank account or Undeposited Funds.");
         if (command.Kind == GiftKind.InKind && (debit.Type is AccountType.Bank or AccountType.AccountsReceivable or AccountType.AccountsPayable or AccountType.CreditCard
                                                 || debit.Type.ClassOf() is AccountClass.Liability or AccountClass.Equity or AccountClass.Income))
             throw new DomainException("donation.in_kind_account", "Record an in-kind gift to the asset or expense it became.");
