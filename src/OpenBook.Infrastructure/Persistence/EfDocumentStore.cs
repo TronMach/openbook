@@ -15,7 +15,12 @@ internal sealed class EfDocumentStore(OpenBookDbContext db) : IDocumentStore
 
     public Task<DocumentReadingSettings?> GetReadingSettingsAsync(CancellationToken ct) => db.DocumentReadingSettings.SingleOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyList<DocumentItemCode>> ListItemCodesAsync(Guid partyId, CancellationToken ct) =>
+        await db.DocumentItemCodes.Where(c => c.PartyId == partyId).ToListAsync(ct);
+
     public void Add(CapturedDocument document) => db.CapturedDocuments.Add(document);
+
+    public void Add(DocumentItemCode code) => db.DocumentItemCodes.Add(code);
 
     public void Add(DocumentReadingSettings settings) => db.DocumentReadingSettings.Add(settings);
 

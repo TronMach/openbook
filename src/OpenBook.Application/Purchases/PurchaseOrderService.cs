@@ -32,7 +32,9 @@ public sealed record ReceiveGoodsCommand(DateOnly Date, IReadOnlyList<ReceiveLin
 public sealed record BillOrderLine(int LineNumber, decimal Quantity, decimal? UnitCost = null);
 
 /// <param name="Lines">What to bill; null for what's been received and not billed (everything left when nothing is recorded as received).</param>
-public sealed record BillFromOrderCommand(DateOnly Date, string? Reference = null, IReadOnlyList<BillOrderLine>? Lines = null, DateOnly? DueDate = null, string? Memo = null);
+/// <param name="Extra">Bill lines that aren't on the order (freight, sales tax), added after the order's lines and left out of the 3-way match.</param>
+public sealed record BillFromOrderCommand(
+    DateOnly Date, string? Reference = null, IReadOnlyList<BillOrderLine>? Lines = null, DateOnly? DueDate = null, string? Memo = null, IReadOnlyList<Domain.Purchases.BillLineDraft>? Extra = null);
 
 /// <summary>A purchase order line with what's been received and billed of it.</summary>
 /// <param name="BilledFromStock">Units billed that had come into stock on delivery; <paramref name="BilledFromStockAmount"/> is their received value.</param>
@@ -236,6 +238,7 @@ public sealed class PurchaseOrderService(
 
         if (drafts.Count == 0)
             throw new DomainException("purchaseorder.nothing_to_bill", "Enter the quantities to bill.");
+        drafts.AddRange(command.Extra ?? []);
         var completes = progress.Lines.All(l =>
             (l.Line.IsItem ? l.BilledQuantity : l.BilledAmount) + sources.Where(s => s.LineNumber == l.Line.LineNumber).Sum(s => l.Line.IsItem ? s.Quantity : s.Amount)
             >= (l.Line.IsItem ? l.Line.Quantity : l.Line.Amount));

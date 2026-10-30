@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<CustomerPortalService>();
         services.AddScoped<ReceiptService>();
         services.AddScoped<OpenBook.Application.Documents.DocumentCaptureService>();
+        services.AddScoped<OpenBook.Application.Documents.DocumentConversionService>();
         services.AddScoped<RetainerService>();
         services.AddScoped<BillableExpenseService>();
         services.AddScoped<CollectionService>();

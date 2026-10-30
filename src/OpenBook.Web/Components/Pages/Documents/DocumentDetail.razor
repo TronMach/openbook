@@ -8,6 +8,7 @@
 @inject CustomerService CustomerService
 @inject ItemService ItemService
 @inject PurchaseOrderService Orders
+@inject AccountService AccountService
 
 <PageTitle>Document · OpenBook</PageTitle>
 
@@ -218,6 +219,106 @@
             </div>
             <p class="hint">Reading again replaces the fields above, including anything you corrected.</p>
         </div>
+
+        <div class="card" id="make">
+            <h2>@(_document.Kind switch
+            {
+                DocumentKind.VendorInvoice => "Enter the bill",
+                DocumentKind.CustomerOrder => "Make the sales order",
+                DocumentKind.PackingSlip => "Receive the goods",
+                _ => "Make the purchase order",
+            })</h2>
+            <p class="muted">
+                @(_document.Kind switch
+                {
+                    DocumentKind.VendorInvoice => _document.PurchaseOrderId is null
+                        ? "A bill for the vendor with the lines above: inventory items into stock, the rest (and tax and shipping) to the categories below."
+                        : "A bill from the purchase order: lines with its items bill the order's lines (checked against what was ordered and received); the rest, tax and shipping go to the categories below.",
+                    DocumentKind.CustomerOrder => "A sales order for the customer with the items above at the document's prices (lines without a price get the customer's usual price), with their PO number as the reference.",
+                    DocumentKind.PackingSlip => "Records the quantities above as received on the purchase order, by item.",
+                    _ => "A purchase order to the vendor: inventory items at the quoted unit prices, everything else (and tax and shipping) as category lines.",
+                })
+                It uses the saved fields: save any changes above first. The file is attached to it.
+            </p>
+            @if (_document.Kind is DocumentKind.VendorInvoice or DocumentKind.VendorQuote)
+            {
+                <form method="post" action="/documents/@_document.Id/@(_document.Kind == DocumentKind.VendorInvoice ? "bill" : "purchase-order")" data-enhance="false">
+                    <AntiforgeryToken />
+                    @foreach (var line in _document.Lines.Where(NeedsCategory))
+                    {
+                        <div class="field">
+                            <label for="account-@line.LineNumber">Category for line @line.LineNumber: @(line.Description ?? line.Sku)</label>
+                            <select id="account-@line.LineNumber" name="account:@line.LineNumber" data-search>
+                                <option value="">The default below</option>
+                                @foreach (var a in _categories)
+                                {
+                                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="row">
+                        <div class="field">
+                            <label for="default-account">Default category</label>
+                            <select id="default-account" name="defaultAccountId" data-search>
+                                <option value="">The vendor's default category</option>
+                                @foreach (var a in _categories)
+                                {
+                                    <option value="@a.Id" selected="@(a.Id == _vendorDefault)">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                        @if (_document.Tax is not null and not 0m)
+                        {
+                            <div class="field">
+                                <label for="tax-account">Sales tax to</label>
+                                <select id="tax-account" name="taxAccountId" data-search>
+                                    <option value="">The default category</option>
+                                    @foreach (var a in _categories)
+                                    {
+                                        <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        @if (_document.Shipping is not null and not 0m)
+                        {
+                            <div class="field">
+                                <label for="shipping-account">Shipping to</label>
+                                <select id="shipping-account" name="shippingAccountId" data-search>
+                                    <option value="">The default category</option>
+                                    @foreach (var a in _categories)
+                                    {
+                                        <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">@(_document.Kind == DocumentKind.VendorInvoice ? "Enter the bill" : "Make the purchase order")</button></div>
+                </form>
+            }
+            else if (_document.Kind == DocumentKind.CustomerOrder)
+            {
+                <form method="post" action="/documents/@_document.Id/sales-order" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="actions"><button type="submit">Make the sales order</button></div>
+                </form>
+            }
+            else
+            {
+                <form method="post" action="/documents/@_document.Id/receive" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="received">Received on</label>
+                        <input id="received" type="date" name="date" value="@((_document.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">Receive the goods</button></div>
+                </form>
+            }
+        </div>
     }
 
     <Notes EntityType="captured_document" EntityId="_document.Id" />
@@ -244,9 +345,18 @@
     private List<PurchaseOrder> _orders = [];
     private List<Item> _items = [];
 
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private Guid? _vendorDefault;
+
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    /// <summary>Lines that become category lines: priced lines without an inventory item.</summary>
+    private bool NeedsCategory(CapturedDocumentLine line) =>
+        (line.Amount is not null || line.UnitPrice is not null) && !(line.ItemId is { } id && _items.FirstOrDefault(i => i.Id == id) is { IsInventory: true });
 
     protected override async Task OnInitializedAsync()
     {
@@ -268,7 +378,11 @@
         _items = (await ItemService.ListAsync()).Where(i => i.IsActive || _document.Lines.Any(l => l.ItemId == i.Id)).OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (_fromVendor)
         {
-            _orders = (await Orders.ListAsync(_document.VendorId))
+            _chart = await AccountService.GetChartAsync();
+            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+                .Where(a => a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
+            _vendorDefault = _document.VendorId is { } vendorId ? (await VendorService.GetAsync(vendorId))?.DefaultExpenseAccountId : null;
+            _orders =(await Orders.ListAsync(_document.VendorId))
                 .Where(o => o.Status != PurchaseOrderStatus.Cancelled || o.Id == _document.PurchaseOrderId)
                 .OrderByDescending(o => o.Date).ToList();
         }

@@ -159,4 +159,85 @@ public sealed class DocumentCaptureTests : IAsyncLifetime
         Assert.Equal([new DocumentLineFields("Widget", "WID-1", 10m, 5m, 50m), new DocumentLineFields(null, null, null, null, 15m)], fields.Lines);
         Assert.Throws<DocumentReadException>(() => OpenBook.Infrastructure.Documents.ClaudeDocumentReader.Parse("not json"));
     }
+
+    // ---- Turning documents into records ----
+
+    private Task<PurchaseOrder> WidgetOrder(decimal quantity = 10m) =>
+        In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(_supplier.Id, Oct1, [new PurchaseOrderLineDraft(_widget.Id, null, null, quantity, 5m)])));
+
+    [Fact]
+    public async Task A_vendor_invoice_becomes_a_bill_from_its_order_with_the_rest_as_category_lines()
+    {
+        var supplies = await _db.CreateAccount("Supplies", AccountType.Expense, "6100");
+        var freight = await _db.CreateAccount("Freight In", AccountType.CostOfGoodsSold, "5100");
+        var order = await WidgetOrder();
+        var text = Invoice.Replace("NUMBER", order.Number, StringComparison.Ordinal).Replace("Total 65.00", "Freight 10.00\nTotal 75.00", StringComparison.Ordinal);
+        var document = await Upload(DocumentKind.VendorInvoice, "invoice.txt", text);
+        Assert.Equal((10.00m, 75.00m), (document.Shipping, document.Total));
+
+        // The vendor has no default category, so the bracket line needs one.
+        Assert.Equal("document.category_required", await Refused(() =>
+            In<DocumentConversionService, Bill>(s => s.MakeBillAsync(document.Id, new DocumentAccounts()))));
+        var accounts = new DocumentAccounts(supplies.Id, ShippingAccountId: freight.Id);
+
+        // A total that doesn't add up is refused, and nothing is made.
+        var reviewed = await In<DocumentCaptureService, CapturedDocument>(s => s.ReviewAsync(document.Id, Review(document) with { Total = 80m }));
+        Assert.Equal("document.total_mismatch", await Refused(() => In<DocumentConversionService, Bill>(s => s.MakeBillAsync(document.Id, accounts))));
+        Assert.Empty(await In<BillService, IReadOnlyList<Bill>>(s => s.ListAsync()));
+        await In<DocumentCaptureService, CapturedDocument>(s => s.ReviewAsync(document.Id, Review(reviewed) with { Total = 75m }));
+
+        var bill = await In<DocumentConversionService, Bill>(s => s.MakeBillAsync(document.Id, accounts));
+        Assert.Equal((order.Id, "PS-881", 75.00m, new DateOnly(2026, 11, 11)), (bill.PurchaseOrderId, bill.Reference, bill.Total, bill.DueDate));
+        Assert.Equal([(_widget.Id, 50.00m), ((Guid?)null, 15.00m), (null, 10.00m)], bill.Lines.Select(l => (l.ItemId, l.Amount)));
+        Assert.Equal([supplies.Id, freight.Id], bill.Lines.Skip(1).Select(l => l.AccountId));
+
+        var done = (await Get(document.Id))!;
+        Assert.Equal((CapturedDocumentStatus.Done, "bill", bill.Id), (done.Status, done.ResultType, done.ResultId!.Value));
+        Assert.Single(await In<AttachmentService, IReadOnlyList<OpenBook.Domain.Attachments.Attachment>>(s => s.ListAsync("bill", bill.Id)));
+        Assert.Equal("document.done", await Refused(() => In<DocumentConversionService, Bill>(s => s.MakeBillAsync(document.Id, accounts))));
+    }
+
+    [Fact]
+    public async Task A_customer_po_becomes_a_sales_order_and_a_quote_a_purchase_order()
+    {
+        var po = await Upload(DocumentKind.CustomerOrder, "po.txt", "Contoso Hardware\nPO # 55821\nOrder date 2026-10-20\n4 Bracket kit 6.00 24.00\nPlease deliver to dock 3\nTotal 24.00");
+        Assert.Equal((_contoso.Id, _bracket.Id), (po.CustomerId, Assert.Single(po.Lines).ItemId));
+        Assert.Equal("document.wrong_kind", await Refused(() => In<DocumentConversionService, Bill>(s => s.MakeBillAsync(po.Id, new DocumentAccounts()))));
+        var order = await In<DocumentConversionService, SalesOrder>(s => s.MakeSalesOrderAsync(po.Id));
+        Assert.Equal(("55821", new DateOnly(2026, 10, 20)), (order.CustomerReference, order.Date));
+        var line = Assert.Single(order.Lines, l => l.ItemId is not null);
+        Assert.Equal((_bracket.Id, 4m, 6m), (line.ItemId!.Value, line.Quantity, line.Rate));
+
+        var supplies = await _db.CreateAccount("Supplies", AccountType.Expense, "6100");
+        var quote = await Upload(DocumentKind.VendorQuote, "quote.txt", "Parts Supply Co\nQuote # Q-1\nWID-1 Widget 3 5.00 15.00\nInstallation 40.00\nTotal 55.00");
+        Assert.Equal("document.category_required", await Refused(() => In<DocumentConversionService, PurchaseOrder>(s => s.MakePurchaseOrderAsync(quote.Id, new DocumentAccounts()))));
+        var purchase = await In<DocumentConversionService, PurchaseOrder>(s => s.MakePurchaseOrderAsync(quote.Id, new DocumentAccounts(supplies.Id)));
+        Assert.Equal((_supplier.Id, "Quote Q-1", 55m), (purchase.VendorId, purchase.Memo, purchase.Total));
+        Assert.Equal([(_widget.Id, (Guid?)null, 3m, 5m), (null, supplies.Id, 1m, 40m)], purchase.Lines.Select(l => (l.ItemId, l.AccountId, l.Quantity, l.UnitCost)));
+    }
+
+    [Fact]
+    public async Task A_packing_slip_receives_goods_on_its_order_and_learned_codes_match_next_time()
+    {
+        var order = await WidgetOrder();
+        var slip = await Upload(DocumentKind.PackingSlip, "slip.txt", $"Parts Supply Co\nPacking Slip\nSlip No: PS-1\nCustomer PO\nPO-{order.Number}\nWID-1 Widget, blue 10 8\nXB-77 Brkt large 2 2");
+        Assert.Equal((order.Id, _widget.Id, (Guid?)null), (slip.PurchaseOrderId, slip.Lines[0].ItemId, slip.Lines[1].ItemId));
+
+        // The bracket isn't on the order: refused until the line is cleared.
+        var review = Review(slip) with { Lines = [.. Review(slip).Lines.Take(1), Review(slip).Lines[1] with { ItemId = _bracket.Id }] };
+        await In<DocumentCaptureService, CapturedDocument>(s => s.ReviewAsync(slip.Id, review));
+        Assert.Equal("document.not_on_order", await Refused(() => In<DocumentConversionService, PurchaseOrder>(s => s.ReceiveAsync(slip.Id))));
+        await In<DocumentCaptureService, CapturedDocument>(s => s.ReviewAsync(slip.Id, review with { Lines = [.. review.Lines.Take(1)] }));
+        var received = await In<DocumentConversionService, PurchaseOrder>(s => s.ReceiveAsync(slip.Id, new DateOnly(2026, 10, 14)));
+        Assert.Equal(8m, received.Received[1]);
+        Assert.Equal("Packing slip PS-1", Assert.Single(received.Receipts).Note);
+
+        // The vendor's code XB-77 was learned for the bracket kit.
+        var next = await Upload(DocumentKind.VendorInvoice, "next.txt", "Parts Supply Co\nInvoice # 9\nXB-77 Something else 1 7.50 7.50");
+        Assert.Equal(_bracket.Id, Assert.Single(next.Lines).ItemId);
+    }
+
+    private static DocumentReview Review(CapturedDocument d) => new(
+        d.Party, d.VendorId, d.CustomerId, d.Number, d.Date, d.DueDate, d.OrderReference, d.PurchaseOrderId, d.Subtotal, d.Tax, d.Shipping, d.Total,
+        d.Lines.Select(l => new DocumentReviewLine(l.Description, l.Sku, l.Quantity, l.UnitPrice, l.Amount, l.ItemId)).ToList());
 }

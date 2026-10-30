@@ -75,6 +75,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<PortalAccess> PortalAccess => Set<PortalAccess>();
     public DbSet<ReceiptCapture> ReceiptCaptures => Set<ReceiptCapture>();
     public DbSet<OpenBook.Domain.Documents.CapturedDocument> CapturedDocuments => Set<OpenBook.Domain.Documents.CapturedDocument>();
+    public DbSet<OpenBook.Domain.Documents.DocumentItemCode> DocumentItemCodes => Set<OpenBook.Domain.Documents.DocumentItemCode>();
     public DbSet<OpenBook.Domain.Documents.DocumentReadingSettings> DocumentReadingSettings => Set<OpenBook.Domain.Documents.DocumentReadingSettings>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
@@ -1665,6 +1666,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(d => d.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Documents.DocumentItemCode>(b =>
+        {
+            b.ToTable("DocumentItemCodes");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Code).HasMaxLength(50);
+            b.HasIndex(c => new { c.PartyId, c.Code }).IsUnique();
+            b.HasOne<Item>().WithMany().HasForeignKey(c => c.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Documents.DocumentReadingSettings>(b =>

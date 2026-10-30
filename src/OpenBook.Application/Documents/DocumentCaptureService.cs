@@ -23,7 +23,11 @@ public interface IDocumentStore
     /// <summary>Tracked; null until the settings are first saved.</summary>
     Task<DocumentReadingSettings?> GetReadingSettingsAsync(CancellationToken ct);
 
+    /// <summary>Tracked; the codes learned for one vendor or customer.</summary>
+    Task<IReadOnlyList<DocumentItemCode>> ListItemCodesAsync(Guid partyId, CancellationToken ct);
+
     void Add(CapturedDocument document);
+    void Add(DocumentItemCode code);
     void Add(DocumentReadingSettings settings);
     void Add(AuditRecord record);
     Task SaveChangesAsync(CancellationToken ct);
@@ -159,9 +163,25 @@ public sealed class DocumentCaptureService(
 
         var before = Snapshot(document);
         document.Review(review);
+        if ((document.VendorId ?? document.CustomerId) is { } partyId)
+            await LearnCodesAsync(partyId, document, ct);
         store.Add(Audit(AuditAction.Updated, document, before));
         await store.SaveChangesAsync(ct);
         return document;
+    }
+
+    /// <summary>Remembers the item chosen for each coded line as that party's code for it.</summary>
+    private async Task LearnCodesAsync(Guid partyId, CapturedDocument document, CancellationToken ct)
+    {
+        var codes = (await store.ListItemCodesAsync(partyId, ct)).ToDictionary(c => c.Code, StringComparer.Ordinal);
+        foreach (var line in document.Lines.Where(l => l.Sku is not null && l.ItemId is not null))
+        {
+            var code = DocumentItemCode.Normalize(line.Sku!);
+            if (codes.TryGetValue(code, out var known))
+                known.Point(line.ItemId!.Value);
+            else
+                store.Add(codes[code] = DocumentItemCode.Create(partyId, code, line.ItemId!.Value));
+        }
     }
 
     public async Task<CapturedDocument> DismissAsync(Guid id, CancellationToken ct = default)
@@ -247,11 +267,15 @@ public sealed class DocumentCaptureService(
             order = DocumentMatching.PurchaseOrder(document.OrderReference, vendorId, await purchases.ListPurchaseOrdersAsync(null, ct));
         vendorId ??= order?.VendorId;
         var items = (await sales.ListItemsAsync(ct)).Where(i => i.IsActive).ToList();
+        var codes = (vendorId ?? customerId) is { } partyId
+            ? (await store.ListItemCodesAsync(partyId, ct)).Where(c => items.Any(i => i.Id == c.ItemId)).ToDictionary(c => c.Code, c => c.ItemId, StringComparer.Ordinal)
+            : [];
         document.Review(new DocumentReview(
             document.Party, vendorId, customerId, document.Number, document.Date, document.DueDate, document.OrderReference, order?.Id,
             document.Subtotal, document.Tax, document.Shipping, document.Total,
             document.Lines.Select(l => new DocumentReviewLine(l.Description, l.Sku, l.Quantity, l.UnitPrice, l.Amount,
-                DocumentMatching.Item(l.Sku, l.Description, items, order))).ToList()));
+                (l.Sku is { } sku && codes.TryGetValue(DocumentItemCode.Normalize(sku), out var learned) ? learned : (Guid?)null)
+                ?? DocumentMatching.Item(l.Sku, l.Description, items, order))).ToList()));
     }
 
     private AuditRecord Audit(AuditAction action, CapturedDocument d, string? before) =>

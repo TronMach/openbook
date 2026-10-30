@@ -1,8 +1,10 @@
 using System.Globalization;
 using OpenBook.Application.Documents;
 using OpenBook.Application.Import;
+using OpenBook.Application.Ledger;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Documents;
+using OpenBook.Web.Security;
 
 namespace OpenBook.Web.Endpoints;
 
@@ -72,6 +74,20 @@ public static class DocumentEndpoints
                 return "done=restored";
             })).RequireAuthorization();
 
+        // Fields: defaultAccountId, taxAccountId, shippingAccountId, account:{line number}, ClosingPassword.
+        app.MapPost("/documents/{id:guid}/bill", async (Guid id, IFormCollection form, DocumentConversionService conversions, ClosedPeriodOverride closing, CancellationToken ct) =>
+            await Make(id, form, closing, async () => $"/purchases/bills/{(await conversions.MakeBillAsync(id, Accounts(form), ct)).Id}")).RequireAuthorization();
+
+        app.MapPost("/documents/{id:guid}/sales-order", async (Guid id, IFormCollection form, DocumentConversionService conversions, ClosedPeriodOverride closing, CancellationToken ct) =>
+            await Make(id, form, closing, async () => $"/sales/orders/{(await conversions.MakeSalesOrderAsync(id, ct)).Id}")).RequireAuthorization();
+
+        // Fields: date, ClosingPassword.
+        app.MapPost("/documents/{id:guid}/receive", async (Guid id, IFormCollection form, DocumentConversionService conversions, ClosedPeriodOverride closing, CancellationToken ct) =>
+            await Make(id, form, closing, async () => $"/purchases/orders/{(await conversions.ReceiveAsync(id, Date(form["date"]), ct)).Id}")).RequireAuthorization();
+
+        app.MapPost("/documents/{id:guid}/purchase-order", async (Guid id, IFormCollection form, DocumentConversionService conversions, ClosedPeriodOverride closing, CancellationToken ct) =>
+            await Make(id, form, closing, async () => $"/purchases/orders/{(await conversions.MakePurchaseOrderAsync(id, Accounts(form), ct)).Id}")).RequireAuthorization();
+
         // Fields: useClaude, model, apiKey, clearApiKey.
         app.MapPost("/settings/document-reading", async (IFormCollection form, DocumentCaptureService documents, CancellationToken ct) =>
             await Back("/settings/document-reading", async () =>
@@ -95,6 +111,29 @@ public static class DocumentEndpoints
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}");
         }
     }
+
+    private static async Task<IResult> Make(Guid id, IFormCollection form, ClosedPeriodOverride closing, Func<Task<string>> make)
+    {
+        closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+        try
+        {
+            return Results.Redirect(await make());
+        }
+        catch (DomainException ex)
+        {
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            return Results.Redirect($"/documents/{id}?error={Uri.EscapeDataString(ex.Message)}{password}#make");
+        }
+    }
+
+    private static DocumentAccounts Accounts(IFormCollection form) => new(
+        Id(form["defaultAccountId"]),
+        form.Keys.Where(k => k.StartsWith("account:", StringComparison.Ordinal))
+            .Select(k => (Line: int.TryParse(k["account:".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0, Account: Id(form[k])))
+            .Where(x => x.Line > 0 && x.Account is not null)
+            .ToDictionary(x => x.Line, x => x.Account!.Value),
+        Id(form["taxAccountId"]),
+        Id(form["shippingAccountId"]));
 
     private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

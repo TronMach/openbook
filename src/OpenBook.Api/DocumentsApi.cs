@@ -13,6 +13,8 @@ public sealed record DocumentReadingSettingsResponse(bool UseClaude, string Mode
 
 public sealed record ReadDocumentRequest(bool UseClaude);
 
+public sealed record ReceiveDocumentRequest(DateOnly? Date = null);
+
 /// <summary>The document inbox: upload (raw body), check, read again, dismiss; the Claude setting (admin).</summary>
 public static class DocumentsApi
 {
@@ -32,6 +34,23 @@ public static class DocumentsApi
         documents.MapPost("/{id:guid}/read", async (Guid id, ReadDocumentRequest r, DocumentCaptureService s, CancellationToken ct) => await s.ReadAgainAsync(id, r.UseClaude, ct));
         documents.MapPost("/{id:guid}/dismiss", async (Guid id, DocumentCaptureService s, CancellationToken ct) => await s.DismissAsync(id, ct));
         documents.MapPost("/{id:guid}/restore", async (Guid id, DocumentCaptureService s, CancellationToken ct) => await s.RestoreAsync(id, ct));
+        documents.MapPost("/{id:guid}/bill", async (Guid id, DocumentAccounts r, DocumentConversionService s, CancellationToken ct) =>
+        {
+            var bill = await s.MakeBillAsync(id, r, ct);
+            return Results.Created($"/api/purchases/bills/{bill.Id}", new { BillId = bill.Id });
+        });
+        documents.MapPost("/{id:guid}/sales-order", async (Guid id, DocumentConversionService s, CancellationToken ct) =>
+        {
+            var order = await s.MakeSalesOrderAsync(id, ct);
+            return Results.Created($"/api/sales/orders/{order.Id}", new { SalesOrderId = order.Id });
+        });
+        documents.MapPost("/{id:guid}/receive", async (Guid id, ReceiveDocumentRequest r, DocumentConversionService s, CancellationToken ct) =>
+            new { PurchaseOrderId = (await s.ReceiveAsync(id, r.Date, ct)).Id });
+        documents.MapPost("/{id:guid}/purchase-order", async (Guid id, DocumentAccounts r, DocumentConversionService s, CancellationToken ct) =>
+        {
+            var order = await s.MakePurchaseOrderAsync(id, r, ct);
+            return Results.Created($"/api/purchases/orders/{order.Id}", new { PurchaseOrderId = order.Id });
+        });
 
         api.MapGet("/settings/document-reading", async (DocumentCaptureService s, CancellationToken ct) =>
             DocumentReadingSettingsResponse.From(await s.GetSettingsAsync(ct)));

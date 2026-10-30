@@ -1575,6 +1575,33 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("CapturedDocuments", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Documents.DocumentItemCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PartyId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("PartyId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("DocumentItemCodes", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Documents.DocumentReadingSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6085,6 +6112,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Documents.DocumentItemCode", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Inventory.AssemblyBuild", b =>

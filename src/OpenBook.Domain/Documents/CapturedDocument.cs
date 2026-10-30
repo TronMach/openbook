@@ -344,3 +344,29 @@ public sealed record DocumentReview(
     decimal? Shipping,
     decimal? Total,
     IReadOnlyList<DocumentReviewLine> Lines);
+
+/// <summary>
+/// A vendor's or customer's own code for one of our items (their SKU or part number), learned when someone picks the item
+/// for a coded line, so the next document from them matches it.
+/// </summary>
+public sealed class DocumentItemCode
+{
+    private DocumentItemCode() => Code = string.Empty;
+
+    public Guid Id { get; private set; }
+
+    /// <summary>The vendor or customer whose code it is.</summary>
+    public Guid PartyId { get; private set; }
+
+    /// <summary>Upper case, as <see cref="Normalize"/> gives it.</summary>
+    public string Code { get; private set; }
+
+    public Guid ItemId { get; private set; }
+
+    public static DocumentItemCode Create(Guid partyId, string code, Guid itemId) =>
+        new() { Id = Guid.CreateVersion7(), PartyId = partyId, Code = Normalize(code), ItemId = itemId };
+
+    public void Point(Guid itemId) => ItemId = itemId;
+
+    public static string Normalize(string code) => code.Trim().ToUpperInvariant();
+}

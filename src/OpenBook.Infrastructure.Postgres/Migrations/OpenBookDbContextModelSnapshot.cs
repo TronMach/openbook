@@ -1582,6 +1582,33 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("CapturedDocuments", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Documents.DocumentItemCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PartyId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("PartyId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("DocumentItemCodes", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Documents.DocumentReadingSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6100,6 +6127,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Documents.DocumentItemCode", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Inventory.AssemblyBuild", b =>
