@@ -253,6 +253,77 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         await store.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// A person's week as a grid: one row per client, service and billable setting, with hours per day (Monday first).
+    /// A cell is locked when it holds more than one entry or invoiced time; running timers are left out.
+    /// </summary>
+    public async Task<IReadOnlyList<WeekRow>> WeekAsync(Guid workerId, DateOnly monday, CancellationToken ct = default)
+    {
+        var entries = await WeekEntriesAsync(workerId, monday, ct);
+        return entries.GroupBy(e => (e.CustomerId, e.ItemId, e.Billable))
+            .Select(g => new WeekRow(g.Key.CustomerId, g.Key.ItemId, g.Key.Billable,
+                Enumerable.Range(0, 7).Select(d => (decimal?)g.Where(e => e.Date == monday.AddDays(d)).Sum(e => e.Hours)).ToList(),
+                Enumerable.Range(0, 7).Select(d => g.Count(e => e.Date == monday.AddDays(d)) > 1 || g.Any(e => e.Date == monday.AddDays(d) && e.InvoiceId is not null)).ToList()))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Saves a week's grid in one go: for each cell with hours given (null leaves it), an empty cell gets a new entry, a
+    /// cell with one entry has its hours changed (zero deletes it), and a locked cell can't change. Returns how many entries changed.
+    /// </summary>
+    public async Task<int> SaveWeekAsync(Guid workerId, DateOnly monday, IReadOnlyList<WeekRow> rows, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        var entries = await WeekEntriesAsync(workerId, monday, ct);
+        var changed = 0;
+        foreach (var row in rows)
+        {
+            for (var day = 0; day < 7 && day < row.Hours.Count; day++)
+            {
+                if (row.Hours[day] is not { } target)
+                    continue;
+                var date = monday.AddDays(day);
+                var cell = entries.Where(e => e.Date == date && e.CustomerId == row.CustomerId && e.ItemId == row.ItemId && e.Billable == row.Billable).ToList();
+                if (cell.Sum(e => e.Hours) == target)
+                    continue;
+                if (cell.Count == 0)
+                {
+                    var details = new TimeEntryDetails(workerId, date, target, row.CustomerId, row.ItemId, row.Billable);
+                    var (billRate, costRate, source) = await RatesAsync(details, ct);
+                    var entry = TimeEntry.Create(details, billRate, costRate, clock.UtcNow, source);
+                    store.Add(entry);
+                    store.Add(Audit(AuditAction.Created, entry, null));
+                }
+                else if (cell.Count == 1 && cell[0].InvoiceId is null)
+                {
+                    var entry = cell[0];
+                    var before = Snapshot(entry);
+                    if (target == 0m)
+                    {
+                        store.Remove(entry);
+                        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, EntityType, entry.Id, before, null));
+                    }
+                    else
+                    {
+                        entry.Update(new TimeEntryDetails(entry.WorkerId, entry.Date, target, entry.CustomerId, entry.ItemId, entry.Billable, entry.BillRate, entry.Notes),
+                            entry.BillRate, entry.CostRate, entry.RateSource);
+                        store.Add(Audit(AuditAction.Updated, entry, before));
+                    }
+                }
+                else
+                    throw new DomainException("time.week_locked", $"{date:ddd MMM d}: that cell has invoiced time or more than one entry. Change it on the time list.");
+                changed++;
+            }
+        }
+
+        if (changed > 0)
+            await store.SaveChangesAsync(ct);
+        return changed;
+    }
+
+    private async Task<List<TimeEntry>> WeekEntriesAsync(Guid workerId, DateOnly monday, CancellationToken ct) =>
+        (await store.ListTimeAsync(new TimeFilter(monday, monday.AddDays(6), workerId), ct)).Where(e => !e.IsRunning).ToList();
+
     /// <summary>The rate a time entry would get from the rate card (for showing on the time form before saving).</summary>
     public async Task<ResolvedRate> QuoteRateAsync(Guid workerId, Guid? customerId, Guid? itemId, DateOnly date, CancellationToken ct = default)
     {

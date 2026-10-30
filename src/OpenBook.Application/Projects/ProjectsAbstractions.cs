@@ -4,6 +4,11 @@ using OpenBook.Domain.Projects;
 namespace OpenBook.Application.Projects;
 
 /// <summary>Which time entries to list; nulls don't filter.</summary>
+/// <summary>One row of a week's time sheet: client, service and billable, with hours Monday to Sunday.</summary>
+/// <param name="Hours">Seven totals; when saving, null leaves a day as it is.</param>
+/// <param name="Locked">Days that can't be changed from the grid (invoiced, or more than one entry); empty when saving.</param>
+public sealed record WeekRow(Guid? CustomerId, Guid? ItemId, bool Billable, IReadOnlyList<decimal?> Hours, IReadOnlyList<bool>? Locked = null);
+
 public sealed record TimeFilter(DateOnly? From = null, DateOnly? To = null, Guid? WorkerId = null, Guid? CustomerId = null);
 
 public interface IProjectStore

@@ -45,6 +45,32 @@ public sealed class ProjectsTests : IAsyncLifetime
         In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(details ?? new ProjectDetails(), name, _acme.Id)));
 
     [Fact]
+    public async Task A_week_grid_creates_changes_and_clears_time_in_one_save()
+    {
+        var monday = new DateOnly(2026, 3, 2);
+        decimal?[] Week(params decimal?[] days) => [.. days, .. Enumerable.Repeat<decimal?>(null, 7 - days.Length)];
+        var billable = new WeekRow(_acme.Id, _consulting.Id, true, Week(2m, 3m));
+        var admin = new WeekRow(null, null, false, Week(null, null, 1.5m));
+        Assert.Equal(3, await In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, monday, [billable, admin])));
+
+        var rows = await In<TimeService, IReadOnlyList<WeekRow>>(s => s.WeekAsync(_ana.Id, monday));
+        var acme = rows.Single(r => r.CustomerId == _acme.Id);
+        Assert.Equal([2m, 3m, 0m, 0m, 0m, 0m, 0m], acme.Hours);
+        var entries = await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.ListAsync(new TimeFilter(monday, monday.AddDays(6), _ana.Id)));
+        Assert.All(entries.Where(e => e.Billable), e => Assert.Equal(120m, e.BillRate));
+
+        // Monday becomes 4 hours, Tuesday is cleared; the admin row is left alone (nulls).
+        Assert.Equal(2, await In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, monday, [billable with { Hours = Week(4m, 0m) }])));
+        entries = await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.ListAsync(new TimeFilter(monday, monday.AddDays(6), _ana.Id)));
+        Assert.Equal([(monday, 4m), (monday.AddDays(2), 1.5m)], entries.OrderBy(e => e.Date).Select(e => (e.Date, e.Hours)));
+
+        // A second entry the same day locks the cell.
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, monday, 1m, _acme.Id, _consulting.Id, true)));
+        Assert.True((await In<TimeService, IReadOnlyList<WeekRow>>(s => s.WeekAsync(_ana.Id, monday))).Single(r => r.CustomerId == _acme.Id).Locked![0]);
+        Assert.Equal("time.week_locked", await Refused(() => In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, monday, [billable with { Hours = Week(6m) }]))));
+    }
+
+    [Fact]
     public async Task A_project_is_a_sub_customer_billed_with_its_customer()
     {
         var project = await NewProject(details: new ProjectDetails(BudgetRevenue: 5000m, BudgetCost: 3000m, BudgetHours: 40m));

@@ -26,6 +26,47 @@ public static class ProjectEndpoints
         app.MapPost("/projects/{id:guid}", async (Guid id, IFormCollection form, ProjectService projects, CancellationToken ct) =>
             await Back($"/projects/{id}", async () => await projects.UpdateAsync(id, Details(form), ct))).RequireAuthorization();
 
+        // Fields: workerId, week (any day of it), and per row r: c:r, i:r, b:r and h:r:d (d = 0 for Monday … 6). A posted
+        // empty cell means zero; a disabled (locked) cell isn't posted, so it's left alone.
+        app.MapPost("/time/week", async (IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            var workerId = Guid.TryParse(form["workerId"], out var w) ? w : Guid.Empty;
+            var day = DateOnly.TryParseExact(form["week"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+            var monday = day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+            var back = $"/time/week?worker={workerId}&week={monday:yyyy-MM-dd}";
+            var rowIndexes = form.Keys.Where(k => k.StartsWith("h:", StringComparison.Ordinal)).Select(k => k.Split(':')[1]).Distinct();
+            var rows = new List<WeekRow>();
+            foreach (var r in rowIndexes)
+            {
+                var hours = new List<decimal?>();
+                for (var i = 0; i < 7; i++)
+                {
+                    var key = $"h:{r}:{i}";
+                    if (!form.ContainsKey(key))
+                        hours.Add(null);
+                    else if (form[key].ToString().Trim() is { Length: 0 })
+                        hours.Add(0m);
+                    else if (decimal.TryParse(form[key], NumberStyles.Number, CultureInfo.InvariantCulture, out var h))
+                        hours.Add(h);
+                    else
+                        return Results.Redirect($"{back}&error={Uri.EscapeDataString($"'{form[key]}' isn't a number of hours.")}");
+                }
+
+                rows.Add(new WeekRow(Guid.TryParse(form[$"c:{r}"], out var c) ? c : null, Guid.TryParse(form[$"i:{r}"], out var item) ? item : null,
+                    form[$"b:{r}"] == "true", hours));
+            }
+
+            try
+            {
+                var changed = await time.SaveWeekAsync(workerId, monday, rows, ct);
+                return Results.Redirect($"{back}&saved={changed}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/time", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {
             var back = Id(form["customerId"]) is { } c ? $"/time?customer={c}" : "/time";

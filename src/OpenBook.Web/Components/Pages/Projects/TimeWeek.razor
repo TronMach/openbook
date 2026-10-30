@@ -1,0 +1,177 @@
+@page "/time/week"
+@using System.Globalization
+@inject TimeService TimeService
+@inject WorkerService WorkerService
+@inject CustomerService CustomerService
+@inject ItemService ItemService
+
+<PageTitle>Week · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Week of @Labels.Date(_monday)</h1>
+        <a class="button secondary" href="@Link(_monday.AddDays(-7))">Previous week</a>
+        <a class="button secondary" href="@Link(_monday.AddDays(7))">Next week</a>
+        <a class="button secondary" href="/time">Time list</a>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Saved is not null)
+    {
+        <div class="alert notice" role="status">@Saved change(s) saved.</div>
+    }
+
+    @if (_worker is null)
+    {
+        <div class="card"><p>Time is tracked per person. <a href="/time/people">Add the people</a> who do the work first.</p></div>
+    }
+    else
+    {
+        <form method="get" class="inline">
+            <label>Person
+                <select name="worker" onchange="this.form.submit()">
+                    @foreach (var w in _workers)
+                    {
+                        <option value="@w.Id" selected="@(w.Id == _worker.Id)">@w.Name</option>
+                    }
+                </select>
+            </label>
+            <input type="hidden" name="week" value="@Iso(_monday)" />
+            <noscript><button type="submit" class="secondary">Show</button></noscript>
+        </form>
+
+        <form method="post" action="/time/week" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="workerId" value="@_worker.Id" />
+            <input type="hidden" name="week" value="@Iso(_monday)" />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Client</th><th>Service</th><th>Billable</th>
+                            @for (var d = 0; d < 7; d++)
+                            {
+                                <th class="num">@_monday.AddDays(d).ToString("ddd d", CultureInfo.CurrentCulture)</th>
+                            }
+                            <th class="num">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var r = 0; r < _rows.Count; r++)
+                        {
+                            var row = _rows[r];
+                            var index = r;
+                            <tr>
+                                <td>
+                                    @(row.CustomerId is { } c ? _customerNames.GetValueOrDefault(c) : "(none)")
+                                    <input type="hidden" name="c:@index" value="@row.CustomerId" />
+                                </td>
+                                <td>
+                                    @(row.ItemId is { } i ? _itemNames.GetValueOrDefault(i) : "(none)")
+                                    <input type="hidden" name="i:@index" value="@row.ItemId" />
+                                </td>
+                                <td>
+                                    @(row.Billable ? "Yes" : "No")
+                                    <input type="hidden" name="b:@index" value="@(row.Billable ? "true" : "false")" />
+                                </td>
+                                @for (var d = 0; d < 7; d++)
+                                {
+                                    var day = d;
+                                    var locked = row.Locked?[day] == true;
+                                    <td class="num">
+                                        <input name="h:@index:@day" inputmode="decimal" size="4" disabled="@locked" title="@(locked ? "Invoiced, or more than one entry: change it on the time list" : null)"
+                                               value="@(row.Hours[day] is { } h && h != 0m ? h.ToString("0.##", CultureInfo.InvariantCulture) : "")" aria-label="Hours on @_monday.AddDays(day).ToString("dddd", CultureInfo.CurrentCulture)" />
+                                    </td>
+                                }
+                                <td class="num">@row.Hours.Sum(h => h ?? 0m).ToString("0.##", CultureInfo.CurrentCulture)</td>
+                            </tr>
+                        }
+                        @for (var n = 0; n < 3; n++)
+                        {
+                            var index = _rows.Count + n;
+                            <tr>
+                                <td>
+                                    <select name="c:@index" data-search aria-label="Client for a new row">
+                                        <option value="">(none)</option>
+                                        @foreach (var c in _customers)
+                                        {
+                                            <option value="@c.Customer.Id">@c.FullName</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="i:@index" aria-label="Service for a new row">
+                                        <option value="">(none)</option>
+                                        @foreach (var s in _services)
+                                        {
+                                            <option value="@s.Id">@s.Name</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input type="checkbox" name="b:@index" value="true" aria-label="Billable" /></td>
+                                @for (var d = 0; d < 7; d++)
+                                {
+                                    var day = d;
+                                    <td class="num"><input name="h:@index:@day" inputmode="decimal" size="4" aria-label="Hours on @_monday.AddDays(day).ToString("dddd", CultureInfo.CurrentCulture)" /></td>
+                                }
+                                <td></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3">Total</td>
+                            @for (var d = 0; d < 7; d++)
+                            {
+                                var day = d;
+                                <td class="num">@_rows.Sum(r => r.Hours[day] ?? 0m).ToString("0.##", CultureInfo.CurrentCulture)</td>
+                            }
+                            <td class="num">@_rows.Sum(r => r.Hours.Sum(h => h ?? 0m)).ToString("0.##", CultureInfo.CurrentCulture)</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <p class="muted">Clearing a cell deletes its time. Billable time needs a client and a service; rates come from the rate card. Running timers aren't shown.</p>
+            <div class="actions"><button type="submit">Save the week</button></div>
+        </form>
+    }
+</div>
+
+@code {
+    private DateOnly _monday;
+    private IReadOnlyList<Worker> _workers = [];
+    private Worker? _worker;
+    private IReadOnlyList<WeekRow> _rows = [];
+    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyDictionary<Guid, string> _customerNames = new Dictionary<Guid, string>();
+    private Dictionary<Guid, string> _itemNames = [];
+    private List<Item> _services = [];
+
+    [SupplyParameterFromQuery] private Guid? Worker { get; set; }
+    [SupplyParameterFromQuery] private string? Week { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Saved { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var day = DateOnly.TryParseExact(Week, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var w) ? w : today;
+        _monday = day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+        _workers = await WorkerService.ListAsync();
+        _worker = _workers.FirstOrDefault(x => x.Id == Worker) ?? await WorkerService.ForCurrentUserAsync() ?? _workers.FirstOrDefault();
+        if (_worker is null)
+            return;
+        _rows = await TimeService.WeekAsync(_worker.Id, _monday);
+        _customers = (await CustomerService.ListAsync(today)).Where(c => c.Customer.IsActive).ToList();
+        _customerNames = await CustomerService.FullNamesAsync();
+        var items = await ItemService.ListAsync(includeInactive: true);
+        _itemNames = items.ToDictionary(i => i.Id, i => i.Name);
+        _services = items.Where(i => i.IsActive && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
+    }
+
+    private string Link(DateOnly monday) => $"/time/week?worker={_worker?.Id}&week={Iso(monday)}";
+
+    private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+}
