@@ -44,6 +44,10 @@
             }
             <dt>Promised</dt><dd>@Labels.Amount(p.Amount)</dd>
             <dt>Paid</dt><dd>@Labels.Amount(_pledge.Paid)</dd>
+            @if (p.CancelledOn is { } cancelledOn)
+            {
+                <dt>Cancelled</dt><dd>@Labels.Amount(p.CancelledAmount) on @Labels.Date(cancelledOn)</dd>
+            }
             <dt>Left</dt><dd>@Labels.Amount(_pledge.Balance)</dd>
             <dt>Contribution account</dt><dd>@_chart.FullName(p.IncomeAccountId)</dd>
             @if (_purpose is not null)
@@ -74,7 +78,33 @@
             </table>
         }
 
-        @if (p.Status == DocumentStatus.Posted && _pledge.Paid == 0m)
+        @if (p.Status == DocumentStatus.Posted && _pledge.Balance > 0m)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Cancel the rest</h2>
+                <p class="muted">When the donor won't pay the @Labels.Amount(_pledge.Balance) left: it comes off the contribution income (accrual basis) and out of Pledges Receivable.</p>
+                <form method="post" action="/nonprofit/pledges/@p.Id/cancel" data-enhance="false" class="inline">
+                    <AntiforgeryToken />
+                    <label>On <input type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <button type="submit" class="secondary">Cancel the rest</button>
+                </form>
+            </div>
+        }
+        else if (p.CancelEntryId is not null)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Undo the cancellation</h2>
+                <form method="post" action="/nonprofit/pledges/@p.Id/uncancel" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="undo-reason">Reason</label><input id="undo-reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="secondary">Undo</button></div>
+                </form>
+            </div>
+        }
+
+        @if (p.Status == DocumentStatus.Posted && _pledge.Paid == 0m && p.CancelEntryId is null)
         {
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>

@@ -909,6 +909,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(p => p.JournalEntryId).IsUnique();
             b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(p => p.CancelledAmount).HasColumnName("CancelledMinor").HasConversion(MinorUnits);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.CancelEntryId).OnDelete(DeleteBehavior.Restrict);
             b.Property(p => p.Memo).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);
             b.HasOne<Customer>().WithMany().HasForeignKey(p => p.DonorId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(p => p.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);

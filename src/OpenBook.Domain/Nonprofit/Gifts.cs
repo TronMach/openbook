@@ -144,11 +144,13 @@ public sealed class Donation
 
 /// <summary>
 /// A donor's promise to give: Dr "Pledges Receivable" / Cr the contribution account on its class, accrual basis only
-/// (cash basis counts the money as it's paid). Paid by gifts that name it. Voided only while nothing is paid.
+/// (cash basis counts the money as it's paid). Paid by gifts that name it. Voided only while nothing is paid. When the
+/// donor won't pay the rest, it's cancelled: the reverse for the unpaid part, also accrual only, and undoable.
 /// </summary>
 public sealed class Pledge
 {
     public const string Source = "nonprofit.pledge";
+    public const string CancelSource = "nonprofit.pledge_cancel";
 
     private Pledge()
     {
@@ -170,6 +172,12 @@ public sealed class Pledge
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>The unpaid part written off, when the donor won't pay the rest.</summary>
+    public decimal CancelledAmount { get; private set; }
+
+    public DateOnly? CancelledOn { get; private set; }
+    public Guid? CancelEntryId { get; private set; }
 
     public static Pledge Create(
         Guid id, int number, Guid donorId, DateOnly date, decimal amount, Guid receivableAccountId, Guid incomeAccountId, Guid? classId,
@@ -204,10 +212,28 @@ public sealed class Pledge
             throw new DomainException("pledge.due_before_date", "The due date can't be before the pledge.");
     }
 
+    /// <param name="unpaid">What's left after posted payments.</param>
+    public void Cancel(decimal unpaid, DateOnly on, Guid entryId)
+    {
+        if (Status != DocumentStatus.Posted)
+            throw new DomainException("pledge.voided", "This pledge is voided.");
+        if (CancelEntryId is not null)
+            throw new DomainException("pledge.already_cancelled", "The rest of this pledge is already cancelled.");
+        if (unpaid <= 0m)
+            throw new DomainException("pledge.paid", "This pledge is fully paid.");
+        if (on < Date)
+            throw new DomainException("pledge.cancel_before", "It can't be cancelled before it was made.");
+        (CancelledAmount, CancelledOn, CancelEntryId) = (unpaid, on, entryId);
+    }
+
+    public void UndoCancel() => (CancelledAmount, CancelledOn, CancelEntryId) = (0m, null, null);
+
     public void Void()
     {
         if (Status == DocumentStatus.Voided)
             throw new DomainException("pledge.already_voided", "This pledge is already voided.");
+        if (CancelEntryId is not null)
+            throw new DomainException("pledge.cancelled", "Undo the cancellation first.");
         Status = DocumentStatus.Voided;
     }
 }

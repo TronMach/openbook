@@ -231,6 +231,30 @@ public sealed class NonprofitTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Cancelling_the_rest_of_a_pledge_takes_the_unpaid_part_off_accrual_income()
+    {
+        var sam = await Donor("Sam Pledger");
+        var pledge = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, new DateOnly(2026, 1, 15), 1000m, Account("Contributions:Unrestricted"))));
+        await Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 2, 1), 300m, Account("Checking"), PledgeId: pledge.Id));
+
+        var cancelled = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.CancelRestAsync(pledge.Id, new DateOnly(2026, 6, 30)));
+        Assert.Equal(700m, cancelled.CancelledAmount);
+        Assert.Equal(0m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
+        Assert.Equal(300m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+        Assert.Equal(300m, await IncomeAsync(ReportBasis.Cash, "Contributions:Unrestricted"));
+        Assert.Equal(0m, (await Report("open-pledges", "asOf=2026-12-31")).Find("Total", 5));
+        Assert.Equal(700m, (await Report("open-pledges", "asOf=2026-03-31")).Find("Total", 5));
+        Assert.Equal("donation.pledge_overpaid", (await Assert.ThrowsAsync<DomainException>(() =>
+            Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 7, 1), 10m, Account("Checking"), PledgeId: pledge.Id)))).Code);
+        Assert.Equal("pledge.already_cancelled", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Domain.Nonprofit.Pledge>(s => s.CancelRestAsync(pledge.Id, new DateOnly(2026, 7, 1))))).Code);
+
+        var undone = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.UndoCancelAsync(pledge.Id, "They paid after all"));
+        Assert.Equal((0m, (DateOnly?)null), (undone.CancelledAmount, undone.CancelledOn));
+        Assert.Equal(1000m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+    }
+
+    [Fact]
     public async Task Gifts_and_retainers_wait_in_undeposited_funds_until_deposited()
     {
         var pat = await Donor("Pat Giver");

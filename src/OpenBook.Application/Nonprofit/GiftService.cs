@@ -39,7 +39,7 @@ public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, 
 /// <summary>A pledge with what's been paid on it by posted gifts.</summary>
 public sealed record PledgeBalance(Pledge Pledge, string Donor, decimal Paid)
 {
-    public decimal Balance => Pledge.Status == DocumentStatus.Posted ? Pledge.Amount - Paid : 0m;
+    public decimal Balance => Pledge.Status == DocumentStatus.Posted ? Pledge.Amount - Paid - Pledge.CancelledAmount : 0m;
 }
 
 /// <summary>A donor's giving in a year: who they are, how to reach them, the gifts and their total.</summary>
@@ -121,7 +121,7 @@ public sealed class GiftService(
                 throw new DomainException("donation.pledge_voided", "That pledge is voided.");
             if (pledge.DonorId != donor.Id)
                 throw new DomainException("donation.pledge_donor", "That pledge is from another donor.");
-            var balance = pledge.Amount - Paid(pledge.Id, await store.ListDonationsAsync(ct));
+            var balance = pledge.Amount - pledge.CancelledAmount - Paid(pledge.Id, await store.ListDonationsAsync(ct));
             if (command.Amount > balance)
                 throw new DomainException("donation.pledge_overpaid", $"Only {balance.ToString("N2", CultureInfo.CurrentCulture)} is left on that pledge.");
             incomeId = pledge.IncomeAccountId;
@@ -246,6 +246,40 @@ public sealed class GiftService(
         await engine.StageVoidAsync(pledge.JournalEntryId, reason, fromDocument: true, ct);
         pledge.Void();
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Voided, PledgeEntity, pledge.Id, before, Snapshot(pledge)));
+        await store.SaveChangesAsync(ct);
+        return pledge;
+    }
+
+    /// <summary>
+    /// The donor won't pay the rest: reverses the unpaid part (Dr the contribution account / Cr the receivable, on its
+    /// class, accrual basis only). Payments can't be recorded after it, unless it's undone.
+    /// </summary>
+    public async Task<Pledge> CancelRestAsync(Guid id, DateOnly on, CancellationToken ct = default)
+    {
+        var pledge = await store.GetPledgeAsync(id, ct) ?? throw new EntityNotFoundException(PledgeEntity, id);
+        var unpaid = pledge.Amount - Paid(pledge.Id, await store.ListDonationsAsync(ct));
+        pledge.Cancel(unpaid, on, Guid.Empty); // checks before anything is staged
+        pledge.UndoCancel();
+        var before = Snapshot(pledge);
+        var memo = $"Rest of pledge {pledge.Number} cancelled";
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(on,
+            [JournalLineDraft.Dr(pledge.IncomeAccountId, unpaid, memo, pledge.ClassId), JournalLineDraft.Cr(pledge.ReceivableAccountId, unpaid, memo, pledge.ClassId)],
+            memo, Pledge.CancelSource, pledge.Id, EntryBasis.AccrualOnly), ct);
+        pledge.Cancel(unpaid, on, entry.Id);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PledgeEntity, pledge.Id, before, Snapshot(pledge)));
+        await store.SaveChangesAsync(ct);
+        return pledge;
+    }
+
+    public async Task<Pledge> UndoCancelAsync(Guid id, string reason, CancellationToken ct = default)
+    {
+        var pledge = await store.GetPledgeAsync(id, ct) ?? throw new EntityNotFoundException(PledgeEntity, id);
+        if (pledge.CancelEntryId is not { } entry)
+            throw new DomainException("pledge.not_cancelled", "Nothing on this pledge is cancelled.");
+        var before = Snapshot(pledge);
+        await engine.StageVoidAsync(entry, reason, fromDocument: true, ct);
+        pledge.UndoCancel();
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PledgeEntity, pledge.Id, before, Snapshot(pledge)));
         await store.SaveChangesAsync(ct);
         return pledge;
     }
@@ -494,6 +528,8 @@ public sealed class GiftService(
         p.DueDate,
         p.Memo,
         Status = p.Status.ToString(),
+        p.CancelledAmount,
+        p.CancelledOn,
     });
 
     private static string Snapshot(GiftSettings s) => JsonSerializer.Serialize(new { s.Ein, s.SignerName, s.SignerTitle, s.Intro });

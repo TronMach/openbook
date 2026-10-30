@@ -36,6 +36,8 @@ public sealed record GiftSettingsResponse(string? Ein, string? SignerName, strin
 
 public sealed record AcknowledgedRequest(IReadOnlyList<Guid> Ids);
 
+public sealed record PledgeCancelRequest(DateOnly Date);
+
 public sealed record GrantBudgetRequest(Guid AccountId, decimal Amount);
 
 public sealed record GrantReceiptRequest(DateOnly Date, decimal Amount, Guid BankAccountId);
@@ -106,6 +108,17 @@ internal static class NonprofitApi
         nonprofit.MapPost("/pledges/{id:guid}/void", async (Guid id, VoidRequest r, GiftService s, CancellationToken ct) =>
         {
             await s.VoidPledgeAsync(id, r.Reason, ct);
+            return PledgeResponse.From((await s.GetPledgeAsync(id, ct))!);
+        });
+
+        nonprofit.MapPost("/pledges/{id:guid}/cancel", async (Guid id, PledgeCancelRequest r, GiftService s, CancellationToken ct) =>
+        {
+            await s.CancelRestAsync(id, r.Date, ct);
+            return PledgeResponse.From((await s.GetPledgeAsync(id, ct))!);
+        });
+        nonprofit.MapPost("/pledges/{id:guid}/uncancel", async (Guid id, VoidRequest r, GiftService s, CancellationToken ct) =>
+        {
+            await s.UndoCancelAsync(id, r.Reason, ct);
             return PledgeResponse.From((await s.GetPledgeAsync(id, ct))!);
         });
 

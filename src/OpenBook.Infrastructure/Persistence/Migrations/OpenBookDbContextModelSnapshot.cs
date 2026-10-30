@@ -2174,6 +2174,16 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountMinor");
 
+                    b.Property<Guid?>("CancelEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CancelledAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CancelledMinor");
+
+                    b.Property<DateOnly?>("CancelledOn")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ClassId")
                         .HasColumnType("TEXT");
 
@@ -2211,6 +2221,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CancelEntryId");
 
                     b.HasIndex("ClassId");
 
@@ -6287,6 +6299,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Pledge", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("CancelEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Segments.Segment", null)
                         .WithMany()
                         .HasForeignKey("ClassId")

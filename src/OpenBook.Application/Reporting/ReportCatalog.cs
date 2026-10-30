@@ -556,6 +556,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Nonprofit.RestrictionRelease.Source => "Release from restriction",
         Domain.Nonprofit.Donation.Source => "Gift",
         Domain.Nonprofit.Pledge.Source => "Pledge",
+        Domain.Nonprofit.Pledge.CancelSource => "Pledge cancelled",
         Domain.Nonprofit.Grant.AwardSource => "Grant award",
         Domain.Nonprofit.Grant.ReceiptSource => "Grant payment",
         Domain.Nonprofit.Grant.RecognitionSource => "Grant income earned",

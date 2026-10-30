@@ -168,6 +168,18 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/pledges/{id}", () => gifts.VoidPledgeAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
+        app.MapPost("/nonprofit/pledges/{id:guid}/cancel", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/pledges/{id}", () => gifts.CancelRestAsync(id, Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/pledges/{id:guid}/uncancel", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/pledges/{id}", () => gifts.UndoCancelAsync(id, Reason(form), ct));
+        }).RequireAuthorization();
+
         app.MapPost("/nonprofit/settings", async (IFormCollection form, GiftService gifts, CancellationToken ct) =>
         {
             try

@@ -84,7 +84,8 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
                      .OrderBy(p => p.Pledge.Date).ThenBy(p => p.Pledge.Number))
         {
             var paidBy = donations.Where(d => d.PledgeId == p.Pledge.Id && d.Status == DocumentStatus.Posted && d.Date <= asOf).Sum(d => d.Amount);
-            if (paidBy >= p.Pledge.Amount)
+            var cancelled = p.Pledge.CancelledOn <= asOf ? p.Pledge.CancelledAmount : 0m;
+            if (paidBy + cancelled >= p.Pledge.Amount)
                 continue;
             promised += p.Pledge.Amount;
             paid += paidBy;
