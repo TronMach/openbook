@@ -23,7 +23,7 @@ public static class Editions
     {
         Edition.ProfessionalServices => "Consultants, agencies, accountants and other firms that bill for their time: projects, time and rates lead.",
         Edition.ECommerce => "Online shops and marketplace sellers: sales, stock and purchasing lead.",
-        Edition.Nonprofit => "Charities and other nonprofits (more to come).",
+        Edition.Nonprofit => "Charities and other nonprofits: donor restrictions, programs and the nonprofit statements lead.",
         _ => "Every area in the menu, in the usual order.",
     };
 
@@ -32,6 +32,7 @@ public static class Editions
     {
         Edition.ProfessionalServices => ["/", "/projects", "/time", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
         Edition.ECommerce => ["/", "/sales", "/inventory", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
+        Edition.Nonprofit => ["/", "/nonprofit", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
         _ => ["/", "/accounts", "/banking", "/sales", "/purchases", "/inventory", "/projects", "/journal", "/reports", "/dashboard"],
     };
 
@@ -40,6 +41,7 @@ public static class Editions
     {
         Edition.ProfessionalServices => ["Projects and time", "Sales and customers"],
         Edition.ECommerce => ["Sales and customers", "Inventory", "Taxes"],
+        Edition.Nonprofit => ["Nonprofit", "Financial statements"],
         _ => [],
     };
 
@@ -61,6 +63,14 @@ public static class Editions
             new("/reports/inventory-stock", "Stock status", "What's on hand and what needs reordering"),
             new("/reports/sales-by-item", "Sales by item", "What sells, and for how much"),
             new("/reports/sales-tax", "Sales tax", "What you've charged and owe, by agency"),
+        ],
+        Edition.Nonprofit =>
+        [
+            new("/nonprofit", "Donor restrictions", "What each purpose holds, and releasing what's been spent"),
+            new("/reports/statement-of-activities", "Statement of activities", "Revenue, support and expenses, without and with donor restrictions"),
+            new("/reports/statement-of-financial-position", "Statement of financial position", "Assets, liabilities and net assets"),
+            new("/reports/functional-expenses", "Functional expenses", "Expenses by program, management and general, and fundraising"),
+            new("/sales/receipts/new", "Record a gift", "A sales receipt to the donor, on a contribution item"),
         ],
         _ => [],
     };

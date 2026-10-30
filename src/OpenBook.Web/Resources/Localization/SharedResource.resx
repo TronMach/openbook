@@ -530,6 +530,9 @@
   <data name="No SKUs yet: import or fetch some orders first." xml:space="preserve">
     <value>No SKUs yet: import or fetch some orders first.</value>
   </data>
+  <data name="Nonprofit" xml:space="preserve">
+    <value>Nonprofit</value>
+  </data>
   <data name="Not allowed" xml:space="preserve">
     <value>Not allowed</value>
   </data>

@@ -19,6 +19,17 @@ public enum SegmentKind
 /// locations can have subsegments (full names "Parent:Child", at most <see cref="MaxDepth"/> levels); tags are flat.
 /// Deactivated, never deleted, so history keeps its names.
 /// </summary>
+/// <summary>Nonprofits: what a class's expenses count as on the statement of functional expenses.</summary>
+public enum FunctionalArea
+{
+    /// <summary>Program services: the work the organization exists to do.</summary>
+    Program,
+
+    ManagementAndGeneral,
+
+    Fundraising,
+}
+
 public sealed class Segment
 {
     public const int MaxDepth = 5;
@@ -30,6 +41,9 @@ public sealed class Segment
     public string Name { get; private set; }
     public Guid? ParentId { get; private set; }
     public bool IsActive { get; private set; }
+
+    /// <summary>Classes only; null takes the parent's (and, at the top, means "not assigned").</summary>
+    public FunctionalArea? FunctionalArea { get; private set; }
 
     public static Segment Create(SegmentKind kind, string name, Guid? parentId = null)
     {
@@ -54,6 +68,13 @@ public sealed class Segment
         if (parentId is not null && Kind == SegmentKind.Tag)
             throw new DomainException("segment.tag_parent", "Tags can't have a parent.");
         ParentId = parentId == Guid.Empty ? null : parentId;
+    }
+
+    public void SetFunctionalArea(FunctionalArea? area)
+    {
+        if (area is not null && (Kind != SegmentKind.Class || !Enum.IsDefined(area.Value)))
+            throw new DomainException("segment.functional_area", "Only classes have a functional area.");
+        FunctionalArea = area;
     }
 
     public void Deactivate() => IsActive = false;

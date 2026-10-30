@@ -6,9 +6,10 @@ using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Api;
 
-public sealed record CreateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null);
+public sealed record CreateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool DonorRestricted = false);
 
-public sealed record UpdateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null);
+/// <param name="DonorRestricted">Null keeps the current setting.</param>
+public sealed record UpdateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool? DonorRestricted = null);
 
 public sealed record AccountResponse(
     Guid Id,
@@ -21,10 +22,11 @@ public sealed record AccountResponse(
     Guid? ParentId,
     string? Description,
     bool IsActive,
-    string? TaxLine)
+    string? TaxLine,
+    bool DonorRestricted = false)
 {
     public static AccountResponse From(Account a, ChartOfAccounts chart) =>
-        new(a.Id, a.Number, a.Name, chart.FullName(a.Id), chart.Depth(a.Id), a.Type, a.Type.ClassOf(), a.ParentId, a.Description, a.IsActive, a.TaxLineKey);
+        new(a.Id, a.Number, a.Name, chart.FullName(a.Id), chart.Depth(a.Id), a.Type, a.Type.ClassOf(), a.ParentId, a.Description, a.IsActive, a.TaxLineKey, a.DonorRestricted);
 }
 
 public sealed record ChartImportResponse(int New, int Existing, int Errors, bool Imported, IReadOnlyList<ChartImportRow> Rows)

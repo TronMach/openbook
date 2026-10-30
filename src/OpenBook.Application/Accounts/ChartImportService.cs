@@ -46,6 +46,7 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
     private static readonly string[] NumberHeaders = ["number", "accountnumber", "accnt", "acctnum", "accnum", "acct", "code", "accountcode", "no"];
     private static readonly string[] TypeHeaders = ["type", "accounttype"];
     private static readonly string[] DescriptionHeaders = ["description", "desc"];
+    private static readonly string[] RestrictedHeaders = ["donorrestricted", "restricted", "restriction", "donorrestriction"];
 
     private static readonly Dictionary<string, AccountType> TypeNames = BuildTypeNames();
 
@@ -87,6 +88,7 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
             ?? throw new DomainException("import.no_type_column", "The file needs an account type column (\"Type\").");
         var numberColumn = Column(header, NumberHeaders);
         var descriptionColumn = Column(header, DescriptionHeaders);
+        var restrictedColumn = Column(header, RestrictedHeaders);
 
         string? Field(CsvRecord record, int? column) =>
             column is { } c && c < record.Fields.Count && record.Fields[c].Length > 0 ? record.Fields[c] : null;
@@ -157,7 +159,9 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
             try
             {
                 chart.EnsureCanAdd(name, type.Value, number, parentId);
-                created.Add(Account.Create(name, type.Value, number, parentId, description));
+                var account = Account.Create(name, type.Value, number, parentId, description);
+                account.SetDonorRestricted(Restricted(Field(record, restrictedColumn)));
+                created.Add(account);
                 results.Add(Row(ImportRowStatus.New));
             }
             catch (DomainException ex)
@@ -168,6 +172,10 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
 
         return (new ChartImportResult(results.OrderBy(r => r.Line).ToList()), created);
     }
+
+    /// <summary>"Yes", "true", "with" or "with donor restrictions"; anything else (or nothing) is unrestricted.</summary>
+    private static bool Restricted(string? text) =>
+        text is not null && Csv.Normalize(text) is "yes" or "y" or "true" or "1" or "with" or "withdonorrestrictions" or "restricted";
 
     private static string NormalizePath(string? fullName) =>
         fullName is null

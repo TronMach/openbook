@@ -33,6 +33,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Channels.ChannelPayout> ChannelPayouts => Set<OpenBook.Domain.Channels.ChannelPayout>();
     public DbSet<OpenBook.Domain.Channels.ChannelOrderBatch> ChannelOrderBatches => Set<OpenBook.Domain.Channels.ChannelOrderBatch>();
     public DbSet<OpenBook.Domain.Channels.ChannelSku> ChannelSkus => Set<OpenBook.Domain.Channels.ChannelSku>();
+    public DbSet<OpenBook.Domain.Nonprofit.RestrictionRelease> RestrictionReleases => Set<OpenBook.Domain.Nonprofit.RestrictionRelease>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
@@ -406,6 +407,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasKey(s => s.Id);
             b.Property(s => s.Kind).HasConversion<string>().HasMaxLength(20);
             b.Property(s => s.Name).HasMaxLength(100);
+            b.Property(s => s.FunctionalArea).HasConversion<string>().HasMaxLength(30);
             b.HasIndex(s => new { s.Kind, s.ParentId, s.Name });
             b.HasOne<Segment>().WithMany().HasForeignKey(s => s.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -854,6 +856,18 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.Property(x => x.Tax).HasColumnName("TaxMinor").HasConversion(MinorUnits);
             });
             b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.RestrictionRelease>(b =>
+        {
+            b.ToTable("RestrictionReleases");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => r.JournalEntryId).IsUnique();
+            b.Property(r => r.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(r => r.Memo).HasMaxLength(OpenBook.Domain.Nonprofit.RestrictionRelease.MaxMemoLength);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(r => r.ClassId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelSku>(b =>

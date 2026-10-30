@@ -88,6 +88,14 @@ public sealed partial class Account
     /// <summary>The <see cref="TaxLines"/> key of the return line this account's total goes on. Profit and loss accounts only.</summary>
     public string? TaxLineKey { get; private set; }
 
+    /// <summary>
+    /// Nonprofits: this income or net asset account holds amounts with donor restrictions, so the nonprofit
+    /// statements put it in the "with donor restrictions" column. Income, other income and equity accounts only.
+    /// </summary>
+    public bool DonorRestricted { get; private set; }
+
+    public static bool CanBeRestricted(AccountType type) => type is AccountType.Income or AccountType.OtherIncome or AccountType.Equity;
+
     public static Account Create(string name, AccountType type, string? number = null, Guid? parentId = null, string? description = null) =>
         new()
         {
@@ -112,6 +120,15 @@ public sealed partial class Account
         Type = ValidType(type);
         if (type.IsBalanceSheet())
             TaxLineKey = null;
+        if (!CanBeRestricted(type))
+            DonorRestricted = false;
+    }
+
+    public void SetDonorRestricted(bool restricted)
+    {
+        if (restricted && !CanBeRestricted(Type))
+            throw new DomainException("account.restriction_type", "Only income, other income and equity (net asset) accounts can hold donor-restricted amounts.");
+        DonorRestricted = restricted;
     }
 
     /// <param name="key">Null or empty to clear.</param>

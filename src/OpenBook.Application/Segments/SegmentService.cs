@@ -97,6 +97,19 @@ public sealed class SegmentService(
         return segment;
     }
 
+    /// <summary>Nonprofits: what a class's expenses count as (program, management and general, fundraising); null takes the parent's.</summary>
+    public async Task<Segment> SetFunctionalAreaAsync(Guid id, FunctionalArea? area, CancellationToken ct = default)
+    {
+        var segment = (await ledger.ListSegmentsAsync(ct)).FirstOrDefault(s => s.Id == id) ?? throw new EntityNotFoundException(EntityType, id);
+        if (segment.FunctionalArea == area)
+            return segment;
+        var before = Snapshot(segment);
+        segment.SetFunctionalArea(area);
+        ledger.Add(Audit(AuditAction.Updated, EntityType, id, before, Snapshot(segment)));
+        await ledger.SaveChangesAsync(ct);
+        return segment;
+    }
+
     /// <summary>Inactive segments can't be put on new transactions; reports still show them.</summary>
     public async Task<Segment> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)
     {
@@ -366,5 +379,5 @@ public sealed class SegmentService(
     private AuditRecord Audit(AuditAction action, string entityType, Guid id, string? before, string after) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, entityType, id, before, after);
 
-    private static string Snapshot(Segment s) => JsonSerializer.Serialize(new { Kind = s.Kind.ToString(), s.Name, s.ParentId, s.IsActive });
+    private static string Snapshot(Segment s) => JsonSerializer.Serialize(new { Kind = s.Kind.ToString(), s.Name, s.ParentId, s.IsActive, FunctionalArea = s.FunctionalArea?.ToString() });
 }

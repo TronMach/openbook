@@ -90,6 +90,8 @@ public static class AccessRules
         ("/reports/trial-balance-worksheet", UserRole.Accountant, UserRole.Accountant),
         ("/reports/adjusting-entries", UserRole.Accountant, UserRole.Accountant),
         ("/api/reports/schedules", UserRole.Accountant, UserRole.Accountant),
+        ("/nonprofit", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/nonprofit", UserRole.ViewOnly, UserRole.Accountant),
         ("/assets", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/assets", UserRole.ViewOnly, UserRole.Accountant),
         ("/loans", UserRole.ViewOnly, UserRole.Accountant),

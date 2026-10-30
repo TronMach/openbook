@@ -91,6 +91,13 @@
             </InputSelect>
             <span class="hint">Where this account's total goes on @TaxLines.Describe(_taxForm), for the <a href="/reports/tax-summary">tax summary</a>. Income and expense accounts only.</span>
         </div>
+        @if (_nonprofit || Input.DonorRestricted)
+        {
+            <div class="field">
+                <label><InputCheckbox @bind-Value="Input.DonorRestricted" /> Holds amounts with donor restrictions</label>
+                <span class="hint">Nonprofits: restricted gifts and grants, or restricted net assets. The nonprofit statements show this account in the "with donor restrictions" column. Income, other income and equity accounts only.</span>
+            </div>
+        }
         <div class="actions">
             <button type="submit">@(_account is null ? "Create account" : "Save changes")</button>
             <a href="/accounts">Cancel</a>
@@ -126,6 +133,7 @@
     private List<(Account Account, int Depth)> _parents = [];
     private bool _useNumbers;
     private TaxForm _taxForm;
+    private bool _nonprofit;
     private string? _error;
 
     [Parameter]
@@ -139,6 +147,7 @@
         var company = await Settings.GetAsync();
         _useNumbers = company.UseAccountNumbers;
         _taxForm = TaxLines.FormFor(company.BusinessType);
+        _nonprofit = company.Edition == OpenBook.Domain.Companies.Edition.Nonprofit || company.BusinessType == OpenBook.Domain.Companies.BusinessType.Nonprofit;
         _chart = await AccountService.GetChartAsync();
         _account = Id is { } id ? _chart.Find(id) : null;
 
@@ -156,6 +165,7 @@
                 ParentId = _account.ParentId,
                 Description = _account.Description,
                 TaxLine = _account.TaxLineKey,
+                DonorRestricted = _account.DonorRestricted,
             };
     }
 
@@ -169,9 +179,10 @@
                 return;
             }
 
+            var restricted = Input.DonorRestricted && Account.CanBeRestricted(Input.Type);
             var saved = _account is null
-                ? await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description))
-                : await AccountService.UpdateAsync(new UpdateAccountCommand(_account.Id, Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description));
+                ? await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted))
+                : await AccountService.UpdateAsync(new UpdateAccountCommand(_account.Id, Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted));
             if (!saved.Type.IsBalanceSheet())
                 await AccountService.MapTaxLinesAsync(new Dictionary<Guid, string?> { [saved.Id] = Input.TaxLine });
             Navigation.NavigateTo("/accounts");
@@ -219,5 +230,7 @@
         public string? Description { get; set; }
 
         public string? TaxLine { get; set; }
+
+        public bool DonorRestricted { get; set; }
     }
 }

@@ -1,0 +1,180 @@
+@page "/nonprofit"
+@using System.Globalization
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject NonprofitService Nonprofit
+@inject SegmentService Segments
+@inject AccountService Accounts
+
+<PageTitle>Donor restrictions · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Donor restrictions</h1>
+        <a class="button secondary" href="/reports/statement-of-activities">Statement of activities</a>
+        <a class="button secondary" href="/reports/statement-of-financial-position">Financial position</a>
+        <a class="button secondary" href="/reports/functional-expenses">Functional expenses</a>
+    </div>
+    <p class="muted">
+        Gifts and grants a donor restricted to a purpose or a later time are held "with donor restrictions" until the purpose is met.
+        Record them to an income account marked as holding donor-restricted amounts, with the purpose's class on the line; once the money
+        is spent on that purpose (or the time comes), release it here.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Classes is { } changed)
+    {
+        <div class="alert notice" role="status">@(changed == 0 ? "The usual classes were already set up." : $"{changed} class(es) set up. Class tracking is on.")</div>
+    }
+
+    <form method="get" class="inline">
+        <label>As of <input type="date" name="asOf" value="@_asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    @if (_purposes.Count == 0)
+    {
+        <div class="card">
+            <p>Nothing is held with donor restrictions on @Labels.Date(_asOf).</p>
+            @if (_restrictedAccounts.Count == 0)
+            {
+                <p class="muted">No account is marked as holding donor-restricted amounts yet. Open a restricted income account (such as "Contributions:Restricted") and tick that box.</p>
+            }
+            else
+            {
+                <p class="muted">Restricted accounts: @string.Join(", ", _restrictedAccounts).</p>
+            }
+        </div>
+    }
+    else
+    {
+        <table class="data">
+            <thead>
+                <tr><th>Purpose (class)</th><th class="num">Received</th><th class="num">Released</th><th class="num">Still restricted</th><th class="num">Spent on it</th><th>Release</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _purposes)
+                {
+                    <tr>
+                        <td>@p.Name</td>
+                        <td class="num">@Labels.Amount(p.Received)</td>
+                        <td class="num">@Labels.Amount(p.Released)</td>
+                        <td class="num">@Labels.Amount(p.Balance)</td>
+                        <td class="num">@(p.ClassId is null ? "" : Labels.Amount(p.Spent))</td>
+                        <td>
+                            @if (p.Balance > 0m)
+                            {
+                                <form method="post" action="/nonprofit/releases" class="inline" data-enhance="false">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="date" value="@_asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
+                                    <input type="hidden" name="classId" value="@p.ClassId" />
+                                    <input name="amount" inputmode="decimal" size="10" aria-label="Amount to release for @p.Name"
+                                           value="@(p.Suggested > 0m ? p.Suggested.ToString("0.00", CultureInfo.InvariantCulture) : "")" placeholder="0.00" />
+                                    <input name="memo" maxlength="@RestrictionRelease.MaxMemoLength" placeholder="Memo (optional)" aria-label="Memo" />
+                                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                                    <button type="submit" class="secondary">Release</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td>Total</td><td class="num">@Labels.Amount(_purposes.Sum(p => p.Received))</td><td class="num">@Labels.Amount(_purposes.Sum(p => p.Released))</td><td class="num">@Labels.Amount(_purposes.Sum(p => p.Balance))</td><td></td><td></td></tr>
+            </tfoot>
+        </table>
+        <p class="muted">
+            The amount filled in is what's been spent on the purpose since its first restricted gift and not released yet. Restrictions without a
+            class (such as gifts for next year) are released by hand when their time comes. Releases are dated @Labels.Date(_asOf).
+        </p>
+    }
+
+    @if (_releases.Count > 0)
+    {
+        <h2>Releases</h2>
+        <table class="data">
+            <thead><tr><th>Date</th><th>Purpose</th><th>Memo</th><th class="num">Amount</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var r in _releases.Take(50))
+                {
+                    <tr class="@(r.Status == DocumentStatus.Voided ? "muted" : "")">
+                        <td><a href="/nonprofit/releases/@r.Id">@Labels.Date(r.Date)</a></td>
+                        <td>@(r.ClassId is { } c ? _names.GetValueOrDefault(c) : SegmentRules.NotSpecified)</td>
+                        <td>@r.Memo</td>
+                        <td class="num">@Labels.Amount(r.Amount)</td>
+                        <td>@(r.Status == DocumentStatus.Voided ? "Voided" : "Posted")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Programs and functions</h2>
+        <p class="muted">
+            The statement of functional expenses splits expenses by class: each class can count as program services, management and general,
+            or fundraising (subclasses take their parent's unless set). Put each program as a class under "Programs".
+        </p>
+        @if (_classes.Count > 0)
+        {
+            <table class="data">
+                <thead><tr><th>Class</th><th>Functional area</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _classes)
+                    {
+                        <tr>
+                            <td><a href="/segments/@c.Segment.Id">@c.FullName</a></td>
+                            <td>
+                                @if (c.Segment.FunctionalArea is { } area)
+                                {
+                                    @FunctionalAreas.Label(area)
+                                }
+                                else
+                                {
+                                    <span class="muted">@(FunctionalAreas.Deciding(c.Segment.Id, _byId) is { } parent ? $"{FunctionalAreas.Label(parent.FunctionalArea)} (from {parent.Name})" : FunctionalAreas.Label(null))</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        <form method="post" action="/nonprofit/functional-classes" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="actions"><button type="submit" class="secondary">Set up the usual classes</button></div>
+            <span class="hint">Adds "Programs", "Management and General" and "Fundraising" with their areas where missing, and turns class tracking on.</span>
+        </form>
+    </div>
+</div>
+
+@code {
+    private DateOnly _asOf;
+    private IReadOnlyList<RestrictedPurpose> _purposes = [];
+    private IReadOnlyList<RestrictionRelease> _releases = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private Dictionary<Guid, Segment> _byId = [];
+    private Dictionary<Guid, string> _names = [];
+    private List<string> _restrictedAccounts = [];
+
+    [SupplyParameterFromQuery] private string? AsOf { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery(Name = "classes")] private int? Classes { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _asOf = DateOnly.TryParseExact(AsOf, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        _purposes = await Nonprofit.PurposesAsync(_asOf);
+        _releases = await Nonprofit.ListReleasesAsync();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+        var all = await Segments.ListAsync(SegmentKind.Class, includeInactive: true);
+        _byId = all.ToDictionary(c => c.Segment.Id, c => c.Segment);
+        _names = all.ToDictionary(c => c.Segment.Id, c => c.FullName);
+        var chart = await Accounts.GetChartAsync();
+        _restrictedAccounts = chart.Ordered(includeInactive: false).Where(x => x.Account.DonorRestricted).Select(x => chart.FullName(x.Account.Id)).ToList();
+    }
+}

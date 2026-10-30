@@ -86,6 +86,7 @@ app.MapCollectionEndpoints();
 app.MapSalesFlowEndpoints();
 app.MapProjectEndpoints();
 app.MapAssetEndpoints();
+app.MapNonprofitEndpoints();
 app.MapChannelEndpoints();
 app.MapDashboardEndpoints();
 app.MapPluginEndpoints();

@@ -55,6 +55,25 @@
             <div class="actions"><button type="submit">Save</button></div>
         </EditForm>
 
+        @if (_segment.Kind == SegmentKind.Class)
+        {
+            <form method="post" action="/segments/@_segment.Id/functional-area" data-enhance="false" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="area">Functional area <span class="muted">(nonprofits)</span></label>
+                    <select id="area" name="area">
+                        <option value="">(the parent class's, or not assigned)</option>
+                        @foreach (var area in Enum.GetValues<FunctionalArea>())
+                        {
+                            <option value="@area" selected="@(_segment.FunctionalArea == area)">@OpenBook.Domain.Nonprofit.FunctionalAreas.Label(area)</option>
+                        }
+                    </select>
+                    <span class="hint">Where this class's expenses go on the statement of functional expenses.</span>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">Save area</button></div>
+            </form>
+        }
+
         <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_segment.IsActive ? "Make inactive" : "Make active")</button>
@@ -67,6 +86,9 @@
     private IReadOnlyList<SegmentChoice> _siblings = [];
     private string _label = "Location";
     private string? _error;
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? QueryError { get; set; }
 
     [Parameter]
     public Guid Id { get; set; }
@@ -83,6 +105,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _error ??= QueryError;
         _segment = await Segments.GetAsync(Id);
         if (_segment is null)
             return;

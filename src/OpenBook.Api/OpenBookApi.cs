@@ -64,6 +64,7 @@ public static class OpenBookApi
         api.MapProjectsApi();
         api.MapAssetsApi();
         api.MapChannelsApi();
+        api.MapNonprofitApi();
         api.MapCaptureApi();
 
         api.MapGet("/company", async (CompanySettingsService settings, CancellationToken ct) =>
@@ -81,13 +82,13 @@ public static class OpenBookApi
 
         api.MapPost("/accounts", async (CreateAccountRequest r, AccountService accounts, CancellationToken ct) =>
         {
-            var account = await accounts.CreateAsync(new CreateAccountCommand(r.Name, r.Type, r.Number, r.ParentId, r.Description), ct);
+            var account = await accounts.CreateAsync(new CreateAccountCommand(r.Name, r.Type, r.Number, r.ParentId, r.Description, r.DonorRestricted), ct);
             return Results.Created($"/api/accounts/{account.Id}", AccountResponse.From(account, await accounts.GetChartAsync(ct)));
         });
 
         api.MapPut("/accounts/{id:guid}", async (Guid id, UpdateAccountRequest r, AccountService accounts, CancellationToken ct) =>
         {
-            var account = await accounts.UpdateAsync(new UpdateAccountCommand(id, r.Name, r.Type, r.Number, r.ParentId, r.Description), ct);
+            var account = await accounts.UpdateAsync(new UpdateAccountCommand(id, r.Name, r.Type, r.Number, r.ParentId, r.Description, r.DonorRestricted), ct);
             return AccountResponse.From(account, await accounts.GetChartAsync(ct));
         });
 

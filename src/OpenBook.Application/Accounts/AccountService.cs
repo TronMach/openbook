@@ -4,9 +4,11 @@ using OpenBook.Domain.Auditing;
 
 namespace OpenBook.Application.Accounts;
 
-public sealed record CreateAccountCommand(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null);
+/// <param name="DonorRestricted">Nonprofits: the account holds amounts with donor restrictions (income, other income and equity only).</param>
+public sealed record CreateAccountCommand(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool DonorRestricted = false);
 
-public sealed record UpdateAccountCommand(Guid Id, string Name, AccountType Type, string? Number, Guid? ParentId, string? Description);
+/// <param name="DonorRestricted">Null keeps the current setting.</param>
+public sealed record UpdateAccountCommand(Guid Id, string Name, AccountType Type, string? Number, Guid? ParentId, string? Description, bool? DonorRestricted = null);
 
 /// <summary>Chart-of-accounts maintenance. Accounts are never deleted; they're made inactive.</summary>
 public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUser user)
@@ -26,6 +28,7 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
         var chart = await GetChartAsync(ct);
         chart.EnsureCanAdd(command.Name, command.Type, command.Number, command.ParentId);
         var account = Account.Create(command.Name, command.Type, command.Number, command.ParentId, command.Description);
+        account.SetDonorRestricted(command.DonorRestricted);
 
         store.Add(account);
         store.Add(Audit(AuditAction.Created, account, before: null));
@@ -51,6 +54,8 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
         account.Update(command.Name, command.Number, command.Description);
         account.ChangeType(command.Type);
         account.MoveTo(command.ParentId);
+        if (command.DonorRestricted is { } restricted)
+            account.SetDonorRestricted(restricted);
 
         store.Add(Audit(AuditAction.Updated, account, before));
         await store.SaveChangesAsync(ct);
@@ -126,5 +131,6 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
         a.Description,
         a.IsActive,
         TaxLine = a.TaxLineKey,
+        a.DonorRestricted,
     });
 }

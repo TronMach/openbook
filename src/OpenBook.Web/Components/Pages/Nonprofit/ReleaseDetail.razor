@@ -1,0 +1,74 @@
+@page "/nonprofit/releases/{Id:guid}"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject NonprofitService Nonprofit
+@inject SegmentService Segments
+
+<PageTitle>Release from restriction · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_release is null)
+    {
+        <h1>Release not found</h1>
+        <p><a href="/nonprofit">Back to donor restrictions</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>Release from restriction</h1>
+            @if (_release.Status == DocumentStatus.Voided)
+            {
+                <span class="badge">Voided</span>
+            }
+            <a class="button secondary" href="/journal/@_release.JournalEntryId">Journal entry</a>
+            <a class="button secondary" href="/audit?entityId=@_release.Id">History</a>
+            <a class="button secondary" href="/nonprofit">Donor restrictions</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(_release.Date)</dd>
+            <dt>Purpose</dt><dd>@_purpose</dd>
+            <dt>Amount</dt><dd>@Labels.Amount(_release.Amount)</dd>
+            @if (_release.Memo is { } memo)
+            {
+                <dt>Memo</dt><dd>@memo</dd>
+            }
+        </dl>
+        <p class="muted">Moved from net assets with donor restrictions to net assets without them. Total net assets don't change.</p>
+
+        @if (_release.Status == DocumentStatus.Posted)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Void</h2>
+                <p class="muted">Puts the amount back with donor restrictions, on the same date.</p>
+                <form method="post" action="/nonprofit/releases/@_release.Id/void" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger">Void</button></div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private RestrictionRelease? _release;
+    private string _purpose = SegmentRules.NotSpecified;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _release = await Nonprofit.GetReleaseAsync(Id);
+        if (_release?.ClassId is { } classId)
+            _purpose = (await Segments.NamesAsync()).GetValueOrDefault(classId) ?? "?";
+    }
+}

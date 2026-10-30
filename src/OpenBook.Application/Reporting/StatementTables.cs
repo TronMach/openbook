@@ -62,6 +62,22 @@ internal static class StatementTables
         return rows;
     }
 
+    /// <summary>Only the expense sections (cost of goods sold, expenses, other expenses) and their total.</summary>
+    public static List<ReportTableRow> Expenses(IReadOnlyList<StatementColumn<ProfitAndLoss>> columns, IReadOnlyList<DerivedColumn> derived)
+    {
+        var first = columns[0].Report;
+        var rows = new List<ReportTableRow>();
+        var width = 1 + columns.Count + derived.Count;
+        if (first.CostOfGoodsSold.Rows.Count > 0)
+            AddSection(rows, columns, r => r.CostOfGoodsSold, derived, width);
+        AddSection(rows, columns, r => r.Expenses, derived, width);
+        if (first.OtherExpenses.Rows.Count > 0)
+            AddSection(rows, columns, r => r.OtherExpenses, derived, width);
+        rows.Add(Computed("Total expenses", columns.Select(c => (decimal?)(c.Report.CostOfGoodsSold.Total + c.Report.Expenses.Total + c.Report.OtherExpenses.Total)).ToList(),
+            derived, ReportRowStyle.Total));
+        return rows;
+    }
+
     public static List<ReportTableRow> BalanceSheet(IReadOnlyList<StatementColumn<BalanceSheet>> columns, IReadOnlyList<DerivedColumn> derived)
     {
         var first = columns[0].Report;

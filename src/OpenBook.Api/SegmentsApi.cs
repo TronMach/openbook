@@ -6,11 +6,14 @@ using OpenBook.Domain.Segments;
 
 namespace OpenBook.Api;
 
-public sealed record SegmentResponse(Guid Id, SegmentKind Kind, string Name, string FullName, Guid? ParentId, bool IsActive)
+public sealed record SegmentResponse(Guid Id, SegmentKind Kind, string Name, string FullName, Guid? ParentId, bool IsActive, FunctionalArea? FunctionalArea = null)
 {
     public static SegmentResponse From(SegmentChoice c) =>
-        new(c.Segment.Id, c.Segment.Kind, c.Segment.Name, c.FullName, c.Segment.ParentId, c.Segment.IsActive);
+        new(c.Segment.Id, c.Segment.Kind, c.Segment.Name, c.FullName, c.Segment.ParentId, c.Segment.IsActive, c.Segment.FunctionalArea);
 }
+
+/// <param name="Area">Null takes the parent class's.</param>
+public sealed record SetFunctionalAreaRequest(FunctionalArea? Area);
 
 public sealed record CreateSegmentRequest(SegmentKind Kind, string Name, Guid? ParentId = null);
 
@@ -47,6 +50,12 @@ internal static class SegmentsApi
         {
             var segment = await s.SetActiveAsync(id, r.Active, ct);
             return new SegmentResponse(segment.Id, segment.Kind, segment.Name, (await s.NamesAsync(ct))[id], segment.ParentId, segment.IsActive);
+        });
+
+        segments.MapPut("/{id:guid}/functional-area", async (Guid id, SetFunctionalAreaRequest r, SegmentService s, CancellationToken ct) =>
+        {
+            var segment = await s.SetFunctionalAreaAsync(id, r.Area, ct);
+            return new SegmentResponse(segment.Id, segment.Kind, segment.Name, (await s.NamesAsync(ct))[id], segment.ParentId, segment.IsActive, segment.FunctionalArea);
         });
 
         segments.MapGet("/tracking", (SegmentService s, CancellationToken ct) => s.GetTrackingAsync(ct));

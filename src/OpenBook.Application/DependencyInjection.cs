@@ -126,6 +126,8 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Channels.ChannelSalesReport>();
         services.AddScoped<OpenBook.Application.Channels.ChannelSyncService>();
         services.AddScoped<OpenBook.Application.Channels.ChannelOrderService>();
+        services.AddScoped<OpenBook.Application.Nonprofit.NonprofitService>();
+        services.AddScoped<OpenBook.Application.Nonprofit.NonprofitReports>();
         services.AddScoped<OpenBook.Application.Projects.ProjectBilling>();
         services.AddScoped<OpenBook.Application.Projects.ProjectReports>();
         services.AddScoped<OpenBook.Application.Assets.AssetAccounts>();
