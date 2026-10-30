@@ -1,0 +1,59 @@
+@page "/sales/scheduled-emails"
+@inject ScheduledEmailService Scheduled
+@inject InvoiceService Invoices
+
+<PageTitle>Scheduled emails · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Scheduled emails</h1>
+    </div>
+    <p class="muted">
+        Invoices set to be emailed later. OpenBook checks every minute and sends what's due, with the invoice as it is then.
+        To schedule one, choose Email on an invoice, then "Send later".
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <section id="scheduled-emails">
+        <h2>Waiting or not sent</h2>
+        @if (_open.Count == 0)
+        {
+            <p class="muted">Nothing waiting.</p>
+        }
+        else
+        {
+            <ScheduledEmailTable Emails="_open" Back="/sales/scheduled-emails" Invoices="_labels" />
+        }
+
+        @if (_done.Count > 0)
+        {
+            <h2>Sent and cancelled</h2>
+            <ScheduledEmailTable Emails="_done" Back="/sales/scheduled-emails" Invoices="_labels" />
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<ScheduledEmail> _open = [];
+    private IReadOnlyList<ScheduledEmail> _done = [];
+    private Dictionary<Guid, string> _labels = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await Scheduled.ListAsync();
+        _open = all.Where(e => e.Status is ScheduledEmailStatus.Scheduled or ScheduledEmailStatus.Failed).ToList();
+        // The latest 100 finished ones, newest first.
+        _done = all.Where(e => e.Status is ScheduledEmailStatus.Sent or ScheduledEmailStatus.Cancelled).Reverse().Take(100).ToList();
+        foreach (var id in all.Select(e => e.InvoiceId).Distinct())
+        {
+            if (await Invoices.GetAsync(id) is { } invoice)
+                _labels[id] = $"Invoice {invoice.Number}";
+        }
+    }
+}

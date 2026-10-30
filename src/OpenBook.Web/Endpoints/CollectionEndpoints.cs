@@ -34,6 +34,21 @@ public static class CollectionEndpoints
                 return $"done=reminders&count={results.Count}";
             })).RequireAuthorization();
 
+        // Fields: back (the page to return to).
+        app.MapPost("/sales/scheduled-emails/{id:guid}/cancel", async (Guid id, IFormCollection form, ScheduledEmailService scheduled, CancellationToken ct) =>
+            await Back(ScheduledBack(form), "#scheduled-emails", async () =>
+            {
+                await scheduled.CancelAsync(id, ct);
+                return "done=cancelled";
+            })).RequireAuthorization();
+
+        app.MapPost("/sales/scheduled-emails/{id:guid}/retry", async (Guid id, IFormCollection form, ScheduledEmailService scheduled, CancellationToken ct) =>
+            await Back(ScheduledBack(form), "#scheduled-emails", async () =>
+            {
+                await scheduled.RetryAsync(id, ct);
+                return "done=retry";
+            })).RequireAuthorization();
+
         app.MapPost("/sales/collections/settings/late-fees", async (IFormCollection form, CollectionService collections, CancellationToken ct) =>
             await Back("/sales/collections/settings", "#late-fees", async () =>
             {
@@ -98,6 +113,10 @@ public static class CollectionEndpoints
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}{anchor}");
         }
     }
+
+    private static string ScheduledBack(IFormCollection form) =>
+        form["back"].ToString() is { Length: > 0 } b && (b.StartsWith("/sales/invoices/", StringComparison.Ordinal) || b == "/sales/scheduled-emails")
+            ? b : "/sales/scheduled-emails";
 
     private static string? Password(IFormCollection form) => form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
 

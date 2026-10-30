@@ -1,0 +1,59 @@
+using System.Security.Claims;
+using OpenBook.Application.Companies;
+using OpenBook.Application.Sales;
+
+namespace OpenBook.Web.Security;
+
+/// <summary>
+/// Sends invoice emails scheduled for later: checks every minute and sends what's due. Failures are kept on each
+/// email for the invoice page, and logged. The audit log names the actor "system".
+/// </summary>
+internal sealed partial class ScheduledEmailHostedService(
+    IServiceScopeFactory scopes, SetupState setup, ILogger<ScheduledEmailHostedService> logger) : BackgroundService
+{
+    private static readonly TimeSpan Period = TimeSpan.FromMinutes(1);
+
+    private static readonly ClaimsPrincipal SystemPrincipal =
+        new(new ClaimsIdentity([new Claim(ClaimTypes.Name, RecurringPostingService.Actor)], authenticationType: "system"));
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(Period);
+        do
+        {
+            await SendDueAsync(stoppingToken);
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    private async Task SendDueAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
+                return;
+            scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
+            foreach (var result in await scope.ServiceProvider.GetRequiredService<ScheduledEmailService>().SendDueAsync(ct))
+            {
+                if (result.Error is null)
+                    LogSent(result.Email.To);
+                else
+                    LogNotSent(result.Email.To, result.Error);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogError(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Scheduled invoice email sent to {To}.")]
+    private partial void LogSent(string to);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Scheduled invoice email to {To} not sent: {Error}")]
+    private partial void LogNotSent(string to, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Scheduled emails couldn't be sent.")]
+    private partial void LogError(Exception ex);
+}

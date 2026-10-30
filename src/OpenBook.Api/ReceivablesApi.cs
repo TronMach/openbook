@@ -153,6 +153,9 @@ public sealed record EmailSettingsResponse(
 
 public sealed record TestEmailRequest(string To);
 
+/// <param name="SendAt">When to send, with its offset (e.g. 2026-11-02T09:00:00-05:00).</param>
+public sealed record ScheduleEmailRequest(DateTimeOffset SendAt, string? To, string? Subject, string? Body);
+
 internal static class ReceivablesApi
 {
     public static void MapReceivablesApi(this RouteGroupBuilder api)
@@ -380,6 +383,24 @@ internal static class ReceivablesApi
             var message = new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body);
             await s.SendFormAsync(formKind, id, message, ct);
             return Results.Ok(new { message.To, message.Subject });
+        });
+        sales.MapGet("/invoices/{id:guid}/scheduled-emails", async (Guid id, ScheduledEmailService s, CancellationToken ct) => await s.ListAsync(id, ct));
+        sales.MapPost("/invoices/{id:guid}/scheduled-emails", async (Guid id, ScheduleEmailRequest r, EmailService email, ScheduledEmailService s, CancellationToken ct) =>
+        {
+            var draft = await email.DraftAsync(FormKind.Invoice, id, ct);
+            var scheduled = await s.ScheduleAsync(id, new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body), r.SendAt, ct);
+            return Results.Created($"/api/sales/scheduled-emails/{scheduled.Id}", scheduled);
+        });
+        sales.MapGet("/scheduled-emails", async (ScheduledEmailService s, CancellationToken ct) => await s.ListAsync(null, ct));
+        sales.MapPost("/scheduled-emails/{id:guid}/cancel", async (Guid id, ScheduledEmailService s, CancellationToken ct) =>
+        {
+            await s.CancelAsync(id, ct);
+            return Results.NoContent();
+        });
+        sales.MapPost("/scheduled-emails/{id:guid}/retry", async (Guid id, ScheduledEmailService s, CancellationToken ct) =>
+        {
+            await s.RetryAsync(id, ct);
+            return Results.NoContent();
         });
         sales.MapGet("/customers/{id:guid}/statement/pdf", async (Guid id, DateOnly? from, DateOnly? to, HttpContext http, FormService s, CancellationToken ct) =>
         {

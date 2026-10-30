@@ -37,6 +37,13 @@ public sealed class CollectionsTests : IAsyncLifetime
     private Task<T> In<TService, T>(Func<TService, Task<T>> work) where TService : notnull =>
         _db.InScope(sp => work(sp.GetRequiredService<TService>()));
 
+    private Task<bool> In<TService>(Func<TService, Task> work) where TService : notnull =>
+        _db.InScope(async sp =>
+        {
+            await work(sp.GetRequiredService<TService>());
+            return true;
+        });
+
     private Task<Customer> Customer(string name, Guid? parent = null, bool billWithParent = false, string? email = null,
         bool noReminders = false, bool noLateFees = false) =>
         In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails(name, Email: email, PaymentTermsDays: 30, ParentId: parent,
@@ -233,6 +240,68 @@ public sealed class CollectionsTests : IAsyncLifetime
         Assert.Equal("-3,7,30", saved.ReminderSchedule);
         Assert.Equal(CollectionSettings.DefaultSubject, saved.ReminderSubject);
         Assert.Equal(1, await _db.InDb(db => db.AuditRecords.CountAsync(a => a.EntityType == CollectionService.EntityType)));
+    }
+
+    // ---- Scheduled emails ----
+
+    [Fact]
+    public async Task Scheduled_invoice_emails_go_when_due_and_failures_can_be_tried_again()
+    {
+        await UseEmail();
+        var invoice = await Invoice(_acme, 2m);
+        var voided = await Invoice(_acme, 1m);
+        var now = _db.Clock.UtcNow;
+        Task<ScheduledEmail> Schedule(Invoice i, DateTimeOffset at) => In<ScheduledEmailService, ScheduledEmail>(s =>
+            s.ScheduleAsync(i.Id, new EmailDraft("ap@acme.test", $"Invoice {i.Number}", "Attached."), at));
+        Task<IReadOnlyList<ScheduledEmailResult>> SendDue() => In<ScheduledEmailService, IReadOnlyList<ScheduledEmailResult>>(s => s.SendDueAsync());
+        Task<IReadOnlyList<ScheduledEmail>> List(Invoice? i = null) => In<ScheduledEmailService, IReadOnlyList<ScheduledEmail>>(s => s.ListAsync(i?.Id));
+
+        Assert.Equal("scheduled_email.in_past", await Refused(() => Schedule(invoice, now.AddMinutes(-1))));
+        Assert.Equal("scheduled_email.too_far", await Refused(() => Schedule(invoice, now.AddYears(2))));
+        Assert.Equal("email.address_invalid", await Refused(() => In<ScheduledEmailService, ScheduledEmail>(s =>
+            s.ScheduleAsync(invoice.Id, new EmailDraft("not an address", "", ""), now.AddHours(1)))));
+
+        var later = await Schedule(invoice, now.AddHours(2));
+        var cancelled = await Schedule(invoice, now.AddHours(1));
+        var forVoided = await Schedule(voided, now.AddHours(1));
+        await In<ScheduledEmailService>(s => s.CancelAsync(cancelled.Id));
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(voided.Id, "Entered twice"));
+
+        // Nothing is due yet.
+        Assert.Empty(await SendDue());
+        Assert.Empty(_db.Mail.Sent);
+
+        // An hour on: the voided invoice's email is cancelled, not sent; the cancelled one stays cancelled.
+        _db.Clock.UtcNow = now.AddHours(1);
+        var result = Assert.Single(await SendDue());
+        Assert.Equal((forVoided.Id, "The invoice was voided."), (result.Email.Id, result.Error));
+        Assert.Empty(_db.Mail.Sent);
+
+        // Two hours on, with the mail server down: kept as failed with the reason.
+        _db.Clock.UtcNow = now.AddHours(2);
+        _db.Mail.Failure = "Connection refused";
+        Assert.Contains("Connection refused", Assert.Single(await SendDue()).Error, StringComparison.Ordinal);
+        var failed = Assert.Single(await List(invoice), e => e.Id == later.Id);
+        Assert.Equal(ScheduledEmailStatus.Failed, failed.Status);
+        Assert.Empty(await SendDue());
+
+        // Tried again once the server is back: it goes with the invoice PDF and the invoice is marked emailed.
+        _db.Mail.Failure = null;
+        await In<ScheduledEmailService>(s => s.RetryAsync(later.Id));
+        Assert.Null(Assert.Single(await SendDue()).Error);
+        var message = Assert.Single(_db.Mail.Sent).Message;
+        Assert.Equal(("Invoice 1001", "Attached."), (message.Subject, message.Body));
+        Assert.Single(message.Attachments);
+        Assert.NotNull((await Reload(invoice))!.LastEmailedAt);
+        Assert.Empty(await SendDue());
+
+        var states = (await List(invoice)).ToDictionary(e => e.Id, e => e.Status);
+        Assert.Equal(ScheduledEmailStatus.Sent, states[later.Id]);
+        Assert.Equal(ScheduledEmailStatus.Cancelled, states[cancelled.Id]);
+        Assert.Equal(3, (await List()).Count);
+        Assert.Equal("scheduled_email.not_pending", await Refused(() => In<ScheduledEmailService>(s => s.CancelAsync(later.Id))));
+        Assert.Equal("scheduled_email.invoice_voided", await Refused(() => Schedule(voided, now.AddHours(5))));
+        Assert.True(await _db.InDb(db => db.AuditRecords.CountAsync(a => a.EntityType == ScheduledEmailService.EntityType)) >= 8);
     }
 
     // ---- Reminders ----

@@ -1,0 +1,77 @@
+@using OpenBook.Domain.Sales
+
+@* Scheduled invoice emails with cancel / try again; posts to /sales/scheduled-emails/{id}/… and returns to Back. *@
+<div class="table-wrap">
+    <table class="data">
+        <thead>
+            <tr>
+                @if (Invoices is not null)
+                {
+                    <th>Invoice</th>
+                }
+                <th>Send on</th>
+                <th>To</th>
+                <th>Subject</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var e in Emails)
+            {
+                <tr id="email-@e.Id">
+                    @if (Invoices is not null)
+                    {
+                        <td><a href="/sales/invoices/@e.InvoiceId">@(Invoices.TryGetValue(e.InvoiceId, out var label) ? label : "Invoice")</a></td>
+                    }
+                    <td>@e.SendAt.ToLocalTime().ToString("g")</td>
+                    <td>@e.To</td>
+                    <td>@e.Subject</td>
+                    <td>
+                        @(e.Status switch
+                        {
+                            ScheduledEmailStatus.Scheduled => "Waiting",
+                            ScheduledEmailStatus.Sent => $"Sent {e.SentAt?.ToLocalTime():g}",
+                            ScheduledEmailStatus.Failed => "Not sent",
+                            _ => "Cancelled",
+                        })
+                        @if (e.Error is not null)
+                        {
+                            <div class="hint">@e.Error</div>
+                        }
+                    </td>
+                    <td class="actions">
+                        @if (e.Status == ScheduledEmailStatus.Failed)
+                        {
+                            <form method="post" action="/sales/scheduled-emails/@e.Id/retry" style="display:inline">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="back" value="@Back" />
+                                <button type="submit" class="secondary">Try again</button>
+                            </form>
+                        }
+                        @if (e.Status is ScheduledEmailStatus.Scheduled or ScheduledEmailStatus.Failed)
+                        {
+                            <form method="post" action="/sales/scheduled-emails/@e.Id/cancel" style="display:inline">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="back" value="@Back" />
+                                <button type="submit" class="secondary">Cancel</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ScheduledEmail> Emails { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public string Back { get; set; } = "/sales/scheduled-emails";
+
+    /// <summary>Invoice labels by id; shows an invoice column when given.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<Guid, string>? Invoices { get; set; }
+}

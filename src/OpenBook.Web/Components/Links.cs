@@ -58,6 +58,7 @@ public static class Links
         "bill" => $"/purchases/bills/{id}",
         "bill_payment" => $"/purchases/payments/{id}",
         "customer" => $"/customers/{id}",
+        "scheduled_email" => "/sales/scheduled-emails",
         "invoice" => $"/sales/invoices/{id}",
         "item" => $"/items/{id}",
         "journal_entry" => $"/journal/{id}",

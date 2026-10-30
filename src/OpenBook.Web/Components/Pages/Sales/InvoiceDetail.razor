@@ -8,6 +8,7 @@
 @inject OpenBook.Application.Inventory.WarehouseService WarehouseService
 @inject WriteOffService WriteOffs
 @inject ReminderService Reminders
+@inject ScheduledEmailService ScheduledEmails
 
 <PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
 
@@ -208,6 +209,18 @@
         </p>
     }
 
+    @if (_scheduled.Count > 0)
+    {
+        <section class="no-print" id="scheduled-emails">
+            <h2>Scheduled emails</h2>
+            @if (EmailError is not null)
+            {
+                <div class="alert error" role="alert">@EmailError</div>
+            }
+            <ScheduledEmailTable Emails="_scheduled" Back="@($"/sales/invoices/{Id}")" />
+        </section>
+    }
+
     <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">@L["Journal entry"]</a></p>
 
     @if (_invoice.Status == DocumentStatus.Posted)
@@ -254,6 +267,9 @@
     private IReadOnlyList<CreditMemo> _credits = [];
     private IReadOnlyList<BadDebtWriteOff> _writeOffs = [];
     private IReadOnlyList<InvoiceReminder> _reminders = [];
+    private IReadOnlyList<ScheduledEmail> _scheduled = [];
+
+    [SupplyParameterFromQuery(Name = "error")] private string? EmailError { get; set; }
     private Guid? _billTo;
     private bool _needsClosingPassword;
 
@@ -276,6 +292,7 @@
         _credits = await Invoices.ListCreditsAsync(Id);
         _writeOffs = await WriteOffs.ListForInvoiceAsync(Id);
         _reminders = await Reminders.ForInvoiceAsync(Id);
+        _scheduled = await ScheduledEmails.ListAsync(Id);
         if (_customer is { BillWithParent: true, ParentId: { } parentId })
             _billTo = parentId;
     }

@@ -125,6 +125,16 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public async Task<IReadOnlyList<InvoiceReminder>> ListRemindersAsync(CancellationToken ct) =>
         await db.InvoiceReminders.AsNoTracking().ToListAsync(ct);
 
+    public Task<ScheduledEmail?> GetScheduledEmailAsync(Guid id, CancellationToken ct) => db.ScheduledEmails.SingleOrDefaultAsync(e => e.Id == id, ct);
+
+    // SQLite can't compare DateTimeOffsets in SQL; the waiting queue is small, so the time check runs in memory.
+    public async Task<IReadOnlyList<ScheduledEmail>> ListDueEmailsAsync(DateTimeOffset now, CancellationToken ct) =>
+        (await db.ScheduledEmails.Where(e => e.Status == ScheduledEmailStatus.Scheduled).ToListAsync(ct))
+            .Where(e => e.IsDue(now)).OrderBy(e => e.SendAt).ToList();
+
+    public async Task<IReadOnlyList<ScheduledEmail>> ListScheduledEmailsAsync(Guid? invoiceId, CancellationToken ct) =>
+        (await db.ScheduledEmails.AsNoTracking().Where(e => invoiceId == null || e.InvoiceId == invoiceId).ToListAsync(ct)).OrderBy(e => e.SendAt).ToList();
+
     public Task<SalesOrder?> GetSalesOrderAsync(Guid id, CancellationToken ct) => db.SalesOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<IReadOnlyList<SalesOrder>> ListSalesOrdersAsync(Guid? customerId, CancellationToken ct) =>
@@ -214,6 +224,8 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public void Add(CollectionSettings settings) => db.CollectionSettings.Add(settings);
 
     public void Add(InvoiceReminder reminder) => db.InvoiceReminders.Add(reminder);
+
+    public void Add(ScheduledEmail email) => db.ScheduledEmails.Add(email);
 
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 

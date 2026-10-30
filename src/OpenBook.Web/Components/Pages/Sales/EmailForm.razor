@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @using OpenBook.Application.Forms
 @inject EmailService Email
+@inject OpenBook.Application.Sales.ScheduledEmailService Scheduled
 @inject NavigationManager Navigation
 
 <PageTitle>Email · OpenBook</PageTitle>
@@ -15,7 +16,9 @@
     }
     @if (_sent)
     {
-        <div class="alert notice" role="status">Sent to @Input.To. <a href="@_backLink">Back</a></div>
+        <div class="alert notice" role="status">
+            @(_scheduledFor is { } at ? $"Scheduled to go to {Input.To} on {at:g}." : $"Sent to {Input.To}.") <a href="@_backLink">Back</a>
+        </div>
     }
 
     @if (!_configured)
@@ -41,8 +44,20 @@
                 <InputTextArea id="body" rows="8" @bind-Value="Input.Body" />
                 <span class="hint">The <a href="@_pdfLink" target="_blank">PDF</a> is attached.</span>
             </div>
+            @if (Kind == "invoices")
+            {
+                <fieldset class="field">
+                    <legend>When</legend>
+                    <InputRadioGroup @bind-Value="Input.When">
+                        <label class="check"><InputRadio Value="@("now")" /> Send now</label>
+                        <label class="check"><InputRadio Value="@("later")" /> Send later, on</label>
+                    </InputRadioGroup>
+                    <InputDate Type="InputDateType.DateTimeLocal" id="send-at" @bind-Value="Input.SendAt" aria-label="Send on" />
+                    <span class="hint">Server time. The PDF is made when the email goes, so it shows the invoice as it is then.</span>
+                </fieldset>
+            }
             <div class="actions">
-                <button type="submit">Send</button>
+                <button type="submit">@(Kind == "invoices" ? "Send or schedule" : "Send")</button>
                 <a href="@_backLink">Cancel</a>
             </div>
         </EditForm>
@@ -56,6 +71,7 @@
     private bool _configured;
     private bool _known;
     private bool _sent;
+    private DateTime? _scheduledFor;
     private string? _error;
 
     [Parameter]
@@ -124,7 +140,19 @@
         try
         {
             var message = new EmailDraft(Input.To, Input.Subject ?? "", Input.Body ?? "");
-            if (Kind == "statement")
+            if (Kind == "invoices" && Input.When == "later")
+            {
+                if (Input.SendAt is not { } local)
+                {
+                    _error = "Choose when to send it.";
+                    return;
+                }
+
+                var offset = TimeZoneInfo.Local.GetUtcOffset(local);
+                await Scheduled.ScheduleAsync(Id, message, new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset));
+                _scheduledFor = local;
+            }
+            else if (Kind == "statement")
                 await Email.SendStatementAsync(Id, StatementFrom, StatementTo, message);
             else
                 await Email.SendFormAsync(FormKindValue!.Value, Id, message);
@@ -146,5 +174,9 @@
 
         [StringLength(20000)]
         public string? Body { get; set; }
+
+        public string When { get; set; } = "now";
+
+        public DateTime? SendAt { get; set; } = DateTime.Today.AddDays(1).AddHours(9);
     }
 }

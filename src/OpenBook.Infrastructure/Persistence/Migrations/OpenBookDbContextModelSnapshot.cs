@@ -4864,6 +4864,62 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("SalesReceipts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Sales.ScheduledEmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScheduledBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("SendAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ScheduledEmails", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxPayment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8673,6 +8729,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.ScheduledEmail", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxPayment", b =>

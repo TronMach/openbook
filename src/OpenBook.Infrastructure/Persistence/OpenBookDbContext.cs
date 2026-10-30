@@ -97,6 +97,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Capture.CaptureDraft> CaptureDrafts => Set<OpenBook.Domain.Capture.CaptureDraft>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
     public DbSet<InvoiceReminder> InvoiceReminders => Set<InvoiceReminder>();
+    public DbSet<ScheduledEmail> ScheduledEmails => Set<ScheduledEmail>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
     public DbSet<BankDeposit> BankDeposits => Set<BankDeposit>();
     public DbSet<EmailSettings> EmailConfigurations => Set<EmailSettings>();
@@ -1882,6 +1883,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(r => new { r.InvoiceId, r.Step }).IsUnique();
             b.Property(r => r.To).HasMaxLength(320);
             b.HasOne<Invoice>().WithMany().HasForeignKey(r => r.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ScheduledEmail>(b =>
+        {
+            b.ToTable("ScheduledEmails");
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.InvoiceId);
+            b.HasIndex(e => e.Status);
+            b.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(e => e.To).HasMaxLength(320);
+            b.Property(e => e.Subject).HasMaxLength(ScheduledEmail.MaxSubject);
+            b.Property(e => e.Body).HasMaxLength(ScheduledEmail.MaxBody);
+            b.Property(e => e.ScheduledBy).HasMaxLength(200);
+            b.Property(e => e.Error).HasMaxLength(1000);
+            b.Ignore(e => e.IsPending);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(e => e.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RecurringInvoice>(b =>
