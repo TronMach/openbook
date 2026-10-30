@@ -47,6 +47,7 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
     private static readonly string[] TypeHeaders = ["type", "accounttype"];
     private static readonly string[] DescriptionHeaders = ["description", "desc"];
     private static readonly string[] RestrictedHeaders = ["donorrestricted", "restricted", "restriction", "donorrestriction"];
+    private static readonly string[] TaxLineHeaders = ["taxline", "taxlinekey"];
 
     private static readonly Dictionary<string, AccountType> TypeNames = BuildTypeNames();
 
@@ -89,6 +90,7 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
         var numberColumn = Column(header, NumberHeaders);
         var descriptionColumn = Column(header, DescriptionHeaders);
         var restrictedColumn = Column(header, RestrictedHeaders);
+        var taxLineColumn = Column(header, TaxLineHeaders);
 
         string? Field(CsvRecord record, int? column) =>
             column is { } c && c < record.Fields.Count && record.Fields[c].Length > 0 ? record.Fields[c] : null;
@@ -161,6 +163,7 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
                 chart.EnsureCanAdd(name, type.Value, number, parentId);
                 var account = Account.Create(name, type.Value, number, parentId, description);
                 account.SetDonorRestricted(Restricted(Field(record, restrictedColumn)));
+                account.SetTaxLine(Field(record, taxLineColumn));
                 created.Add(account);
                 results.Add(Row(ImportRowStatus.New));
             }

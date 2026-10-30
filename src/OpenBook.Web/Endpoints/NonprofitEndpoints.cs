@@ -181,6 +181,81 @@ public static class NonprofitEndpoints
             }
         }).RequireAuthorization();
 
+        // Grants. Fields: name, funderId, reference, amount, awardedOn, startsOn, endsOn, classId, incomeAccountId, conditional, terms.
+        app.MapPost("/nonprofit/grants", async (IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            try
+            {
+                var today = DateOnly.FromDateTime(DateTime.Today);
+                var grant = await grants.CreateAsync(new GrantCommand(
+                    form["name"].ToString(),
+                    Id(form["funderId"]) ?? throw new DomainException("grant.funder_required", "Choose the funder."),
+                    Number(form["amount"]) ?? throw new DomainException("grant.amount", "Enter the amount awarded."),
+                    Date(form["awardedOn"]) ?? today,
+                    Date(form["startsOn"]) ?? today,
+                    Date(form["endsOn"]) ?? today,
+                    Id(form["classId"]),
+                    Id(form["incomeAccountId"]),
+                    form["conditional"] == "true",
+                    form["reference"],
+                    form["terms"]), ct);
+                return Results.Redirect($"/nonprofit/grants/{grant.Id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                return Results.Redirect($"/nonprofit/grants/new?error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/receive", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.ReceiveAsync(id, Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                Number(form["amount"]) ?? 0m, Id(form["bankAccountId"]) ?? Guid.Empty, ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/recognize", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.RecognizeAsync(id, Date(form["through"]) ?? DateOnly.FromDateTime(DateTime.Today), ct));
+        }).RequireAuthorization();
+
+        // Fields: account:{i}, amount:{i}.
+        app.MapPost("/nonprofit/grants/{id:guid}/budget", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
+        {
+            var lines = form.Keys.Where(k => k.StartsWith("account:", StringComparison.Ordinal))
+                .Select(k => (Account: Id(form[k]), Amount: Number(form["amount:" + k["account:".Length..]]) ?? 0m))
+                .Where(l => l.Account is not null && l.Amount != 0m)
+                .Select(l => (l.Account!.Value, l.Amount)).ToList();
+            return await Back($"/nonprofit/grants/{id}", () => grants.SetBudgetAsync(id, lines, ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/receipts/{line:int}/void", async (Guid id, int line, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.VoidReceiptAsync(id, line, Reason(form), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/recognitions/{line:int}/void", async (Guid id, int line, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.VoidRecognitionAsync(id, line, Reason(form), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/close", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.CloseAsync(id, ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/reopen", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.ReopenAsync(id, ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/void", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.VoidAsync(id, Reason(form), ct));
+        }).RequireAuthorization();
+
         // On a class's page; "" clears the area (the parent's applies).
         app.MapPost("/segments/{id:guid}/functional-area", async (Guid id, IFormCollection form, SegmentService segments, CancellationToken ct) =>
         {

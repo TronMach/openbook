@@ -37,6 +37,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Nonprofit.Donation> Donations => Set<OpenBook.Domain.Nonprofit.Donation>();
     public DbSet<OpenBook.Domain.Nonprofit.Pledge> Pledges => Set<OpenBook.Domain.Nonprofit.Pledge>();
     public DbSet<OpenBook.Domain.Nonprofit.GiftSettings> GiftSettings => Set<OpenBook.Domain.Nonprofit.GiftSettings>();
+    public DbSet<OpenBook.Domain.Nonprofit.Grant> Grants => Set<OpenBook.Domain.Nonprofit.Grant>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
@@ -914,6 +915,54 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(p => p.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Segment>().WithMany().HasForeignKey(p => p.ClassId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.Grant>(b =>
+        {
+            b.ToTable("Grants");
+            b.HasKey(g => g.Id);
+            b.Property(g => g.Name).HasMaxLength(OpenBook.Domain.Nonprofit.Grant.MaxNameLength);
+            b.Property(g => g.Reference).HasMaxLength(50);
+            b.Property(g => g.Terms).HasMaxLength(OpenBook.Domain.Nonprofit.Grant.MaxTextLength);
+            b.Property(g => g.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(g => g.Status).HasConversion<string>().HasMaxLength(20);
+            b.Ignore(g => g.Received);
+            b.Ignore(g => g.Recognized);
+            b.Ignore(g => g.Due);
+            b.HasIndex(g => g.FunderId);
+            b.HasOne<Customer>().WithMany().HasForeignKey(g => g.FunderId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(g => g.ClassId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(g => g.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(g => g.ReceivableAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(g => g.AwardEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(g => g.Budget, l =>
+            {
+                l.ToTable("GrantBudgetLines");
+                l.WithOwner().HasForeignKey("GrantId");
+                l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantBudgetLine.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.OwnsMany(g => g.Receipts, l =>
+            {
+                l.ToTable("GrantReceipts");
+                l.WithOwner().HasForeignKey("GrantId");
+                l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantReceipt.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.OwnsMany(g => g.Recognitions, l =>
+            {
+                l.ToTable("GrantRecognitions");
+                l.WithOwner().HasForeignKey("GrantId");
+                l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantRecognition.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(g => g.Budget).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.Navigation(g => g.Receipts).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.Navigation(g => g.Recognitions).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.GiftSettings>(b =>

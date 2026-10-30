@@ -2088,6 +2088,79 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("GiftSettings", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.Grant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<Guid?>("AwardEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("AwardedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Conditional")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EndsOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FunderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("IncomeAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReceivableAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartsOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AwardEntryId");
+
+                    b.HasIndex("ClassId");
+
+                    b.HasIndex("FunderId");
+
+                    b.HasIndex("IncomeAccountId");
+
+                    b.HasIndex("ReceivableAccountId");
+
+                    b.ToTable("Grants", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Pledge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6047,6 +6120,163 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("PledgeId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.Grant", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("AwardEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("FunderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("IncomeAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReceivableAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantBudgetLine", "Budget", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("GrantBudgetLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantReceipt", "Receipts", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid>("BankAccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("EntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.HasIndex("BankAccountId");
+
+                            b1.HasIndex("EntryId");
+
+                            b1.ToTable("GrantReceipts", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("BankAccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("EntryId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantRecognition", "Recognitions", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("EntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.HasIndex("EntryId");
+
+                            b1.ToTable("GrantRecognitions", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("EntryId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
+                    b.Navigation("Budget");
+
+                    b.Navigation("Receipts");
+
+                    b.Navigation("Recognitions");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Pledge", b =>

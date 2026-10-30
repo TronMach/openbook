@@ -23,11 +23,14 @@ public interface INonprofitStore
     Task<IReadOnlyList<Pledge>> ListPledgesAsync(CancellationToken ct);
     Task<Pledge?> GetPledgeAsync(Guid id, CancellationToken ct);
     Task<GiftSettings?> GetSettingsAsync(CancellationToken ct);
+    Task<IReadOnlyList<Grant>> ListGrantsAsync(CancellationToken ct);
+    Task<Grant?> GetGrantAsync(Guid id, CancellationToken ct);
 
     void Add(RestrictionRelease release);
     void Add(Donation donation);
     void Add(Pledge pledge);
     void Add(GiftSettings settings);
+    void Add(Grant grant);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

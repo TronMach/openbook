@@ -36,6 +36,22 @@ public sealed record GiftSettingsResponse(string? Ein, string? SignerName, strin
 
 public sealed record AcknowledgedRequest(IReadOnlyList<Guid> Ids);
 
+public sealed record GrantBudgetRequest(Guid AccountId, decimal Amount);
+
+public sealed record GrantReceiptRequest(DateOnly Date, decimal Amount, Guid BankAccountId);
+
+public sealed record GrantRecognizeRequest(DateOnly Through);
+
+public sealed record GrantResponse(
+    Guid Id, string Name, Guid FunderId, string Funder, string? Reference, decimal Amount, DateOnly AwardedOn, DateOnly StartsOn, DateOnly EndsOn,
+    Guid ClassId, Guid IncomeAccountId, bool Conditional, GrantStatus Status, decimal Recognized, decimal Received, decimal Due, decimal Spent,
+    decimal ReadyToRecognize, IReadOnlyList<GrantBudgetRow> Budget)
+{
+    public static GrantResponse From(GrantPosition p) => new(p.Grant.Id, p.Grant.Name, p.Grant.FunderId, p.Funder, p.Grant.Reference, p.Grant.Amount,
+        p.Grant.AwardedOn, p.Grant.StartsOn, p.Grant.EndsOn, p.Grant.ClassId, p.Grant.IncomeAccountId, p.Grant.Conditional, p.Grant.Status,
+        p.Grant.Recognized, p.Grant.Received, p.Grant.Due, p.Spent, p.ReadyToRecognize, p.Rows);
+}
+
 internal static class NonprofitApi
 {
     public static void MapNonprofitApi(this RouteGroupBuilder api)
@@ -96,7 +112,50 @@ internal static class NonprofitApi
         nonprofit.MapGet("/settings", async (GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.GetSettingsAsync(ct)));
         nonprofit.MapPut("/settings", async (GiftSettingsCommand r, GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
 
+        nonprofit.MapGet("/grants", async (DateOnly? asOf, GrantService s, CancellationToken ct) =>
+            (await s.PositionsAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), ct)).Select(GrantResponse.From));
+        nonprofit.MapGet("/grants/{id:guid}", async (Guid id, DateOnly? asOf, GrantService s, CancellationToken ct) =>
+            await s.PositionAsync(id, asOf ?? DateOnly.FromDateTime(DateTime.Today), ct) is { } p ? Results.Ok(GrantResponse.From(p)) : Results.NotFound());
+        nonprofit.MapPost("/grants", async (GrantCommand r, GrantService s, CancellationToken ct) =>
+        {
+            var grant = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/nonprofit/grants/{grant.Id}", await Position(s, grant.Id, ct));
+        });
+        nonprofit.MapPut("/grants/{id:guid}", async (Guid id, GrantDetailsCommand r, GrantService s, CancellationToken ct) =>
+        {
+            await s.UpdateAsync(id, r, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPut("/grants/{id:guid}/budget", async (Guid id, IReadOnlyList<GrantBudgetRequest> r, GrantService s, CancellationToken ct) =>
+        {
+            await s.SetBudgetAsync(id, r.Select(l => (l.AccountId, l.Amount)).ToList(), ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/receipts", async (Guid id, GrantReceiptRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.ReceiveAsync(id, r.Date, r.Amount, r.BankAccountId, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/recognize", async (Guid id, GrantRecognizeRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.RecognizeAsync(id, r.Through, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/close", async (Guid id, GrantService s, CancellationToken ct) =>
+        {
+            await s.CloseAsync(id, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/void", async (Guid id, VoidRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.VoidAsync(id, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
+
         nonprofit.MapPost("/functional-classes", async (NonprofitService s, CancellationToken ct) =>
             new { Changed = await s.SetUpFunctionalClassesAsync(ct) });
     }
+
+    private static async Task<GrantResponse> Position(GrantService s, Guid id, CancellationToken ct) =>
+        GrantResponse.From((await s.PositionAsync(id, DateOnly.FromDateTime(DateTime.Today), ct))!);
 }

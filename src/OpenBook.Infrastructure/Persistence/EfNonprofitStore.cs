@@ -23,6 +23,12 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     public Task<GiftSettings?> GetSettingsAsync(CancellationToken ct) => db.GiftSettings.FirstOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyList<Grant>> ListGrantsAsync(CancellationToken ct) => await db.Grants.ToListAsync(ct);
+
+    public Task<Grant?> GetGrantAsync(Guid id, CancellationToken ct) => db.Grants.SingleOrDefaultAsync(g => g.Id == id, ct);
+
+    public void Add(Grant grant) => db.Grants.Add(grant);
+
     public void Add(RestrictionRelease release) => db.RestrictionReleases.Add(release);
 
     public void Add(Donation donation) => db.Donations.Add(donation);

@@ -230,6 +230,93 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Null(lapsed.Find("Pat Giver", 2));
     }
 
+    // ---- Grants and Form 990 (slice 3) ----
+
+    private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));
+
+    private Task<GrantPosition?> PositionOf(Guid id) => In<GrantService, GrantPosition?>(s => s.PositionAsync(id, Dec31));
+
+    [Fact]
+    public async Task An_unconditional_grant_is_income_when_awarded_and_spending_counts_against_its_budget()
+    {
+        var foundation = await Donor("Riverside Foundation");
+        var grant = await NewGrant(new GrantCommand("Literacy 2026", foundation.Id, 10000m, new DateOnly(2026, 1, 5), Jan1, Dec31,
+            IncomeAccountId: Account("Grants:Restricted")));
+        Assert.NotNull(grant.AwardEntryId);
+        Assert.Equal(Account(GrantService.ReceivableName), grant.ReceivableAccountId);
+        Assert.Equal(10000m, await IncomeAsync(ReportBasis.Accrual, "Grants:Restricted"));
+        var created = (await In<SegmentService, IReadOnlyList<SegmentChoice>>(s => s.ListAsync(SegmentKind.Class))).Single(c => c.Segment.Id == grant.ClassId);
+        Assert.Equal(("Literacy 2026", FunctionalArea.Program), (created.FullName, created.Segment.FunctionalArea));
+
+        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(Account("Program Supplies"), 4000m), (Account("Salaries and Wages"), 6000m)]));
+        var checking = Account("Checking");
+        await Post(new DateOnly(2026, 2, 1), Dr(Account("Program Supplies"), 1500m, classId: grant.ClassId), Cr(checking, 1500m));
+        await Post(new DateOnly(2026, 2, 1), Dr(Account("Travel and Meetings"), 200m, classId: grant.ClassId), Cr(checking, 200m));
+        await Post(new DateOnly(2025, 12, 1), Dr(Account("Program Supplies"), 999m, classId: grant.ClassId), Cr(checking, 999m)); // before the period
+
+        var position = (await PositionOf(grant.Id))!;
+        Assert.Equal((1700m, 8300m), (position.Spent, position.Unspent));
+        Assert.Equal(2500m, position.Rows.Single(r => r.Account == "Program Supplies").Left);
+        Assert.Equal((0m, 200m), (position.Rows.Single(r => r.Account == "Travel and Meetings").Budget, position.Rows.Single(r => r.Account == "Travel and Meetings").Spent));
+        Assert.Equal("grant.budget_account", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(checking, 5m)])))).Code);
+
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 3, 1), 6000m, checking));
+        Assert.Equal(4000m, (await PositionOf(grant.Id))!.Grant.Due);
+        Assert.Equal("grant.overpaid", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 3, 2), 5000m, checking)))).Code);
+        Assert.Equal("grant.unconditional", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, Dec31)))).Code);
+        Assert.Equal("grant.has_activity", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.VoidAsync(grant.Id, "Mistake")))).Code);
+
+        var report = await Report("grants", "asOf=2026-12-31");
+        Assert.Equal(4000m, report.Find("Literacy 2026", 6));
+
+        await In<GrantService, Grant>(s => s.VoidReceiptAsync(grant.Id, 1, "Wrong grant"));
+        var voided = await In<GrantService, Grant>(s => s.VoidAsync(grant.Id, "Mistake"));
+        Assert.Equal(GrantStatus.Voided, voided.Status);
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, "Grants:Restricted"));
+    }
+
+    [Fact]
+    public async Task A_conditional_grant_becomes_income_as_it_is_spent()
+    {
+        var city = await Donor("City Arts Council");
+        var grant = await NewGrant(new GrantCommand("Mural project", city.Id, 3000m, Jan1, Jan1, Dec31, ClassId: _scholarships, Conditional: true));
+        Assert.Null(grant.AwardEntryId);
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, GrantService.GrantsIncomeName));
+
+        await Post(new DateOnly(2026, 4, 1), Dr(Account("Program Supplies"), 1200m, classId: _scholarships), Cr(Account("Checking"), 1200m));
+        Assert.Equal(1200m, (await PositionOf(grant.Id))!.ReadyToRecognize);
+        await In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, new DateOnly(2026, 4, 30)));
+        Assert.Equal(1200m, await IncomeAsync(ReportBasis.Accrual, GrantService.GrantsIncomeName));
+        Assert.Equal(0m, (await PositionOf(grant.Id))!.ReadyToRecognize);
+        Assert.Equal("grant.nothing_to_recognize", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, new DateOnly(2026, 5, 1))))).Code);
+
+        // Spending past the award only recognizes up to it.
+        await Post(new DateOnly(2026, 6, 1), Dr(Account("Program Supplies"), 5000m, classId: _scholarships), Cr(Account("Checking"), 5000m));
+        var closed = await In<GrantService, Grant>(async s => { await s.RecognizeAsync(grant.Id, new DateOnly(2026, 6, 30)); return await s.CloseAsync(grant.Id); });
+        Assert.Equal((3000m, GrantStatus.Closed), (closed.Recognized, closed.Status));
+        Assert.Equal("grant.not_active", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, Dec31, 100m, Account("Checking"))))).Code);
+    }
+
+    [Fact]
+    public async Task Form_990_part_ix_splits_mapped_lines_by_function()
+    {
+        Assert.Equal("n.9.7", _chart.FindByFullName("Salaries and Wages")!.TaxLineKey);
+        Assert.Equal(AccountType.OtherCurrentAsset, _chart.FindByFullName(GrantService.ReceivableName)!.Type);
+        await GiveAndSpendAsync();
+        var table = await Report("form-990-expenses", "preset=Custom&from=2026-01-01&to=2026-12-31&basis=Accrual");
+        Assert.Equal(["Line", "(A) Total", "(B) Program services", "(C) Management and general", "(D) Fundraising", "No functional area"], table.Columns.Select(c => c.Header));
+        Assert.Equal((300m, 300m), ((decimal)table.Find("24 Other expenses", 1)!, (decimal)table.Find("24 Other expenses", 2)!));
+        Assert.Equal(200m, table.Find("16 Occupancy", 3));
+        Assert.Equal(50m, table.Find("13 Office expenses", 5));
+        Assert.Equal(550m, table.Find("25 Total functional expenses", 1));
+    }
+
     [Fact]
     public async Task Functional_expenses_follow_each_class_or_its_parent()
     {

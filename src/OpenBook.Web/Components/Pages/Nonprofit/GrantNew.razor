@@ -1,0 +1,98 @@
+@page "/nonprofit/grants/new"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject SegmentService Segments
+
+<PageTitle>Add a grant · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Add a grant</h1>
+        <a class="button secondary" href="/nonprofit/grants">Grants</a>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    <div class="card">
+        <form method="post" action="/nonprofit/grants" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field"><label for="name">Name</label><input id="name" name="name" required maxlength="@Grant.MaxNameLength" placeholder="Youth literacy 2026" /></div>
+                <div class="field">
+                    <label for="funder">Funder</label>
+                    <select id="funder" name="funderId" data-search required>
+                        <option value="">Choose the funder…</option>
+                        @foreach (var c in _funders)
+                        {
+                            <option value="@c.Customer.Id">@c.FullName</option>
+                        }
+                    </select>
+                    <span class="hint">A customer record (<a href="/customers/new">add one</a>).</span>
+                </div>
+                <div class="field"><label for="reference">Award number <span class="muted">(optional)</span></label><input id="reference" name="reference" maxlength="50" /></div>
+            </div>
+            <div class="row">
+                <div class="field"><label for="amount">Amount awarded</label><input id="amount" name="amount" class="amount" inputmode="decimal" required /></div>
+                <div class="field"><label for="awarded">Awarded on</label><input id="awarded" name="awardedOn" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="starts">Grant period starts</label><input id="starts" name="startsOn" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="ends">Ends</label><input id="ends" name="endsOn" type="date" value="@DateTime.Today.AddYears(1).AddDays(-1).ToString("yyyy-MM-dd")" /></div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="class">Class</label>
+                    <select id="class" name="classId" data-search>
+                        <option value="">(a new class named after the grant, as program services)</option>
+                        @foreach (var c in _classes)
+                        {
+                            <option value="@c.Segment.Id">@c.FullName</option>
+                        }
+                    </select>
+                    <span class="hint">Expenses on this class (and its subclasses) in the grant period count against the grant.</span>
+                </div>
+                <div class="field">
+                    <label for="income">Income account <span class="muted">(optional)</span></label>
+                    <select id="income" name="incomeAccountId" data-search>
+                        <option value="">(@GrantService.GrantsIncomeName)</option>
+                        @foreach (var a in _income)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)@(a.DonorRestricted ? " (restricted)" : "")</option>
+                        }
+                    </select>
+                    <span class="hint">Most grants are for a purpose or period: choose a restricted account.</span>
+                </div>
+            </div>
+            <div class="field">
+                <label><input type="checkbox" name="conditional" value="true" /> Conditional: income only as the condition is met (cost reimbursement, matching)</label>
+            </div>
+            <div class="field">
+                <label for="terms">Terms <span class="muted">(optional)</span></label>
+                <textarea id="terms" name="terms" rows="3" maxlength="@Grant.MaxTextLength" placeholder="Allowed costs, reports due, conditions"></textarea>
+            </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <div class="actions"><button type="submit">Add grant</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _funders = [];
+    private List<Account> _income = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _funders = (await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Where(c => c.Customer.IsActive).ToList();
+        _chart = await AccountService.GetChartAsync();
+        _income = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+    }
+}

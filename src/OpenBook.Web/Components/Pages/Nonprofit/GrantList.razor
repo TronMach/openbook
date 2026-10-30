@@ -1,0 +1,51 @@
+@page "/nonprofit/grants"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Nonprofit
+@inject GrantService GrantService
+
+<PageTitle>Grants · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Grants</h1>
+        <a class="button" href="/nonprofit/grants/new">Add a grant</a>
+        <a class="button secondary" href="/reports/grants">Grants report</a>
+        <a class="button secondary" href="/reports/form-990-expenses">Form 990 Part IX</a>
+    </div>
+    <p class="muted">
+        Each grant has its own class: put the grant's class on its expenses (bills, expenses, payroll entries) and they count against it.
+        Unconditional grants are income when awarded; conditional ones (such as cost reimbursement) as the money is spent.
+    </p>
+
+    @if (_grants.Count == 0)
+    {
+        <div class="card"><p>No grants yet.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Grant</th><th>Funder</th><th>Period</th><th class="num">Awarded</th><th class="num">Spent</th><th class="num">Left</th><th class="num">Due from funder</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var p in _grants)
+                {
+                    <tr class="@(p.Grant.Status == GrantStatus.Active ? "" : "muted")">
+                        <td><a href="/nonprofit/grants/@p.Grant.Id">@p.Grant.Name</a>@(p.Grant.Conditional ? " (conditional)" : "")</td>
+                        <td><a href="/customers/@p.Grant.FunderId">@p.Funder</a></td>
+                        <td>@Labels.Date(p.Grant.StartsOn) – @Labels.Date(p.Grant.EndsOn)</td>
+                        <td class="num">@Labels.Amount(p.Grant.Amount)</td>
+                        <td class="num">@Labels.Amount(p.Spent)</td>
+                        <td class="num">@Labels.Amount(p.Unspent)</td>
+                        <td class="num">@Labels.Amount(p.Grant.Due)</td>
+                        <td>@p.Grant.Status@(p.ReadyToRecognize > 0m ? $" · {Labels.Amount(p.ReadyToRecognize)} to recognize" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<GrantPosition> _grants = [];
+
+    protected override async Task OnInitializedAsync() => _grants = await GrantService.PositionsAsync(DateOnly.FromDateTime(DateTime.Today));
+}

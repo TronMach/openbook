@@ -73,6 +73,8 @@ public static class Editions
             new("/nonprofit/gifts/new", "Record a gift", "Money or in kind, for a purpose or a pledge"),
             new("/nonprofit/thanks", "Thank donors", "Acknowledgment letters and year-end giving statements"),
             new("/reports/lapsed-donors", "Lapsed donors", "Who gave last year but not yet this year"),
+            new("/nonprofit/grants", "Grants", "Awards, budgets, spending and what funders still owe"),
+            new("/reports/form-990-expenses", "Form 990 Part IX", "Expenses by 990 line and function"),
         ],
         _ => [],
     };
