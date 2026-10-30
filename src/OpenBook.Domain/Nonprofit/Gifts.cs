@@ -1,0 +1,230 @@
+using OpenBook.Domain.Common;
+
+namespace OpenBook.Domain.Nonprofit;
+
+public enum GiftKind
+{
+    /// <summary>Money: cash, check, card or transfer, deposited to a bank account.</summary>
+    Cash,
+
+    /// <summary>Goods or services given instead of money, recorded at fair value.</summary>
+    InKind,
+}
+
+/// <summary>
+/// A gift from a donor (a customer record). A cash gift posts Dr the bank account / Cr the contribution account on
+/// its class; an in-kind gift Dr the asset or expense it became / Cr the contribution account. A gift paying a pledge
+/// credits the pledge's receivable instead, and adds a cash-basis-only entry recognizing the income then (the pledge
+/// itself is accrual-only), so cash-basis reports count pledged money when it arrives. Voided, never edited.
+/// </summary>
+public sealed class Donation
+{
+    public const string Source = "nonprofit.donation";
+    public const int MaxTextLength = 500;
+    public const int MaxReferenceLength = 50;
+
+    private Donation()
+    {
+    }
+
+    public Guid Id { get; private set; }
+    public int Number { get; private set; }
+    public Guid DonorId { get; private set; }
+    public DateOnly Date { get; private set; }
+    public GiftKind Kind { get; private set; }
+    public decimal Amount { get; private set; }
+
+    /// <summary>Cash: the bank account it went into. In kind: the asset or expense account it was recorded to.</summary>
+    public Guid DebitAccountId { get; private set; }
+
+    /// <summary>The contribution account (for a pledge payment, the pledge's).</summary>
+    public Guid IncomeAccountId { get; private set; }
+
+    public Guid? PledgeId { get; private set; }
+    public Guid? ClassId { get; private set; }
+
+    /// <summary>Check number or other reference.</summary>
+    public string? Reference { get; private set; }
+
+    public string? Memo { get; private set; }
+
+    /// <summary>In kind: what was given (the acknowledgment describes it but doesn't value it).</summary>
+    public string? Description { get; private set; }
+
+    /// <summary>Quid pro quo: the fair value of goods or services the donor received in return (a dinner, a gift).</summary>
+    public decimal GoodsValue { get; private set; }
+
+    public string? GoodsDescription { get; private set; }
+    public DocumentStatus Status { get; private set; }
+    public Guid JournalEntryId { get; private set; }
+
+    /// <summary>For a pledge payment, the cash-basis-only entry recognizing the income.</summary>
+    public Guid? CashEntryId { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset? AcknowledgedAt { get; private set; }
+
+    /// <summary>What the donor may deduct: the amount less what they received in return.</summary>
+    public decimal Deductible => Math.Max(0m, Amount - GoodsValue);
+
+    public static Donation Create(
+        Guid id, int number, Guid donorId, DateOnly date, GiftKind kind, decimal amount, Guid debitAccountId, Guid incomeAccountId,
+        Guid? pledgeId, Guid? classId, string? reference, string? memo, string? description, decimal goodsValue, string? goodsDescription,
+        Guid journalEntryId, Guid? cashEntryId, DateTimeOffset createdAt)
+    {
+        Check(kind, amount, description, goodsValue, goodsDescription, pledgeId);
+        return new Donation
+        {
+            Id = id,
+            Number = number,
+            DonorId = donorId,
+            Date = date,
+            Kind = kind,
+            Amount = amount,
+            DebitAccountId = debitAccountId,
+            IncomeAccountId = incomeAccountId,
+            PledgeId = pledgeId,
+            ClassId = classId == Guid.Empty ? null : classId,
+            Reference = Text.Optional(reference, MaxReferenceLength, "donation.reference_too_long", "Reference"),
+            Memo = Text.Optional(memo, MaxTextLength, "donation.memo_too_long", "Memo"),
+            Description = Text.Optional(description, MaxTextLength, "donation.description_too_long", "Description"),
+            GoodsValue = goodsValue,
+            GoodsDescription = Text.Optional(goodsDescription, MaxTextLength, "donation.goods_too_long", "What the donor received"),
+            Status = DocumentStatus.Posted,
+            JournalEntryId = journalEntryId,
+            CashEntryId = cashEntryId,
+            CreatedAt = createdAt.ToUniversalTime(),
+        };
+    }
+
+    /// <summary>The rules a gift must meet, checked before anything posts.</summary>
+    public static void Check(GiftKind kind, decimal amount, string? description, decimal goodsValue, string? goodsDescription, Guid? pledgeId)
+    {
+        if (!Enum.IsDefined(kind))
+            throw new DomainException("donation.kind_invalid", "Choose cash or in kind.");
+        if (amount <= 0m)
+            throw new DomainException("donation.amount", "Enter an amount above zero.");
+        if (decimal.Round(amount, 2) != amount || decimal.Round(goodsValue, 2) != goodsValue)
+            throw new DomainException("donation.amount_cents", "Amounts are in cents.");
+        if (goodsValue < 0m || goodsValue > amount)
+            throw new DomainException("donation.goods_value", "What the donor received can't be more than the gift.");
+        if (goodsValue > 0m && string.IsNullOrWhiteSpace(goodsDescription))
+            throw new DomainException("donation.goods_description", "Say what the donor received in return.");
+        if (kind == GiftKind.InKind && string.IsNullOrWhiteSpace(description))
+            throw new DomainException("donation.description_required", "Describe what was given.");
+        if (kind == GiftKind.InKind && pledgeId is not null)
+            throw new DomainException("donation.pledge_in_kind", "Pledges are paid in money.");
+    }
+
+    public void MarkAcknowledged(DateTimeOffset at) => AcknowledgedAt ??= at.ToUniversalTime();
+
+    public void Void()
+    {
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("donation.already_voided", "This gift is already voided.");
+        Status = DocumentStatus.Voided;
+    }
+}
+
+/// <summary>
+/// A donor's promise to give: Dr "Pledges Receivable" / Cr the contribution account on its class, accrual basis only
+/// (cash basis counts the money as it's paid). Paid by gifts that name it. Voided only while nothing is paid.
+/// </summary>
+public sealed class Pledge
+{
+    public const string Source = "nonprofit.pledge";
+
+    private Pledge()
+    {
+    }
+
+    public Guid Id { get; private set; }
+    public int Number { get; private set; }
+    public Guid DonorId { get; private set; }
+    public DateOnly Date { get; private set; }
+    public decimal Amount { get; private set; }
+    public Guid ReceivableAccountId { get; private set; }
+    public Guid IncomeAccountId { get; private set; }
+    public Guid? ClassId { get; private set; }
+
+    /// <summary>When the donor expects to have paid it all.</summary>
+    public DateOnly? DueDate { get; private set; }
+
+    public string? Memo { get; private set; }
+    public DocumentStatus Status { get; private set; }
+    public Guid JournalEntryId { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+
+    public static Pledge Create(
+        Guid id, int number, Guid donorId, DateOnly date, decimal amount, Guid receivableAccountId, Guid incomeAccountId, Guid? classId,
+        DateOnly? dueDate, string? memo, Guid journalEntryId, DateTimeOffset createdAt)
+    {
+        Check(date, amount, dueDate);
+        return new Pledge
+        {
+            Id = id,
+            Number = number,
+            DonorId = donorId,
+            Date = date,
+            Amount = amount,
+            ReceivableAccountId = receivableAccountId,
+            IncomeAccountId = incomeAccountId,
+            ClassId = classId == Guid.Empty ? null : classId,
+            DueDate = dueDate,
+            Memo = Text.Optional(memo, Donation.MaxTextLength, "pledge.memo_too_long", "Memo"),
+            Status = DocumentStatus.Posted,
+            JournalEntryId = journalEntryId,
+            CreatedAt = createdAt.ToUniversalTime(),
+        };
+    }
+
+    public static void Check(DateOnly date, decimal amount, DateOnly? dueDate)
+    {
+        if (amount <= 0m)
+            throw new DomainException("pledge.amount", "Enter an amount above zero.");
+        if (decimal.Round(amount, 2) != amount)
+            throw new DomainException("pledge.amount_cents", "Amounts are in cents.");
+        if (dueDate < date)
+            throw new DomainException("pledge.due_before_date", "The due date can't be before the pledge.");
+    }
+
+    public void Void()
+    {
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("pledge.already_voided", "This pledge is already voided.");
+        Status = DocumentStatus.Voided;
+    }
+}
+
+/// <summary>What goes on acknowledgment letters and giving statements (one row).</summary>
+public sealed class GiftSettings
+{
+    public const int MaxTextLength = 2000;
+
+    public GiftSettings()
+    {
+        Id = Guid.CreateVersion7();
+    }
+
+    public Guid Id { get; private set; }
+
+    /// <summary>The organization's EIN, printed with the tax-exempt statement when given.</summary>
+    public string? Ein { get; private set; }
+
+    public string? SignerName { get; private set; }
+    public string? SignerTitle { get; private set; }
+
+    /// <summary>The thank-you paragraph that opens each letter; a default is used when empty.</summary>
+    public string? Intro { get; private set; }
+
+    public void Update(string? ein, string? signerName, string? signerTitle, string? intro)
+    {
+        var digits = ein is null ? "" : new string(ein.Where(char.IsDigit).ToArray());
+        if (digits.Length is not (0 or 9))
+            throw new DomainException("gifts.ein_invalid", "An EIN has nine digits (12-3456789).");
+        Ein = digits.Length == 0 ? null : $"{digits[..2]}-{digits[2..]}";
+        SignerName = Text.Optional(signerName, 100, "gifts.signer_too_long", "Signer");
+        SignerTitle = Text.Optional(signerTitle, 100, "gifts.title_too_long", "Title");
+        Intro = Text.Optional(intro, MaxTextLength, "gifts.intro_too_long", "Opening paragraph");
+    }
+}

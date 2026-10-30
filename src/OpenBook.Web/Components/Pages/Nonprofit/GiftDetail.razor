@@ -1,0 +1,134 @@
+@page "/nonprofit/gifts/{Id:guid}"
+@using OpenBook.Application.Forms
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@inject GiftService GiftService
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject SegmentService Segments
+
+<PageTitle>Gift · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_gift is null)
+    {
+        <h1>Gift not found</h1>
+        <p><a href="/nonprofit/gifts">Back to gifts</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>Gift @_gift.Number</h1>
+            @if (_gift.Status == DocumentStatus.Voided)
+            {
+                <span class="badge">Voided</span>
+            }
+            else
+            {
+                <a class="button secondary" href="/nonprofit/gifts/@_gift.Id/letter" target="_blank">Acknowledgment (PDF)</a>
+            }
+            <a class="button secondary" href="/journal/@_gift.JournalEntryId">Journal entry</a>
+            <a class="button secondary" href="/audit?entityId=@_gift.Id">History</a>
+            <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (Sent)
+        {
+            <div class="alert notice" role="status">Acknowledgment sent.</div>
+        }
+        <dl class="facts">
+            <dt>Donor</dt><dd><a href="/customers/@_gift.DonorId">@_donor?.DisplayName</a></dd>
+            <dt>Date</dt><dd>@Labels.Date(_gift.Date)</dd>
+            <dt>Amount</dt><dd>@Labels.Amount(_gift.Amount)</dd>
+            <dt>Kind</dt><dd>@(_gift.Kind == GiftKind.InKind ? $"In kind: {_gift.Description}" : "Money")</dd>
+            <dt>@(_gift.Kind == GiftKind.InKind ? "Recorded to" : "Deposited to")</dt><dd>@_chart.FullName(_gift.DebitAccountId)</dd>
+            <dt>Contribution account</dt><dd>@_chart.FullName(_gift.IncomeAccountId)</dd>
+            @if (_gift.PledgeId is { } pledge)
+            {
+                <dt>Pays</dt><dd><a href="/nonprofit/pledges/@pledge">pledge</a></dd>
+            }
+            @if (_purpose is not null)
+            {
+                <dt>Purpose</dt><dd>@_purpose</dd>
+            }
+            @if (_gift.Reference is { } reference)
+            {
+                <dt>Reference</dt><dd>@reference</dd>
+            }
+            @if (_gift.GoodsValue > 0m)
+            {
+                <dt>Received in return</dt><dd>@_gift.GoodsDescription (@Labels.Amount(_gift.GoodsValue)); deductible @Labels.Amount(_gift.Deductible)</dd>
+            }
+            @if (_gift.Memo is { } memo)
+            {
+                <dt>Memo</dt><dd>@memo</dd>
+            }
+            <dt>Thanked</dt><dd>@(_gift.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.LocalDateTime)) : "Not yet")</dd>
+        </dl>
+
+        @if (_gift.Status == DocumentStatus.Posted)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Send the acknowledgment</h2>
+                <form method="post" action="/nonprofit/gifts/@_gift.Id/email" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="to">To</label><input id="to" name="to" type="email" value="@_draft?.To" required /></div>
+                        <div class="field"><label for="subject">Subject</label><input id="subject" name="subject" value="@_draft?.Subject" maxlength="300" /></div>
+                    </div>
+                    <div class="field"><label for="body">Message</label><textarea id="body" name="body" rows="5">@_draft?.Body</textarea></div>
+                    <div class="actions"><button type="submit">Email the letter</button></div>
+                </form>
+                @if (_gift.AcknowledgedAt is null)
+                {
+                    <form method="post" action="/nonprofit/thanks/mark" data-enhance="false" style="margin-top: 0.75rem">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="id" value="@_gift.Id" />
+                        <input type="hidden" name="back" value="/nonprofit/gifts/@_gift.Id" />
+                        <button type="submit" class="secondary">Mark as thanked (printed or sent another way)</button>
+                    </form>
+                }
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Void</h2>
+                <p class="muted">Takes the gift out of the books on its date@(_gift.PledgeId is null ? "" : ", and puts it back on the pledge").</p>
+                <form method="post" action="/nonprofit/gifts/@_gift.Id/void" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger">Void</button></div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private Donation? _gift;
+    private Customer? _donor;
+    private string? _purpose;
+    private EmailDraft? _draft;
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private bool Sent { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _gift = await GiftService.GetAsync(Id);
+        if (_gift is null)
+            return;
+        _donor = await CustomerService.GetAsync(_gift.DonorId);
+        _chart = await AccountService.GetChartAsync();
+        if (_gift.ClassId is { } classId)
+            _purpose = (await Segments.NamesAsync()).GetValueOrDefault(classId);
+        _draft = await GiftService.DraftAcknowledgmentAsync(Id);
+    }
+}

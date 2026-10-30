@@ -170,15 +170,15 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
 
     internal static FormParty CompanyParty(Company c) => new(c.LegalName ?? c.Name, c.Address, c.Email, c.Phone);
 
-    private static FormParty CustomerParty(Customer c) =>
+    internal static FormParty CustomerParty(Customer c) =>
         new(c.CompanyName is { } company && company != c.DisplayName ? $"{c.DisplayName}\n{company}" : c.DisplayName, c.BillingAddress, c.Email, c.Phone);
 
-    private static FormStyle Style(Company c) => new(c.FormTemplate, c.FormAccentColor, c.FormFooter);
+    internal static FormStyle Style(Company c) => new(c.FormTemplate, c.FormAccentColor, c.FormFooter);
 
     private static string D(DateOnly date) => date.ToString("d", CultureInfo.CurrentCulture);
 
     /// <summary>"Studio Books Invoice 1001.pdf", without characters file systems reject.</summary>
-    private static string FileName(Company company, string title, string number)
+    internal static string FileName(Company company, string title, string number)
     {
         var name = $"{company.Name} {title} {number}.pdf";
         var invalid = Path.GetInvalidFileNameChars();

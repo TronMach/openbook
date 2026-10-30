@@ -3,10 +3,13 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Nonprofit;
 using OpenBook.Application.Reporting;
+using OpenBook.Application.Sales;
 using OpenBook.Application.Segments;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Nonprofit;
+using OpenBook.Domain.Sales;
 using OpenBook.Domain.Segments;
 using static OpenBook.Domain.Ledger.JournalLineDraft;
 
@@ -113,6 +116,118 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal(1000m, Assert.Single(await In<NonprofitService, IReadOnlyList<RestrictedPurpose>>(s => s.PurposesAsync(asOf))).Balance);
         Assert.Equal("release.already_voided", (await Assert.ThrowsAsync<DomainException>(() =>
             In<NonprofitService, Domain.Nonprofit.RestrictionRelease>(s => s.VoidAsync(release.Id, "Again")))).Code);
+    }
+
+    // ---- Gifts and pledges (slice 2) ----
+
+    private Task<Customer> Donor(string name, string? email = null) =>
+        In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails(name, Email: email)));
+
+    private Task<Donation> Give(RecordGiftCommand command) => In<GiftService, Donation>(s => s.RecordAsync(command));
+
+    private async Task<decimal> IncomeAsync(ReportBasis basis, string account) =>
+        (await _db.InScope(sp => sp.GetRequiredService<ReportLedger>().LinesAsync(basis, Jan1, Dec31)))
+        .Where(l => l.AccountId == Account(account)).Sum(l => -l.Amount);
+
+    [Fact]
+    public async Task Gifts_post_to_the_bank_or_in_kind_account_and_check_their_wording_rules()
+    {
+        var pat = await Donor("Pat Giver");
+        var checking = Account("Checking");
+        var gift = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 3, 1), 250m, checking, IncomeAccountId: Account("Contributions:Restricted"),
+            ClassId: _scholarships, Reference: "1042", GoodsValue: 60m, GoodsDescription: "Gala dinner"));
+        Assert.Equal((1, 190m), (gift.Number, gift.Deductible));
+        var entry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(gift.JournalEntryId)))!;
+        Assert.Equal(250m, entry.Lines.Single(l => l.AccountId == checking).Amount);
+        Assert.Equal(250m, Assert.Single(await In<NonprofitService, IReadOnlyList<RestrictedPurpose>>(s => s.PurposesAsync(Dec31))).Balance);
+
+        var laptops = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 3, 2), 900m, Account("Equipment"), GiftKind.InKind, Description: "Two laptops"));
+        Assert.Equal(Account(GiftService.InKindName), laptops.IncomeAccountId);
+
+        Assert.Equal("donation.deposit_bank", (await Assert.ThrowsAsync<DomainException>(() => Give(new RecordGiftCommand(pat.Id, Jan1, 10m, Account("Equipment"))))).Code);
+        Assert.Equal("donation.description_required", (await Assert.ThrowsAsync<DomainException>(() =>
+            Give(new RecordGiftCommand(pat.Id, Jan1, 10m, Account("Equipment"), GiftKind.InKind)))).Code);
+        Assert.Equal("donation.goods_value", (await Assert.ThrowsAsync<DomainException>(() =>
+            Give(new RecordGiftCommand(pat.Id, Jan1, 10m, checking, GoodsValue: 20m, GoodsDescription: "Mug")))).Code);
+        Assert.Equal("donation.in_kind_account", (await Assert.ThrowsAsync<DomainException>(() =>
+            Give(new RecordGiftCommand(pat.Id, Jan1, 10m, Account("Accounts Payable"), GiftKind.InKind, Description: "?")))).Code);
+
+        var voided = await In<GiftService, Donation>(s => s.VoidAsync(laptops.Id, "Returned"));
+        Assert.Equal(DocumentStatus.Voided, voided.Status);
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, GiftService.InKindName));
+    }
+
+    [Fact]
+    public async Task Pledges_count_when_made_on_accrual_and_when_paid_on_cash()
+    {
+        var sam = await Donor("Sam Pledger");
+        var other = await Donor("Someone Else");
+        var pledge = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, new DateOnly(2026, 1, 15), 1200m,
+            Account("Contributions:Unrestricted"), DueDate: new DateOnly(2026, 12, 1))));
+        Assert.Equal(1200m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Cash, "Contributions:Unrestricted"));
+
+        var checking = Account("Checking");
+        var paid = await Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 2, 15), 400m, checking, PledgeId: pledge.Id));
+        Assert.NotNull(paid.CashEntryId);
+        Assert.Equal(1200m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+        Assert.Equal(400m, await IncomeAsync(ReportBasis.Cash, "Contributions:Unrestricted"));
+        Assert.Equal(800m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
+
+        Assert.Equal("donation.pledge_overpaid", (await Assert.ThrowsAsync<DomainException>(() =>
+            Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 3, 1), 900m, checking, PledgeId: pledge.Id)))).Code);
+        Assert.Equal("donation.pledge_donor", (await Assert.ThrowsAsync<DomainException>(() =>
+            Give(new RecordGiftCommand(other.Id, new DateOnly(2026, 3, 1), 100m, checking, PledgeId: pledge.Id)))).Code);
+        Assert.Equal("pledge.has_payments", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Domain.Nonprofit.Pledge>(s => s.VoidPledgeAsync(pledge.Id, "Withdrawn")))).Code);
+
+        var open = await Report("open-pledges", "asOf=2026-12-31");
+        Assert.Equal(800m, open.Find("Total", 5));
+
+        // Voiding the payment takes it off both bases and puts it back on the pledge.
+        await In<GiftService, Donation>(s => s.VoidAsync(paid.Id, "Bounced"));
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Cash, "Contributions:Unrestricted"));
+        Assert.Equal(1200m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
+        var withdrawn = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.VoidPledgeAsync(pledge.Id, "Withdrawn"));
+        Assert.Equal(DocumentStatus.Voided, withdrawn.Status);
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+    }
+
+    [Fact]
+    public async Task Letters_state_what_the_donor_received_and_statements_go_to_donors_with_an_address()
+    {
+        await In<GiftService, Domain.Nonprofit.GiftSettings>(s => s.SaveSettingsAsync(new GiftSettingsCommand("123456789", "Robin Lee", "Executive Director", null)));
+        Assert.Equal("12-3456789", (await In<GiftService, Domain.Nonprofit.GiftSettings>(s => s.GetSettingsAsync())).Ein);
+        Assert.Equal("gifts.ein_invalid", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Domain.Nonprofit.GiftSettings>(s => s.SaveSettingsAsync(new GiftSettingsCommand("123", null, null, null))))).Code);
+
+        var pat = await Donor("Pat Giver", "pat@example.test");
+        var kim = await Donor("Kim Quiet");
+        var checking = Account("Checking");
+        var gala = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 4, 1), 250m, checking, GoodsValue: 60m, GoodsDescription: "Gala dinner"));
+        await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 9, 1), 100m, checking));
+        await Give(new RecordGiftCommand(kim.Id, new DateOnly(2025, 6, 1), 75m, checking));
+
+        var letter = await In<GiftService, Application.Forms.RenderedForm>(s => s.AcknowledgmentAsync(gala.Id));
+        Assert.Equal("%PDF"u8.ToArray(), letter.Pdf[..4]);
+        var all = await In<GiftService, Application.Forms.RenderedForm>(s => s.YearStatementsAsync(2026));
+        Assert.Equal("%PDF"u8.ToArray(), all.Pdf[..4]);
+
+        await _db.InScope(sp => sp.GetRequiredService<Application.Forms.EmailService>().SaveSettingsAsync(new Application.Forms.EmailSettingsCommand(
+            Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "s3cret", false, "books@charity.test", "Charity", null)));
+        await In<GiftService, bool>(async s => { await s.SendAcknowledgmentAsync(gala.Id, await s.DraftAcknowledgmentAsync(gala.Id)); return true; });
+        Assert.NotNull((await In<GiftService, Donation?>(s => s.GetAsync(gala.Id)))!.AcknowledgedAt);
+
+        var (sent, notSent) = await In<GiftService, (int, IReadOnlyList<string>)>(s => s.SendYearStatementsAsync(2026));
+        Assert.Equal(1, sent);
+        Assert.Empty(notSent);
+        Assert.Equal(["pat@example.test", "pat@example.test"], _db.Mail.Sent.Select(m => m.Message.To));
+
+        var giving = await Report("giving-by-donor", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        Assert.Equal(350m, giving.Find("Pat Giver", 2));
+        var lapsed = await Report("lapsed-donors", "year=2026");
+        Assert.Equal(75m, lapsed.Find("Kim Quiet", 2));
+        Assert.Null(lapsed.Find("Pat Giver", 2));
     }
 
     [Fact]

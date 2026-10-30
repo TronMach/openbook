@@ -18,7 +18,16 @@ public interface INonprofitStore
     Task<IReadOnlyList<RestrictionRelease>> ListReleasesAsync(CancellationToken ct);
     Task<RestrictionRelease?> GetReleaseAsync(Guid id, CancellationToken ct);
 
+    Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct);
+    Task<Donation?> GetDonationAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<Pledge>> ListPledgesAsync(CancellationToken ct);
+    Task<Pledge?> GetPledgeAsync(Guid id, CancellationToken ct);
+    Task<GiftSettings?> GetSettingsAsync(CancellationToken ct);
+
     void Add(RestrictionRelease release);
+    void Add(Donation donation);
+    void Add(Pledge pledge);
+    void Add(GiftSettings settings);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

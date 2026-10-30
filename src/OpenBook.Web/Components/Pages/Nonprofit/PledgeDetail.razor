@@ -1,0 +1,113 @@
+@page "/nonprofit/pledges/{Id:guid}"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@inject GiftService GiftService
+@inject AccountService AccountService
+@inject SegmentService Segments
+
+<PageTitle>Pledge · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_pledge is null)
+    {
+        <h1>Pledge not found</h1>
+        <p><a href="/nonprofit/pledges">Back to pledges</a></p>
+    }
+    else
+    {
+        var p = _pledge.Pledge;
+        <div class="toolbar">
+            <h1>Pledge @p.Number</h1>
+            @if (p.Status == DocumentStatus.Voided)
+            {
+                <span class="badge">Voided</span>
+            }
+            else if (_pledge.Balance > 0m)
+            {
+                <a class="button" href="/nonprofit/gifts/new?pledge=@p.Id">Record a payment</a>
+            }
+            <a class="button secondary" href="/journal/@p.JournalEntryId">Journal entry</a>
+            <a class="button secondary" href="/audit?entityId=@p.Id">History</a>
+            <a class="button secondary" href="/nonprofit/pledges">Pledges</a>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <dl class="facts">
+            <dt>Donor</dt><dd><a href="/customers/@p.DonorId">@_pledge.Donor</a></dd>
+            <dt>Date</dt><dd>@Labels.Date(p.Date)</dd>
+            @if (p.DueDate is { } due)
+            {
+                <dt>Due by</dt><dd>@Labels.Date(due)</dd>
+            }
+            <dt>Promised</dt><dd>@Labels.Amount(p.Amount)</dd>
+            <dt>Paid</dt><dd>@Labels.Amount(_pledge.Paid)</dd>
+            <dt>Left</dt><dd>@Labels.Amount(_pledge.Balance)</dd>
+            <dt>Contribution account</dt><dd>@_chart.FullName(p.IncomeAccountId)</dd>
+            @if (_purpose is not null)
+            {
+                <dt>Purpose</dt><dd>@_purpose</dd>
+            }
+            @if (p.Memo is { } memo)
+            {
+                <dt>Memo</dt><dd>@memo</dd>
+            }
+        </dl>
+
+        @if (_payments.Count > 0)
+        {
+            <h2>Payments</h2>
+            <table class="data">
+                <thead><tr><th>Gift</th><th>Date</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var g in _payments)
+                    {
+                        <tr class="@(g.Status == DocumentStatus.Voided ? "muted" : "")">
+                            <td><a href="/nonprofit/gifts/@g.Id">@g.Number@(g.Status == DocumentStatus.Voided ? " (voided)" : "")</a></td>
+                            <td>@Labels.Date(g.Date)</td>
+                            <td class="num">@Labels.Amount(g.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (p.Status == DocumentStatus.Posted && _pledge.Paid == 0m)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Void</h2>
+                <p class="muted">For a pledge recorded by mistake or withdrawn before anything was paid.</p>
+                <form method="post" action="/nonprofit/pledges/@p.Id/void" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger">Void</button></div>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private PledgeBalance? _pledge;
+    private IReadOnlyList<Donation> _payments = [];
+    private string? _purpose;
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _pledge = await GiftService.GetPledgeAsync(Id);
+        if (_pledge is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        _payments = (await GiftService.ListAsync(donorId: _pledge.Pledge.DonorId)).Where(g => g.PledgeId == Id).ToList();
+        if (_pledge.Pledge.ClassId is { } classId)
+            _purpose = (await Segments.NamesAsync()).GetValueOrDefault(classId);
+    }
+}

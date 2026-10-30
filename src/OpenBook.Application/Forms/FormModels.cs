@@ -64,6 +64,25 @@ public sealed record CheckForm(
     string? Memo,
     IReadOnlyList<(string Description, decimal Amount)> StubLines);
 
+public sealed record DonorLetterGift(DateOnly Date, string Description, decimal Amount);
+
+/// <summary>
+/// A nonprofit's letter to a donor: one gift's acknowledgment or a year's giving statement. <paramref name="Paragraphs"/>
+/// come after the gifts (what the donor received in return, the tax-exempt statement); the signer closes it.
+/// </summary>
+public sealed record DonorLetter(
+    FormParty Company,
+    FormParty Donor,
+    string Title,
+    DateOnly Date,
+    string Intro,
+    IReadOnlyList<DonorLetterGift> Gifts,
+    IReadOnlyList<string> Paragraphs,
+    string? SignerName,
+    string? SignerTitle,
+    string Currency,
+    FormStyle Style);
+
 /// <summary>Renders forms to PDF. Implemented with MigraDoc in Infrastructure.</summary>
 public interface IFormRenderer
 {
@@ -72,6 +91,9 @@ public interface IFormRenderer
 
     /// <summary>One check per Letter page, on standard voucher check stock (check at the top).</summary>
     byte[] Render(IReadOnlyList<CheckForm> checks);
+
+    /// <summary>Letters to donors, each starting on a new page, in one PDF (to print a batch).</summary>
+    byte[] Render(IReadOnlyList<DonorLetter> letters);
 }
 
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);

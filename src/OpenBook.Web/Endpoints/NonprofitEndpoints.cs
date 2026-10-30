@@ -1,8 +1,10 @@
 using System.Globalization;
+using OpenBook.Application.Forms;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Nonprofit;
 using OpenBook.Application.Segments;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Nonprofit;
 using OpenBook.Domain.Segments;
 using OpenBook.Web.Security;
 
@@ -56,6 +58,129 @@ public static class NonprofitEndpoints
             return Results.Redirect($"/nonprofit?classes={changed}");
         }).RequireAuthorization();
 
+        // Gifts. Fields: donorId, date, amount, kind, debitAccountId, incomeAccountId, pledgeId, classId, reference, memo,
+        // description, goodsValue, goodsDescription, ClosingPassword.
+        app.MapPost("/nonprofit/gifts", async (IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            try
+            {
+                var gift = await gifts.RecordAsync(new RecordGiftCommand(
+                    Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
+                    Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                    Number(form["amount"]) ?? throw new DomainException("donation.amount", "Enter an amount above zero."),
+                    Id(form["debitAccountId"]) ?? Guid.Empty,
+                    Enum.TryParse<GiftKind>(form["kind"], out var kind) ? kind : GiftKind.Cash,
+                    Id(form["incomeAccountId"]),
+                    Id(form["pledgeId"]),
+                    Id(form["classId"]),
+                    form["reference"],
+                    form["memo"],
+                    form["description"],
+                    Number(form["goodsValue"]) ?? 0m,
+                    form["goodsDescription"]), ct);
+                return Results.Redirect($"/nonprofit/gifts/{gift.Id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                return Results.Redirect($"/nonprofit/gifts/new?donor={form["donorId"]}&pledge={form["pledgeId"]}&kind={form["kind"]}&error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/gifts/{id:guid}/void", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/gifts/{id}", () => gifts.VoidAsync(id, Reason(form), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/gifts/{id:guid}/email", async (Guid id, IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        {
+            try
+            {
+                await gifts.SendAcknowledgmentAsync(id, new EmailDraft(form["to"].ToString(), form["subject"].ToString(), form["body"].ToString()), ct);
+                return Results.Redirect($"/nonprofit/gifts/{id}?sent=true");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/gifts/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapGet("/nonprofit/gifts/{id:guid}/letter", async (Guid id, GiftService gifts, CancellationToken ct) =>
+            Results.File((await gifts.AcknowledgmentAsync(id, ct)).Pdf, "application/pdf")).RequireAuthorization();
+
+        // Fields: id (one per ticked gift), back.
+        app.MapPost("/nonprofit/thanks/mark", async (IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        {
+            var back = form["back"].ToString() is { } b && b.StartsWith("/nonprofit/", StringComparison.Ordinal) ? b : "/nonprofit/thanks";
+            var ids = form["id"].Select(Id).OfType<Guid>().ToList();
+            var marked = await gifts.MarkAcknowledgedAsync(ids, ct);
+            return Results.Redirect(back == "/nonprofit/thanks" ? $"{back}?done={Uri.EscapeDataString($"{marked} gift(s) marked as thanked.")}" : back);
+        }).RequireAuthorization();
+
+        app.MapGet("/nonprofit/statements/{year:int}", async (int year, GiftService gifts, CancellationToken ct) =>
+            Results.File((await gifts.YearStatementsAsync(year, ct)).Pdf, "application/pdf")).RequireAuthorization();
+
+        app.MapGet("/nonprofit/statements/{year:int}/{donorId:guid}", async (int year, Guid donorId, GiftService gifts, CancellationToken ct) =>
+            Results.File((await gifts.YearStatementAsync(donorId, year, ct)).Pdf, "application/pdf")).RequireAuthorization();
+
+        app.MapPost("/nonprofit/statements/{year:int}/email", async (int year, IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        {
+            try
+            {
+                var (sent, notSent) = await gifts.SendYearStatementsAsync(year, ct);
+                var done = $"{sent} statement(s) sent." + (notSent.Count > 0 ? $" Not sent: {string.Join("; ", notSent)}." : "");
+                return Results.Redirect($"/nonprofit/thanks?year={year}&done={Uri.EscapeDataString(done)}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/thanks?year={year}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        // Pledges. Fields: donorId, date, amount, dueDate, incomeAccountId, classId, memo, ClosingPassword.
+        app.MapPost("/nonprofit/pledges", async (IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            try
+            {
+                var pledge = await gifts.PledgeAsync(new PledgeCommand(
+                    Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
+                    Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                    Number(form["amount"]) ?? throw new DomainException("pledge.amount", "Enter an amount above zero."),
+                    Id(form["incomeAccountId"]),
+                    Id(form["classId"]),
+                    Date(form["dueDate"]),
+                    form["memo"]), ct);
+                return Results.Redirect($"/nonprofit/pledges/{pledge.Id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                return Results.Redirect($"/nonprofit/pledges/new?donor={form["donorId"]}&error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/pledges/{id:guid}/void", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/pledges/{id}", () => gifts.VoidPledgeAsync(id, Reason(form), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/settings", async (IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        {
+            try
+            {
+                await gifts.SaveSettingsAsync(new GiftSettingsCommand(form["ein"], form["signerName"], form["signerTitle"], form["intro"]), ct);
+                return Results.Redirect("/nonprofit/settings?saved=true");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/settings?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         // On a class's page; "" clears the area (the parent's applies).
         app.MapPost("/segments/{id:guid}/functional-area", async (Guid id, IFormCollection form, SegmentService segments, CancellationToken ct) =>
         {
@@ -72,6 +197,25 @@ public static class NonprofitEndpoints
 
         return app;
     }
+
+    private static async Task<IResult> Back<T>(string page, Func<Task<T>> change)
+    {
+        try
+        {
+            await change();
+            return Results.Redirect(page);
+        }
+        catch (DomainException ex)
+        {
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}");
+        }
+    }
+
+    private static string Reason(IFormCollection form) =>
+        form["reason"].ToString().Trim() is { Length: > 0 } reason ? reason : throw new DomainException("void.reason_required", "Say why.");
+
+    private static Guid? Id(string? value) => Guid.TryParse(value, out var id) && id != Guid.Empty ? id : null;
 
     private static string? Password(IFormCollection form) => form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
 

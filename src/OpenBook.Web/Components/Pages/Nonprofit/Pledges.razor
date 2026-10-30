@@ -1,0 +1,47 @@
+@page "/nonprofit/pledges"
+@using OpenBook.Application.Nonprofit
+@inject GiftService GiftService
+
+<PageTitle>Pledges · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Pledges</h1>
+        <a class="button" href="/nonprofit/pledges/new">Record a pledge</a>
+        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+        <a class="button secondary" href="/reports/open-pledges">Open pledges report</a>
+    </div>
+    <p class="muted">Promises to give. A pledge is income when it's made (accrual basis) and is paid by gifts that name it.</p>
+
+    @if (_pledges.Count == 0)
+    {
+        <div class="card"><p>No pledges yet.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>No.</th><th>Date</th><th>Donor</th><th>Due</th><th class="num">Promised</th><th class="num">Paid</th><th class="num">Left</th></tr></thead>
+            <tbody>
+                @foreach (var p in _pledges)
+                {
+                    <tr class="@(p.Pledge.Status == DocumentStatus.Voided ? "muted" : "")">
+                        <td><a href="/nonprofit/pledges/@p.Pledge.Id">@p.Pledge.Number</a></td>
+                        <td>@Labels.Date(p.Pledge.Date)</td>
+                        <td><a href="/customers/@p.Pledge.DonorId">@p.Donor</a></td>
+                        <td>@(p.Pledge.DueDate is { } due ? Labels.Date(due) : "")</td>
+                        <td class="num">@Labels.Amount(p.Pledge.Amount)</td>
+                        <td class="num">@Labels.Amount(p.Paid)</td>
+                        <td class="num">@(p.Pledge.Status == DocumentStatus.Voided ? "voided" : Labels.Amount(p.Balance))</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><td colspan="6">Still to come</td><td class="num">@Labels.Amount(_pledges.Sum(p => p.Balance))</td></tr></tfoot>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<PledgeBalance> _pledges = [];
+
+    protected override async Task OnInitializedAsync() => _pledges = await GiftService.ListPledgesAsync();
+}

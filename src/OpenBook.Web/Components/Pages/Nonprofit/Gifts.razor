@@ -1,0 +1,68 @@
+@page "/nonprofit/gifts"
+@using System.Globalization
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Nonprofit
+@inject GiftService GiftService
+@inject CustomerService CustomerService
+
+<PageTitle>Gifts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Gifts</h1>
+        <a class="button" href="/nonprofit/gifts/new">Record a gift</a>
+        <a class="button secondary" href="/nonprofit/pledges">Pledges</a>
+        <a class="button secondary" href="/nonprofit/thanks">Thank donors</a>
+        <a class="button secondary" href="/reports/giving-by-donor">Giving by donor</a>
+    </div>
+
+    <form method="get" class="inline">
+        <label>From <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
+        <label>To <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    @if (_gifts.Count == 0)
+    {
+        <div class="card"><p>No gifts in this period.</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>No.</th><th>Date</th><th>Donor</th><th>Kind</th><th class="num">Amount</th><th>Thanked</th></tr></thead>
+            <tbody>
+                @foreach (var g in _gifts)
+                {
+                    <tr class="@(g.Status == DocumentStatus.Voided ? "muted" : "")">
+                        <td><a href="/nonprofit/gifts/@g.Id">@g.Number</a></td>
+                        <td>@Labels.Date(g.Date)</td>
+                        <td><a href="/customers/@g.DonorId">@_names.GetValueOrDefault(g.DonorId)</a></td>
+                        <td>@(g.Kind == GiftKind.InKind ? "In kind" : g.PledgeId is null ? "Money" : "Pledge payment")@(g.Status == DocumentStatus.Voided ? " (voided)" : "")</td>
+                        <td class="num">@Labels.Amount(g.Amount)</td>
+                        <td>@(g.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.LocalDateTime)) : "")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_gifts.Where(g => g.Status == DocumentStatus.Posted).Sum(g => g.Amount))</td><td></td></tr></tfoot>
+        </table>
+    }
+</div>
+
+@code {
+    private DateOnly _from;
+    private DateOnly _to;
+    private IReadOnlyList<Donation> _gifts = [];
+    private Dictionary<Guid, string> _names = [];
+
+    [SupplyParameterFromQuery] private string? From { get; set; }
+    [SupplyParameterFromQuery] private string? To { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _from = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : new DateOnly(today.Year, 1, 1);
+        _to = DateOnly.TryParseExact(To, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : today;
+        _gifts = await GiftService.ListAsync(_from, _to);
+        _names = (await CustomerService.ListAsync(today)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
+    }
+}

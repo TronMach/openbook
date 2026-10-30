@@ -1,0 +1,110 @@
+@page "/nonprofit/thanks"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Nonprofit
+@inject GiftService GiftService
+@inject CustomerService CustomerService
+
+<PageTitle>Thank donors · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Thank donors</h1>
+        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+        <a class="button secondary" href="/nonprofit/settings">Letter settings</a>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is not null)
+    {
+        <div class="alert notice" role="status">@Done</div>
+    }
+
+    <h2>Gifts not thanked yet</h2>
+    @if (_unthanked.Count == 0)
+    {
+        <p class="muted">Every gift has been thanked.</p>
+    }
+    else
+    {
+        <form method="post" action="/nonprofit/thanks/mark" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="back" value="/nonprofit/thanks" />
+            <table class="data">
+                <thead><tr><th></th><th>Gift</th><th>Date</th><th>Donor</th><th class="num">Amount</th><th>Letter</th></tr></thead>
+                <tbody>
+                    @foreach (var g in _unthanked)
+                    {
+                        <tr>
+                            <td><input type="checkbox" name="id" value="@g.Id" aria-label="Gift @g.Number" /></td>
+                            <td><a href="/nonprofit/gifts/@g.Id">@g.Number</a></td>
+                            <td>@Labels.Date(g.Date)</td>
+                            <td>@_names.GetValueOrDefault(g.DonorId)</td>
+                            <td class="num">@Labels.Amount(g.Amount)</td>
+                            <td><a href="/nonprofit/gifts/@g.Id/letter" target="_blank">PDF</a> · <a href="/nonprofit/gifts/@g.Id">email</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="actions"><button type="submit" class="secondary">Mark the ticked gifts as thanked</button></div>
+        </form>
+    }
+
+    <h2 style="margin-top: 2rem">Year-end giving statements</h2>
+    <form method="get" class="inline">
+        <label>Year <input type="number" name="year" value="@_year" min="2000" max="2100" style="width: 6rem" /></label>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+    @if (_givers.Count == 0)
+    {
+        <p class="muted">No gifts in @_year.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Donor</th><th>Email</th><th class="num">Gifts</th><th class="num">Total</th><th>Statement</th></tr></thead>
+            <tbody>
+                @foreach (var g in _givers)
+                {
+                    <tr>
+                        <td><a href="/customers/@g.Donor.Id">@g.Donor.DisplayName</a></td>
+                        <td>@g.Donor.Email</td>
+                        <td class="num">@g.Gifts.Count</td>
+                        <td class="num">@Labels.Amount(g.Total)</td>
+                        <td><a href="/nonprofit/statements/@_year/@g.Donor.Id" target="_blank">PDF</a></td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><td colspan="3">Total</td><td class="num">@Labels.Amount(_givers.Sum(g => g.Total))</td><td></td></tr></tfoot>
+        </table>
+        <div class="actions">
+            <a class="button secondary" href="/nonprofit/statements/@_year" target="_blank">Download all to print (one PDF)</a>
+            <form method="post" action="/nonprofit/statements/@_year/email" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <button type="submit">Email every donor with an address (@_givers.Count(g => !string.IsNullOrWhiteSpace(g.Donor.Email)))</button>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    private int _year;
+    private IReadOnlyList<Donation> _unthanked = [];
+    private IReadOnlyList<Giver> _givers = [];
+    private Dictionary<Guid, string> _names = [];
+
+    [SupplyParameterFromQuery(Name = "year")] private int? Year { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        // Statements go out early in the new year for the year just ended.
+        _year = Year ?? (today.Month <= 2 ? today.Year - 1 : today.Year);
+        _unthanked = (await GiftService.ListAsync()).Where(g => g.Status == DocumentStatus.Posted && g.AcknowledgedAt is null).ToList();
+        _givers = await GiftService.GiversAsync(_year);
+        _names = (await CustomerService.ListAsync(today)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
+    }
+}

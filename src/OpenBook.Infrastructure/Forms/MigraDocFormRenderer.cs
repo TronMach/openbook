@@ -81,6 +81,50 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         return Pdf(document);
     }
 
+    public byte[] Render(IReadOnlyList<DonorLetter> letters)
+    {
+        ArgumentNullException.ThrowIfNull(letters);
+        if (letters.Count == 0)
+            throw new ArgumentException("No letters to render.", nameof(letters));
+        var look = Look.For(letters[0].Style);
+        var (document, section) = NewDocument(look, letters[0].Style.Footer, perSection: true);
+        for (var i = 0; i < letters.Count; i++)
+        {
+            var letter = letters[i];
+            if (i > 0)
+                section = AddSection(document, look, letter.Style.Footer, perSection: true);
+
+            Header(section, look, letter.Company, letter.Title.ToUpperInvariant(), [("Date", D(letter.Date))]);
+            BillTo(section, look, letter.Donor);
+            section.AddParagraph(letter.Intro).Format.SpaceAfter = 10;
+
+            var gifts = Table(section, look, [1.2, 4.6, 1.4]);
+            Heading(gifts, look, ("Date", false), ("Gift", false), ("Amount", true));
+            foreach (var gift in letter.Gifts)
+                Body(gifts, 2, D(gift.Date), gift.Description, gift.Amount == 0m ? "" : Amount(gift.Amount));
+            if (letter.Gifts.Count > 1)
+                Body(gifts, 2, "", "Total", Money(letter.Gifts.Sum(g => g.Amount), letter.Currency)).Format.Font.Bold = true;
+
+            foreach (var paragraph in letter.Paragraphs)
+                section.AddParagraph(paragraph).Format.SpaceBefore = 10;
+
+            var closing = section.AddParagraph("With gratitude,");
+            closing.Format.SpaceBefore = 18;
+            if (letter.SignerName is { } signer)
+            {
+                var name = section.AddParagraph(signer);
+                name.Format.SpaceBefore = 24;
+                name.Format.Font.Bold = true;
+                if (letter.SignerTitle is { } title)
+                    section.AddParagraph(title).Format.Font.Color = Grey;
+            }
+            else
+                section.AddParagraph(letter.Company.Name).Format.SpaceBefore = 24;
+        }
+
+        return Pdf(document);
+    }
+
     /// <summary>
     /// Standard voucher checks (Letter, check in the top third, two stubs below). The stock is pre-printed with
     /// the bank details, MICR line and signature line, so only the variable parts are printed, at fixed spots.
@@ -179,14 +223,19 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         return paragraph;
     }
 
-    private static (Document Document, Section Section) NewDocument(Look look, string? footer)
+    /// <param name="perSection">Number pages within each section (a batch of letters) rather than the whole document.</param>
+    private static (Document Document, Section Section) NewDocument(Look look, string? footer, bool perSection = false)
     {
         var document = new Document();
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = SystemFontResolver.FamilyName;
         normal.Font.Size = look.Body;
         normal.Font.Color = new Color(0x1d, 0x24, 0x30);
+        return (document, AddSection(document, look, footer, perSection));
+    }
 
+    private static Section AddSection(Document document, Look look, string? footer, bool perSection)
+    {
         var section = document.AddSection();
         section.PageSetup = document.DefaultPageSetup.Clone();
         // Setting PageFormat on a cloned setup doesn't change its size, so set US Letter explicitly.
@@ -213,8 +262,14 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         pages.AddText("Page ");
         pages.AddPageField();
         pages.AddText(" of ");
-        pages.AddNumPagesField();
-        return (document, section);
+        if (perSection)
+        {
+            section.PageSetup.StartingNumber = 1;
+            pages.AddSectionPagesField();
+        }
+        else
+            pages.AddNumPagesField();
+        return section;
     }
 
     /// <summary>Company on the left; title and facts on the right; an accent band (Modern) or rule (others).</summary>

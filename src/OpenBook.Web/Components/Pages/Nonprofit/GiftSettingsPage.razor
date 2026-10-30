@@ -1,0 +1,51 @@
+@page "/nonprofit/settings"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Nonprofit
+@inject GiftService GiftService
+
+<PageTitle>Letter settings · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Letter settings</h1>
+        <a class="button secondary" href="/nonprofit/thanks">Thank donors</a>
+    </div>
+    <p class="muted">What goes on gift acknowledgments and giving statements. They use the company's name, address and form style from Settings.</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Saved)
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+    <div class="card">
+        <form method="post" action="/nonprofit/settings" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="ein">EIN <span class="muted">(optional)</span></label>
+                    <input id="ein" name="ein" value="@_settings.Ein" placeholder="12-3456789" maxlength="12" />
+                    <span class="hint">With it, letters say the organization is tax-exempt under section 501(c)(3).</span>
+                </div>
+                <div class="field"><label for="signer">Signed by <span class="muted">(optional)</span></label><input id="signer" name="signerName" value="@_settings.SignerName" maxlength="100" /></div>
+                <div class="field"><label for="title">Title <span class="muted">(optional)</span></label><input id="title" name="signerTitle" value="@_settings.SignerTitle" maxlength="100" placeholder="Executive Director" /></div>
+            </div>
+            <div class="field">
+                <label for="intro">Opening paragraph <span class="muted">(optional)</span></label>
+                <textarea id="intro" name="intro" rows="4" maxlength="@GiftSettings.MaxTextLength">@_settings.Intro</textarea>
+                <span class="hint">Leave empty for a plain thank-you that names the organization (and the year on statements).</span>
+            </div>
+            <div class="actions"><button type="submit">Save</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private GiftSettings _settings = new();
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Saved { get; set; }
+
+    protected override async Task OnInitializedAsync() => _settings = await GiftService.GetSettingsAsync();
+}

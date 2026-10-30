@@ -1,0 +1,172 @@
+@page "/nonprofit/gifts/new"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject SegmentService Segments
+@inject GiftService Gifts
+
+<PageTitle>Record a gift · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Record a gift</h1>
+        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+        <a class="button secondary" href="/nonprofit/pledges/new">Record a pledge instead</a>
+    </div>
+    <p class="muted">
+        Donors are customer records (<a href="/customers/new">add one</a>). A money gift goes into a bank account; an in-kind gift is recorded at its fair value to the
+        asset or expense it became. For a restricted gift, choose a restricted contribution account and the purpose's class.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <form method="post" action="/nonprofit/gifts" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="donor">Donor</label>
+                    <select id="donor" name="donorId" data-search required>
+                        <option value="">Choose a donor…</option>
+                        @foreach (var c in _donors)
+                        {
+                            <option value="@c.Customer.Id" selected="@(c.Customer.Id == (Donor ?? _pledge?.Pledge.DonorId))">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="amount">Amount</label>
+                    <input id="amount" name="amount" class="amount" inputmode="decimal" required value="@(_pledge is { } chosen ? chosen.Balance.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "")" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="kind">Kind</label>
+                    <select id="kind" name="kind">
+                        <option value="@GiftKind.Cash" selected="@(Kind != "InKind")">Money (cash, check, card, transfer)</option>
+                        <option value="@GiftKind.InKind" selected="@(Kind == "InKind")">In kind (goods or services)</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="debit">Deposited to, or recorded to (in kind)</label>
+                    <select id="debit" name="debitAccountId" data-search required>
+                        <optgroup label="Bank accounts (money)">
+                            @foreach (var a in _banks)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Assets and expenses (in kind)">
+                            @foreach (var a in _inKind)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="reference">Reference <span class="muted">(optional)</span></label>
+                    <input id="reference" name="reference" maxlength="@Donation.MaxReferenceLength" placeholder="Check number" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="pledge">Paying a pledge <span class="muted">(optional)</span></label>
+                    <select id="pledge" name="pledgeId" data-search>
+                        <option value="">(not a pledge payment)</option>
+                        @foreach (var p in _pledges)
+                        {
+                            <option value="@p.Pledge.Id" selected="@(p.Pledge.Id == Pledge)">Pledge @p.Pledge.Number · @p.Donor · @Labels.Amount(p.Balance) left</option>
+                        }
+                    </select>
+                    <span class="hint">A pledge payment takes the pledge's account and purpose.</span>
+                </div>
+                <div class="field">
+                    <label for="income">Contribution account <span class="muted">(optional)</span></label>
+                    <select id="income" name="incomeAccountId" data-search>
+                        <option value="">(@GiftService.ContributionsName, or @GiftService.InKindName for in kind)</option>
+                        @foreach (var a in _income)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)@(a.DonorRestricted ? " (restricted)" : "")</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="class">Purpose (class) <span class="muted">(optional)</span></label>
+                    <select id="class" name="classId" data-search>
+                        <option value="">(none)</option>
+                        @foreach (var c in _classes)
+                        {
+                            <option value="@c.Segment.Id">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label for="description">What was given <span class="muted">(in kind only)</span></label>
+                <input id="description" name="description" maxlength="@Donation.MaxTextLength" placeholder="Two laptops, used" />
+            </div>
+            <fieldset>
+                <legend>Did the donor receive anything in return? <span class="muted">(optional)</span></legend>
+                <div class="row">
+                    <div class="field">
+                        <label for="goods-value">Its fair value</label>
+                        <input id="goods-value" name="goodsValue" class="amount" inputmode="decimal" placeholder="0.00" />
+                    </div>
+                    <div class="field">
+                        <label for="goods">What it was</label>
+                        <input id="goods" name="goodsDescription" maxlength="@Donation.MaxTextLength" placeholder="Gala dinner for two" />
+                    </div>
+                </div>
+                <span class="hint">The acknowledgment then states the value and that only the rest is deductible (the IRS requires this above $75).</span>
+            </fieldset>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" name="memo" maxlength="@Donation.MaxTextLength" />
+            </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <div class="actions"><button type="submit">Record gift</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _donors = [];
+    private List<Account> _banks = [];
+    private List<Account> _inKind = [];
+    private List<Account> _income = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private List<PledgeBalance> _pledges = [];
+    private PledgeBalance? _pledge;
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private Guid? Donor { get; set; }
+    [SupplyParameterFromQuery] private Guid? Pledge { get; set; }
+    [SupplyParameterFromQuery] private string? Kind { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _donors = (await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Where(c => c.Customer.IsActive).ToList();
+        _chart = await AccountService.GetChartAsync();
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _banks = active.Where(a => a.Type == AccountType.Bank).ToList();
+        _inKind = active.Where(a => a.Type is AccountType.OtherCurrentAsset or AccountType.FixedAsset or AccountType.OtherAsset
+                                    || a.Type.ClassOf() == AccountClass.Expense).ToList();
+        _income = active.Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+        _pledges = (await Gifts.ListPledgesAsync()).Where(p => p.Balance > 0m).ToList();
+        _pledge = _pledges.FirstOrDefault(p => p.Pledge.Id == Pledge);
+    }
+}

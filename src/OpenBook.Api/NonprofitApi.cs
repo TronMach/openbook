@@ -12,6 +12,30 @@ public sealed record ReleaseResponse(Guid Id, DateOnly Date, Guid? ClassId, deci
     public static ReleaseResponse From(RestrictionRelease r) => new(r.Id, r.Date, r.ClassId, r.Amount, r.Memo, r.Status, r.JournalEntryId);
 }
 
+public sealed record GiftResponse(
+    Guid Id, int Number, Guid DonorId, DateOnly Date, GiftKind Kind, decimal Amount, Guid DebitAccountId, Guid IncomeAccountId, Guid? PledgeId,
+    Guid? ClassId, string? Reference, string? Memo, string? Description, decimal GoodsValue, string? GoodsDescription, decimal Deductible,
+    DocumentStatus Status, Guid JournalEntryId, DateTimeOffset? AcknowledgedAt)
+{
+    public static GiftResponse From(Donation d) => new(d.Id, d.Number, d.DonorId, d.Date, d.Kind, d.Amount, d.DebitAccountId, d.IncomeAccountId, d.PledgeId,
+        d.ClassId, d.Reference, d.Memo, d.Description, d.GoodsValue, d.GoodsDescription, d.Deductible, d.Status, d.JournalEntryId, d.AcknowledgedAt);
+}
+
+public sealed record PledgeResponse(
+    Guid Id, int Number, Guid DonorId, string Donor, DateOnly Date, DateOnly? DueDate, decimal Amount, decimal Paid, decimal Balance,
+    Guid IncomeAccountId, Guid? ClassId, string? Memo, DocumentStatus Status, Guid JournalEntryId)
+{
+    public static PledgeResponse From(PledgeBalance b) => new(b.Pledge.Id, b.Pledge.Number, b.Pledge.DonorId, b.Donor, b.Pledge.Date, b.Pledge.DueDate,
+        b.Pledge.Amount, b.Paid, b.Balance, b.Pledge.IncomeAccountId, b.Pledge.ClassId, b.Pledge.Memo, b.Pledge.Status, b.Pledge.JournalEntryId);
+}
+
+public sealed record GiftSettingsResponse(string? Ein, string? SignerName, string? SignerTitle, string? Intro)
+{
+    public static GiftSettingsResponse From(GiftSettings s) => new(s.Ein, s.SignerName, s.SignerTitle, s.Intro);
+}
+
+public sealed record AcknowledgedRequest(IReadOnlyList<Guid> Ids);
+
 internal static class NonprofitApi
 {
     public static void MapNonprofitApi(this RouteGroupBuilder api)
@@ -30,6 +54,48 @@ internal static class NonprofitApi
         });
         nonprofit.MapPost("/releases/{id:guid}/void", async (Guid id, VoidRequest r, NonprofitService s, CancellationToken ct) =>
             ReleaseResponse.From(await s.VoidAsync(id, r.Reason, ct)));
+        nonprofit.MapGet("/gifts", async (DateOnly? from, DateOnly? to, Guid? donorId, GiftService s, CancellationToken ct) =>
+            (await s.ListAsync(from, to, donorId, ct)).Select(GiftResponse.From));
+        nonprofit.MapGet("/gifts/{id:guid}", async (Guid id, GiftService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } g ? Results.Ok(GiftResponse.From(g)) : Results.NotFound());
+        nonprofit.MapPost("/gifts", async (RecordGiftCommand r, GiftService s, CancellationToken ct) =>
+        {
+            var gift = await s.RecordAsync(r, ct);
+            return Results.Created($"/api/nonprofit/gifts/{gift.Id}", GiftResponse.From(gift));
+        });
+        nonprofit.MapPost("/gifts/{id:guid}/void", async (Guid id, VoidRequest r, GiftService s, CancellationToken ct) =>
+            GiftResponse.From(await s.VoidAsync(id, r.Reason, ct)));
+        nonprofit.MapPost("/gifts/acknowledged", async (AcknowledgedRequest r, GiftService s, CancellationToken ct) =>
+            new { Marked = await s.MarkAcknowledgedAsync(r.Ids, ct) });
+        nonprofit.MapGet("/gifts/{id:guid}/letter", async (Guid id, GiftService s, CancellationToken ct) =>
+        {
+            var letter = await s.AcknowledgmentAsync(id, ct);
+            return Results.File(letter.Pdf, "application/pdf", letter.FileName);
+        });
+        nonprofit.MapGet("/statements/{year:int}/{donorId:guid}", async (int year, Guid donorId, GiftService s, CancellationToken ct) =>
+        {
+            var statement = await s.YearStatementAsync(donorId, year, ct);
+            return Results.File(statement.Pdf, "application/pdf", statement.FileName);
+        });
+
+        nonprofit.MapGet("/pledges", async (Guid? donorId, GiftService s, CancellationToken ct) =>
+            (await s.ListPledgesAsync(donorId, ct)).Select(PledgeResponse.From));
+        nonprofit.MapGet("/pledges/{id:guid}", async (Guid id, GiftService s, CancellationToken ct) =>
+            await s.GetPledgeAsync(id, ct) is { } p ? Results.Ok(PledgeResponse.From(p)) : Results.NotFound());
+        nonprofit.MapPost("/pledges", async (PledgeCommand r, GiftService s, CancellationToken ct) =>
+        {
+            var pledge = await s.PledgeAsync(r, ct);
+            return Results.Created($"/api/nonprofit/pledges/{pledge.Id}", PledgeResponse.From((await s.GetPledgeAsync(pledge.Id, ct))!));
+        });
+        nonprofit.MapPost("/pledges/{id:guid}/void", async (Guid id, VoidRequest r, GiftService s, CancellationToken ct) =>
+        {
+            await s.VoidPledgeAsync(id, r.Reason, ct);
+            return PledgeResponse.From((await s.GetPledgeAsync(id, ct))!);
+        });
+
+        nonprofit.MapGet("/settings", async (GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.GetSettingsAsync(ct)));
+        nonprofit.MapPut("/settings", async (GiftSettingsCommand r, GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
+
         nonprofit.MapPost("/functional-classes", async (NonprofitService s, CancellationToken ct) =>
             new { Changed = await s.SetUpFunctionalClassesAsync(ct) });
     }

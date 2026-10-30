@@ -23,7 +23,7 @@ public static class Editions
     {
         Edition.ProfessionalServices => "Consultants, agencies, accountants and other firms that bill for their time: projects, time and rates lead.",
         Edition.ECommerce => "Online shops and marketplace sellers: sales, stock and purchasing lead.",
-        Edition.Nonprofit => "Charities and other nonprofits: donor restrictions, programs and the nonprofit statements lead.",
+        Edition.Nonprofit => "Charities and other nonprofits: gifts, donors, restrictions and the nonprofit statements lead.",
         _ => "Every area in the menu, in the usual order.",
     };
 
@@ -70,7 +70,9 @@ public static class Editions
             new("/reports/statement-of-activities", "Statement of activities", "Revenue, support and expenses, without and with donor restrictions"),
             new("/reports/statement-of-financial-position", "Statement of financial position", "Assets, liabilities and net assets"),
             new("/reports/functional-expenses", "Functional expenses", "Expenses by program, management and general, and fundraising"),
-            new("/sales/receipts/new", "Record a gift", "A sales receipt to the donor, on a contribution item"),
+            new("/nonprofit/gifts/new", "Record a gift", "Money or in kind, for a purpose or a pledge"),
+            new("/nonprofit/thanks", "Thank donors", "Acknowledgment letters and year-end giving statements"),
+            new("/reports/lapsed-donors", "Lapsed donors", "Who gave last year but not yet this year"),
         ],
         _ => [],
     };

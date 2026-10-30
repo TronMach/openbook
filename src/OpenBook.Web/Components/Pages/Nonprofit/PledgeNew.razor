@@ -1,0 +1,89 @@
+@page "/nonprofit/pledges/new"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject SegmentService Segments
+
+<PageTitle>Record a pledge · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Record a pledge</h1>
+        <a class="button secondary" href="/nonprofit/pledges">Pledges</a>
+    </div>
+    <p class="muted">
+        A donor's promise to give later. It goes to "@GiftService.PledgesReceivableName" until paid; record each payment as a gift that names the pledge.
+        A pledge for future years or a purpose is usually restricted: choose a restricted contribution account.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    <div class="card">
+        <form method="post" action="/nonprofit/pledges" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="donor">Donor</label>
+                    <select id="donor" name="donorId" data-search required>
+                        <option value="">Choose a donor…</option>
+                        @foreach (var c in _donors)
+                        {
+                            <option value="@c.Customer.Id" selected="@(c.Customer.Id == Donor)">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" required /></div>
+                <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="due">Due by <span class="muted">(optional)</span></label><input id="due" name="dueDate" type="date" /></div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="income">Contribution account <span class="muted">(optional)</span></label>
+                    <select id="income" name="incomeAccountId" data-search>
+                        <option value="">(@GiftService.ContributionsName)</option>
+                        @foreach (var a in _income)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)@(a.DonorRestricted ? " (restricted)" : "")</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="class">Purpose (class) <span class="muted">(optional)</span></label>
+                    <select id="class" name="classId" data-search>
+                        <option value="">(none)</option>
+                        @foreach (var c in _classes)
+                        {
+                            <option value="@c.Segment.Id">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field"><label for="memo">Memo <span class="muted">(optional)</span></label><input id="memo" name="memo" maxlength="@Donation.MaxTextLength" /></div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <div class="actions"><button type="submit">Record pledge</button></div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _donors = [];
+    private List<Account> _income = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private Guid? Donor { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _donors = (await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Where(c => c.Customer.IsActive).ToList();
+        _chart = await AccountService.GetChartAsync();
+        _income = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+    }
+}
