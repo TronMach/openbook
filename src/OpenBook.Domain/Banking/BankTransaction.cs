@@ -195,6 +195,26 @@ public sealed class BankTransaction
         VendorId = vendorId;
     }
 
+    /// <summary>Takes a correction of a transfer: the entry posted for it (the old one voided by the caller).</summary>
+    public void ChangeTransfer(Guid fromAccountId, Guid toAccountId, DateOnly date, decimal amount, Guid journalEntryId, string? memo)
+    {
+        if (Status == BankTransactionStatus.Voided)
+            throw new DomainException("bank.voided", "This transaction is voided, so it can't be changed.");
+        if (Kind != BankTransactionKind.Transfer)
+            throw new DomainException("bank.kind_invalid", "Only transfers change this way.");
+        if (amount <= 0m)
+            throw new DomainException("bank.total_not_positive", "The amount must be more than zero.");
+        if (fromAccountId == toAccountId)
+            throw new DomainException("bank.transfer_same_account", "Choose two different accounts.");
+
+        AccountId = fromAccountId;
+        TransferAccountId = toAccountId;
+        Date = date;
+        Amount = amount;
+        JournalEntryId = journalEntryId;
+        Memo = Text(memo, 1000, "memo");
+    }
+
     public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
     public void MarkVoided()

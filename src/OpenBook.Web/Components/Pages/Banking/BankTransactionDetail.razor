@@ -20,9 +20,9 @@
         <h1>@_title</h1>
         <a class="button secondary" href="/banking/@_transaction.AccountId">Back to register</a>
         <a class="button secondary" href="/audit?entityId=@_transaction.Id">History</a>
-        @if (_transaction is { Status: BankTransactionStatus.Posted } and not { Kind: BankTransactionKind.Transfer })
+        @if (_transaction.Status == BankTransactionStatus.Posted)
         {
-            <a class="button secondary" href="/banking/transactions/@_transaction.Id/edit">Change</a>
+            <a class="button secondary" href="@(_transaction.Kind == BankTransactionKind.Transfer ? $"/banking/transfers/{_transaction.Id}/edit" : $"/banking/transactions/{_transaction.Id}/edit")">Change</a>
         }
         @if (_transaction is { Kind: BankTransactionKind.Spend, Status: BankTransactionStatus.Posted } && _chart.Find(_transaction.AccountId)?.Type == AccountType.Bank)
         {

@@ -18,7 +18,7 @@
 
     @if (_loaded && (_transaction is null || _transaction.Status == BankTransactionStatus.Voided || _transaction.Kind == BankTransactionKind.Transfer))
     {
-        <div class="card"><p>Only posted payments, charges and deposits can be changed; to change a transfer, void it and record it again. <a href="/banking/transactions/@Id">Back to the transaction</a></p></div>
+        <div class="card"><p>Only posted payments, charges and deposits can be changed here; transfers have <a href="/banking/transfers/@Id/edit">their own page</a>. <a href="/banking/transactions/@Id">Back to the transaction</a></p></div>
     }
     else if (_loaded && _transaction is not null)
     {

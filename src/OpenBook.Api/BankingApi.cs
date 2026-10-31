@@ -149,6 +149,8 @@ internal static class BankingApi
         // Correct a posted spend or receive in place: its entry reversed and a new one posted.
         banking.MapPut("/transactions/{id:guid}", async (Guid id, ChangeBankTransactionCommand r, BankingService s, CancellationToken ct) =>
             BankTransactionResponse.From(await s.ChangeAsync(id, r, ct)));
+        banking.MapPut("/transfers/{id:guid}", async (Guid id, ChangeTransferCommand r, BankingService s, CancellationToken ct) =>
+            BankTransactionResponse.From(await s.ChangeTransferAsync(id, r, ct)));
         banking.MapPost("/transactions/{id:guid}/void", async (Guid id, VoidRequest r, BankingService s, CancellationToken ct) =>
             BankTransactionResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

@@ -38,6 +38,10 @@ public sealed record ChangeBankTransactionCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null);
 
+/// <summary>A correction to a posted transfer (<see cref="BankingService.ChangeTransferAsync"/>).</summary>
+/// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
+public sealed record ChangeTransferCommand(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string Reason, string? Memo = null);
+
 public sealed record TransferCommand(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
 public sealed record BankAccountSummary(
@@ -254,6 +258,52 @@ public sealed class BankingService(
 
         transaction.Change(command.Date, amount, entry.Id, payee, command.Reference, command.Memo, command.VendorId);
         transaction.SetLocation(command.LocationId);
+        foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))
+            item.FollowEntry(entry.Id);
+        bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, transaction.Id, before,
+            DocumentChanges.WithReason(Snapshot(transaction), command.Reason)));
+        await bank.SaveChangesAsync(ct);
+        return transaction;
+    }
+
+    /// <summary>
+    /// Corrects a posted transfer in place, in one save: its entry is voided (the reversal dated the original date) and a
+    /// new one posted. Refused once either side is reconciled or ticked (as a void is). When a bank feed line stands for
+    /// either side, the amount and both accounts stay; matched feed lines follow the new entry.
+    /// </summary>
+    public async Task<BankTransaction> ChangeTransferAsync(Guid id, ChangeTransferCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new DomainException("bank.change_reason_required", "Say why the transaction is being changed.");
+
+        var transaction = await bank.GetTransactionAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (transaction.Status == BankTransactionStatus.Voided)
+            throw new DomainException("bank.voided", "This transaction is voided, so it can't be changed.");
+        if (transaction.Kind != BankTransactionKind.Transfer)
+            throw new DomainException("bank.kind_invalid", "Only transfers change this way.");
+
+        var chart = await accounts.GetChartAsync(ct);
+        var from = chart.Get(command.FromAccountId);
+        var to = chart.Get(command.ToAccountId);
+        BankingRules.EnsureBankingAccount(from);
+        BankingRules.EnsureBankingAccount(to);
+        Money.EnsureCents(command.Amount);
+        var postings = BankTransaction.TransferPostings(from.Id, to.Id, command.Amount);
+
+        var feed = new List<BankFeedItem>();
+        foreach (var accountId in new[] { transaction.AccountId, transaction.TransferAccountId!.Value })
+            feed.AddRange(await BankFeedService.TiedToAsync(bank, accountId, transaction.JournalEntryId, transaction.Id, ct));
+        if (feed.Count > 0 && (command.Amount != transaction.Amount || from.Id != transaction.AccountId || to.Id != transaction.TransferAccountId))
+            throw new DomainException("bank.feed_amount",
+                $"This transfer stands for a line from the bank feed, so its amount ({transaction.Amount:N2}) and accounts stay. Undo the feed line first to change them.");
+
+        var before = Snapshot(transaction);
+        await engine.StageVoidAsync(transaction.JournalEntryId, $"Transfer changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        var memo = string.IsNullOrWhiteSpace(command.Memo) ? $"Transfer from {chart.FullName(from.Id)} to {chart.FullName(to.Id)}" : command.Memo;
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, postings, memo, BankTransaction.TransferSource, transaction.Id), ct);
+
+        transaction.ChangeTransfer(from.Id, to.Id, command.Date, command.Amount, entry.Id, command.Memo);
         foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))
             item.FollowEntry(entry.Id);
         bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, transaction.Id, before,

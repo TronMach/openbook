@@ -23,7 +23,8 @@ To correct a check, payment, card charge, deposit or card credit, open it (from 
 - A transaction added from the bank feed, or matched to a feed line, keeps the bank's amount; categories and the rest can change.
 - A check that's been printed, or sent to the bank in a positive pay file, keeps its amount, payee and check number.
 - Lines marked billable to a customer stay as they are, in their place; remove the mark first to change one.
-- Transfers and the over/short of a petty cash count can't be changed: void and record them again.
+- A **transfer** has its own Change page: the from and to accounts, amount, date and memo. If a bank feed line stands for it, the amount and accounts stay.
+- The over/short of a petty cash count can't be changed: void the count's transaction and count again.
 
 ## Importing your bank statement
 

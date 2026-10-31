@@ -1,0 +1,144 @@
+@page "/banking/transfers/{Id:guid}/edit"
+@using System.ComponentModel.DataAnnotations
+@inject BankingService BankingService
+@inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
+
+<PageTitle>Change transfer · OpenBook</PageTitle>
+
+<div class="card">
+    <h1>Change transfer</h1>
+
+    @if (_transaction is null || _transaction.Kind != BankTransactionKind.Transfer || _transaction.Status == BankTransactionStatus.Voided)
+    {
+        <p>Only posted transfers can be changed here. <a href="/banking/transactions/@Id">Back to the transaction</a></p>
+    }
+    else
+    {
+        <p class="muted">Saving reverses the transfer's journal entry on its original date and posts the corrected one, keeping its history. Reconciled transfers can't be changed, and a transfer from the bank feed keeps the bank's amount and accounts. Changes in a closed period need the closing date password.</p>
+
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+
+        <EditForm Model="Input" FormName="change-transfer" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="from">From</label>
+                    <InputSelect id="from" @bind-Value="Input.FromAccountId">
+                        @foreach (var a in _accounts)
+                        {
+                            <option value="@a.Account.Id">@a.FullName (@Labels.Amount(a.Balance))</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => Input.FromAccountId" />
+                </div>
+                <div class="field">
+                    <label for="to">To</label>
+                    <InputSelect id="to" @bind-Value="Input.ToAccountId">
+                        @foreach (var a in _accounts)
+                        {
+                            <option value="@a.Account.Id">@a.FullName (@Labels.Amount(a.Balance))</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => Input.ToAccountId" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="amount">Amount</label>
+                    <InputNumber id="amount" step="0.01" min="0.01" @bind-Value="Input.Amount" />
+                    <ValidationMessage For="() => Input.Amount" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <InputDate id="date" @bind-Value="Input.Date" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <InputText id="memo" @bind-Value="Input.Memo" />
+            </div>
+            <div class="field">
+                <label for="reason">Why are you changing it?</label>
+                <InputText id="reason" @bind-Value="Input.Reason" />
+                <ValidationMessage For="() => Input.Reason" />
+                <span class="hint">Kept in the transfer's history and the audit log.</span>
+            </div>
+            <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+            <div class="actions">
+                <button type="submit">Save changes</button>
+                <a href="/banking/transactions/@Id">Cancel</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BankTransaction? _transaction;
+    private IReadOnlyList<BankAccountSummary> _accounts = [];
+    private string? _error;
+    private bool _needsClosingPassword;
+
+    [SupplyParameterFromForm(FormName = "change-transfer")]
+    private ChangeModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _transaction = await BankingService.GetAsync(Id);
+        _accounts = await BankingService.ListAccountsAsync();
+        Input ??= _transaction is null ? new() : new ChangeModel
+        {
+            FromAccountId = _transaction.AccountId,
+            ToAccountId = _transaction.TransferAccountId,
+            Amount = _transaction.Amount,
+            Date = _transaction.Date,
+            Memo = _transaction.Memo,
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = Input.ClosingPassword;
+            await BankingService.ChangeTransferAsync(Id, new ChangeTransferCommand(Input.FromAccountId!.Value, Input.ToAccountId!.Value, Input.Date,
+                Input.Amount!.Value, Input.Reason, Input.Memo));
+            Navigation.NavigateTo($"/banking/transactions/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class ChangeModel
+    {
+        [Required(ErrorMessage = "Choose the account the money leaves.")]
+        public Guid? FromAccountId { get; set; }
+
+        [Required(ErrorMessage = "Choose the account the money goes to.")]
+        public Guid? ToAccountId { get; set; }
+
+        [Required(ErrorMessage = "Enter an amount.")]
+        [Range(typeof(decimal), "0.01", "999999999999", ErrorMessage = "Enter an amount above zero.")]
+        public decimal? Amount { get; set; }
+
+        public DateOnly Date { get; set; }
+
+        [StringLength(1000)]
+        public string? Memo { get; set; }
+
+        [Required(ErrorMessage = "Say why the transfer is being changed.")]
+        [StringLength(400)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
+    }
+}

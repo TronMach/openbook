@@ -95,6 +95,31 @@ public sealed class BankTransactionChangeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_transfer_changes_its_accounts_amount_and_date()
+    {
+        var card = await _db.CreateAccount("Visa", AccountType.CreditCard, "2100");
+        var transfer = await In<BankingService, BankTransaction>(s => s.TransferAsync(new TransferCommand(_checking.Id, _savings.Id, Mar1, 100m)));
+        Task<BankTransaction> ChangeTransfer(Guid from, Guid to, decimal amount) =>
+            In<BankingService, BankTransaction>(s => s.ChangeTransferAsync(transfer.Id, new ChangeTransferCommand(from, to, Mar5, amount, "Paid the card instead")));
+
+        var changed = await ChangeTransfer(_checking.Id, card.Id, 250m);
+        Assert.Equal((card.Id, 250m, Mar5), (changed.TransferAccountId, changed.Amount, changed.Date));
+        Assert.Equal((-250m, 0m, 250m), (await Balance(_checking.Id), await Balance(_savings.Id), await Balance(card.Id)));
+        Assert.Equal("bank.transfer_same_account", await Refused(() => ChangeTransfer(card.Id, card.Id, 250m)));
+        Assert.Equal("bank.kind_invalid", await Refused(() =>
+            In<BankingService, BankTransaction>(async s => await s.ChangeTransferAsync((await Spend(Mar1, null, new BankSplit(_rent.Id, 5m))).Id,
+                new ChangeTransferCommand(_checking.Id, _savings.Id, Mar1, 5m, "x")))));
+
+        // A matched feed line keeps the amount and accounts, and follows the new entry.
+        var line = await FeedLine(Mar5, -250m, "T1");
+        await _db.InScope(sp => sp.GetRequiredService<BankFeedService>().MatchAsync(line.Id, changed.JournalEntryId));
+        Assert.Equal("bank.feed_amount", await Refused(() => ChangeTransfer(_checking.Id, _savings.Id, 250m)));
+        var again = await ChangeTransfer(_checking.Id, card.Id, 250m);
+        Assert.Equal(again.JournalEntryId, (await In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(_checking.Id, BankFeedStatus.Matched)))
+            .Single().Item.MatchedJournalEntryId);
+    }
+
+    [Fact]
     public async Task Closed_periods_need_the_password_and_reconciled_transactions_cant_change()
     {
         var spend = await Spend(Jan5, null, new BankSplit(_rent.Id, 1000m));
