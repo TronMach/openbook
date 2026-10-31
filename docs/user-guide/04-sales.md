@@ -59,7 +59,7 @@ If the customer has billable expenses, time or mileage waiting to be invoiced, t
 
 The invoice page has **PDF** (open or print it) and **Email**. Email sends the PDF to the customer's email address with a message you can edit, or schedule it for later with **Send later**. Before the first email, an administrator enters the mail server's details in **Settings → Email** (or chooses to save emails to a folder instead).
 
-How the PDF looks (Classic, Modern or Compact layout, accent color, footer) is set in **Settings → Invoice style**.
+How the PDF looks (layout, logo, font, footer, and which customers or documents get which design) is set in **Settings → Invoice and form designs**; see [Printed forms](27-printed-forms.md).
 
 ### Fixing a mistake
 

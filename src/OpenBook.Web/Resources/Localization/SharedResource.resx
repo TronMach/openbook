@@ -272,6 +272,9 @@
   <data name="Device" xml:space="preserve">
     <value>Device</value>
   </data>
+  <data name="designs with logos and fonts for invoices, statements and other printed forms" xml:space="preserve">
+    <value>designs with logos and fonts for invoices, statements and other printed forms</value>
+  </data>
   <data name="Disconnect" xml:space="preserve">
     <value>Disconnect</value>
   </data>
@@ -434,11 +437,11 @@
   <data name="Invoice date" xml:space="preserve">
     <value>Invoice date</value>
   </data>
+  <data name="Invoice and form designs" xml:space="preserve">
+    <value>Invoice and form designs</value>
+  </data>
   <data name="Invoice number" xml:space="preserve">
     <value>Invoice number</value>
-  </data>
-  <data name="Invoice style" xml:space="preserve">
-    <value>Invoice style</value>
   </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
@@ -838,9 +841,6 @@
   </data>
   <data name="tell other systems about changes as they happen (admins)" xml:space="preserve">
     <value>tell other systems about changes as they happen (admins)</value>
-  </data>
-  <data name="template, accent color and footer for PDF forms" xml:space="preserve">
-    <value>template, accent color and footer for PDF forms</value>
   </data>
   <data name="Terms" xml:space="preserve">
     <value>Terms</value>

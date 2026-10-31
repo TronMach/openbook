@@ -18,7 +18,7 @@ Open-source QuickBooks alternative in .NET 10. Plan and milestones: `ROADMAP.md`
 
 ## User guide
 
-- `docs/user-guide/` (Markdown, 26 numbered chapters, one per area, indexed in its `README.md`; a new area gets a chapter and an index line). Written for bookkeepers, not developers: menu paths and on-screen labels exactly as the pages show them, roles where an action needs more than standard. When a change renames a label, moves a page or changes a rule a chapter describes, update the chapter in the same commit.
+- `docs/user-guide/` (Markdown, 27 numbered chapters, one per area, indexed in its `README.md`; a new area gets a chapter and an index line). Written for bookkeepers, not developers: menu paths and on-screen labels exactly as the pages show them, roles where an action needs more than standard. When a change renames a label, moves a page or changes a rule a chapter describes, update the chapter in the same commit.
 
 ## Layout
 
