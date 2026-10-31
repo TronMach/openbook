@@ -14,7 +14,7 @@ public static class DocumentChanges
 {
     public const string ReasonKey = "ChangeReason";
 
-    /// <summary>The document's snapshot (a JSON object with its <c>Total</c>) with the reason added.</summary>
+    /// <summary>The document's snapshot (a JSON object with its <c>Total</c> or <c>Amount</c>) with the reason added.</summary>
     public static string WithReason(string snapshot, string reason)
     {
         var after = JsonNode.Parse(snapshot)!.AsObject();
@@ -26,7 +26,10 @@ public static class DocumentChanges
     public static async Task<IReadOnlyList<DocumentChange>> ListAsync(ILedgerStore ledger, string entityType, Guid id, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(ledger);
-        static decimal Total(string? json) => json is null ? 0m : JsonNode.Parse(json)?["Total"]?.GetValue<decimal>() ?? 0m;
+        // Bank transactions call their total "Amount".
+        static decimal Total(string? json) => json is null ? 0m : JsonNode.Parse(json) is { } node
+            ? (node["Total"] ?? node["Amount"])?.GetValue<decimal>() ?? 0m
+            : 0m;
         return (await ledger.ListAuditAsync(entityType, id, null, ct))
             .Where(r => r.Action == AuditAction.Updated && r.After is not null)
             .Select(r => (Record: r, Reason: JsonNode.Parse(r.After!)?[ReasonKey]?.GetValue<string>()))

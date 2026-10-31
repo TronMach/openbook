@@ -79,7 +79,8 @@ public sealed class BankTransactionChangeTests : IAsyncLifetime
         var (entries, _) = await In<PostingEngine, (IReadOnlyList<JournalEntry>, int)>(e => e.ListAsync(new JournalEntryFilter(Source: BankTransaction.SpendSource, SourceId: original.Id)));
         Assert.Equal(3, entries.Count);
         Assert.Equal(Mar1, entries.Single(e => e.Kind == JournalEntryKind.Reversal).Date);
-        Assert.Single(await In<BankingService, IReadOnlyList<DocumentChange>>(s => s.ChangesAsync(original.Id)));
+        var history = Assert.Single(await In<BankingService, IReadOnlyList<DocumentChange>>(s => s.ChangesAsync(original.Id)));
+        Assert.Equal((1000m, 950m), (history.TotalBefore, history.TotalAfter));
         Assert.Equal([new BankSplit(_rent.Id, 900m), new BankSplit(_supplies.Id, 50m, "Keys")], await In<BankingService, IReadOnlyList<BankSplit>>(s => s.SplitsAsync(changed)));
 
         // Deposits too; transfers and voided transactions can't change.

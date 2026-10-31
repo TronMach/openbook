@@ -37,6 +37,11 @@
             <a class="button" href="/purchases/vendor-credits/apply?vendor=@_credit.VendorId">Apply to bills</a>
         }
     </div>
+    @if (_changes.Count > 0)
+    {
+        var last = _changes[^1];
+        <p class="muted no-print">Changed @last.At.ToLocalTime().ToString("g") by @last.By: @last.Reason</p>
+    }
 
     @if (_error is not null)
     {
