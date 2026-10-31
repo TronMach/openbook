@@ -81,6 +81,41 @@ public sealed class ApiAccessTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Journal_entries_posted_through_the_api_carry_classes_locations_and_tags()
+    {
+        Guid bank, sales, consulting, east, rush;
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var accounts = sp.GetRequiredService<OpenBook.Application.Accounts.AccountService>();
+            bank = (await accounts.CreateAsync(new OpenBook.Application.Accounts.CreateAccountCommand("Api Checking", OpenBook.Domain.Accounts.AccountType.Bank))).Id;
+            sales = (await accounts.CreateAsync(new OpenBook.Application.Accounts.CreateAccountCommand("Api Sales", OpenBook.Domain.Accounts.AccountType.Income))).Id;
+            var segments = sp.GetRequiredService<OpenBook.Application.Segments.SegmentService>();
+            consulting = (await segments.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Class, "Consulting")).Id;
+            east = (await segments.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Location, "East")).Id;
+            rush = (await segments.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Tag, "Rush")).Id;
+        }
+
+        var response = await Client(UserRole.Accountant).PostAsJsonAsync("/api/journal-entries", new
+        {
+            date = "2026-10-01",
+            lines = new object[] { new { accountId = bank, debit = 50m, credit = 0m }, new { accountId = sales, debit = 0m, credit = 50m, classId = consulting } },
+            locationId = east,
+            tagIds = new[] { rush },
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var id = (await response.Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>())!["id"].GetGuid();
+
+        await using var check = _app.Services.CreateAsyncScope();
+        var store = check.ServiceProvider.GetRequiredService<OpenBook.Application.ILedgerStore>();
+        var lineSegments = await store.GetLineSegmentsAsync([id], default);
+        Assert.Equal(2, lineSegments.Count);
+        Assert.All(lineSegments, s => Assert.Equal(east, s.LocationId));
+        Assert.Single(lineSegments, s => s.ClassId == consulting);
+        Assert.Equal(rush, (await store.GetEntryTagsAsync([id], default)).Single().TagId);
+    }
+
+    [Fact]
     public async Task The_books_need_an_accountant_and_people_need_an_admin()
     {
         var entry = new { date = "2026-10-01", lines = Array.Empty<object>() };

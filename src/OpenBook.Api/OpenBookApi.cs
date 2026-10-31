@@ -120,8 +120,9 @@ public static class OpenBookApi
 
         api.MapPost("/journal-entries", async (PostJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
         {
-            var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo)).ToList();
-            var entry = await engine.PostAsync(new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis, ReverseOn: request.ReverseOn), ct);
+            var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo, l.ClassId)).ToList();
+            var entry = await engine.PostAsync(new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis, ReverseOn: request.ReverseOn,
+                LocationId: request.LocationId, TagIds: request.TagIds), ct);
             return Results.Created($"/api/journal-entries/{entry.Id}", JournalEntryResponse.From(entry));
         });
 

@@ -35,10 +35,14 @@ public sealed record ChartImportResponse(int New, int Existing, int Errors, bool
         new(r.NewCount, r.ExistingCount, r.ErrorCount, imported, r.Rows);
 }
 
-public sealed record JournalLineRequest(Guid AccountId, decimal Debit, decimal Credit, string? Memo = null);
+/// <param name="ClassId">The line's class (Domain.Segments), if any.</param>
+public sealed record JournalLineRequest(Guid AccountId, decimal Debit, decimal Credit, string? Memo = null, Guid? ClassId = null);
 
+/// <param name="LocationId">The entry's location; every line carries it.</param>
+/// <param name="TagIds">Tags on the entry.</param>
 public sealed record PostJournalEntryRequest(
-    DateOnly Date, IReadOnlyList<JournalLineRequest> Lines, string? Memo = null, EntryBasis Basis = EntryBasis.Both, DateOnly? ReverseOn = null);
+    DateOnly Date, IReadOnlyList<JournalLineRequest> Lines, string? Memo = null, EntryBasis Basis = EntryBasis.Both, DateOnly? ReverseOn = null,
+    Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null);
 
 public sealed record VoidJournalEntryRequest(string Reason);
 
