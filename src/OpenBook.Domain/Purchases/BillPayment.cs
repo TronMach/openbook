@@ -100,6 +100,24 @@ public sealed class BillPayment
         return payment;
     }
 
+    /// <summary>Takes a correction: the new applications and the entry posted for them (the old one voided by the caller).</summary>
+    public void Change(
+        DateOnly date, Guid paymentAccountId, IReadOnlyCollection<(Guid BillId, decimal Amount)> applications, Guid journalEntryId, string? reference, string? memo)
+    {
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("payment.voided", "This payment is voided, so it can't be changed.");
+        var checkedPayment = Create(Id, VendorId, date, paymentAccountId, PayableAccountId, applications, journalEntryId, CreatedAt, reference, memo);
+
+        Date = date;
+        Amount = checkedPayment.Amount;
+        PaymentAccountId = paymentAccountId;
+        JournalEntryId = journalEntryId;
+        Reference = checkedPayment.Reference;
+        Memo = checkedPayment.Memo;
+        _applications.Clear();
+        _applications.AddRange(applications.Select(a => new BillPaymentApplication(a.BillId, a.Amount)));
+    }
+
     public void Void()
     {
         if (Status == DocumentStatus.Voided)

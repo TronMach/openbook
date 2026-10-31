@@ -62,6 +62,12 @@ Bills that arrive regularly with the same amounts, such as rent, can be entered 
 
 To print checks, go to **Banking → Print checks**. Bills on hold for approval are listed unticked and can't be paid until approved.
 
+To correct a bill payment, open it and use **Change**: the payment date, **Paid from** account, check number or reference, memo and how much goes to each of the vendor's bills (the vendor stays). Say **Why are you changing it?** and **Save changes**. OpenBook reverses the payment's journal entry on its original date, posts the corrected one and pays the bills again; each change is listed under **Changes** on the payment.
+
+- A check that's been printed, sent by ACH or included in a positive pay file keeps its amount, account and number; which bills it pays can still change.
+- A payment matched to a bank feed line keeps its amount and account.
+- A payment reconciled at the bank can't be changed, as it can't be voided.
+
 ## Expenses
 
 To record something you've already paid, go to **Banking**, find the bank or card account it came out of and choose **Check / payment** (or **Card charge** for a card).

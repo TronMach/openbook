@@ -223,6 +223,9 @@ internal static class PurchasesApi
             await s.GetAsync(id, ct) is { } p ? Results.Ok(BillPaymentResponse.From(p)) : Results.NotFound());
         purchases.MapPost("/pay-bills", async (PayBillsCommand r, BillPaymentService s, CancellationToken ct) =>
             (await s.PayAsync(r, ct)).Select(BillPaymentResponse.From));
+        // Correct a posted bill payment in place: its entry reversed and a new one posted, the bills paid again.
+        purchases.MapPut("/payments/{id:guid}", async (Guid id, ChangeBillPaymentCommand r, BillPaymentService s, CancellationToken ct) =>
+            BillPaymentResponse.From(await s.ChangeAsync(id, r, ct)));
         purchases.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, BillPaymentService s, CancellationToken ct) =>
             BillPaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
     }
