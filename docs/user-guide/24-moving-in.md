@@ -42,7 +42,7 @@ Files can be up to 20 MB; export larger books in parts (lists, then transactions
 - OpenBook's subaccounts must have their parent's type. A GnuCash account whose type differs from its parent's becomes a top-level account of its own.
 - One currency only: transactions in other currencies are refused.
 
-Imported entries are marked as an import batch. To undo an import, void its entries from the **Journal**.
+Imported entries are marked as an import batch. To undo an import, open any of its entries from the **Journal** and use **Undo the whole import**: with a reason, **Void all … entries** voids every entry from that file that's still standing, all at once. If one of them can't be voided (it's been reconciled, or it's in a closed period and you don't have the closing password), none are. Accounts, customers, vendors and products the import added stay; make them inactive if you don't want them.
 
 ## Importing transactions from a spreadsheet
 

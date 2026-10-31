@@ -132,6 +132,11 @@ public static class OpenBookApi
         api.MapPost("/journal-entries/{id:guid}/void", async (Guid id, VoidJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
             JournalEntryResponse.From(await engine.VoidAsync(id, request.Reason, ct)));
 
+        // Undo an import (journal entry CSV or move-in file): the batch id is the imported entries' sourceId.
+        api.MapPost("/journal-entries/imports/{batchId:guid}/void", async (Guid batchId, VoidJournalEntryRequest request,
+            OpenBook.Application.Import.JournalImportService imports, CancellationToken ct) =>
+            new { Voided = await imports.VoidBatchAsync(batchId, request.Reason, ct) });
+
         api.MapGet("/reports/trial-balance", async (DateOnly? asOf, ReportBasis? basis, TrialBalanceQuery query, CancellationToken ct) =>
             TrialBalanceResponse.From(await query.RunAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), basis, ct)));
 

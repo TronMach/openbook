@@ -71,6 +71,39 @@ public sealed class PortabilityTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_whole_import_is_undone_at_once_or_not_at_all()
+    {
+        const string csv = """
+            Entry,Date,Account,Debit,Credit
+            1,2026-01-31,Rent,1200.00,
+            1,2026-01-31,Checking,,1200.00
+            2,2026-02-28,Rent,1200.00,
+            2,2026-02-28,Checking,,1200.00
+            3,2026-03-31,Rent,1200.00,
+            3,2026-03-31,Checking,,1200.00
+            """;
+        var imports = (Func<IServiceProvider, JournalImportService>)(sp => sp.GetRequiredService<JournalImportService>());
+        await Run(sp => imports(sp).ImportEntriesAsync(csv));
+        await Run(sp => sp.GetRequiredService<PostingEngine>().PostAsync(new PostJournalEntryCommand(new DateOnly(2026, 2, 1),
+            [new JournalLineDraft(_rent.Id, 50m, 0m), new JournalLineDraft(_checking.Id, 0m, 50m)])));
+        var (entries, _) = await Run(sp => sp.GetRequiredService<PostingEngine>().ListAsync(new JournalEntryFilter(Source: JournalEntry.ImportSource)));
+        var batch = entries[0].SourceId!.Value;
+        Assert.Equal(3, (await Run(sp => imports(sp).BatchAsync(batch))).Count);
+
+        // One entry already voided by hand: the rest are voided, the manual entry is left alone.
+        await Run(sp => sp.GetRequiredService<PostingEngine>().VoidAsync(entries[0].Id, "Wrong month"));
+        Assert.Equal(2, await Run(sp => imports(sp).VoidBatchAsync(batch, "Wrong file")));
+        Assert.Equal(50m, await Balance(_rent.Id));
+        // The batch now holds the three entries, all voided, and their three reversals.
+        var after = await Run(sp => imports(sp).BatchAsync(batch));
+        Assert.All(after.Where(e => e.Kind == JournalEntryKind.Standard), e => Assert.Equal(JournalEntryStatus.Voided, e.Status));
+        Assert.Equal(3, after.Count(e => e.Kind == JournalEntryKind.Reversal));
+
+        var again = await Assert.ThrowsAsync<DomainException>(() => Run(sp => imports(sp).VoidBatchAsync(batch, "Twice")));
+        Assert.Equal("import.nothing_to_void", again.Code);
+    }
+
+    [Fact]
     public async Task Without_an_entry_column_lines_group_until_they_balance()
     {
         const string csv = """

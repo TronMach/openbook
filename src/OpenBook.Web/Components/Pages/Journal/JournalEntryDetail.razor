@@ -7,6 +7,7 @@
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
 @inject AdjustingEntryService Adjusting
+@inject OpenBook.Application.Import.JournalImportService Imports
 
 <PageTitle>Journal entry @(_entry?.Number) · OpenBook</PageTitle>
 
@@ -145,6 +146,24 @@
                 <button type="submit" class="danger">Void entry</button>
             </EditForm>
         </div>
+
+        @if (_importStanding > 1)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Undo the whole import</h2>
+                <p class="muted">This entry is one of @_importStanding still standing from the same import. Void them all at once: either every one is voided, or none is (for example when one has been reconciled).</p>
+                <EditForm Model="ImportInput" FormName="void-import" OnValidSubmit="VoidImportAsync" method="post">
+                    <DataAnnotationsValidator />
+                    <div class="field">
+                        <label for="import-reason">Reason</label>
+                        <InputText id="import-reason" @bind-Value="ImportInput.Reason" />
+                        <ValidationMessage For="() => ImportInput.Reason" />
+                    </div>
+                    <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="ImportInput.ClosingPassword" />
+                    <button type="submit" class="danger">Void all @_importStanding entries</button>
+                </EditForm>
+            </div>
+        }
     }
 
     @if (_entry.Kind != JournalEntryKind.Reversal)
@@ -172,10 +191,17 @@
     [SupplyParameterFromForm(FormName = "void")]
     private VoidModel VoidInput { get; set; } = default!;
 
+    [SupplyParameterFromForm(FormName = "void-import")]
+    private VoidModel ImportInput { get; set; } = default!;
+
+    /// <summary>For an imported entry: how many entries of its import are still standing (including this one).</summary>
+    private int _importStanding;
+
     protected override async Task OnInitializedAsync()
     {
         _isAdjusting = (await Adjusting.MarkedAsync()).Contains(Id);
         VoidInput ??= new();
+        ImportInput ??= new();
         _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
         _chart = await AccountService.GetChartAsync();
         _entry = await Engine.GetAsync(Id);
@@ -185,6 +211,23 @@
         {
             var (reversals, _) = await Engine.ListAsync(new JournalEntryFilter(Take: 1, Source: JournalEntry.AutoReversalSource, SourceId: _entry.Id));
             _autoReversal = reversals.FirstOrDefault();
+        }
+        if (_entry is { Source: JournalEntry.ImportSource, SourceId: { } batch, Status: JournalEntryStatus.Posted })
+            _importStanding = (await Imports.BatchAsync(batch)).Count(e => e.Status == JournalEntryStatus.Posted && e.Kind == JournalEntryKind.Standard);
+    }
+
+    private async Task VoidImportAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = ImportInput.ClosingPassword;
+            await Imports.VoidBatchAsync(_entry!.SourceId!.Value, ImportInput.Reason);
+            Navigation.NavigateTo($"/journal/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 

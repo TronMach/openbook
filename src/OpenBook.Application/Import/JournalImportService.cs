@@ -83,6 +83,40 @@ public sealed class JournalImportService(
         return result;
     }
 
+    /// <summary>
+    /// The entries one import posted (a journal entry CSV or a move-in file: <c>SourceId</c> is the batch), in number
+    /// order, with the reversals of any voided since (they keep the source).
+    /// </summary>
+    public async Task<IReadOnlyList<JournalEntry>> BatchAsync(Guid batchId, CancellationToken ct = default)
+    {
+        var entries = new List<JournalEntry>();
+        while (true)
+        {
+            var (page, total) = await engine.ListAsync(new JournalEntryFilter(Skip: entries.Count, Take: 500, Source: JournalEntry.ImportSource, SourceId: batchId), ct);
+            entries.AddRange(page);
+            if (page.Count == 0 || entries.Count >= total)
+                return entries.OrderBy(e => e.Number).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Undoes an import: voids every entry of the batch still standing, in one save, so either the whole import is
+    /// undone or (a reconciled entry, a closed period without its password) nothing is. Accounts, customers and the
+    /// rest a move-in created are left alone.
+    /// </summary>
+    /// <returns>How many entries were voided.</returns>
+    public async Task<int> VoidBatchAsync(Guid batchId, string reason, CancellationToken ct = default)
+    {
+        var standing = (await BatchAsync(batchId, ct)).Where(e => e.Status == JournalEntryStatus.Posted && e.Kind == JournalEntryKind.Standard).ToList();
+        if (standing.Count == 0)
+            throw new DomainException("import.nothing_to_void", "Nothing from this import is left to void.");
+
+        foreach (var entry in standing)
+            await engine.StageVoidAsync(entry.Id, reason, fromDocument: false, ct);
+        await engine.SaveAsync(ct);
+        return standing.Count;
+    }
+
     public async Task<OpeningBalanceImportResult> PreviewBalancesAsync(string csv, CancellationToken ct = default) => await PlanBalancesAsync(csv, ct);
 
     /// <summary>One opening balance entry on <paramref name="asOf"/>, the difference going to Opening Balance Equity.</summary>
