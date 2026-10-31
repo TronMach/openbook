@@ -1,5 +1,6 @@
 using System.Text.Json;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
@@ -14,6 +15,20 @@ public sealed record CreateVendorCreditCommand(
     Guid VendorId,
     DateOnly Date,
     IReadOnlyList<BillLineDraft> Lines,
+    string? Reference = null,
+    string? Memo = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
+
+/// <summary>A correction to a posted vendor credit (<see cref="VendorCreditService.ChangeAsync"/>). The vendor can't change.</summary>
+/// <param name="Lines">Every category line the credit should have.</param>
+/// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
+/// <param name="Reference">Null keeps the vendor's credit number; blank clears it.</param>
+/// <param name="TagIds">Null keeps the entry's tags.</param>
+public sealed record ChangeVendorCreditCommand(
+    DateOnly Date,
+    IReadOnlyList<BillLineDraft> Lines,
+    string Reason,
     string? Reference = null,
     string? Memo = null,
     Guid? LocationId = null,
@@ -38,6 +53,8 @@ public sealed class VendorCreditService(
     PurchaseAccounts purchaseAccounts,
     AccountService accounts,
     PostingEngine engine,
+    ICompanyStore companies,
+    ILedgerStore ledger,
     IClock clock,
     ICurrentUser user)
 {
@@ -85,6 +102,64 @@ public sealed class VendorCreditService(
         await store.SaveChangesAsync(ct);
         return credit;
     }
+
+    /// <summary>
+    /// Corrects a posted vendor credit in place, in one save: its entry is voided (the reversal dated the original date)
+    /// and a new one posted on its date. It keeps its id, so applications and refunds stay. The total can't go below
+    /// what's applied and refunded, nor the date past the first application; if the postings change, refund dates in a
+    /// closed period need the closing password (cash basis spreads each refund over the current lines).
+    /// </summary>
+    public async Task<VendorCredit> ChangeAsync(Guid id, ChangeVendorCreditCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Lines);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new DomainException("vendorcredit.change_reason_required", "Say why the vendor credit is being changed.");
+
+        var credit = await store.GetVendorCreditAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (credit.Status == DocumentStatus.Voided)
+            throw new DomainException("vendorcredit.voided", "This vendor credit is voided, so it can't be changed.");
+        var vendor = await store.GetVendorAsync(credit.VendorId, ct) ?? throw new EntityNotFoundException("vendor", credit.VendorId);
+
+        if (command.Lines.Any(l => l.ItemId is not null))
+            throw new DomainException("vendorcredit.no_items", "Vendor credits are for categories only. To send stock back, record a quantity adjustment.");
+        var lines = Bill.LinesFrom(command.Lines);
+        var chart = await accounts.GetChartAsync(ct);
+        foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
+            Bill.EnsureCategoryAccount(chart.Get(accountId));
+        var used = credit.AmountApplied + credit.AmountRefunded;
+        if (lines.Sum(l => l.Amount) < used)
+            throw new DomainException("vendorcredit.total_below_used",
+                $"This credit has {used:N2} applied or refunded, so its total can't go below that.");
+
+        if (credit.AmountRefunded > 0m && !BillService.SamePostings(credit.Lines, lines))
+        {
+            var company = await companies.GetRequiredCompanyAsync(ct);
+            var refunds = (await store.ListVendorRefundsAsync(credit.VendorId, ct)).Where(r => r.VendorCreditId == credit.Id && r.Status == DocumentStatus.Posted);
+            foreach (var refundedOn in refunds.Select(r => r.Date).Distinct().Order())
+                engine.EnsureOpen(company, refundedOn, $"changing the lines of a vendor credit refunded on {refundedOn:yyyy-MM-dd}");
+        }
+
+        var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([credit.JournalEntryId], ct)).Select(t => t.TagId).ToList();
+        var reference = command.Reference is null ? credit.Reference : string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
+        var before = Snapshot(credit);
+
+        await engine.StageVoidAsync(credit.JournalEntryId, $"Vendor credit changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        var memo = reference is null ? $"Vendor credit · {vendor.DisplayName}" : $"Vendor credit {reference} · {vendor.DisplayName}";
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(
+            command.Date, VendorCredit.Postings(credit.PayableAccountId, lines, memo), memo, VendorCredit.Source, credit.Id,
+            LocationId: command.LocationId, TagIds: tagIds), ct);
+
+        credit.Change(reference, command.Date, lines, entry.Id, command.Memo);
+        credit.SetLocation(command.LocationId);
+        store.Add(Audit(AuditAction.Updated, EntityType, credit.Id, before, DocumentChanges.WithReason(Snapshot(credit), command.Reason)));
+        await store.SaveChangesAsync(ct);
+        return credit;
+    }
+
+    /// <summary>The vendor credit's corrections, oldest first.</summary>
+    public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
+        DocumentChanges.ListAsync(ledger, EntityType, id, ct);
 
     public async Task<VendorCredit> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {

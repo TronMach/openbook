@@ -232,7 +232,7 @@ public sealed class BillService(
     }
 
     /// <summary>Whether two sets of lines post the same amount to each account and class, however it's split into lines.</summary>
-    private static bool SamePostings(IEnumerable<BillLine> a, IEnumerable<BillLine> b)
+    internal static bool SamePostings(IEnumerable<BillLine> a, IEnumerable<BillLine> b)
     {
         static List<(Guid, Guid?, decimal)> Posted(IEnumerable<BillLine> lines) => lines
             .GroupBy(l => (l.AccountId, l.ClassId))

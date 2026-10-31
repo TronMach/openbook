@@ -1,0 +1,137 @@
+@page "/purchases/vendor-credits/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Change vendor credit · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Change vendor credit@(_vendor is null ? "" : $" from {_vendor.DisplayName}")</h1>
+        <a class="button secondary" href="/purchases/vendor-credits/@Id">Back to the vendor credit</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_credit is null || _credit.Status == DocumentStatus.Voided))
+    {
+        <div class="card"><p>Only posted vendor credits can be changed. <a href="/purchases/vendor-credits/@Id">Back to the vendor credit</a></p></div>
+    }
+    else if (_loaded && _credit is not null && _vendor is not null)
+    {
+        <p class="muted">Saving reverses the credit's journal entry on its original date and posts the corrected one, keeping what's applied and refunded, and its history. Changes in a closed period need the closing date password.</p>
+        @if (_credit.AmountApplied + _credit.AmountRefunded > 0m)
+        {
+            <div class="alert notice" role="status">@Labels.Amount(_credit.AmountApplied + _credit.AmountRefunded) is already applied or refunded, so the total can't go below that@(_credit.Applications.Count > 0 ? $", and the date can't be later than {Labels.Date(_credit.Applications.Min(a => a.AppliedOn))}, when it was first applied" : "").</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label>Vendor</label>
+                    <div>@_vendor.DisplayName</div>
+                    <span class="hint">For another vendor, void this credit and enter a new one.</span>
+                </div>
+                <div class="field">
+                    <label for="reference">Credit no. <span class="muted">(the vendor's, optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+
+            <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+            <div class="field">
+                <label for="reason">Why are you changing it?</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">Kept in the credit's history and the audit log.</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save changes</button>
+                <a href="/purchases/vendor-credits/@Id">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private VendorCredit? _credit;
+    private Vendor? _vendor;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private string? _reference;
+    private DateOnly _date;
+    private string? _memo;
+    private string? _reason;
+    private List<BillLineModel> _lines = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid? _locationId;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_reason) && BillLineModel.IsComplete(_lines);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _credit = await Ops.RunAsync<VendorCreditService, VendorCredit?>(s => s.GetAsync(Id));
+        if (_credit is not null)
+        {
+            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            (_vendor, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<VendorService>().GetAsync(_credit.VendorId),
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
+            _categories = BillLineModel.Categories(_chart);
+
+            _reference = _credit.Reference;
+            _date = _credit.Date;
+            _memo = _credit.Memo;
+            _locationId = _credit.LocationId;
+            _lines = _credit.Lines.OrderBy(l => l.LineNumber).Select(l => BillLineModel.From(l.ToDraft())).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new ChangeVendorCreditCommand(_date, BillLineModel.Drafts(_lines.Where(BillLineModel.IsFilledLine).ToList()), _reason!, _reference ?? "", _memo, _locationId);
+            await Ops.RunAsync<VendorCreditService, VendorCredit>(s => s.ChangeAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/purchases/vendor-credits/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

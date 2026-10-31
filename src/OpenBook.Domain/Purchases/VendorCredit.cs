@@ -91,6 +91,33 @@ public sealed class VendorCredit
     public static IReadOnlyList<JournalLineDraft> Postings(Guid payableAccountId, IReadOnlyCollection<BillLine> lines, string? memo) =>
         Bill.Postings(payableAccountId, lines, memo).Select(l => l with { Debit = l.Credit, Credit = l.Debit }).ToList();
 
+    /// <summary>
+    /// Takes a correction: the new lines and the entry posted for them (the old one voided by the caller). The total
+    /// can't go below what's applied and refunded, nor the date past the first application.
+    /// </summary>
+    public void Change(string? reference, DateOnly date, IReadOnlyList<BillLine> lines, Guid journalEntryId, string? memo)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        EnsurePosted();
+        var total = lines.Sum(l => l.Amount);
+        if (total <= 0m)
+            throw new DomainException("vendorcredit.total_not_positive", "The total must be more than zero.");
+        if (total < AmountApplied + AmountRefunded)
+            throw new DomainException("vendorcredit.total_below_used",
+                $"This credit has {AmountApplied + AmountRefunded:N2} applied or refunded, so its total can't go below that.");
+        if (_applications.Count > 0 && date > _applications.Min(a => a.AppliedOn))
+            throw new DomainException("credit.applied_before_payment",
+                $"This credit was applied on {_applications.Min(a => a.AppliedOn):yyyy-MM-dd}, so its date can't be later than that.");
+
+        Reference = Text.Optional(reference, 30, "vendorcredit.reference_too_long", "Credit number");
+        Date = date;
+        Memo = Text.Optional(memo, 1000, "vendorcredit.memo_too_long", "Memo");
+        JournalEntryId = journalEntryId;
+        _lines.Clear();
+        _lines.AddRange(lines);
+        Total = total;
+    }
+
     public void Apply(Guid billId, decimal amount, DateOnly appliedOn)
     {
         EnsurePosted();
