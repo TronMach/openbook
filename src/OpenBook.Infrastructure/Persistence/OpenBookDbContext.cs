@@ -167,6 +167,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(BankFeedItem), typeof(RecurringEntry),
         typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
+        typeof(Item),
     ];
 
     /// <summary>Whether anything has been saved through this context, so an operation that then hit a conflict can't simply be run again.</summary>
@@ -176,6 +177,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     {
         if (ChangeTracker.Entries<JournalEntry>().Any(e => e.State == EntityState.Added))
             throw new NotSupportedException("Journal entries must be saved with SaveChangesAsync.");
+        foreach (var itemId in StockMovedItemIds())
+            TouchItem(Items.Local.FirstOrDefault(i => i.Id == itemId) ?? Items.Find(itemId));
         BumpVersions();
         try
         {
@@ -191,6 +194,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        foreach (var itemId in StockMovedItemIds())
+            TouchItem(Items.Local.FirstOrDefault(i => i.Id == itemId) ?? await Items.FindAsync([itemId], cancellationToken));
         BumpVersions();
         try
         {
@@ -213,6 +218,20 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         ex is DbUpdateConcurrencyException
         || ex.InnerException is Microsoft.Data.Sqlite.SqliteException { SqliteExtendedErrorCode: 2067 or 1555 } // UNIQUE, PRIMARY KEY
         || ex.InnerException is Npgsql.PostgresException { SqlState: "23505" or "40001" or "40P01" };
+
+    /// <summary>
+    /// Items gaining stock movements in this save. Stock is an append-only ledger, so taking the last units changes no
+    /// existing row; the item's version is bumped instead, and two documents planned from the same stock (the item
+    /// loaded before its movements were read) can't both save.
+    /// </summary>
+    private List<Guid> StockMovedItemIds() =>
+        ChangeTracker.Entries<InventoryMovement>().Where(e => e.State == EntityState.Added).Select(e => e.Entity.ItemId).Distinct().ToList();
+
+    private void TouchItem(Item? item)
+    {
+        if (item is not null && Entry(item) is { State: EntityState.Unchanged or EntityState.Modified } entry)
+            entry.Property(VersionProperty).IsModified = true;
+    }
 
     private void BumpVersions()
     {

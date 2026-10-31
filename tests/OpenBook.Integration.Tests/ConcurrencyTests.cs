@@ -1,11 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 using OpenBook.Infrastructure.Persistence;
 
@@ -81,6 +85,36 @@ public sealed class ConcurrencyTests : IAsyncLifetime
         var saved = await _db.InDb(db => db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id));
         Assert.Equal(200m, saved.AmountPaid);
         Assert.Equal(1, await _db.InDb(db => db.Invoices.Where(i => i.Id == invoice.Id).Select(i => EF.Property<int>(i, "Version")).SingleAsync()));
+    }
+
+    [Fact]
+    public async Task Two_sales_planned_from_the_same_stock_cant_both_take_the_last_units()
+    {
+        var widget = await _db.InScope(sp => sp.GetRequiredService<ItemService>().CreateAsync(
+            new ItemDetails("Widget", ItemType.Inventory, _revenue.Id, 10m, PurchaseCost: 5m)));
+        var vendor = await _db.InScope(sp => sp.GetRequiredService<VendorService>().CreateAsync(new VendorDetails("Supplier")));
+        await _db.InScope(sp => sp.GetRequiredService<BillService>().CreateAsync(
+            new CreateBillCommand(vendor.Id, Mar1, [new BillLineDraft(Guid.Empty, 25m, null, widget.Id, 5m)])));
+        Task<Invoice> SellAll() => _db.InScope(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(
+            new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(widget.Id, null, 5m, 10m)])));
+
+        // A sale planned from the stock as it was: the item loaded, then its movements read, all five taken.
+        await using var stale = _db.Services.CreateAsyncScope();
+        var staleDb = stale.ServiceProvider.GetRequiredService<OpenBookDbContext>();
+        var item = await staleDb.Items.SingleAsync(i => i.Id == widget.Id);
+        var movements = await stale.ServiceProvider.GetRequiredService<IInventoryStore>().ListMovementsAsync(widget.Id, default);
+        var takes = Costing.Take(item, movements, 5m, Mar1);
+
+        // Meanwhile someone else sells all five.
+        await SellAll();
+
+        foreach (var take in takes)
+            staleDb.InventoryMovements.Add(InventoryMovement.Issue(take, widget.Id, Mar1, "test", Guid.NewGuid(), DateTimeOffset.UtcNow));
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() => staleDb.SaveChangesAsync());
+        Assert.Equal(0m, (await _db.InScope(sp => sp.GetRequiredService<InventoryService>().StockForAsync(widget.Id)))!.Quantity);
+
+        // Run again from the start, the sale sees the stock is gone.
+        Assert.Equal("inventory.insufficient", (await Assert.ThrowsAsync<DomainException>(SellAll)).Code);
     }
 
     [Fact]

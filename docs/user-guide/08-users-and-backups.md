@@ -19,7 +19,7 @@ From the Users page an administrator can change someone's role, **reset their pa
 
 ### Working at the same time
 
-Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, or both post the same bank line), OpenBook usually tries yours again with the other change included, so it still checks for overpayments and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.
+Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.
 
 ## Closing the books
 
