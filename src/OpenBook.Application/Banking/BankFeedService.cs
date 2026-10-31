@@ -222,6 +222,17 @@ public sealed class BankFeedService(
     private async Task<HashSet<string>> KnownKeysAsync(Guid accountId, CancellationToken ct) =>
         (await bank.ListFeedItemsAsync(accountId, ct)).Select(i => i.DedupeKey).ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The account's feed lines standing for a document about to be corrected: matched to its entry, or added as the
+    /// bank transaction <paramref name="transactionId"/>. They're what the bank reported, so the document's money in
+    /// the account has to stay the same; matched ones then follow the new entry (<see cref="BankFeedItem.FollowEntry"/>).
+    /// </summary>
+    internal static async Task<IReadOnlyList<BankFeedItem>> TiedToAsync(IBankingStore bank, Guid accountId, Guid entryId, Guid? transactionId, CancellationToken ct) =>
+        (await bank.ListFeedItemsAsync(accountId, ct))
+            .Where(i => i.Status == BankFeedStatus.Matched && i.MatchedJournalEntryId == entryId
+                || i.Status == BankFeedStatus.Added && transactionId is not null && i.BankTransactionId == transactionId)
+            .ToList();
+
     private async Task<List<BankRule>> ActiveRulesAsync(CancellationToken ct) =>
         (await bank.ListRulesAsync(ct)).Where(r => r.IsActive).OrderBy(r => r.Priority).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
 

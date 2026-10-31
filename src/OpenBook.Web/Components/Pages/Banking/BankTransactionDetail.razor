@@ -20,6 +20,10 @@
         <h1>@_title</h1>
         <a class="button secondary" href="/banking/@_transaction.AccountId">Back to register</a>
         <a class="button secondary" href="/audit?entityId=@_transaction.Id">History</a>
+        @if (_transaction is { Status: BankTransactionStatus.Posted } and not { Kind: BankTransactionKind.Transfer })
+        {
+            <a class="button secondary" href="/banking/transactions/@_transaction.Id/edit">Change</a>
+        }
         @if (_transaction is { Kind: BankTransactionKind.Spend, Status: BankTransactionStatus.Posted } && _chart.Find(_transaction.AccountId)?.Type == AccountType.Bank)
         {
             <PrintCheckButton Kind="CheckKind.Expense" Id="_transaction.Id" PrintedAt="_transaction.PrintedAt" />
@@ -33,6 +37,11 @@
     @if (_transaction.Status == BankTransactionStatus.Voided)
     {
         <div class="alert notice" role="status">This transaction is voided. Its journal entry was reversed on the same date.</div>
+    }
+    @if (_changes.Count > 0)
+    {
+        var last = _changes[^1];
+        <p class="muted no-print">Changed @last.At.ToLocalTime().ToString("g") by @last.By: @last.Reason</p>
     }
 
     <div class="card">
@@ -110,6 +119,8 @@
         </div>
     }
 
+    <DocumentChangeList Changes="_changes" />
+
     <EntryTags EntryId="_transaction.JournalEntryId" />
 
     @if (_transaction.Kind == BankTransactionKind.Spend && _transaction.Status == BankTransactionStatus.Posted)
@@ -130,6 +141,7 @@
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
     private string? _title;
+    private IReadOnlyList<DocumentChange> _changes = [];
     private string? _error;
     private bool _needsClosingPassword;
 
@@ -149,6 +161,7 @@
         _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
         _entry = await Engine.GetAsync(_transaction.JournalEntryId);
         _title = Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type);
+        _changes = await BankingService.ChangesAsync(Id);
     }
 
     private async Task VoidAsync()

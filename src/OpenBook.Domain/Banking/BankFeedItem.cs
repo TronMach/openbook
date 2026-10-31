@@ -112,6 +112,14 @@ public sealed class BankFeedItem
         (ResolvedAt, ResolvedBy) = (at.ToUniversalTime(), actor);
     }
 
+    /// <summary>The matched document was corrected and its entry replaced: the match follows it to the new entry.</summary>
+    public void FollowEntry(Guid journalEntryId)
+    {
+        if (Status != BankFeedStatus.Matched)
+            throw new DomainException("feed.not_matched", "This line isn't matched to a transaction.");
+        MatchedJournalEntryId = journalEntryId;
+    }
+
     public void Exclude(DateTimeOffset at, string actor)
     {
         EnsurePending();

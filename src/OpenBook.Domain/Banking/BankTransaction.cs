@@ -171,6 +171,30 @@ public sealed class BankTransaction
         };
     }
 
+    /// <summary>
+    /// Takes a correction of a spend or receive: the new total and the entry posted for it (the old one voided by the
+    /// caller). The account and kind stay.
+    /// </summary>
+    public void Change(DateOnly date, decimal amount, Guid journalEntryId, string? payee, string? reference, string? memo, Guid? vendorId)
+    {
+        if (Status == BankTransactionStatus.Voided)
+            throw new DomainException("bank.voided", "This transaction is voided, so it can't be changed.");
+        if (Kind == BankTransactionKind.Transfer)
+            throw new DomainException("bank.transfer_change", "Transfers can't be changed. Void it and record it again.");
+        if (amount <= 0m)
+            throw new DomainException("bank.total_not_positive", "The amount must be more than zero.");
+        if (vendorId is not null && Kind != BankTransactionKind.Spend)
+            throw new DomainException("bank.vendor_on_spend_only", "Only payments and charges can name a vendor.");
+
+        Date = date;
+        Amount = amount;
+        JournalEntryId = journalEntryId;
+        Payee = Text(payee, 200, "payee");
+        Reference = Text(reference, 30, "reference");
+        Memo = Text(memo, 1000, "memo");
+        VendorId = vendorId;
+    }
+
     public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
     public void MarkVoided()

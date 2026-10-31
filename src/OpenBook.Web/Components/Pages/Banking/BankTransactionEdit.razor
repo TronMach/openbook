@@ -1,0 +1,245 @@
+@page "/banking/transactions/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Change @(_title.ToLowerInvariant()) · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Change @_title.ToLowerInvariant()</h1>
+        <a class="button secondary" href="/banking/transactions/@Id">Back to the transaction</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_transaction is null || _transaction.Status == BankTransactionStatus.Voided || _transaction.Kind == BankTransactionKind.Transfer))
+    {
+        <div class="card"><p>Only posted payments, charges and deposits can be changed; to change a transfer, void it and record it again. <a href="/banking/transactions/@Id">Back to the transaction</a></p></div>
+    }
+    else if (_loaded && _transaction is not null)
+    {
+        <p class="muted">Saving reverses the transaction's journal entry on its original date and posts the corrected one, keeping its history. Reconciled transactions can't be changed. A transaction from the bank feed keeps the bank's amount, and a check that's been printed or sent in a positive pay file keeps its amount, payee and number. Changes in a closed period need the closing date password.</p>
+
+        <div class="card">
+            <p class="muted">@(_transaction.Kind == BankTransactionKind.Spend ? "From" : "Into") <strong>@_chart.FullName(_transaction.AccountId)</strong> <span class="hint">(to use another account, void this transaction and record it again)</span></p>
+            @if (_transaction.Kind == BankTransactionKind.Spend && _vendors.Count > 0)
+            {
+                <div class="field">
+                    <label for="vendor">Vendor <span class="muted">(optional)</span></label>
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" Value="_vendorId" OnChange="PickVendor" EmptyText="None" Placeholder="Type a name or leave blank" />
+                </div>
+            }
+            <div class="row">
+                <div class="field">
+                    <label for="payee">@(_transaction.Kind == BankTransactionKind.Spend ? "Payee" : "Received from") <span class="muted">(optional)</span></label>
+                    <input id="payee" @bind="_payee" maxlength="200" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="reference">@(IsCheck ? "Check number" : "Reference") <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" @bind="_memo" maxlength="1000" />
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th class="num">Amount</th>
+                            <th>Line memo</th>
+                            @if (_segments.ClassColumn is not null)
+                            {
+                                <th>Class</th>
+                            }
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr @key="line">
+                                <td>
+                                    <SearchSelect Options="CategoryOptions" @bind-Value="line.AccountId" Placeholder="Find a category…" AriaLabel="Category" />
+                                </td>
+                                <td><input class="amount" type="number" step="0.01" aria-label="Amount" @bind="line.Amount" /></td>
+                                <td><input @bind="line.Memo" aria-label="Line memo" /></td>
+                                @if (_segments.ClassColumn is { } lineClasses)
+                                {
+                                    <td><ClassSelect Classes="lineClasses" Value="line.ClassId" ValueChanged="v => line.ClassId = v" /></td>
+                                }
+                                <td>
+                                    @if (_lines.Count > 1)
+                                    {
+                                        <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => _lines.Remove(line)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><button type="button" class="secondary" @onclick="() => _lines.Add(new LineModel())">Add line</button></td>
+                            <td class="num">@Labels.Amount(Total)</td>
+                            <td colspan="@(_segments.ClassColumn is null ? 2 : 3)" class="muted">A negative line reduces the total, e.g. a discount.</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            @if (_marked.Count > 0)
+            {
+                <p class="hint">
+                    Marked billable to a customer, so they stay as they are and where they are:
+                    @string.Join("; ", _marked.Select(m => $"line {m.LineNumber - 1} ({m.Description})")).
+                    Remove the mark on the transaction's page first to change one.
+                </p>
+            }
+
+            <div class="field" style="margin-top: 1rem">
+                <label for="reason">Why are you changing it?</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">Kept in the transaction's history and the audit log.</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save changes</button>
+                <a href="/banking/transactions/@Id">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private List<Account>? _categoriesFor;
+    private IReadOnlyList<PickerOption> _categoryOptions = [];
+
+    private IReadOnlyList<PickerOption> CategoryOptions
+    {
+        get
+        {
+            if (!ReferenceEquals(_categoriesFor, _categories))
+                (_categoriesFor, _categoryOptions) = (_categories, PickerOptions.Accounts(_categories, _chart, _useNumbers));
+            return _categoryOptions;
+        }
+    }
+
+    private BankTransaction? _transaction;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private string _title = "Bank transaction";
+    private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<BillableLine> _marked = [];
+    private DateOnly _date;
+    private string? _payee;
+    private Guid? _vendorId;
+    private string? _reference;
+    private string? _memo;
+    private string? _reason;
+    private List<LineModel> _lines = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid? _locationId;
+
+    private bool IsCheck => _transaction?.Kind == BankTransactionKind.Spend && _chart.Find(_transaction.AccountId)?.Type == AccountType.Bank;
+    private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
+    private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
+    private bool CanSave => Total > 0m && Filled.Any() && Filled.All(l => l.AccountId is not null && (l.Amount ?? 0m) != 0m)
+        && !string.IsNullOrWhiteSpace(_reason);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _transaction = await Ops.RunAsync<BankingService, BankTransaction?>(s => s.GetAsync(Id));
+        if (_transaction is { Status: BankTransactionStatus.Posted } and not { Kind: BankTransactionKind.Transfer })
+        {
+            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            IReadOnlyList<BankSplit> splits;
+            (_chart, _useNumbers, _vendors, splits, _marked) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
+                (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_transaction.Date)).Select(v => v.Vendor)
+                    .Where(v => v.IsActive || v.Id == _transaction.VendorId).ToList(),
+                await sp.GetRequiredService<BankingService>().SplitsAsync(_transaction),
+                _transaction.Kind == BankTransactionKind.Spend
+                    ? (IReadOnlyList<BillableLine>)(await sp.GetRequiredService<BillableExpenseService>().LinesAsync(BillableSource.Expense, Id)).Where(l => l.Billable is not null).ToList()
+                    : []));
+            _title = Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type);
+            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != _transaction.AccountId).ToList();
+            foreach (var used in splits.Select(s => s.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
+                _categories.Add(_chart.Get(used));
+
+            _date = _transaction.Date;
+            _payee = _transaction.Payee;
+            _vendorId = _transaction.VendorId;
+            _reference = _transaction.Reference;
+            _memo = _transaction.Memo;
+            _locationId = _transaction.LocationId;
+            _lines = splits.Select(s => new LineModel { AccountId = s.AccountId, Amount = s.Amount, Memo = s.Memo, ClassId = s.ClassId }).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private void PickVendor(ChangeEventArgs e)
+    {
+        var previous = _vendors.FirstOrDefault(v => v.Id == _vendorId);
+        _vendorId = Guid.TryParse(e.Value as string, out var id) ? id : null;
+        var vendor = _vendors.FirstOrDefault(v => v.Id == _vendorId);
+        if (string.IsNullOrWhiteSpace(_payee) || _payee == previous?.DisplayName)
+            _payee = vendor?.DisplayName;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo, l.ClassId)).ToList();
+            var command = new ChangeBankTransactionCommand(_date, splits, _reason!, _payee, _reference, _memo,
+                _transaction!.Kind == BankTransactionKind.Spend ? _vendorId : null, _locationId);
+            await Ops.RunAsync<BankingService, BankTransaction>(s => s.ChangeAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/banking/transactions/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class LineModel
+    {
+        public Guid? AccountId { get; set; }
+        public decimal? Amount { get; set; }
+        public string? Memo { get; set; }
+        public Guid? ClassId { get; set; }
+    }
+}

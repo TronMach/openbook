@@ -1,10 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
+using OpenBook.Application.Banking;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
@@ -99,6 +101,20 @@ public sealed class ReceiptChangeTests : IAsyncLifetime
         // Same money, other income: fine.
         await Change(receipt.Id, Mar1, [Course(3m)]);
         Assert.Equal((150m, 0m, 0m, -150m), (await Balance(_checking.Id), await Balance(_undeposited.Id), await Balance(_services.Id), await Balance(_training.Id)));
+    }
+
+    [Fact]
+    public async Task A_receipt_matched_to_the_bank_feed_keeps_its_total_and_the_match_follows_it()
+    {
+        var receipt = await Receipt(Mar1, _checking.Id, Hours(1m), Course());
+        await In<BankFeedService, FeedImportResult>(s => s.QueueAsync(_checking.Id, [new FeedLine(Mar1, 150m, "Deposit", null, null, "F1")]));
+        var line = (await In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(_checking.Id, BankFeedStatus.Pending))).Single().Item;
+        await _db.InScope(sp => sp.GetRequiredService<BankFeedService>().MatchAsync(line.Id, receipt.JournalEntryId));
+
+        Assert.Equal("receipt.feed_matched", await Refused(() => Change(receipt.Id, Mar1, [Hours(1m)])));
+        var changed = await Change(receipt.Id, Mar1, [Course(3m)]);
+        Assert.Equal(changed.JournalEntryId, (await In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(_checking.Id, BankFeedStatus.Matched)))
+            .Single().Item.MatchedJournalEntryId);
     }
 
     [Fact]

@@ -15,6 +15,16 @@ Each account on the Banking page has:
 
 For customer payments, use **Receive payment** and **Make deposit** ([Customers and sales](04-sales.md)), not Deposit, so the invoice is marked paid.
 
+### Correcting a transaction
+
+To correct a check, payment, card charge, deposit or card credit, open it (from the register) and use **Change**: the vendor, payee, date, check number or reference, location, memo and category lines. Say **Why are you changing it?** and **Save changes**. OpenBook reverses its journal entry on its original date and posts the corrected one, and lists each change under **Changes** on the transaction. The account stays the same: to move it to another account, void it and record it again.
+
+- A reconciled transaction can't be changed, as it can't be voided (see [Reconciling](#reconciling)).
+- A transaction added from the bank feed, or matched to a feed line, keeps the bank's amount; categories and the rest can change.
+- A check that's been printed, or sent to the bank in a positive pay file, keeps its amount, payee and check number.
+- Lines marked billable to a customer stay as they are, in their place; remove the mark first to change one.
+- Transfers and the over/short of a petty cash count can't be changed: void and record them again.
+
 ## Importing your bank statement
 
 Download transactions from your bank's website and import them, instead of typing each one.

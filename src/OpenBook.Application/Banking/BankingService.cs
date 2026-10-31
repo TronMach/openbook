@@ -22,6 +22,22 @@ public sealed record RecordBankTransactionCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null);
 
+/// <summary>A correction to a posted spend or receive (<see cref="BankingService.ChangeAsync"/>). The account can't change.</summary>
+/// <param name="Splits">Every category line the transaction should have.</param>
+/// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
+/// <param name="Payee">Defaults to the vendor's name when a vendor is given.</param>
+/// <param name="TagIds">Null keeps the entry's tags.</param>
+public sealed record ChangeBankTransactionCommand(
+    DateOnly Date,
+    IReadOnlyCollection<BankSplit> Splits,
+    string Reason,
+    string? Payee = null,
+    string? Reference = null,
+    string? Memo = null,
+    Guid? VendorId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
+
 public sealed record TransferCommand(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
 public sealed record BankAccountSummary(
@@ -169,6 +185,126 @@ public sealed class BankingService(
         bank.Add(Audit(AuditAction.Voided, transaction, before));
         await bank.SaveChangesAsync(ct);
         return transaction;
+    }
+
+    /// <summary>
+    /// Corrects a posted spend or receive in place, in one save: its entry is voided (the reversal dated the original date)
+    /// and a new one posted on its date. It keeps its id, so attachments, notes and the bank feed line it came from stay.
+    /// Refused once reconciled or ticked (as a void is), for transfers, and for a cash count's over/short. A transaction
+    /// that came from or was matched to a bank feed line keeps its amount (the bank's figure); an issued check (printed,
+    /// or sent in a positive pay file) keeps its amount, payee and number. Category lines marked billable to a customer
+    /// are pointed at by line number, so they stay as they are, in their place.
+    /// </summary>
+    public async Task<BankTransaction> ChangeAsync(Guid id, ChangeBankTransactionCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Splits);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new DomainException("bank.change_reason_required", "Say why the transaction is being changed.");
+
+        var transaction = await bank.GetTransactionAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (transaction.Status == BankTransactionStatus.Voided)
+            throw new DomainException("bank.voided", "This transaction is voided, so it can't be changed.");
+        if (transaction.Kind == BankTransactionKind.Transfer)
+            throw new DomainException("bank.transfer_change", "Transfers can't be changed. Void it and record it again.");
+        foreach (var fund in (await bank.ListPettyCashFundsAsync(ct)).Where(f => f.AccountId == transaction.AccountId))
+        {
+            if ((await bank.ListCashCountsAsync(fund.Id, ct)).Any(c => c.AdjustmentTransactionId == transaction.Id))
+                throw new DomainException("bank.cash_count", "This is the over or short of a cash count, so it can't be changed.");
+        }
+
+        var payee = command.Payee;
+        if (command.VendorId is { } vendorId)
+        {
+            if (transaction.Kind != BankTransactionKind.Spend)
+                throw new DomainException("bank.vendor_on_spend_only", "Only payments and charges can name a vendor.");
+            var vendor = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+            if (!vendor.IsActive && vendorId != transaction.VendorId)
+                throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
+            if (string.IsNullOrWhiteSpace(payee))
+                payee = vendor.DisplayName;
+        }
+
+        var postings = BankTransaction.SplitPostings(transaction.Kind, transaction.AccountId, command.Splits);
+        var amount = command.Splits.Sum(s => s.Amount);
+        var feed = await BankFeedService.TiedToAsync(bank, transaction.AccountId, transaction.JournalEntryId, transaction.Id, ct);
+        if (feed.Count > 0 && amount != transaction.Amount)
+            throw new DomainException("bank.feed_amount",
+                $"This transaction stands for a line from the bank feed, so its amount stays {transaction.Amount:N2}. Undo the feed line first to change it.");
+        if (await IsIssuedCheckAsync(transaction, ct)
+            && (amount != transaction.Amount || !SameText(payee, transaction.Payee) || !SameText(command.Reference, transaction.Reference)))
+            throw new DomainException("bank.check_issued",
+                "This check has been printed or sent to the bank in a positive pay file, so its amount, payee and number stay. Void it and write a new one instead.");
+
+        var old = await ledger.GetEntryAsync(transaction.JournalEntryId, ct) ?? throw new EntityNotFoundException("journal_entry", transaction.JournalEntryId);
+        await EnsureMarkedLinesKeptAsync(transaction, old, postings, ct);
+        var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([transaction.JournalEntryId], ct)).Select(t => t.TagId).ToList();
+        var before = Snapshot(transaction);
+
+        await engine.StageVoidAsync(transaction.JournalEntryId, $"Transaction changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        var entryMemo = string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(
+            command.Date,
+            postings,
+            entryMemo.Length == 0 ? null : entryMemo,
+            BankTransaction.SourceFor(transaction.Kind),
+            transaction.Id,
+            LocationId: command.LocationId,
+            TagIds: tagIds), ct);
+
+        transaction.Change(command.Date, amount, entry.Id, payee, command.Reference, command.Memo, command.VendorId);
+        transaction.SetLocation(command.LocationId);
+        foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))
+            item.FollowEntry(entry.Id);
+        bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, transaction.Id, before,
+            DocumentChanges.WithReason(Snapshot(transaction), command.Reason)));
+        await bank.SaveChangesAsync(ct);
+        return transaction;
+    }
+
+    /// <summary>A spend's or receive's category lines as they stand, in order, in the form <see cref="ChangeAsync"/> takes.</summary>
+    public async Task<IReadOnlyList<BankSplit>> SplitsAsync(BankTransaction transaction, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        var entry = await ledger.GetEntryAsync(transaction.JournalEntryId, ct) ?? throw new EntityNotFoundException("journal_entry", transaction.JournalEntryId);
+        var classes = (await ledger.GetLineSegmentsAsync([entry.Id], ct)).ToDictionary(s => s.JournalLineId, s => s.ClassId);
+        var sign = transaction.Kind == BankTransactionKind.Spend ? 1m : -1m;
+        return entry.Lines.Where(l => l.LineNumber > 1).OrderBy(l => l.LineNumber)
+            .Select(l => new BankSplit(l.AccountId, sign * l.Amount, l.Memo, classes.GetValueOrDefault(l.Id)))
+            .ToList();
+    }
+
+    /// <summary>The transaction's corrections, oldest first.</summary>
+    public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
+        DocumentChanges.ListAsync(ledger, EntityType, id, ct);
+
+    /// <summary>A check the bank already knows of: printed, or numbered and dated within what positive pay has sent.</summary>
+    private async Task<bool> IsIssuedCheckAsync(BankTransaction transaction, CancellationToken ct) =>
+        transaction.Kind == BankTransactionKind.Spend
+        && (transaction.PrintedAt is not null
+            || PositivePayService.IsCheckNumber(transaction.Reference)
+            && (await bank.GetPositivePaySettingsAsync(transaction.AccountId, ct))?.LastExportedThrough is { } through && transaction.Date <= through);
+
+    private static bool SameText(string? a, string? b) =>
+        string.Equals(string.IsNullOrWhiteSpace(a) ? null : a.Trim(), string.IsNullOrWhiteSpace(b) ? null : b.Trim(), StringComparison.Ordinal);
+
+    /// <summary>
+    /// An expense line marked billable is pointed at by its journal line number (the bank line is line 1, the categories
+    /// follow in order), so it must still be there, unchanged, at the same place (remove the mark first to change it).
+    /// </summary>
+    private async Task EnsureMarkedLinesKeptAsync(BankTransaction transaction, JournalEntry old, IReadOnlyList<JournalLineDraft> postings, CancellationToken ct)
+    {
+        if (transaction.Kind != BankTransactionKind.Spend)
+            return;
+        foreach (var mark in await sales.ListBillableForDocumentAsync(Domain.Sales.BillableSource.Expense, transaction.Id, ct))
+        {
+            var was = old.Lines.FirstOrDefault(l => l.LineNumber == mark.LineNumber);
+            var now = mark.LineNumber >= 1 && mark.LineNumber <= postings.Count ? postings[mark.LineNumber - 1] : null;
+            if (was is null || now is not null && (now.AccountId, now.Debit, now.Credit) == (was.AccountId, was.Debit, was.Credit) && SameText(now.Memo, was.Memo))
+                continue;
+            throw new DomainException("bank.line_locked",
+                $"Line {mark.LineNumber - 1} ({was.Memo ?? mark.Description}) is marked billable to a customer, so it has to stay as it is, in its place. Remove the mark first to change it.");
+        }
     }
 
     /// <summary>One more than the highest numeric check number used on the account, or null if none.</summary>

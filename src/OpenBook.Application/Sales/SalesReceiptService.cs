@@ -57,6 +57,7 @@ public sealed class SalesReceiptService(
     InventoryService inventory,
     WarehouseService warehouses,
     CustomFields.CustomFieldStamper customFields,
+    Banking.IBankingStore bank,
     ILedgerStore ledger,
     IClock clock,
     ICurrentUser user)
@@ -150,6 +151,12 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {receipt.Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");
 
+        // A feed line matched to the receipt is what the bank reported, so the money into that account stays.
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, receipt.DepositAccountId, receipt.JournalEntryId, null, ct);
+        if (feed.Count > 0 && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))
+            throw new DomainException("receipt.feed_matched",
+                $"Sales receipt {receipt.Number} is matched to a line from the bank feed, so its total and deposit account stay. Undo the match first to change them.");
+
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([receipt.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(receipt);
@@ -168,6 +175,8 @@ public sealed class SalesReceiptService(
             command.Reference ?? receipt.Reference, command.Memo, taxCodeId, exemption);
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
+        foreach (var item in feed)
+            item.FollowEntry(entry.Id);
 
         // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
         await customFields.MoveLinesAsync(EntityType, receipt.Id, drafts.Count, command.FromLines, ct);

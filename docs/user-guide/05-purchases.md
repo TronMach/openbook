@@ -74,6 +74,8 @@ To record something you've already paid, go to **Banking**, find the bank or car
 
 Most expenses don't need typing at all: import your bank or card statement and add them from the review list ([Banking](06-banking.md)). Bank rules can fill in the vendor and category for you.
 
+To correct an expense, open it and use **Change** ([Correcting a transaction](06-banking.md#correcting-a-transaction)).
+
 ## Vendor credits
 
 A *vendor credit* reduces what you owe a vendor: a return, a refund promised for a billing mistake.
