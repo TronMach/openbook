@@ -91,7 +91,7 @@
             </div>
             <TagChecks Options="_segments" Value="_tags" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="DateOnly.FromDateTime(DateTime.Today)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="CompanyTime.Today" />
             <p class="hint">@L["Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting."]</p>
 
             <div class="field" style="margin-top: 1rem">
@@ -128,7 +128,7 @@
     private string? _memo;
     private int _interval = 1;
     private RecurrenceFrequency _frequency = RecurrenceFrequency.Monthly;
-    private DateOnly _startDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _startDate = CompanyTime.Today;
     private DateOnly? _endDate;
     private int? _maxOccurrences;
     private bool _autoCreate;
@@ -149,7 +149,7 @@
     {
         RecurringInvoice? template;
         (_customers, _items, template) = await Ops.RunAsync(async sp => (
-            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(s => s.Customer).ToList(),
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(CompanyTime.Today)).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             Id is { } id ? await sp.GetRequiredService<RecurringInvoiceService>().GetAsync(id) : null));
 

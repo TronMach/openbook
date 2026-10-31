@@ -15,7 +15,7 @@
 <div class="wide">
     @{
         var open = _order.Status == PurchaseOrderStatus.Open;
-        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var today = CompanyTime.Today.ToString("yyyy-MM-dd");
         var anyReceived = _order.Receipts.Any(r => !r.IsVoided);
     }
     <div class="toolbar">

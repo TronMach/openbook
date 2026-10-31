@@ -107,7 +107,7 @@
     [SupplyParameterFromQuery] private DateOnly? AsOf { get; set; }
     [SupplyParameterFromQuery] private bool Detail { get; set; }
 
-    private DateOnly AsOfDate => AsOf ?? DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly AsOfDate => AsOf ?? CompanyTime.Today;
 
     protected override async Task OnParametersSetAsync()
     {

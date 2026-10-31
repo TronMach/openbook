@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Sales;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Sales;
@@ -82,7 +83,7 @@ internal static class InventoryApi
             return Results.Created($"/api/inventory/builds/{build.Id}", build);
         });
         inventory.MapGet("/builds/pending", async (AssemblyBuildService s, CancellationToken ct) =>
-            (await s.ListPendingAsync(DateOnly.FromDateTime(DateTime.Today), ct)).Select(p => new
+            (await s.ListPendingAsync(CompanyTime.Today, ct)).Select(p => new
             {
                 p.Pending,
                 AssemblyName = p.Assembly.Name,
@@ -121,7 +122,7 @@ internal static class InventoryApi
         inventory.MapPut("/items/{id:guid}/lots/{lot}/expiry", async (Guid id, string lot, LotExpiryRequest r, InventoryService s, CancellationToken ct) =>
             await s.SetLotExpiryAsync(id, lot, r.ExpiresOn, ct));
         inventory.MapGet("/lots/expiring", async (int? days, InventoryService s, CancellationToken ct) =>
-            (await s.ExpiringAsync(DateOnly.FromDateTime(DateTime.Today).AddDays(days ?? 30), ct)).Select(l => new { ItemId = l.Item.Id, l.Item.Name, l.Lot, l.ExpiresOn, l.Quantity }));
+            (await s.ExpiringAsync(CompanyTime.Today.AddDays(days ?? 30), ct)).Select(l => new { ItemId = l.Item.Id, l.Item.Name, l.Lot, l.ExpiresOn, l.Quantity }));
         inventory.MapPost("/labels", async (LabelsRequest r, LabelService s, CancellationToken ct) =>
             Results.File(await s.RenderAsync((r.Items ?? []).Select(i => (i.ItemId, i.Copies)).ToList(), r.ShowPrice, ct), "application/pdf", "Labels.pdf"));
 

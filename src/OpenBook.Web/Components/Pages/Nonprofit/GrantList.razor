@@ -47,5 +47,5 @@
 @code {
     private IReadOnlyList<GrantPosition> _grants = [];
 
-    protected override async Task OnInitializedAsync() => _grants = await GrantService.PositionsAsync(DateOnly.FromDateTime(DateTime.Today));
+    protected override async Task OnInitializedAsync() => _grants = await GrantService.PositionsAsync(CompanyTime.Today);
 }

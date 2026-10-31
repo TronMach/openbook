@@ -148,7 +148,7 @@ Bank Loan,9000.00</pre>
     private const long MaxFileBytes = 5 * 1024 * 1024;
 
     private string _mode = "entries";
-    private DateOnly _asOf = new(DateTime.Today.Year - 1, 12, 31);
+    private DateOnly _asOf = new(CompanyTime.Today.Year - 1, 12, 31);
     private string? _csv;
     private string? _fileName;
     private JournalImportResult? _entries;

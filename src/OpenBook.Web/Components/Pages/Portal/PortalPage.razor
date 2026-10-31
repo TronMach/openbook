@@ -98,7 +98,7 @@
 
 @code {
     private PortalView? _view;
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
 
     [Parameter] public string Token { get; set; } = "";
     [SupplyParameterFromQuery] private string? Error { get; set; }

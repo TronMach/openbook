@@ -3,6 +3,7 @@ using Microsoft.Net.Http.Headers;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Import;
 using OpenBook.Application.Ledger;
+using OpenBook.Application;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Web.Security;
@@ -18,7 +19,7 @@ public static class BankingEndpoints
         {
             try
             {
-                var connection = await connections.ConnectAsync(BankConnectionProvider.SimpleFin, form["setupToken"].ToString(), form["name"], TimeZoneInfo.Local, ct);
+                var connection = await connections.ConnectAsync(BankConnectionProvider.SimpleFin, form["setupToken"].ToString(), form["name"], CompanyTime.Zone, ct);
                 return Results.Redirect($"/banking/connections/{connection.Id}?done=connected");
             }
             catch (DomainException ex)
@@ -30,7 +31,7 @@ public static class BankingEndpoints
         app.MapPost("/banking/connections/{id:guid}/sync", async (Guid id, IFormCollection form, BankConnectionService connections, CancellationToken ct) =>
             await Back($"/banking/connections/{id}", async () =>
             {
-                var result = await connections.SyncAsync(id, TimeZoneInfo.Local, ct);
+                var result = await connections.SyncAsync(id, CompanyTime.Zone, ct);
                 return result.Succeeded
                     ? FormattableString.Invariant($"done=synced&queued={result.Queued}&added={result.AutoAdded}&skipped={result.Skipped}")
                     : $"error={Uri.EscapeDataString(result.Error!)}";
@@ -152,5 +153,5 @@ public static class BankingEndpoints
     private static decimal? Amount(string? value) =>
         StatementValues.TryParseAmount(value, out var amount) ? amount : null;
 
-    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today() => CompanyTime.Today;
 }

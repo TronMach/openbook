@@ -117,7 +117,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _asOf = DateOnly.TryParse(AsOf, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        _asOf = DateOnly.TryParse(AsOf, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : CompanyTime.Today;
         _weeks = Math.Clamp(Weeks ?? 13, 1, ForecastService.MaxWeeks);
         _scenarios = await Forecasts.ListScenariosAsync();
         var scenario = _scenarios.Any(s => s.Id == ScenarioId) ? ScenarioId : null;

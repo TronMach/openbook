@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Sales;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Pricing;
 using OpenBook.Domain.Sales;
@@ -143,7 +144,7 @@ internal static class SalesApi
     public static void MapSalesApi(this RouteGroupBuilder api)
     {
         api.MapGet("/customers", async (bool? includeInactive, CustomerService s, CancellationToken ct) =>
-            (await s.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive ?? false, ct)).Select(x => CustomerResponse.From(x.Customer, x.Balance)));
+            (await s.ListAsync(CompanyTime.Today, includeInactive ?? false, ct)).Select(x => CustomerResponse.From(x.Customer, x.Balance)));
         api.MapGet("/customers/{id:guid}", async (Guid id, CustomerService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } c ? Results.Ok(CustomerResponse.From(c)) : Results.NotFound());
         api.MapPost("/customers", async (CustomerDetails r, CustomerService s, CancellationToken ct) =>

@@ -156,7 +156,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         var day = DateOnly.TryParseExact(Week, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var w) ? w : today;
         _monday = day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
         _workers = await WorkerService.ListAsync();

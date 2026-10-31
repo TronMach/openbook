@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.SalesTax;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.SalesTax;
 
@@ -48,7 +49,7 @@ internal static class SalesTaxApi
 
         tax.MapGet("/agencies", async (DateOnly? asOf, SalesTaxService s, SalesTaxPaymentService p, CancellationToken ct) =>
         {
-            var owed = await p.OwedAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), ct);
+            var owed = await p.OwedAsync(asOf ?? CompanyTime.Today, ct);
             return (await s.ListAgenciesAsync(ct)).Select(a => TaxAgencyResponse.From(a, owed.GetValueOrDefault(a.Id)));
         });
         tax.MapGet("/agencies/{id:guid}", async (Guid id, SalesTaxService s, CancellationToken ct) =>

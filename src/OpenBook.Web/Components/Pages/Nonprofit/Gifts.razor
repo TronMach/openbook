@@ -60,7 +60,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _from = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : new DateOnly(today.Year, 1, 1);
         _to = DateOnly.TryParseExact(To, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : today;
         _gifts = await GiftService.ListAsync(_from, _to);

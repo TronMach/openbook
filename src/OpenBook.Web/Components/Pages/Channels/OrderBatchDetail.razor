@@ -133,7 +133,7 @@
                             </tbody>
                         </table>
                         <div class="row">
-                            <div class="field"><label for="return-date">Date</label><input id="return-date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                            <div class="field"><label for="return-date">Date</label><input id="return-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
                             <div class="field"><label for="return-memo">Memo <span class="muted">(optional)</span></label><input id="return-memo" name="memo" maxlength="@ChannelReturn.MaxMemoLength" /></div>
                         </div>
                         <div class="actions"><button type="submit" class="secondary">Put the returns in stock</button></div>

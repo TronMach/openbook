@@ -5,6 +5,7 @@ using OpenBook.Application.Import;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Web.Security;
 
@@ -117,7 +118,7 @@ public static class OnlineEndpoints
                 var spend = await receipts.RecordAsync(id, new RecordReceiptCommand(
                     Guid.TryParse(form["accountId"], out var account) ? account : throw new DomainException("receipt.account_required", "Choose the account it was paid from."),
                     Guid.TryParse(form["categoryId"], out var category) && category != Guid.Empty ? category : null,
-                    DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : DateOnly.FromDateTime(DateTime.Today),
+                    DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : CompanyTime.Today,
                     StatementValues.TryParseAmount(form["amount"], out var amount) ? amount : 0m,
                     Guid.TryParse(form["vendorId"], out var vendor) && vendor != Guid.Empty ? vendor : null,
                     form["payee"].ToString() is { Length: > 0 } payee ? payee : null,

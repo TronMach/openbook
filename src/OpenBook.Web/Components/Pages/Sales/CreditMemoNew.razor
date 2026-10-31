@@ -65,7 +65,7 @@
     private IReadOnlyList<Item> _items = [];
     private Guid? _customerId;
     private string? _number;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private string? _memo;
     private List<SalesLineModel> _lines = [new()];
     private bool _loaded;

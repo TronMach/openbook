@@ -101,7 +101,7 @@
     private ReconciliationWorksheet? _worksheet;
     private DateOnly? _lastStatementDate;
     private decimal _beginning;
-    private DateOnly _statementDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _statementDate = CompanyTime.Today;
     private decimal? _statementBalance;
     private bool _loaded;
     private bool _busy;

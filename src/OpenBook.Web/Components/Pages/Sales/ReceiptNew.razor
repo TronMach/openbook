@@ -84,7 +84,7 @@
     private Guid? _customerId;
     private Guid _depositAccountId;
     private string? _number;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private string? _reference;
     private string? _memo;
     private List<SalesLineModel> _lines = [new()];

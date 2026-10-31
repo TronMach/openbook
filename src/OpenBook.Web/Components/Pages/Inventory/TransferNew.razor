@@ -103,7 +103,7 @@
     {
         _places = await StockPlaces.LoadAsync(WarehouseService);
         _items = (await Items.ListAsync()).Where(i => i.IsInventory).ToList();
-        Input ??= new TransferModel { Date = DateOnly.FromDateTime(DateTime.Today) };
+        Input ??= new TransferModel { Date = CompanyTime.Today };
         while (Input.Lines.Count < Rows)
             Input.Lines.Add(new LineModel { To = _places.Choices.Skip(1).FirstOrDefault()?.Value });
         if (PresetItem is { } preset && Input.Lines.All(l => l.ItemId is null))

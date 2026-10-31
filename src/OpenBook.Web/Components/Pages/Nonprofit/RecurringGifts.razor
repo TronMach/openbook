@@ -152,7 +152,7 @@
 </div>
 
 @code {
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
     private IReadOnlyList<RecurringGift> _templates = [];
     private RecurringGift? _editing;
     private Dictionary<Guid, string> _names = [];

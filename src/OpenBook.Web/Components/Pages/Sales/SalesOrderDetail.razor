@@ -41,7 +41,7 @@
                     <tr class="@(i.Status == DocumentStatus.Voided ? "inactive" : null)">
                         <td><a href="/sales/invoices/@i.Id">@i.Number</a></td>
                         <td>@Labels.Date(i.Date)</td>
-                        <td>@(i.Status == DocumentStatus.Voided ? "Voided" : Labels.Status(i, DateOnly.FromDateTime(DateTime.Today)))</td>
+                        <td>@(i.Status == DocumentStatus.Voided ? "Voided" : Labels.Status(i, CompanyTime.Today))</td>
                         <td class="num">@Labels.Amount(i.Total)</td>
                     </tr>
                 }

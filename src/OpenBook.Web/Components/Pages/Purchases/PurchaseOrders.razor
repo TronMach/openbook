@@ -49,6 +49,6 @@
     protected override async Task OnInitializedAsync()
     {
         _orders = (await Orders.ListAsync()).Where(o => ShowAll || o.Status == PurchaseOrderStatus.Open).ToList();
-        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
     }
 }

@@ -47,7 +47,7 @@ Downloads a copy of the whole company file, attachments included, as a `.openboo
 
 Set OpenBook to back itself up:
 
-- **How often**: daily or weekly, at an hour in the server's time.
+- **How often**: daily or weekly, at an hour in the company's time zone (**Settings → Time zone**; the server's if none is set).
 - **Keep the newest**: how many to keep; older scheduled backups are deleted.
 - **Save to**: a **folder** (give the full path, ideally a different drive or a synced folder), or **S3-compatible storage** such as Amazon S3, Backblaze B2, Cloudflare R2, Wasabi or MinIO (service URL, region, bucket, folder and an access key that can only put, list and delete in that bucket; the secret is stored encrypted).
 

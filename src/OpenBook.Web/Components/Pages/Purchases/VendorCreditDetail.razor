@@ -264,7 +264,7 @@
         public decimal? Amount { get; set; }
 
         public Guid AccountId { get; set; }
-        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly Date { get; set; } = CompanyTime.Today;
 
         [StringLength(30)]
         public string? Reference { get; set; }

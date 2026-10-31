@@ -196,7 +196,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _today = DateOnly.FromDateTime(DateTime.Today);
+        _today = CompanyTime.Today;
         if (Enum.TryParse<FormDocuments>(KindText, out var kind) && FormDesign.Each(PrintQueueItem.Queueable).Contains(kind))
             _kind = kind;
         _to = To ?? _today;

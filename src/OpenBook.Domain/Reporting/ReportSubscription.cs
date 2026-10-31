@@ -85,7 +85,7 @@ public sealed class ReportSubscription
         IsActive = details.IsActive;
     }
 
-    /// <summary>The most recent scheduled time at or before <paramref name="now"/> (both in server local time).</summary>
+    /// <summary>The most recent scheduled time at or before <paramref name="now"/> (both in the company's local time).</summary>
     public DateTime LatestSlot(DateTime now)
     {
         var today = now.Date.AddHours(Hour);
@@ -104,12 +104,14 @@ public sealed class ReportSubscription
     }
 
     /// <summary>Due when active and a scheduled time has passed since it was made or last ran.</summary>
-    public bool IsDue(DateTimeOffset now)
+    /// <param name="zone">The company's time zone, which the schedule's days and hour are in; null for the server's.</param>
+    public bool IsDue(DateTimeOffset now, TimeZoneInfo? zone = null)
     {
         if (!IsActive)
             return false;
-        var since = (LastRunAt ?? CreatedAt).ToLocalTime().DateTime;
-        return LatestSlot(now.ToLocalTime().DateTime) > since;
+        zone ??= TimeZoneInfo.Local;
+        var since = TimeZoneInfo.ConvertTime(LastRunAt ?? CreatedAt, zone).DateTime;
+        return LatestSlot(TimeZoneInfo.ConvertTime(now, zone).DateTime) > since;
     }
 
     public void RecordRun(DateTimeOffset at, string? error)

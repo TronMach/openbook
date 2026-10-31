@@ -38,7 +38,7 @@
 </div>
 
 @code {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today => CompanyTime.Today;
 
     [SupplyParameterFromQuery] private string? Back { get; set; }
 }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Purchases;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Purchases;
 
@@ -101,7 +102,7 @@ internal static class PurchasesApi
     public static void MapPurchasesApi(this RouteGroupBuilder api)
     {
         api.MapGet("/vendors", async (bool? includeInactive, VendorService s, CancellationToken ct) =>
-            (await s.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive ?? false, ct)).Select(x => VendorResponse.From(x.Vendor, x.Balance)));
+            (await s.ListAsync(CompanyTime.Today, includeInactive ?? false, ct)).Select(x => VendorResponse.From(x.Vendor, x.Balance)));
         api.MapGet("/vendors/{id:guid}", async (Guid id, VendorService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } v ? Results.Ok(VendorResponse.From(v)) : Results.NotFound());
         api.MapPost("/vendors", async (VendorDetails r, VendorService s, CancellationToken ct) =>

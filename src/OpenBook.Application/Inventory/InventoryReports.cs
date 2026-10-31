@@ -102,7 +102,7 @@ public sealed class InventoryReports(InventoryService inventory, IInventoryStore
 
         return new ReportTable(
             "Inventory stock status",
-            [company.Name, $"As of {DateOnly.FromDateTime(DateTime.Today):MMM d, yyyy}{(warehouse is null ? "" : $" · {warehouse.Name}")}"],
+            [company.Name, $"As of {CompanyTime.Today:MMM d, yyyy}{(warehouse is null ? "" : $" · {warehouse.Name}")}"],
             [new("Item"), new("On hand", ColumnFormat.Number), new("Reorder point", ColumnFormat.Number), new("Status"), new("Purchase cost", ColumnFormat.Money), new("Asset value", ColumnFormat.Money)],
             rows,
             Note: "Items at or below their reorder point come first.");

@@ -91,7 +91,7 @@
                 <form method="post" action="/assets/@a.Id/dispose" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
-                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
                         <div class="field"><label for="proceeds">Sold for</label><input id="proceeds" name="proceeds" class="amount" inputmode="decimal" placeholder="0.00" /></div>
                         <div class="field">
                             <label for="proceedsAccount">Money went to</label>

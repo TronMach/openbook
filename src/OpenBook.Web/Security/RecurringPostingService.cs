@@ -3,6 +3,7 @@ using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 
 namespace OpenBook.Web.Security;
@@ -34,10 +35,17 @@ internal sealed partial class RecurringPostingService(
 
     private async Task PostDueAsync(CancellationToken ct)
     {
-        if (!await StepAsync("Checking setup", async services => await setup.CheckAsync(services.GetRequiredService<CompanySetupService>(), ct), ct))
+        if (!await StepAsync("Checking setup", async services =>
+        {
+            if (!await setup.CheckAsync(services.GetRequiredService<CompanySetupService>(), ct))
+                return false;
+            // A restored file, or another server instance, may have changed the company's time zone.
+            CompanyTime.Use(await services.GetRequiredService<ICompanyStore>().GetCompanyAsync(ct));
+            return true;
+        }, ct))
             return;
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         await StepAsync("Recurring entries", async services =>
         {
             foreach (var result in await services.GetRequiredService<RecurringEntryService>().PostDueAsync(today, autoPostOnly: true, ct))

@@ -125,7 +125,7 @@
     private string? _memo;
     private int _interval = 1;
     private RecurrenceFrequency _frequency = RecurrenceFrequency.Monthly;
-    private DateOnly _startDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _startDate = CompanyTime.Today;
     private DateOnly? _endDate;
     private int? _maxOccurrences;
     private bool _autoCreate;
@@ -143,7 +143,7 @@
     {
         RecurringBill? template;
         (_vendors, _chart, _useNumbers, template) = await Ops.RunAsync(async sp => (
-            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(s => s.Vendor).ToList(),
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(CompanyTime.Today)).Select(s => s.Vendor).ToList(),
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
             Id is { } id ? await sp.GetRequiredService<RecurringBillService>().GetAsync(id) : null));

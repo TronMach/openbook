@@ -139,7 +139,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _agencies = (await Taxes.ListAgenciesAsync()).Where(a => a.IsActive || a.Id == PresetAgency).ToList();
         _chart = await AccountService.GetChartAsync();
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();

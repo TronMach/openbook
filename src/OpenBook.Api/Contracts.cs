@@ -99,7 +99,8 @@ public sealed record CompanySettingsRequest(
     int FiscalYearStartMonth,
     bool UseAccountNumbers,
     ReportBasis DefaultReportBasis,
-    Edition? Edition = null);
+    Edition? Edition = null,
+    string? TimeZoneId = null);
 
 public sealed record CompanyResponse(
     Guid Id,
@@ -113,9 +114,10 @@ public sealed record CompanyResponse(
     int FiscalYearStartMonth,
     bool UseAccountNumbers,
     ReportBasis DefaultReportBasis,
-    Edition Edition)
+    Edition Edition,
+    string? TimeZoneId)
 {
     public static CompanyResponse From(Company c) => new(
         c.Id, c.Name, c.BusinessType, c.LegalName, c.Email, c.Phone, c.Address, c.HomeCurrency.Code,
-        c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, c.Edition);
+        c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, c.Edition, c.TimeZoneId);
 }

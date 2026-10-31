@@ -172,7 +172,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _asOf = DateOnly.TryParseExact(AsOf, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        _asOf = DateOnly.TryParseExact(AsOf, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : CompanyTime.Today;
         _purposes = await Nonprofit.PurposesAsync(_asOf);
         _releases = await Nonprofit.ListReleasesAsync();
         _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);

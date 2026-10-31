@@ -1,5 +1,6 @@
 using System.Globalization;
 using OpenBook.Application.Reporting;
+using OpenBook.Application;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 
@@ -12,7 +13,7 @@ public sealed record ReportQuery(DatePreset Preset, DateRange Range, ReportBasis
     {
         var parsedPreset = Enum.TryParse<DatePreset>(preset, ignoreCase: true, out var p) ? p : defaultPreset;
         var parsedBasis = Enum.TryParse<ReportBasis>(basis, ignoreCase: true, out var b) ? b : company.DefaultReportBasis;
-        var range = DateRanges.For(parsedPreset, DateOnly.FromDateTime(DateTime.Today), company.FiscalYearStartMonth, from, to);
+        var range = DateRanges.For(parsedPreset, CompanyTime.Today, company.FiscalYearStartMonth, from, to);
         return new ReportQuery(parsedPreset, range, parsedBasis);
     }
 

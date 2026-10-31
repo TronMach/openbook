@@ -108,7 +108,7 @@
     private Account? _badDebts;
     private ChartOfAccounts _chart = new([]);
     private int _days = 90;
-    private DateOnly _asOf = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _asOf = CompanyTime.Today;
     private string _back = "/sales/write-offs/new";
 
     [SupplyParameterFromQuery] private Guid? Invoice { get; set; }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Pricing;
+using OpenBook.Application;
 using OpenBook.Domain.Pricing;
 
 namespace OpenBook.Api;
@@ -57,7 +58,7 @@ internal static class PricingApi
             return result.Errors.Count == 0 ? Results.Ok(result) : Results.BadRequest(result);
         }).Accepts<string>("text/csv");
         pricing.MapGet("/levels/{id:guid}/export", async (Guid id, DateOnly? date, PricingService s, CancellationToken ct) =>
-            Results.Text(await s.ExportLevelPricesAsync(id, date ?? DateOnly.FromDateTime(DateTime.Today), ct), "text/csv"));
+            Results.Text(await s.ExportLevelPricesAsync(id, date ?? CompanyTime.Today, ct), "text/csv"));
 
         pricing.MapGet("/rules", async (PricingService s, CancellationToken ct) => (await s.ListRulesAsync(ct)).Select(PriceRuleResponse.From));
         pricing.MapGet("/rules/{id:guid}", async (Guid id, PricingService s, CancellationToken ct) =>
@@ -84,7 +85,7 @@ internal static class PricingApi
 
         pricing.MapGet("/quote", async (Guid itemId, Guid? customerId, decimal? quantity, DateOnly? date, PricingService s, CancellationToken ct) =>
         {
-            var q = await s.QuoteAsync(customerId, itemId, quantity ?? 1m, date ?? DateOnly.FromDateTime(DateTime.Today), ct);
+            var q = await s.QuoteAsync(customerId, itemId, quantity ?? 1m, date ?? CompanyTime.Today, ct);
             return new PriceQuoteResponse(q.ListPrice, q.Price, q.Source, q.Steps);
         });
         pricing.MapGet("/last-prices/{customerId:guid}", async (Guid customerId, PricingService s, CancellationToken ct) =>

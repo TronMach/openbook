@@ -179,7 +179,7 @@
 </div>
 
 @code {
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
     private IReadOnlyList<TaxAgency> _agencies = [];
     private IReadOnlyList<TaxRate> _rates = [];
     private IReadOnlyList<TaxCode> _codes = [];

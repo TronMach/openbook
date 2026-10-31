@@ -33,7 +33,7 @@
             <dt>@L["Home currency"]</dt>
             <dd>@_company.HomeCurrency</dd>
             <dt>@L["Fiscal year"]</dt>
-            <dd>@L["Starts in {0}; current year began {1}", Labels.Month(_company.FiscalYearStartMonth), _company.FiscalYearStart(DateOnly.FromDateTime(DateTime.Today)).ToString("d")]</dd>
+            <dd>@L["Starts in {0}; current year began {1}", Labels.Month(_company.FiscalYearStartMonth), _company.FiscalYearStart(CompanyTime.Today).ToString("d")]</dd>
         </dl>
     </div>
 

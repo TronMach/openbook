@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Sales;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
@@ -161,7 +162,7 @@ internal static class ReceivablesApi
     public static void MapReceivablesApi(this RouteGroupBuilder api)
     {
         var sales = api.MapGroup("/sales");
-        static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+        static DateOnly Today() => CompanyTime.Today;
 
         sales.MapGet("/estimates", async (Guid? customerId, EstimateService s, CancellationToken ct) =>
             (await s.ListAsync(customerId, ct)).Select(EstimateResponse.From));

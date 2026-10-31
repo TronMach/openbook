@@ -72,8 +72,8 @@
     private bool _useNumbers;
     private Vendor? _vendor;
     private string? _reference;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
-    private DateOnly _dueDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
+    private DateOnly _dueDate = CompanyTime.Today;
     private string? _memo;
     private List<BillLineModel> _lines = [new()];
     private bool _loaded;

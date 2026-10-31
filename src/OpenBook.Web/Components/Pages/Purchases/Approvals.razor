@@ -77,6 +77,6 @@
     {
         _settings = await ApprovalService.GetSettingsAsync();
         _bills = await ApprovalService.PendingAsync();
-        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
     }
 }

@@ -74,7 +74,7 @@
     protected override async Task OnInitializedAsync()
     {
         _terms = await Editions.TermsAsync(Companies);
-        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today), ShowInactive);
+        _customers = await CustomerService.ListAsync(CompanyTime.Today, ShowInactive);
         _fields = await FieldService.ListColumnsAsync(OpenBook.Domain.CustomFields.CustomFieldTarget.Customer);
     }
 

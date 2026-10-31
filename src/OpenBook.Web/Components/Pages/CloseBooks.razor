@@ -126,7 +126,7 @@
     private string? _message;
     private string? _error;
 
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today => CompanyTime.Today;
 
     [SupplyParameterFromForm(FormName = "closing")]
     private ClosingModel Input { get; set; } = default!;

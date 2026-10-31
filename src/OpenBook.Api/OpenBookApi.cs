@@ -75,7 +75,7 @@ public static class OpenBookApi
 
         api.MapPut("/company", async (CompanySettingsRequest r, CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.UpdateAsync(new UpdateCompanySettingsCommand(
-                r.Name, r.BusinessType, r.LegalName, r.Email, r.Phone, r.Address, r.FiscalYearStartMonth, r.UseAccountNumbers, r.DefaultReportBasis, r.Edition), ct)));
+                r.Name, r.BusinessType, r.LegalName, r.Email, r.Phone, r.Address, r.FiscalYearStartMonth, r.UseAccountNumbers, r.DefaultReportBasis, r.Edition, r.TimeZoneId), ct)));
 
         api.MapGet("/accounts", async (AccountService accounts, CancellationToken ct) =>
         {
@@ -138,7 +138,7 @@ public static class OpenBookApi
             new { Voided = await imports.VoidBatchAsync(batchId, request.Reason, ct) });
 
         api.MapGet("/reports/trial-balance", async (DateOnly? asOf, ReportBasis? basis, TrialBalanceQuery query, CancellationToken ct) =>
-            TrialBalanceResponse.From(await query.RunAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), basis, ct)));
+            TrialBalanceResponse.From(await query.RunAsync(asOf ?? CompanyTime.Today, basis, ct)));
 
         return app;
     }

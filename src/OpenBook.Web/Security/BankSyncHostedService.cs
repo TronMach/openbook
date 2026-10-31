@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
+using OpenBook.Application;
 
 namespace OpenBook.Web.Security;
 
@@ -32,7 +33,7 @@ internal sealed partial class BankSyncHostedService(
             if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
                 return;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
-            foreach (var (connection, result) in await scope.ServiceProvider.GetRequiredService<BankConnectionService>().SyncDueAsync(TimeZoneInfo.Local, ct))
+            foreach (var (connection, result) in await scope.ServiceProvider.GetRequiredService<BankConnectionService>().SyncDueAsync(CompanyTime.Zone, ct))
             {
                 if (result.Succeeded)
                     LogSynced(connection.Name, result.Queued, result.AutoAdded);

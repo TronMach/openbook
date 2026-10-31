@@ -150,7 +150,7 @@
     private static readonly (string Key, string Label)[] Tabs =
         [("open", "Unpaid bills"), ("all-bills", "All bills"), ("payments", "Bill payments"), ("credits", "Vendor credits"), ("expenses", "Expenses")];
 
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
     private IReadOnlyList<Bill> _bills = [];
     private IReadOnlyList<BillPayment> _payments = [];
     private IReadOnlyList<VendorCredit> _credits = [];

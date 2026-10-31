@@ -1,6 +1,7 @@
 using System.Globalization;
 using OpenBook.Application.Assets;
 using OpenBook.Application.Ledger;
+using OpenBook.Application;
 using OpenBook.Domain.Assets;
 using OpenBook.Domain.Common;
 using OpenBook.Web.Security;
@@ -167,5 +168,5 @@ public static class AssetEndpoints
         decimal.TryParse(value?.Replace(",", "", StringComparison.Ordinal).Replace("$", "", StringComparison.Ordinal).Replace("%", "", StringComparison.Ordinal).Trim(),
             NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n) ? n : null;
 
-    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today() => CompanyTime.Today;
 }

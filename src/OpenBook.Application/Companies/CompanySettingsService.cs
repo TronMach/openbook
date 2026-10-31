@@ -15,7 +15,8 @@ public sealed record UpdateCompanySettingsCommand(
     int FiscalYearStartMonth,
     bool UseAccountNumbers,
     ReportBasis DefaultReportBasis,
-    Edition? Edition = null);
+    Edition? Edition = null,
+    string? TimeZoneId = null);
 
 /// <summary>Company details and book settings, edited after setup. Home currency is fixed.</summary>
 public sealed class CompanySettingsService(ICompanyStore store, IClock clock, ICurrentUser user)
@@ -35,12 +36,15 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         company.SetDefaultReportBasis(command.DefaultReportBasis);
         if (command.Edition is { } edition)
             company.SetEdition(edition);
+        if (command.TimeZoneId is { } zone)
+            company.SetTimeZone(zone);
 
         var after = Snapshot(company);
         if (after != before)
         {
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "company", company.Id, before, after));
             await store.SaveChangesAsync(ct);
+            CompanyTime.Use(company);
         }
 
         return company;
@@ -58,5 +62,6 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         c.UseAccountNumbers,
         DefaultReportBasis = c.DefaultReportBasis.ToString(),
         Edition = c.Edition.ToString(),
+        c.TimeZoneId,
     });
 }

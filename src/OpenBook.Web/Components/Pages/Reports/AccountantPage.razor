@@ -33,7 +33,7 @@
             The file holds full taxpayer IDs: keep it private. Downloads are recorded in the audit log.
         </p>
         <form method="get" action="/accountant/1099" data-enhance="false" class="inline">
-            <label>Tax year <input type="number" name="year" class="short" value="@(DateTime.Today.Year - 1)" /></label>
+            <label>Tax year <input type="number" name="year" class="short" value="@(CompanyTime.Today.Year - 1)" /></label>
             <button type="submit" class="secondary">Download 1099 data</button>
         </form>
     </div>
@@ -75,7 +75,7 @@
     protected override async Task OnInitializedAsync()
     {
         var company = await Settings.GetAsync();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         var last = DateRanges.For(DatePreset.LastFiscalYear, today, company.FiscalYearStartMonth);
         (_from, _to) = (last.From ?? today, last.To);
         var current = DateRanges.For(DatePreset.ThisFiscalYearToDate, today, company.FiscalYearStartMonth);

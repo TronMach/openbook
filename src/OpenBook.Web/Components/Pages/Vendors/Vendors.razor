@@ -61,7 +61,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _vendors = await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today), ShowInactive);
+        _vendors = await VendorService.ListAsync(CompanyTime.Today, ShowInactive);
         _fields = await FieldService.ListColumnsAsync(OpenBook.Domain.CustomFields.CustomFieldTarget.Vendor);
     }
 

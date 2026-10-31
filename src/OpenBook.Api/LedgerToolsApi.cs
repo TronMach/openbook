@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Auditing;
 using OpenBook.Application.Ledger;
+using OpenBook.Application;
 using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Api;
@@ -29,7 +30,7 @@ internal static class LedgerToolsApi
         api.MapPut("/closing", async (SetClosingRequest r, CloseBooksService s, CancellationToken ct) =>
             await s.SetAsync(r.ClosingDate, r.NewPassword, r.RemovePassword, ct));
         api.MapGet("/closing/fiscal-years", async (CloseBooksService s, CancellationToken ct) =>
-            await s.FiscalYearsAsync(DateOnly.FromDateTime(DateTime.Today), ct));
+            await s.FiscalYearsAsync(CompanyTime.Today, ct));
         api.MapPost("/closing/fiscal-years/{end}/close", async (DateOnly end, CloseBooksService s, CancellationToken ct) =>
             await s.CloseYearAsync(end, ct));
 
@@ -47,7 +48,7 @@ internal static class LedgerToolsApi
         api.MapPut("/recurring-entries/{id:guid}/active", async (Guid id, SetActiveRequest r, RecurringEntryService s, CancellationToken ct) =>
             RecurringEntryResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         api.MapPost("/recurring-entries/post-due", async (RecurringEntryService s, CancellationToken ct) =>
-            (await s.PostDueAsync(DateOnly.FromDateTime(DateTime.Today), autoPostOnly: false, ct))
+            (await s.PostDueAsync(CompanyTime.Today, autoPostOnly: false, ct))
                 .Select(x => new { x.Template.Id, x.Template.Name, Posted = x.Posted.Select(e => new { e.Id, e.Number, e.Date }), x.Error }));
 
         api.MapGet("/opening-balances/accounts", async (OpeningBalanceService s, CancellationToken ct) =>

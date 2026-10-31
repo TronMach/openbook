@@ -260,6 +260,9 @@
   <data name="Days to get paid" xml:space="preserve">
     <value>Days to get paid</value>
   </data>
+  <data name="Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run." xml:space="preserve">
+    <value>Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run.</value>
+  </data>
   <data name="Defaults to the name." xml:space="preserve">
     <value>Defaults to the name.</value>
   </data>
@@ -269,11 +272,11 @@
   <data name="Description" xml:space="preserve">
     <value>Description</value>
   </data>
-  <data name="Device" xml:space="preserve">
-    <value>Device</value>
-  </data>
   <data name="designs with logos and fonts for invoices, statements and other printed forms" xml:space="preserve">
     <value>designs with logos and fonts for invoices, statements and other printed forms</value>
+  </data>
+  <data name="Device" xml:space="preserve">
+    <value>Device</value>
   </data>
   <data name="Disconnect" xml:space="preserve">
     <value>Disconnect</value>
@@ -434,11 +437,11 @@
   <data name="Invoice" xml:space="preserve">
     <value>Invoice</value>
   </data>
-  <data name="Invoice date" xml:space="preserve">
-    <value>Invoice date</value>
-  </data>
   <data name="Invoice and form designs" xml:space="preserve">
     <value>Invoice and form designs</value>
+  </data>
+  <data name="Invoice date" xml:space="preserve">
+    <value>Invoice date</value>
   </data>
   <data name="Invoice number" xml:space="preserve">
     <value>Invoice number</value>
@@ -865,6 +868,9 @@
   </data>
   <data name="Time" xml:space="preserve">
     <value>Time</value>
+  </data>
+  <data name="Time zone" xml:space="preserve">
+    <value>Time zone</value>
   </data>
   <data name="Times" xml:space="preserve">
     <value>Times</value>

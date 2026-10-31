@@ -45,7 +45,7 @@ Have a saved report emailed regularly, for example the profit and loss to the ow
 
 1. Choose the **saved report** (save one first from its page with **Save report**).
 2. **To**: up to 10 email addresses.
-3. **How often**: **every day**, **every week on** a day, or **every month on day** 1–28, at an **hour** (server time).
+3. **How often**: **every day**, **every week on** a day, or **every month on day** 1–28, at an **hour** (in the company's time zone, set in **Settings**).
 4. **Format**: PDF, Excel or CSV.
 5. **Schedule**.
 

@@ -66,7 +66,7 @@ public sealed class ReportSubscriptionService(
     {
         var now = clock.UtcNow;
         var runs = new List<SubscriptionRun>();
-        foreach (var subscription in (await store.ListSubscriptionsAsync(ct)).Where(s => s.IsDue(now)).ToList())
+        foreach (var subscription in (await store.ListSubscriptionsAsync(ct)).Where(s => s.IsDue(now, CompanyTime.Zone)).ToList())
             runs.Add(await SendAsync(subscription, ct));
         return runs;
     }
@@ -98,7 +98,7 @@ public sealed class ReportSubscriptionService(
             foreach (var to in subscription.RecipientList)
             {
                 await email.SendMessageAsync(new EmailMessage(to, saved.Name,
-                    $"{saved.Name}, as of {clock.UtcNow.ToLocalTime():MMM d, yyyy}, is attached.\n\nSent by OpenBook on a schedule set up by {subscription.CreatedBy}.",
+                    $"{saved.Name}, as of {CompanyTime.Today:MMM d, yyyy}, is attached.\n\nSent by OpenBook on a schedule set up by {subscription.CreatedBy}.",
                     [file]), ct);
             }
         }

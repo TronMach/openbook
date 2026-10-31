@@ -101,7 +101,7 @@
     private IReadOnlyList<RecurringPostResult> _results = [];
     private int _dueCount;
 
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today => CompanyTime.Today;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 

@@ -78,7 +78,7 @@
     private IReadOnlyList<Warehouse> _warehouses = [];
     private Guid? _customerId;
     private string? _number;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private DateOnly? _expectedDate;
     private string? _customerReference;
     private string? _memo;

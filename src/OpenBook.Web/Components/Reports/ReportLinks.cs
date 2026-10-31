@@ -1,5 +1,6 @@
 using System.Globalization;
 using OpenBook.Application.Reporting;
+using OpenBook.Application;
 using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Web.Components.Reports;
@@ -11,7 +12,7 @@ public static class ReportLinks
     {
         null => null,
         { Kind: "account" } => $"/reports/general-ledger?accountId={link.Id}&preset=Custom" +
-            $"&from={Iso(link.From ?? DateRanges.Beginning)}&to={Iso(link.To ?? DateOnly.FromDateTime(DateTime.Today))}" +
+            $"&from={Iso(link.From ?? DateRanges.Beginning)}&to={Iso(link.To ?? CompanyTime.Today)}" +
             (basis is { } b ? $"&basis={b}" : ""),
         { Kind: "entry" } => Links.ForEntry(link.Source ?? string.Empty, link.SourceId, link.Id),
         _ => Links.ForAuditEntity(link.Kind, link.Id),

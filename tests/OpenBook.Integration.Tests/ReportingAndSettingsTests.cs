@@ -122,4 +122,27 @@ public sealed class ReportingAndSettingsTests : IAsyncLifetime
         Assert.False(company.UseAccountNumbers);
         Assert.Equal(1, await Audits());
     }
+
+    [Fact]
+    public async Task The_time_zone_is_kept_when_not_given_and_cleared_with_blank()
+    {
+        Task<Company> Update(string? zone) =>
+            _db.InScope(sp => sp.GetRequiredService<CompanySettingsService>().UpdateAsync(Settings() with { TimeZoneId = zone }));
+        try
+        {
+            Assert.Equal("Pacific/Auckland", (await Update("Pacific/Auckland")).TimeZoneId);
+            Assert.Equal("Pacific/Auckland", CompanyTime.Zone.Id);
+            Assert.Equal("Pacific/Auckland", (await Update(null)).TimeZoneId);
+            Assert.Contains(await _db.InDb(db => db.AuditRecords.Where(r => r.EntityType == "company").ToListAsync()),
+                r => r.After?.Contains("Pacific/Auckland", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            Assert.Null((await Update("")).TimeZoneId);
+        }
+
+        Assert.Equal(TimeZoneInfo.Local, CompanyTime.Zone);
+        // 11:00 UTC on Mar 1 is already Mar 2 in Auckland.
+        Assert.Equal(new DateOnly(2026, 3, 2), CompanyTime.TodayAt(new DateTimeOffset(2026, 3, 1, 11, 0, 0, TimeSpan.Zero), TimeZoneInfo.FindSystemTimeZoneById("Pacific/Auckland")));
+    }
 }

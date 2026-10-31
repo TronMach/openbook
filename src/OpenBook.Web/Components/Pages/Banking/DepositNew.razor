@@ -90,7 +90,7 @@
     private List<Account> _banks = [];
     private ChartOfAccounts _chart = new([]);
     private Guid _bankAccountId;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private string? _memo;
     private bool _loaded;
     private bool _busy;

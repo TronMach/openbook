@@ -18,7 +18,7 @@
 
 <div class="wide">
     @{
-        var status = Labels.Status(_bill, DateOnly.FromDateTime(DateTime.Today));
+        var status = Labels.Status(_bill, CompanyTime.Today);
     }
     <div class="toolbar">
         <h1>Bill from @_vendor.DisplayName</h1>

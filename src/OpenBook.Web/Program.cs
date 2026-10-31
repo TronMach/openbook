@@ -51,6 +51,8 @@ if (isResetPassword)
     return await ResetPasswordCommand.RunAsync(app.Services, args);
 
 await app.Services.MigrateOpenBookDatabaseAsync();
+await using (var scope = app.Services.CreateAsyncScope())
+    OpenBook.Application.CompanyTime.Use(await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Companies.ICompanyStore>().GetCompanyAsync(default));
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -59,9 +61,9 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
-app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseRequestLocalization(OpenBook.Web.Localization.AppCulture.Options());
 
 app.UseMiddleware<SetupGateMiddleware>();

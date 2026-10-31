@@ -86,7 +86,7 @@
     [SupplyParameterFromForm]
     private EmailModel Input { get; set; } = default!;
 
-    private DateOnly StatementTo => To ?? DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly StatementTo => To ?? CompanyTime.Today;
     private DateOnly StatementFrom => From ?? StatementTo.AddMonths(-1).AddDays(1);
 
     private FormKind? FormKindValue => Kind switch
@@ -148,7 +148,7 @@
                     return;
                 }
 
-                var offset = TimeZoneInfo.Local.GetUtcOffset(local);
+                var offset = CompanyTime.Zone.GetUtcOffset(local);
                 await Scheduled.ScheduleAsync(Id, message, new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset));
                 _scheduledFor = local;
             }
@@ -177,6 +177,6 @@
 
         public string When { get; set; } = "now";
 
-        public DateTime? SendAt { get; set; } = DateTime.Today.AddDays(1).AddHours(9);
+        public DateTime? SendAt { get; set; } = CompanyTime.Today.AddDays(1).ToDateTime(new TimeOnly(9, 0));
     }
 }

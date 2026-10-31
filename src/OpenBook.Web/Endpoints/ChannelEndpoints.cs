@@ -1,5 +1,6 @@
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Channels;
+using OpenBook.Application;
 using OpenBook.Domain.Channels;
 using OpenBook.Domain.Common;
 
@@ -121,7 +122,7 @@ public static class ChannelEndpoints
                     Quantity: decimal.TryParse(form[k], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) ? q : 0m))
                 .Where(l => l.Line > 0 && l.Quantity != 0m).ToList();
             var date = DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)
-                ? d : DateOnly.FromDateTime(DateTime.Today);
+                ? d : CompanyTime.Today;
             return await Back($"/sales/channels/orders/{id}", () => orders.ReturnAsync(id, date, lines, form["memo"], ct));
         }).RequireAuthorization();
 

@@ -117,7 +117,7 @@
         _rows = eligible.Select(a => new Row(a)).ToList();
         _existing = existing;
         // The day before the current fiscal year: the usual point to start from.
-        _asOf = company.FiscalYearStart(DateOnly.FromDateTime(DateTime.Today)).AddDays(-1);
+        _asOf = company.FiscalYearStart(CompanyTime.Today).AddDays(-1);
         _loaded = true;
     }
 

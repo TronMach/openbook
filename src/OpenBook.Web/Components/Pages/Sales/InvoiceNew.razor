@@ -120,8 +120,8 @@
     private Customer? _customer;
     private Guid? _customerId;
     private string? _number;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
-    private DateOnly _dueDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
+    private DateOnly _dueDate = CompanyTime.Today;
     private string? _memo;
     private List<SalesLineModel> _lines = [new()];
     private bool _loaded;

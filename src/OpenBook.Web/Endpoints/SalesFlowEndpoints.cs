@@ -2,6 +2,7 @@ using System.Globalization;
 using OpenBook.Application.Import;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Sales;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
 using OpenBook.Web.Security;
@@ -215,5 +216,5 @@ public static class SalesFlowEndpoints
     private static decimal? Amount(string? value) =>
         StatementValues.TryParseAmount(value, out var amount) ? amount : null;
 
-    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today() => CompanyTime.Today;
 }

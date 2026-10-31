@@ -241,7 +241,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         ArgumentNullException.ThrowIfNull(p);
         var definition = Find(key) ?? throw new DomainException("report.unknown", "Unknown report.");
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         var (_, range) = p.Period(company, definition.DefaultPreset, today);
         var from = range.From ?? DateRanges.Beginning;
         var asOf = p.GetDate("asOf") ?? today;
@@ -318,7 +318,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         {
             // Default to the budget for the current fiscal year, else the latest one.
             var budgets = await services.GetRequiredService<BudgetService>().ListAsync(ct);
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            var today = CompanyTime.Today;
             budgetId = (budgets.FirstOrDefault(b => b.FiscalYearStart <= today && today <= b.FiscalYearEnd) ?? (budgets.Count > 0 ? budgets[0] : null))?.Id
                 ?? throw new DomainException("budget.none", "There are no budgets yet. Create one under Reports › Budgets.");
         }

@@ -122,7 +122,7 @@
     protected override async Task OnInitializedAsync()
     {
         var company = await Settings.GetAsync();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _parameters = ReportParameters.Parse(new Uri(Navigation.Uri).Query);
         var definition = ReportCatalog.FindBuiltIn("builder")!;
         var (preset, range) = _parameters.Period(company, definition.DefaultPreset, today);

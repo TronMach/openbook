@@ -68,7 +68,7 @@
         }
         else
         {
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            var today = CompanyTime.Today;
             <div class="table-wrap">
                 <table class="data entry">
                     <thead>
@@ -123,7 +123,7 @@
     private List<RowModel> _rows = [];
     private List<BillPayment> _paid = [];
     private Guid _accountId;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private string? _reference;
     private Guid? _vendorFilter;
     private bool _loaded;
@@ -153,7 +153,7 @@
     {
         var (accounts, vendors, bills) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<BankingService>().ListAccountsAsync(),
-            await sp.GetRequiredService<VendorService>().ListAsync(DateOnly.FromDateTime(DateTime.Today), includeInactive: true),
+            await sp.GetRequiredService<VendorService>().ListAsync(CompanyTime.Today, includeInactive: true),
             await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync()));
         _accounts = accounts.OrderBy(a => a.Account.Type != AccountType.Bank).ToList();
         _vendors = vendors.ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);

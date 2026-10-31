@@ -99,6 +99,6 @@
         _companyName = company.Name;
         _useNumbers = company.UseAccountNumbers;
         ReportBasis? basis = Enum.TryParse<ReportBasis>(Basis, ignoreCase: true, out var parsed) ? parsed : null;
-        _report = await Query.RunAsync(AsOf ?? DateOnly.FromDateTime(DateTime.Today), basis);
+        _report = await Query.RunAsync(AsOf ?? CompanyTime.Today, basis);
     }
 }

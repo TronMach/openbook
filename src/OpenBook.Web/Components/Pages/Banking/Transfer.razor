@@ -108,7 +108,7 @@
         [Range(typeof(decimal), "0.01", "999999999999", ErrorMessage = "Enter an amount above zero.")]
         public decimal? Amount { get; set; }
 
-        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly Date { get; set; } = CompanyTime.Today;
 
         [StringLength(1000)]
         public string? Memo { get; set; }

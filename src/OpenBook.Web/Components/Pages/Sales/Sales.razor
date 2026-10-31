@@ -186,7 +186,7 @@
     private static readonly (string Key, string Label)[] Tabs =
         [("open", "Unpaid invoices"), ("all-invoices", "All invoices"), ("estimates", "Estimates"), ("payments", "Payments"), ("credits", "Credits and refunds"), ("receipts", "Sales receipts")];
 
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<SalesReceipt> _receipts = [];

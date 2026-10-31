@@ -1,4 +1,5 @@
 using OpenBook.Application.Companies;
+using OpenBook.Application;
 
 namespace OpenBook.Web.Security;
 
@@ -25,7 +26,7 @@ internal sealed partial class ScheduledBackupHostedService(
             await using var scope = scopes.CreateAsyncScope();
             if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
                 return;
-            var result = await scope.ServiceProvider.GetRequiredService<ScheduledBackupService>().RunDueAsync(TimeZoneInfo.Local, ct);
+            var result = await scope.ServiceProvider.GetRequiredService<ScheduledBackupService>().RunDueAsync(CompanyTime.Zone, ct);
             if (result is { Succeeded: true })
                 LogBackedUp(result.FileName!, result.Deleted);
             else if (result is { Succeeded: false })

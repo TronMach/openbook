@@ -154,7 +154,7 @@
     private string? _memo;
     private int _interval = 1;
     private RecurrenceFrequency _frequency = RecurrenceFrequency.Monthly;
-    private DateOnly _startDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _startDate = CompanyTime.Today;
     private DateOnly? _endDate;
     private int? _maxOccurrences;
     private EntryBasis _basis = EntryBasis.Both;

@@ -121,7 +121,7 @@
                         </div>
                         <div class="field">
                             <label for="apply-date">Date</label>
-                            <input id="apply-date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                            <input id="apply-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
                         </div>
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
@@ -150,7 +150,7 @@
                     </div>
                     <div class="field">
                         <label for="refund-date">Date</label>
-                        <input id="refund-date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        <input id="refund-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
                     </div>
                     <div class="field">
                         <label for="refund-ref">Check no. <span class="muted">(optional)</span></label>

@@ -150,7 +150,7 @@
                 </div>
                 <div class="field">
                     <label for="try-date">@L["Date"]</label>
-                    <input id="try-date" name="tryDate" type="date" value="@((TryDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                    <input id="try-date" name="tryDate" type="date" value="@((TryDate ?? CompanyTime.Today).ToString("yyyy-MM-dd"))" />
                 </div>
             </div>
             <div class="actions"><button type="submit" class="secondary" disabled="@(_workers.Count == 0)">@L["Check"]</button></div>
@@ -180,7 +180,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _rates = await Rates.ListAsync();
         _editing = _rates.FirstOrDefault(r => r.Id == Edit);
         _workers = await WorkerService.ListAsync(includeInactive: true);

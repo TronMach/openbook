@@ -290,7 +290,7 @@
 
     [SupplyParameterFromQuery(Name = "pending")] private string? PendingNote { get; set; }
     [SupplyParameterFromQuery] private string? PendingError { get; set; }
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
     private const int ExpiryDays = 30;
     private IReadOnlyList<InventoryMovement> _lotHistory = [];
     private Func<StockPlace, string> _place = _ => "";

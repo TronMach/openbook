@@ -156,7 +156,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _from = DateOnly.TryParse(From, System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : new DateOnly(today.Year, today.Month, 1);
         _to = DateOnly.TryParse(To, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : today;
         _chart = await Accounts.GetChartAsync();

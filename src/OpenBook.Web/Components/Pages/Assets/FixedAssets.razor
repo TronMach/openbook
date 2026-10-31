@@ -109,7 +109,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _through = DateOnly.TryParse(Through, out var t) ? t : new DateOnly(today.Year, today.Month, 1).AddDays(-1);
         _assets = await AssetService.ListAsync();
         _due = await DepreciationService.PreviewAsync(_through);

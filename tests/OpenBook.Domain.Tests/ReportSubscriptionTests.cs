@@ -20,6 +20,20 @@ public class ReportSubscriptionTests
     }
 
     [Fact]
+    public void The_hour_is_in_the_companys_time_zone()
+    {
+        var newYork = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        var s = ReportSubscription.Create(new ReportSubscriptionDetails(Guid.NewGuid(), "a@b.test", ReportFrequency.Daily, 0, 7, ReportFileFormat.Pdf),
+            "owner", new DateTimeOffset(2026, 3, 4, 0, 0, 0, TimeSpan.Zero));
+
+        // 10:00 UTC is 5:00 in New York (EST): its 7:00 slot hasn't come yet, though 7:00 UTC has.
+        var tenUtc = new DateTimeOffset(2026, 3, 4, 10, 0, 0, TimeSpan.Zero);
+        Assert.False(s.IsDue(tenUtc, newYork));
+        Assert.True(s.IsDue(tenUtc, TimeZoneInfo.Utc));
+        Assert.True(s.IsDue(tenUtc.AddHours(2), newYork));
+    }
+
+    [Fact]
     public void Paused_subscriptions_are_never_due()
     {
         var s = ReportSubscription.Create(new ReportSubscriptionDetails(Guid.NewGuid(), "a@b.test", ReportFrequency.Daily, 0, 0, ReportFileFormat.Csv, IsActive: false),

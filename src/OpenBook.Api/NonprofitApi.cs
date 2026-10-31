@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Nonprofit;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Nonprofit;
 
@@ -61,7 +62,7 @@ internal static class NonprofitApi
         var nonprofit = api.MapGroup("/nonprofit");
 
         nonprofit.MapGet("/purposes", (DateOnly? asOf, NonprofitService s, CancellationToken ct) =>
-            s.PurposesAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), ct));
+            s.PurposesAsync(asOf ?? CompanyTime.Today, ct));
         nonprofit.MapGet("/releases", async (NonprofitService s, CancellationToken ct) => (await s.ListReleasesAsync(ct)).Select(ReleaseResponse.From));
         nonprofit.MapGet("/releases/{id:guid}", async (Guid id, NonprofitService s, CancellationToken ct) =>
             await s.GetReleaseAsync(id, ct) is { } r ? Results.Ok(ReleaseResponse.From(r)) : Results.NotFound());
@@ -131,16 +132,16 @@ internal static class NonprofitApi
         nonprofit.MapPut("/recurring-gifts/{id:guid}", (Guid id, RecurringGiftDetails r, RecurringGiftService s, CancellationToken ct) => s.UpdateAsync(id, r, ct));
         nonprofit.MapPut("/recurring-gifts/{id:guid}/active", (Guid id, SetActiveRequest r, RecurringGiftService s, CancellationToken ct) => s.SetActiveAsync(id, r.Active, ct));
         nonprofit.MapPost("/recurring-gifts/record", async (RecurringGiftService s, CancellationToken ct) =>
-            (await s.CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: false, ct: ct))
+            (await s.CreateDueAsync(CompanyTime.Today, automaticOnly: false, ct: ct))
                 .Select(r => new { TemplateId = r.Template.Id, Created = r.Created.Select(g => g.Id), r.Error }));
 
         nonprofit.MapGet("/settings", async (GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.GetSettingsAsync(ct)));
         nonprofit.MapPut("/settings", async (GiftSettingsCommand r, GiftService s, CancellationToken ct) => GiftSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
 
         nonprofit.MapGet("/grants", async (DateOnly? asOf, GrantService s, CancellationToken ct) =>
-            (await s.PositionsAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), ct)).Select(GrantResponse.From));
+            (await s.PositionsAsync(asOf ?? CompanyTime.Today, ct)).Select(GrantResponse.From));
         nonprofit.MapGet("/grants/{id:guid}", async (Guid id, DateOnly? asOf, GrantService s, CancellationToken ct) =>
-            await s.PositionAsync(id, asOf ?? DateOnly.FromDateTime(DateTime.Today), ct) is { } p ? Results.Ok(GrantResponse.From(p)) : Results.NotFound());
+            await s.PositionAsync(id, asOf ?? CompanyTime.Today, ct) is { } p ? Results.Ok(GrantResponse.From(p)) : Results.NotFound());
         nonprofit.MapPost("/grants", async (GrantCommand r, GrantService s, CancellationToken ct) =>
         {
             var grant = await s.CreateAsync(r, ct);
@@ -182,5 +183,5 @@ internal static class NonprofitApi
     }
 
     private static async Task<GrantResponse> Position(GrantService s, Guid id, CancellationToken ct) =>
-        GrantResponse.From((await s.PositionAsync(id, DateOnly.FromDateTime(DateTime.Today), ct))!);
+        GrantResponse.From((await s.PositionAsync(id, CompanyTime.Today, ct))!);
 }

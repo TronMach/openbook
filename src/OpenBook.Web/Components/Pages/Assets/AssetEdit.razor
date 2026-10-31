@@ -40,7 +40,7 @@
                     </div>
                     <div class="field">
                         <label for="inService">Placed in service</label>
-                        <input id="inService" name="inServiceDate" type="date" required value="@((_asset?.InServiceDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                        <input id="inService" name="inServiceDate" type="date" required value="@((_asset?.InServiceDate ?? CompanyTime.Today).ToString("yyyy-MM-dd"))" />
                     </div>
                     <div class="field">
                         <label for="assetAccount">Asset account</label>

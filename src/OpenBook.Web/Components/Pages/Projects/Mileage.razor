@@ -27,7 +27,7 @@
             <div class="row">
                 <div class="field">
                     <label for="date">Date</label>
-                    <input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    <input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
                 </div>
                 <div class="field">
                     <label for="miles">Miles</label>
@@ -75,7 +75,7 @@
                 </div>
                 <div class="field">
                     <label for="rate">Bill per mile</label>
-                    <input id="rate" name="billRate" class="amount" inputmode="decimal" value="@_rates.GetValueOrDefault(DateTime.Today.Year).ToString("0.00##")" />
+                    <input id="rate" name="billRate" class="amount" inputmode="decimal" value="@_rates.GetValueOrDefault(CompanyTime.Today.Year).ToString("0.00##")" />
                 </div>
                 <div class="field">
                     <label><input type="checkbox" name="billable" value="true" /> Billable</label>
@@ -144,7 +144,7 @@
         <p class="hint">The IRS business rates are filled in; check them before filing, and add later years as they're announced.</p>
         <form method="post" action="/mileage/rates" data-enhance="false" class="inline">
             <AntiforgeryToken />
-            <input name="year" type="number" class="short" value="@DateTime.Today.Year" aria-label="Year" />
+            <input name="year" type="number" class="short" value="@CompanyTime.Today.Year" aria-label="Year" />
             <input name="rate" class="short" inputmode="decimal" placeholder="0.725" aria-label="Rate per mile" />
             <button type="submit" class="secondary">Set rate</button>
         </form>
@@ -164,11 +164,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _year = Year is >= 2000 and <= 2100 ? Year.Value : DateTime.Today.Year;
+        _year = Year is >= 2000 and <= 2100 ? Year.Value : CompanyTime.Today.Year;
         _log = await MileageService.YearAsync(_year);
         _rates = await MileageService.RatesAsync();
         _workers = await WorkerService.ListAsync();
-        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _customers = await CustomerService.ListAsync(CompanyTime.Today);
         _names = await CustomerService.FullNamesAsync();
     }
 }

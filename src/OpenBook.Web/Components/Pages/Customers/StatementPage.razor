@@ -72,7 +72,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        To ??= DateOnly.FromDateTime(DateTime.Today);
+        To ??= CompanyTime.Today;
         From ??= new DateOnly(To.Value.Year, To.Value.Month, 1).AddMonths(-2);
         try
         {

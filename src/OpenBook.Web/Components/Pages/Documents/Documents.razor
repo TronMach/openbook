@@ -108,7 +108,7 @@
         _admin = AuthState is not null && (await AuthState).User.Can(OpenBook.Domain.Companies.UserRole.Admin);
         _settings = await DocumentService.GetSettingsAsync();
         _documents = (await DocumentService.ListAsync()).Where(d => ShowAll || d.Status == CapturedDocumentStatus.New).ToList();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         foreach (var v in await VendorService.ListAsync(today))
             _names[v.Vendor.Id] = v.Vendor.DisplayName;
         foreach (var c in await CustomerService.ListAsync(today))

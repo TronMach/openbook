@@ -140,7 +140,7 @@
         _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type is AccountType.CostOfGoodsSold or AccountType.Expense or AccountType.OtherExpense or AccountType.Equity or AccountType.OtherIncome)
             .ToList();
-        Input ??= new AdjustmentModel { Date = DateOnly.FromDateTime(DateTime.Today) };
+        Input ??= new AdjustmentModel { Date = CompanyTime.Today };
         while (Input.Lines.Count < Rows)
             Input.Lines.Add(new LineModel());
         if (PresetItem is { } preset && Input.Lines.All(l => l.ItemId is null))

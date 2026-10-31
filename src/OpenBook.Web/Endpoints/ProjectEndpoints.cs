@@ -1,5 +1,6 @@
 using System.Globalization;
 using OpenBook.Application.Projects;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Projects;
 
@@ -31,7 +32,7 @@ public static class ProjectEndpoints
         app.MapPost("/time/week", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {
             var workerId = Guid.TryParse(form["workerId"], out var w) ? w : Guid.Empty;
-            var day = DateOnly.TryParseExact(form["week"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+            var day = DateOnly.TryParseExact(form["week"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : CompanyTime.Today;
             var monday = day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
             var back = $"/time/week?worker={workerId}&week={monday:yyyy-MM-dd}";
             var rowIndexes = form.Keys.Where(k => k.StartsWith("h:", StringComparison.Ordinal)).Select(k => k.Split(':')[1]).Distinct();
@@ -217,5 +218,5 @@ public static class ProjectEndpoints
         decimal.TryParse(value?.Replace(",", "", StringComparison.Ordinal).Replace("$", "", StringComparison.Ordinal).Trim(),
             NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n) ? n : null;
 
-    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today() => CompanyTime.Today;
 }

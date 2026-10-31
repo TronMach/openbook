@@ -136,7 +136,7 @@
 
     private sealed class LandedCostModel
     {
-        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly Date { get; set; } = CompanyTime.Today;
 
         [Required(ErrorMessage = "Enter the amount to spread.")]
         public decimal? Amount { get; set; }

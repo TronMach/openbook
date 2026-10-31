@@ -135,7 +135,7 @@
     private IReadOnlyList<AvailableCredit> _credits = [];
     private Guid? _customerId;
     private Guid _depositAccountId;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private decimal? _amount;
     private string? _reference;
     private string? _memo;

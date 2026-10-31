@@ -109,6 +109,17 @@
                     <span class="hint">@L["Each report can still switch basis."]</span>
                 </div>
             </div>
+            <div class="field">
+                <label for="time-zone">@L["Time zone"]</label>
+                <InputSelect id="time-zone" @bind-Value="Input.TimeZoneId" data-search>
+                    <option value="">@L["The server's ({0})", TimeZoneInfo.Local.DisplayName]</option>
+                    @foreach (var (id, name) in TimeZones)
+                    {
+                        <option value="@id">@name</option>
+                    }
+                </InputSelect>
+                <span class="hint">@L["Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run."]</span>
+            </div>
             <label class="check">
                 <InputCheckbox @bind-Value="Input.UseAccountNumbers" />
                 <span>@L["Use account numbers"]</span>
@@ -174,6 +185,7 @@
             UseAccountNumbers = company.UseAccountNumbers,
             DefaultReportBasis = company.DefaultReportBasis,
             Edition = company.Edition,
+            TimeZoneId = company.TimeZoneId,
         };
     }
 
@@ -183,7 +195,7 @@
         {
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty));
             _saved = true;
         }
         catch (DomainException ex)
@@ -221,5 +233,13 @@
         public ReportBasis DefaultReportBasis { get; set; }
 
         public Edition Edition { get; set; }
+
+        /// <summary>IANA id; empty for the server's.</summary>
+        public string? TimeZoneId { get; set; }
     }
+
+    /// <summary>The server's time zones by IANA id (as the company stores them), in offset order.</summary>
+    private static IEnumerable<(string Id, string Name)> TimeZones => TimeZoneInfo.GetSystemTimeZones()
+        .Select(z => (Id: z.HasIanaId ? z.Id : TimeZoneInfo.TryConvertWindowsIdToIanaId(z.Id, out var iana) ? iana : z.Id, z.DisplayName))
+        .DistinctBy(z => z.Id);
 }

@@ -37,7 +37,7 @@
                     </select>
                 </div>
                 <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" required /></div>
-                <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
                 <div class="field"><label for="due">Due by <span class="muted">(optional)</span></label><input id="due" name="dueDate" type="date" /></div>
             </div>
             <div class="row">
@@ -81,7 +81,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _donors = (await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Where(c => c.Customer.IsActive).ToList();
+        _donors = (await CustomerService.ListAsync(CompanyTime.Today)).Where(c => c.Customer.IsActive).ToList();
         _chart = await AccountService.GetChartAsync();
         _income = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
         _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);

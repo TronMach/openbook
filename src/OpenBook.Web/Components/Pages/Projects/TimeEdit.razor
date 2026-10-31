@@ -110,7 +110,7 @@
     {
         _entry = await TimeService.GetAsync(Id);
         _workers = await WorkerService.ListAsync(includeInactive: true);
-        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _customers = await CustomerService.ListAsync(CompanyTime.Today);
         _services = (await ItemService.ListAsync(includeInactive: true))
             .Where(i => (i.IsActive || i.Id == _entry?.ItemId) && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
     }

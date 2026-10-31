@@ -100,7 +100,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         // Statements go out early in the new year for the year just ended.
         _year = Year ?? (today.Month <= 2 ? today.Year - 1 : today.Year);
         _unthanked = (await GiftService.ListAsync()).Where(g => g.Status == DocumentStatus.Posted && g.AcknowledgedAt is null).ToList();

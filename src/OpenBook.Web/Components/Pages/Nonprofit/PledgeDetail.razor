@@ -85,7 +85,7 @@
                 <p class="muted">When the donor won't pay the @Labels.Amount(_pledge.Balance) left: it comes off the contribution income (accrual basis) and out of Pledges Receivable.</p>
                 <form method="post" action="/nonprofit/pledges/@p.Id/cancel" data-enhance="false" class="inline">
                     <AntiforgeryToken />
-                    <label>On <input type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
+                    <label>On <input type="date" name="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></label>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <button type="submit" class="secondary">Cancel the rest</button>
                 </form>

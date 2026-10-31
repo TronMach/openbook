@@ -163,7 +163,7 @@
         _banks = active.Where(a => BankTransaction.IsBankingAccount(a.Type)).ToList();
         _categories = active.Where(a => a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable))
             .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income)).ToList();
-        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(v => v.Vendor).ToList();
+        _vendors = (await VendorService.ListAsync(CompanyTime.Today)).Select(v => v.Vendor).ToList();
 
         if (Id is { } id)
         {

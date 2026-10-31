@@ -3,6 +3,7 @@ using OpenBook.Application.Forms;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Nonprofit;
 using OpenBook.Application.Segments;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Nonprofit;
 using OpenBook.Domain.Segments;
@@ -19,7 +20,7 @@ public static class NonprofitEndpoints
         app.MapPost("/nonprofit/releases", async (IFormCollection form, NonprofitService nonprofit, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
-            var date = Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today);
+            var date = Date(form["date"]) ?? CompanyTime.Today;
             try
             {
                 var release = await nonprofit.ReleaseAsync(new ReleaseCommand(
@@ -67,7 +68,7 @@ public static class NonprofitEndpoints
             {
                 var gift = await gifts.RecordAsync(new RecordGiftCommand(
                     Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
-                    Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                    Date(form["date"]) ?? CompanyTime.Today,
                     Number(form["amount"]) ?? throw new DomainException("donation.amount", "Enter an amount above zero."),
                     Id(form["debitAccountId"]) ?? Guid.Empty,
                     Enum.TryParse<GiftKind>(form["kind"], out var kind) ? kind : GiftKind.Cash,
@@ -147,7 +148,7 @@ public static class NonprofitEndpoints
             {
                 var pledge = await gifts.PledgeAsync(new PledgeCommand(
                     Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
-                    Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                    Date(form["date"]) ?? CompanyTime.Today,
                     Number(form["amount"]) ?? throw new DomainException("pledge.amount", "Enter an amount above zero."),
                     Id(form["incomeAccountId"]),
                     Id(form["classId"]),
@@ -171,7 +172,7 @@ public static class NonprofitEndpoints
         app.MapPost("/nonprofit/pledges/{id:guid}/cancel", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
-            return await Back($"/nonprofit/pledges/{id}", () => gifts.CancelRestAsync(id, Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today), ct));
+            return await Back($"/nonprofit/pledges/{id}", () => gifts.CancelRestAsync(id, Date(form["date"]) ?? CompanyTime.Today, ct));
         }).RequireAuthorization();
 
         app.MapPost("/nonprofit/pledges/{id:guid}/uncancel", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
@@ -199,7 +200,7 @@ public static class NonprofitEndpoints
             closing.Password = Password(form);
             try
             {
-                var today = DateOnly.FromDateTime(DateTime.Today);
+                var today = CompanyTime.Today;
                 var grant = await grants.CreateAsync(new GrantCommand(
                     form["name"].ToString(),
                     Id(form["funderId"]) ?? throw new DomainException("grant.funder_required", "Choose the funder."),
@@ -224,14 +225,14 @@ public static class NonprofitEndpoints
         app.MapPost("/nonprofit/grants/{id:guid}/receive", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
-            return await Back($"/nonprofit/grants/{id}", () => grants.ReceiveAsync(id, Date(form["date"]) ?? DateOnly.FromDateTime(DateTime.Today),
+            return await Back($"/nonprofit/grants/{id}", () => grants.ReceiveAsync(id, Date(form["date"]) ?? CompanyTime.Today,
                 Number(form["amount"]) ?? 0m, Id(form["bankAccountId"]) ?? Guid.Empty, ct));
         }).RequireAuthorization();
 
         app.MapPost("/nonprofit/grants/{id:guid}/recognize", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
-            return await Back($"/nonprofit/grants/{id}", () => grants.RecognizeAsync(id, Date(form["through"]) ?? DateOnly.FromDateTime(DateTime.Today), ct));
+            return await Back($"/nonprofit/grants/{id}", () => grants.RecognizeAsync(id, Date(form["through"]) ?? CompanyTime.Today, ct));
         }).RequireAuthorization();
 
         // Fields: account:{i}, amount:{i}.
@@ -281,7 +282,7 @@ public static class NonprofitEndpoints
 
         app.MapPost("/nonprofit/recurring/record", async (IFormCollection form, RecurringGiftService recurring, CancellationToken ct) =>
         {
-            var results = await recurring.CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: false, ct: ct);
+            var results = await recurring.CreateDueAsync(CompanyTime.Today, automaticOnly: false, ct: ct);
             var created = results.Sum(r => r.Created.Count);
             var errors = results.Where(r => r.Error is not null).Select(r => r.Error!).ToList();
             var done = $"{created} gift(s) recorded." + (errors.Count > 0 ? $" Stopped: {string.Join("; ", errors)}" : "");
@@ -324,7 +325,7 @@ public static class NonprofitEndpoints
         Number(form["amount"]) ?? 0m,
         Id(form["depositAccountId"]) ?? throw new DomainException("donation.account_required", "Choose the bank account it goes into."),
         Enum.TryParse<OpenBook.Domain.Ledger.RecurrenceFrequency>(form["frequency"], out var frequency) ? frequency : OpenBook.Domain.Ledger.RecurrenceFrequency.Monthly,
-        Date(form["startDate"]) ?? DateOnly.FromDateTime(DateTime.Today),
+        Date(form["startDate"]) ?? CompanyTime.Today,
         int.TryParse(form["interval"], out var interval) ? interval : 1,
         Date(form["endDate"]),
         int.TryParse(form["maxOccurrences"], out var max) ? max : null,

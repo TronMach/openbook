@@ -154,7 +154,7 @@
     private IReadOnlyList<LateFeeDue> _fees = [];
     private IReadOnlyList<BadDebtWriteOff> _writeOffs = [];
     private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly _today = CompanyTime.Today;
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
     private System.Security.Claims.ClaimsPrincipal User { get; set; } = new();

@@ -35,7 +35,7 @@
                 <form method="post" action="/loans/@_loan.Id/pay" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
-                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@(_remaining.Count > 0 ? _remaining[0].Date.ToString("yyyy-MM-dd") : DateTime.Today.ToString("yyyy-MM-dd"))" /></div>
+                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@(_remaining.Count > 0 ? _remaining[0].Date.ToString("yyyy-MM-dd") : CompanyTime.Today.ToString("yyyy-MM-dd"))" /></div>
                         <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" value="@_loan.NextPayment.ToString("0.00")" /></div>
                         <div class="field">
                             <label for="from">Paid from</label>

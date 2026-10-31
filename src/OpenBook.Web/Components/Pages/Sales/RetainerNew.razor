@@ -47,7 +47,7 @@
                 <div class="row">
                     <div class="field">
                         <label for="date">Date</label>
-                        <input id="date" name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        <input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
                     </div>
                     <div class="field">
                         <label for="account">Deposit to</label>
@@ -85,7 +85,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _customers = await CustomerService.ListAsync(CompanyTime.Today);
         _chart = await AccountService.GetChartAsync();
         // A bank account, or Undeposited Funds to group it into a deposit later.
         _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account)

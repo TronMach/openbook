@@ -131,7 +131,7 @@
         _settings = await PayService.SettingsAsync(_accountId);
 
         // By default: from the day after the last export (or the start of the month) to today.
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _to = Parse(To) ?? today;
         _from = Parse(From) ?? _settings.LastExportedThrough?.AddDays(1) ?? new DateOnly(today.Year, today.Month, 1);
         if (_from > _to)

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Attachments;
 using OpenBook.Application.Purchases;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
@@ -42,7 +43,7 @@ internal static class PayablesApi
     public static void MapPayablesApi(this RouteGroupBuilder api)
     {
         var purchases = api.MapGroup("/purchases");
-        static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+        static DateOnly Today() => CompanyTime.Today;
 
         purchases.MapGet("/vendor-credits", async (Guid? vendorId, VendorCreditService s, CancellationToken ct) =>
             (await s.ListAsync(vendorId, ct)).Select(VendorCreditResponse.From));

@@ -312,7 +312,7 @@
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="received">Received on</label>
-                        <input id="received" type="date" name="date" value="@((_document.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                        <input id="received" type="date" name="date" value="@((_document.Date ?? CompanyTime.Today).ToString("yyyy-MM-dd"))" />
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Receive the goods</button></div>
@@ -371,7 +371,7 @@
         _rows = _document.Lines.Count + 5;
         _linesTotal = _document.Lines.Any(l => l.Amount is not null) ? _document.Lines.Sum(l => l.Amount ?? 0m) : null;
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         var vendors = (await VendorService.ListAsync(today)).Select(v => (v.Vendor.Id, v.Vendor.DisplayName)).ToList();
         _names = vendors.ToDictionary(v => v.Id, v => v.DisplayName);
         _parties = _fromVendor ? vendors : (await CustomerService.ListAsync(today)).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList();

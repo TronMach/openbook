@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Import;
+using OpenBook.Application;
 using OpenBook.Domain.Banking;
 
 namespace OpenBook.Api;
@@ -133,11 +134,11 @@ internal static class BankingProApi
             await s.GetAsync(id, ct) is { } c ? Results.Ok(BankConnectionResponse.From(c)) : Results.NotFound());
         banking.MapPost("/connections", async (ConnectRequest r, BankConnectionService s, CancellationToken ct) =>
         {
-            var connection = await s.ConnectAsync(BankConnectionProvider.SimpleFin, r.SetupToken, r.Name, TimeZoneInfo.Local, ct);
+            var connection = await s.ConnectAsync(BankConnectionProvider.SimpleFin, r.SetupToken, r.Name, CompanyTime.Zone, ct);
             return Results.Created($"/api/banking/connections/{connection.Id}", BankConnectionResponse.From(connection));
         });
         banking.MapPost("/connections/{id:guid}/sync", async (Guid id, BankConnectionService s, CancellationToken ct) =>
-            await s.SyncAsync(id, TimeZoneInfo.Local, ct));
+            await s.SyncAsync(id, CompanyTime.Zone, ct));
         banking.MapPut("/connections/{id:guid}/accounts/{remoteId}", async (Guid id, string remoteId, LinkConnectionAccountRequest r, BankConnectionService s, CancellationToken ct) =>
             BankConnectionResponse.From(await s.LinkAsync(id, remoteId, r.AccountId, r.ImportFrom, ct)));
         banking.MapPost("/connections/{id:guid}/disconnect", async (Guid id, BankConnectionService s, CancellationToken ct) =>

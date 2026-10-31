@@ -5,6 +5,7 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Search;
+using OpenBook.Application;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Reporting;
@@ -33,7 +34,7 @@ internal static class ReportsApi
         var reports = api.MapGroup("/reports");
 
         reports.MapGet("/kpis", async (DateOnly? asOf, KpiService s, CancellationToken ct) =>
-            await s.SnapshotAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), ct));
+            await s.SnapshotAsync(asOf ?? CompanyTime.Today, ct));
         reports.MapGet("/schedules", async (ReportSubscriptionService s, CancellationToken ct) => await s.ListAsync(ct));
         reports.MapPost("/schedules", async (ReportSubscriptionDetails r, ReportSubscriptionService s, CancellationToken ct) =>
         {
@@ -62,7 +63,7 @@ internal static class ReportsApi
         });
 
         reports.MapGet("/balance-sheet", async (DateOnly? asOf, ReportBasis? basis, FinancialReports r, CancellationToken ct) =>
-            await r.BalanceSheetAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), basis, ct));
+            await r.BalanceSheetAsync(asOf ?? CompanyTime.Today, basis, ct));
 
         reports.MapGet("/general-ledger", async (DatePreset? preset, DateOnly? from, DateOnly? to, ReportBasis? basis, Guid? accountId,
             FinancialReports r, CompanySettingsService settings, CancellationToken ct) =>
@@ -105,7 +106,7 @@ internal static class ReportsApi
         reports.MapGet("/{key}/export", async (string key, string? format, HttpContext http, ReportCatalog catalog, IReportExporter exporter, CancellationToken ct) =>
         {
             var table = await catalog.RunAsync(key, Parameters(http), ct);
-            var name = $"{catalog.Find(key)!.Key}-{DateTime.Today:yyyyMMdd}";
+            var name = $"{catalog.Find(key)!.Key}-{CompanyTime.Today:yyyyMMdd}";
             return (format ?? "csv").ToLowerInvariant() switch
             {
                 "xlsx" => Results.File(exporter.ToXlsx(table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{name}.xlsx"),
@@ -117,7 +118,7 @@ internal static class ReportsApi
 
         var accountant = api.MapGroup("/accountant");
         accountant.MapGet("/forecast", async (DateOnly? asOf, int? weeks, Guid? scenarioId, ForecastService s, CancellationToken ct) =>
-            await s.ForecastAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), weeks ?? 13, scenarioId, ct));
+            await s.ForecastAsync(asOf ?? CompanyTime.Today, weeks ?? 13, scenarioId, ct));
         accountant.MapGet("/scenarios", async (ForecastService s, CancellationToken ct) => await s.ListScenariosAsync(ct));
         accountant.MapPost("/scenarios", async (ForecastScenarioDetails r, ForecastService s, CancellationToken ct) =>
         {
@@ -140,7 +141,7 @@ internal static class ReportsApi
             return Results.NoContent();
         });
         accountant.MapGet("/worksheet", async (DateOnly? asOf, ReportBasis? basis, AdjustingEntryService s, CompanySettingsService settings, CancellationToken ct) =>
-            await s.WorksheetAsync(asOf ?? DateOnly.FromDateTime(DateTime.Today), basis ?? (await settings.GetAsync(ct)).DefaultReportBasis, ct));
+            await s.WorksheetAsync(asOf ?? CompanyTime.Today, basis ?? (await settings.GetAsync(ct)).DefaultReportBasis, ct));
         accountant.MapGet("/1099-filing", async (int year, AccountantPackageService s, CancellationToken ct) =>
             Results.File(await s.Filing1099CsvAsync(year, audit: true, ct: ct), "text/csv", $"1099 filing data {year}.csv"));
 
@@ -194,7 +195,7 @@ internal static class ReportsApi
 
     private static async Task<DateRange> Range(DatePreset preset, DateOnly? from, DateOnly? to, CompanySettingsService settings, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         return from is not null || to is not null
             ? DateRanges.For(DatePreset.Custom, today, 1, from, to)
             : DateRanges.For(preset, today, (await settings.GetAsync(ct)).FiscalYearStartMonth);

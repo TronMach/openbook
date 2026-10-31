@@ -74,7 +74,7 @@
     private bool _busy;
     private string? _error;
 
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _date = CompanyTime.Today;
     private EntryBasis _basis = EntryBasis.Both;
     private string? _memo;
     private DateOnly? _reverseOn;

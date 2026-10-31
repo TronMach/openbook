@@ -100,7 +100,7 @@
     [SupplyParameterFromQuery] private decimal? Threshold { get; set; }
 
     /// <summary>Last year by default: 1099s are filed early in the following year.</summary>
-    private int YearValue => Year ?? DateTime.Today.Year - 1;
+    private int YearValue => Year ?? CompanyTime.Today.Year - 1;
 
     protected override async Task OnParametersSetAsync()
     {

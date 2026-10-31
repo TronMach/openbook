@@ -81,7 +81,7 @@
                     <p class="muted">@Labels.Amount(_position.ReadyToRecognize) spent through today hasn't been recognized yet. Recognizing posts it as grant income on its date.</p>
                     <form method="post" action="/nonprofit/grants/@g.Id/recognize" data-enhance="false" class="inline">
                         <AntiforgeryToken />
-                        <label>Through <input type="date" name="through" value="@Iso(DateOnly.FromDateTime(DateTime.Today))" /></label>
+                        <label>Through <input type="date" name="through" value="@Iso(CompanyTime.Today)" /></label>
                         <ClosedPeriodPassword Visible="Password" Interactive="false" />
                         <button type="submit">Recognize</button>
                     </form>
@@ -94,7 +94,7 @@
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" required /></div>
-                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@Iso(DateOnly.FromDateTime(DateTime.Today))" /></div>
+                        <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@Iso(CompanyTime.Today)" /></div>
                         <div class="field">
                             <label for="bank">Deposited to</label>
                             <select id="bank" name="bankAccountId">
@@ -211,7 +211,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _position = await GrantService.PositionAsync(Id, DateOnly.FromDateTime(DateTime.Today));
+        _position = await GrantService.PositionAsync(Id, CompanyTime.Today);
         _chart = await AccountService.GetChartAsync();
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _banks = active.Where(a => a.Type == AccountType.Bank).ToList();

@@ -42,7 +42,7 @@
 
     @if (_vendor is not null && _bills.Count + _payments.Count + _expenses.Count > 0)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         <div class="summary-bar">
             <div><span class="label">You owe</span><span class="value">@Labels.Amount(_bills.Sum(b => b.Balance))</span></div>
             <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_bills.Where(b => b.IsOverdue(today)).Sum(b => b.Balance))</span></div>

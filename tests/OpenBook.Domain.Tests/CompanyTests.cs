@@ -26,6 +26,25 @@ public class CompanyTests
         Assert.Equal("company.fiscal_month_invalid", Assert.Throws<DomainException>(() => WithFiscalStart(month)).Code);
 
     [Fact]
+    public void The_time_zone_is_stored_as_an_iana_id_and_blank_means_the_servers()
+    {
+        var company = WithFiscalStart(1);
+        Assert.Null(company.TimeZoneId);
+        Assert.Equal(TimeZoneInfo.Local, company.TimeZone);
+
+        company.SetTimeZone("America/New_York");
+        Assert.Equal("America/New_York", company.TimeZoneId);
+        // A Windows id is converted, so the company file means the same on a Linux server.
+        company.SetTimeZone("Eastern Standard Time");
+        Assert.Equal("America/New_York", company.TimeZoneId);
+        Assert.Equal(TimeSpan.FromHours(-5), company.TimeZone.GetUtcOffset(new DateTime(2026, 1, 15)));
+
+        Assert.Equal("company.time_zone_invalid", Assert.Throws<DomainException>(() => company.SetTimeZone("Mars/Olympus_Mons")).Code);
+        company.SetTimeZone(" ");
+        Assert.Null(company.TimeZoneId);
+    }
+
+    [Fact]
     public void Fiscal_year_end_is_the_day_before_the_next_start() =>
         Assert.Equal(new DateOnly(2026, 6, 30), WithFiscalStart(7).FiscalYearEnd(new DateOnly(2026, 3, 15)));
 

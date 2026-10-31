@@ -85,7 +85,7 @@
                 <div class="row">
                     <div class="field">
                         <label for="date">Date</label>
-                        <input id="date" type="date" name="date" value="@((_receipt.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))" />
+                        <input id="date" type="date" name="date" value="@((_receipt.Date ?? CompanyTime.Today).ToString("yyyy-MM-dd"))" />
                     </div>
                     <div class="field">
                         <label for="amount">Amount</label>
@@ -138,6 +138,6 @@
         var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _payFrom = accounts.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
         _categories = accounts.Where(a => a.Type.ClassOf() is AccountClass.Expense || a.Type is AccountType.CostOfGoodsSold or AccountType.OtherCurrentAsset or AccountType.FixedAsset).ToList();
-        _vendors = (await VendorService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(v => v.Vendor).ToList();
+        _vendors = (await VendorService.ListAsync(CompanyTime.Today)).Select(v => v.Vendor).ToList();
     }
 }

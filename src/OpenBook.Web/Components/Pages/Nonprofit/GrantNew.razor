@@ -38,9 +38,9 @@
             </div>
             <div class="row">
                 <div class="field"><label for="amount">Amount awarded</label><input id="amount" name="amount" class="amount" inputmode="decimal" required /></div>
-                <div class="field"><label for="awarded">Awarded on</label><input id="awarded" name="awardedOn" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
-                <div class="field"><label for="starts">Grant period starts</label><input id="starts" name="startsOn" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
-                <div class="field"><label for="ends">Ends</label><input id="ends" name="endsOn" type="date" value="@DateTime.Today.AddYears(1).AddDays(-1).ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="awarded">Awarded on</label><input id="awarded" name="awardedOn" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="starts">Grant period starts</label><input id="starts" name="startsOn" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
+                <div class="field"><label for="ends">Ends</label><input id="ends" name="endsOn" type="date" value="@CompanyTime.Today.AddYears(1).AddDays(-1).ToString("yyyy-MM-dd")" /></div>
             </div>
             <div class="row">
                 <div class="field">
@@ -90,7 +90,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _funders = (await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Where(c => c.Customer.IsActive).ToList();
+        _funders = (await CustomerService.ListAsync(CompanyTime.Today)).Where(c => c.Customer.IsActive).ToList();
         _chart = await AccountService.GetChartAsync();
         _income = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
         _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);

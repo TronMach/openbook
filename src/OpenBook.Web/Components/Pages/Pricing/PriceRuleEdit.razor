@@ -165,7 +165,7 @@
     protected override async Task OnInitializedAsync()
     {
         _items = await Items.ListAsync();
-        _customers = (await Customers.ListAsync(DateOnly.FromDateTime(DateTime.Today))).Select(c => c.Customer).ToList();
+        _customers = (await Customers.ListAsync(CompanyTime.Today)).Select(c => c.Customer).ToList();
         _levels = await Pricing.ListLevelsAsync(includeInactive: false);
         if (Id is { } id)
         {

@@ -172,7 +172,7 @@
             return;
 
         var company = await Settings.GetAsync();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _parameters = ReportParameters.Parse(new Uri(Navigation.Uri).Query);
         var (preset, range) = _parameters.Period(company, _definition.DefaultPreset, today);
         _basis = _parameters.Basis(company);

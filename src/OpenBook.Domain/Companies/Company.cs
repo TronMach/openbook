@@ -165,6 +165,32 @@ public sealed class Company
     public void SetEdition(Edition edition) =>
         Edition = Enum.IsDefined(edition) ? edition : throw new DomainException("company.edition_invalid", $"Unknown edition {edition}.");
 
+    /// <summary>
+    /// The company's time zone (IANA id, e.g. "America/New_York"), which decides what "today" is for defaults, due
+    /// dates and the scheduled jobs; null = the server's own. A server in a container usually runs on UTC.
+    /// </summary>
+    public string? TimeZoneId { get; private set; }
+
+    /// <summary>Null or blank for the server's time zone. Windows ids are stored as their IANA equivalent, so the file moves between systems.</summary>
+    public void SetTimeZone(string? timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+        {
+            TimeZoneId = null;
+            return;
+        }
+
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId.Trim(), out var zone))
+            throw new DomainException("company.time_zone_invalid", $"'{timeZoneId}' isn't a time zone this server knows.");
+        TimeZoneId = zone.HasIanaId ? zone.Id
+            : TimeZoneInfo.TryConvertWindowsIdToIanaId(zone.Id, out var iana) ? iana
+            : zone.Id;
+    }
+
+    /// <summary>The company's time zone, or the server's when none is set (or this server doesn't know it).</summary>
+    public TimeZoneInfo TimeZone =>
+        TimeZoneId is { } id && TimeZoneInfo.TryFindSystemTimeZoneById(id, out var zone) ? zone : TimeZoneInfo.Local;
+
     public void SetDefaultReportBasis(ReportBasis basis) =>
         DefaultReportBasis = Enum.IsDefined(basis)
             ? basis

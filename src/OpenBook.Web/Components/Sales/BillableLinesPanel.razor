@@ -103,7 +103,7 @@
             _lines = [];
         }
 
-        _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today));
+        _customers = await CustomerService.ListAsync(CompanyTime.Today);
         _names = await CustomerService.FullNamesAsync();
     }
 }

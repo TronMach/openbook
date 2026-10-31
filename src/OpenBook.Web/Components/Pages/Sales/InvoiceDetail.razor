@@ -20,7 +20,7 @@
 
 <div class="wide">
     @{
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         var status = Labels.Status(_invoice, today);
     }
     <div class="toolbar">

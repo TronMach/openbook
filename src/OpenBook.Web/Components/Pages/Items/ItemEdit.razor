@@ -340,7 +340,7 @@
                                     <input type="hidden" name="lot" value="@lot.Key" />
                                     <input type="date" name="expiresOn" value="@expires?.ToString("yyyy-MM-dd")" aria-label="Expiry of lot @lot.Key" />
                                     <button type="submit" class="secondary">Save</button>
-                                    @if (expires is { } date && date < DateOnly.FromDateTime(DateTime.Today))
+                                    @if (expires is { } date && date < CompanyTime.Today)
                                     {
                                         <span class="badge warn">Expired</span>
                                     }

@@ -72,8 +72,8 @@
     private IReadOnlyList<Item> _items = [];
     private Guid? _customerId;
     private string? _number;
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Today);
-    private DateOnly? _expirationDate = DateOnly.FromDateTime(DateTime.Today).AddDays(30);
+    private DateOnly _date = CompanyTime.Today;
+    private DateOnly? _expirationDate = CompanyTime.Today.AddDays(30);
     private string? _memo;
     private List<SalesLineModel> _lines = [new()];
     private bool _loaded;

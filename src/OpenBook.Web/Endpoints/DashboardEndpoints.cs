@@ -1,5 +1,6 @@
 using System.Globalization;
 using OpenBook.Application.Reporting;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Reporting;
 using OpenBook.Web.Components.Pages.Reports;
@@ -57,7 +58,7 @@ public static class DashboardEndpoints
                 form["description"].ToString(),
                 decimal.TryParse(form["amount"].ToString().Replace(",", "", StringComparison.Ordinal), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
                     ? amount : throw new DomainException("scenario.amount_zero", "Enter an amount: positive for money in, negative for money out."),
-                Date(form["startDate"]) ?? DateOnly.FromDateTime(DateTime.Today),
+                Date(form["startDate"]) ?? CompanyTime.Today,
                 Enum.TryParse<ScenarioRecurrence>(form["recurrence"], out var recurrence) ? recurrence : ScenarioRecurrence.Once,
                 Date(form["endDate"])), ct)).Id)).RequireAuthorization();
 
@@ -88,7 +89,7 @@ public static class DashboardEndpoints
         {
             try
             {
-                var end = to ?? DateOnly.FromDateTime(DateTime.Today);
+                var end = to ?? CompanyTime.Today;
                 var file = await packages.BuildAsync(from ?? new DateOnly(end.Year, 1, 1), end, ct);
                 var bytes = await File.ReadAllBytesAsync(file.Path, ct);
                 File.Delete(file.Path);
@@ -102,7 +103,7 @@ public static class DashboardEndpoints
 
         app.MapGet("/accountant/1099", async (int? year, AccountantPackageService packages, CancellationToken ct) =>
         {
-            var y = year ?? DateTime.Today.Year - 1;
+            var y = year ?? CompanyTime.Today.Year - 1;
             try
             {
                 return Results.File(await packages.Filing1099CsvAsync(y, audit: true, ct: ct), "text/csv", $"1099 filing data {y}.csv");

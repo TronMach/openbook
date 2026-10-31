@@ -178,7 +178,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _asOf = DateOnly.TryParse(AsOf, CultureInfo.InvariantCulture, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        _asOf = DateOnly.TryParse(AsOf, CultureInfo.InvariantCulture, out var d) ? d : CompanyTime.Today;
         _k = await Kpis.SnapshotAsync(_asOf);
         _yearStart = _k.YearStart;
         _hidden = await Preferences.HiddenAsync();

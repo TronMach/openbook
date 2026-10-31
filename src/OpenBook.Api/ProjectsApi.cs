@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Projects;
+using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Projects;
 
@@ -132,7 +133,7 @@ public static class ProjectsApi
 
         // The rate time would get from the rate card, and where it comes from.
         projects.MapGet("/time/rate", async (Guid workerId, Guid? customerId, Guid? itemId, DateOnly? date, TimeService s, CancellationToken ct) =>
-            await s.QuoteRateAsync(workerId, customerId, itemId, date ?? DateOnly.FromDateTime(DateTime.Today), ct));
+            await s.QuoteRateAsync(workerId, customerId, itemId, date ?? CompanyTime.Today, ct));
 
         projects.MapGet("/mileage-rates", async (MileageService s, CancellationToken ct) =>
             (await s.RatesAsync(ct)).Select(kv => new MileageRateRequest(kv.Key, kv.Value)));

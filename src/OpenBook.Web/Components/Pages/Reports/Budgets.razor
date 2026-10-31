@@ -144,7 +144,7 @@
         _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
         _locations = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location, includeInactive: false);
         _locationLabel = (await Segments.GetTrackingAsync()).LocationLabel;
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         Input ??= new BudgetModel { Year = company.FiscalYearStart(today).Year, CopyFrom = _budgets.FirstOrDefault()?.Id };
     }
 

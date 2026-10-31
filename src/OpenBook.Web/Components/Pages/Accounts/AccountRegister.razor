@@ -153,7 +153,7 @@
             return;
 
         var company = await Settings.GetAsync();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = CompanyTime.Today;
         _useNumbers = company.UseAccountNumbers;
         _debitNormal = _account.Type.IsDebitNormal();
         _hasSubaccounts = _chart.ChildrenOf(_account.Id).Any();
