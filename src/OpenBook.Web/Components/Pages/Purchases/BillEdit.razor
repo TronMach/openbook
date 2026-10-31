@@ -22,7 +22,7 @@
     }
     else if (_loaded && _bill?.PurchaseOrderId is not null)
     {
-        <div class="card"><p>This bill was entered from a purchase order, so it can't be changed here yet. Void it and enter it from the order again. <a href="/purchases/bills/@Id">Back to the bill</a></p></div>
+        <BillFromOrderEdit BillId="Id" />
     }
     else if (_loaded && _bill is not null && _vendor is not null)
     {

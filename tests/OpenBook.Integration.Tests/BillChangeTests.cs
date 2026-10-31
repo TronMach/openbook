@@ -143,7 +143,7 @@ public sealed class BillChangeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Bills_from_a_purchase_order_are_left_alone()
+    public async Task Bills_from_a_purchase_order_change_through_the_order()
     {
         var order = await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(_landlord.Id, Mar1,
             [new PurchaseOrderLineDraft(null, _supplies.Id, "Paper", 1m, 40m)])));

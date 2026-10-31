@@ -44,7 +44,7 @@ To correct a bill, use **Change** at the top of its page: the bill number, dates
 - Stock the bill brought in is received again, so the change is refused once some of it has been sold, used, moved or given landed costs.
 - Lines marked billable to a customer stay as they are, on the same line; remove the mark first to change one.
 - If the bill is over the approval limit after the change, it waits for approval again, even if it was approved before, and the person who changed it can't approve it (unless self-approval is on).
-- Bills entered from a purchase order can't be changed yet: void them and enter them from the order again.
+- A bill entered from a purchase order is changed by order line instead (see [Purchase orders](15-purchase-orders.md)).
 
 A bill can be voided (with a reason) from its page until a payment is made against it.
 

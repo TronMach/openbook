@@ -36,6 +36,30 @@ public sealed record BillOrderLine(int LineNumber, decimal Quantity, decimal? Un
 public sealed record BillFromOrderCommand(
     DateOnly Date, string? Reference = null, IReadOnlyList<BillOrderLine>? Lines = null, DateOnly? DueDate = null, string? Memo = null, IReadOnlyList<Domain.Purchases.BillLineDraft>? Extra = null);
 
+/// <summary>A correction to a posted bill made from a purchase order (<see cref="PurchaseOrderService.ChangeBillAsync"/>).</summary>
+/// <param name="Lines">What the bill bills of the order, as when it was entered.</param>
+/// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
+/// <param name="Reference">Null keeps the vendor's bill number; blank clears it.</param>
+/// <param name="DueDate">Defaults to the same distance from the bill date as before.</param>
+/// <param name="Extra">Bill lines that aren't on the order (freight, sales tax), after the order's lines.</param>
+/// <param name="TagIds">Null keeps the entry's tags.</param>
+public sealed record ChangeBillFromOrderCommand(
+    DateOnly Date,
+    IReadOnlyList<BillOrderLine> Lines,
+    string Reason,
+    string? Reference = null,
+    DateOnly? DueDate = null,
+    string? Memo = null,
+    IReadOnlyList<Domain.Purchases.BillLineDraft>? Extra = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
+
+/// <summary>A bill made from a purchase order, taken apart for correcting it.</summary>
+/// <param name="Others">The order's lines as received and billed by its other bills.</param>
+/// <param name="Picks">What the bill bills of each order line (unit cost for item lines, amount for category lines).</param>
+/// <param name="Extra">The bill's lines that aren't from the order.</param>
+public sealed record BillFromOrderParts(
+    PurchaseOrder Order, IReadOnlyList<PurchaseOrderLineStatus> Others, IReadOnlyList<BillOrderLine> Picks, IReadOnlyList<Domain.Purchases.BillLineDraft> Extra);
+
 /// <summary>A purchase order line with what's been received and billed of it.</summary>
 /// <param name="BilledFromStock">Units billed that had come into stock on delivery; <paramref name="BilledFromStockAmount"/> is their received value.</param>
 public sealed record PurchaseOrderLineStatus(
@@ -174,6 +198,74 @@ public sealed class PurchaseOrderService(
         if (picks.Count == 0 || picks.All(p => p.Quantity == 0m && p.UnitCost is null or 0m))
             throw new DomainException("purchaseorder.nothing_to_bill", "Nothing has been received that isn't billed yet. Enter the quantities to bill.");
 
+        var (drafts, source) = await PlanBillAsync(order, progress, settings, picks, command.Extra, ct);
+        return await bills.CreateAsync(
+            new CreateBillCommand(order.VendorId, command.Date, drafts, command.DueDate, command.Reference, command.Memo ?? $"PO {order.Number}",
+                order.LocationId, WarehouseId: order.WarehouseId),
+            recurringBillId: null, ct, source);
+    }
+
+    /// <summary>
+    /// Corrects a posted bill made from this order in place: what it bills is worked out again as if it were being
+    /// entered now, against the order as billed by its other bills (so stock received before still clears "Received
+    /// Not Billed" at the value it came in at), and the bill is changed through <see cref="BillService"/>: entry voided and
+    /// reposted, stock taken back and received again, the 3-way match and approval rules run again, and the order closes
+    /// or reopens with what's left to bill. Refused for a cancelled order.
+    /// </summary>
+    public async Task<Bill> ChangeBillAsync(Guid billId, ChangeBillFromOrderCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Lines);
+        var bill = await store.GetBillAsync(billId, ct) ?? throw new EntityNotFoundException(BillService.EntityType, billId);
+        if (bill.PurchaseOrderId is not { } orderId)
+            throw new DomainException("bill.not_from_order", "This bill wasn't entered from a purchase order; change it from the bill's page.");
+        var order = await store.GetPurchaseOrderAsync(orderId, ct) ?? throw new EntityNotFoundException(EntityType, orderId);
+        if (order.Status == PurchaseOrderStatus.Cancelled)
+            throw new DomainException("purchaseorder.not_open", $"Purchase order {order.Number} is cancelled, so its bills can't be changed. Void the bill instead.");
+        if (command.Lines.All(p => p.Quantity == 0m && p.UnitCost is null or 0m))
+            throw new DomainException("purchaseorder.nothing_to_bill", "Enter the quantities to bill. To bill nothing, void the bill.");
+
+        var progress = await ProgressAsync(order, ct, except: bill.Id);
+        var settings = await store.GetPurchasingSettingsAsync(ct) ?? PurchasingSettings.Create();
+        var (drafts, source) = await PlanBillAsync(order, progress, settings, command.Lines, command.Extra, ct);
+        return await bills.ChangeFromSourceAsync(bill.Id,
+            new ChangeBillCommand(command.Date, drafts, command.Reason, command.DueDate, command.Reference, command.Memo ?? bill.Memo,
+                order.LocationId, command.TagIds, order.WarehouseId),
+            source, ct);
+    }
+
+    /// <summary>
+    /// A bill made from an order, as <see cref="ChangeBillAsync"/> takes it: the order lines it bills (from its source
+    /// lines) and its other lines. The order's lines come first on the bill; planning them again against the order's
+    /// other bills gives how many there are, so the rest are the extra lines.
+    /// </summary>
+    public async Task<BillFromOrderParts> BillPartsAsync(Guid billId, CancellationToken ct = default)
+    {
+        var bill = await store.GetBillAsync(billId, ct) ?? throw new EntityNotFoundException(BillService.EntityType, billId);
+        if (bill.PurchaseOrderId is not { } orderId)
+            throw new DomainException("bill.not_from_order", "This bill wasn't entered from a purchase order.");
+        var order = await store.GetPurchaseOrderAsync(orderId, ct) ?? throw new EntityNotFoundException(EntityType, orderId);
+        var progress = await ProgressAsync(order, ct, except: bill.Id);
+        var lines = order.Lines.ToDictionary(l => l.LineNumber);
+        var picks = bill.SourceLines.OrderBy(s => s.LineNumber)
+            .Select(s => lines[s.LineNumber].IsItem
+                ? new BillOrderLine(s.LineNumber, s.Quantity, s.Quantity == 0m ? 0m : decimal.Round(s.Amount / s.Quantity, 4, MidpointRounding.AwayFromZero))
+                : new BillOrderLine(s.LineNumber, 1m, s.Amount))
+            .ToList();
+        var settings = await store.GetPurchasingSettingsAsync(ct) ?? PurchasingSettings.Create();
+        var fromOrder = picks.Count == 0 ? 0 : (await PlanBillAsync(order, progress, settings, picks, extra: null, ct)).Drafts.Count;
+        var extra = bill.Lines.OrderBy(l => l.LineNumber).Skip(fromOrder).Select(l => l.ToDraft()).ToList();
+        return new BillFromOrderParts(order, progress.Lines, picks, extra);
+    }
+
+    /// <summary>
+    /// The bill lines for the chosen order lines, matched to the order and to what's been received (as of
+    /// <paramref name="progress"/>): differences become hold reasons; extra lines go after the order's.
+    /// </summary>
+    private async Task<(List<Domain.Purchases.BillLineDraft> Drafts, BillSource Source)> PlanBillAsync(
+        PurchaseOrder order, PurchaseOrderProgress progress, PurchasingSettings settings, IReadOnlyList<BillOrderLine> picks,
+        IReadOnlyList<Domain.Purchases.BillLineDraft>? extra, CancellationToken ct)
+    {
         var drafts = new List<Domain.Purchases.BillLineDraft>();
         var sources = new List<BillSourceLine>();
         var exceptions = new List<string>();
@@ -240,15 +332,11 @@ public sealed class PurchaseOrderService(
 
         if (drafts.Count == 0)
             throw new DomainException("purchaseorder.nothing_to_bill", "Enter the quantities to bill.");
-        drafts.AddRange(command.Extra ?? []);
+        drafts.AddRange(extra ?? []);
         var completes = progress.Lines.All(l =>
             (l.Line.IsItem ? l.BilledQuantity : l.BilledAmount) + sources.Where(s => s.LineNumber == l.Line.LineNumber).Sum(s => l.Line.IsItem ? s.Quantity : s.Amount)
             >= (l.Line.IsItem ? l.Line.Quantity : l.Line.Amount));
-
-        return await bills.CreateAsync(
-            new CreateBillCommand(order.VendorId, command.Date, drafts, command.DueDate, command.Reference, command.Memo ?? $"PO {order.Number}",
-                order.LocationId, WarehouseId: order.WarehouseId),
-            recurringBillId: null, ct, new BillSource(order.Id, sources, exceptions, completes));
+        return (drafts, new BillSource(order.Id, sources, exceptions, completes));
     }
 
     /// <summary>
@@ -301,9 +389,10 @@ public sealed class PurchaseOrderService(
             .ToList();
     }
 
-    private async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct)
+    /// <param name="except">A bill being corrected: what it bills now doesn't count.</param>
+    private async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct, Guid? except = null)
     {
-        var made = (await store.ListBillsAsync(order.VendorId, ct)).Where(b => b.PurchaseOrderId == order.Id).OrderBy(b => b.Date).ToList();
+        var made = (await store.ListBillsAsync(order.VendorId, ct)).Where(b => b.PurchaseOrderId == order.Id && b.Id != except).OrderBy(b => b.Date).ToList();
         var billed = made.Where(b => b.Status == DocumentStatus.Posted).SelectMany(b => b.SourceLines).ToLookup(s => s.LineNumber);
         var received = order.Received;
         return new PurchaseOrderProgress(made, order.Lines.OrderBy(l => l.LineNumber)

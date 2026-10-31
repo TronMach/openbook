@@ -26,6 +26,8 @@ When the vendor's bill comes, use **Enter the vendor's bill** on the PO. Enter *
 
 The PO tracks what's been ordered, received and billed, and closes when everything is billed. **Cancel the rest of the order** if the vendor can't supply it. Voiding a bill puts its quantities back on the PO.
 
+To correct a bill entered from a PO, use **Change** on the bill. It lists the order's lines with what's been ordered, received and billed on other bills: change the quantity and unit cost (or the amount, on a category line) the bill covers, and the **Other lines** (freight, tax) that aren't on the order. Say **Why are you changing it?** and **Save changes**. OpenBook bills the order again as if the bill were entered now: goods received into stock clear "Received Not Billed" again, the 3-way match and approval rules run again, and the PO closes or reopens with what's left. Changing it is refused once stock it brought in has been sold or used, and on a cancelled PO (void the bill instead).
+
 ## The 3-way match and approvals
 
 When a bill comes from a PO, OpenBook compares the order, what was received and the bill. It holds the bill for approval if:

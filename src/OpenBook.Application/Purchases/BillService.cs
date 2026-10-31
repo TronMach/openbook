@@ -140,7 +140,12 @@ public sealed class BillService(
     /// can't go below it, and if what it posts per account and class changes, payments dated in a closed period need
     /// the closing password (cash basis allocates them across the current lines).
     /// </summary>
-    public async Task<Bill> ChangeAsync(Guid id, ChangeBillCommand command, CancellationToken ct = default)
+    public Task<Bill> ChangeAsync(Guid id, ChangeBillCommand command, CancellationToken ct = default) => ChangeFromSourceAsync(id, command, source: null, ct);
+
+    /// <param name="source">For a bill made from a purchase order, what it now bills of the order (from
+    /// <see cref="PurchaseOrderService.ChangeBillAsync"/>): recorded on the bill, its differences held for approval, and the
+    /// order closed or reopened by what's left.</param>
+    internal async Task<Bill> ChangeFromSourceAsync(Guid id, ChangeBillCommand command, BillSource? source, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
@@ -152,9 +157,9 @@ public sealed class BillService(
         var bill = await store.GetBillAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (bill.Status == DocumentStatus.Voided)
             throw new DomainException("bill.voided", "This bill is voided, so it can't be changed.");
-        if (bill.PurchaseOrderId is not null)
+        if (bill.PurchaseOrderId != source?.PurchaseOrderId)
             throw new DomainException("bill.from_order",
-                "This bill was entered from a purchase order, so it can't be changed here yet. Void it and enter it from the order again.");
+                "This bill was entered from a purchase order, so it's changed from the order's side: use Change on the bill's page.");
         var vendor = await store.GetVendorAsync(bill.VendorId, ct) ?? throw new EntityNotFoundException("vendor", bill.VendorId);
 
         var reference = command.Reference is null ? bill.Reference : string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
@@ -198,9 +203,25 @@ public sealed class BillService(
         bill.SetLocation(command.LocationId);
         bill.SetWarehouse(warehouseId);
         var settings = await store.GetPurchasingSettingsAsync(ct);
-        bill.Rehold(settings?.ApprovalThreshold is { } threshold && bill.Total >= threshold
-            ? [$"The total, {bill.Total:N2}, is at or over the approval limit of {threshold:N2}."]
-            : [], user.Actor);
+        var holds = new List<string>(source?.Exceptions ?? []);
+        if (settings?.ApprovalThreshold is { } threshold && bill.Total >= threshold)
+            holds.Insert(0, $"The total, {bill.Total:N2}, is at or over the approval limit of {threshold:N2}.");
+        bill.Rehold(holds, user.Actor);
+        if (source is not null)
+        {
+            bill.SetSource(source.PurchaseOrderId, source.Lines);
+            if (await store.GetPurchaseOrderAsync(source.PurchaseOrderId, ct) is { } order
+                && (source.Completes ? order.Status == PurchaseOrderStatus.Open : order.Status == PurchaseOrderStatus.Closed))
+            {
+                var orderBefore = PurchaseOrderService.Snapshot(order);
+                if (source.Completes)
+                    order.Close();
+                else
+                    order.Reopen();
+                store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PurchaseOrderService.EntityType, order.Id,
+                    orderBefore, PurchaseOrderService.Snapshot(order)));
+            }
+        }
 
         // Drafts become lines 1, 2, ... in order; custom field values follow their line.
         await customFields.MoveLinesAsync(EntityType, bill.Id, lines.Count, command.FromLines, ct);

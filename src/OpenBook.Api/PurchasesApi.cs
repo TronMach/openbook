@@ -211,6 +211,14 @@ internal static class PurchasesApi
             var b = await s.CreateAsync(r, ct);
             return Results.Created($"/api/purchases/bills/{b.Id}", BillResponse.From(b));
         });
+        // A bill entered from a purchase order is corrected by order line: billed again against the order's other bills.
+        purchases.MapGet("/bills/{id:guid}/from-order", async (Guid id, PurchaseOrderService s, CancellationToken ct) =>
+        {
+            var parts = await s.BillPartsAsync(id, ct);
+            return new { OrderId = parts.Order.Id, parts.Picks, parts.Extra };
+        });
+        purchases.MapPut("/bills/{id:guid}/from-order", async (Guid id, ChangeBillFromOrderCommand r, PurchaseOrderService s, CancellationToken ct) =>
+            BillResponse.From(await s.ChangeBillAsync(id, r, ct)));
         // Correct a posted bill in place: its entry reversed and a new one posted, the approval rules run again.
         purchases.MapPut("/bills/{id:guid}", async (Guid id, ChangeBillCommand r, BillService s, CancellationToken ct) =>
             BillResponse.From(await s.ChangeAsync(id, r, ct)));

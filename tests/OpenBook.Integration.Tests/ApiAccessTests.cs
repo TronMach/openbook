@@ -198,6 +198,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/api/sales/invoices", "POST", UserRole.Standard)]
     [InlineData("/api/sales/invoices/0190a7a2-0000-7000-8000-000000000000", "PUT", UserRole.Standard)]
     [InlineData("/api/purchases/bills/0190a7a2-0000-7000-8000-000000000000", "PUT", UserRole.Standard)]
+    [InlineData("/api/purchases/bills/0190a7a2-0000-7000-8000-000000000000/from-order", "PUT", UserRole.Standard)]
     [InlineData("/api/sales/receipts/0190a7a2-0000-7000-8000-000000000000", "PUT", UserRole.Standard)]
     [InlineData("/api/sales/credit-memos/0190a7a2-0000-7000-8000-000000000000", "PUT", UserRole.Standard)]
     [InlineData("/api/purchases/vendor-credits/0190a7a2-0000-7000-8000-000000000000", "PUT", UserRole.Standard)]

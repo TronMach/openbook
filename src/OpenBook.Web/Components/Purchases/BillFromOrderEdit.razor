@@ -1,0 +1,172 @@
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+@* Changing a bill entered from a purchase order: what it bills of each order line, plus its other lines. *@
+
+@if (_parts is not null && _bill is not null)
+{
+    <p class="muted">This bill was entered from purchase order <a href="/purchases/orders/@_parts.Order.Id">@_parts.Order.Number</a>. Saving reverses its journal entry on its original date and bills the order again as shown: stock comes in again, goods already received clear "Received Not Billed" again, the 3-way match and approval rules run again, and the order closes or reopens with what's left. Changes in a closed period need the closing date password.</p>
+    @if (_bill.AmountPaid > 0m)
+    {
+        <div class="alert notice" role="status">@Labels.Amount(_bill.AmountPaid) is already paid or credited, so the total can't go below that.</div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <div class="row">
+            <div class="field">
+                <label for="reference">Bill no. <span class="muted">(the vendor's invoice number, optional)</span></label>
+                <input id="reference" @bind="_reference" maxlength="30" />
+            </div>
+            <div class="field">
+                <label for="date">Bill date</label>
+                <input id="date" type="date" @bind="_date" />
+            </div>
+            <div class="field">
+                <label for="due">Due date</label>
+                <input id="due" type="date" @bind="_dueDate" />
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data entry">
+                <thead><tr><th>Order line</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Billed on other bills</th><th class="num">Quantity</th><th class="num">Unit cost / amount</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        var line = row.Status.Line;
+                        <tr @key="line.LineNumber">
+                            <td>@(line.Description ?? $"Line {line.LineNumber}")</td>
+                            <td class="num">@(line.IsItem ? Labels.Quantity(line.Quantity) : Labels.Amount(line.Amount))</td>
+                            <td class="num">@(line.IsItem ? Labels.Quantity(row.Status.Received) : "")</td>
+                            <td class="num">@(line.IsItem ? Labels.Quantity(row.Status.BilledQuantity) : Labels.Amount(row.Status.BilledAmount))</td>
+                            <td>
+                                @if (line.IsItem)
+                                {
+                                    <input class="amount" type="number" step="0.0001" min="0" aria-label="Quantity for @line.Description" @bind="row.Quantity" />
+                                }
+                            </td>
+                            <td><input class="amount" type="number" step="@(line.IsItem ? "0.0001" : "0.01")" min="0" aria-label="@(line.IsItem ? "Unit cost" : "Amount") for @line.Description" @bind="row.Cost" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <h2 style="margin-top: 1rem">Other lines</h2>
+        <p class="hint">Freight, sales tax and anything else on the vendor's bill that isn't on the order; left out of the 3-way match.</p>
+        <BillLinesEditor Lines="_extra" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+
+        <div class="field" style="margin-top: 1rem">
+            <label for="memo">Memo <span class="muted">(optional)</span></label>
+            <input id="memo" @bind="_memo" maxlength="1000" />
+        </div>
+        <div class="field">
+            <label for="reason">Why are you changing it?</label>
+            <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+            <span class="hint">Kept in the bill's history and the audit log.</span>
+        </div>
+
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+        <div class="actions">
+            <button type="button" @onclick="SaveAsync" disabled="@(string.IsNullOrWhiteSpace(_reason) || _busy)">Save changes</button>
+            <a href="/purchases/bills/@BillId">Cancel</a>
+        </div>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert error" role="alert">@_error</div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid BillId { get; set; }
+
+    private Bill? _bill;
+    private BillFromOrderParts? _parts;
+    private List<RowModel> _rows = [];
+    private List<BillLineModel> _extra = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private bool _useNumbers;
+    private string? _reference;
+    private DateOnly _date;
+    private DateOnly _dueDate;
+    private string? _memo;
+    private string? _reason;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (_bill, _parts, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<BillService>().GetAsync(BillId),
+                await sp.GetRequiredService<PurchaseOrderService>().BillPartsAsync(BillId),
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            return;
+        }
+
+        _categories = BillLineModel.Categories(_chart);
+        var picks = _parts.Picks.ToDictionary(p => p.LineNumber);
+        _rows = _parts.Others.Select(s => new RowModel(s)
+        {
+            Quantity = picks.TryGetValue(s.Line.LineNumber, out var p) && s.Line.IsItem ? p.Quantity : null,
+            Cost = picks.TryGetValue(s.Line.LineNumber, out var q) ? q.UnitCost : null,
+        }).ToList();
+        _extra = _parts.Extra.Select(BillLineModel.From).ToList();
+        if (_extra.Count == 0)
+            _extra.Add(new());
+        _reference = _bill!.Reference;
+        _date = _bill.Date;
+        _dueDate = _bill.DueDate;
+        _memo = _bill.Memo;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var lines = _rows
+                .Where(r => r.Status.Line.IsItem ? (r.Quantity ?? 0m) != 0m : (r.Cost ?? 0m) != 0m)
+                .Select(r => r.Status.Line.IsItem ? new BillOrderLine(r.Status.Line.LineNumber, r.Quantity!.Value, r.Cost) : new BillOrderLine(r.Status.Line.LineNumber, 1m, r.Cost))
+                .ToList();
+            var extra = BillLineModel.Drafts(_extra.Where(BillLineModel.IsFilledLine).ToList());
+            var command = new ChangeBillFromOrderCommand(_date, lines, _reason!, _reference ?? "", _dueDate, _memo, extra);
+            await Ops.RunAsync<PurchaseOrderService, Bill>(s => s.ChangeBillAsync(BillId, command), _closingPassword);
+            Navigation.NavigateTo($"/purchases/bills/{BillId}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class RowModel(PurchaseOrderLineStatus status)
+    {
+        public PurchaseOrderLineStatus Status { get; } = status;
+        public decimal? Quantity { get; set; }
+        public decimal? Cost { get; set; }
+    }
+}
