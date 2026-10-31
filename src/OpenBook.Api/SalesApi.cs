@@ -193,6 +193,9 @@ internal static class SalesApi
             var i = await s.CreateAsync(r, ct);
             return Results.Created($"/api/sales/invoices/{i.Id}", InvoiceResponse.From(i));
         });
+        // Correct a posted invoice in place: its entry reversed and a new one posted, same id and number.
+        sales.MapPut("/invoices/{id:guid}", async (Guid id, ChangeInvoiceCommand r, InvoiceService s, CancellationToken ct) =>
+            InvoiceResponse.From(await s.ChangeAsync(id, r, ct)));
         sales.MapPost("/invoices/{id:guid}/void", async (Guid id, VoidRequest r, InvoiceService s, CancellationToken ct) =>
             InvoiceResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

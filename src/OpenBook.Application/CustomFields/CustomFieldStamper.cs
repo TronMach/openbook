@@ -15,6 +15,22 @@ public sealed class CustomFieldStamper(ICustomFieldStore store)
     /// line's item fields marked for this document. With <paramref name="replaceLines"/> (a document edited), line
     /// values are copied again and record-level values already there are kept.
     /// </summary>
+    /// <summary>
+    /// After a document's lines were renumbered (an invoice changed): each line's values follow it to its new number
+    /// (<paramref name="moves"/>: old → new); values of lines that are gone are removed.
+    /// </summary>
+    public async Task MoveLinesAsync(string entityType, Guid documentId, IReadOnlyDictionary<int, int> moves, CancellationToken ct)
+    {
+        foreach (var value in (await store.ListValuesAsync([documentId], ct)).Where(v => v.LineNumber > 0).ToList())
+        {
+            if (moves.TryGetValue(value.LineNumber, out var to) && to == value.LineNumber)
+                continue;
+            store.Remove(value);
+            if (moves.TryGetValue(value.LineNumber, out var moved))
+                store.Add(CustomFieldValue.Create(value.FieldId, entityType, documentId, moved, value.Value));
+        }
+    }
+
     /// <param name="lines">Each line's number and item.</param>
     public async Task StampAsync(
         string entityType, Guid documentId, Guid? partyId, IEnumerable<(int LineNumber, Guid? ItemId)> lines,

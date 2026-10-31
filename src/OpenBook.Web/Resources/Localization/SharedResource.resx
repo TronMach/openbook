@@ -116,6 +116,9 @@
   <data name="Back to the home page" xml:space="preserve">
     <value>Back to the home page</value>
   </data>
+  <data name="Back to the invoice" xml:space="preserve">
+    <value>Back to the invoice</value>
+  </data>
   <data name="Backup" xml:space="preserve">
     <value>Backup</value>
   </data>
@@ -137,6 +140,9 @@
   <data name="Billable expenses for this customer" xml:space="preserve">
     <value>Billable expenses for this customer</value>
   </data>
+  <data name="Billable expenses, time and mileage" xml:space="preserve">
+    <value>Billable expenses, time and mileage</value>
+  </data>
   <data name="Billable time and mileage for this customer" xml:space="preserve">
     <value>Billable time and mileage for this customer</value>
   </data>
@@ -145,6 +151,9 @@
   </data>
   <data name="Business type" xml:space="preserve">
     <value>Business type</value>
+  </data>
+  <data name="By" xml:space="preserve">
+    <value>By</value>
   </data>
   <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
@@ -164,11 +173,17 @@
   <data name="Cash in the bank" xml:space="preserve">
     <value>Cash in the bank</value>
   </data>
+  <data name="Change" xml:space="preserve">
+    <value>Change</value>
+  </data>
   <data name="Change a rate" xml:space="preserve">
     <value>Change a rate</value>
   </data>
   <data name="Change password" xml:space="preserve">
     <value>Change password</value>
+  </data>
+  <data name="Changes" xml:space="preserve">
+    <value>Changes</value>
   </data>
   <data name="Channel" xml:space="preserve">
     <value>Channel</value>
@@ -292,6 +307,12 @@
   </data>
   <data name="Due" xml:space="preserve">
     <value>Due</value>
+  </data>
+  <data name="Due date" xml:space="preserve">
+    <value>Due date</value>
+  </data>
+  <data name="Each change reversed the invoice's previous journal entry on its date and posted a new one; all of them stay in the journal." xml:space="preserve">
+    <value>Each change reversed the invoice's previous journal entry on its date and posted a new one; all of them stay in the journal.</value>
   </data>
   <data name="Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting." xml:space="preserve">
     <value>Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</value>
@@ -467,6 +488,9 @@
   <data name="Journal entry" xml:space="preserve">
     <value>Journal entry</value>
   </data>
+  <data name="Kept in the invoice's history and the audit log." xml:space="preserve">
+    <value>Kept in the invoice's history and the audit log.</value>
+  </data>
   <data name="Kind" xml:space="preserve">
     <value>Kind</value>
   </data>
@@ -493,6 +517,12 @@
   </data>
   <data name="Legal name" xml:space="preserve">
     <value>Legal name</value>
+  </data>
+  <data name="Lines from the estimate" xml:space="preserve">
+    <value>Lines from the estimate</value>
+  </data>
+  <data name="Lines from the sales order" xml:space="preserve">
+    <value>Lines from the sales order</value>
   </data>
   <data name="Live connection" xml:space="preserve">
     <value>Live connection</value>
@@ -574,6 +604,9 @@
   </data>
   <data name="Online payments" xml:space="preserve">
     <value>Online payments</value>
+  </data>
+  <data name="Only posted invoices can be changed." xml:space="preserve">
+    <value>Only posted invoices can be changed.</value>
   </data>
   <data name="Open" xml:space="preserve">
     <value>Open</value>
@@ -677,6 +710,9 @@
   <data name="Qty" xml:space="preserve">
     <value>Qty</value>
   </data>
+  <data name="Quantity" xml:space="preserve">
+    <value>Quantity</value>
+  </data>
   <data name="Quick ratio" xml:space="preserve">
     <value>Quick ratio</value>
   </data>
@@ -764,6 +800,9 @@
   <data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
+  <data name="Save changes" xml:space="preserve">
+    <value>Save changes</value>
+  </data>
   <data name="Save invoice" xml:space="preserve">
     <value>Save invoice</value>
   </data>
@@ -772,6 +811,9 @@
   </data>
   <data name="Saved." xml:space="preserve">
     <value>Saved.</value>
+  </data>
+  <data name="Saving reverses the invoice's journal entry on its original date and posts the corrected invoice, keeping its number, payments and history. Changes in a closed period need the closing date password." xml:space="preserve">
+    <value>Saving reverses the invoice's journal entry on its original date and posts the corrected invoice, keeping its number, payments and history. Changes in a closed period need the closing date password.</value>
   </data>
   <data name="Schedule" xml:space="preserve">
     <value>Schedule</value>
@@ -854,6 +896,9 @@
   <data name="The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below." xml:space="preserve">
     <value>The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below.</value>
   </data>
+  <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
+    <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
+  </data>
   <data name="This browser" xml:space="preserve">
     <value>This browser</value>
   </data>
@@ -875,8 +920,17 @@
   <data name="Times" xml:space="preserve">
     <value>Times</value>
   </data>
+  <data name="To bill someone else, void this invoice and enter a new one." xml:space="preserve">
+    <value>To bill someone else, void this invoice and enter a new one.</value>
+  </data>
   <data name="Total" xml:space="preserve">
     <value>Total</value>
+  </data>
+  <data name="Total after" xml:space="preserve">
+    <value>Total after</value>
+  </data>
+  <data name="Total before" xml:space="preserve">
+    <value>Total before</value>
   </data>
   <data name="Transactions" xml:space="preserve">
     <value>Transactions</value>
@@ -926,6 +980,9 @@
   <data name="What kind of business is this?" xml:space="preserve">
     <value>What kind of business is this?</value>
   </data>
+  <data name="When" xml:space="preserve">
+    <value>When</value>
+  </data>
   <data name="Where you're signed in" xml:space="preserve">
     <value>Where you're signed in</value>
   </data>
@@ -934,6 +991,12 @@
   </data>
   <data name="who can sign in, and their roles (admins)" xml:space="preserve">
     <value>who can sign in, and their roles (admins)</value>
+  </data>
+  <data name="Why" xml:space="preserve">
+    <value>Why</value>
+  </data>
+  <data name="Why are you changing it?" xml:space="preserve">
+    <value>Why are you changing it?</value>
   </data>
   <data name="Why it wasn't entered" xml:space="preserve">
     <value>Why it wasn't entered</value>

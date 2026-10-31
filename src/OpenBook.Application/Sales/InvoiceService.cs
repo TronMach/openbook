@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
@@ -31,6 +33,32 @@ public sealed record CreateInvoiceCommand(
     IReadOnlyList<Guid>? TimeEntryIds = null,
     IReadOnlyList<Guid>? MileageTripIds = null);
 
+/// <summary>A correction to a posted invoice (<see cref="InvoiceService.ChangeAsync"/>). The customer can't change.</summary>
+/// <param name="Lines">Every line the invoice should have, tax lines left out (they're recalculated).</param>
+/// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
+/// <param name="DueDate">Defaults to the same distance from the invoice date as before.</param>
+/// <param name="Number">Defaults to the invoice's number.</param>
+/// <param name="TaxCodeId">Null keeps the invoice's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
+/// <param name="TagIds">Null keeps the entry's tags.</param>
+/// <param name="WarehouseId">As for a new invoice: null is the default warehouse.</param>
+/// <param name="FromLines">For each of <paramref name="Lines"/>, the number of the line it continues (null for a new one), so
+/// its custom field values follow it; null takes the lines as continuing the old ones in order.</param>
+public sealed record ChangeInvoiceCommand(
+    DateOnly Date,
+    IReadOnlyList<SalesLineDraft> Lines,
+    string Reason,
+    DateOnly? DueDate = null,
+    string? Number = null,
+    string? Memo = null,
+    Guid? TaxCodeId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null,
+    Guid? WarehouseId = null,
+    IReadOnlyList<int?>? FromLines = null);
+
+/// <summary>One correction of an invoice, from its audit record.</summary>
+public sealed record InvoiceChange(DateTimeOffset At, string By, string Reason, decimal TotalBefore, decimal TotalAfter);
+
 /// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
 internal sealed record InvoiceSource(Guid? SalesOrderId, IReadOnlyList<InvoiceSourceLine> Lines, bool Completes);
 
@@ -44,6 +72,8 @@ public sealed class InvoiceService(
     BillableExpenseService billables,
     Projects.ProjectBilling projectBilling,
     CustomFields.CustomFieldStamper customFields,
+    ICompanyStore companies,
+    ILedgerStore ledger,
     IClock clock,
     ICurrentUser user)
 {
@@ -186,6 +216,154 @@ public sealed class InvoiceService(
 
         await store.SaveChangesAsync(ct);
         return invoice;
+    }
+
+    /// <summary>
+    /// Corrects a posted invoice in place, in one save: its entry is voided (the reversal dated the original date), its
+    /// stock put back and taken again, and a new entry posted from the changed invoice on its date. It keeps its id and
+    /// number, so payments, credits and everything else pointing at it stay. Lines billed from a sales order or
+    /// estimate, and billable expense, time and mileage lines, must stay as they are. With anything settled, the total
+    /// can't go below it, and if the income lines change, payments dated in a closed period need the closing password
+    /// (cash basis allocates them across the current lines).
+    /// </summary>
+    public async Task<Invoice> ChangeAsync(Guid id, ChangeInvoiceCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Lines);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new DomainException("invoice.change_reason_required", "Say why the invoice is being changed.");
+        if (command.FromLines is { } from && from.Count != command.Lines.Count)
+            throw new DomainException("invoice.from_lines_count", "Say which old line each line continues, one for each line.");
+
+        var invoice = await store.GetInvoiceAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (invoice.Status == DocumentStatus.Voided)
+            throw new DomainException("invoice.voided", $"Invoice {invoice.Number} is voided, so it can't be changed.");
+        var customer = await store.GetCustomerAsync(invoice.CustomerId, ct) ?? throw new EntityNotFoundException("customer", invoice.CustomerId);
+
+        var number = Invoice.NormalizeNumber(command.Number ?? invoice.Number);
+        if (!string.Equals(number, invoice.Number, StringComparison.OrdinalIgnoreCase)
+            && (await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
+            throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
+
+        var drafts = command.Lines.ToList();
+        EnsureLockedLinesKept(invoice, drafts);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId ?? invoice.TaxCodeId ?? Guid.Empty, command.Date, ct);
+        var dueDate = command.DueDate ?? command.Date.AddDays(invoice.DueDate.DayNumber - invoice.Date.DayNumber);
+        if (lines.Sum(l => l.Amount) < invoice.AmountPaid)
+            throw new DomainException("invoice.total_below_paid",
+                $"Invoice {invoice.Number} has {invoice.AmountPaid:N2} paid, credited or written off, so its total can't go below that.");
+
+        // Cash basis spreads each payment over the invoice's current income lines: changing them changes the periods paid in.
+        if (invoice.AmountPaid > 0m && !SameIncome(invoice.Lines, lines))
+        {
+            var company = await companies.GetRequiredCompanyAsync(ct);
+            foreach (var paidOn in (await SettlementDatesAsync(invoice, ct)).Distinct().Order())
+                engine.EnsureOpen(company, paidOn, $"changing the income lines of invoice {invoice.Number}, paid on {paidOn:yyyy-MM-dd}");
+        }
+
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([invoice.JournalEntryId], ct)).Select(t => t.TagId).ToList();
+        var before = Snapshot(invoice);
+
+        var back = await inventory.PlanReversalAsync(InventorySources.Invoice, invoice.Id, invoice.Date, $"invoice {invoice.Number}", ct);
+        await engine.StageVoidAsync(invoice.JournalEntryId, $"Invoice changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        inventory.Apply(back, InventorySources.Invoice, invoice.Id);
+        var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
+        var memo = $"Invoice {number} · {customer.DisplayName}";
+        var entry = await engine.StageAsync(
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(invoice.ReceivableAccountId, lines, memo), .. stock.Postings], memo, Invoice.Source, invoice.Id,
+                LocationId: command.LocationId, TagIds: tagIds), ct);
+        inventory.Apply(stock, InventorySources.Invoice, invoice.Id);
+
+        invoice.Change(number, command.Date, dueDate, lines, entry.Id, command.Memo, taxCodeId, exemption);
+        invoice.SetLocation(command.LocationId);
+        invoice.SetWarehouse(warehouseId);
+
+        // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
+        var moves = new Dictionary<int, int>();
+        for (var i = 0; i < drafts.Count; i++)
+        {
+            if ((command.FromLines is null ? i + 1 : command.FromLines[i]) is { } old && old > 0)
+                moves.TryAdd(old, i + 1);
+        }
+
+        await customFields.MoveLinesAsync(EntityType, invoice.Id, moves, ct);
+
+        var after = JsonNode.Parse(Snapshot(invoice))!.AsObject();
+        after["ChangeReason"] = command.Reason.Trim();
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, invoice.Id, before, after.ToJsonString()));
+        await store.SaveChangesAsync(ct);
+        return invoice;
+    }
+
+    /// <summary>The invoice's corrections, oldest first (audit records carrying a change reason).</summary>
+    public async Task<IReadOnlyList<InvoiceChange>> ChangesAsync(Guid id, CancellationToken ct = default)
+    {
+        static decimal Total(string? json) => json is null ? 0m : JsonNode.Parse(json)?["Total"]?.GetValue<decimal>() ?? 0m;
+        return (await ledger.ListAuditAsync(EntityType, id, null, ct))
+            .Where(r => r.Action == AuditAction.Updated && r.After is not null)
+            .Select(r => (Record: r, Reason: JsonNode.Parse(r.After!)?["ChangeReason"]?.GetValue<string>()))
+            .Where(x => x.Reason is not null)
+            .OrderBy(x => x.Record.OccurredAt)
+            .Select(x => new InvoiceChange(x.Record.OccurredAt, x.Record.Actor, x.Reason!, Total(x.Record.Before), Total(x.Record.After)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Lines that came from somewhere can't change in a correction: lines billed from a sales order or estimate (the
+    /// source's quantities are recorded against its own line numbers) and billable expense, time and mileage lines
+    /// (marked as invoiced; voiding the invoice releases them). Each must still be there as it was.
+    /// </summary>
+    private static void EnsureLockedLinesKept(Invoice invoice, IReadOnlyList<SalesLineDraft> drafts)
+    {
+        var fromSource = invoice.SourceLines.Count > 0;
+        var locked = invoice.Lines
+            .Where(l => l.Kind != SalesLineKind.Tax && (fromSource || l.PriceSource is BillableExpenseService.PriceSource
+                or Projects.ProjectBilling.TimePriceSource or Projects.ProjectBilling.MileagePriceSource))
+            .ToList();
+        if (locked.Count == 0)
+            return;
+
+        static (Guid?, string?, decimal, decimal, SalesLineKind, string?) Key(SalesLineDraft d) =>
+            (d.ItemId, d.Description, d.Quantity, d.Rate, d.Kind == SalesLineKind.Note ? SalesLineKind.Item : d.Kind, d.PriceSource);
+        var offered = drafts.GroupBy(Key).ToDictionary(g => g.Key, g => g.Count());
+        foreach (var line in locked)
+        {
+            var key = Key(line.ToDraft());
+            if (offered.GetValueOrDefault(key) > 0)
+            {
+                offered[key]--;
+                continue;
+            }
+
+            var origin = fromSource ? (invoice.SalesOrderId is null ? "the estimate" : "the sales order")
+                : line.PriceSource == BillableExpenseService.PriceSource ? "billable expenses"
+                : line.PriceSource == Projects.ProjectBilling.TimePriceSource ? "billable time" : "billable mileage";
+            throw new DomainException("invoice.line_locked",
+                $"The line “{line.Description}” was billed from {origin}, so it can't be changed or removed here. Void the invoice to bill it again.");
+        }
+    }
+
+    /// <summary>Whether two sets of lines post the same income to each account and class, however it's split into lines.</summary>
+    private static bool SameIncome(IEnumerable<SalesLine> a, IEnumerable<SalesLine> b)
+    {
+        static List<(Guid, Guid?, decimal)> Income(IEnumerable<SalesLine> lines) => lines
+            .Where(l => l.IncomeAccountId is not null)
+            .GroupBy(l => (Account: l.IncomeAccountId!.Value, l.ClassId))
+            .Select(g => (g.Key.Account, g.Key.ClassId, g.Sum(l => l.Amount)))
+            .Where(x => x.Item3 != 0m)
+            .Order()
+            .ToList();
+        return Income(a).SequenceEqual(Income(b));
+    }
+
+    /// <summary>The dates payments and retainers were applied to the invoice: what cash basis counts it on.</summary>
+    private async Task<IEnumerable<DateOnly>> SettlementDatesAsync(Invoice invoice, CancellationToken ct)
+    {
+        var payments = (await store.ListPaymentsForInvoiceAsync(invoice.Id, ct)).Where(p => p.Status == DocumentStatus.Posted).Select(p => p.Date);
+        var retainers = (await store.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted)
+            .SelectMany(r => r.Applications.Where(a => a.InvoiceId == invoice.Id && !a.IsVoided).Select(a => a.AppliedOn));
+        return payments.Concat(retainers).ToList();
     }
 
     public async Task<Invoice> VoidAsync(Guid id, string reason, CancellationToken ct = default)

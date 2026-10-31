@@ -31,6 +31,9 @@ public sealed class SalesLineModel
     /// <summary>Lot or serial numbers, for lot- and serial-tracked items; blank takes the oldest on a sale.</summary>
     public string? Lots { get; set; }
 
+    /// <summary>When correcting a saved document: the number of the line this one continues (null for a new line).</summary>
+    public int? OriginalLine { get; set; }
+
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 
     public bool IsBlank => !IsDiscount && ItemId is null && string.IsNullOrWhiteSpace(Description) && ItemAmount == 0m;

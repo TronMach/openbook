@@ -4,7 +4,8 @@ namespace OpenBook.Domain.Sales;
 
 /// <summary>
 /// A bill to a customer: debits accounts receivable and credits income. Payments reduce its balance.
-/// Never edited; voided (once no payments are applied) by reversing its entry.
+/// Voided (once no payments are applied) by reversing its entry, or corrected in place with <see cref="Change"/>
+/// (its entry reversed and a new one posted; the invoice keeps its id and number).
 /// </summary>
 public sealed class Invoice
 {
@@ -172,6 +173,40 @@ public sealed class Invoice
         if (amount <= 0m || amount > AmountPaid)
             throw new DomainException("payment.remove_invalid", $"Invoice {Number} doesn't have {amount:N2} paid to remove.");
         AmountPaid -= amount;
+    }
+
+    /// <summary>
+    /// Corrects the invoice in place: new number, dates, lines, message and tax, posted as <paramref name="journalEntryId"/>
+    /// (the old entry is reversed by the caller). The customer, A/R account and what's settled stay, so the total can't
+    /// fall below what's settled. An early payment discount date keeps its distance from the invoice date.
+    /// </summary>
+    public void Change(
+        string number, DateOnly date, DateOnly dueDate, IReadOnlyList<SalesLine> lines, Guid journalEntryId, string? memo, Guid? taxCodeId, string? taxExemption)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("invoice.voided", $"Invoice {Number} is voided, so it can't be changed.");
+        if (dueDate < date)
+            throw new DomainException("invoice.due_before_date", "The due date can't be before the invoice date.");
+        var total = lines.Sum(l => l.Amount);
+        if (total <= 0m)
+            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        if (total < AmountPaid)
+            throw new DomainException("invoice.total_below_paid",
+                $"Invoice {Number} has {AmountPaid:N2} paid, credited or written off, so its total can't go below that.");
+
+        if (EarlyPaymentDiscountDate is { } discountDate)
+            EarlyPaymentDiscountDate = date.AddDays(discountDate.DayNumber - Date.DayNumber);
+        Number = NormalizeNumber(number);
+        Date = date;
+        DueDate = dueDate;
+        Memo = Text.Optional(memo, 1000, "invoice.memo_too_long", "Message");
+        TaxCodeId = taxCodeId;
+        TaxExemption = taxCodeId is null ? null : taxExemption;
+        JournalEntryId = journalEntryId;
+        _lines.Clear();
+        _lines.AddRange(lines);
+        Total = total;
     }
 
     public void Void()

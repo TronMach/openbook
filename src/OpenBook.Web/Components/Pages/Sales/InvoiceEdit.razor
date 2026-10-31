@@ -1,0 +1,205 @@
+@page "/sales/invoices/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Change invoice {0}", _invoice?.Number ?? ""] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Change invoice {0}", _invoice?.Number ?? ""]</h1>
+        <a class="button secondary" href="/sales/invoices/@Id">@L["Back to the invoice"]</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_invoice is null || _invoice.Status == DocumentStatus.Voided))
+    {
+        <div class="card"><p>@L["Only posted invoices can be changed."] <a href="/sales/invoices/@Id">@L["Back to the invoice"]</a></p></div>
+    }
+    else if (_loaded && _invoice is not null && _customer is not null)
+    {
+        <p class="muted">@L["Saving reverses the invoice's journal entry on its original date and posts the corrected invoice, keeping its number, payments and history. Changes in a closed period need the closing date password."]</p>
+        @if (_invoice.AmountPaid > 0m)
+        {
+            <div class="alert notice" role="status">@L["{0} is already paid, credited or written off, so the total can't go below that.", Labels.Amount(_invoice.AmountPaid)]</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label>@L["Customer"]</label>
+                    <div>@_customer.DisplayName</div>
+                    <span class="hint">@L["To bill someone else, void this invoice and enter a new one."]</span>
+                </div>
+                <div class="field">
+                    <label for="number">@L["Invoice number"]</label>
+                    <input id="number" @bind="_number" maxlength="20" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">@L["Invoice date"]</label>
+                    <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
+                </div>
+                <div class="field">
+                    <label for="due">@L["Due date"]</label>
+                    <input id="due" type="date" @bind="_dueDate" />
+                </div>
+            </div>
+
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            @if (!_allLocked)
+            {
+                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            }
+
+            @if (_locked.Count > 0)
+            {
+                <fieldset style="margin-top: 1rem">
+                    <legend>@(!_allLocked ? L["Billable expenses, time and mileage"] : _invoice.SalesOrderId is null ? L["Lines from the estimate"] : L["Lines from the sales order"])</legend>
+                    <table class="data">
+                        <thead><tr><th>@L["Description"]</th><th class="num">@L["Quantity"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                        <tbody>
+                            @foreach (var line in _locked)
+                            {
+                                <tr><td>@line.Description</td><td class="num">@Labels.Quantity(line.Quantity)</td><td class="num">@Labels.Price(line.Rate)</td><td class="num">@Labels.Amount(line.Amount)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    <span class="hint">@L["These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again."]</span>
+                </fieldset>
+            }
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">@L["Message to customer"] <span class="muted">@L["(optional, printed on the invoice)"]</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+            <div class="field">
+                <label for="reason">@L["Why are you changing it?"]</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">@L["Kept in the invoice's history and the audit log."]</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@L["Save changes"]</button>
+                <a href="/sales/invoices/@Id">@L["Cancel"]</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Invoice? _invoice;
+    private Customer? _customer;
+    private IReadOnlyList<Item> _items = [];
+    private string? _number;
+    private DateOnly _date;
+    private DateOnly _dueDate;
+    private string? _memo;
+    private string? _reason;
+    private List<SalesLineModel> _lines = [];
+    private List<SalesLine> _locked = [];
+    private bool _allLocked;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
+    private Guid? _taxCodeId;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
+    private Guid? _locationId;
+
+    private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
+    private string? TaxExemption => SelectedTax is null ? null : _customer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && _customer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason)
+        && (_allLocked || SalesLineModel.Total(_lines) + _locked.Sum(l => l.Amount) > 0m);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _invoice = await Ops.RunAsync<InvoiceService, Invoice?>(s => s.GetAsync(Id));
+        if (_invoice is not null)
+        {
+            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+            (_customer, _items) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<CustomerService>().GetAsync(_invoice.CustomerId),
+                await sp.GetRequiredService<ItemService>().ListAsync()));
+
+            _number = _invoice.Number;
+            _date = _invoice.Date;
+            _dueDate = _invoice.DueDate;
+            _memo = _invoice.Memo;
+            _taxCodeId = _invoice.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+            _locationId = _invoice.LocationId;
+            _warehouseId = _invoice.WarehouseId;
+
+            // The same rule the service checks: lines from a sales order or estimate, and billed costs, time and mileage, stay.
+            _allLocked = _invoice.SourceLines.Count > 0;
+            var lines = _invoice.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).ToList();
+            _locked = lines.Where(l => _allLocked || l.PriceSource is BillableExpenseService.PriceSource
+                or OpenBook.Application.Projects.ProjectBilling.TimePriceSource or OpenBook.Application.Projects.ProjectBilling.MileagePriceSource).ToList();
+            _lines = lines.Except(_locked).Select(l =>
+            {
+                var model = SalesLineModel.From(l.ToDraft());
+                model.OriginalLine = l.LineNumber;
+                return model;
+            }).ToList();
+            if (_lines.Count == 0 && !_allLocked)
+                _lines.Add(new());
+        }
+
+        _loaded = true;
+    }
+
+    private void ChangeDate(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
+            return;
+        // The due date keeps its distance from the invoice date.
+        _dueDate = date.AddDays(_dueDate.DayNumber - _date.DayNumber);
+        _date = date;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var editable = _allLocked ? [] : _lines.Where(l => !l.IsBlank).ToList();
+            var drafts = SalesLineModel.Drafts(editable).Concat(_locked.Select(l => l.ToDraft())).ToList();
+            var from = editable.Select(l => l.OriginalLine).Concat(_locked.Select(l => (int?)l.LineNumber)).ToList();
+            var command = new ChangeInvoiceCommand(_date, drafts, _reason!, _dueDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
+                WarehouseId: _warehouseId, FromLines: from);
+            await Ops.RunAsync<InvoiceService, Invoice>(s => s.ChangeAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/sales/invoices/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

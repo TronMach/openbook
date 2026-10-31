@@ -31,6 +31,10 @@
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Invoice" Id="_invoice.Id" PdfUrl="@($"/api/sales/invoices/{_invoice.Id}/pdf")" />
         <a class="button secondary" href="/sales/email/invoices/@_invoice.Id">@L["Email"]</a>
         <a class="button secondary" href="/audit?entityId=@_invoice.Id">@L["History"]</a>
+        @if (_invoice.Status == DocumentStatus.Posted)
+        {
+            <a class="button secondary" href="/sales/invoices/@_invoice.Id/edit">@L["Change"]</a>
+        }
         @if (_invoice.IsOpen)
         {
             <a class="button secondary" href="/sales/credits/apply?customer=@_customer.Id">@L["Apply credit"]</a>
@@ -38,6 +42,12 @@
             <a class="button" href="/sales/payments/new?customer=@(_billTo ?? _customer.Id)">@L["Receive payment"]</a>
         }
     </div>
+
+    @if (_changes.Count > 0)
+    {
+        var last = _changes[^1];
+        <p class="muted no-print">@L["Changed {0} by {1}: {2}", last.At.ToLocalTime().ToString("g"), last.By, last.Reason]</p>
+    }
 
     @if (_invoice.LastEmailedAt is { } emailed)
     {
@@ -223,6 +233,29 @@
         </section>
     }
 
+    @if (_changes.Count > 0)
+    {
+        <section class="no-print">
+            <h2>@L["Changes"]</h2>
+            <table class="data">
+                <thead><tr><th>@L["When"]</th><th>@L["By"]</th><th>@L["Why"]</th><th class="num">@L["Total before"]</th><th class="num">@L["Total after"]</th></tr></thead>
+                <tbody>
+                    @foreach (var change in _changes)
+                    {
+                        <tr>
+                            <td>@change.At.ToLocalTime().ToString("g")</td>
+                            <td>@change.By</td>
+                            <td>@change.Reason</td>
+                            <td class="num">@Labels.Amount(change.TotalBefore)</td>
+                            <td class="num">@Labels.Amount(change.TotalAfter)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="muted">@L["Each change reversed the invoice's previous journal entry on its date and posted a new one; all of them stay in the journal."]</p>
+        </section>
+    }
+
     <p class="muted no-print" style="margin-top: 1rem"><a href="/journal/@_invoice.JournalEntryId">@L["Journal entry"]</a></p>
 
     @if (_invoice.Status == DocumentStatus.Posted)
@@ -272,6 +305,7 @@
     private IReadOnlyList<BadDebtWriteOff> _writeOffs = [];
     private IReadOnlyList<InvoiceReminder> _reminders = [];
     private IReadOnlyList<ScheduledEmail> _scheduled = [];
+    private IReadOnlyList<InvoiceChange> _changes = [];
 
     [SupplyParameterFromQuery(Name = "error")] private string? EmailError { get; set; }
     private Guid? _billTo;
@@ -297,6 +331,7 @@
         _writeOffs = await WriteOffs.ListForInvoiceAsync(Id);
         _reminders = await Reminders.ForInvoiceAsync(Id);
         _scheduled = await ScheduledEmails.ListAsync(Id);
+        _changes = await Invoices.ChangesAsync(Id);
         if (_customer is { BillWithParent: true, ParentId: { } parentId })
             _billTo = parentId;
     }

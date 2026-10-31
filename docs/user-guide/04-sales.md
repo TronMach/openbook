@@ -63,9 +63,14 @@ How the PDF looks (layout, logo, font, footer, and which customers or documents 
 
 ### Fixing a mistake
 
-Posted invoices can't be edited. Instead, **Void this invoice** at the bottom of its page (give a reason), then enter it again correctly. Voiding records an opposite entry on the same date, so your reports come out as if the invoice had never been entered, while the record of both stays.
+**Change** at the top of an invoice opens it for correcting: the number, dates, lines, tax, location, warehouse and message. Say **Why are you changing it?** and **Save changes**. The invoice keeps its number and everything attached to it (payments, credits, emails, notes, files). Behind the scenes OpenBook reverses the invoice's journal entry on its original date and posts the corrected one, so reports read as if the invoice had always been right, and the journal still shows what it was. Each change is listed under **Changes** on the invoice, with who made it and why.
 
-An invoice that has a payment or credit applied can't be voided until that payment is voided or the credit unapplied. To reduce what a customer owes without voiding, issue a **credit memo**.
+- The customer can't change: to bill someone else, void the invoice and enter a new one.
+- If part of the invoice is paid, credited or written off, the new total can't be less than that.
+- Lines billed from a sales order or estimate, and billable expenses, time and mileage, stay as they are (void the invoice to bill them again).
+- Changing an invoice dated in a closed period needs the closing date password. So does changing which income an invoice paid in a closed period counts as, because cash-basis reports spread payments over the invoice's lines.
+
+To cancel an invoice instead, **Void this invoice** at the bottom of its page (give a reason). Voiding records an opposite entry on the same date, so your reports come out as if the invoice had never been entered, while the record of both stays. An invoice that has a payment or credit applied can't be voided until that payment is voided or the credit unapplied. To reduce what a customer owes without changing the invoice, issue a **credit memo**.
 
 ## Receiving payments
 
