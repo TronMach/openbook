@@ -86,6 +86,13 @@ When a customer pays an invoice, record it with **Receive payment**: on the invo
 
 If the amount is more than the invoices you apply it to, the rest stays with the customer as a **credit**, which you can apply to a later invoice (**Apply credit** on the invoice) or refund.
 
+To correct a payment, for example one applied to the wrong invoice, open it and use **Change**: the amount received, date, **Deposit to**, reference, memo and how much goes to each invoice (the customer stays). Say **Why are you changing it?** and **Save changes**. OpenBook reverses the payment's journal entry on its original date, posts the corrected one and settles the invoices again; each change is listed under **Changes** on the payment.
+
+- Credit from the payment that you applied to an invoice later keeps its date.
+- If part of the payment was refunded, at least that much has to stay unapplied.
+- Once the payment is in a bank deposit, matched to a bank feed line or taken online, the amount and **Deposit to** account stay (and an online payment's reference too); how it's applied can still change.
+- A payment reconciled at the bank can't be changed, as it can't be voided.
+
 ## Making deposits
 
 If you received payments into Undeposited Funds, record the trip to the bank: **Banking → Make deposit** (the button shows how many are waiting).

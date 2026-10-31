@@ -1,0 +1,239 @@
+@page "/sales/payments/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Change payment · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Change payment@(_customer is null ? "" : $" from {_customer.DisplayName}")</h1>
+        <a class="button secondary" href="/sales/payments/@Id">Back to the payment</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_payment is null || _payment.Status == DocumentStatus.Voided))
+    {
+        <div class="card"><p>Only posted payments can be changed. <a href="/sales/payments/@Id">Back to the payment</a></p></div>
+    }
+    else if (_loaded && _payment is not null && _customer is not null)
+    {
+        <p class="muted">Saving reverses the payment's journal entry on its original date and posts the corrected one, then settles the invoices again as shown below. Payments reconciled at the bank can't be changed. Changes in a closed period need the closing date password.</p>
+        @if (_payment.DepositId is not null)
+        {
+            <div class="alert notice" role="status">This payment is in a bank deposit, so the amount received and deposit account stay. How it's applied can still change.</div>
+        }
+        @if (_payment.AmountRefunded > 0m)
+        {
+            <div class="alert notice" role="status">@Labels.Amount(_payment.AmountRefunded) of it was refunded, so at least that much has to stay unapplied.</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label>Customer</label>
+                    <div>@_customer.DisplayName</div>
+                    <span class="hint">For another customer, void this payment and receive a new one.</span>
+                </div>
+                <div class="field">
+                    <label for="amount">Amount received</label>
+                    <input id="amount" type="number" step="0.01" min="0" @bind="_amount" disabled="@(_payment.DepositId is not null)" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Payment date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="deposit">Deposit to</label>
+                    <select id="deposit" @bind="_depositAccountId" disabled="@(_payment.DepositId is not null)">
+                        @foreach (var a in _depositAccounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" @bind="_memo" maxlength="1000" />
+                </div>
+            </div>
+        </div>
+
+        @if (_rows.Count == 0)
+        {
+            <div class="card"><p>This customer has no unpaid invoices. The payment stays as a credit for them.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th class="num">Open without this payment</th><th class="num">Discount</th><th class="num">Payment</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr @key="row.Invoice.Id">
+                                <td><a href="/sales/invoices/@row.Invoice.Id" target="_blank">@row.Invoice.Number</a></td>
+                                <td>@Labels.Date(row.Invoice.Date)</td>
+                                <td>@Labels.Date(row.Invoice.DueDate)</td>
+                                <td class="num">@Labels.Amount(row.Open)</td>
+                                <td><input class="amount" type="number" step="0.01" min="0" aria-label="Discount for invoice @row.Invoice.Number" @bind="row.Discount" /></td>
+                                <td><input class="amount" type="number" step="0.01" min="0" aria-label="Payment for invoice @row.Invoice.Number" @bind="row.Amount" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4">Applied to invoices</td>
+                            <td class="num">@Labels.Amount(TotalDiscount)</td>
+                            <td class="num">@Labels.Amount(TotalApplied)</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+
+        <div class="summary-bar">
+            <div><span class="label">Amount received</span><span class="value">@Labels.Amount(_amount ?? 0m)</span></div>
+            <div><span class="label">Applied</span><span class="value">@Labels.Amount(TotalApplied)</span></div>
+            <div><span class="label">Credit for the customer</span><span class="value @(Unapplied < 0m ? "off" : null)">@Labels.Amount(Unapplied)</span></div>
+        </div>
+
+        <div class="card">
+            <div class="field">
+                <label for="reason">Why are you changing it?</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">Kept in the payment's history and the audit log.</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save changes</button>
+                <a href="/sales/payments/@Id">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private CustomerPayment? _payment;
+    private Customer? _customer;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _depositAccounts = [];
+    private Guid _depositAccountId;
+    private DateOnly _date;
+    private decimal? _amount;
+    private string? _reference;
+    private string? _memo;
+    private string? _reason;
+    private List<RowModel> _rows = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    private decimal TotalApplied => _rows.Sum(r => r.Amount ?? 0m);
+    private decimal TotalDiscount => _rows.Sum(r => r.Discount ?? 0m);
+    private decimal Unapplied => (_amount ?? 0m) - TotalApplied;
+    private bool Invalid => _rows.Any(r => (r.Amount ?? 0m) < 0m || (r.Discount ?? 0m) < 0m || (r.Amount ?? 0m) + (r.Discount ?? 0m) > r.Open);
+    private bool CanSave => ((_amount ?? 0m) > 0m || TotalDiscount > 0m) && Unapplied >= 0m && !Invalid && !string.IsNullOrWhiteSpace(_reason);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _payment = await Ops.RunAsync<PaymentService, CustomerPayment?>(s => s.GetAsync(Id));
+        if (_payment is not null)
+        {
+            IReadOnlyList<Invoice> open, applied;
+            (_customer, _chart, open, applied) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<CustomerService>().GetAsync(_payment.CustomerId),
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                await sp.GetRequiredService<PaymentService>().OpenInvoicesAsync(_payment.CustomerId),
+                await AppliedAsync(sp.GetRequiredService<InvoiceService>(), _payment)));
+            _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+                .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset || a.Id == _payment.DepositAccountId)
+                .OrderBy(a => a.Type != AccountType.Bank)
+                .ToList();
+
+            var settled = _payment.Applications.ToDictionary(a => a.InvoiceId);
+            _rows = applied.Concat(open.Where(i => !settled.ContainsKey(i.Id)))
+                .Where(i => i.ReceivableAccountId == _payment.ReceivableAccountId)
+                .OrderBy(i => i.DueDate).ThenBy(i => i.Date)
+                .Select(i => new RowModel(i, i.Balance + (settled.TryGetValue(i.Id, out var a) ? a.Settled : 0m))
+                {
+                    Amount = settled.TryGetValue(i.Id, out var s) && s.Amount > 0m ? s.Amount : null,
+                    Discount = settled.TryGetValue(i.Id, out var d) && d.Discount > 0m ? d.Discount : null,
+                })
+                .ToList();
+            _depositAccountId = _payment.DepositAccountId;
+            _date = _payment.Date;
+            _amount = _payment.Amount;
+            _reference = _payment.Reference;
+            _memo = _payment.Memo;
+        }
+
+        _loaded = true;
+    }
+
+    private static async Task<IReadOnlyList<Invoice>> AppliedAsync(InvoiceService invoices, CustomerPayment payment)
+    {
+        var found = new List<Invoice>();
+        foreach (var application in payment.Applications)
+        {
+            if (await invoices.GetAsync(application.InvoiceId) is { } invoice)
+                found.Add(invoice);
+        }
+
+        return found;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = new ChangePaymentCommand(_date,
+                _rows.Where(r => (r.Amount ?? 0m) > 0m || (r.Discount ?? 0m) > 0m)
+                    .Select(r => new ApplyToInvoice(r.Invoice.Id, r.Amount ?? 0m, r.Discount ?? 0m)).ToList(),
+                _reason!, _amount ?? 0m, _depositAccountId, _reference ?? "", _memo);
+            await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ChangeAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/sales/payments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class RowModel(Invoice invoice, decimal open)
+    {
+        public Invoice Invoice { get; } = invoice;
+
+        /// <summary>The invoice's balance if this payment didn't settle any of it.</summary>
+        public decimal Open { get; } = open;
+
+        public decimal? Amount { get; set; }
+        public decimal? Discount { get; set; }
+    }
+}

@@ -59,7 +59,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 
 Knowing these makes the rest of the guide easier to follow:
 
-- **Nothing posted is ever edited or deleted.** To correct a journal entry you *void* it, which records an opposite entry on the same date, and then enter it again. The original stays on record, marked voided. Invoices, sales receipts, credit memos, bills, vendor credits, expenses, checks and deposits can be changed in place: OpenBook voids the old entry and posts the corrected one for you, keeping the document's number and payments.
+- **Nothing posted is ever edited or deleted.** To correct a journal entry you *void* it, which records an opposite entry on the same date, and then enter it again. The original stays on record, marked voided. Invoices, payments, sales receipts, credit memos, bills, vendor credits, expenses, checks, deposits and transfers can be changed in place: OpenBook voids the old entry and posts the corrected one for you, keeping the document's number and payments.
 - **Every change is recorded.** Who did what and when is kept in the audit log, which accountants can open from Settings or from the **History** link on most record pages.
 - **Everything balances.** Every transaction, whatever screen it came from, ends up as a balanced journal entry. The database itself refuses anything that doesn't add up.
 - **Lists are never emptied.** Customers, vendors, products and accounts you no longer use are made *inactive* rather than deleted, so old transactions keep their names.

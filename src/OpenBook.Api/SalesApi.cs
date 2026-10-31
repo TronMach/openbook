@@ -208,6 +208,9 @@ internal static class SalesApi
             var p = await s.ReceiveAsync(r, ct);
             return Results.Created($"/api/sales/payments/{p.Id}", PaymentResponse.From(p));
         });
+        // Correct a posted payment in place: its entry reversed and a new one posted, the invoices settled again.
+        sales.MapPut("/payments/{id:guid}", async (Guid id, ChangePaymentCommand r, PaymentService s, CancellationToken ct) =>
+            PaymentResponse.From(await s.ChangeAsync(id, r, ct)));
         sales.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, PaymentService s, CancellationToken ct) =>
             PaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

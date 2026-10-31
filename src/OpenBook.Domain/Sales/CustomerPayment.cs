@@ -140,6 +140,39 @@ public sealed class CustomerPayment
         return lines;
     }
 
+    /// <summary>
+    /// Takes a correction: the new amount, applications and the entry posted for them (the old one voided by the caller).
+    /// An invoice applied before keeps its application date unless that's before the new payment date; new ones are
+    /// dated the payment date. What's refunded must still be covered.
+    /// </summary>
+    public void Change(
+        DateOnly date, decimal amount, Guid depositAccountId, IReadOnlyCollection<PaymentApplicationDraft> applications, Guid journalEntryId,
+        string? reference, string? memo)
+    {
+        ArgumentNullException.ThrowIfNull(applications);
+        EnsurePosted();
+        var lines = Validate(applications);
+        Money.EnsureCents(amount);
+        if (amount < 0m || amount <= 0m && lines.Sum(a => a.Discount) <= 0m)
+            throw new DomainException("payment.amount_not_positive", "Enter the amount received.");
+        if (lines.Sum(a => a.Amount) > amount)
+            throw new DomainException("payment.over_applied", "The amounts applied to invoices add up to more than the payment.");
+        if (amount - lines.Sum(a => a.Amount) < AmountRefunded)
+            throw new DomainException("payment.refund_not_covered",
+                $"{AmountRefunded:N2} of this payment was refunded, so at least that much has to stay unapplied.");
+
+        var appliedOn = _applications.ToDictionary(a => a.InvoiceId, a => a.AppliedOn);
+        _applications.Clear();
+        _applications.AddRange(lines.Select(a => new PaymentApplication(a.InvoiceId, a.Amount, a.Discount,
+            appliedOn.TryGetValue(a.InvoiceId, out var on) && on > date ? on : date)));
+        Date = date;
+        Amount = amount;
+        DepositAccountId = depositAccountId;
+        JournalEntryId = journalEntryId;
+        Reference = Text.Optional(reference, 30, "payment.reference_too_long", "Reference");
+        Memo = Text.Optional(memo, 1000, "payment.memo_too_long", "Memo");
+    }
+
     /// <summary>Applies unapplied credit to an invoice; adds to an existing application for the same invoice.</summary>
     public void ApplyCredit(Guid invoiceId, decimal amount, DateOnly appliedOn)
     {
