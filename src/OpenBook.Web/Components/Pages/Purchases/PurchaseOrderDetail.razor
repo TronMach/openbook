@@ -24,6 +24,7 @@
         <a class="button secondary" href="/purchases/orders">Back to purchase orders</a>
         <a class="button secondary" href="/audit?entityId=@_order.Id">History</a>
         <a class="button secondary" href="/purchases/orders/@_order.Id/pdf" target="_blank">PDF</a>
+        <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.PurchaseOrder" Id="_order.Id" PdfUrl="@($"/purchases/orders/{_order.Id}/pdf")" />
         @if (open && !_progress.Started && !anyReceived)
         {
             <a class="button secondary" href="/purchases/orders/@_order.Id/edit">Edit</a>

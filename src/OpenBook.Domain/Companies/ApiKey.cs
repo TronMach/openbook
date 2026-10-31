@@ -97,7 +97,7 @@ public static class ApiScopes
         ["nonprofit"] = ("Donor restrictions and releases", ["/api/nonprofit"]),
         ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),
         ["capture"] = ("Offline capture (time, mileage, expenses, receipts)", ["/api/capture"]),
-        ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields"]),
+        ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields", "/api/print"]),
     };
 
     /// <summary>Checks and orders scopes; "area:write" makes "area:read" redundant.</summary>

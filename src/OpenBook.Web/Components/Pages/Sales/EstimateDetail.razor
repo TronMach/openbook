@@ -24,6 +24,7 @@
         </span>
         <a class="button secondary" href="/sales?show=estimates">Back to estimates</a>
         <a class="button secondary" href="/api/sales/estimates/@_estimate.Id/pdf" target="_blank">PDF</a>
+        <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Estimate" Id="_estimate.Id" PdfUrl="@($"/api/sales/estimates/{_estimate.Id}/pdf")" />
         <a class="button secondary" href="/sales/email/estimates/@_estimate.Id">Email</a>
         <a class="button secondary" href="/audit?entityId=@_estimate.Id">History</a>
         @if (_estimate.Status != EstimateStatus.Closed && !_progress.Started)

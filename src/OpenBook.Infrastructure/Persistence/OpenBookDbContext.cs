@@ -80,6 +80,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.CustomFields.CustomField> CustomFields => Set<OpenBook.Domain.CustomFields.CustomField>();
     public DbSet<FormDesign> FormDesigns => Set<FormDesign>();
     public DbSet<FormFont> FormFonts => Set<FormFont>();
+    public DbSet<PrintQueueItem> PrintQueue => Set<PrintQueueItem>();
     public DbSet<OpenBook.Domain.CustomFields.CustomFieldValue> CustomFieldValues => Set<OpenBook.Domain.CustomFields.CustomFieldValue>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
@@ -1686,6 +1687,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.ProtectedApiKey).HasMaxLength(2000);
             b.Property(s => s.Model).HasMaxLength(100);
             b.Ignore(s => s.IsReady);
+        });
+
+        modelBuilder.Entity<PrintQueueItem>(b =>
+        {
+            b.ToTable("PrintQueue");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Document).HasConversion<string>().HasMaxLength(20);
+            b.Property(i => i.AddedBy).HasMaxLength(100);
+            b.Property(i => i.PrintedBy).HasMaxLength(100);
+            b.HasIndex(i => new { i.Document, i.DocumentId });
+            b.Ignore(i => i.IsWaiting);
         });
 
         modelBuilder.Entity<FormFont>(b =>

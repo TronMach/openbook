@@ -140,6 +140,7 @@ app.MapOnlineEndpoints();
 app.MapDocumentEndpoints();
 app.MapCustomFieldEndpoints();
 app.MapFormDesignEndpoints();
+app.MapPrintEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

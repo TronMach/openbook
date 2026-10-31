@@ -28,6 +28,7 @@
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
         <a class="button secondary" href="/sales">@L["Back to sales"]</a>
         <a class="button secondary" href="/api/sales/invoices/@_invoice.Id/pdf" target="_blank">@L["PDF"]</a>
+        <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Invoice" Id="_invoice.Id" PdfUrl="@($"/api/sales/invoices/{_invoice.Id}/pdf")" />
         <a class="button secondary" href="/sales/email/invoices/@_invoice.Id">@L["Email"]</a>
         <a class="button secondary" href="/audit?entityId=@_invoice.Id">@L["History"]</a>
         @if (_invoice.IsOpen)

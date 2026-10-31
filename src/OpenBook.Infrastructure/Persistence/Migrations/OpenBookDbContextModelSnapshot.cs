@@ -1503,6 +1503,42 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("FormFonts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.PrintQueueItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AddedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Document")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PrintedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrintedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Document", "DocumentId");
+
+                    b.ToTable("PrintQueue", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.User", b =>
                 {
                     b.Property<Guid>("Id")

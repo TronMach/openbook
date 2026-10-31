@@ -1,0 +1,82 @@
+using System.Globalization;
+using OpenBook.Application.Forms;
+using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
+using OpenBook.Web.Security;
+
+namespace OpenBook.Web.Endpoints;
+
+/// <summary>Printing: the "print later" queue, and printing a batch of documents and statements as one PDF.</summary>
+public static class PrintEndpoints
+{
+    public static IEndpointRouteBuilder MapPrintEndpoints(this IEndpointRouteBuilder app)
+    {
+        // Fields: document (a FormDocuments name), id, returnUrl.
+        app.MapPost("/print/queue", async (IFormCollection form, PrintService print, CancellationToken ct) =>
+            await Back(form, async () => await print.AddAsync(Document(form["document"]), Id(form["id"]), ct))).RequireAuthorization();
+
+        // Fields: document and id, or item (a queue item's id); returnUrl.
+        app.MapPost("/print/queue/remove", async (IFormCollection form, PrintService print, CancellationToken ct) =>
+            await Back(form, async () =>
+            {
+                if (Guid.TryParse(form["item"], out var item))
+                    await print.RemoveAsync(item, ct);
+                else
+                    await print.RemoveAsync(Document(form["document"]), Id(form["id"]), ct);
+            })).RequireAuthorization();
+
+        // Field: item.
+        app.MapPost("/print/put-back", async (IFormCollection form, PrintService print, CancellationToken ct) =>
+            await Back(form, async () => await print.PutBackAsync(Id(form["item"]), ct))).RequireAuthorization();
+
+        // Fields: doc (each "Document:id", in print order), customer (each customer whose statement to print), from, to.
+        // Answers with the PDF to show or print; refusals as a short page.
+        app.MapPost("/print/pdf", async (IFormCollection form, PrintService print, CancellationToken ct) =>
+        {
+            try
+            {
+                var documents = form["doc"].OfType<string>().Select(d => d.Split(':', 2))
+                    .Select(p => (Document(p[0]), Id(p.Length > 1 ? p[1] : null))).ToList();
+                var customers = form["customer"].OfType<string>().Select(c => Id(c)).ToList();
+                StatementRun? statements = customers.Count == 0 ? null : new StatementRun(customers, Date(form["from"], "start"), Date(form["to"], "end"));
+                var rendered = await print.PrintAsync(documents, statements, ct);
+                return Results.File(rendered.Pdf, "application/pdf");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Content(
+                    $"<!doctype html><meta charset=\"utf-8\"><title>Nothing printed</title><body style=\"font-family:sans-serif;padding:1rem\"><p>{System.Net.WebUtility.HtmlEncode(ex.Message)}</p><p><a href=\"/print\">Back to printing</a></p></body>",
+                    "text/html", statusCode: 400);
+            }
+        }).RequireAuthorization();
+
+        return app;
+    }
+
+    private static async Task<IResult> Back(IFormCollection form, Func<Task> change)
+    {
+        var back = WebSecurity.SafeReturnUrl(form["returnUrl"]);
+        try
+        {
+            await change();
+            return Results.Redirect(back);
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"{back}{(back.Contains('?', StringComparison.Ordinal) ? '&' : '?')}printError={Uri.EscapeDataString(ex.Message)}");
+        }
+    }
+
+    private static FormDocuments Document(string? value) =>
+        Enum.TryParse<FormDocuments>(value, out var d) && FormDesign.Each(PrintQueueItem.Queueable).Contains(d)
+            ? d
+            : throw new DomainException("print.document_invalid", "That isn't a document that can be printed here.");
+
+    private static Guid Id(string? value) =>
+        Guid.TryParse(value, out var id) ? id : throw new DomainException("print.id_invalid", "That isn't a document.");
+
+    private static DateOnly Date(string? value, string which) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : throw new DomainException("print.period_invalid", $"Give the statement period's {which} date.");
+}

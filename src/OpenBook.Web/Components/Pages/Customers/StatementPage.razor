@@ -10,6 +10,7 @@
         @if (_statement is not null)
         {
             <a class="button secondary" href="/api/sales/customers/@Id/statement/pdf?from=@D(_statement.From)&to=@D(_statement.To)" target="_blank">PDF</a>
+            <button type="button" class="button secondary" data-print="/api/sales/customers/@Id/statement/pdf?from=@D(_statement.From)&to=@D(_statement.To)">Print</button>
             <a class="button" href="/sales/email/statement/@Id?from=@D(_statement.From)&to=@D(_statement.To)">Email</a>
         }
     </div>

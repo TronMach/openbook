@@ -1,0 +1,218 @@
+@page "/print"
+@using System.Globalization
+@using OpenBook.Domain.Companies
+@inject PrintService Print
+@inject CustomerService Customers
+
+<PageTitle>Print · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Print</h1>
+        <a class="button secondary" href="/sales">Sales</a>
+        <a class="button secondary" href="/settings/forms">Form designs</a>
+    </div>
+    <p class="muted">
+        Print many documents at once: they come out as one PDF, each starting on its own page with its own design, and the print
+        dialog opens straight away. Use "Print later" on an invoice, estimate, credit memo, sales receipt or purchase order to queue it here.
+    </p>
+    @if (PrintError is not null)
+    {
+        <div class="alert error" role="alert">@PrintError</div>
+    }
+
+    <section class="card">
+        <h2>Waiting to be printed (@_queue.Count)</h2>
+        @if (_queue.Count == 0)
+        {
+            <p class="muted">Nothing is waiting. Documents marked "Print later" show up here.</p>
+        }
+        else
+        {
+            <form method="post" action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="/print" />
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th class="check"><span class="sr-only">Print</span></th><th>Document</th><th>For</th><th>Date</th><th class="num">Total</th><th>Added</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var entry in _queue)
+                            {
+                                <tr>
+                                    <td class="check">
+                                        @if (entry.Document is not null)
+                                        {
+                                            <input type="checkbox" name="doc" value="@($"{entry.Item.Document}:{entry.Item.DocumentId}")" checked aria-label="Print @entry.Document.Title" />
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (entry.Document is { } d)
+                                        {
+                                            <a href="@Link(d)">@d.Title</a>@(d.Voided ? " " : "")
+                                            @if (d.Voided)
+                                            {
+                                                <span class="badge warn">Void</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">A document that no longer exists</span>
+                                        }
+                                    </td>
+                                    <td>@entry.Document?.Party</td>
+                                    <td>@(entry.Document is { } dated ? Labels.Date(dated.Date) : "")</td>
+                                    <td class="num">@(entry.Document is { } totalled ? Labels.Amount(totalled.Total) : "")</td>
+                                    <td class="muted">@entry.Item.AddedBy · @entry.Item.AddedAt.LocalDateTime.ToString("g", CultureInfo.CurrentCulture)</td>
+                                    <td><button type="submit" class="link" formaction="/print/queue/remove" formtarget="_self" name="item" value="@entry.Item.Id">Take out</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <button type="submit">Print the ticked documents</button>
+                <span class="hint">They're marked printed; "Printed recently" below can put them back.</span>
+            </form>
+        }
+    </section>
+
+    <section class="card">
+        <h2>Choose documents</h2>
+        <form method="get" action="/print" class="inline-actions">
+            <select name="kind" aria-label="Kind of document">
+                @foreach (var kind in FormDesign.Each(PrintQueueItem.Queueable))
+                {
+                    <option value="@kind" selected="@(kind == _kind)">@FormDesign.Label(kind)</option>
+                }
+            </select>
+            <label>from <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
+            <label>to <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
+            <button type="submit" class="secondary">Show</button>
+        </form>
+        @if (_documents.Count == 0)
+        {
+            <p class="muted">No @FormDesign.Label(_kind).ToLowerInvariant() dated in that period.</p>
+        }
+        else
+        {
+            <form method="post" action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
+                <AntiforgeryToken />
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="Tick all" /></th><th>Document</th><th>For</th><th>Date</th><th class="num">Total</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _documents)
+                            {
+                                <tr class="@(d.Voided ? "inactive" : null)">
+                                    <td class="check"><input type="checkbox" name="doc" value="@($"{d.Document}:{d.Id}")" aria-label="Print @d.Title" /></td>
+                                    <td><a href="@Link(d)">@d.Title</a>@(d.Voided ? " (void)" : "")</td>
+                                    <td>@d.Party</td>
+                                    <td>@Labels.Date(d.Date)</td>
+                                    <td class="num">@Labels.Amount(d.Total)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <button type="submit">Print the ticked documents</button>
+            </form>
+        }
+    </section>
+
+    <section class="card">
+        <h2>Statements</h2>
+        @if (_balances.Count == 0)
+        {
+            <p class="muted">No customer owes anything or has credit, so there are no statements to send.</p>
+        }
+        else
+        {
+            <form method="post" action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
+                <AntiforgeryToken />
+                <div class="inline-actions">
+                    <label>Activity from <input type="date" name="from" value="@_today.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" required /></label>
+                    <label>to <input type="date" name="to" value="@_today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" required /></label>
+                </div>
+                <ul class="check-list">
+                    @foreach (var c in _balances)
+                    {
+                        <li>
+                            <label class="check">
+                                <input type="checkbox" name="customer" value="@c.Customer.Id" checked />
+                                <span>@c.Customer.DisplayName <span class="muted">@Labels.Amount(c.Balance)</span></span>
+                            </label>
+                        </li>
+                    }
+                </ul>
+                <button type="submit">Print statements</button>
+            </form>
+        }
+    </section>
+
+    @if (_printed.Count > 0)
+    {
+        <section class="card">
+            <h2>Printed recently</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Document</th><th>For</th><th>Printed</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var entry in _printed)
+                        {
+                            <tr>
+                                <td>@(entry.Document is { } d ? d.Title : "A document that no longer exists")</td>
+                                <td>@entry.Document?.Party</td>
+                                <td class="muted">@entry.Item.PrintedBy · @entry.Item.PrintedAt?.LocalDateTime.ToString("g", CultureInfo.CurrentCulture)</td>
+                                <td>
+                                    <form method="post" action="/print/put-back" class="inline-form" data-enhance="false">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="item" value="@entry.Item.Id" />
+                                        <input type="hidden" name="returnUrl" value="/print" />
+                                        <button type="submit" class="link">Put back in the queue</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<PrintQueueEntry> _queue = [];
+    private IReadOnlyList<PrintQueueEntry> _printed = [];
+    private IReadOnlyList<PrintableDocument> _documents = [];
+    private IReadOnlyList<CustomerSummary> _balances = [];
+    private FormDocuments _kind = FormDocuments.Invoice;
+    private DateOnly _today;
+    private DateOnly _from;
+    private DateOnly _to;
+
+    [SupplyParameterFromQuery] private string? PrintError { get; set; }
+    [SupplyParameterFromQuery(Name = "kind")] private string? KindText { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] private DateOnly? To { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _today = DateOnly.FromDateTime(DateTime.Today);
+        if (Enum.TryParse<FormDocuments>(KindText, out var kind) && FormDesign.Each(PrintQueueItem.Queueable).Contains(kind))
+            _kind = kind;
+        _to = To ?? _today;
+        _from = From ?? _today.AddDays(-7);
+        _queue = await Print.QueueAsync();
+        _printed = await Print.PrintedAsync();
+        _documents = await Print.DocumentsAsync(_kind, _from, _to);
+        _balances = [.. (await Customers.ListAsync(_today)).Where(c => c.Balance != 0m)];
+    }
+
+    private static string Link(PrintableDocument d) => d.Document switch
+    {
+        FormDocuments.Invoice => $"/sales/invoices/{d.Id}",
+        FormDocuments.Estimate => $"/sales/estimates/{d.Id}",
+        FormDocuments.CreditMemo => $"/sales/credit-memos/{d.Id}",
+        FormDocuments.SalesReceipt => $"/sales/receipts/{d.Id}",
+        _ => $"/purchases/orders/{d.Id}",
+    };
+}

@@ -46,6 +46,19 @@ public sealed record CustomerFormDesignRequest(Guid? DesignId);
 
 public sealed record GoogleFontRequest(string Family);
 
+public sealed record PrintDocumentRequest(FormDocuments Document, Guid Id);
+
+public sealed record PrintStatementsRequest(IReadOnlyList<Guid> CustomerIds, DateOnly From, DateOnly To);
+
+/// <param name="Documents">In print order.</param>
+public sealed record PrintRequest(IReadOnlyList<PrintDocumentRequest>? Documents = null, PrintStatementsRequest? Statements = null);
+
+public sealed record PrintQueueResponse(Guid Id, FormDocuments Document, Guid DocumentId, string? Title, string? Party, DateTimeOffset AddedAt, string AddedBy, DateTimeOffset? PrintedAt)
+{
+    public static PrintQueueResponse From(PrintQueueEntry e) =>
+        new(e.Item.Id, e.Item.Document, e.Item.DocumentId, e.Document?.Title, e.Document?.Party, e.Item.AddedAt, e.Item.AddedBy, e.Item.PrintedAt);
+}
+
 /// <param name="Regular">The regular face's .ttf file, Base64.</param>
 /// <param name="Bold">The bold face's .ttf file, Base64 (optional).</param>
 public sealed record UploadFontRequest(string Family, string Regular, string? Bold = null);
@@ -117,6 +130,32 @@ internal static class FormDesignsApi
         {
             await s.RemoveAsync(key, ct);
             return Results.NoContent();
+        });
+
+        // The print queue, and printing a batch as one PDF (queued documents in it are marked printed).
+        var print = api.MapGroup("/print");
+        print.MapGet("/queue", async (PrintService s, CancellationToken ct) => (await s.QueueAsync(ct)).Select(PrintQueueResponse.From));
+        print.MapGet("/printed", async (PrintService s, CancellationToken ct) => (await s.PrintedAsync(ct)).Select(PrintQueueResponse.From));
+        print.MapPost("/queue", async (PrintDocumentRequest r, PrintService s, CancellationToken ct) =>
+        {
+            var item = await s.AddAsync(r.Document, r.Id, ct);
+            return new { item.Id, item.Document, item.DocumentId };
+        });
+        print.MapDelete("/queue/{id:guid}", async (Guid id, PrintService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(id, ct);
+            return Results.NoContent();
+        });
+        print.MapPost("/queue/{id:guid}/put-back", async (Guid id, PrintService s, CancellationToken ct) =>
+        {
+            await s.PutBackAsync(id, ct);
+            return Results.NoContent();
+        });
+        print.MapPost("/pdf", async (PrintRequest r, PrintService s, CancellationToken ct) =>
+        {
+            var rendered = await s.PrintAsync([.. (r.Documents ?? []).Select(d => (d.Document, d.Id))],
+                r.Statements is { } st ? new StatementRun(st.CustomerIds ?? [], st.From, st.To) : null, ct);
+            return Results.File(rendered.Pdf, "application/pdf", rendered.FileName);
         });
 
         api.MapPut("/customers/{id:guid}/form-design", async (Guid id, CustomerFormDesignRequest r, FormDesignService s, CancellationToken ct) =>

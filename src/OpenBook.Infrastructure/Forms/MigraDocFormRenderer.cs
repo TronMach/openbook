@@ -6,6 +6,8 @@ using MigraDoc.Rendering;
 using OpenBook.Application.Forms;
 using OpenBook.Domain.Companies;
 using PdfSharp.Fonts;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 
 namespace OpenBook.Infrastructure.Forms;
 
@@ -531,6 +533,23 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
                 value.Format.Font.Size = look.Body + 2;
             }
         }
+    }
+
+    public byte[] Combine(IReadOnlyList<byte[]> pdfs)
+    {
+        ArgumentNullException.ThrowIfNull(pdfs);
+        using var combined = new PdfDocument();
+        foreach (var pdf in pdfs)
+        {
+            using var input = new MemoryStream(pdf);
+            using var source = PdfReader.Open(input, PdfDocumentOpenMode.Import);
+            foreach (var page in source.Pages)
+                combined.AddPage(page);
+        }
+
+        using var stream = new MemoryStream();
+        combined.Save(stream, closeStream: false);
+        return stream.ToArray();
     }
 
     private static byte[] Pdf(Document document)

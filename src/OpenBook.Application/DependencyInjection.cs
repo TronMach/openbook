@@ -82,6 +82,7 @@ public static class DependencyInjection
         services.AddScoped<FormService>();
         services.AddScoped<FormDesignService>();
         services.AddScoped<FormFontService>();
+        services.AddScoped<PrintService>();
         services.AddScoped<OpenBook.Application.Purchases.PurchaseOrderForms>();
         services.AddScoped<EmailService>();
         services.AddScoped<CustomerService>();

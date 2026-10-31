@@ -124,6 +124,9 @@ public interface IFormRenderer
 
     /// <summary>Letters to donors, each starting on a new page, in one PDF (to print a batch).</summary>
     byte[] Render(IReadOnlyList<DonorLetter> letters);
+
+    /// <summary>Several PDFs as one, their pages in order.</summary>
+    byte[] Combine(IReadOnlyList<byte[]> pdfs);
 }
 
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);

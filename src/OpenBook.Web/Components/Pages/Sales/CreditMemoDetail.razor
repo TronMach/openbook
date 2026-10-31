@@ -28,6 +28,7 @@
         }
         <a class="button secondary" href="/sales?show=credits">Back to credit memos</a>
         <a class="button secondary" href="/api/sales/credit-memos/@_credit.Id/pdf" target="_blank">PDF</a>
+        <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.CreditMemo" Id="_credit.Id" PdfUrl="@($"/api/sales/credit-memos/{_credit.Id}/pdf")" />
         <a class="button secondary" href="/sales/email/credit-memos/@_credit.Id">Email</a>
         <a class="button secondary" href="/audit?entityId=@_credit.Id">History</a>
         @if (_credit.Balance > 0m)

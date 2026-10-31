@@ -24,6 +24,7 @@
         }
         <a class="button secondary" href="/sales?show=receipts">Back to sales receipts</a>
         <a class="button secondary" href="/api/sales/receipts/@_receipt.Id/pdf" target="_blank">PDF</a>
+        <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.SalesReceipt" Id="_receipt.Id" PdfUrl="@($"/api/sales/receipts/{_receipt.Id}/pdf")" />
         @if (_receipt.CustomerId is not null)
         {
             <a class="button secondary" href="/sales/email/receipts/@_receipt.Id">Email</a>
