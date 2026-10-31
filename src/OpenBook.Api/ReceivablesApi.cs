@@ -192,6 +192,9 @@ internal static class ReceivablesApi
             var c = await s.CreateCreditMemoAsync(r, ct);
             return Results.Created($"/api/sales/credit-memos/{c.Id}", CreditMemoResponse.From(c));
         });
+        // Correct a posted credit memo in place: its entry reversed and a new one posted.
+        sales.MapPut("/credit-memos/{id:guid}", async (Guid id, ChangeCreditMemoCommand r, CreditService s, CancellationToken ct) =>
+            CreditMemoResponse.From(await s.ChangeCreditMemoAsync(id, r, ct)));
         sales.MapPost("/credit-memos/{id:guid}/void", async (Guid id, VoidRequest r, CreditService s, CancellationToken ct) =>
             CreditMemoResponse.From(await s.VoidCreditMemoAsync(id, r.Reason, ct)));
 

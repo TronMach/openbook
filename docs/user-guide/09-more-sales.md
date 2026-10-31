@@ -66,6 +66,12 @@ The credit then sits on the customer's account. Use it by either:
 
 Overpayments work the same way: when a customer pays more than the invoices you apply the payment to, the rest is credit you can apply or refund.
 
+To correct a credit memo, use **Change** at the top of its page: the number, date, lines, tax, location, warehouse and message (the customer stays). Say **Why are you changing it?** and **Save changes**. OpenBook reverses its journal entry on its original date and posts the corrected one, so what's applied and refunded stays with it; each change is listed under **Changes**.
+
+- The new total can't be less than what's already applied and refunded, and the date can't be later than the day it was first applied.
+- If it was refunded in a closed period, changing its lines needs the closing date password (the cash basis report spreads the refund over them).
+- Returned stock is taken out and put back as corrected, which isn't possible once some of it has been sold again.
+
 ## Refunds
 
 To pay a credit back, open the credit memo or the payment and choose **Refund**. Enter the amount (up to what's left), **paid from** (a bank or card account), the date and a check number or reference, then **Record refund**.

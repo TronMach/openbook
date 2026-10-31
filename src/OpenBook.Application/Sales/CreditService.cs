@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
@@ -20,6 +21,27 @@ public sealed record CreateCreditMemoCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null);
+
+/// <summary>A correction to a posted credit memo (<see cref="CreditService.ChangeCreditMemoAsync"/>). The customer can't change.</summary>
+/// <param name="Lines">Every line the credit memo should have, tax lines left out (they're recalculated).</param>
+/// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
+/// <param name="Number">Null keeps the credit memo's number.</param>
+/// <param name="TaxCodeId">Null keeps the credit memo's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
+/// <param name="TagIds">Null keeps the entry's tags.</param>
+/// <param name="WarehouseId">As for a new credit memo: null is the default warehouse.</param>
+/// <param name="FromLines">For each of <paramref name="Lines"/>, the number of the line it continues (null for a new one), so
+/// its custom field values follow it; null takes the lines as continuing the old ones in order.</param>
+public sealed record ChangeCreditMemoCommand(
+    DateOnly Date,
+    IReadOnlyList<SalesLineDraft> Lines,
+    string Reason,
+    string? Number = null,
+    string? Memo = null,
+    Guid? TaxCodeId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<Guid>? TagIds = null,
+    Guid? WarehouseId = null,
+    IReadOnlyList<int?>? FromLines = null);
 
 public enum CreditKind
 {
@@ -56,6 +78,8 @@ public sealed class CreditService(
     InventoryService inventory,
     WarehouseService warehouses,
     CustomFields.CustomFieldStamper customFields,
+    ICompanyStore companies,
+    ILedgerStore ledger,
     IClock clock,
     ICurrentUser user)
 {
@@ -113,6 +137,76 @@ public sealed class CreditService(
         await store.SaveChangesAsync(ct);
         return credit;
     }
+
+    /// <summary>
+    /// Corrects a posted credit memo in place, in one save: its entry is voided (the reversal dated the original date),
+    /// returned stock taken out again and put back as changed, and a new entry posted on its date. It keeps its id and
+    /// number, so applications and refunds stay. The total can't go below what's applied and refunded, nor the date past
+    /// the first application; if the income lines change, refunds dated in a closed period need the closing password
+    /// (cash basis spreads each refund over the current lines).
+    /// </summary>
+    public async Task<CreditMemo> ChangeCreditMemoAsync(Guid id, ChangeCreditMemoCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Lines);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new DomainException("creditmemo.change_reason_required", "Say why the credit memo is being changed.");
+        if (command.FromLines is { } from && from.Count != command.Lines.Count)
+            throw new DomainException("creditmemo.from_lines_count", "Say which old line each line continues, one for each line.");
+
+        var credit = await store.GetCreditMemoAsync(id, ct) ?? throw new EntityNotFoundException(CreditMemoType, id);
+        if (credit.Status == DocumentStatus.Voided)
+            throw new DomainException("creditmemo.voided", $"Credit memo {credit.Number} is voided, so it can't be changed.");
+        var customer = await store.GetCustomerAsync(credit.CustomerId, ct) ?? throw new EntityNotFoundException("customer", credit.CustomerId);
+
+        var number = CreditMemo.NormalizeNumber(command.Number ?? credit.Number);
+        if (!string.Equals(number, credit.Number, StringComparison.OrdinalIgnoreCase)
+            && (await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
+            throw new DomainException("creditmemo.number_taken", $"Credit memo number {number} is already used.");
+
+        var drafts = command.Lines.ToList();
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId ?? credit.TaxCodeId ?? Guid.Empty, command.Date, ct);
+        var used = credit.AmountApplied + credit.AmountRefunded;
+        if (lines.Sum(l => l.Amount) < used)
+            throw new DomainException("creditmemo.total_below_used",
+                $"Credit memo {credit.Number} has {used:N2} applied or refunded, so its total can't go below that.");
+
+        if (credit.AmountRefunded > 0m && !InvoiceService.SameIncome(credit.Lines, lines))
+        {
+            var company = await companies.GetRequiredCompanyAsync(ct);
+            var refunds = (await store.ListRefundsAsync(credit.CustomerId, ct)).Where(r => r.CreditMemoId == credit.Id && r.Status == DocumentStatus.Posted);
+            foreach (var refundedOn in refunds.Select(r => r.Date).Distinct().Order())
+                engine.EnsureOpen(company, refundedOn, $"changing the lines of credit memo {credit.Number}, refunded on {refundedOn:yyyy-MM-dd}");
+        }
+
+        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([credit.JournalEntryId], ct)).Select(t => t.TagId).ToList();
+        var before = Snapshot(credit);
+
+        var back = await inventory.PlanReversalAsync(InventorySources.CreditMemo, credit.Id, credit.Date, $"credit memo {credit.Number}", ct);
+        await engine.StageVoidAsync(credit.JournalEntryId, $"Credit memo changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        inventory.Apply(back, InventorySources.CreditMemo, credit.Id);
+        var stock = await inventory.PlanReturnAsync(lines, command.Date, warehouseId, ct);
+        var memo = $"Credit memo {number} · {customer.DisplayName}";
+        var entry = await engine.StageAsync(
+            new PostJournalEntryCommand(command.Date, [.. CreditMemo.Postings(credit.ReceivableAccountId, lines, memo), .. stock.Postings], memo, CreditMemo.Source, credit.Id,
+                LocationId: command.LocationId, TagIds: tagIds), ct);
+        inventory.Apply(stock, InventorySources.CreditMemo, credit.Id);
+
+        credit.Change(number, command.Date, lines, entry.Id, command.Memo, taxCodeId, exemption);
+        credit.SetLocation(command.LocationId);
+        credit.SetWarehouse(warehouseId);
+
+        // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
+        await customFields.MoveLinesAsync(CreditMemoType, credit.Id, drafts.Count, command.FromLines, ct);
+        store.Add(Audit(AuditAction.Updated, CreditMemoType, credit.Id, before, DocumentChanges.WithReason(Snapshot(credit), command.Reason)));
+        await store.SaveChangesAsync(ct);
+        return credit;
+    }
+
+    /// <summary>The credit memo's corrections, oldest first.</summary>
+    public Task<IReadOnlyList<DocumentChange>> CreditMemoChangesAsync(Guid id, CancellationToken ct = default) =>
+        DocumentChanges.ListAsync(ledger, CreditMemoType, id, ct);
 
     public async Task<CreditMemo> VoidCreditMemoAsync(Guid id, string reason, CancellationToken ct = default)
     {

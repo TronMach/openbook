@@ -1,0 +1,155 @@
+@page "/sales/credit-memos/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Change credit memo @(_credit?.Number) · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Change credit memo @_credit?.Number</h1>
+        <a class="button secondary" href="/sales/credit-memos/@Id">Back to the credit memo</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_credit is null || _credit.Status == DocumentStatus.Voided))
+    {
+        <div class="card"><p>Only posted credit memos can be changed. <a href="/sales/credit-memos/@Id">Back to the credit memo</a></p></div>
+    }
+    else if (_loaded && _credit is not null && _customer is not null)
+    {
+        <p class="muted">Saving reverses the credit memo's journal entry on its original date and posts the corrected one, keeping its number, what's applied and refunded, and its history. Changes in a closed period need the closing date password.</p>
+        @if (_credit.AmountApplied + _credit.AmountRefunded > 0m)
+        {
+            <div class="alert notice" role="status">@Labels.Amount(_credit.AmountApplied + _credit.AmountRefunded) is already applied or refunded, so the total can't go below that@(_credit.Applications.Count > 0 ? $", and the date can't be later than {Labels.Date(_credit.Applications.Min(a => a.AppliedOn))}, when it was first applied" : "").</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label>Customer</label>
+                    <div>@_customer.DisplayName</div>
+                    <span class="hint">To credit someone else, void this credit memo and enter a new one.</span>
+                </div>
+                <div class="field">
+                    <label for="number">Credit memo number</label>
+                    <input id="number" @bind="_number" maxlength="20" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+            </div>
+
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Message to customer <span class="muted">(optional)</span></label>
+                <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
+            </div>
+            <div class="field">
+                <label for="reason">Why are you changing it?</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">Kept in the credit memo's history and the audit log.</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save changes</button>
+                <a href="/sales/credit-memos/@Id">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private CreditMemo? _credit;
+    private Customer? _customer;
+    private IReadOnlyList<Item> _items = [];
+    private string? _number;
+    private DateOnly _date;
+    private string? _memo;
+    private string? _reason;
+    private List<SalesLineModel> _lines = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
+    private Guid? _taxCodeId;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
+    private Guid? _locationId;
+
+    private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
+    private string? TaxExemption => SelectedTax is null ? null : _customer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && _customer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    private bool CanSave => SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _credit = await Ops.RunAsync<CreditService, CreditMemo?>(s => s.GetCreditMemoAsync(Id));
+        if (_credit is not null)
+        {
+            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+            (_customer, _items) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<CustomerService>().GetAsync(_credit.CustomerId),
+                await sp.GetRequiredService<ItemService>().ListAsync()));
+
+            _number = _credit.Number;
+            _date = _credit.Date;
+            _memo = _credit.Memo;
+            _taxCodeId = _credit.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+            _locationId = _credit.LocationId;
+            _warehouseId = _credit.WarehouseId;
+            _lines = _credit.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l =>
+            {
+                var model = SalesLineModel.From(l.ToDraft());
+                model.OriginalLine = l.LineNumber;
+                return model;
+            }).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var lines = _lines.Where(l => !l.IsBlank).ToList();
+            var command = new ChangeCreditMemoCommand(_date, SalesLineModel.Drafts(lines), _reason!, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
+                WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList());
+            await Ops.RunAsync<CreditService, CreditMemo>(s => s.ChangeCreditMemoAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/sales/credit-memos/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

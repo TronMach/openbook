@@ -122,6 +122,35 @@ public sealed class CreditMemo
             .Select(l => new JournalLineDraft(l.AccountId, l.Credit, l.Debit, l.Memo))
             .ToList();
 
+    /// <summary>
+    /// Takes a correction: the new lines and the entry posted for them (the old one voided by the caller). The total
+    /// can't go below what's applied and refunded, nor the date past the first application.
+    /// </summary>
+    public void Change(string number, DateOnly date, IReadOnlyList<SalesLine> lines, Guid journalEntryId, string? memo, Guid? taxCodeId, string? taxExemption)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        EnsurePosted();
+        var total = lines.Sum(l => l.Amount);
+        if (total <= 0m)
+            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        if (total < AmountApplied + AmountRefunded)
+            throw new DomainException("creditmemo.total_below_used",
+                $"Credit memo {Number} has {AmountApplied + AmountRefunded:N2} applied or refunded, so its total can't go below that.");
+        if (_applications.Count > 0 && date > _applications.Min(a => a.AppliedOn))
+            throw new DomainException("credit.applied_before_payment",
+                $"Credit memo {Number} was applied on {_applications.Min(a => a.AppliedOn):yyyy-MM-dd}, so its date can't be later than that.");
+
+        Number = NormalizeNumber(number);
+        Date = date;
+        Memo = Text.Optional(memo, 1000, "creditmemo.memo_too_long", "Message");
+        TaxCodeId = taxCodeId;
+        TaxExemption = taxCodeId is null ? null : taxExemption;
+        JournalEntryId = journalEntryId;
+        _lines.Clear();
+        _lines.AddRange(lines);
+        Total = total;
+    }
+
     public void Apply(Guid invoiceId, decimal amount, DateOnly appliedOn)
     {
         EnsurePosted();

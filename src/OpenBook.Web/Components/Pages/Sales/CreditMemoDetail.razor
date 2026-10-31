@@ -31,6 +31,10 @@
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.CreditMemo" Id="_credit.Id" PdfUrl="@($"/api/sales/credit-memos/{_credit.Id}/pdf")" />
         <a class="button secondary" href="/sales/email/credit-memos/@_credit.Id">Email</a>
         <a class="button secondary" href="/audit?entityId=@_credit.Id">History</a>
+        @if (_credit.Status == DocumentStatus.Posted)
+        {
+            <a class="button secondary" href="/sales/credit-memos/@_credit.Id/edit">Change</a>
+        }
         @if (_credit.Balance > 0m)
         {
             <a class="button secondary" href="/sales/refunds/new?creditMemo=@_credit.Id">Refund</a>
@@ -105,6 +109,8 @@
         </div>
     }
 
+    <DocumentChangeList Changes="_changes" />
+
     <EntryTags EntryId="_credit.JournalEntryId" />
 
     <Attachments EntityType="credit_memo" EntityId="_credit.Id" />
@@ -120,6 +126,7 @@
     private OpenBook.Domain.Companies.Company? _company;
     private Dictionary<Guid, string> _invoiceNumbers = [];
     private IReadOnlyList<CustomerRefund> _refunds = [];
+    private IReadOnlyList<DocumentChange> _changes = [];
     private string? _error;
     private bool _needsClosingPassword;
 
@@ -156,6 +163,7 @@
         _company = await Settings.GetAsync();
         _invoiceNumbers = (await Invoices.ListAsync(_credit.CustomerId)).ToDictionary(i => i.Id, i => i.Number);
         _refunds = (await Credits.ListRefundsAsync(_credit.CustomerId)).Where(r => r.CreditMemoId == _credit.Id).ToList();
+        _changes = await Credits.CreditMemoChangesAsync(Id);
     }
 
     private async Task VoidAsync()
