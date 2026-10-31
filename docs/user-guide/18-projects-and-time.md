@@ -1,0 +1,71 @@
+# Projects, time and mileage
+
+For work you bill by the hour, or jobs whose profit you want to follow: record time and mileage against customers and projects, bill it on invoices, and see what each project earned and cost. In the professional services edition this comes first in the menu, and customers are called clients.
+
+## Projects
+
+A project in OpenBook *is* a customer record, usually a sub-customer of the client it's for ("Acme:Website redesign"). So invoices, payments and statements work for projects with nothing new to learn, and the client can be billed for all its projects together.
+
+**Projects → New project**: choose the **customer** and give the **project name**. OpenBook creates the sub-customer, billed with the client and copying their terms, tax code and price level. Or turn an existing sub-customer into a project.
+
+The project's page has its **status** (and dates) and **budgets** for revenue, cost and hours, then its time, expenses and mileage, with income, costs and what's still unbilled.
+
+## People and rates
+
+**Time → People and rates** (`/time/people`) lists who records time:
+
+- **Name**, **cost rate per hour** (what an hour of theirs costs you, for profitability) and **bill rate per hour** (what you charge, unless the rate card says otherwise).
+- **Role**, for setting rates by role, such as Partner or Associate.
+- **Hours a week**, for the utilization report.
+- **OpenBook user**: link the person to their sign-in, so their time is entered as them.
+- **Vendor**, for contractors you pay through bills.
+
+### The rate card
+
+**Time → Rate card** (accountant role to change) sets hourly rates for particular cases: for a client or every client, for a person, a role or a service, optionally from a start date. The most specific matching line wins:
+
+1. for the client (then each parent up the tree, so projects inherit their client's rates): person, then role, then service, then the client alone;
+2. for every client: person, then role, then service;
+3. the person's own bill rate;
+4. the service's price.
+
+Among lines for the same thing, the latest that has started by the work's date wins. **Check** on the rate card answers which rate applies to a person, client, service and date.
+
+Time takes its rate when entered, and records where it came from ("Acme · Partner"). Changing the rate card afterwards doesn't reprice time already entered.
+
+## Recording time
+
+**Time** in the menu:
+
+- **Start timer**: choose the person, customer or project, service and notes, and start it. **Stop** when done; the minutes are rounded and saved. One timer runs per person at a time.
+- **Add time**: the same fields with **hours** (to 2 decimals, up to 24 a day) and a **date**.
+- **Week grid**: a timesheet, one row per client and service, a column per day. Type hours in the cells and **Save the week**. Clearing a cell deletes its time.
+
+Billable time needs a customer or project and a service. A **rate per hour** typed in overrides the rate card. Time posts nothing to the books by itself; it's income only once invoiced. Time can be edited or deleted until it's invoiced.
+
+## Mileage
+
+**Mileage** (`/mileage`) records trips: **date**, **miles**, **business purpose**, from, to, vehicle and driver. Add a **customer or project** and a **bill per mile** amount to bill it on.
+
+The mileage log by year is your record for taxes. The IRS business rates are filled in at the bottom of the page; check them before filing, and an accountant can add later years as they're announced (**Set rate**).
+
+## Billing time, mileage and expenses
+
+When you create an invoice for a customer, their unbilled time, trips and billable expenses are listed on the form. Tick what to bill and they're added as lines: time at its service and rate, mileage as a "Mileage" line, expenses as "Billable Expenses".
+
+An invoice for a client can include the work of all its projects billed with it. When the work belongs to more than one, the invoice groups the lines under a heading per project with a subtotal for each, on screen and on the PDF.
+
+Voiding the invoice puts everything back on the unbilled list.
+
+## Project costs
+
+Bill and expense lines can be charged to a project for its profitability without being billed to the client: in the **Billable to customers and project costs** panel on the bill or expense page, choose the project for the line and untick **Bill it**.
+
+## Reports
+
+In the **Projects and time** group:
+
+- **Project profitability**: income, costs (marked expenses, time at cost rates, mileage at the year's rate) and margin per project.
+- **Unbilled work**: time, mileage and expenses not yet on an invoice, per client, with the oldest work.
+- **Utilization**: per person, available hours, hours worked, the billable share, billable value and what was invoiced.
+- **Time by customer** and **Mileage log**.

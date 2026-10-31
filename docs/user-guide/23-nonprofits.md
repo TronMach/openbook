@@ -1,0 +1,97 @@
+# Nonprofits: restrictions, gifts, pledges and grants
+
+OpenBook keeps a nonprofit's books the way the nonprofit statements need them: net assets without and with donor restrictions, expenses by function, gifts with acknowledgment letters, pledges and grants. Choose the **Nonprofit** edition at setup (or in Settings) and the **Nonprofit** starter chart, and donors, gifts and the nonprofit statements come first.
+
+Donors are customer records, called **Donors** in this edition. Most pages here need the accountant role to change; recording gifts and pledges and thanking donors need only the standard role.
+
+## Donor restrictions
+
+A restricted gift may only be spent on its *purpose* (a program, a project, a capital campaign) or after a date. OpenBook tracks restrictions with two things you already have:
+
+- **Accounts**: tick **Holds amounts with donor restrictions** on the income and net asset accounts that hold restricted money, for example "Contributions:Restricted". The nonprofit starter chart has these set up.
+- **Classes**: the class on a restricted gift is its purpose.
+
+So a restricted gift is income on a restricted account, with the purpose as its class. Everything on restricted accounts counts as net assets *with* donor restrictions; everything else is *without*.
+
+### Releasing restrictions
+
+When you spend money on a purpose, the restriction is met and that much moves to unrestricted. **Nonprofit** (`/nonprofit`) lists each purpose, **as of** a date: **received**, **released**, **still restricted**, **spent on it**, and a suggested release (what's been spent but not yet released). Enter an amount and **Release**.
+
+A release posts between "Released From Restricted" and "Released To Unrestricted" on the purpose's class. Total net assets don't change. You can't release more than the purpose holds. Void a release from its page.
+
+## Functional expenses
+
+Nonprofits report expenses by function: **program services**, **management and general**, and **fundraising**. Each class can carry its functional area (on the class's page); subclasses take their parent's.
+
+On the Nonprofit page, **Set up the usual classes** adds "Programs", "Management and General" and "Fundraising" with their areas, and turns class tracking on. Add each program as a class under "Programs", then put a class on every expense line.
+
+## Gifts
+
+**Nonprofit → Record a gift** (`/nonprofit/gifts/new`):
+
+- **Donor**, **amount** and **date**.
+- **Kind**: **Money** (cash, check, card, transfer) or **In kind** (goods or services). For in-kind gifts, describe **what was given**; the amount is its fair value, recorded to an asset or expense account.
+- **Deposited to**: a bank account, or Undeposited Funds to include it in a deposit later.
+- **Contribution account** (default "Contributions", or a restricted account) and **purpose (class)**.
+- **Paying a pledge**: choose the pledge, and the gift takes its account and purpose.
+- **Did the donor receive anything in return?** For a gala ticket or a thank-you gift, enter **its fair value** and **what it was**. The deductible amount on the letter is the gift less that value.
+
+Gifts can be voided from their page.
+
+### Recurring gifts
+
+**Nonprofit → Recurring gifts** for monthly card gifts, standing transfers or pledges paid in installments: donor, amount, deposited to, **every** so often, **starting** and **ending** (or after a number of gifts). Each becomes an ordinary gift on its date, automatically within the hour, or by hand with **Record what's due**. **Stop** ends one.
+
+## Thanking donors
+
+**Nonprofit → Thank donors**:
+
+- **Gifts not thanked yet**: open a gift to **email the letter** (an acknowledgment PDF), or tick gifts and **mark the ticked gifts as thanked** if you printed or sent them another way.
+- **Year-end giving statements**: choose the **year** and **Show**. Download each donor's statement, all of them in one PDF, or **email every donor with an address**.
+
+Letters use your company name, address and form style. **Nonprofit → Settings** (letter settings) adds:
+
+- **EIN**: with it, letters say the organization is tax-exempt under section 501(c)(3).
+- **Signed by** and **title**.
+- **Opening paragraph**, or leave it empty for a plain thank-you.
+
+Letters include the IRS wording: what was received in return and its value, or that no goods or services were provided, and for in-kind gifts, a description without a value.
+
+## Pledges
+
+A *pledge* is a promise to give. On accrual basis it's income when made; on cash basis, when paid.
+
+**Nonprofit → Pledges → Record a pledge**: donor, amount, date, **due by**, contribution account and purpose. It's paid by gifts that name it (**Paying a pledge** on the gift form). The pledge page lists its payments and what's left.
+
+- **Cancel the rest** when the donor won't pay what's left: it comes off contribution income and pledges receivable. **Undo the cancellation** if they pay after all.
+- **Void** only a pledge recorded by mistake or withdrawn before anything was paid.
+
+## Grants
+
+**Nonprofit → Grants → Add a grant**:
+
+- **Name**, **funder** (a customer record), **award number**, **amount awarded**, **awarded on**, and the **grant period** (starts, ends).
+- **Class**: expenses on this class (and its subclasses) during the grant period count against the grant. Leave it empty to create a class named after the grant.
+- **Income account**: most grants are for a purpose or period, so choose a restricted account.
+- **Conditional**: tick for grants that are income only as the condition is met, such as cost reimbursement or matching grants.
+- **Terms**: allowed costs, reports due, conditions, for your own reference.
+
+An unconditional grant is recorded as income and receivable when awarded. A conditional one records nothing until it's earned: on its page, **Recognize income earned** posts what's been spent so far (up to the award) as grant income.
+
+On the grant's page:
+
+- **Budget and spending**: enter a budget by account (**Save budget**) and compare spending against it.
+- **Money from the funder**: record each payment (**Record payment**). On a conditional grant, money received before it's earned is held as a refundable advance until spending catches up.
+- **Close the grant** when it ends (**Reopen** if needed), or void it; void individual payments and recognitions.
+
+## Reports
+
+In the **Nonprofit** group:
+
+- **Statement of activities**: revenue, support and expenses, without and with donor restrictions, and the net assets they leave.
+- **Statement of financial position**: the balance sheet with net assets split into without and with donor restrictions.
+- **Statement of functional expenses**: expenses by account and function, with a column per program.
+- **Restricted net assets by purpose**: what each purpose holds.
+- **Giving by donor**, **Lapsed donors** (gave last year but not yet this year) and **Open pledges**.
+- **Grants**: awards, spending, recognized income and what funders still owe.
+- **Form 990 Part IX expenses**: expenses by 990 line and function, from your accounts' tax lines.

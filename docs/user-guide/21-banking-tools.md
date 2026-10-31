@@ -1,0 +1,62 @@
+# Bank connections, checks, positive pay and petty cash
+
+More tools linked from the **Banking** page, beyond the everyday ones in [Banking](06-banking.md).
+
+## Bank connections
+
+Instead of downloading statement files, connect your bank accounts so new transactions arrive by themselves. OpenBook uses [SimpleFIN Bridge](https://beta-bridge.simplefin.org/), which links to thousands of US and Canadian banks for a small yearly fee.
+
+**Banking → Bank connections** (accountant role):
+
+1. At SimpleFIN Bridge, connect your banks, then create a **setup token**.
+2. In OpenBook, paste it under **Connect with SimpleFIN**, give the connection a name, and **Connect**. The token works once; OpenBook swaps it for a key it stores encrypted.
+3. On the connection's page, each account at the bank is listed. Choose which of your accounts each one **goes to**, and the date to **fetch from**. **Save**.
+
+OpenBook then fetches posted transactions every six hours (or **Sync now**) into each account's review list, where you add or match them as with an imported file. Pending transactions wait until they post. Overlaps are recognized, so nothing arrives twice. If a sync fails, the connection's page says why. **Disconnect** stops it.
+
+## Printing checks
+
+Payments from bank accounts (bill payments and checks written as expenses) can be printed on standard **voucher check stock**: the check at the top and two stubs below, with the bank details, MICR line and signature line already printed on the stock.
+
+**Banking → Print checks**: choose the **account** (or all), show checks **not printed yet** or all, tick the ones to print and **Print selected**. The PDF opens in a new tab.
+
+- Load the stock face up.
+- Print at **100% ("actual size")**, not "fit to page".
+- Reload the page afterwards to see them marked as printed.
+
+A single check can also be printed from its payment or expense page. The amount is written out in words.
+
+## Positive pay
+
+Many banks protect business accounts from check fraud with *positive pay*: you send the bank a list of the checks you've issued, and it refuses any check not on the list.
+
+**Banking → Positive pay**:
+
+1. Choose the **account**, **from** and **to** dates, and **Show checks**. Numbered checks from that account are listed; voided ones are marked V. The page shows when you last exported and through which date.
+2. Under **Issue file**, fill in the **account number at the bank**, the **date format** your bank wants, and whether to **include a header row**. OpenBook remembers these for the account.
+3. **Download CSV** and upload it to your bank.
+
+The file has the account number, check number, issue date, amount, payee and void flag on each line.
+
+## Petty cash
+
+A cash box for small purchases, kept at a fixed *float* (say $200) and topped up when it runs low.
+
+**Banking → Petty cash → New petty cash box**:
+
+- **Account**: an existing bank account for the box, or **create a new account** with a name.
+- **Float**: the amount the box should hold.
+- **Custodian**: who looks after it (optional).
+- **Fund it from** a bank account on a date, which records the transfer into the box; or **don't record a transfer** if it's already funded in your books.
+
+### Spending from the box
+
+Record each purchase as an ordinary expense from the petty cash account (**Check / payment** on the Banking page), with the receipt attached.
+
+### Counting
+
+On the box's page, **Count the cash**: the **date** and the **cash counted**, and optionally the **notes and coins** as value x count (`20x5; 1x3; 0.25x8`). **Record count**. If the count differs from the balance in the books, OpenBook records the difference to "Cash Over and Short", so the box matches what's really there.
+
+### Replenishing
+
+**Replenish** transfers the float less the balance from a bank account into the box, bringing it back to the float. The page shows how much that is today.

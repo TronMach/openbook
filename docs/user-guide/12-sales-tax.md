@@ -1,0 +1,54 @@
+# Sales tax
+
+OpenBook works out sales tax on invoices, sales receipts, estimates and credit memos, keeps track of what you owe each tax agency, and records the payments when you file. Set it up on **Sales → Sales tax**.
+
+## How it fits together
+
+- An **agency** is who you pay: a state's department of revenue, a city, a county. Each agency gets its own liability account (under "Sales Tax Payable"), so you always know what you owe it.
+- A **rate** is one percentage paid to one agency, for example "Texas state 6.25%".
+- A **tax code** is what you put on a sale. It charges one or more rates together, for example "Austin" = state 6.25% + city 1% + transit 1%. Each rate makes a code of its own when you create it; add a code to combine rates.
+- Each **customer** has a default tax code (where you deliver to them decides the rate), and may be **exempt**.
+- Each **product or service** is taxable or not.
+
+## Setting up
+
+1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly or annually; this sets the period OpenBook suggests you report) and your **permit or account number** with it.
+2. **Add its rates**: **name**, **rate (%)** (up to four decimals) and **paid to** (the agency). Leave **Also make a tax code that charges just this rate** ticked unless you'll only use it combined with others.
+3. If you charge several rates together, **add a tax code**, give it a name, and tick its rates in the order they should print.
+4. On each **customer**, choose their **tax code**. New invoices, receipts and estimates for them start with it.
+5. On each **product or service**, tick **Taxable** if sales tax applies to it.
+
+When a rate changes, edit its percentage. The new rate applies to documents from then on; existing ones keep the tax they were charged.
+
+## On sales
+
+When you choose a customer, their tax code is selected in the form's **Sales tax** field (it only appears once you have tax codes). Change it for one sale if you need to, for example delivery to a different place, or choose **No sales tax**. An exempt customer's form says so; if their certificate has expired, it warns you and tax is charged. Each line has a **taxable** box that starts from the product's setting.
+
+OpenBook adds the tax under the subtotal: taxable lines, less their share of any discounts, times the code's combined rate, rounded once, then split among the rates. Invoices and PDFs show one tax row per rate.
+
+### Exempt customers
+
+On the customer's page, enter their **exemption certificate number**, the **reason** and the **expiry date**. While it's valid, their sales are taxed at zero and reported as exempt. Attach the certificate itself to the customer under **Attachments**. The Sales tax page lists every exempt customer.
+
+## What you owe
+
+The **Sales tax** page lists each agency with **Owed today** and the **period to file**.
+
+**Reports → Sales tax liability** shows, for a period, each agency and rate: total sales, non-taxable, exempt and taxable amounts, and the tax. Use it to fill in your return. Credit memos are subtracted.
+
+## Paying the tax
+
+When you file, record the payment: **Pay** on the agency's row (or **Sales tax → Pay sales tax**).
+
+1. Choose the **agency** and **for the period ending**. The amount starts as what was owed on that date.
+2. Set the **payment date**, **paid from** (bank account) and **amount paid**.
+3. Add adjustment lines if the return had them:
+   - **Discount or credit**, such as a timely-filing discount the state lets you keep, to an income account.
+   - **Penalty or interest**, to an expense account.
+4. Add a **check number or confirmation** and **Record payment**.
+
+The payment clears that much of the agency's liability. To correct one, void it from its page; the tax is owed again. Payments already reconciled at the bank can't be voided.
+
+## Turning things off
+
+Rates, codes and agencies are made inactive, never deleted. A rate still used by an active code, or an agency with active rates, can't be made inactive until those are.
