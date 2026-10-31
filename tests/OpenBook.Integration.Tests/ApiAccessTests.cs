@@ -160,6 +160,16 @@ public sealed class ApiAccessTests : IAsyncLifetime
         Assert.Equal("\"ok\"", await Client(null).GetStringAsync("/healthz"));
     }
 
+    [Fact]
+    public async Task Every_response_refuses_framing_by_other_sites_and_sniffing()
+    {
+        var login = await Client(null).GetAsync("/login");
+        Assert.Equal("nosniff", login.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("same-origin", login.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Equal("SAMEORIGIN", login.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("frame-ancestors 'self'", login.Headers.GetValues("Content-Security-Policy").Single());
+    }
+
     [Theory]
     [InlineData("/sales/invoices/new", "GET", UserRole.Standard)]
     [InlineData("/sales/invoices/0190a7a2-0000-7000-8000-000000000000", "GET", UserRole.ViewOnly)]

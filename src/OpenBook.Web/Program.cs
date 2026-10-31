@@ -61,6 +61,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseRequestLocalization(OpenBook.Web.Localization.AppCulture.Options());
 
 app.UseMiddleware<SetupGateMiddleware>();
