@@ -102,6 +102,12 @@ A *sales receipt* is for a sale paid on the spot: a shop sale, a card payment ta
 
 **Sales → Sales receipt** (`n` then `r`): choose the customer (optional for walk-in sales), add lines like an invoice, choose **Deposit to** (Undeposited Funds or a bank account) and **Save sales receipt**.
 
+To correct a sales receipt, use **Change** at the top of its page: the customer (or none), number, date, deposit account, reference, lines, tax, location, warehouse and memo. Say **Why are you changing it?** and **Save changes**. As with invoices, OpenBook reverses the receipt's journal entry on its original date and posts the corrected one, and lists each change under **Changes** on the receipt.
+
+- Once the receipt is in a bank deposit, its total and **Deposit to** account can't change (the deposit moved that amount); other changes are fine. Void the deposit first to change them.
+- A receipt whose money is reconciled at the bank can't be changed, as it can't be voided.
+- Stock sold on the receipt is put back and taken again, so there must be enough on hand for the corrected quantities.
+
 ## Where it shows up
 
 - The **Sales** page lists recent invoices, payments, receipts and refunds; filter by kind with the links above the list.

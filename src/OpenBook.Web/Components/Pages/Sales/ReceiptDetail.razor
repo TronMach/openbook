@@ -30,7 +30,16 @@
             <a class="button secondary" href="/sales/email/receipts/@_receipt.Id">Email</a>
         }
         <a class="button secondary" href="/audit?entityId=@_receipt.Id">History</a>
+        @if (_receipt.Status == DocumentStatus.Posted)
+        {
+            <a class="button secondary" href="/sales/receipts/@_receipt.Id/edit">Change</a>
+        }
     </div>
+    @if (_changes.Count > 0)
+    {
+        var last = _changes[^1];
+        <p class="muted no-print">Changed @last.At.ToLocalTime().ToString("g") by @last.By: @last.Reason</p>
+    }
     @if (_receipt.DepositId is { } depositId)
     {
         <p class="muted no-print">Deposited: <a href="/banking/deposits/@depositId">see the bank deposit</a>.</p>
@@ -106,6 +115,8 @@
         </div>
     }
 
+    <DocumentChangeList Changes="_changes" />
+
     <EntryTags EntryId="_receipt.JournalEntryId" />
 
     <Attachments EntityType="sales_receipt" EntityId="_receipt.Id" />
@@ -120,6 +131,7 @@
     private Customer? _customer;
     private OpenBook.Domain.Companies.Company? _company;
     private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<DocumentChange> _changes = [];
     private string? _error;
     private bool _needsClosingPassword;
 
@@ -138,6 +150,7 @@
         _customer = _receipt.CustomerId is { } c ? await CustomerService.GetAsync(c) : null;
         _company = await Settings.GetAsync();
         _chart = await AccountService.GetChartAsync();
+        _changes = await Receipts.ChangesAsync(Id);
     }
 
     private async Task VoidAsync()

@@ -9,18 +9,20 @@ namespace OpenBook.Application.CustomFields;
 public sealed class CustomFieldStamper(ICustomFieldStore store)
 {
     /// <summary>
-    /// Record-level values, first found wins: the source document's (an invoice made from a sales order or estimate,
-    /// a bill from a purchase order) for fields this document takes; the customer's or vendor's fields marked for this
-    /// document (into the document field of the same name when there is one); document fields' defaults. Then each
-    /// line's item fields marked for this document. With <paramref name="replaceLines"/> (a document edited), line
-    /// values are copied again and record-level values already there are kept.
+    /// After a document was corrected and its <paramref name="count"/> lines became lines 1, 2, … in order: each old
+    /// line's values follow it to its new number (<paramref name="fromLines"/>: the old number each new line continues,
+    /// null for a new line; null throughout takes the lines as continuing the old ones in order); values of lines that
+    /// are gone are removed.
     /// </summary>
-    /// <summary>
-    /// After a document's lines were renumbered (an invoice changed): each line's values follow it to its new number
-    /// (<paramref name="moves"/>: old → new); values of lines that are gone are removed.
-    /// </summary>
-    public async Task MoveLinesAsync(string entityType, Guid documentId, IReadOnlyDictionary<int, int> moves, CancellationToken ct)
+    public async Task MoveLinesAsync(string entityType, Guid documentId, int count, IReadOnlyList<int?>? fromLines, CancellationToken ct)
     {
+        var moves = new Dictionary<int, int>();
+        for (var i = 0; i < count; i++)
+        {
+            if ((fromLines is null ? i + 1 : fromLines[i]) is { } old && old > 0)
+                moves.TryAdd(old, i + 1);
+        }
+
         foreach (var value in (await store.ListValuesAsync([documentId], ct)).Where(v => v.LineNumber > 0).ToList())
         {
             if (moves.TryGetValue(value.LineNumber, out var to) && to == value.LineNumber)
@@ -31,6 +33,13 @@ public sealed class CustomFieldStamper(ICustomFieldStore store)
         }
     }
 
+    /// <summary>
+    /// Record-level values, first found wins: the source document's (an invoice made from a sales order or estimate,
+    /// a bill from a purchase order) for fields this document takes; the customer's or vendor's fields marked for this
+    /// document (into the document field of the same name when there is one); document fields' defaults. Then each
+    /// line's item fields marked for this document. With <paramref name="replaceLines"/> (a document edited), line
+    /// values are copied again and record-level values already there are kept.
+    /// </summary>
     /// <param name="lines">Each line's number and item.</param>
     public async Task StampAsync(
         string entityType, Guid documentId, Guid? partyId, IEnumerable<(int LineNumber, Guid? ItemId)> lines,

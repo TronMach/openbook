@@ -220,6 +220,9 @@ internal static class SalesApi
             var receipt = await s.CreateAsync(r, ct);
             return Results.Created($"/api/sales/receipts/{receipt.Id}", SalesReceiptResponse.From(receipt));
         });
+        // Correct a posted sales receipt in place: its entry reversed and a new one posted.
+        sales.MapPut("/receipts/{id:guid}", async (Guid id, ChangeSalesReceiptCommand r, SalesReceiptService s, CancellationToken ct) =>
+            SalesReceiptResponse.From(await s.ChangeAsync(id, r, ct)));
         sales.MapPost("/receipts/{id:guid}/void", async (Guid id, VoidRequest r, SalesReceiptService s, CancellationToken ct) =>
             SalesReceiptResponse.From(await s.VoidAsync(id, r.Reason, ct)));
     }

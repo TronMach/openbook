@@ -96,6 +96,39 @@ public sealed class SalesReceipt
         return receipt;
     }
 
+    /// <summary>
+    /// Takes a correction: the new lines and the entry posted for them (the old one voided by the caller). While the
+    /// receipt is in a bank deposit its total and deposit account can't change, since the deposit moved that amount.
+    /// </summary>
+    public void Change(
+        string number, Guid? customerId, DateOnly date, Guid depositAccountId, IReadOnlyList<SalesLine> lines, Guid journalEntryId,
+        string? reference, string? memo, Guid? taxCodeId, string? taxExemption)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("receipt.voided", $"Sales receipt {Number} is voided, so it can't be changed.");
+        var total = lines.Sum(l => l.Amount);
+        if (total <= 0m)
+            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        if (DepositId is not null && (total != Total || depositAccountId != DepositAccountId))
+            throw new DomainException("receipt.deposited",
+                $"Sales receipt {Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");
+
+        Number = Text.Optional(number, 20, "receipt.number_too_long", "Receipt number")
+            ?? throw new DomainException("receipt.number_required", "A sales receipt needs a number.");
+        CustomerId = customerId;
+        Date = date;
+        DepositAccountId = depositAccountId;
+        Reference = Text.Optional(reference, 30, "receipt.reference_too_long", "Reference");
+        Memo = Text.Optional(memo, 1000, "receipt.memo_too_long", "Memo");
+        TaxCodeId = taxCodeId;
+        TaxExemption = taxCodeId is null ? null : taxExemption;
+        JournalEntryId = journalEntryId;
+        _lines.Clear();
+        _lines.AddRange(lines);
+        Total = total;
+    }
+
     public void MarkDeposited(Guid depositId)
     {
         if (Status != DocumentStatus.Posted)

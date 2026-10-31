@@ -1,0 +1,185 @@
+@page "/sales/receipts/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Change sales receipt @(_receipt?.Number) · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Change sales receipt @_receipt?.Number</h1>
+        <a class="button secondary" href="/sales/receipts/@Id">Back to the sales receipt</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_receipt is null || _receipt.Status == DocumentStatus.Voided))
+    {
+        <div class="card"><p>Only posted sales receipts can be changed. <a href="/sales/receipts/@Id">Back to the sales receipt</a></p></div>
+    }
+    else if (_loaded && _receipt is not null)
+    {
+        <p class="muted">Saving reverses the receipt's journal entry on its original date and posts the corrected receipt, keeping its history. Receipts already reconciled at the bank can't be changed. Changes in a closed period need the closing date password.</p>
+        @if (_receipt.DepositId is not null)
+        {
+            <div class="alert notice" role="status">This receipt is in a bank deposit, so its total (@Labels.Amount(_receipt.Total)) and deposit account can't change. Void the deposit first to change them.</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">Customer <span class="muted">(optional)</span></label>
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" @bind-Value="_customerId" EmptyText="No customer" Placeholder="Type a name or leave blank" />
+                </div>
+                <div class="field">
+                    <label for="number">Receipt number</label>
+                    <input id="number" @bind="_number" maxlength="20" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="deposit">Deposit to</label>
+                    <select id="deposit" @bind="_depositAccountId" disabled="@(_receipt.DepositId is not null)">
+                        @foreach (var a in _depositAccounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
+                <input id="reference" @bind="_reference" maxlength="30" />
+            </div>
+
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+            <div class="field">
+                <label for="reason">Why are you changing it?</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">Kept in the receipt's history and the audit log.</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save changes</button>
+                <a href="/sales/receipts/@Id">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private SalesReceipt? _receipt;
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _depositAccounts = [];
+    private Guid? _customerId;
+    private Guid _depositAccountId;
+    private string? _number;
+    private DateOnly _date;
+    private string? _reference;
+    private string? _memo;
+    private string? _reason;
+    private List<SalesLineModel> _lines = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
+    private Guid? _taxCodeId;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
+    private Guid? _locationId;
+
+    private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
+    private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
+    private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty
+        && !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt?>(s => s.GetAsync(Id));
+        if (_receipt is not null)
+        {
+            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+            (_customers, _items, _chart) = await Ops.RunAsync(async sp => (
+                (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_receipt.Date)).Select(s => s.Customer)
+                    .Where(c => c.IsActive || c.Id == _receipt.CustomerId).ToList(),
+                await sp.GetRequiredService<ItemService>().ListAsync(),
+                await sp.GetRequiredService<AccountService>().GetChartAsync()));
+            _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+                .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset || a.Id == _receipt.DepositAccountId)
+                .OrderBy(a => a.Type != AccountType.Bank)
+                .ToList();
+
+            _customerId = _receipt.CustomerId;
+            _depositAccountId = _receipt.DepositAccountId;
+            _number = _receipt.Number;
+            _date = _receipt.Date;
+            _reference = _receipt.Reference;
+            _memo = _receipt.Memo;
+            _taxCodeId = _receipt.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+            _locationId = _receipt.LocationId;
+            _warehouseId = _receipt.WarehouseId;
+            _lines = _receipt.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l =>
+            {
+                var model = SalesLineModel.From(l.ToDraft());
+                model.OriginalLine = l.LineNumber;
+                return model;
+            }).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var lines = _lines.Where(l => !l.IsBlank).ToList();
+            var command = new ChangeSalesReceiptCommand(_date, SalesLineModel.Drafts(lines), _reason!, _customerId, _depositAccountId, _number,
+                _reference ?? "", _memo, _taxCodeId ?? Guid.Empty, _locationId, WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList());
+            await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.ChangeAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/sales/receipts/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -276,14 +276,7 @@ public sealed class InvoiceService(
         invoice.SetWarehouse(warehouseId);
 
         // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
-        var moves = new Dictionary<int, int>();
-        for (var i = 0; i < drafts.Count; i++)
-        {
-            if ((command.FromLines is null ? i + 1 : command.FromLines[i]) is { } old && old > 0)
-                moves.TryAdd(old, i + 1);
-        }
-
-        await customFields.MoveLinesAsync(EntityType, invoice.Id, moves, ct);
+        await customFields.MoveLinesAsync(EntityType, invoice.Id, drafts.Count, command.FromLines, ct);
 
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, invoice.Id, before,
             DocumentChanges.WithReason(Snapshot(invoice), command.Reason)));
@@ -331,7 +324,7 @@ public sealed class InvoiceService(
     }
 
     /// <summary>Whether two sets of lines post the same income to each account and class, however it's split into lines.</summary>
-    private static bool SameIncome(IEnumerable<SalesLine> a, IEnumerable<SalesLine> b)
+    internal static bool SameIncome(IEnumerable<SalesLine> a, IEnumerable<SalesLine> b)
     {
         static List<(Guid, Guid?, decimal)> Income(IEnumerable<SalesLine> lines) => lines
             .Where(l => l.IncomeAccountId is not null)

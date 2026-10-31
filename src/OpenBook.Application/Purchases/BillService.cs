@@ -203,14 +203,7 @@ public sealed class BillService(
             : [], user.Actor);
 
         // Drafts become lines 1, 2, ... in order; custom field values follow their line.
-        var moves = new Dictionary<int, int>();
-        for (var i = 0; i < lines.Count; i++)
-        {
-            if ((command.FromLines is null ? i + 1 : command.FromLines[i]) is { } old && old > 0)
-                moves.TryAdd(old, i + 1);
-        }
-
-        await customFields.MoveLinesAsync(EntityType, bill.Id, moves, ct);
+        await customFields.MoveLinesAsync(EntityType, bill.Id, lines.Count, command.FromLines, ct);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, bill.Id, before,
             DocumentChanges.WithReason(Snapshot(bill), command.Reason)));
         await store.SaveChangesAsync(ct);
