@@ -37,6 +37,15 @@ Vendors with unpaid bills can't be made inactive. Vendors can be imported from a
 
 Attach the vendor's PDF or a photo to the bill under **Attachments** on its page, so it's there when you need it.
 
+To correct a bill, use **Change** at the top of its page: the bill number, dates, lines, location, warehouse and memo. Say **Why are you changing it?** and **Save changes**. OpenBook reverses the bill's journal entry on its original date and posts the corrected one, so the bill keeps its payments and history; each change is listed under **Changes** on the bill.
+
+- The vendor can't change: to bill a different vendor, void the bill and enter a new one.
+- If part of the bill is paid or credited, the new total can't be less than that. Changing what a bill paid in a closed period was for needs the closing date password, like any change dated in a closed period.
+- Stock the bill brought in is received again, so the change is refused once some of it has been sold, used, moved or given landed costs.
+- Lines marked billable to a customer stay as they are, on the same line; remove the mark first to change one.
+- If the bill is over the approval limit after the change, it waits for approval again, even if it was approved before, and the person who changed it can't approve it (unless self-approval is on).
+- Bills entered from a purchase order can't be changed yet: void them and enter them from the order again.
+
 A bill can be voided (with a reason) from its page until a payment is made against it.
 
 Bills that arrive regularly with the same amounts, such as rent, can be entered automatically: see **Purchases → Recurring**.

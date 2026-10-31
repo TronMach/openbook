@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
@@ -55,9 +54,6 @@ public sealed record ChangeInvoiceCommand(
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
     IReadOnlyList<int?>? FromLines = null);
-
-/// <summary>One correction of an invoice, from its audit record.</summary>
-public sealed record InvoiceChange(DateTimeOffset At, string By, string Reason, decimal TotalBefore, decimal TotalAfter);
 
 /// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
 internal sealed record InvoiceSource(Guid? SalesOrderId, IReadOnlyList<InvoiceSourceLine> Lines, bool Completes);
@@ -289,25 +285,15 @@ public sealed class InvoiceService(
 
         await customFields.MoveLinesAsync(EntityType, invoice.Id, moves, ct);
 
-        var after = JsonNode.Parse(Snapshot(invoice))!.AsObject();
-        after["ChangeReason"] = command.Reason.Trim();
-        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, invoice.Id, before, after.ToJsonString()));
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, invoice.Id, before,
+            DocumentChanges.WithReason(Snapshot(invoice), command.Reason)));
         await store.SaveChangesAsync(ct);
         return invoice;
     }
 
-    /// <summary>The invoice's corrections, oldest first (audit records carrying a change reason).</summary>
-    public async Task<IReadOnlyList<InvoiceChange>> ChangesAsync(Guid id, CancellationToken ct = default)
-    {
-        static decimal Total(string? json) => json is null ? 0m : JsonNode.Parse(json)?["Total"]?.GetValue<decimal>() ?? 0m;
-        return (await ledger.ListAuditAsync(EntityType, id, null, ct))
-            .Where(r => r.Action == AuditAction.Updated && r.After is not null)
-            .Select(r => (Record: r, Reason: JsonNode.Parse(r.After!)?["ChangeReason"]?.GetValue<string>()))
-            .Where(x => x.Reason is not null)
-            .OrderBy(x => x.Record.OccurredAt)
-            .Select(x => new InvoiceChange(x.Record.OccurredAt, x.Record.Actor, x.Reason!, Total(x.Record.Before), Total(x.Record.After)))
-            .ToList();
-    }
+    /// <summary>The invoice's corrections, oldest first.</summary>
+    public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
+        DocumentChanges.ListAsync(ledger, EntityType, id, ct);
 
     /// <summary>
     /// Lines that came from somewhere can't change in a correction: lines billed from a sales order or estimate (the

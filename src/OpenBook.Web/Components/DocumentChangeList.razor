@@ -1,0 +1,28 @@
+@* The corrections of a document changed in place (invoice, bill): who, when, why and the totals. *@
+@if (Changes.Count > 0)
+{
+    <section class="no-print">
+        <h2>@L["Changes"]</h2>
+        <table class="data">
+            <thead><tr><th>@L["When"]</th><th>@L["By"]</th><th>@L["Why"]</th><th class="num">@L["Total before"]</th><th class="num">@L["Total after"]</th></tr></thead>
+            <tbody>
+                @foreach (var change in Changes)
+                {
+                    <tr>
+                        <td>@change.At.ToLocalTime().ToString("g")</td>
+                        <td>@change.By</td>
+                        <td>@change.Reason</td>
+                        <td class="num">@Labels.Amount(change.TotalBefore)</td>
+                        <td class="num">@Labels.Amount(change.TotalAfter)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="muted">@L["Each change reversed the previous journal entry on its date and posted a new one; all of them stay in the journal."]</p>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DocumentChange> Changes { get; set; } = [];
+}

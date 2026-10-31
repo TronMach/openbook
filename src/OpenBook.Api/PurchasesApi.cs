@@ -211,6 +211,9 @@ internal static class PurchasesApi
             var b = await s.CreateAsync(r, ct);
             return Results.Created($"/api/purchases/bills/{b.Id}", BillResponse.From(b));
         });
+        // Correct a posted bill in place: its entry reversed and a new one posted, the approval rules run again.
+        purchases.MapPut("/bills/{id:guid}", async (Guid id, ChangeBillCommand r, BillService s, CancellationToken ct) =>
+            BillResponse.From(await s.ChangeAsync(id, r, ct)));
         purchases.MapPost("/bills/{id:guid}/void", async (Guid id, VoidRequest r, BillService s, CancellationToken ct) =>
             BillResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

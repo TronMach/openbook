@@ -25,12 +25,22 @@
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
         <a class="button secondary" href="/purchases">Back to purchases</a>
         <a class="button secondary" href="/audit?entityId=@_bill.Id">History</a>
+        @if (_bill.Status == DocumentStatus.Posted && _bill.PurchaseOrderId is null)
+        {
+            <a class="button secondary" href="/purchases/bills/@_bill.Id/edit">Change</a>
+        }
         @if (_bill.IsOpen)
         {
             <a class="button secondary" href="/purchases/vendor-credits/apply?vendor=@_vendor.Id">Apply credit</a>
             <a class="button" href="/purchases/pay-bills?vendor=@_vendor.Id">Pay bills</a>
         }
     </div>
+    @if (_changes.Count > 0)
+    {
+        var last = _changes[^1];
+        <p class="muted no-print">Changed @last.At.ToLocalTime().ToString("g") by @last.By: @last.Reason</p>
+    }
+
     @if (_bill.RecurringBillId is { } recurringId)
     {
         <p class="muted">Entered by a <a href="/purchases/recurring/@recurringId">recurring bill</a>.</p>
@@ -166,6 +176,8 @@
         </div>
     }
 
+    <DocumentChangeList Changes="_changes" />
+
     <EntryTags EntryId="_bill.JournalEntryId" />
 
     <BillableLinesPanel Kind="BillableSource.Bill" DocumentId="_bill.Id" Back="@($"/purchases/bills/{_bill.Id}")"
@@ -186,6 +198,7 @@
     private Vendor? _vendor;
     private IReadOnlyList<BillPayment> _payments = [];
     private IReadOnlyList<VendorCredit> _credits = [];
+    private IReadOnlyList<DocumentChange> _changes = [];
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
     private string? _error;
@@ -207,6 +220,7 @@
         _vendor = await VendorService.GetAsync(_bill.VendorId);
         _payments = await Bills.ListPaymentsAsync(Id);
         _credits = await Bills.ListCreditsAsync(Id);
+        _changes = await Bills.ChangesAsync(Id);
         _chart = await AccountService.GetChartAsync();
         _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
     }

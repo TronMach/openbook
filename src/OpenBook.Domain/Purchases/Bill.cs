@@ -50,7 +50,8 @@ public sealed class BillLine
 
 /// <summary>
 /// A vendor's bill: debits what was bought (expense or asset accounts) and credits accounts payable. Bill
-/// payments reduce its balance. Never edited; voided (once no payments are applied) by reversing its entry.
+/// payments reduce its balance. Voided (once no payments are applied) by reversing its entry, or corrected in place
+/// with <see cref="Change"/> (its entry reversed and a new one posted; the bill keeps its id).
 /// </summary>
 public sealed class Bill
 {
@@ -270,6 +271,54 @@ public sealed class Bill
         if (amount <= 0m || amount > AmountPaid)
             throw new DomainException("payment.remove_invalid", $"This bill doesn't have {amount:N2} paid to remove.");
         AmountPaid -= amount;
+    }
+
+    /// <summary>
+    /// Corrects the bill in place: new vendor's number, dates, memo and lines, posted as <paramref name="journalEntryId"/>
+    /// (the old entry is reversed by the caller). The vendor, A/P account and what's settled stay, so the total can't
+    /// fall below what's settled.
+    /// </summary>
+    public void Change(string? reference, DateOnly date, DateOnly dueDate, IReadOnlyList<BillLine> lines, Guid journalEntryId, string? memo)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("bill.voided", "This bill is voided, so it can't be changed.");
+        if (dueDate < date)
+            throw new DomainException("bill.due_before_date", "The due date can't be before the bill date.");
+        var total = lines.Sum(l => l.Amount);
+        if (total < AmountPaid)
+            throw new DomainException("bill.total_below_paid", $"This bill has {AmountPaid:N2} paid or credited, so its total can't go below that.");
+
+        Reference = Text.Optional(reference, 30, "bill.reference_too_long", "Bill number");
+        Date = date;
+        DueDate = dueDate;
+        Memo = Text.Optional(memo, 1000, "bill.memo_too_long", "Memo");
+        JournalEntryId = journalEntryId;
+        _lines.Clear();
+        _lines.AddRange(lines);
+        Total = total;
+    }
+
+    /// <summary>
+    /// After a correction the approval rules run again: held (by <paramref name="changedBy"/>, who then can't approve it
+    /// unless self-approval is on) when there are reasons, even if it was approved before; otherwise no approval needed.
+    /// </summary>
+    public void Rehold(IReadOnlyList<string> reasons, string changedBy)
+    {
+        ArgumentNullException.ThrowIfNull(reasons);
+        ApprovedBy = null;
+        ApprovedAt = null;
+        ApprovalNote = null;
+        if (reasons.Count == 0)
+        {
+            Approval = BillApproval.NotRequired;
+            HoldReason = null;
+            return;
+        }
+
+        SetEnteredBy(changedBy);
+        Approval = BillApproval.Pending;
+        HoldReason = Text.Optional(string.Join('\n', reasons), 2000, "bill.hold_too_long", "Hold reason");
     }
 
     public void Void()

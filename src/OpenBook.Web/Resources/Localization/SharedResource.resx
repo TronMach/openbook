@@ -311,8 +311,8 @@
   <data name="Due date" xml:space="preserve">
     <value>Due date</value>
   </data>
-  <data name="Each change reversed the invoice's previous journal entry on its date and posted a new one; all of them stay in the journal." xml:space="preserve">
-    <value>Each change reversed the invoice's previous journal entry on its date and posted a new one; all of them stay in the journal.</value>
+  <data name="Each change reversed the previous journal entry on its date and posted a new one; all of them stay in the journal." xml:space="preserve">
+    <value>Each change reversed the previous journal entry on its date and posted a new one; all of them stay in the journal.</value>
   </data>
   <data name="Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting." xml:space="preserve">
     <value>Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</value>

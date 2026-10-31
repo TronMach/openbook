@@ -22,6 +22,12 @@ public sealed class BillLineModel
 
     private bool IsFilled => AccountId is not null || ItemId is not null || (Amount ?? 0m) != 0m;
 
+    /// <summary>When correcting a saved bill: the number of the line this one continues (null for a new line).</summary>
+    public int? OriginalLine { get; set; }
+
+    /// <summary>Whether the line goes into <see cref="Drafts"/> (blank lines are left out).</summary>
+    public static bool IsFilledLine(BillLineModel line) => line?.IsFilled ?? false;
+
     public static decimal Total(IEnumerable<BillLineModel> lines) => lines.Sum(l => l.Amount ?? 0m);
 
     /// <summary>Every filled line has a category and an amount, and the total is above zero.</summary>
@@ -41,7 +47,11 @@ public sealed class BillLineModel
     public static BillLineModel From(BillLineDraft draft)
     {
         ArgumentNullException.ThrowIfNull(draft);
-        return new BillLineModel { AccountId = draft.AccountId, Amount = draft.Amount, Description = draft.Description, ItemId = draft.ItemId, Quantity = draft.Quantity };
+        return new BillLineModel
+        {
+            AccountId = draft.AccountId, Amount = draft.Amount, Description = draft.Description, ItemId = draft.ItemId, Quantity = draft.Quantity,
+            ClassId = draft.ClassId, Lots = draft.Lots,
+        };
     }
 
     /// <summary>Accounts a bill line can use, expenses first: anything but receivables and payables.</summary>

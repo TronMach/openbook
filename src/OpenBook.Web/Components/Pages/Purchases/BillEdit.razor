@@ -1,0 +1,187 @@
+@page "/purchases/bills/{Id:guid}/edit"
+@rendermode InteractiveServer
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>Change bill · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Change bill@(_vendor is null ? "" : $" from {_vendor.DisplayName}")</h1>
+        <a class="button secondary" href="/purchases/bills/@Id">Back to the bill</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && (_bill is null || _bill.Status == DocumentStatus.Voided))
+    {
+        <div class="card"><p>Only posted bills can be changed. <a href="/purchases/bills/@Id">Back to the bill</a></p></div>
+    }
+    else if (_loaded && _bill?.PurchaseOrderId is not null)
+    {
+        <div class="card"><p>This bill was entered from a purchase order, so it can't be changed here yet. Void it and enter it from the order again. <a href="/purchases/bills/@Id">Back to the bill</a></p></div>
+    }
+    else if (_loaded && _bill is not null && _vendor is not null)
+    {
+        <p class="muted">Saving reverses the bill's journal entry on its original date and posts the corrected bill, keeping its payments and history. Stock it brought in is received again, which isn't possible once some has been sold or used. Changes in a closed period need the closing date password.</p>
+        @if (_bill.AmountPaid > 0m)
+        {
+            <div class="alert notice" role="status">@Labels.Amount(_bill.AmountPaid) is already paid or credited, so the total can't go below that.</div>
+        }
+        @if (_bill.Approval != BillApproval.NotRequired)
+        {
+            <div class="alert notice" role="status">The approval rules run again when you save: if the bill still needs approval, it waits for someone else to approve it.</div>
+        }
+
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label>Vendor</label>
+                    <div>@_vendor.DisplayName</div>
+                    <span class="hint">To change the vendor, void this bill and enter a new one.</span>
+                </div>
+                <div class="field">
+                    <label for="reference">Bill no. <span class="muted">(the vendor's invoice number, optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Bill date</label>
+                    <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
+                </div>
+                <div class="field">
+                    <label for="due">Due date</label>
+                    <input id="due" type="date" @bind="_dueDate" />
+                </div>
+            </div>
+
+            <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Items="_stockItems" Changed="StateHasChanged" />
+            @if (_marked.Count > 0)
+            {
+                <p class="hint">
+                    Marked billable to a customer, so they stay as they are and where they are:
+                    @string.Join("; ", _marked.Select(m => $"line {m.LineNumber} ({m.Description})")).
+                    Remove the mark on the bill's page first to change one.
+                </p>
+            }
+
+            <LocationField Options="_segments" @bind-Value="_locationId" />
+            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <div class="field" style="margin-top: 1rem">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+            <div class="field">
+                <label for="reason">Why are you changing it?</label>
+                <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="400" />
+                <span class="hint">Kept in the bill's history and the audit log.</span>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save changes</button>
+                <a href="/purchases/bills/@Id">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Bill? _bill;
+    private Vendor? _vendor;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private IReadOnlyList<Item> _stockItems = [];
+    private bool _useNumbers;
+    private string? _reference;
+    private DateOnly _date;
+    private DateOnly _dueDate;
+    private string? _memo;
+    private string? _reason;
+    private List<BillLineModel> _lines = [];
+    private IReadOnlyList<BillableLine> _marked = [];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private SegmentOptions _segments = SegmentOptions.None;
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
+    private Guid? _locationId;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_reason) && BillLineModel.IsComplete(_lines);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _bill = await Ops.RunAsync<BillService, Bill?>(s => s.GetAsync(Id));
+        if (_bill is not null)
+        {
+            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+            (_vendor, _chart, _useNumbers, _marked) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<VendorService>().GetAsync(_bill.VendorId),
+                await sp.GetRequiredService<AccountService>().GetChartAsync(),
+                (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
+                (IReadOnlyList<BillableLine>)(await sp.GetRequiredService<BillableExpenseService>().LinesAsync(BillableSource.Bill, Id)).Where(l => l.Billable is not null).ToList()));
+            _categories = BillLineModel.Categories(_chart);
+            _stockItems = await Ops.RunAsync(async sp =>
+                (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory).ToList());
+
+            _reference = _bill.Reference;
+            _date = _bill.Date;
+            _dueDate = _bill.DueDate;
+            _memo = _bill.Memo;
+            _locationId = _bill.LocationId;
+            _warehouseId = _bill.WarehouseId;
+            _lines = _bill.Lines.OrderBy(l => l.LineNumber).Select(l =>
+            {
+                var model = BillLineModel.From(l.ToDraft());
+                model.OriginalLine = l.LineNumber;
+                return model;
+            }).ToList();
+        }
+
+        _loaded = true;
+    }
+
+    private void ChangeDate(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
+            return;
+        // The due date keeps its distance from the bill date.
+        _dueDate = date.AddDays(_dueDate.DayNumber - _date.DayNumber);
+        _date = date;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var filled = _lines.Where(BillLineModel.IsFilledLine).ToList();
+            var command = new ChangeBillCommand(_date, BillLineModel.Drafts(filled), _reason!, _dueDate, _reference ?? "", _memo, _locationId,
+                WarehouseId: _warehouseId, FromLines: filled.Select(l => l.OriginalLine).ToList());
+            await Ops.RunAsync<BillService, Bill>(s => s.ChangeAsync(Id, command), _closingPassword);
+            Navigation.NavigateTo($"/purchases/bills/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
