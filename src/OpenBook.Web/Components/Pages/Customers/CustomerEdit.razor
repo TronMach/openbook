@@ -7,6 +7,7 @@
 @inject PaymentService Payments
 @inject SalesTaxService Taxes
 @inject PricingService Pricing
+@inject FormDesignService Designs
 @inject NavigationManager Navigation
 
 <PageTitle>@(_customer?.DisplayName ?? $"New {_terms.LowerCustomer}") · OpenBook</PageTitle>
@@ -273,6 +274,28 @@
 
         <Attachments EntityType="customer" EntityId="_customer.Id" />
 
+        @if (_designs.Count(d => d.IsActive) > 1 || _customer.FormDesignId is not null)
+        {
+            <section class="card no-print" id="form-design">
+                <h2>Form design</h2>
+                @if (DesignError is not null)
+                {
+                    <div class="alert error" role="alert">@DesignError</div>
+                }
+                <form method="post" action="/customers/@_customer.Id/form-design" data-enhance="false" class="inline-actions">
+                    <AntiforgeryToken />
+                    <select name="designId" aria-label="Design for this customer's documents">
+                        <option value="">The usual design for each document</option>
+                        @foreach (var design in _designs.Where(d => d.IsActive || d.Id == _customer.FormDesignId))
+                        {
+                            <option value="@design.Id" selected="@(design.Id == _customer.FormDesignId)">@design.Name@(design.IsActive ? "" : " (switched off)")</option>
+                        }
+                    </select>
+                    <button type="submit" class="secondary">Save</button>
+                </form>
+                <p class="hint">Their invoices, estimates, credit memos, sales receipts and statements print with it. <a href="/settings/forms">Designs</a></p>
+            </section>
+        }
         <CustomFieldPanel EntityType="customer" EntityId="_customer.Id" />
 
         <Notes EntityType="customer" EntityId="_customer.Id" />
@@ -283,6 +306,9 @@
     private EditionTerms _terms = EditionTerms.Default;
 
     private Customer? _customer;
+    private IReadOnlyList<OpenBook.Domain.Companies.FormDesign> _designs = [];
+
+    [SupplyParameterFromQuery] private string? DesignError { get; set; }
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<TaxCode> _taxCodes = [];
@@ -320,6 +346,7 @@
             _children = _all.Where(c => _descendants.Contains(c.Customer.Id)).ToList();
             _invoices = await Invoices.ListAsync(id);
             _payments = await Payments.ListAsync(id);
+            _designs = await Designs.ListAsync();
         }
 
         Input ??= _customer is null

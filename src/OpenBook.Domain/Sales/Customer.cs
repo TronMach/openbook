@@ -61,6 +61,11 @@ public sealed class Customer
     /// <summary>Never charge the customer late fees.</summary>
     public bool NoLateFees { get; private set; }
 
+    /// <summary>The form design their documents print with; null = the usual one for each document.</summary>
+    public Guid? FormDesignId { get; private set; }
+
+    public void SetFormDesign(Guid? designId) => FormDesignId = designId == Guid.Empty ? null : designId;
+
     public bool IsActive { get; private set; }
 
     public static Customer Create(CustomerDetails details)

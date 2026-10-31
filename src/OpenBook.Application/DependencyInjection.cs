@@ -80,6 +80,7 @@ public static class DependencyInjection
         services.AddScoped<RecurringInvoiceService>();
         services.AddScoped<ReceivablesService>();
         services.AddScoped<FormService>();
+        services.AddScoped<FormDesignService>();
         services.AddScoped<OpenBook.Application.Purchases.PurchaseOrderForms>();
         services.AddScoped<EmailService>();
         services.AddScoped<CustomerService>();

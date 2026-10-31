@@ -1,100 +1,90 @@
 @page "/settings/forms"
-@using System.ComponentModel.DataAnnotations
 @using OpenBook.Domain.Companies
-@inject CompanySettingsService Settings
-@inject NavigationManager Navigation
+@inject FormDesignService Designs
 
 <PageTitle>Invoice style · OpenBook</PageTitle>
 
-<div class="card">
+<div class="wide">
     <div class="toolbar">
-        <h1>Invoice and form style</h1>
-        <a class="button secondary" href="/settings">Back to settings</a>
+        <h1>Invoice and form designs</h1>
+        <a class="button secondary" href="/settings">Settings</a>
+        <a class="button secondary" href="/audit?entityType=form_style">History</a>
     </div>
-    <p class="muted">The look of PDF invoices, estimates, credit memos, receipts and statements. Your company name, address, email and phone come from Settings.</p>
+    <p class="muted">
+        How printed invoices, estimates, credit memos, sales receipts, statements and purchase orders look. Every document uses the
+        default design, unless another design is chosen for that kind of document or for the customer. Your company name, address,
+        email and phone come from Settings.
+    </p>
 
-    @if (_saved)
+    @if (Error is not null)
     {
-        <div class="alert notice" role="status">
-            Saved.
-            @if (_sampleInvoiceId is { } sample)
-            {
-                <a href="/api/sales/invoices/@sample/pdf" target="_blank">See an invoice with this style</a><text>.</text>
-            }
-        </div>
-    }
-    @if (_error is not null)
-    {
-        <div class="alert error" role="alert">@_error</div>
+        <div class="alert error" role="alert">@Error</div>
     }
 
-    <EditForm Model="Input" FormName="forms" OnValidSubmit="SaveAsync" method="post">
-        <div class="row">
-            <div class="field">
-                <label for="template">Template</label>
-                <InputSelect id="template" @bind-Value="Input.Template">
-                    @foreach (var choice in Enum.GetValues<FormTemplate>())
+    <div class="card">
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Design</th><th>Used for</th><th>Template</th><th>Paper</th><th>Logo</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var design in _designs)
                     {
-                        <option value="@choice">@Labels.For(choice)</option>
+                        <tr class="@(design.IsActive ? null : "inactive")">
+                            <td>
+                                <a href="/settings/forms/@design.Id">@design.Name</a>
+                                @if (design.IsDefault)
+                                {
+                                    <span class="badge ok">Default</span>
+                                }
+                            </td>
+                            <td>@UsedFor(design)</td>
+                            <td class="muted">@Labels.For(design.Template)</td>
+                            <td class="muted">@design.PaperSize</td>
+                            <td class="muted">@(design.Logo is null ? "" : "Yes")</td>
+                            <td class="muted">@(design.IsActive ? "" : "Switched off")</td>
+                        </tr>
                     }
-                </InputSelect>
-            </div>
-            <div class="field">
-                <label for="color">Accent color</label>
-                <input id="color" name="Input.AccentColor" type="color" value="@Input.AccentColor" />
-            </div>
+                </tbody>
+            </table>
         </div>
-        <div class="field">
-            <label for="footer">Footer <span class="muted">(optional)</span></label>
-            <InputTextArea id="footer" rows="3" @bind-Value="Input.Footer" />
-            <span class="hint">Printed at the bottom of every page, e.g. how to pay: bank details, or "Make checks payable to…".</span>
-        </div>
-        <button type="submit">Save</button>
-    </EditForm>
+    </div>
+
+    <div class="card">
+        <h2>New design</h2>
+        <form method="post" action="/settings/forms/new" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Name</label>
+                    <input id="name" name="name" required maxlength="@FormDesign.MaxNameLength" placeholder="e.g. Quotes, or Acme's invoices" />
+                </div>
+                <div class="field">
+                    <label for="copyFrom">Start from</label>
+                    <select id="copyFrom" name="copyFrom">
+                        <option value="">A blank design</option>
+                        @foreach (var design in _designs)
+                        {
+                            <option value="@design.Id" selected="@design.IsDefault">A copy of @design.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <button type="submit">Create</button>
+        </form>
+    </div>
 </div>
 
 @code {
-    private bool _saved;
-    private string? _error;
-    private Guid? _sampleInvoiceId;
+    private IReadOnlyList<FormDesign> _designs = [];
 
-    [SupplyParameterFromForm(FormName = "forms")]
-    private StyleModel Input { get; set; } = default!;
+    [SupplyParameterFromQuery] private string? Error { get; set; }
 
-    [SupplyParameterFromQuery(Name = "saved")]
-    private bool Saved { get; set; }
+    protected override async Task OnInitializedAsync() => _designs = await Designs.ListAsync();
 
-    [Inject]
-    private InvoiceService Invoices { get; set; } = default!;
-
-    protected override async Task OnInitializedAsync()
+    private static string UsedFor(FormDesign design)
     {
-        var company = await Settings.GetAsync();
-        Input ??= new StyleModel { Template = company.FormTemplate, AccentColor = company.FormAccentColor, Footer = company.FormFooter };
-        _saved = Saved;
-        if (_saved)
-            _sampleInvoiceId = (await Invoices.ListAsync()).FirstOrDefault()?.Id;
-    }
-
-    private async Task SaveAsync()
-    {
-        try
-        {
-            await Settings.UpdateFormStyleAsync(Input.Template, Input.AccentColor, Input.Footer);
-            Navigation.NavigateTo("/settings/forms?saved=true");
-        }
-        catch (DomainException ex)
-        {
-            _error = ex.Message;
-        }
-    }
-
-    private sealed class StyleModel
-    {
-        public FormTemplate Template { get; set; }
-        public string? AccentColor { get; set; } = Company.DefaultAccentColor;
-
-        [StringLength(1000)]
-        public string? Footer { get; set; }
+        var documents = FormDesign.Each(design.DefaultFor).Select(FormDesign.Label).ToList();
+        if (design.IsDefault)
+            documents.Insert(0, documents.Count == 0 ? "Everything" : "Everything else");
+        return documents.Count == 0 ? "Customers who have it" : string.Join(", ", documents);
     }
 }

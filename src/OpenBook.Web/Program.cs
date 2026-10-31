@@ -139,6 +139,7 @@ app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
 app.MapDocumentEndpoints();
 app.MapCustomFieldEndpoints();
+app.MapFormDesignEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

@@ -69,14 +69,6 @@ public sealed class Company
     public string? Address { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public FormTemplate FormTemplate { get; private set; }
-
-    /// <summary>Accent color for sales forms, as "#rrggbb".</summary>
-    public string FormAccentColor { get; private set; } = DefaultAccentColor;
-
-    /// <summary>Printed at the bottom of invoices and other forms, e.g. payment instructions.</summary>
-    public string? FormFooter { get; private set; }
-
     /// <summary>How prices changed by levels, quantity breaks and rules are rounded, unless the deciding rule says otherwise.</summary>
     public PriceRounding PriceRounding { get; private set; } = PriceRounding.Cent;
 
@@ -153,18 +145,6 @@ public sealed class Company
     }
 
     public void SetAccountNumbering(bool enabled) => UseAccountNumbers = enabled;
-
-    public void SetFormStyle(FormTemplate template, string? accentColor, string? footer)
-    {
-        if (!Enum.IsDefined(template))
-            throw new DomainException("company.template_invalid", "Unknown form template.");
-        var color = string.IsNullOrWhiteSpace(accentColor) ? DefaultAccentColor : accentColor.Trim().ToLowerInvariant();
-        if (color.Length != 7 || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
-            throw new DomainException("company.color_invalid", "Enter the accent color as #rrggbb.");
-        FormTemplate = template;
-        FormAccentColor = color;
-        FormFooter = Text.Optional(footer, 1000, "company.footer_too_long", "Footer");
-    }
 
     /// <param name="passwordHash">Null keeps the current password; use <see cref="ClearClosingPassword"/> to remove it.</param>
     public void SetClosingDate(DateOnly? closingDate, string? passwordHash)

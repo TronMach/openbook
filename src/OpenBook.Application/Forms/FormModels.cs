@@ -5,7 +5,24 @@ namespace OpenBook.Application.Forms;
 /// <summary>Who a form is from or to.</summary>
 public sealed record FormParty(string Name, string? Address = null, string? Email = null, string? Phone = null);
 
-public sealed record FormStyle(FormTemplate Template, string AccentColor, string? Footer);
+public sealed record FormLogo(byte[] Content, FormLogoPosition Position, FormLogoSize Size);
+
+/// <summary>How a form looks: from a <see cref="FormDesign"/> (<see cref="From"/>).</summary>
+/// <param name="FontKey">The font family to print with; null = the built-in sans-serif.</param>
+/// <param name="ColumnLabels">Line table headings; empty ones keep the usual words.</param>
+public sealed record FormStyle(
+    FormTemplate Template, string AccentColor, string? Footer, FormPaperSize PaperSize = FormPaperSize.Letter, FormLogo? Logo = null,
+    string? FontKey = null, bool ShowQuantityAndRate = true, FormColumnLabels? ColumnLabels = null)
+{
+    public static FormStyle From(FormDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        return new FormStyle(
+            design.Template, design.AccentColor, design.Footer, design.PaperSize,
+            design.Logo is { } logo ? new FormLogo(logo, design.LogoPosition, design.LogoSize) : null,
+            design.FontKey, design.ShowQuantityAndRate, design.ColumnLabels);
+    }
+}
 
 /// <param name="Quantity">Null for notes and discount lines.</param>
 public enum FormLineStyle
@@ -32,6 +49,7 @@ public sealed record FormTotal(string Label, decimal Amount, bool Emphasis = fal
 /// <param name="Facts">Label/value pairs under the title: date, due date, terms…</param>
 /// <param name="PartyLabel">The heading over the other party ("BILL TO"; "VENDOR" on a purchase order).</param>
 /// <param name="ExtraColumns">Custom field columns between the description and the quantity.</param>
+/// <param name="ShipTo">Where the goods go, beside the bill-to party; null leaves it out.</param>
 public sealed record SalesForm(
     string Title,
     string Number,
@@ -44,7 +62,8 @@ public sealed record SalesForm(
     string Currency,
     FormStyle Style,
     string PartyLabel = "BILL TO",
-    IReadOnlyList<string>? ExtraColumns = null);
+    IReadOnlyList<string>? ExtraColumns = null,
+    FormParty? ShipTo = null);
 
 public sealed record StatementFormLine(DateOnly Date, string Activity, string Reference, decimal Amount, decimal Balance);
 
@@ -58,7 +77,9 @@ public sealed record StatementForm(
     decimal ClosingBalance,
     IReadOnlyList<(string Label, decimal Amount)> Aging,
     string Currency,
-    FormStyle Style);
+    FormStyle Style,
+    string Title = "Statement",
+    string? Message = null);
 
 /// <summary>One check: the check itself plus two stubs (yours and the payee's), voucher style.</summary>
 /// <param name="StubLines">What it pays for, e.g. each bill a bill payment covers.</param>

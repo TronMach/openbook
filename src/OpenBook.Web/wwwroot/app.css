@@ -193,6 +193,11 @@ details.presets summary { cursor: pointer; color: var(--accent); font-weight: 60
 .row.wrap { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
 .row.wrap .wide-field { grid-column: 1 / -1; }
 .pre-line { white-space: pre-line; }
+.design-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.design-preview { position: sticky; top: 1rem; }
+.design-preview iframe { width: 100%; height: 78vh; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.inline-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 900px) { .design-editor { grid-template-columns: 1fr; } .design-preview { position: static; } .design-preview iframe { height: 60vh; } }
 table.data { width: 100%; border-collapse: collapse; background: var(--surface); }
 table.data th, table.data td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 table.data th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 600; }

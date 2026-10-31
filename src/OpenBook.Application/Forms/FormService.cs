@@ -20,7 +20,7 @@ public enum FormKind
 public sealed record RenderedForm(string FileName, byte[] Pdf, Guid CustomerId, string Title);
 
 /// <summary>Builds printable invoices, estimates, credit memos, sales receipts and statements, and renders them to PDF.</summary>
-public sealed class FormService(ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer, CustomFields.CustomFieldService customFields)
+public sealed class FormService(ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer, CustomFields.CustomFieldService customFields, FormDesignService designs)
 {
     public async Task<RenderedForm> RenderAsync(FormKind kind, Guid id, CancellationToken ct = default)
     {
@@ -42,8 +42,18 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             FormKind.CreditMemo => await CreditMemoAsync(company, id, ct),
             _ => await ReceiptAsync(company, id, ct),
         };
-        return (await customFields.DecorateAsync(form, id, ct), customerId);
+        var document = Document(kind);
+        var design = await designs.ForAsync(document, customerId == Guid.Empty ? null : customerId, ct);
+        return (await customFields.DecorateAsync(FormDesignService.Apply(form, design, document), id, ct), customerId);
     }
+
+    public static FormDocuments Document(FormKind kind) => kind switch
+    {
+        FormKind.Invoice => FormDocuments.Invoice,
+        FormKind.Estimate => FormDocuments.Estimate,
+        FormKind.CreditMemo => FormDocuments.CreditMemo,
+        _ => FormDocuments.SalesReceipt,
+    };
 
     public async Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
@@ -60,8 +70,9 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             statement.ClosingBalance,
             [("Current", aging.Current), ("1–30 days", aging.Days1To30), ("31–60 days", aging.Days31To60), ("61–90 days", aging.Days61To90), ("Over 90 days", aging.Over90)],
             company.HomeCurrency.Code,
-            Style(company));
-        return new RenderedForm(FileName(company, "Statement", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), renderer.Render(form), customerId,
+            Unstyled);
+        form = FormDesignService.Apply(form, await designs.ForAsync(FormDocuments.Statement, customerId, ct));
+        return new RenderedForm(FileName(company, form.Title, to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), renderer.Render(form), customerId,
             $"Statement {to.ToString("d", CultureInfo.CurrentCulture)}");
     }
 
@@ -121,14 +132,15 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         List<FormTotal> totals = [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)];
         AddSavings(totals, receipt.Lines);
         var form = new SalesForm("Sales receipt", receipt.Number, CompanyParty(company), party, facts, Lines(receipt.Lines),
-            totals, receipt.Memo, company.HomeCurrency.Code, Style(company));
+            totals, receipt.Memo, company.HomeCurrency.Code, Unstyled, ShipTo: customer is null ? null : ShipToParty(customer));
         return (form, customer?.Id ?? Guid.Empty);
     }
 
     private static SalesForm Form(
         Company company, Customer customer, string title, string number, IReadOnlyList<(string, string)> facts,
         IEnumerable<SalesLine> lines, IReadOnlyList<FormTotal> totals, string? message) =>
-        new(title, number, CompanyParty(company), CustomerParty(customer), facts, Lines(lines), totals, message, company.HomeCurrency.Code, Style(company));
+        new(title, number, CompanyParty(company), CustomerParty(customer), facts, Lines(lines), totals, message, company.HomeCurrency.Code, Unstyled,
+            ShipTo: ShipToParty(customer));
 
     /// <summary>
     /// What price levels, quantity breaks and rules took off the list prices (manual prices don't count), rounded to the
@@ -177,7 +189,12 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
     internal static FormParty CustomerParty(Customer c) =>
         new(c.CompanyName is { } company && company != c.DisplayName ? $"{c.DisplayName}\n{company}" : c.DisplayName, c.BillingAddress, c.Email, c.Phone);
 
-    internal static FormStyle Style(Company c) => new(c.FormTemplate, c.FormAccentColor, c.FormFooter);
+    /// <summary>Forms are built with this, then <see cref="FormDesignService.Apply(SalesForm, FormDesign, FormDocuments)"/> gives them their design's look.</summary>
+    internal static readonly FormStyle Unstyled = new(FormTemplate.Classic, Company.DefaultAccentColor, null);
+
+    /// <summary>The customer's shipping address, when they have one.</summary>
+    internal static FormParty? ShipToParty(Customer c) =>
+        c.ShippingAddress is { } address ? new FormParty(c.CompanyName ?? c.DisplayName, address) : null;
 
     private static string D(DateOnly date) => date.ToString("d", CultureInfo.CurrentCulture);
 

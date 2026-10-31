@@ -19,7 +19,7 @@ public sealed record SetUpCompanyCommand(
     Edition Edition = Edition.General);
 
 /// <summary>First-run wizard: creates the company and its owner in one save.</summary>
-public sealed class CompanySetupService(ICompanyStore store, IPasswordHasher hasher, IClock clock)
+public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignStore designs, IPasswordHasher hasher, IClock clock)
 {
     public async Task<bool> IsSetUpAsync(CancellationToken ct = default) => await store.GetCompanyAsync(ct) is not null;
 
@@ -46,6 +46,8 @@ public sealed class CompanySetupService(ICompanyStore store, IPasswordHasher has
         var owner = User.Create(command.Username, hasher.Hash(command.Password), now);
 
         store.Add(company);
+        // Documents print with this until other designs are made; saved with the company.
+        designs.Add(FormDesign.Create(new FormDesignDetails(Forms.FormDesignService.DefaultName), now, isDefault: true));
         store.Add(owner);
         store.Add(AuditRecord.Create(now, owner.Username, AuditAction.Created, "company", company.Id, null, JsonSerializer.Serialize(new
         {

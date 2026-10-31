@@ -425,10 +425,13 @@ internal static class ReceivablesApi
             await s.SendTestAsync(r.To, ct);
             return Results.NoContent();
         });
-        api.MapPut("/settings/forms", async (FormStyleRequest r, CompanySettingsService s, CancellationToken ct) =>
+        // The default design's template, color and footer (the rest of it is kept); /api/settings/form-designs has everything.
+        api.MapPut("/settings/forms", async (FormStyleRequest r, FormDesignService s, CancellationToken ct) =>
         {
-            var c = await s.UpdateFormStyleAsync(r.Template, r.AccentColor, r.Footer, ct);
-            return new { c.FormTemplate, c.FormAccentColor, c.FormFooter };
+            var design = (await s.ListAsync(ct)).FirstOrDefault(d => d.IsDefault)
+                ?? await s.CreateAsync(new FormDesignDetails(FormDesignService.DefaultName), ct: ct);
+            var d = await s.UpdateAsync(design.Id, design.ToDetails() with { Template = r.Template, AccentColor = r.AccentColor, Footer = r.Footer }, ct);
+            return new { FormTemplate = d.Template, FormAccentColor = d.AccentColor, FormFooter = d.Footer };
         });
     }
 

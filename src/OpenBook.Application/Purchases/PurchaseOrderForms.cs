@@ -4,13 +4,14 @@ using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
 
 /// <summary>Purchase orders as PDF (the company's form style) and emailed to the vendor.</summary>
 public sealed class PurchaseOrderForms(
-    IPurchasesStore store, ICompanyStore companies, IFormRenderer renderer, EmailService email, CustomFields.CustomFieldService customFields, IClock clock, ICurrentUser user)
+    IPurchasesStore store, ICompanyStore companies, IFormRenderer renderer, EmailService email, CustomFields.CustomFieldService customFields, FormDesignService designs, IClock clock, ICurrentUser user)
 {
     public async Task<RenderedForm> RenderAsync(Guid id, CancellationToken ct = default)
     {
@@ -29,9 +30,10 @@ public sealed class PurchaseOrderForms(
         var party = new FormParty(vendor.CompanyName is { } name && name != vendor.DisplayName ? $"{vendor.DisplayName}\n{name}" : vendor.DisplayName,
             vendor.Address, vendor.Email, vendor.Phone);
         var form = new SalesForm("Purchase order", order.Number, FormService.CompanyParty(company), party, facts, lines,
-            [new FormTotal("Total", order.Total, Emphasis: true)], order.Memo, company.HomeCurrency.Code, FormService.Style(company), PartyLabel: "VENDOR");
+            [new FormTotal("Total", order.Total, Emphasis: true)], order.Memo, company.HomeCurrency.Code, FormService.Unstyled, PartyLabel: "VENDOR");
+        form = FormDesignService.Apply(form, await designs.ForAsync(FormDocuments.PurchaseOrder, ct: ct), FormDocuments.PurchaseOrder);
         form = await customFields.DecorateAsync(form, order.Id, ct);
-        return new RenderedForm(FormService.FileName(company, "Purchase order", order.Number), renderer.Render(form), Guid.Empty, $"Purchase order {order.Number}");
+        return new RenderedForm(FormService.FileName(company, form.Title, order.Number), renderer.Render(form), Guid.Empty, $"{form.Title} {order.Number}");
     }
 
     public async Task<EmailDraft> DraftAsync(Guid id, CancellationToken ct = default)

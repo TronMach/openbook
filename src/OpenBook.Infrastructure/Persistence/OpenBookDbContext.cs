@@ -78,6 +78,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Documents.DocumentItemCode> DocumentItemCodes => Set<OpenBook.Domain.Documents.DocumentItemCode>();
     public DbSet<OpenBook.Domain.Documents.DocumentReadingSettings> DocumentReadingSettings => Set<OpenBook.Domain.Documents.DocumentReadingSettings>();
     public DbSet<OpenBook.Domain.CustomFields.CustomField> CustomFields => Set<OpenBook.Domain.CustomFields.CustomField>();
+    public DbSet<FormDesign> FormDesigns => Set<FormDesign>();
     public DbSet<OpenBook.Domain.CustomFields.CustomFieldValue> CustomFieldValues => Set<OpenBook.Domain.CustomFields.CustomFieldValue>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
@@ -271,9 +272,6 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.DefaultReportBasis).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.Edition).HasConversion<string>().HasMaxLength(30);
             b.Property(c => c.ClosingPasswordHash).HasMaxLength(500);
-            b.Property(c => c.FormTemplate).HasConversion<string>().HasMaxLength(20);
-            b.Property(c => c.FormAccentColor).HasMaxLength(7);
-            b.Property(c => c.FormFooter).HasMaxLength(1000);
             b.Property(c => c.PriceRounding).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.LocationLabel).HasMaxLength(30);
         });
@@ -1117,6 +1115,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.ExemptionCertificate).HasMaxLength(50);
             b.Property(c => c.ExemptionReason).HasConversion<string>().HasMaxLength(20);
             b.HasOne<PriceLevel>().WithMany().HasForeignKey(c => c.PriceLevelId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<FormDesign>().WithMany().HasForeignKey(c => c.FormDesignId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Customer>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -1686,6 +1685,37 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.ProtectedApiKey).HasMaxLength(2000);
             b.Property(s => s.Model).HasMaxLength(100);
             b.Ignore(s => s.IsReady);
+        });
+
+        modelBuilder.Entity<FormDesign>(b =>
+        {
+            b.ToTable("FormDesigns");
+            b.HasKey(d => d.Id);
+            b.Property(d => d.Name).HasMaxLength(FormDesign.MaxNameLength);
+            b.HasIndex(d => d.Name).IsUnique();
+            b.Property(d => d.Template).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.AccentColor).HasMaxLength(7);
+            b.Property(d => d.Footer).HasMaxLength(1000);
+            b.Property(d => d.FontKey).HasMaxLength(FormDesign.MaxFontKeyLength);
+            b.Property(d => d.PaperSize).HasConversion<string>().HasMaxLength(10);
+            b.Property(d => d.LogoContentType).HasMaxLength(20);
+            b.Property(d => d.LogoPosition).HasConversion<string>().HasMaxLength(10);
+            b.Property(d => d.LogoSize).HasConversion<string>().HasMaxLength(10);
+            b.Property(d => d.DescriptionLabel).HasMaxLength(FormColumnLabels.MaxLength);
+            b.Property(d => d.QuantityLabel).HasMaxLength(FormColumnLabels.MaxLength);
+            b.Property(d => d.RateLabel).HasMaxLength(FormColumnLabels.MaxLength);
+            b.Property(d => d.AmountLabel).HasMaxLength(FormColumnLabels.MaxLength);
+            b.Ignore(d => d.ColumnLabels);
+            b.OwnsMany(d => d.Texts, t =>
+            {
+                t.ToTable("FormDesignTexts");
+                t.WithOwner().HasForeignKey("FormDesignId");
+                t.Property(x => x.Document).HasConversion<string>().HasMaxLength(20);
+                t.HasKey("FormDesignId", nameof(FormDesignText.Document));
+                t.Property(x => x.Title).HasMaxLength(FormDesignText.MaxTitleLength);
+                t.Property(x => x.Message).HasMaxLength(FormDesignText.MaxMessageLength);
+            });
+            b.Navigation(d => d.Texts).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.CustomFields.CustomField>(b =>

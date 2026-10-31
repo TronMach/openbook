@@ -364,7 +364,11 @@ public sealed class ReceivablesFlowTests : IAsyncLifetime
     [InlineData(FormTemplate.Compact)]
     public async Task Forms_render_as_pdf_in_every_template(FormTemplate template)
     {
-        await In<CompanySettingsService, Company>(s => s.UpdateFormStyleAsync(template, "#335577", "Pay by bank transfer"));
+        await In<FormDesignService, FormDesign>(async s =>
+        {
+            var design = (await s.ListAsync()).Single(d => d.IsDefault);
+            return await s.UpdateAsync(design.Id, design.ToDetails() with { Template = template, AccentColor = "#335577", Footer = "Pay by bank transfer" });
+        });
         var invoice = await Invoice(_acme, 2m, null, new SalesLineDraft(null, "Thanks!", 0m, 0m));
         var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, Mar1, [Consulting(1m)])));
 

@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Capture.ICaptureStore, EfCaptureStore>();
         services.AddScoped<OpenBook.Application.Documents.IDocumentStore, EfDocumentStore>();
         services.AddScoped<OpenBook.Application.CustomFields.ICustomFieldStore, EfCustomFieldStore>();
+        services.AddScoped<OpenBook.Application.Forms.IFormDesignStore, EfFormDesignStore>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IDataExporter, DataExporter>();
         services.AddSingleton<OpenBook.Application.Webhooks.IWebhookSender, HttpWebhookSender>();

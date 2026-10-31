@@ -1286,20 +1286,6 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<int>("FiscalYearStartMonth")
                         .HasColumnType("integer");
 
-                    b.Property<string>("FormAccentColor")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
-
-                    b.Property<string>("FormFooter")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("FormTemplate")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
                     b.Property<string>("HomeCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -1387,6 +1373,102 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("EmailSettings", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Companies.FormDesign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccentColor")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("AmountLabel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DefaultFor")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DescriptionLabel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("FontKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Footer")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<byte[]>("Logo")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("LogoContentType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("LogoPosition")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("LogoSize")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("PaperSize")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("QuantityLabel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RateLabel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("ShowQuantityAndRate")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowShipTo")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowTerms")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Template")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("FormDesigns", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Companies.User", b =>
@@ -4265,6 +4347,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("FormDesignId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -4302,6 +4387,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("DisplayName")
                         .IsUnique();
+
+                    b.HasIndex("FormDesignId");
 
                     b.HasIndex("ParentId");
 
@@ -6168,6 +6255,36 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Companies.FormDesign", b =>
+                {
+                    b.OwnsMany("OpenBook.Domain.Companies.FormDesignText", "Texts", b1 =>
+                        {
+                            b1.Property<Guid>("FormDesignId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Document")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Message")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)");
+
+                            b1.Property<string>("Title")
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)");
+
+                            b1.HasKey("FormDesignId", "Document");
+
+                            b1.ToTable("FormDesignTexts", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("FormDesignId");
+                        });
+
+                    b.Navigation("Texts");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Companies.UserSession", b =>
@@ -8138,6 +8255,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Sales.Customer", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Companies.FormDesign", null)
+                        .WithMany()
+                        .HasForeignKey("FormDesignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Sales.Customer", null)
                         .WithMany()
                         .HasForeignKey("ParentId")

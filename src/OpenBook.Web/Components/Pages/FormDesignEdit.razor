@@ -1,0 +1,232 @@
+@page "/settings/forms/{Id:guid}"
+@using OpenBook.Domain.Companies
+@inject FormDesignService Designs
+
+<PageTitle>@(_design?.Name ?? "Design") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_design is null)
+    {
+        <h1>Design</h1>
+        <p>There's no such design. <a href="/settings/forms">All designs</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_design.Name</h1>
+            @if (_design.IsDefault)
+            {
+                <span class="badge ok">Default</span>
+            }
+            <a class="button secondary" href="/settings/forms">All designs</a>
+            <a class="button secondary" href="/audit?entityType=form_style&entityId=@_design.Id">History</a>
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (Done is "saved" or "created")
+        {
+            <div class="alert notice" role="status">@(Done == "created" ? "Created. Change it below; the preview follows as you type." : "Saved.")</div>
+        }
+        @if (!_design.IsActive)
+        {
+            <div class="alert notice" role="status">This design is switched off: nothing prints with it.</div>
+        }
+
+        <div class="design-editor">
+            <div>
+                <form method="post" action="/settings/forms/@_design.Id" data-enhance="false" data-preview="design-preview" data-logo="@(_design.Logo is null ? "" : _design.Id.ToString())" class="card">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field">
+                            <label for="name">Name</label>
+                            <input id="name" name="name" required maxlength="@FormDesign.MaxNameLength" value="@_design.Name" />
+                        </div>
+                        <div class="field">
+                            <label for="template">Template</label>
+                            <select id="template" name="template">
+                                @foreach (var choice in Enum.GetValues<FormTemplate>())
+                                {
+                                    <option value="@choice" selected="@(choice == _design.Template)">@Labels.For(choice)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="color">Accent color</label>
+                            <input id="color" name="accentColor" type="color" value="@_design.AccentColor" />
+                        </div>
+                        <div class="field">
+                            <label for="paper">Paper</label>
+                            <select id="paper" name="paperSize">
+                                <option value="@FormPaperSize.Letter" selected="@(_design.PaperSize == FormPaperSize.Letter)">US Letter</option>
+                                <option value="@FormPaperSize.A4" selected="@(_design.PaperSize == FormPaperSize.A4)">A4</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="logoPosition">Logo</label>
+                            <select id="logoPosition" name="logoPosition">
+                                <option value="@FormLogoPosition.Left" selected="@(_design.LogoPosition == FormLogoPosition.Left)">Above the company name</option>
+                                <option value="@FormLogoPosition.Right" selected="@(_design.LogoPosition == FormLogoPosition.Right)">Above the title, on the right</option>
+                                <option value="@FormLogoPosition.Center" selected="@(_design.LogoPosition == FormLogoPosition.Center)">Centered at the top</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="logoSize">Logo size</label>
+                            <select id="logoSize" name="logoSize">
+                                @foreach (var size in Enum.GetValues<FormLogoSize>())
+                                {
+                                    <option value="@size" selected="@(size == _design.LogoSize)">@size</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <fieldset>
+                        <legend>What's shown</legend>
+                        <label class="check"><input type="checkbox" name="showShipTo" value="true" checked="@_design.ShowShipTo" /> <span>The customer's shipping address, beside the bill-to address</span></label>
+                        <label class="check"><input type="checkbox" name="showTerms" value="true" checked="@_design.ShowTerms" /> <span>Due date and terms</span></label>
+                        <label class="check"><input type="checkbox" name="showQuantityAndRate" value="true" checked="@_design.ShowQuantityAndRate" /> <span>Quantity and rate columns <span class="muted">(off: only the amount)</span></span></label>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Column headings <span class="muted">(blank keeps the usual word)</span></legend>
+                        <div class="row wrap">
+                            <div class="field"><label for="ld">Description</label><input id="ld" name="labelDescription" maxlength="@FormColumnLabels.MaxLength" value="@_design.DescriptionLabel" placeholder="Description" /></div>
+                            <div class="field"><label for="lq">Quantity</label><input id="lq" name="labelQuantity" maxlength="@FormColumnLabels.MaxLength" value="@_design.QuantityLabel" placeholder="Qty" /></div>
+                            <div class="field"><label for="lr">Rate</label><input id="lr" name="labelRate" maxlength="@FormColumnLabels.MaxLength" value="@_design.RateLabel" placeholder="Rate" /></div>
+                            <div class="field"><label for="la">Amount</label><input id="la" name="labelAmount" maxlength="@FormColumnLabels.MaxLength" value="@_design.AmountLabel" placeholder="Amount" /></div>
+                        </div>
+                    </fieldset>
+
+                    <div class="field">
+                        <label for="footer">Footer <span class="muted">(optional)</span></label>
+                        <textarea id="footer" name="footer" rows="3" maxlength="1000">@_design.Footer</textarea>
+                        <span class="hint">Printed at the bottom of every page, e.g. how to pay: bank details, or "Make checks payable to…".</span>
+                    </div>
+
+                    <fieldset>
+                        <legend>Titles and messages <span class="muted">(blank keeps the usual title and adds no message)</span></legend>
+                        @foreach (var document in FormDesign.Each(FormDesign.AllDocuments))
+                        {
+                            var usual = FormDesignService.UsualTitle(document);
+                            <div class="row">
+                                <div class="field">
+                                    <label for="title-@document">@usual title</label>
+                                    <input id="title-@document" name="title:@document" maxlength="@FormDesignText.MaxTitleLength" placeholder="@usual" value="@(_design.TitleFor(document, usual) is var t && t != usual ? t : null)" />
+                                </div>
+                                <div class="field">
+                                    <label for="message-@document">Message on every @usual.ToLowerInvariant()</label>
+                                    <textarea id="message-@document" name="message:@document" rows="2" maxlength="@FormDesignText.MaxMessageLength">@_design.MessageFor(document)</textarea>
+                                </div>
+                            </div>
+                        }
+                    </fieldset>
+                    <button type="submit">Save design</button>
+                </form>
+
+                <div class="card">
+                    <h2>Logo</h2>
+                    @if (_design.Logo is not null)
+                    {
+                        <p class="muted">A @(_design.LogoContentType == "image/png" ? "PNG" : "JPEG") of @((_design.Logo.Length / 1024.0).ToString("0")) KB. Uploading another replaces it.</p>
+                    }
+                    else
+                    {
+                        <p class="muted">A PNG or JPEG of at most 1 MB. A wide logo on a white or transparent background prints best.</p>
+                    }
+                    <form method="post" action="/settings/forms/@_design.Id/logo" enctype="multipart/form-data" data-enhance="false" class="inline-actions">
+                        <AntiforgeryToken />
+                        <input type="file" name="logo" accept="image/png,image/jpeg" required />
+                        <button type="submit" class="secondary">Upload</button>
+                    </form>
+                    @if (_design.Logo is not null)
+                    {
+                        <form method="post" action="/settings/forms/@_design.Id/logo/remove" data-enhance="false">
+                            <AntiforgeryToken />
+                            <button type="submit" class="link">Remove the logo</button>
+                        </form>
+                    }
+                </div>
+
+                <div class="card">
+                    <h2>Where it's used</h2>
+                    @if (_design.IsDefault)
+                    {
+                        <p class="muted">This is the default design: documents print with it unless another design is chosen below or for the customer.</p>
+                    }
+                    else if (_design.IsActive)
+                    {
+                        <form method="post" action="/settings/forms/@_design.Id/default" data-enhance="false">
+                            <AntiforgeryToken />
+                            <button type="submit" class="secondary">Make it the default</button>
+                        </form>
+                    }
+                    @if (_design.IsActive)
+                    {
+                        <form method="post" action="/settings/forms/@_design.Id/documents" data-enhance="false">
+                            <AntiforgeryToken />
+                            <p>Use it for every:</p>
+                            <ul class="check-list">
+                                @foreach (var document in FormDesign.Each(FormDesign.AllDocuments))
+                                {
+                                    var other = _designs.FirstOrDefault(d => d.Id != _design.Id && d.DefaultFor.HasFlag(document));
+                                    <li>
+                                        <label class="check">
+                                            <input type="checkbox" name="doc" value="@document" checked="@_design.DefaultFor.HasFlag(document)" />
+                                            <span>@FormDesignService.UsualTitle(document).ToLowerInvariant()@if (other is not null) { <span class="muted"> (now @other.Name)</span> }</span>
+                                        </label>
+                                    </li>
+                                }
+                            </ul>
+                            <button type="submit" class="secondary">Save</button>
+                        </form>
+                        <p class="muted">To use it for one customer's documents, choose it on the customer's page.</p>
+                    }
+                    @if (!_design.IsDefault)
+                    {
+                        <form method="post" action="/settings/forms/@_design.Id/active" data-enhance="false">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="active" value="@(_design.IsActive ? "false" : "true")" />
+                            <button type="submit" class="secondary">@(_design.IsActive ? "Switch it off" : "Switch it on")</button>
+                        </form>
+                    }
+                </div>
+            </div>
+
+            <div class="design-preview">
+                <div class="toolbar">
+                    <h2>Preview</h2>
+                    <select id="design-preview-document" aria-label="Document to preview" data-preview-document="design-preview">
+                        @foreach (var document in FormDesign.Each(FormDesign.AllDocuments))
+                        {
+                            <option value="@document">@FormDesignService.UsualTitle(document)</option>
+                        }
+                    </select>
+                </div>
+                <iframe id="design-preview" title="Preview of a sample document with these settings" src="@PreviewUrl()"></iframe>
+                <p class="muted">A sample document with your company's details. It follows the settings as you change them; nothing is saved until you press Save design.</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private FormDesign? _design;
+    private IReadOnlyList<FormDesign> _designs = [];
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _designs = await Designs.ListAsync();
+        _design = _designs.FirstOrDefault(d => d.Id == Id);
+    }
+
+    /// <summary>The first preview, from the saved design; forms.js replaces it from the form as it changes.</summary>
+    private string PreviewUrl() => $"/settings/forms/preview?design={_design!.Id}&document={FormDocuments.Invoice}";
+}

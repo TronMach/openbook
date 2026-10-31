@@ -34,20 +34,32 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var (document, section) = NewDocument(look, form.Style.Footer);
 
         Header(section, look, form.Company, $"{form.Title.ToUpperInvariant()} {form.Number}", form.Facts);
-        BillTo(section, look, form.Customer, form.PartyLabel);
+        Parties(section, look, form.Customer, form.PartyLabel, form.ShipTo);
 
         // Custom field columns sit between the description and the quantity, taking their room from the description.
         var extra = form.ExtraColumns ?? [];
-        var table = Table(section, look, [Math.Max(5 - (1.2 * extra.Count), 2), .. extra.Select(_ => 1.2), 1, 1.4, 1.4]);
-        Heading(table, look, [("Description", false), .. extra.Select(c => (c, false)), ("Qty", true), ("Rate", true), ("Amount", true)]);
+        var labels = form.Style.ColumnLabels ?? new FormColumnLabels();
+        var counts = form.Style.ShowQuantityAndRate;
+        var table = Table(section, look, [Math.Max((counts ? 5 : 7.4) - (1.2 * extra.Count), 2), .. extra.Select(_ => 1.2), .. counts ? new[] { 1, 1.4 } : [], 1.4]);
+        Heading(table, look,
+        [
+            (labels.Description ?? "Description", false), .. extra.Select(c => (c, false)),
+            .. counts ? new[] { (labels.Quantity ?? "Qty", true), (labels.Rate ?? "Rate", true) } : [],
+            (labels.Amount ?? "Amount", true),
+        ]);
         foreach (var line in form.Lines)
         {
             var row = Body(table, 1 + extra.Count,
             [
                 line.Description ?? "",
                 .. extra.Select((_, i) => line.Extra is { } values && i < values.Count ? values[i] : ""),
-                line.Quantity is { } q ? q.ToString("0.####", CultureInfo.CurrentCulture) : "",
-                line.Rate is { } r ? r.ToString("#,0.00##", CultureInfo.CurrentCulture) : "",
+                .. counts
+                    ? new[]
+                    {
+                        line.Quantity is { } q ? q.ToString("0.####", CultureInfo.CurrentCulture) : "",
+                        line.Rate is { } r ? r.ToString("#,0.00##", CultureInfo.CurrentCulture) : "",
+                    }
+                    : [],
                 line.Amount is { } a ? Amount(a) : "",
             ]);
             if (line.Style != FormLineStyle.Normal)
@@ -74,7 +86,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var (document, section) = NewDocument(look, form.Style.Footer);
         var facts = new List<(string, string)> { ("Period", $"{D(form.From)} – {D(form.To)}"), ("Amount due", Money(form.ClosingBalance, form.Currency)) };
 
-        Header(section, look, form.Company, "STATEMENT", facts);
+        Header(section, look, form.Company, form.Title.ToUpperInvariant(), facts);
         BillTo(section, look, form.Customer);
 
         var activity = Table(section, look, [1.2, 3, 1.2, 1.2, 1.2]);
@@ -88,6 +100,8 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         Heading(aging, look, [.. form.Aging.Select(a => (a.Label, true)), ("Amount due", true)]);
         var row = Body(aging, 0, [.. form.Aging.Select(a => Amount(a.Amount)), Money(form.ClosingBalance, form.Currency)]);
         row.Cells[form.Aging.Count].Format.Font.Bold = true;
+        if (!string.IsNullOrWhiteSpace(form.Message))
+            section.AddParagraph(form.Message).Format.SpaceBefore = 14;
 
         return Pdf(document);
     }
@@ -249,9 +263,10 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
     {
         var section = document.AddSection();
         section.PageSetup = document.DefaultPageSetup.Clone();
-        // Setting PageFormat on a cloned setup doesn't change its size, so set US Letter explicitly.
-        section.PageSetup.PageWidth = Unit.FromInch(8.5);
-        section.PageSetup.PageHeight = Unit.FromInch(11);
+        // Setting PageFormat on a cloned setup doesn't change its size, so set the size explicitly.
+        (section.PageSetup.PageWidth, section.PageSetup.PageHeight) = look.Style.PaperSize == FormPaperSize.A4
+            ? (Unit.FromMillimeter(210), Unit.FromMillimeter(297))
+            : (Unit.FromInch(8.5), Unit.FromInch(11));
         var margin = Unit.FromPoint(look.Template == FormTemplate.Compact ? CompactMargin : PageMargin);
         (section.PageSetup.TopMargin, section.PageSetup.BottomMargin, section.PageSetup.LeftMargin, section.PageSetup.RightMargin) =
             (margin, margin + Unit.FromPoint(12), margin, margin);
@@ -283,13 +298,25 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         return section;
     }
 
-    /// <summary>Company on the left; title and facts on the right; an accent band (Modern) or rule (others).</summary>
+    /// <summary>
+    /// Company on the left; title and facts on the right; an accent band (Modern) or rule (others). The logo goes
+    /// above the company name, above the title, or centered above both.
+    /// </summary>
     private static void Header(Section section, Look look, FormParty company, string title, IReadOnlyList<(string Label, string Value)> facts)
     {
         var modern = look.Template == FormTemplate.Modern;
         var ink = modern ? Colors.White : look.Accent;
-        var table = section.AddTable();
         var width = ContentWidth(section);
+        var logo = look.Style.Logo;
+        if (logo is { Position: FormLogoPosition.Center })
+        {
+            var centered = section.AddParagraph();
+            centered.Format.Alignment = ParagraphAlignment.Center;
+            centered.Format.SpaceAfter = 8;
+            AddLogo(centered, logo, width);
+        }
+
+        var table = section.AddTable();
         table.AddColumn(width * 0.55);
         table.AddColumn(width * 0.45);
         if (modern)
@@ -308,6 +335,13 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
 
         var row = table.AddRow();
         var left = row.Cells[0];
+        if (logo is { Position: FormLogoPosition.Left })
+        {
+            var place = left.AddParagraph();
+            place.Format.SpaceAfter = 6;
+            AddLogo(place, logo, width * 0.5);
+        }
+
         var name = left.AddParagraph(company.Name);
         name.Format.Font.Size = look.Body + 5;
         name.Format.Font.Bold = true;
@@ -323,6 +357,13 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
 
         var right = row.Cells[1];
         right.Format.Alignment = ParagraphAlignment.Right;
+        if (logo is { Position: FormLogoPosition.Right })
+        {
+            var place = right.AddParagraph();
+            place.Format.SpaceAfter = 6;
+            AddLogo(place, logo, width * 0.4);
+        }
+
         var heading = right.AddParagraph(title.Trim());
         heading.Format.Font.Size = look.Body + 8;
         heading.Format.Font.Bold = true;
@@ -344,6 +385,67 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             rule.Format.Borders.Bottom.Width = 2;
             rule.Format.Borders.Bottom.Color = look.Accent;
         }
+    }
+
+    /// <summary>Bill-to alone, or bill-to and ship-to side by side.</summary>
+    private static void Parties(Section section, Look look, FormParty customer, string heading, FormParty? shipTo)
+    {
+        if (shipTo is null)
+        {
+            BillTo(section, look, customer, heading);
+            return;
+        }
+
+        section.AddParagraph().Format.SpaceBefore = 8;
+        var table = section.AddTable();
+        var width = ContentWidth(section);
+        table.AddColumn(width * 0.5);
+        table.AddColumn(width * 0.5);
+        (table.LeftPadding, table.RightPadding) = (0, 0);
+        var row = table.AddRow();
+        foreach (var (cell, label, party) in new[] { (row.Cells[0], heading, customer), (row.Cells[1], "SHIP TO", shipTo) })
+        {
+            var title = cell.AddParagraph(label);
+            title.Format.Font.Size = look.Small;
+            title.Format.Font.Bold = true;
+            title.Format.Font.Color = look.Accent;
+            foreach (var line in party.Name.Split('\n'))
+                cell.AddParagraph(line).Format.Font.Bold = true;
+            foreach (var line in PartyLines(party))
+                cell.AddParagraph(line).Format.Font.Size = look.Small;
+        }
+
+        section.AddParagraph().Format.SpaceAfter = 8;
+    }
+
+    /// <summary>The logo at its size's height, narrowed to fit <paramref name="maxWidth"/>, keeping its shape.</summary>
+    private static void AddLogo(Paragraph paragraph, FormLogo logo, Unit maxWidth)
+    {
+        var height = Unit.FromPoint(logo.Size switch { FormLogoSize.Small => 36, FormLogoSize.Large => 84, _ => 56 });
+        var image = paragraph.AddImage("base64:" + Convert.ToBase64String(logo.Content));
+        image.LockAspectRatio = true;
+        if (ImageSize(logo.Content) is { Width: > 0, Height: > 0 } size && height.Point * size.Width / size.Height > maxWidth.Point)
+            image.Width = maxWidth;
+        else
+            image.Height = height;
+    }
+
+    /// <summary>Pixel size of a PNG (IHDR) or JPEG (first SOF marker); null when it can't be read.</summary>
+    internal static (int Width, int Height)? ImageSize(byte[] content)
+    {
+        if (content.Length >= 24 && content[0] == 0x89 && content[1] == 0x50)
+            return ((content[16] << 24) | (content[17] << 16) | (content[18] << 8) | content[19], (content[20] << 24) | (content[21] << 16) | (content[22] << 8) | content[23]);
+        var i = 2;
+        while (i + 9 < content.Length && content[i] == 0xFF)
+        {
+            var marker = content[i + 1];
+            var length = (content[i + 2] << 8) | content[i + 3];
+            if (marker is >= 0xC0 and <= 0xCF and not 0xC4 and not 0xC8 and not 0xCC)
+                return ((content[i + 7] << 8) | content[i + 8], (content[i + 5] << 8) | content[i + 6]);
+            i += 2 + length;
+        }
+
+        return null;
     }
 
     private static void BillTo(Section section, Look look, FormParty customer, string heading = "BILL TO")
@@ -460,7 +562,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
 
     private static string D(DateOnly date) => date.ToString("d", CultureInfo.CurrentCulture);
 
-    private sealed record Look(FormTemplate Template, Color Accent, double Body, double Small)
+    private sealed record Look(FormTemplate Template, Color Accent, double Body, double Small, FormStyle Style)
     {
         public static Look For(FormStyle style)
         {
@@ -470,8 +572,8 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
                 byte.Parse(hex[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
                 byte.Parse(hex[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
             return style.Template == FormTemplate.Compact
-                ? new Look(style.Template, accent, 8.5, 7.5)
-                : new Look(style.Template, accent, 10, 8.5);
+                ? new Look(style.Template, accent, 8.5, 7.5, style)
+                : new Look(style.Template, accent, 10, 8.5, style);
         }
     }
 }

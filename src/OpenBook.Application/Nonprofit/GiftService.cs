@@ -56,7 +56,7 @@ public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string
 /// </summary>
 public sealed class GiftService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine,
-    ICompanyStore companies, IFormRenderer renderer, EmailService email, IClock clock, ICurrentUser user)
+    ICompanyStore companies, IFormRenderer renderer, EmailService email, FormDesignService designs, IClock clock, ICurrentUser user)
 {
     public const string DonationEntity = "donation";
     public const string PledgeEntity = "pledge";
@@ -446,7 +446,7 @@ public sealed class GiftService(
             settings.SignerName,
             settings.SignerTitle,
             company.HomeCurrency.Code,
-            FormService.Style(company));
+            await designs.DefaultStyleAsync(ct));
     }
 
     private async Task SendAsync(EmailDraft draft, RenderedForm rendered, CancellationToken ct)
