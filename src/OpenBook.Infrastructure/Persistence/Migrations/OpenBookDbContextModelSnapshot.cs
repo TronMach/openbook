@@ -1464,6 +1464,45 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("FormDesigns", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.FormFont", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Bold")
+                        .HasColumnType("BLOB");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Family")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Regular")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("FormFonts", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.User", b =>
                 {
                     b.Property<Guid>("Id")

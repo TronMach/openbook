@@ -29,4 +29,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Fonts for printed forms (SIL Open Font License, each with its OFL.txt), copied beside the app. -->
+    <None Include="Forms/Fonts/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

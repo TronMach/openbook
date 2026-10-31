@@ -79,6 +79,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Documents.DocumentReadingSettings> DocumentReadingSettings => Set<OpenBook.Domain.Documents.DocumentReadingSettings>();
     public DbSet<OpenBook.Domain.CustomFields.CustomField> CustomFields => Set<OpenBook.Domain.CustomFields.CustomField>();
     public DbSet<FormDesign> FormDesigns => Set<FormDesign>();
+    public DbSet<FormFont> FormFonts => Set<FormFont>();
     public DbSet<OpenBook.Domain.CustomFields.CustomFieldValue> CustomFieldValues => Set<OpenBook.Domain.CustomFields.CustomFieldValue>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
@@ -1685,6 +1686,16 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.ProtectedApiKey).HasMaxLength(2000);
             b.Property(s => s.Model).HasMaxLength(100);
             b.Ignore(s => s.IsReady);
+        });
+
+        modelBuilder.Entity<FormFont>(b =>
+        {
+            b.ToTable("FormFonts");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Key).HasMaxLength(FormDesign.MaxFontKeyLength);
+            b.HasIndex(f => f.Key).IsUnique();
+            b.Property(f => f.Family).HasMaxLength(FormFont.MaxFamilyLength);
+            b.Property(f => f.Origin).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<FormDesign>(b =>

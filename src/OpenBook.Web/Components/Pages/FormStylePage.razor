@@ -1,6 +1,7 @@
 @page "/settings/forms"
 @using OpenBook.Domain.Companies
 @inject FormDesignService Designs
+@inject FormFontService Fonts
 
 <PageTitle>Invoice style · OpenBook</PageTitle>
 
@@ -24,13 +25,13 @@
     <div class="card">
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Design</th><th>Used for</th><th>Template</th><th>Paper</th><th>Logo</th><th>Status</th></tr></thead>
+                <thead><tr><th>Design</th><th>Used for</th><th>Template</th><th>Font</th><th>Paper</th><th>Logo</th><th>Status</th></tr></thead>
                 <tbody>
                     @foreach (var design in _designs)
                     {
                         <tr class="@(design.IsActive ? null : "inactive")">
                             <td>
-                                <a href="/settings/forms/@design.Id">@design.Name</a>
+                                <a href="/settings/forms/@design.Id">@design.Name</a>@(design.IsDefault ? " " : "")
                                 @if (design.IsDefault)
                                 {
                                     <span class="badge ok">Default</span>
@@ -38,6 +39,7 @@
                             </td>
                             <td>@UsedFor(design)</td>
                             <td class="muted">@Labels.For(design.Template)</td>
+                            <td class="muted">@(_fonts.FirstOrDefault(f => f.Key == design.FontKey)?.Family ?? FormFontService.BuiltInName)</td>
                             <td class="muted">@design.PaperSize</td>
                             <td class="muted">@(design.Logo is null ? "" : "Yes")</td>
                             <td class="muted">@(design.IsActive ? "" : "Switched off")</td>
@@ -47,6 +49,75 @@
             </table>
         </div>
     </div>
+
+    <section class="card" id="fonts">
+        <h2>Fonts</h2>
+        @if (FontError is not null)
+        {
+            <div class="alert error" role="alert">@FontError</div>
+        }
+        @if (FontsDone is not null)
+        {
+            <div class="alert notice" role="status">@FontsDone</div>
+        }
+        <p class="muted">
+            Designs can use the built-in font, any of the @_fonts.Count(f => f.Group is not ("Built in" or "Uploaded" or "Added from Google Fonts")) fonts that come
+            with OpenBook (all under the SIL Open Font License), or a font you add. Added fonts are kept in the company file, so backups include them.
+        </p>
+        @{
+            var added = _fonts.Where(f => f.Group is "Uploaded" or "Added from Google Fonts").ToList();
+        }
+        @if (added.Count > 0)
+        {
+            <ul class="note-list">
+                @foreach (var font in added)
+                {
+                    <li>
+                        <strong>@font.Family</strong> <span class="muted">· @font.Group</span>
+                        @if (font.CanRemove)
+                        {
+                            <form method="post" action="/settings/forms/fonts/@font.Key/remove" class="inline-form" data-enhance="false">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link">Remove</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="muted">· in use</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+        <div class="row">
+            <form method="post" action="/settings/forms/fonts/google" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="google-family">Add from Google Fonts</label>
+                    <input id="google-family" name="family" required maxlength="@FormFont.MaxFamilyLength" placeholder="e.g. Work Sans" />
+                    <span class="hint">The family's name as fonts.google.com shows it. The server downloads its regular and bold weights once.</span>
+                </div>
+                <button type="submit" class="secondary">Add</button>
+            </form>
+            <form method="post" action="/settings/forms/fonts/upload" enctype="multipart/form-data" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="upload-family">Upload your own</label>
+                    <input id="upload-family" name="family" required maxlength="@FormFont.MaxFamilyLength" placeholder="Family name" />
+                </div>
+                <div class="field">
+                    <label for="upload-regular">Regular (.ttf)</label>
+                    <input id="upload-regular" type="file" name="regular" accept=".ttf,font/ttf" required />
+                </div>
+                <div class="field">
+                    <label for="upload-bold">Bold (.ttf, optional)</label>
+                    <input id="upload-bold" type="file" name="bold" accept=".ttf,font/ttf" />
+                    <span class="hint">Check that the font's license lets you embed it in PDFs.</span>
+                </div>
+                <button type="submit" class="secondary">Upload</button>
+            </form>
+        </div>
+    </section>
 
     <div class="card">
         <h2>New design</h2>
@@ -76,9 +147,17 @@
 @code {
     private IReadOnlyList<FormDesign> _designs = [];
 
-    [SupplyParameterFromQuery] private string? Error { get; set; }
+    private IReadOnlyList<FormFontChoice> _fonts = [];
 
-    protected override async Task OnInitializedAsync() => _designs = await Designs.ListAsync();
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? FontError { get; set; }
+    [SupplyParameterFromQuery(Name = "fonts")] private string? FontsDone { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _designs = await Designs.ListAsync();
+        _fonts = await Fonts.ChoicesAsync();
+    }
 
     private static string UsedFor(FormDesign design)
     {

@@ -69,6 +69,27 @@ public static class FormDesignEndpoints
             await Preview(() => designs.PreviewAsync(Details(k => form[k]) with { Name = "Preview" }, Document(form["document"]),
                 Guid.TryParse(form["logoFrom"], out var logoFrom) ? logoFrom : null, ct))).RequireAuthorization();
 
+        // Field: family (as Google Fonts names it).
+        app.MapPost("/settings/forms/fonts/google", async (IFormCollection form, FormFontService fonts, CancellationToken ct) =>
+            await Fonts(async () => $"Added {(await fonts.AddFromGoogleAsync(form["family"].ToString(), ct)).Family}.")).RequireAuthorization();
+
+        // Fields: family, regular and bold (.ttf files; bold optional).
+        app.MapPost("/settings/forms/fonts/upload", async (IFormFile? regular, IFormFile? bold, HttpRequest request, FormFontService fonts, CancellationToken ct) =>
+            await Fonts(async () =>
+            {
+                var form = await request.ReadFormAsync(ct);
+                var regularBytes = await ReadAsync(regular, ct) ?? throw new DomainException("font.empty", "Choose the regular font file.");
+                var font = await fonts.UploadAsync(form["family"].ToString(), regularBytes, await ReadAsync(bold, ct), ct);
+                return $"Added {font.Family}.";
+            })).RequireAuthorization();
+
+        app.MapPost("/settings/forms/fonts/{key}/remove", async (string key, IFormCollection form, FormFontService fonts, CancellationToken ct) =>
+            await Fonts(async () =>
+            {
+                await fonts.RemoveAsync(key, ct);
+                return "Removed.";
+            })).RequireAuthorization();
+
         // Field: designId (empty = the usual design).
         app.MapPost("/customers/{id:guid}/form-design", async (Guid id, IFormCollection form, FormDesignService designs, CancellationToken ct) =>
         {
@@ -110,6 +131,29 @@ public static class FormDesignEndpoints
             field("showQuantityAndRate") == "true",
             new FormColumnLabels(field("labelDescription"), field("labelQuantity"), field("labelRate"), field("labelAmount")),
             texts);
+    }
+
+    private static async Task<IResult> Fonts(Func<Task<string>> change)
+    {
+        try
+        {
+            return Results.Redirect($"/settings/forms?fonts={Uri.EscapeDataString(await change())}#fonts");
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"/settings/forms?fontError={Uri.EscapeDataString(ex.Message)}#fonts");
+        }
+    }
+
+    private static async Task<byte[]?> ReadAsync(IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return null;
+        if (file.Length > FormFont.MaxFileBytes)
+            throw new DomainException("font.too_large", "Font files can be at most 10 MB.");
+        using var buffer = new MemoryStream();
+        await file.CopyToAsync(buffer, ct);
+        return buffer.ToArray();
     }
 
     private static FormDocuments Document(string? value) =>

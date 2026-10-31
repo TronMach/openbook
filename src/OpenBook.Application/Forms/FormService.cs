@@ -44,7 +44,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         };
         var document = Document(kind);
         var design = await designs.ForAsync(document, customerId == Guid.Empty ? null : customerId, ct);
-        return (await customFields.DecorateAsync(FormDesignService.Apply(form, design, document), id, ct), customerId);
+        return (await customFields.DecorateAsync(await designs.ApplyAsync(form, design, document, ct), id, ct), customerId);
     }
 
     public static FormDocuments Document(FormKind kind) => kind switch
@@ -71,7 +71,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             [("Current", aging.Current), ("1–30 days", aging.Days1To30), ("31–60 days", aging.Days31To60), ("61–90 days", aging.Days61To90), ("Over 90 days", aging.Over90)],
             company.HomeCurrency.Code,
             Unstyled);
-        form = FormDesignService.Apply(form, await designs.ForAsync(FormDocuments.Statement, customerId, ct));
+        form = await designs.ApplyAsync(form, await designs.ForAsync(FormDocuments.Statement, customerId, ct), ct);
         return new RenderedForm(FileName(company, form.Title, to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), renderer.Render(form), customerId,
             $"Statement {to.ToString("d", CultureInfo.CurrentCulture)}");
     }
@@ -189,7 +189,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
     internal static FormParty CustomerParty(Customer c) =>
         new(c.CompanyName is { } company && company != c.DisplayName ? $"{c.DisplayName}\n{company}" : c.DisplayName, c.BillingAddress, c.Email, c.Phone);
 
-    /// <summary>Forms are built with this, then <see cref="FormDesignService.Apply(SalesForm, FormDesign, FormDocuments)"/> gives them their design's look.</summary>
+    /// <summary>Forms are built with this, then <see cref="FormDesignService.ApplyAsync(SalesForm, FormDesign, FormDocuments, CancellationToken)"/> gives them their design's look.</summary>
     internal static readonly FormStyle Unstyled = new(FormTemplate.Classic, Company.DefaultAccentColor, null);
 
     /// <summary>The customer's shipping address, when they have one.</summary>

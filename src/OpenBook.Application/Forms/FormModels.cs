@@ -8,19 +8,19 @@ public sealed record FormParty(string Name, string? Address = null, string? Emai
 public sealed record FormLogo(byte[] Content, FormLogoPosition Position, FormLogoSize Size);
 
 /// <summary>How a form looks: from a <see cref="FormDesign"/> (<see cref="From"/>).</summary>
-/// <param name="FontKey">The font family to print with; null = the built-in sans-serif.</param>
+/// <param name="Font">The font to print with; null = the built-in sans-serif.</param>
 /// <param name="ColumnLabels">Line table headings; empty ones keep the usual words.</param>
 public sealed record FormStyle(
     FormTemplate Template, string AccentColor, string? Footer, FormPaperSize PaperSize = FormPaperSize.Letter, FormLogo? Logo = null,
-    string? FontKey = null, bool ShowQuantityAndRate = true, FormColumnLabels? ColumnLabels = null)
+    FormFontFace? Font = null, bool ShowQuantityAndRate = true, FormColumnLabels? ColumnLabels = null)
 {
-    public static FormStyle From(FormDesign design)
+    public static FormStyle From(FormDesign design, FormFontFace? font = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         return new FormStyle(
             design.Template, design.AccentColor, design.Footer, design.PaperSize,
             design.Logo is { } logo ? new FormLogo(logo, design.LogoPosition, design.LogoSize) : null,
-            design.FontKey, design.ShowQuantityAndRate, design.ColumnLabels);
+            font, design.ShowQuantityAndRate, design.ColumnLabels);
     }
 }
 

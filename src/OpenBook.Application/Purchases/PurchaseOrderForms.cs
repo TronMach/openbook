@@ -31,7 +31,7 @@ public sealed class PurchaseOrderForms(
             vendor.Address, vendor.Email, vendor.Phone);
         var form = new SalesForm("Purchase order", order.Number, FormService.CompanyParty(company), party, facts, lines,
             [new FormTotal("Total", order.Total, Emphasis: true)], order.Memo, company.HomeCurrency.Code, FormService.Unstyled, PartyLabel: "VENDOR");
-        form = FormDesignService.Apply(form, await designs.ForAsync(FormDocuments.PurchaseOrder, ct: ct), FormDocuments.PurchaseOrder);
+        form = await designs.ApplyAsync(form, await designs.ForAsync(FormDocuments.PurchaseOrder, ct: ct), FormDocuments.PurchaseOrder, ct);
         form = await customFields.DecorateAsync(form, order.Id, ct);
         return new RenderedForm(FormService.FileName(company, form.Title, order.Number), renderer.Render(form), Guid.Empty, $"{form.Title} {order.Number}");
     }

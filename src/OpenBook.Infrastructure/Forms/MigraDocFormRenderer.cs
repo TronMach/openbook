@@ -253,7 +253,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
     {
         var document = new Document();
         var normal = document.Styles[StyleNames.Normal]!;
-        normal.Font.Name = SystemFontResolver.FamilyName;
+        normal.Font.Name = look.Style.Font is { } font ? FormFontRegistry.Register(font) : SystemFontResolver.FamilyName;
         normal.Font.Size = look.Body;
         normal.Font.Color = new Color(0x1d, 0x24, 0x30);
         return (document, AddSection(document, look, footer, perSection));

@@ -44,6 +44,12 @@ public sealed record FormDesignDocumentsRequest(IReadOnlyList<FormDocuments> Doc
 
 public sealed record CustomerFormDesignRequest(Guid? DesignId);
 
+public sealed record GoogleFontRequest(string Family);
+
+/// <param name="Regular">The regular face's .ttf file, Base64.</param>
+/// <param name="Bold">The bold face's .ttf file, Base64 (optional).</param>
+public sealed record UploadFontRequest(string Family, string Regular, string? Bold = null);
+
 internal static class FormDesignsApi
 {
     public static void MapFormDesignsApi(this RouteGroupBuilder api)
@@ -81,6 +87,37 @@ internal static class FormDesignsApi
             await s.GetAsync(id, ct) is { } d
                 ? Results.File(await s.PreviewAsync(d.ToDetails(), document ?? FormDocuments.Invoice, d.Id, ct), "application/pdf")
                 : Results.NotFound());
+
+        // Fonts designs can use (fontKey): built in, shipped with OpenBook, and added.
+        var fonts = api.MapGroup("/settings/form-fonts");
+        fonts.MapGet("/", async (FormFontService s, CancellationToken ct) => await s.ChoicesAsync(ct));
+        fonts.MapPost("/google", async (GoogleFontRequest r, FormFontService s, CancellationToken ct) =>
+        {
+            var f = await s.AddFromGoogleAsync(r.Family, ct);
+            return new { f.Key, f.Family, Origin = f.Origin.ToString(), HasBold = f.Bold is not null };
+        });
+        fonts.MapPost("/upload", async (UploadFontRequest r, FormFontService s, CancellationToken ct) =>
+        {
+            static byte[] Decode(string base64, string face)
+            {
+                try
+                {
+                    return Convert.FromBase64String(base64);
+                }
+                catch (FormatException)
+                {
+                    throw new DomainException("font.not_base64", $"The {face} file isn't Base64.");
+                }
+            }
+
+            var f = await s.UploadAsync(r.Family, Decode(r.Regular ?? "", "regular"), r.Bold is { Length: > 0 } bold ? Decode(bold, "bold") : null, ct);
+            return new { f.Key, f.Family, Origin = f.Origin.ToString(), HasBold = f.Bold is not null };
+        });
+        fonts.MapDelete("/{key}", async (string key, FormFontService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(key, ct);
+            return Results.NoContent();
+        });
 
         api.MapPut("/customers/{id:guid}/form-design", async (Guid id, CustomerFormDesignRequest r, FormDesignService s, CancellationToken ct) =>
         {

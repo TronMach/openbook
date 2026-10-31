@@ -1,6 +1,7 @@
 @page "/settings/forms/{Id:guid}"
 @using OpenBook.Domain.Companies
 @inject FormDesignService Designs
+@inject FormFontService Fonts
 
 <PageTitle>@(_design?.Name ?? "Design") · OpenBook</PageTitle>
 
@@ -56,6 +57,21 @@
                         <div class="field">
                             <label for="color">Accent color</label>
                             <input id="color" name="accentColor" type="color" value="@_design.AccentColor" />
+                        </div>
+                        <div class="field">
+                            <label for="font">Font</label>
+                            <select id="font" name="fontKey">
+                                @foreach (var group in _fonts.GroupBy(f => f.Group))
+                                {
+                                    <optgroup label="@group.Key">
+                                        @foreach (var font in group)
+                                        {
+                                            <option value="@font.Key" selected="@(font.Key == _design.FontKey)">@font.Family</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                            <span class="hint"><a href="/settings/forms#fonts">Add a Google font or your own</a></span>
                         </div>
                         <div class="field">
                             <label for="paper">Paper</label>
@@ -215,6 +231,7 @@
 @code {
     private FormDesign? _design;
     private IReadOnlyList<FormDesign> _designs = [];
+    private IReadOnlyList<FormFontChoice> _fonts = [];
 
     [Parameter] public Guid Id { get; set; }
 
@@ -225,6 +242,7 @@
     {
         _designs = await Designs.ListAsync();
         _design = _designs.FirstOrDefault(d => d.Id == Id);
+        _fonts = await Fonts.ChoicesAsync();
     }
 
     /// <summary>The first preview, from the saved design; forms.js replaces it from the form as it changes.</summary>

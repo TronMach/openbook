@@ -22,14 +22,23 @@ internal sealed class SystemFontResolver : IFontResolver
 
     public FontResolverInfo? ResolveTypeface(string familyName, bool bold, bool italic)
     {
-        // Every family maps to OpenBook Sans: forms only ask for this one.
+        // A design's font (registered by the renderer under a name that includes its content hash).
+        if (FormFontRegistry.Find(familyName) is { } added)
+        {
+            var addedFace = bold && added.Bold is not null ? familyName + FormFontRegistry.BoldSuffix : familyName;
+            var addedSimulations = (bold && added.Bold is null ? XStyleSimulations.BoldSimulation : XStyleSimulations.None)
+                | (italic ? XStyleSimulations.ItalicSimulation : XStyleSimulations.None);
+            return new FontResolverInfo(addedFace, addedSimulations);
+        }
+
+        // Every other family maps to OpenBook Sans.
         var face = bold && BoldPath.Value is not null ? Bold : Regular;
         var simulations = (bold && face == Regular ? XStyleSimulations.BoldSimulation : XStyleSimulations.None)
             | (italic ? XStyleSimulations.ItalicSimulation : XStyleSimulations.None);
         return new FontResolverInfo(face, simulations);
     }
 
-    public byte[]? GetFont(string faceName) => _cache.GetOrAdd(faceName, name =>
+    public byte[]? GetFont(string faceName) => FormFontRegistry.Face(faceName) ?? _cache.GetOrAdd(faceName, name =>
     {
         var path = (name == Bold ? BoldPath.Value : null) ?? RegularPath.Value
             ?? throw new InvalidOperationException(

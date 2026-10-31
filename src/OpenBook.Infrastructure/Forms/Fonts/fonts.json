@@ -1,0 +1,74 @@
+[
+  {
+    "key": "inter",
+    "family": "Inter",
+    "category": "Sans-serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "roboto",
+    "family": "Roboto",
+    "category": "Sans-serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "open-sans",
+    "family": "Open Sans",
+    "category": "Sans-serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "lato",
+    "family": "Lato",
+    "category": "Sans-serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "montserrat",
+    "family": "Montserrat",
+    "category": "Sans-serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "source-sans-3",
+    "family": "Source Sans 3",
+    "category": "Sans-serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "merriweather",
+    "family": "Merriweather",
+    "category": "Serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "lora",
+    "family": "Lora",
+    "category": "Serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "source-serif-4",
+    "family": "Source Serif 4",
+    "category": "Serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "eb-garamond",
+    "family": "EB Garamond",
+    "category": "Serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "playfair-display",
+    "family": "Playfair Display",
+    "category": "Serif",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "key": "ibm-plex-mono",
+    "family": "IBM Plex Mono",
+    "category": "Monospace",
+    "license": "SIL Open Font License 1.1"
+  }
+]
