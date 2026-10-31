@@ -86,6 +86,8 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         var cash = lines.Where(l => l.Basis.AppliesTo(ReportBasis.Cash)
             && (!AccrualDocuments.Contains(l.Source) || l.Source is Invoice.Source or CreditMemo.Source && stockAccounts.Contains(l.AccountId))).ToList();
         var entryNumbers = lines.GroupBy(l => l.JournalEntryId).ToDictionary(g => g.Key, g => g.First().EntryNumber);
+        // Each document's posted lines, looked up once rather than by scanning every line per document.
+        var byEntry = lines.ToLookup(l => l.JournalEntryId);
         bool InRange(DateOnly d) => d <= to && (from is null || d >= from);
 
         var customerPayments = (await sales.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InRange(p.Date)).ToList();
@@ -95,7 +97,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             foreach (var payment in customerPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
-                var entryLines = lines.Where(l => l.JournalEntryId == payment.JournalEntryId).ToList();
+                var entryLines = byEntry[payment.JournalEntryId].ToList();
                 var memo = entryLines.FirstOrDefault()?.EntryMemo;
                 if (payment.Amount != 0m)
                     cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.DepositAccountId, payment.Amount, memo, CustomerPayment.Source, payment.Id));
@@ -125,7 +127,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             foreach (var (retainer, application) in applications)
             {
                 var number = entryNumbers.GetValueOrDefault(application.JournalEntryId);
-                var memo = lines.FirstOrDefault(l => l.JournalEntryId == application.JournalEntryId)?.EntryMemo;
+                var memo = byEntry[application.JournalEntryId].FirstOrDefault()?.EntryMemo;
                 cash.Add(Derived(application.JournalEntryId, number, application.AppliedOn, retainer.LiabilityAccountId, application.Amount, memo,
                     Retainer.ApplicationSource, retainer.Id));
                 var invoice = invoices[application.InvoiceId];
@@ -144,12 +146,12 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 if (refund.CreditMemoId is not { } creditId)
                 {
                     // A refund of unapplied payment money: as posted (A/R against the bank).
-                    cash.AddRange(lines.Where(l => l.JournalEntryId == refund.JournalEntryId));
+                    cash.AddRange(byEntry[refund.JournalEntryId]);
                     continue;
                 }
 
                 var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
-                var memo = lines.FirstOrDefault(l => l.JournalEntryId == refund.JournalEntryId)?.EntryMemo;
+                var memo = byEntry[refund.JournalEntryId].FirstOrDefault()?.EntryMemo;
                 cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.PaymentAccountId, -refund.Amount, memo, CustomerRefund.Source, refund.Id));
                 var credit = credits[creditId];
                 foreach (var (accountId, classId, share) in AllocateByClass(refund.Amount, IncomeLines(credit.Lines)))
@@ -164,7 +166,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             foreach (var payment in billPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
-                var memo = lines.FirstOrDefault(l => l.JournalEntryId == payment.JournalEntryId)?.EntryMemo;
+                var memo = byEntry[payment.JournalEntryId].FirstOrDefault()?.EntryMemo;
                 cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.PaymentAccountId, -payment.Amount, memo, BillPayment.Source, payment.Id));
                 foreach (var application in payment.Applications)
                 {
@@ -184,7 +186,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             foreach (var refund in vendorRefunds)
             {
                 var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
-                var memo = lines.FirstOrDefault(l => l.JournalEntryId == refund.JournalEntryId)?.EntryMemo;
+                var memo = byEntry[refund.JournalEntryId].FirstOrDefault()?.EntryMemo;
                 cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.DepositAccountId, refund.Amount, memo, VendorRefund.Source, refund.Id));
                 var vendorCredit = vendorCredits[refund.VendorCreditId];
                 var creditLines = vendorCredit.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount)).ToList();
