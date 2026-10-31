@@ -42,7 +42,7 @@ internal sealed partial class ScheduledEmailHostedService(
                     LogNotSent(result.Email.To, result.Error);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             LogError(ex);
         }

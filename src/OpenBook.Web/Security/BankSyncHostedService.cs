@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
-using OpenBook.Domain.Common;
 
 namespace OpenBook.Web.Security;
 
@@ -41,9 +40,9 @@ internal sealed partial class BankSyncHostedService(
                     LogFailed(connection.Name, result.Error!);
             }
         }
-        catch (Exception ex) when (ex is DomainException or InvalidOperationException or System.Data.Common.DbException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            // A restore can swap the company file mid-run; the next tick tries again.
+            // Anything (a restore swapping the company file mid-run, a network error): log it and let the next tick try again.
             LogError(ex);
         }
     }

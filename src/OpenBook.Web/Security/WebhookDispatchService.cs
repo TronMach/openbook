@@ -19,7 +19,7 @@ internal sealed partial class WebhookDispatchService(IServiceScopeFactory scopes
                 if (await company.IsSetUpAsync(stoppingToken))
                     await scope.ServiceProvider.GetRequiredService<WebhookDispatcher>().RunOnceAsync(stoppingToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 // A database hiccup (or a restore in progress) mustn't stop the service; the next tick retries.
                 LogFailed(ex);

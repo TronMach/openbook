@@ -31,7 +31,7 @@ internal sealed partial class ScheduledBackupHostedService(
             else if (result is { Succeeded: false })
                 LogFailed(result.Error!);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             LogError(ex);
         }

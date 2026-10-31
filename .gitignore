@@ -486,4 +486,6 @@ $RECYCLE.BIN/
 *.db-shm
 *.db-wal
 backups/
+# ...but not the source folder of that name (Windows matches the rule above ignoring case).
+!src/OpenBook.Infrastructure/Backups/
 mail/

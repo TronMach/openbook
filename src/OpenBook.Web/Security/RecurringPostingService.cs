@@ -34,26 +34,25 @@ internal sealed partial class RecurringPostingService(
 
     private async Task PostDueAsync(CancellationToken ct)
     {
-        try
-        {
-            await using var scope = scopes.CreateAsyncScope();
-            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
-                return;
+        if (!await StepAsync("Checking setup", async services => await setup.CheckAsync(services.GetRequiredService<CompanySetupService>(), ct), ct))
+            return;
 
-            scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
-            var results = await scope.ServiceProvider.GetRequiredService<RecurringEntryService>()
-                .PostDueAsync(DateOnly.FromDateTime(DateTime.Today), autoPostOnly: true, ct);
-            foreach (var result in results)
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        await StepAsync("Recurring entries", async services =>
+        {
+            foreach (var result in await services.GetRequiredService<RecurringEntryService>().PostDueAsync(today, autoPostOnly: true, ct))
             {
                 if (result.Posted.Count > 0)
                     LogPosted(result.Posted.Count, result.Template.Name);
                 if (result.Error is not null)
                     LogStopped(result.Template.Name, result.Error);
             }
+            return true;
+        }, ct);
 
-            var invoices = await scope.ServiceProvider.GetRequiredService<RecurringInvoiceService>()
-                .CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: true, ct);
-            foreach (var result in invoices)
+        await StepAsync("Recurring invoices", async services =>
+        {
+            foreach (var result in await services.GetRequiredService<RecurringInvoiceService>().CreateDueAsync(today, automaticOnly: true, ct))
             {
                 if (result.Created.Count > 0)
                     LogInvoicesCreated(result.Created.Count, result.Template.Name, result.Emailed);
@@ -62,69 +61,93 @@ internal sealed partial class RecurringPostingService(
                 if (result.EmailError is not null)
                     LogStopped(result.Template.Name, result.EmailError);
             }
+            return true;
+        }, ct);
 
-            var bills = await scope.ServiceProvider.GetRequiredService<RecurringBillService>()
-                .CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: true, ct);
-            foreach (var result in bills)
+        await StepAsync("Recurring bills", async services =>
+        {
+            foreach (var result in await services.GetRequiredService<RecurringBillService>().CreateDueAsync(today, automaticOnly: true, ct))
             {
                 if (result.Created.Count > 0)
                     LogBillsCreated(result.Created.Count, result.Template.Name);
                 if (result.Error is not null)
                     LogStopped(result.Template.Name, result.Error);
             }
+            return true;
+        }, ct);
 
-            var gifts = await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Nonprofit.RecurringGiftService>()
-                .CreateDueAsync(DateOnly.FromDateTime(DateTime.Today), automaticOnly: true, ct: ct);
-            foreach (var result in gifts)
+        await StepAsync("Recurring gifts", async services =>
+        {
+            foreach (var result in await services.GetRequiredService<OpenBook.Application.Nonprofit.RecurringGiftService>().CreateDueAsync(today, automaticOnly: true, ct: ct))
             {
                 if (result.Error is not null)
                     LogStopped($"recurring gift {result.Template.Id}", result.Error);
             }
+            return true;
+        }, ct);
 
-            await CollectAsync(scope.ServiceProvider, ct);
+        await StepAsync("Late fees", async services =>
+        {
+            if ((await services.GetRequiredService<CollectionService>().GetAsync(ct)).LateFeesAutomatic)
+            {
+                var fees = await services.GetRequiredService<LateFeeService>().ChargeAsync(today, ct: ct);
+                if (fees.Count > 0)
+                    LogFeesCharged(fees.Count);
+            }
+            return true;
+        }, ct);
 
-            foreach (var run in await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Reporting.ReportSubscriptionService>().SendDueAsync(ct))
+        await StepAsync("Reminders", async services =>
+        {
+            if ((await services.GetRequiredService<CollectionService>().GetAsync(ct)).RemindersEnabled)
+            {
+                var results = await services.GetRequiredService<ReminderService>().SendAsync(today, ct: ct);
+                var failed = results.FirstOrDefault(r => r.Error is not null);
+                var sent = results.Count(r => r.Error is null);
+                if (sent > 0)
+                    LogRemindersSent(sent);
+                if (failed is not null)
+                    LogCollectionFailed("Reminders", failed.Error!);
+            }
+            return true;
+        }, ct);
+
+        await StepAsync("Scheduled reports", async services =>
+        {
+            foreach (var run in await services.GetRequiredService<OpenBook.Application.Reporting.ReportSubscriptionService>().SendDueAsync(ct))
             {
                 if (run.Error is null)
                     LogReportSent(run.ReportName, run.Subscription.Recipients);
                 else
                     LogCollectionFailed($"Report '{run.ReportName}'", run.Error);
             }
-        }
-        catch (Exception ex) when (ex is DomainException or InvalidOperationException or System.Data.Common.DbException)
-        {
-            // A restore can swap the company file mid-run; the next tick tries again.
-            LogFailed(ex);
-        }
+            return true;
+        }, ct);
     }
 
-    private async Task CollectAsync(IServiceProvider services, CancellationToken ct)
+    /// <summary>
+    /// Runs one part of the hourly job in its own scope, so a save that failed (its entities still tracked) can't be
+    /// saved again by the next part, and any failure is logged rather than stopping the other parts or the app.
+    /// </summary>
+    /// <returns>The step's answer; false when it failed.</returns>
+    private async Task<bool> StepAsync(string what, Func<IServiceProvider, Task<bool>> step, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var settings = await services.GetRequiredService<CollectionService>().GetAsync(ct);
-        if (settings.LateFeesAutomatic)
+        try
         {
-            try
-            {
-                var fees = await services.GetRequiredService<LateFeeService>().ChargeAsync(today, ct: ct);
-                if (fees.Count > 0)
-                    LogFeesCharged(fees.Count);
-            }
-            catch (DomainException ex)
-            {
-                LogCollectionFailed("Late fees", ex.Message);
-            }
+            await using var scope = scopes.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
+            return await step(scope.ServiceProvider);
         }
-
-        if (settings.RemindersEnabled)
+        catch (DomainException ex)
         {
-            var results = await services.GetRequiredService<ReminderService>().SendAsync(today, ct: ct);
-            var failed = results.FirstOrDefault(r => r.Error is not null);
-            var sent = results.Count(r => r.Error is null);
-            if (sent > 0)
-                LogRemindersSent(sent);
-            if (failed is not null)
-                LogCollectionFailed("Reminders", failed.Error!);
+            LogCollectionFailed(what, ex.Message);
+            return false;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // A restore can swap the company file mid-run, or a save can clash with someone else's; the next tick tries again.
+            LogFailed(what, ex);
+            return false;
         }
     }
 
@@ -152,6 +175,6 @@ internal sealed partial class RecurringPostingService(
     [LoggerMessage(Level = LogLevel.Warning, Message = "Recurring '{Template}' stopped: {Error}")]
     private partial void LogStopped(string template, string error);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Posting recurring entries failed.")]
-    private partial void LogFailed(Exception ex);
+    [LoggerMessage(Level = LogLevel.Error, Message = "{What} failed.")]
+    private partial void LogFailed(string what, Exception ex);
 }
