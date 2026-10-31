@@ -1,3 +1,5 @@
+using OpenBook.Application.CustomFields;
+using OpenBook.Domain.CustomFields;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using OpenBook.Application.Accounts;
@@ -22,7 +24,7 @@ public sealed record ImportResult<TRow>(IReadOnlyList<TRow> Rows, int NewCount, 
 /// Customer list CSV import, all-or-nothing. A name column is required; company, email, phone, addresses
 /// (one column, or street/city/state/zip/country), terms ("Net 30", "Due on receipt", "15") and notes are optional.
 /// </summary>
-public sealed partial class CustomerImportService(ISalesStore store, CustomerService customers)
+public sealed partial class CustomerImportService(ISalesStore store, CustomerService customers, CustomFieldImport fieldImport)
 {
     public const int MaxRows = 5000;
 
@@ -31,11 +33,12 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
 
     public async Task<ImportResult<CustomerImportRow>> ImportAsync(string csv, CancellationToken ct = default)
     {
-        var (result, created) = await PlanAsync(csv, ct);
+        var (result, created, fields, fieldValues) = await PlanAsync(csv, ct);
         SalesImport.EnsureImportable(result.ErrorCount, created.Count);
         foreach (var customer in created)
         {
             store.Add(customer);
+            fields.Add(customer.Id, fieldValues[customer.Id]);
             store.Add(customers.Audit(AuditAction.Created, customer, before: null));
         }
 
@@ -43,10 +46,12 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
         return result;
     }
 
-    private async Task<(ImportResult<CustomerImportRow> Result, List<Customer> Created)> PlanAsync(string csv, CancellationToken ct)
+    private async Task<(ImportResult<CustomerImportRow> Result, List<Customer> Created, CustomFieldColumns Fields, Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>> FieldValues)> PlanAsync(string csv, CancellationToken ct)
     {
         var records = SalesImport.Records(csv, MaxRows);
         var cols = new CsvColumns(records[0]);
+        var fieldColumns = await fieldImport.ColumnsAsync(CustomFieldTarget.Customer, cols, ct);
+        var fieldValues = new Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>>();
         var name = cols.Find("customer", "name", "displayname", "customername", "fullname", "customerdisplayname")
             ?? throw new DomainException("import.no_name_column", "The file needs a customer name column (\"Customer\" or \"Name\").");
         var company = cols.Find("company", "companyname");
@@ -85,6 +90,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
                     termsText is null ? 30 : ParseTerms(termsText),
                     F(notes));
 
+                var custom = fieldColumns.Read(r);
                 if (displayName is not null && existing.Contains(displayName.Trim()))
                 {
                     rows.Add(new CustomerImportRow(r.Line, details, ImportRowStatus.Exists, null));
@@ -94,7 +100,9 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
                 if (displayName is not null && !seen.Add(displayName.Trim()))
                     throw new DomainException("import.duplicate_row", "This customer appears more than once in the file.");
 
-                created.Add(Customer.Create(details));
+                var made = Customer.Create(details);
+                created.Add(made);
+                fieldValues[made.Id] = custom;
                 rows.Add(new CustomerImportRow(r.Line, details, ImportRowStatus.New, null));
             }
             catch (DomainException ex)
@@ -103,7 +111,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
             }
         }
 
-        return (SalesImport.Result(rows, r => r.Status), created);
+        return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
     }
 
     internal static int ParseTerms(string text)
@@ -133,7 +141,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
 /// "Non-inventory"), description, price and income account (full name or number) are optional. Rows
 /// without an income account use <c>defaultIncomeAccountId</c>.
 /// </summary>
-public sealed class ItemImportService(ISalesStore store, ItemService items, AccountService accounts)
+public sealed class ItemImportService(ISalesStore store, ItemService items, AccountService accounts, CustomFieldImport fieldImport)
 {
     public const int MaxRows = 5000;
 
@@ -142,11 +150,12 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
 
     public async Task<ImportResult<ItemImportRow>> ImportAsync(string csv, Guid? defaultIncomeAccountId, CancellationToken ct = default)
     {
-        var (result, created) = await PlanAsync(csv, defaultIncomeAccountId, ct);
+        var (result, created, fields, fieldValues) = await PlanAsync(csv, defaultIncomeAccountId, ct);
         SalesImport.EnsureImportable(result.ErrorCount, created.Count);
         foreach (var item in created)
         {
             store.Add(item);
+            fields.Add(item.Id, fieldValues[item.Id]);
             store.Add(items.Audit(AuditAction.Created, item, before: null));
         }
 
@@ -154,10 +163,12 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
         return result;
     }
 
-    private async Task<(ImportResult<ItemImportRow> Result, List<Item> Created)> PlanAsync(string csv, Guid? defaultIncomeAccountId, CancellationToken ct)
+    private async Task<(ImportResult<ItemImportRow> Result, List<Item> Created, CustomFieldColumns Fields, Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>> FieldValues)> PlanAsync(string csv, Guid? defaultIncomeAccountId, CancellationToken ct)
     {
         var records = SalesImport.Records(csv, MaxRows);
         var cols = new CsvColumns(records[0]);
+        var fieldColumns = await fieldImport.ColumnsAsync(CustomFieldTarget.Item, cols, ct);
+        var fieldValues = new Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>>();
         var name = cols.Find("item", "name", "product", "service", "productservice", "itemname", "productservicename")
             ?? throw new DomainException("import.no_name_column", "The file needs a name column (\"Name\" or \"Item\").");
         var type = cols.Find("type", "itemtype");
@@ -196,6 +207,7 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
                     F(description),
                     F(taxable) is not { } tx || ParseTaxable(tx));
 
+                var custom = fieldColumns.Read(r);
                 if (itemName is not null && existing.Contains(itemName.Trim()))
                 {
                     rows.Add(new ItemImportRow(r.Line, details, chart.FullName(incomeAccount.Id), ImportRowStatus.Exists, null));
@@ -205,7 +217,9 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
                 if (itemName is not null && !seen.Add(itemName.Trim()))
                     throw new DomainException("import.duplicate_row", "This item appears more than once in the file.");
 
-                created.Add(Item.Create(details));
+                var made = Item.Create(details);
+                created.Add(made);
+                fieldValues[made.Id] = custom;
                 rows.Add(new ItemImportRow(r.Line, details, chart.FullName(incomeAccount.Id), ImportRowStatus.New, null));
             }
             catch (DomainException ex)
@@ -214,7 +228,7 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
             }
         }
 
-        return (SalesImport.Result(rows, r => r.Status), created);
+        return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
     }
 
     /// <summary>"Yes"/"No", "Tax"/"Non" (QuickBooks' sales tax codes), "true"/"false" and the like.</summary>

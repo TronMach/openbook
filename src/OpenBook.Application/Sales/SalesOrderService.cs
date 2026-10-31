@@ -39,7 +39,7 @@ public sealed record InvoicingProgress(IReadOnlyList<Invoice> Invoices, IReadOnl
 }
 
 /// <summary>Sales orders: what customers have ordered, invoiced in full or in parts as it's delivered.</summary>
-public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, WarehouseService warehouses, IClock clock, ICurrentUser user)
+public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, WarehouseService warehouses, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "sales_order";
 
@@ -60,6 +60,7 @@ public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBu
         await FillAsync(order, command, ct);
         store.Add(order);
         store.Add(Audit(AuditAction.Created, order, null));
+        await customFields.StampAsync(EntityType, order.Id, order.CustomerId, order.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
         return order;
     }
@@ -74,6 +75,7 @@ public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBu
         var before = Snapshot(order);
         await FillAsync(order, command, ct);
         store.Add(Audit(AuditAction.Updated, order, before));
+        await customFields.StampAsync(EntityType, order.Id, order.CustomerId, order.Lines.Select(l => (l.LineNumber, l.ItemId)), ct, replaceLines: true);
         await store.SaveChangesAsync(ct);
         return order;
     }

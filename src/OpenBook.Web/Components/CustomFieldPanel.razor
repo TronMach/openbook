@@ -1,0 +1,149 @@
+@using OpenBook.Application.CustomFields
+@using OpenBook.Domain.Companies
+@using OpenBook.Domain.CustomFields
+@inject CustomFieldService FieldService
+@inject NavigationManager Navigation
+@* A record's custom fields: their values and a form posting to /custom-fields. Shown only when the record has any. *@
+
+@if (_entries.Count > 0)
+{
+    <section class="card custom-fields" id="custom-fields">
+        <h2>@(Title ?? "More details")</h2>
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+        @if (_saved)
+        {
+            <div class="alert notice" role="status">Saved.</div>
+        }
+        @if (_canWrite)
+        {
+            <form method="post" action="/custom-fields" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="entityType" value="@EntityType" />
+                <input type="hidden" name="entityId" value="@EntityId" />
+                <input type="hidden" name="returnUrl" value="@_returnUrl" />
+                <div class="row wrap">
+                    @foreach (var entry in _entries)
+                    {
+                        var field = entry.Field;
+                        var id = $"cf-{field.Id:N}";
+                        var name = $"f:{field.Id}";
+                        var value = entry.Value ?? (IsRecord && field.IsActive ? field.DefaultValue : null);
+                        <div class="field @(field.Type == CustomFieldType.LongText ? "wide-field" : null)">
+                            <label for="@id">@field.Name@Origin(field)@(field.IsRequired && field.IsActive ? " *" : "")</label>
+                            @switch (field.Type)
+                            {
+                                case CustomFieldType.LongText:
+                                    <textarea id="@id" name="@name" rows="3" maxlength="@field.Limit">@value</textarea>
+                                    break;
+                                case CustomFieldType.WholeNumber:
+                                    <input id="@id" name="@name" type="number" step="1" min="@field.Minimum" max="@field.Maximum" value="@value" />
+                                    break;
+                                case CustomFieldType.DecimalNumber or CustomFieldType.Money:
+                                    <input id="@id" name="@name" inputmode="decimal" value="@value" />
+                                    break;
+                                case CustomFieldType.Date:
+                                    <input id="@id" name="@name" type="date" value="@value" />
+                                    break;
+                                case CustomFieldType.YesNo:
+                                    <select id="@id" name="@name">
+                                        <option value="" selected="@(value is null)"></option>
+                                        <option value="Yes" selected="@(value == "Yes")">Yes</option>
+                                        <option value="No" selected="@(value == "No")">No</option>
+                                    </select>
+                                    break;
+                                case CustomFieldType.PickList:
+                                    <select id="@id" name="@name">
+                                        <option value="" selected="@(value is null)"></option>
+                                        @foreach (var option in field.OptionList)
+                                        {
+                                            <option value="@option" selected="@(option == value)">@option</option>
+                                        }
+                                        @if (value is not null && !field.OptionList.Contains(value))
+                                        {
+                                            <option value="@value" selected>@value (no longer a choice)</option>
+                                        }
+                                    </select>
+                                    break;
+                                default:
+                                    <input id="@id" name="@name" type="@InputType(field.Type)" maxlength="@field.Limit" value="@value" />
+                                    break;
+                            }
+                            @if (field.HelpText is not null)
+                            {
+                                <span class="hint">@field.HelpText</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <button type="submit" class="secondary">Save @((Title ?? "details").ToLowerInvariant())</button>
+            </form>
+        }
+        else
+        {
+            <dl class="facts">
+                @foreach (var entry in _entries.Where(e => e.Value is not null))
+                {
+                    <dt>@entry.Field.Name</dt>
+                    <dd><CustomFieldValueView Field="entry.Field" Value="@entry.Value" /></dd>
+                }
+            </dl>
+        }
+    </section>
+}
+
+@code {
+    private IReadOnlyList<CustomFieldEntry> _entries = [];
+    private string _returnUrl = "/";
+    private string? _error;
+    private bool _saved;
+    private bool _canWrite;
+
+    [Parameter, EditorRequired]
+    public string EntityType { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public Guid EntityId { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool IsRecord => EntityType is "item" or "customer" or "vendor";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        _error = query["fieldError"];
+        _saved = query["fields"] == "saved";
+        _returnUrl = Strip(uri.PathAndQuery);
+        _canWrite = AuthState is not null && (await AuthState).User.Can(UserRole.Standard);
+        _entries = await FieldService.EntriesAsync(EntityType, EntityId);
+    }
+
+    private static string Strip(string pathAndQuery)
+    {
+        var parts = pathAndQuery.Split('?', 2);
+        if (parts.Length == 1)
+            return pathAndQuery;
+        var kept = parts[1].Split('&').Where(p => !p.StartsWith("fieldError=", StringComparison.Ordinal) && !p.StartsWith("fields=", StringComparison.Ordinal)).ToList();
+        return kept.Count == 0 ? parts[0] : $"{parts[0]}?{string.Join('&', kept)}";
+    }
+
+    private string Origin(CustomField field) =>
+        !IsRecord && field.Target == CustomFieldTarget.Customer ? " (from the customer)"
+        : !IsRecord && field.Target == CustomFieldTarget.Vendor ? " (from the vendor)"
+        : field.IsActive ? "" : " (switched off)";
+
+    private static string InputType(CustomFieldType type) => type switch
+    {
+        CustomFieldType.Link => "url",
+        CustomFieldType.Email => "email",
+        CustomFieldType.Phone => "tel",
+        _ => "text",
+    };
+}

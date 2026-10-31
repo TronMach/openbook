@@ -55,6 +55,7 @@ public sealed class CreditService(
     PostingEngine engine,
     InventoryService inventory,
     WarehouseService warehouses,
+    CustomFields.CustomFieldStamper customFields,
     IClock clock,
     ICurrentUser user)
 {
@@ -108,6 +109,7 @@ public sealed class CreditService(
         credit.SetWarehouse(warehouseId);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
+        await customFields.StampAsync(CreditMemoType, credit.Id, customer.Id, credit.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
         return credit;
     }

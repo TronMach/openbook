@@ -43,6 +43,7 @@ public sealed class InvoiceService(
     WarehouseService warehouses,
     BillableExpenseService billables,
     Projects.ProjectBilling projectBilling,
+    CustomFields.CustomFieldStamper customFields,
     IClock clock,
     ICurrentUser user)
 {
@@ -155,6 +156,8 @@ public sealed class InvoiceService(
             invoice.SetSource(source.SalesOrderId, source.Lines);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
+        await customFields.StampAsync(EntityType, invoice.Id, customer.Id, invoice.Lines.Select(l => (l.LineNumber, l.ItemId)), ct,
+            sourceId: source?.SalesOrderId ?? estimate?.Id);
         foreach (var b in billable)
         {
             var billableBefore = BillableExpenseService.Snapshot(b);

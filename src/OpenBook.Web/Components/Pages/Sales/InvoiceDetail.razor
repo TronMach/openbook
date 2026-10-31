@@ -110,6 +110,7 @@
                             {
                                 <div class="muted">@lots</div>
                             }
+                            <LineFields DocumentId="_invoice.Id" LineNumber="line.LineNumber" />
                         </td>
                         <td class="num">@(line.ItemId is null ? "" : line.Quantity.ToString("0.####"))</td>
                         <td class="num">@(line.ItemId is null ? "" : line.Rate.ToString("#,##0.00##"))<PriceNote Line="line" /></td>
@@ -253,6 +254,8 @@
     <EntryTags EntryId="_invoice.JournalEntryId" />
 
     <Attachments EntityType="invoice" EntityId="_invoice.Id" />
+
+    <CustomFieldPanel EntityType="invoice" EntityId="_invoice.Id" />
 
     <Notes EntityType="invoice" EntityId="_invoice.Id" />
 </div>

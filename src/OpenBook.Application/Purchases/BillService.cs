@@ -33,6 +33,7 @@ public sealed class BillService(
     InventoryService inventory,
     WarehouseService warehouses,
     Sales.ISalesStore sales,
+    CustomFields.CustomFieldStamper customFields,
     IClock clock,
     ICurrentUser user)
 {
@@ -101,6 +102,7 @@ public sealed class BillService(
 
         store.Add(bill);
         store.Add(Audit(AuditAction.Created, bill, before: null));
+        await customFields.StampAsync(EntityType, bill.Id, bill.VendorId, bill.Lines.Select(l => (l.LineNumber, l.ItemId)), ct, sourceId: source?.PurchaseOrderId);
         await store.SaveChangesAsync(ct);
         return bill;
     }

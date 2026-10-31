@@ -76,6 +76,7 @@ public static class Links
         "receipt" => $"/purchases/receipts/{id}",
         "captured_document" => $"/documents/{id}",
         "document_reading_settings" => "/settings/document-reading",
+        "custom_field" => $"/settings/custom-fields/{id}",
         "online_payment_settings" => "/settings/online-payments",
         "purchasing_settings" => "/purchases/approvals/settings",
         "ach_batch" => "/purchases/ach",

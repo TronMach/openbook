@@ -1,0 +1,136 @@
+@page "/settings/custom-fields"
+@using OpenBook.Application.CustomFields
+@using OpenBook.Domain.CustomFields
+@inject CustomFieldService FieldService
+
+<PageTitle>Custom fields · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Custom fields</h1>
+        <a class="button" href="/settings/custom-fields/new">New field</a>
+        <a class="button secondary" href="/settings">Settings</a>
+        <a class="button secondary" href="/audit?entityType=custom_field">History</a>
+    </div>
+    <p class="muted">
+        Extra fields for products and services, customers, vendors and documents. Fill them in on each record's page. A product,
+        customer or vendor field can be copied onto new documents, and anything on a document can print on its PDF. Copied
+        values stay as they were, so later changes don't alter documents already made.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Added is { } added)
+    {
+        <div class="alert notice" role="status">@(added == "0" ? "Those fields were already added." : $"Added {added} field{(added == "1" ? "" : "s")}.")</div>
+    }
+
+    @foreach (var target in Enum.GetValues<CustomFieldTarget>())
+    {
+        var fields = _fields.Where(f => f.Target == target).ToList();
+        <section class="card">
+            <div class="toolbar">
+                <h2>@CustomField.Label(target)</h2>
+                <a class="button secondary" href="/settings/custom-fields/new?target=@target">Add a field</a>
+            </div>
+            @if (fields.Count == 0)
+            {
+                <p class="muted">No fields yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Kind</th>
+                                <th>@(target == CustomFieldTarget.Document ? "Goes on" : "Copied onto")</th>
+                                <th>Printed</th>
+                                @if (target != CustomFieldTarget.Document)
+                                {
+                                    <th>In the list</th>
+                                }
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var field in fields)
+                            {
+                                <tr class="@(field.IsActive ? null : "muted")">
+                                    <td>
+                                        <a href="/settings/custom-fields/@field.Id">@field.Name</a>
+                                        @if (field.IsRequired)
+                                        {
+                                            <span class="badge">Required</span>
+                                        }
+                                    </td>
+                                    <td>@CustomField.Label(field.Type)</td>
+                                    <td>@Documents(field.Documents)</td>
+                                    <td>@(field.Documents == CustomFieldDocuments.None ? "" : field.PrintOnForms ? (target == CustomFieldTarget.Item && field.Placement == CustomFieldPlacement.Column ? "Yes, as a column" : "Yes") : "No")</td>
+                                    @if (target != CustomFieldTarget.Document)
+                                    {
+                                        <td>@(field.ShowInList ? "Yes" : "")</td>
+                                    }
+                                    <td>@(field.IsActive ? "Active" : "Switched off")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @{
+                var presets = _presets.Where(p => p.Target == target).ToList();
+            }
+            @if (presets.Count > 0)
+            {
+                <details class="presets">
+                    <summary>Ready-made fields (@presets.Count)</summary>
+                    <form method="post" action="/settings/custom-fields/presets" data-enhance="false">
+                        <AntiforgeryToken />
+                        <ul class="check-list">
+                            @foreach (var preset in presets)
+                            {
+                                <li>
+                                    <label class="check">
+                                        <input type="checkbox" name="key" value="@preset.Key" />
+                                        <span>
+                                            <strong>@preset.Details.Name</strong>
+                                            <span class="muted">
+                                                @CustomField.Label(preset.Details.Type)@(preset.Details.Documents == CustomFieldDocuments.None ? "" : $" · {(target == CustomFieldTarget.Document ? "on" : "copied onto")} {Documents(preset.Details.Documents).ToLowerInvariant()}")@(preset.Details.HelpText is { } help ? $" · {help}" : "")
+                                            </span>
+                                        </span>
+                                    </label>
+                                </li>
+                            }
+                        </ul>
+                        <div class="actions">
+                            <button type="submit" class="secondary">Add the ticked fields</button>
+                            <button type="submit" class="secondary" name="all" value="@target">Add all @presets.Count</button>
+                        </div>
+                    </form>
+                </details>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CustomField> _fields = [];
+    private IReadOnlyList<CustomFieldPreset> _presets = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Added { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _fields = await FieldService.ListAsync();
+        _presets = await FieldService.AvailablePresetsAsync();
+    }
+
+    private static string Documents(CustomFieldDocuments documents) =>
+        documents == CustomField.AllDocuments ? "All documents" : CustomField.Describe(documents);
+}

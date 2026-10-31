@@ -29,6 +29,7 @@ public sealed class SalesReceiptService(
     PostingEngine engine,
     InventoryService inventory,
     WarehouseService warehouses,
+    CustomFields.CustomFieldStamper customFields,
     IClock clock,
     ICurrentUser user)
 {
@@ -75,6 +76,7 @@ public sealed class SalesReceiptService(
         receipt.SetWarehouse(warehouseId);
         store.Add(receipt);
         store.Add(Audit(AuditAction.Created, receipt, before: null));
+        await customFields.StampAsync(EntityType, receipt.Id, customer?.Id, receipt.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
         return receipt;
     }

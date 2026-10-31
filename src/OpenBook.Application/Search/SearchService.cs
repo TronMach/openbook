@@ -38,7 +38,8 @@ public sealed class SearchService(
     ISalesStore sales,
     IPurchasesStore purchases,
     IBankingStore banking,
-    ILedgerStore ledger)
+    ILedgerStore ledger,
+    CustomFields.CustomFieldService customFields)
 {
     public const int MaxPerKind = 20;
 
@@ -65,17 +66,20 @@ public sealed class SearchService(
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
         var chart = await accounts.GetChartAsync(ct);
+        // Custom field values count as text of their record.
+        var fieldValues = await customFields.ValuesByRecordAsync(["customer", "vendor", "item", "invoice", "bill", "sales_receipt"], ct);
+        bool Field(Guid id) => fieldValues.TryGetValue(id, out var entries) && entries.Any(e => Text(e.Value, e.Display));
 
         AddAll(customers.Values
-            .Where(c => Text(c.DisplayName, c.CompanyName, c.Email, c.Phone))
+            .Where(c => Text(c.DisplayName, c.CompanyName, c.Email, c.Phone) || Field(c.Id))
             .OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .Select(c => new SearchHit(SearchKind.Customer, c.Id, c.DisplayName, c.Email ?? c.CompanyName)));
         AddAll(vendors.Values
-            .Where(v => Text(v.DisplayName, v.CompanyName, v.Email, v.Phone, v.AccountNumber))
+            .Where(v => Text(v.DisplayName, v.CompanyName, v.Email, v.Phone, v.AccountNumber) || Field(v.Id))
             .OrderBy(v => v.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .Select(v => new SearchHit(SearchKind.Vendor, v.Id, v.DisplayName, v.Email ?? v.CompanyName)));
         AddAll((await sales.ListItemsAsync(ct))
-            .Where(i => Text(i.Name, i.Description) || Money(i.Rate))
+            .Where(i => Text(i.Name, i.Description) || Money(i.Rate) || Field(i.Id))
             .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(i => new SearchHit(SearchKind.Item, i.Id, i.Name, i.Description, Amount: i.Rate)));
         AddAll(chart.Ordered()
@@ -86,13 +90,13 @@ public sealed class SearchService(
         string Vendor(Guid id) => vendors.TryGetValue(id, out var vendor) ? vendor.DisplayName : string.Empty;
 
         AddAll((await sales.ListInvoicesAsync(null, ct))
-            .Where(i => Text(i.Number, i.Memo, Customer(i.CustomerId)) || Money(i.Total) || Money(i.Balance))
+            .Where(i => Text(i.Number, i.Memo, Customer(i.CustomerId)) || Money(i.Total) || Money(i.Balance) || Field(i.Id))
             .Select(i => new SearchHit(SearchKind.Invoice, i.Id, $"Invoice {i.Number}", Customer(i.CustomerId), i.Date, i.Total)));
         AddAll((await purchases.ListBillsAsync(null, ct))
-            .Where(b => Text(b.Reference, b.Memo, Vendor(b.VendorId)) || Money(b.Total) || Money(b.Balance))
+            .Where(b => Text(b.Reference, b.Memo, Vendor(b.VendorId)) || Money(b.Total) || Money(b.Balance) || Field(b.Id))
             .Select(b => new SearchHit(SearchKind.Bill, b.Id, b.Reference is null ? "Bill" : $"Bill {b.Reference}", Vendor(b.VendorId), b.Date, b.Total)));
         AddAll((await sales.ListReceiptsAsync(ct))
-            .Where(r => Text(r.Number, r.Reference, r.Memo, Customer(r.CustomerId)) || Money(r.Total))
+            .Where(r => Text(r.Number, r.Reference, r.Memo, Customer(r.CustomerId)) || Money(r.Total) || Field(r.Id))
             .Select(r => new SearchHit(SearchKind.SalesReceipt, r.Id, $"Sales receipt {r.Number}", Customer(r.CustomerId), r.Date, r.Total)));
         AddAll((await sales.ListPaymentsAsync(null, ct))
             .Where(p => Text(p.Reference, p.Memo, Customer(p.CustomerId)) || Money(p.Amount))

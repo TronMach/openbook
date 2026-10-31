@@ -45,7 +45,7 @@
         <p class="muted no-print">Emailed @emailed.ToLocalTime().ToString("g").</p>
     }
 
-    <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Prepared for" Facts="Facts" Lines="_estimate.Lines"
+    <SalesDocument DocumentId="_estimate.Id" Company="_company" Customer="_customer" CustomerLabel="Prepared for" Facts="Facts" Lines="_estimate.Lines"
                    Totals="Totals" Memo="@_estimate.Memo" />
 
     @if (_progress.Invoices.Count > 0)
@@ -89,6 +89,8 @@
     }
 
     <Attachments EntityType="estimate" EntityId="_estimate.Id" />
+
+    <CustomFieldPanel EntityType="estimate" EntityId="_estimate.Id" />
 
     <Notes EntityType="estimate" EntityId="_estimate.Id" />
 </div>

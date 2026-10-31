@@ -87,6 +87,7 @@
                         {
                             <span class="muted"> · <a href="/items/@itemId">@Labels.Quantity(quantity) received</a></span>
                         }
+                        <LineFields DocumentId="_bill.Id" LineNumber="line.LineNumber" />
                     </td>
                     <td class="num">@Labels.Amount(line.Amount)</td>
                 </tr>
@@ -171,6 +172,8 @@
                         Active="@(_bill.Status == DocumentStatus.Posted)" Error="@BillableError" />
 
     <Attachments EntityType="bill" EntityId="_bill.Id" />
+
+    <CustomFieldPanel EntityType="bill" EntityId="_bill.Id" />
 
     <Notes EntityType="bill" EntityId="_bill.Id" />
 </div>

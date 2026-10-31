@@ -204,6 +204,7 @@
         <AuthorizeView>
             <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.Can(OpenBook.Domain.Companies.UserRole.Accountant)" Error="@BankError" />
         </AuthorizeView>
+        <CustomFieldPanel EntityType="vendor" EntityId="_vendor.Id" />
         <Notes EntityType="vendor" EntityId="_vendor.Id" />
     }
 </div>

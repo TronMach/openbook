@@ -239,6 +239,9 @@
   <data name="Current ratio" xml:space="preserve">
     <value>Current ratio</value>
   </data>
+  <data name="Custom fields" xml:space="preserve">
+    <value>Custom fields</value>
+  </data>
   <data name="Customer" xml:space="preserve">
     <value>Customer</value>
   </data>
@@ -331,6 +334,9 @@
   </data>
   <data name="Every other session is signed out. This browser stays signed in." xml:space="preserve">
     <value>Every other session is signed out. This browser stays signed in.</value>
+  </data>
+  <data name="extra fields for products, customers, vendors and documents, like pack size, printed on invoices and orders" xml:space="preserve">
+    <value>extra fields for products, customers, vendors and documents, like pack size, printed on invoices and orders</value>
   </data>
   <data name="Fees" xml:space="preserve">
     <value>Fees</value>

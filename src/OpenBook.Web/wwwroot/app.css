@@ -185,6 +185,14 @@ dl.facts dd { margin: 0; }
 .toolbar input, .toolbar select { width: auto; }
 
 .table-wrap { overflow-x: auto; }
+.check-list { list-style: none; padding: 0; margin: 0.75rem 0; columns: 2 18rem; column-gap: 2rem; }
+.check-list .check { margin-bottom: 0.6rem; break-inside: avoid; }
+details.presets { margin-top: 1rem; }
+details.presets summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.field-line { display: block; font-size: 0.8rem; color: var(--muted); }
+.row.wrap { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+.row.wrap .wide-field { grid-column: 1 / -1; }
+.pre-line { white-space: pre-line; }
 table.data { width: 100%; border-collapse: collapse; background: var(--surface); }
 table.data th, table.data td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 table.data th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 600; }

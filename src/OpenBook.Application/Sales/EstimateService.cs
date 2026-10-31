@@ -18,7 +18,7 @@ public sealed record SaveEstimateCommand(
     Guid? LocationId = null);
 
 /// <summary>Estimates: quotes that post nothing, and become invoices when accepted.</summary>
-public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, IClock clock, ICurrentUser user)
+public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "estimate";
 
@@ -43,6 +43,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         estimate.SetLocation(command.LocationId);
         store.Add(estimate);
         store.Add(Audit(AuditAction.Created, estimate, before: null));
+        await customFields.StampAsync(EntityType, estimate.Id, customer.Id, estimate.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
         return estimate;
     }
@@ -63,6 +64,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         estimate.Update(customer.Id, command.Date, command.ExpirationDate, lines, command.Memo, taxCodeId, exemption);
         estimate.SetLocation(command.LocationId);
         store.Add(Audit(AuditAction.Updated, estimate, before));
+        await customFields.StampAsync(EntityType, estimate.Id, customer.Id, estimate.Lines.Select(l => (l.LineNumber, l.ItemId)), ct, replaceLines: true);
         await store.SaveChangesAsync(ct);
         return estimate;
     }

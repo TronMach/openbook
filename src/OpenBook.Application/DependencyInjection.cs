@@ -113,6 +113,9 @@ public static class DependencyInjection
         services.AddScoped<PayablesService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<NoteService>();
+        services.AddScoped<OpenBook.Application.CustomFields.CustomFieldService>();
+        services.AddScoped<OpenBook.Application.CustomFields.CustomFieldStamper>();
+        services.AddScoped<OpenBook.Application.CustomFields.CustomFieldImport>();
         services.AddScoped<VendorImportService>();
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();

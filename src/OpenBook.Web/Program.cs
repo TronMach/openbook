@@ -43,6 +43,7 @@ builder.Services
     .AddOpenBookApi()
     .AddOpenBookWebSecurity(builder.Configuration["OpenBook:DataProtectionKeys"]);
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
+builder.Services.AddScoped<OpenBook.Web.Components.LineFieldCache>();
 
 var app = builder.Build();
 
@@ -137,6 +138,7 @@ app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
 app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
 app.MapDocumentEndpoints();
+app.MapCustomFieldEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

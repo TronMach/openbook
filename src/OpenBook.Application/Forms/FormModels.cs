@@ -19,13 +19,19 @@ public enum FormLineStyle
     Subtotal,
 }
 
-public sealed record FormLine(string? Description, decimal? Quantity, decimal? Rate, decimal? Amount, FormLineStyle Style = FormLineStyle.Normal);
+/// <param name="LineNumber">The document line it shows, so custom field values can find it.</param>
+/// <param name="Details">Small text under the description (custom fields shown there).</param>
+/// <param name="Extra">Values for <see cref="SalesForm.ExtraColumns"/>, in order.</param>
+public sealed record FormLine(
+    string? Description, decimal? Quantity, decimal? Rate, decimal? Amount, FormLineStyle Style = FormLineStyle.Normal,
+    int? LineNumber = null, string? Details = null, IReadOnlyList<string>? Extra = null);
 
 public sealed record FormTotal(string Label, decimal Amount, bool Emphasis = false);
 
 /// <summary>An invoice, estimate, credit memo, sales receipt or purchase order, ready to render.</summary>
 /// <param name="Facts">Label/value pairs under the title: date, due date, terms…</param>
 /// <param name="PartyLabel">The heading over the other party ("BILL TO"; "VENDOR" on a purchase order).</param>
+/// <param name="ExtraColumns">Custom field columns between the description and the quantity.</param>
 public sealed record SalesForm(
     string Title,
     string Number,
@@ -37,7 +43,8 @@ public sealed record SalesForm(
     string? Message,
     string Currency,
     FormStyle Style,
-    string PartyLabel = "BILL TO");
+    string PartyLabel = "BILL TO",
+    IReadOnlyList<string>? ExtraColumns = null);
 
 public sealed record StatementFormLine(DateOnly Date, string Activity, string Reference, decimal Amount, decimal Balance);
 

@@ -60,7 +60,7 @@
                 @foreach (var line in _receipt.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
                 {
                     <tr>
-                        <td>@line.Description</td>
+                        <td>@line.Description<LineFields DocumentId="_receipt.Id" LineNumber="line.LineNumber" /></td>
                         <td class="num">@(line.ItemId is null ? "" : line.Quantity.ToString("0.####"))</td>
                         <td class="num">@(line.ItemId is null ? "" : line.Rate.ToString("#,##0.00##"))<PriceNote Line="line" /></td>
                         <td class="num">@Labels.AmountOrBlank(line.Amount)</td>
@@ -108,6 +108,8 @@
     <EntryTags EntryId="_receipt.JournalEntryId" />
 
     <Attachments EntityType="sales_receipt" EntityId="_receipt.Id" />
+
+    <CustomFieldPanel EntityType="sales_receipt" EntityId="_receipt.Id" />
 
     <Notes EntityType="sales_receipt" EntityId="_receipt.Id" />
 </div>

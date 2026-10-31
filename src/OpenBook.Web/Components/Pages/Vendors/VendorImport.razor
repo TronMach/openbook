@@ -14,7 +14,7 @@
         <p>
             Upload a CSV with a header row. A <strong>name</strong> column ("Vendor" or "Name") is required. Company, email,
             phone, address (one column, or street / city / state / zip / country), account number, terms ("Net 30"),
-            default expense account (full name or number) and notes are used when present. Vendors already in OpenBook
+            default expense account (full name or number), notes and columns named after your custom fields are used when present. Vendors already in OpenBook
             are skipped; nothing is imported unless every row is valid.
         </p>
         <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />

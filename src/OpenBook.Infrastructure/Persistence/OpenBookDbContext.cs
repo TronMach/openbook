@@ -77,6 +77,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Documents.CapturedDocument> CapturedDocuments => Set<OpenBook.Domain.Documents.CapturedDocument>();
     public DbSet<OpenBook.Domain.Documents.DocumentItemCode> DocumentItemCodes => Set<OpenBook.Domain.Documents.DocumentItemCode>();
     public DbSet<OpenBook.Domain.Documents.DocumentReadingSettings> DocumentReadingSettings => Set<OpenBook.Domain.Documents.DocumentReadingSettings>();
+    public DbSet<OpenBook.Domain.CustomFields.CustomField> CustomFields => Set<OpenBook.Domain.CustomFields.CustomField>();
+    public DbSet<OpenBook.Domain.CustomFields.CustomFieldValue> CustomFieldValues => Set<OpenBook.Domain.CustomFields.CustomFieldValue>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
     public DbSet<AchSettings> AchSettings => Set<AchSettings>();
@@ -1684,6 +1686,36 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.ProtectedApiKey).HasMaxLength(2000);
             b.Property(s => s.Model).HasMaxLength(100);
             b.Ignore(s => s.IsReady);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.CustomFields.CustomField>(b =>
+        {
+            b.ToTable("CustomFields");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Target).HasConversion<string>().HasMaxLength(20);
+            b.Property(f => f.Type).HasConversion<string>().HasMaxLength(20);
+            b.Property(f => f.Placement).HasConversion<string>().HasMaxLength(20);
+            b.Property(f => f.Name).HasMaxLength(OpenBook.Domain.CustomFields.CustomField.MaxNameLength);
+            b.Property(f => f.HelpText).HasMaxLength(OpenBook.Domain.CustomFields.CustomField.MaxHelpLength);
+            b.Property(f => f.Options).HasMaxLength(4000);
+            b.Property(f => f.DefaultValue).HasMaxLength(OpenBook.Domain.CustomFields.CustomField.MaxValueLength);
+            b.Property(f => f.Minimum).HasColumnName("MinimumTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(f => f.Maximum).HasColumnName("MaximumTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(f => f.PresetKey).HasMaxLength(50);
+            b.Ignore(f => f.OptionList);
+            b.Ignore(f => f.Limit);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.CustomFields.CustomFieldValue>(b =>
+        {
+            b.ToTable("CustomFieldValues");
+            b.HasKey(v => v.Id);
+            b.Property(v => v.EntityType).HasMaxLength(40);
+            b.Property(v => v.Value).HasMaxLength(OpenBook.Domain.CustomFields.CustomField.MaxValueLength);
+            b.HasIndex(v => new { v.EntityId, v.FieldId, v.LineNumber }).IsUnique();
+            b.HasIndex(v => new { v.EntityType, v.LineNumber });
+            b.HasIndex(v => v.FieldId);
+            b.HasOne<OpenBook.Domain.CustomFields.CustomField>().WithMany().HasForeignKey(v => v.FieldId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PurchaseOrder>(b =>

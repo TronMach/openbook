@@ -28,7 +28,7 @@
         <div class="alert error no-print" role="alert">@Error</div>
     }
 
-    <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Ordered by" Facts="Facts" Lines="_order.Lines" Totals="Totals" Memo="@_order.Memo" />
+    <SalesDocument DocumentId="_order.Id" Company="_company" Customer="_customer" CustomerLabel="Ordered by" Facts="Facts" Lines="_order.Lines" Totals="Totals" Memo="@_order.Memo" />
 
     @if (_progress.Invoices.Count > 0)
     {
@@ -61,6 +61,8 @@
     }
 
     <Attachments EntityType="sales_order" EntityId="_order.Id" />
+
+    <CustomFieldPanel EntityType="sales_order" EntityId="_order.Id" />
 
     <Notes EntityType="sales_order" EntityId="_order.Id" />
 </div>

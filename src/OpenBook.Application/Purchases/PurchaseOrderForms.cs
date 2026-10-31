@@ -10,7 +10,7 @@ namespace OpenBook.Application.Purchases;
 
 /// <summary>Purchase orders as PDF (the company's form style) and emailed to the vendor.</summary>
 public sealed class PurchaseOrderForms(
-    IPurchasesStore store, ICompanyStore companies, IFormRenderer renderer, EmailService email, IClock clock, ICurrentUser user)
+    IPurchasesStore store, ICompanyStore companies, IFormRenderer renderer, EmailService email, CustomFields.CustomFieldService customFields, IClock clock, ICurrentUser user)
 {
     public async Task<RenderedForm> RenderAsync(Guid id, CancellationToken ct = default)
     {
@@ -24,12 +24,13 @@ public sealed class PurchaseOrderForms(
         if (vendor.AccountNumber is { } account)
             facts.Add(("Our account", account));
         var lines = order.Lines.Select(l => l.IsItem
-            ? new FormLine(l.Description, l.Quantity, l.UnitCost, l.Amount)
-            : new FormLine(l.Description, null, null, l.Amount)).ToList();
+            ? new FormLine(l.Description, l.Quantity, l.UnitCost, l.Amount, LineNumber: l.LineNumber)
+            : new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber)).ToList();
         var party = new FormParty(vendor.CompanyName is { } name && name != vendor.DisplayName ? $"{vendor.DisplayName}\n{name}" : vendor.DisplayName,
             vendor.Address, vendor.Email, vendor.Phone);
         var form = new SalesForm("Purchase order", order.Number, FormService.CompanyParty(company), party, facts, lines,
             [new FormTotal("Total", order.Total, Emphasis: true)], order.Memo, company.HomeCurrency.Code, FormService.Style(company), PartyLabel: "VENDOR");
+        form = await customFields.DecorateAsync(form, order.Id, ct);
         return new RenderedForm(FormService.FileName(company, "Purchase order", order.Number), renderer.Render(form), Guid.Empty, $"Purchase order {order.Number}");
     }
 

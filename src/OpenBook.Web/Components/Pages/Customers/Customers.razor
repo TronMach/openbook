@@ -1,5 +1,6 @@
 @page "/customers"
 @inject CustomerService CustomerService
+@inject OpenBook.Application.CustomFields.CustomFieldService FieldService
 @inject OpenBook.Application.Companies.ICompanyStore Companies
 
 <PageTitle>@_terms.Customers · OpenBook</PageTitle>
@@ -27,6 +28,7 @@
                 <thead>
                     <tr>
                         <th>@_terms.Customer</th>
+                        @foreach (var column in _fields.Columns) { <th>@column.Name</th> }
                         <th>Email</th>
                         <th>Phone</th>
                         <th>Terms</th>
@@ -46,6 +48,7 @@
                                     <span class="badge">Inactive</span>
                                 }
                             </td>
+                            @foreach (var column in _fields.Columns) { <td>@(_fields.Values.GetValueOrDefault(s.Customer.Id)?.GetValueOrDefault(column.Id))</td> }
                             <td>@s.Customer.Email</td>
                             <td>@s.Customer.Phone</td>
                             <td class="muted">@s.Customer.Terms.Label</td>
@@ -72,5 +75,9 @@
     {
         _terms = await Editions.TermsAsync(Companies);
         _customers = await CustomerService.ListAsync(DateOnly.FromDateTime(DateTime.Today), ShowInactive);
+        _fields = await FieldService.ListColumnsAsync(OpenBook.Domain.CustomFields.CustomFieldTarget.Customer);
     }
+
+    private (IReadOnlyList<OpenBook.Domain.CustomFields.CustomField> Columns, IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, string>> Values) _fields =
+        ([], new Dictionary<Guid, IReadOnlyDictionary<Guid, string>>());
 }

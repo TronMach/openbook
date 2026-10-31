@@ -20,7 +20,7 @@ public enum FormKind
 public sealed record RenderedForm(string FileName, byte[] Pdf, Guid CustomerId, string Title);
 
 /// <summary>Builds printable invoices, estimates, credit memos, sales receipts and statements, and renders them to PDF.</summary>
-public sealed class FormService(ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer)
+public sealed class FormService(ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer, CustomFields.CustomFieldService customFields)
 {
     public async Task<RenderedForm> RenderAsync(FormKind kind, Guid id, CancellationToken ct = default)
     {
@@ -33,13 +33,17 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
     public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, CancellationToken ct = default) =>
         (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, ct)).Form;
 
-    private async Task<(SalesForm Form, Guid CustomerId)> BuildAsync(Company company, FormKind kind, Guid id, CancellationToken ct) => kind switch
+    private async Task<(SalesForm Form, Guid CustomerId)> BuildAsync(Company company, FormKind kind, Guid id, CancellationToken ct)
     {
-        FormKind.Invoice => await InvoiceAsync(company, id, ct),
-        FormKind.Estimate => await EstimateAsync(company, id, ct),
-        FormKind.CreditMemo => await CreditMemoAsync(company, id, ct),
-        _ => await ReceiptAsync(company, id, ct),
-    };
+        var (form, customerId) = kind switch
+        {
+            FormKind.Invoice => await InvoiceAsync(company, id, ct),
+            FormKind.Estimate => await EstimateAsync(company, id, ct),
+            FormKind.CreditMemo => await CreditMemoAsync(company, id, ct),
+            _ => await ReceiptAsync(company, id, ct),
+        };
+        return (await customFields.DecorateAsync(form, id, ct), customerId);
+    }
 
     public async Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
@@ -158,10 +162,10 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             ? new FormLine(shown.Heading, null, null, shown.Subtotal, shown.Subtotal is null ? FormLineStyle.Heading : FormLineStyle.Subtotal)
             : l.Kind switch
             {
-                SalesLineKind.Note => new FormLine(l.Description, null, null, null),
-                SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount),
+                SalesLineKind.Note => new FormLine(l.Description, null, null, null, LineNumber: l.LineNumber),
+                SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber),
                 // Lot and serial numbers follow the description, so a customer's copy shows what was shipped.
-                _ => new FormLine(l.Lots is { } lots ? $"{l.Description} · {lots}" : l.Description, l.Quantity, l.Rate, l.Amount),
+                _ => new FormLine(l.Lots is { } lots ? $"{l.Description} · {lots}" : l.Description, l.Quantity, l.Rate, l.Amount, LineNumber: l.LineNumber),
             })
         .ToList();
 

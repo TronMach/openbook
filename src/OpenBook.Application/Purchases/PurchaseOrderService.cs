@@ -59,7 +59,7 @@ public sealed record PurchaseOrderProgress(IReadOnlyList<Bill> Bills, IReadOnlyL
 /// </summary>
 public sealed class PurchaseOrderService(
     IPurchasesStore store, Sales.ISalesStore sales, AccountService accounts, WarehouseService warehouses, BillService bills,
-    InventoryService inventory, PostingEngine engine, IClock clock, ICurrentUser user)
+    InventoryService inventory, PostingEngine engine, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "purchase_order";
     public const string ReceiptSource = "purchases.receipt";
@@ -83,6 +83,7 @@ public sealed class PurchaseOrderService(
         await FillAsync(order, command, ct);
         store.Add(order);
         store.Add(Audit(AuditAction.Created, order, null));
+        await customFields.StampAsync(EntityType, order.Id, order.VendorId, order.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
         return order;
     }
@@ -97,6 +98,7 @@ public sealed class PurchaseOrderService(
         var before = Snapshot(order);
         await FillAsync(order, command, ct);
         store.Add(Audit(AuditAction.Updated, order, before));
+        await customFields.StampAsync(EntityType, order.Id, order.VendorId, order.Lines.Select(l => (l.LineNumber, l.ItemId)), ct, replaceLines: true);
         await store.SaveChangesAsync(ct);
         return order;
     }

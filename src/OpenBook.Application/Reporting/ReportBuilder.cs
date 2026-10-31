@@ -1,3 +1,4 @@
+using OpenBook.Domain.CustomFields;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Purchases;
@@ -43,7 +44,9 @@ public enum BuilderGrouping
 /// A custom transaction report's settings, read from the query string so it can be saved, exported and emailed
 /// like any report: <c>columns</c> (comma list of <see cref="BuilderColumn"/>), <c>groupBy</c>, <c>accounts</c>
 /// (comma list of ids, subaccounts included), <c>accountClass</c>, <c>types</c> (comma list of document types),
-/// <c>name</c> and <c>memo</c> (contains), <c>min</c>/<c>max</c> (absolute amount) and <c>title</c>.
+/// <c>name</c> and <c>memo</c> (contains), <c>min</c>/<c>max</c> (absolute amount), <c>title</c>, <c>fields</c> (comma list
+/// of custom field ids: customer, vendor or document fields of each line's document, shown before the amounts) and
+/// <c>fieldId</c>/<c>fieldValue</c> (only lines whose document or name has that field containing the text).
 /// </summary>
 public sealed record BuilderOptions(
     IReadOnlyList<BuilderColumn> Columns,
@@ -55,7 +58,10 @@ public sealed record BuilderOptions(
     string? MemoContains = null,
     decimal? MinAmount = null,
     decimal? MaxAmount = null,
-    string? Title = null)
+    string? Title = null,
+    IReadOnlyList<Guid>? FieldIds = null,
+    Guid? FieldFilterId = null,
+    string? FieldFilterText = null)
 {
     public static readonly IReadOnlyList<BuilderColumn> DefaultColumns =
         [BuilderColumn.Date, BuilderColumn.Type, BuilderColumn.Number, BuilderColumn.Name, BuilderColumn.Account, BuilderColumn.Memo, BuilderColumn.Amount];
@@ -77,7 +83,10 @@ public sealed record BuilderOptions(
             p.Get("memo"),
             p.GetAmount("min"),
             p.GetAmount("max"),
-            p.Get("title"));
+            p.Get("title"),
+            List(p.Get("fields")).Select(f => Guid.TryParse(f, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList(),
+            Guid.TryParse(p.Get("fieldId"), out var fieldId) ? fieldId : null,
+            p.Get("fieldValue"));
     }
 }
 
@@ -86,7 +95,8 @@ public sealed record BuilderOptions(
 /// the other reports) with the columns, filters and grouping the user picks.
 /// </summary>
 public sealed class ReportBuilder(
-    ReportLedger ledger, AccountService accounts, ISalesStore sales, IPurchasesStore purchases, Segments.SegmentService segments, ICompanyStore companies)
+    ReportLedger ledger, AccountService accounts, ISalesStore sales, IPurchasesStore purchases, Segments.SegmentService segments, ICompanyStore companies,
+    CustomFields.CustomFieldService customFields)
 {
     public const int MaxRows = 5000;
 
@@ -113,6 +123,20 @@ public sealed class ReportBuilder(
         var classes = (await segments.ListAsync(Domain.Segments.SegmentKind.Class, ct: ct)).ToDictionary(s => s.Segment.Id, s => s.FullName);
         var locations = (await segments.ListAsync(Domain.Segments.SegmentKind.Location, ct: ct)).ToDictionary(s => s.Segment.Id, s => s.FullName);
 
+        // Custom fields of each line's customer or vendor, or of its document.
+        var reportable = (await customFields.ListAsync(ct: ct)).Where(f => f.Target != CustomFieldTarget.Item).ToDictionary(f => f.Id);
+        var fieldColumns = (options.FieldIds ?? []).Where(reportable.ContainsKey).Select(id => reportable[id]).ToList();
+        var filterField = options.FieldFilterId is { } filterId ? reportable.GetValueOrDefault(filterId) : null;
+        var fieldValues = fieldColumns.Count > 0 || filterField is not null
+            ? await customFields.ValuesByRecordAsync([.. CustomFields.CustomFieldService.EntityTypes.Keys.Where(k => k != "item")], ct)
+            : new Dictionary<Guid, IReadOnlyList<CustomFields.CustomFieldEntry>>();
+        string? FieldValue(CustomField field, LedgerLine l)
+        {
+            Guid? owner = field.Target == CustomFieldTarget.Document ? l.SourceId
+                : l.SourceId is { } id && names.TryGetValue((l.Source, id), out var n) ? n.PartyId : null;
+            return owner is { } o && fieldValues.TryGetValue(o, out var entries) ? entries.FirstOrDefault(e => e.Field.Id == field.Id)?.Display : null;
+        }
+
         IEnumerable<Guid> Subtree(Guid id) => chart.ChildrenOf(id).SelectMany(c => Subtree(c.Id)).Prepend(id);
         var accountSet = options.AccountIds is { Count: > 0 } ids
             ? ids.Where(id => chart.Find(id) is not null).SelectMany(Subtree).ToHashSet()
@@ -127,6 +151,7 @@ public sealed class ReportBuilder(
             .Where(l => options.MemoContains is not { } m || (l.LineMemo ?? l.EntryMemo)?.Contains(m, StringComparison.OrdinalIgnoreCase) == true)
             .Where(l => options.MinAmount is not { } min || Math.Abs(l.Amount) >= min)
             .Where(l => options.MaxAmount is not { } max || Math.Abs(l.Amount) <= max)
+            .Where(l => filterField is null || FieldValue(filterField, l)?.Contains(options.FieldFilterText ?? "", StringComparison.OrdinalIgnoreCase) == true)
             .OrderBy(l => l.Date).ThenBy(l => l.EntryNumber)
             .ToList();
         var truncated = lines.Count > MaxRows;
@@ -148,7 +173,15 @@ public sealed class ReportBuilder(
             _ => "",
         };
 
-        var columns = options.Columns;
+        // Custom field columns go before the first amount column.
+        var standard = options.Columns;
+        var firstMoney = standard.ToList().FindIndex(c => c is BuilderColumn.Debit or BuilderColumn.Credit or BuilderColumn.Amount or BuilderColumn.Balance);
+        var at = firstMoney < 0 ? standard.Count : firstMoney;
+        List<(BuilderColumn? Column, CustomField? Field)> columns =
+            [.. standard.Take(at).Select(c => ((BuilderColumn?)c, (CustomField?)null)), .. fieldColumns.Select(f => ((BuilderColumn?)null, (CustomField?)f)),
+             .. standard.Skip(at).Select(c => ((BuilderColumn?)c, (CustomField?)null))];
+        ReportCell Any((BuilderColumn? Column, CustomField? Field) column, LedgerLine l, decimal balance) =>
+            column.Field is { } field ? FieldValue(field, l) : Cell(column.Column!.Value, l, balance);
         ReportCell Cell(BuilderColumn column, LedgerLine l, decimal balance) => column switch
         {
             BuilderColumn.Date => new ReportCell(l.Date),
@@ -164,9 +197,10 @@ public sealed class ReportBuilder(
             BuilderColumn.Amount => l.Amount,
             _ => balance,
         };
-        ReportCell? Total(BuilderColumn column, IReadOnlyList<LedgerLine> group, string label, int index) => column switch
+        ReportCell? Total((BuilderColumn? Column, CustomField? Field) column, IReadOnlyList<LedgerLine> group, string label, int index) => column.Column switch
         {
             _ when index == 0 => label,
+            null => null,
             BuilderColumn.Debit => group.Where(l => l.Amount > 0m).Sum(l => l.Amount),
             BuilderColumn.Credit => -group.Where(l => l.Amount < 0m).Sum(l => l.Amount),
             BuilderColumn.Amount or BuilderColumn.Balance => group.Sum(l => l.Amount),
@@ -180,7 +214,7 @@ public sealed class ReportBuilder(
             foreach (var l in group)
             {
                 balance += l.Amount;
-                rows.Add(new ReportTableRow(columns.Select(c => (ReportCell?)Cell(c, l, balance)).ToList(), depth));
+                rows.Add(new ReportTableRow(columns.Select(c => (ReportCell?)Any(c, l, balance)).ToList(), depth));
             }
         }
 
@@ -205,7 +239,7 @@ public sealed class ReportBuilder(
         return new ReportTable(
             options.Title is { Length: > 0 } title ? title : "Transaction report",
             [company.Name, subtitle],
-            columns.Select(c => new ReportColumn(Header(c), c switch
+            columns.Select(c => c.Field is { } field ? new ReportColumn(field.Name, ColumnFormat.Text) : new ReportColumn(Header(c.Column!.Value), c.Column switch
             {
                 BuilderColumn.Date => ColumnFormat.Date,
                 BuilderColumn.Number => ColumnFormat.Number,
@@ -217,25 +251,25 @@ public sealed class ReportBuilder(
             truncated ? $"Only the first {MaxRows:N0} lines are shown; narrow the dates or filters." : "Amounts are debits positive, credits negative.");
     }
 
-    private static string? Name(LedgerLine line, IReadOnlyDictionary<(string, Guid), string> names) =>
-        line.SourceId is { } id && names.TryGetValue((line.Source, id), out var name) ? name : null;
+    private static string? Name(LedgerLine line, IReadOnlyDictionary<(string, Guid), (string Name, Guid? PartyId)> names) =>
+        line.SourceId is { } id && names.TryGetValue((line.Source, id), out var name) ? name.Name : null;
 
-    /// <summary>The customer or vendor of each document, keyed by source and document id.</summary>
-    private async Task<IReadOnlyDictionary<(string, Guid), string>> NamesAsync(CancellationToken ct)
+    /// <summary>The customer or vendor of each document (name and id; an expense without a vendor has its payee), keyed by source and document id.</summary>
+    private async Task<IReadOnlyDictionary<(string, Guid), (string Name, Guid? PartyId)>> NamesAsync(CancellationToken ct)
     {
         var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
-        var names = new Dictionary<(string, Guid), string>();
+        var names = new Dictionary<(string, Guid), (string Name, Guid? PartyId)>();
         void Customer(string source, Guid id, Guid? customerId)
         {
             if (customerId is { } c && customers.TryGetValue(c, out var n))
-                names[(source, id)] = n;
+                names[(source, id)] = (n, c);
         }
 
         void Vendor(string source, Guid id, Guid? vendorId)
         {
             if (vendorId is { } v && vendors.TryGetValue(v, out var n))
-                names[(source, id)] = n;
+                names[(source, id)] = (n, v);
         }
 
         foreach (var i in await sales.ListInvoicesAsync(null, ct))
@@ -270,7 +304,7 @@ public sealed class ReportBuilder(
             if (e.VendorId is not null)
                 Vendor(BankTransaction.SpendSource, e.Id, e.VendorId);
             else if (e.Payee is { } payee)
-                names[(BankTransaction.SpendSource, e.Id)] = payee;
+                names[(BankTransaction.SpendSource, e.Id)] = (payee, null);
         }
 
         return names;

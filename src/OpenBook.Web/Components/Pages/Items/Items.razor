@@ -1,5 +1,6 @@
 @page "/items"
 @inject ItemService ItemService
+@inject OpenBook.Application.CustomFields.CustomFieldService FieldService
 @inject AccountService AccountService
 @inject OpenBook.Application.Inventory.InventoryService Inventory
 
@@ -22,7 +23,7 @@
     {
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Name</th><th>Type</th><th>Description</th><th class="num">Price</th><th class="num">On hand</th><th>Income account</th></tr></thead>
+                <thead><tr><th>Name</th>@foreach (var column in _fields.Columns) { <th>@column.Name</th> }<th>Type</th><th>Description</th><th class="num">Price</th><th class="num">On hand</th><th>Income account</th></tr></thead>
                 <tbody>
                     @foreach (var item in _items)
                     {
@@ -34,6 +35,7 @@
                                     <span class="badge">Inactive</span>
                                 }
                             </td>
+                            @foreach (var column in _fields.Columns) { <td>@(_fields.Values.GetValueOrDefault(item.Id)?.GetValueOrDefault(column.Id))</td> }
                             <td class="muted">@Labels.For(item.Type)</td>
                             <td class="muted">@item.Description</td>
                             <td class="num">@item.Rate.ToString("#,##0.00##")</td>
@@ -69,5 +71,9 @@
         _chart = await AccountService.GetChartAsync();
         _items = await ItemService.ListAsync(ShowInactive);
         _stock = (await Inventory.StockAsync()).ToDictionary(s => s.Item.Id);
+        _fields = await FieldService.ListColumnsAsync(OpenBook.Domain.CustomFields.CustomFieldTarget.Item);
     }
+
+    private (IReadOnlyList<OpenBook.Domain.CustomFields.CustomField> Columns, IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, string>> Values) _fields =
+        ([], new Dictionary<Guid, IReadOnlyDictionary<Guid, string>>());
 }

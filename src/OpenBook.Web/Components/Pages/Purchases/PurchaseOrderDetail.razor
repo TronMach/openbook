@@ -72,7 +72,7 @@
                 @foreach (var s in _progress.Lines)
                 {
                     <tr>
-                        <td>@(s.Line.Description ?? "")</td>
+                        <td>@(s.Line.Description ?? "")<LineFields DocumentId="_order.Id" LineNumber="s.Line.LineNumber" /></td>
                         <td class="num">@(s.Line.IsItem ? Labels.Quantity(s.Line.Quantity) : "")</td>
                         <td class="num">@(s.Line.IsItem ? s.Line.UnitCost.ToString("#,##0.00##") : "")</td>
                         <td class="num">@Labels.Amount(s.Line.Amount)</td>
@@ -219,6 +219,8 @@
     }
 
     <Attachments EntityType="purchase_order" EntityId="_order.Id" />
+
+    <CustomFieldPanel EntityType="purchase_order" EntityId="_order.Id" />
 
     <Notes EntityType="purchase_order" EntityId="_order.Id" />
 </div>

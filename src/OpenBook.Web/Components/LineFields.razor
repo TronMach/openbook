@@ -1,0 +1,21 @@
+@using OpenBook.Application.CustomFields
+@inject LineFieldCache Cache
+@* The custom field values a document line carries (copied from its item), shown under the description. *@
+
+@if (_entries is { Count: > 0 })
+{
+    <span class="field-line">@string.Join(" · ", _entries.Select(e => $"{e.Field.Name}: {e.Display}"))</span>
+}
+
+@code {
+    private IReadOnlyList<CustomFieldEntry>? _entries;
+
+    [Parameter, EditorRequired]
+    public Guid DocumentId { get; set; }
+
+    [Parameter, EditorRequired]
+    public int LineNumber { get; set; }
+
+    protected override async Task OnParametersSetAsync() =>
+        _entries = (await Cache.ForAsync(DocumentId)).GetValueOrDefault(LineNumber);
+}

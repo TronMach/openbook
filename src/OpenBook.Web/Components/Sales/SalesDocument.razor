@@ -35,6 +35,10 @@
                         {
                             <div class="muted">@lots</div>
                         }
+                        @if (DocumentId is { } documentId)
+                        {
+                            <LineFields DocumentId="documentId" LineNumber="line.LineNumber" />
+                        }
                     </td>
                     <td class="num">@(line.Kind == SalesLineKind.Item ? line.Quantity.ToString("0.####") : "")</td>
                     <td class="num">
@@ -83,4 +87,8 @@
 
     [Parameter]
     public string? Memo { get; set; }
+
+    /// <summary>The document's id, to show the custom field values its lines carry.</summary>
+    [Parameter]
+    public Guid? DocumentId { get; set; }
 }

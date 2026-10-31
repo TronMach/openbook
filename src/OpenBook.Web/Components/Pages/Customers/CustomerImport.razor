@@ -14,7 +14,7 @@
         <p>
             Upload a CSV with a header row. A <strong>name</strong> column ("Customer" or "Name") is required. Company, email,
             phone, billing address (one column, or street / city / state / zip / country), shipping address, terms
-            ("Net 30", "Due on receipt") and notes are used when present. A QuickBooks customer export works as-is.
+            ("Net 30", "Due on receipt") and notes are used when present, and so is a column named after one of your custom fields. A QuickBooks customer export works as-is.
             Customers already in OpenBook are skipped; nothing is imported unless every row is valid.
         </p>
         <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />

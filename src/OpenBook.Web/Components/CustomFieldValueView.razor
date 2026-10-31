@@ -1,0 +1,30 @@
+@using OpenBook.Domain.CustomFields
+@* One stored custom field value as people read it; links and email addresses can be followed. *@
+
+@if (Value is null)
+{
+}
+else if (Field.Type == CustomFieldType.Link && Uri.TryCreate(Value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+{
+    <a href="@uri" rel="noopener noreferrer" target="_blank">@Value</a>
+}
+else if (Field.Type == CustomFieldType.Email)
+{
+    <a href="mailto:@Value">@Value</a>
+}
+else if (Field.Type == CustomFieldType.LongText)
+{
+    <span class="pre-line">@Field.Display(Value)</span>
+}
+else
+{
+    @Field.Display(Value)
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public CustomField Field { get; set; } = default!;
+
+    [Parameter]
+    public string? Value { get; set; }
+}

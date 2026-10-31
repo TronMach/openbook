@@ -36,17 +36,28 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         Header(section, look, form.Company, $"{form.Title.ToUpperInvariant()} {form.Number}", form.Facts);
         BillTo(section, look, form.Customer, form.PartyLabel);
 
-        var table = Table(section, look, [5, 1, 1.4, 1.4]);
-        Heading(table, look, ("Description", false), ("Qty", true), ("Rate", true), ("Amount", true));
+        // Custom field columns sit between the description and the quantity, taking their room from the description.
+        var extra = form.ExtraColumns ?? [];
+        var table = Table(section, look, [Math.Max(5 - (1.2 * extra.Count), 2), .. extra.Select(_ => 1.2), 1, 1.4, 1.4]);
+        Heading(table, look, [("Description", false), .. extra.Select(c => (c, false)), ("Qty", true), ("Rate", true), ("Amount", true)]);
         foreach (var line in form.Lines)
         {
-            var row = Body(table, 1,
+            var row = Body(table, 1 + extra.Count,
+            [
                 line.Description ?? "",
+                .. extra.Select((_, i) => line.Extra is { } values && i < values.Count ? values[i] : ""),
                 line.Quantity is { } q ? q.ToString("0.####", CultureInfo.CurrentCulture) : "",
                 line.Rate is { } r ? r.ToString("#,0.00##", CultureInfo.CurrentCulture) : "",
-                line.Amount is { } a ? Amount(a) : "");
+                line.Amount is { } a ? Amount(a) : "",
+            ]);
             if (line.Style != FormLineStyle.Normal)
                 row.Format.Font.Bold = true;
+            if (!string.IsNullOrEmpty(line.Details))
+            {
+                var details = row.Cells[0].AddParagraph(line.Details);
+                details.Format.Font.Size = look.Small;
+                details.Format.Font.Color = Grey;
+            }
         }
 
         Totals(section, look, form);

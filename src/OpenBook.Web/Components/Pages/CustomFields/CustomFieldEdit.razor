@@ -1,0 +1,212 @@
+@page "/settings/custom-fields/new"
+@page "/settings/custom-fields/{Id:guid}"
+@using System.Globalization
+@using OpenBook.Application.CustomFields
+@using OpenBook.Domain.CustomFields
+@inject CustomFieldService FieldService
+
+<PageTitle>@(_field?.Name ?? "New field") · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(_field is null ? _target is { } t ? $"New field for {CustomField.Label(t).ToLowerInvariant()}" : "New field" : _field.Name)</h1>
+        <a class="button secondary" href="/settings/custom-fields">Custom fields</a>
+        @if (_field is not null)
+        {
+            <a class="button secondary" href="/audit?entityType=custom_field&entityId=@_field.Id">History</a>
+        }
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+
+    @if (Id is not null && _field is null)
+    {
+        <p>There's no such field.</p>
+    }
+    else if (_target is not { } target)
+    {
+        <div class="card">
+            <p>What will the field belong to?</p>
+            <ul class="links">
+                @foreach (var choice in Enum.GetValues<CustomFieldTarget>())
+                {
+                    <li><a href="/settings/custom-fields/new?target=@choice">@CustomField.Label(choice)</a> <span class="muted">@Explain(choice)</span></li>
+                }
+            </ul>
+        </div>
+    }
+    else
+    {
+        @if (_field is { IsActive: false })
+        {
+            <div class="alert notice" role="status">This field is switched off: it isn't shown on records or copied onto new documents. Documents that have it keep it.</div>
+        }
+        <div class="card">
+            <form method="post" action="@(_field is null ? "/settings/custom-fields" : $"/settings/custom-fields/{_field.Id}")" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="target" value="@target" />
+                <p class="muted">@Explain(target)</p>
+                <div class="row wrap">
+                    <div class="field">
+                        <label for="name">Name</label>
+                        <input id="name" name="name" required maxlength="@CustomField.MaxNameLength" value="@_field?.Name" />
+                    </div>
+                    <div class="field">
+                        <label for="type">Kind of value</label>
+                        <select id="type" name="type">
+                            @foreach (var type in Enum.GetValues<CustomFieldType>())
+                            {
+                                <option value="@type" selected="@(type == (_field?.Type ?? CustomFieldType.Text))">@CustomField.Label(type)</option>
+                            }
+                        </select>
+                        @if (_field is not null)
+                        {
+                            <span class="hint">Can't change once anything has a value.</span>
+                        }
+                    </div>
+                    <div class="field">
+                        <label for="position">Order</label>
+                        <input id="position" name="position" type="number" min="0" max="100000" value="@(_field?.Position ?? 0)" />
+                        <span class="hint">Lower numbers come first; 0 puts a new field last.</span>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="help">Help text</label>
+                    <input id="help" name="helpText" maxlength="@CustomField.MaxHelpLength" value="@_field?.HelpText" />
+                    <span class="hint">Shown under the field, e.g. "How it's packed, like Case of 12".</span>
+                </div>
+                <div class="row wrap">
+                    <div class="field">
+                        <label for="options">Pick list choices</label>
+                        <textarea id="options" name="options" rows="5">@(_field is null ? "" : string.Join('\n', _field.OptionList))</textarea>
+                        <span class="hint">Pick lists only: one choice per line.</span>
+                    </div>
+                    <div class="field">
+                        <label for="default">Default value</label>
+                        <input id="default" name="defaultValue" value="@_field?.DefaultValue" />
+                        <span class="hint">@(target == CustomFieldTarget.Document ? "Filled in on new documents." : "Suggested when a record has no value yet.") Dates as yyyy-mm-dd, yes/no as Yes or No.</span>
+                    </div>
+                </div>
+                <div class="row wrap">
+                    <div class="field">
+                        <label for="max">Longest text allowed</label>
+                        <input id="max" name="maxLength" type="number" min="1" max="@CustomField.MaxValueLength" value="@_field?.MaxLength" />
+                        <span class="hint">Text, links, emails and phone numbers. Blank: the usual limit.</span>
+                    </div>
+                    <div class="field">
+                        <label for="min">Smallest value</label>
+                        <input id="min" name="minimum" inputmode="decimal" value="@Number(_field?.Minimum)" />
+                        <span class="hint">Numbers and money.</span>
+                    </div>
+                    <div class="field">
+                        <label for="maximum">Largest value</label>
+                        <input id="maximum" name="maximum" inputmode="decimal" value="@Number(_field?.Maximum)" />
+                    </div>
+                </div>
+                <label class="check">
+                    <input type="checkbox" name="required" value="true" checked="@(_field?.IsRequired ?? false)" />
+                    <span>Required <span class="muted">(the record's fields can't be saved with it blank)</span></span>
+                </label>
+                @if (target != CustomFieldTarget.Document)
+                {
+                    <label class="check">
+                        <input type="checkbox" name="showInList" value="true" checked="@(_field?.ShowInList ?? false)" />
+                        <span>Show it as a column in the @CustomField.Label(target).ToLowerInvariant() list</span>
+                    </label>
+                }
+
+                <fieldset>
+                    <legend>@(target == CustomFieldTarget.Document ? "Documents that have this field" : "Copy it onto these documents when they're made")</legend>
+                    <ul class="check-list">
+                        @foreach (var document in CustomField.Each(CustomField.Reach(target)))
+                        {
+                            <li>
+                                <label class="check">
+                                    <input type="checkbox" name="doc" value="@document" checked="@((_field?.Documents ?? CustomFieldDocuments.None).HasFlag(document))" />
+                                    <span>@CustomField.Label(document)</span>
+                                </label>
+                            </li>
+                        }
+                    </ul>
+                    @if (target is CustomFieldTarget.Customer or CustomFieldTarget.Vendor)
+                    {
+                        <span class="hint">When documents have their own field with the same name (from Documents above), the value goes into it, so it can be changed on each document.</span>
+                    }
+                </fieldset>
+                <label class="check">
+                    <input type="checkbox" name="printOnForms" value="true" checked="@(_field?.PrintOnForms ?? true)" />
+                    <span>Print it on PDFs <span class="muted">(invoices, estimates, credit memos, sales receipts and purchase orders)</span></span>
+                </label>
+                @if (target == CustomFieldTarget.Item)
+                {
+                    <div class="field">
+                        <label for="placement">On document lines</label>
+                        <select id="placement" name="placement">
+                            <option value="@CustomFieldPlacement.UnderDescription" selected="@(_field?.Placement != CustomFieldPlacement.Column)">Under the description, e.g. "Pack size: Case of 12"</option>
+                            <option value="@CustomFieldPlacement.Column" selected="@(_field?.Placement == CustomFieldPlacement.Column)">Its own column</option>
+                        </select>
+                    </div>
+                }
+                <div class="actions"><button type="submit">@(_field is null ? "Add the field" : "Save")</button></div>
+            </form>
+        </div>
+
+        @if (_field is not null)
+        {
+            <div class="card">
+                <h2>@(_field.IsActive ? "Switch it off" : "Switch it on")</h2>
+                <p class="muted">
+                    @(_field.IsActive
+                        ? "Fields aren't deleted, because documents keep values copied onto them. Switched off, it's no longer shown on records or copied onto new documents."
+                        : "It shows on records and is copied onto new documents again, with the values it had.")
+                </p>
+                <form method="post" action="/settings/custom-fields/@_field.Id/active" data-enhance="false">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="active" value="@(_field.IsActive ? "false" : "true")" />
+                    <button type="submit" class="secondary">@(_field.IsActive ? "Switch off" : "Switch on")</button>
+                </form>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private CustomField? _field;
+    private CustomFieldTarget? _target;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery(Name = "target")] private string? TargetText { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id is { } id)
+        {
+            _field = await FieldService.GetAsync(id);
+            _target = _field?.Target;
+        }
+        else if (Enum.TryParse<CustomFieldTarget>(TargetText, out var target) && Enum.IsDefined(target))
+        {
+            _target = target;
+        }
+    }
+
+    private static string Explain(CustomFieldTarget target) => target switch
+    {
+        CustomFieldTarget.Item => "Filled in on each product or service, and copied onto the lines of documents that sell or buy it.",
+        CustomFieldTarget.Customer => "Filled in on each customer, and copied onto their invoices, estimates, sales orders, receipts or credit memos.",
+        CustomFieldTarget.Vendor => "Filled in on each vendor, and copied onto your purchase orders and bills.",
+        _ => "Filled in on each document, like a ship date or tracking number.",
+    };
+
+    private static string? Number(decimal? value) => value?.ToString("0.####", CultureInfo.InvariantCulture);
+}

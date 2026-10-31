@@ -1,3 +1,5 @@
+using OpenBook.Application.CustomFields;
+using OpenBook.Domain.CustomFields;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Import;
 using OpenBook.Application.Sales;
@@ -15,7 +17,7 @@ public sealed record VendorImportRow(int Line, VendorDetails? Details, string? E
 /// email, phone, address (one column or street/city/state/zip/country), account number, terms, default
 /// expense account (full name or number) and notes are optional.
 /// </summary>
-public sealed class VendorImportService(IPurchasesStore store, VendorService vendors, AccountService accounts)
+public sealed class VendorImportService(IPurchasesStore store, VendorService vendors, AccountService accounts, CustomFieldImport fieldImport)
 {
     public const int MaxRows = 5000;
 
@@ -24,11 +26,12 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
 
     public async Task<ImportResult<VendorImportRow>> ImportAsync(string csv, CancellationToken ct = default)
     {
-        var (result, created) = await PlanAsync(csv, ct);
+        var (result, created, fields, fieldValues) = await PlanAsync(csv, ct);
         SalesImport.EnsureImportable(result.ErrorCount, created.Count);
         foreach (var vendor in created)
         {
             store.Add(vendor);
+            fields.Add(vendor.Id, fieldValues[vendor.Id]);
             store.Add(vendors.Audit(AuditAction.Created, vendor, before: null));
         }
 
@@ -36,10 +39,12 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
         return result;
     }
 
-    private async Task<(ImportResult<VendorImportRow> Result, List<Vendor> Created)> PlanAsync(string csv, CancellationToken ct)
+    private async Task<(ImportResult<VendorImportRow> Result, List<Vendor> Created, CustomFieldColumns Fields, Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>> FieldValues)> PlanAsync(string csv, CancellationToken ct)
     {
         var records = SalesImport.Records(csv, MaxRows);
         var cols = new CsvColumns(records[0]);
+        var fieldColumns = await fieldImport.ColumnsAsync(CustomFieldTarget.Vendor, cols, ct);
+        var fieldValues = new Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>>();
         var name = cols.Find("vendor", "name", "displayname", "vendorname", "supplier", "fullname", "vendordisplayname")
             ?? throw new DomainException("import.no_name_column", "The file needs a vendor name column (\"Vendor\" or \"Name\").");
         var company = cols.Find("company", "companyname");
@@ -90,6 +95,7 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
                     F(notes));
                 var accountName = expenseAccount is null ? null : chart.FullName(expenseAccount.Id);
 
+                var custom = fieldColumns.Read(r);
                 if (displayName is not null && existing.Contains(displayName.Trim()))
                 {
                     rows.Add(new VendorImportRow(r.Line, details, accountName, ImportRowStatus.Exists, null));
@@ -99,7 +105,9 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
                 if (displayName is not null && !seen.Add(displayName.Trim()))
                     throw new DomainException("import.duplicate_row", "This vendor appears more than once in the file.");
 
-                created.Add(Vendor.Create(details));
+                var made = Vendor.Create(details);
+                created.Add(made);
+                fieldValues[made.Id] = custom;
                 rows.Add(new VendorImportRow(r.Line, details, accountName, ImportRowStatus.New, null));
             }
             catch (DomainException ex)
@@ -108,6 +116,6 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
             }
         }
 
-        return (SalesImport.Result(rows, r => r.Status), created);
+        return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
     }
 }

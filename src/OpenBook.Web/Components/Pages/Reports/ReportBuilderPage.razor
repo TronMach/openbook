@@ -3,6 +3,7 @@
 @inject ReportCatalog Catalog
 @inject CompanySettingsService Settings
 @inject AccountService AccountService
+@inject OpenBook.Application.CustomFields.CustomFieldService FieldService
 @inject NavigationManager Navigation
 @* The custom transaction report: every setting is in the query string, so it saves, exports and emails like any report. *@
 
@@ -58,6 +59,20 @@
             <div class="field"><label for="memo">Memo contains</label><input id="memo" name="memo" value="@_options.MemoContains" /></div>
             <div class="field"><label for="min">Amount from</label><input id="min" name="min" class="short" inputmode="decimal" value="@_options.MinAmount" /></div>
             <div class="field"><label for="max">to</label><input id="max" name="max" class="short" inputmode="decimal" value="@_options.MaxAmount" /></div>
+            @if (_fields.Count > 0)
+            {
+                <div class="field">
+                    <label for="fieldId">Custom field</label>
+                    <select id="fieldId" name="fieldId">
+                        <option value="">Any</option>
+                        @foreach (var f in _fields)
+                        {
+                            <option value="@f.Id" selected="@(f.Id == _options.FieldFilterId)">@FieldLabel(f)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field"><label for="fieldValue">contains</label><input id="fieldValue" name="fieldValue" value="@_options.FieldFilterText" /></div>
+            }
             <div class="field"><label for="title">Title</label><input id="title" name="title" maxlength="100" value="@_options.Title" placeholder="Transaction report" /></div>
             <fieldset class="field columns">
                 <legend>Columns</legend>
@@ -68,6 +83,17 @@
                     <label class="check"><input type="checkbox" value="@c" checked="@_options.Columns.Contains(c)" onchange="this.form.columns.value=Array.from(this.form.querySelectorAll('fieldset.columns input[type=checkbox]')).filter(b=>b.checked).map(b=>b.value).join(',')" /> @ReportBuilder.Header(c)</label>
                 }
             </fieldset>
+            @if (_fields.Count > 0)
+            {
+                <fieldset class="field custom-columns">
+                    <legend>Custom field columns</legend>
+                    <input type="hidden" name="fields" id="fields" value="@string.Join(',', _options.FieldIds ?? [])" />
+                    @foreach (var f in _fields)
+                    {
+                        <label class="check"><input type="checkbox" value="@f.Id" checked="@(_options.FieldIds?.Contains(f.Id) == true)" onchange="this.form.fields.value=Array.from(this.form.querySelectorAll('fieldset.custom-columns input[type=checkbox]')).filter(b=>b.checked).map(b=>b.value).join(',')" /> @FieldLabel(f)</label>
+                    }
+                </fieldset>
+            }
         </ReportFilter>
     </div>
 
@@ -90,6 +116,7 @@
     private BuilderOptions _options = new(BuilderOptions.DefaultColumns);
     private ChartOfAccounts _chart = new([]);
     private ReportTable? _table;
+    private IReadOnlyList<OpenBook.Domain.CustomFields.CustomField> _fields = [];
     private string? _error;
 
     protected override async Task OnInitializedAsync()
@@ -103,6 +130,7 @@
         _query = new ReportQuery(preset, range, _basis);
         _options = BuilderOptions.Parse(_parameters);
         _chart = await AccountService.GetChartAsync();
+        _fields = (await FieldService.ListAsync()).Where(f => f.Target != OpenBook.Domain.CustomFields.CustomFieldTarget.Item).ToList();
         try
         {
             _table = await Catalog.RunAsync("builder", _parameters);
@@ -112,6 +140,13 @@
             _error = ex.Message;
         }
     }
+
+    private static string FieldLabel(OpenBook.Domain.CustomFields.CustomField f) => f.Target switch
+    {
+        OpenBook.Domain.CustomFields.CustomFieldTarget.Customer => $"{f.Name} (customer)",
+        OpenBook.Domain.CustomFields.CustomFieldTarget.Vendor => $"{f.Name} (vendor)",
+        _ => $"{f.Name} (document)",
+    };
 
     private static string GroupLabel(BuilderGrouping g) => g switch
     {

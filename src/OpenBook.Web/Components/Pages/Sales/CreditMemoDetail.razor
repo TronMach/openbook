@@ -42,7 +42,7 @@
         <div class="alert error no-print" role="alert">@_error</div>
     }
 
-    <SalesDocument Company="_company" Customer="_customer" CustomerLabel="Credit to" Facts="Facts" Lines="_credit.Lines" Totals="Totals" Memo="@_credit.Memo" />
+    <SalesDocument DocumentId="_credit.Id" Company="_company" Customer="_customer" CustomerLabel="Credit to" Facts="Facts" Lines="_credit.Lines" Totals="Totals" Memo="@_credit.Memo" />
 
     @if (_credit.Applications.Count > 0)
     {
@@ -107,6 +107,8 @@
     <EntryTags EntryId="_credit.JournalEntryId" />
 
     <Attachments EntityType="credit_memo" EntityId="_credit.Id" />
+
+    <CustomFieldPanel EntityType="credit_memo" EntityId="_credit.Id" />
 
     <Notes EntityType="credit_memo" EntityId="_credit.Id" />
 </div>
