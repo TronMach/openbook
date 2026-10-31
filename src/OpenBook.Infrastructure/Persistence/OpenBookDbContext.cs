@@ -152,14 +152,81 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     private static readonly ValueConverter<decimal?, long?> NullableTenThousandths =
         new(value => value == null ? null : (long)(value.Value * 10000m), stored => stored == null ? null : stored.Value / 10000m);
 
+    /// <summary>
+    /// Shadow concurrency token on records that two people (or a person and a background job) may change at once:
+    /// incremented on every save that modifies the row, so the second of two overlapping saves fails instead of
+    /// silently overwriting the first (an invoice's amount paid, a feed line added twice, a payout posted twice).
+    /// </summary>
+    internal const string VersionProperty = "Version";
+
+    private static readonly Type[] Versioned =
+    [
+        typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
+        typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
+        typeof(Bill), typeof(VendorCredit), typeof(PurchaseOrder), typeof(RecurringBill),
+        typeof(BankFeedItem), typeof(RecurringEntry),
+        typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
+        typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
+    ];
+
+    /// <summary>Whether anything has been saved through this context, so an operation that then hit a conflict can't simply be run again.</summary>
+    public bool HasSaved { get; private set; }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         if (ChangeTracker.Entries<JournalEntry>().Any(e => e.State == EntityState.Added))
             throw new NotSupportedException("Journal entries must be saved with SaveChangesAsync.");
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        BumpVersions();
+        try
+        {
+            var written = base.SaveChanges(acceptAllChangesOnSuccess);
+            HasSaved = true;
+            return written;
+        }
+        catch (DbUpdateException ex) when (IsConflict(ex))
+        {
+            throw new ConcurrencyConflictException(ex);
+        }
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        BumpVersions();
+        try
+        {
+            var written = await SaveAndSealAsync(acceptAllChangesOnSuccess, cancellationToken);
+            HasSaved = true;
+            return written;
+        }
+        catch (DbUpdateException ex) when (IsConflict(ex))
+        {
+            throw new ConcurrencyConflictException(ex);
+        }
+    }
+
+    /// <summary>
+    /// Collisions with another save, not mistakes in this one: a versioned row changed since it was read, or a unique
+    /// number (an entry or document number) taken in between, which services check beforehand; on PostgreSQL also a
+    /// serialization failure or deadlock.
+    /// </summary>
+    private static bool IsConflict(DbUpdateException ex) =>
+        ex is DbUpdateConcurrencyException
+        || ex.InnerException is Microsoft.Data.Sqlite.SqliteException { SqliteExtendedErrorCode: 2067 or 1555 } // UNIQUE, PRIMARY KEY
+        || ex.InnerException is Npgsql.PostgresException { SqlState: "23505" or "40001" or "40P01" };
+
+    private void BumpVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State == EntityState.Modified && entry.Metadata.FindProperty(VersionProperty) is not null)
+            {
+                var version = entry.Property(VersionProperty);
+                version.CurrentValue = (int)version.OriginalValue! + 1;
+            }
+        }
+    }
+
+    private async Task<int> SaveAndSealAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
     {
         var newEntryIds = ChangeTracker.Entries<JournalEntry>()
             .Where(e => e.State == EntityState.Added)
@@ -683,6 +750,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(d => new { d.SubscriptionId, d.CreatedAt });
             b.HasOne<WebhookSubscription>().WithMany().HasForeignKey(d => d.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        foreach (var type in Versioned)
+            modelBuilder.Entity(type).Property<int>(VersionProperty).IsConcurrencyToken();
     }
 
     private static void ConfigureAssets(ModelBuilder modelBuilder)

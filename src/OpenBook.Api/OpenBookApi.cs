@@ -143,16 +143,35 @@ public static class OpenBookApi
         if (context.HttpContext.Request.Headers.TryGetValue("X-Closing-Password", out var closingPassword))
             context.HttpContext.RequestServices.GetRequiredService<ClosedPeriodOverride>().Password = closingPassword.ToString();
 
-        try
+        // Endpoints that read the raw body themselves (file uploads) can read it again on a retry.
+        var request = context.HttpContext.Request;
+        if (!request.HasJsonContentType())
+            request.EnableBuffering();
+        var work = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
+        for (var attempt = 1; ; attempt++)
         {
-            return await next(context);
-        }
-        catch (DomainException ex)
-        {
-            return Results.Problem(
-                title: ex.Message,
-                statusCode: ex is EntityNotFoundException ? StatusCodes.Status404NotFound : StatusCodes.Status400BadRequest,
-                extensions: new Dictionary<string, object?> { ["code"] = ex.Code });
+            try
+            {
+                return await next(context);
+            }
+            catch (ConcurrencyConflictException ex) when (ConflictRetry.ShouldRetry(ex, attempt, work) && !context.HttpContext.Response.HasStarted)
+            {
+                work.DiscardPending();
+                if (request.Body.CanSeek)
+                    request.Body.Position = 0;
+            }
+            catch (DomainException ex)
+            {
+                return Results.Problem(
+                    title: ex.Message,
+                    statusCode: ex switch
+                    {
+                        EntityNotFoundException => StatusCodes.Status404NotFound,
+                        ConcurrencyConflictException => StatusCodes.Status409Conflict,
+                        _ => StatusCodes.Status400BadRequest,
+                    },
+                    extensions: new Dictionary<string, object?> { ["code"] = ex.Code });
+            }
         }
     }
 }

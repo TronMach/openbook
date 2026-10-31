@@ -1,3 +1,4 @@
+using OpenBook.Application;
 using OpenBook.Application.Ledger;
 
 namespace OpenBook.Web.Security;
@@ -10,13 +11,26 @@ namespace OpenBook.Web.Security;
 /// </summary>
 internal sealed class Operations(IServiceScopeFactory scopes, CircuitUser circuitUser)
 {
+    /// <summary>
+    /// Runs <paramref name="work"/>; when its save collides with someone else's and nothing was saved yet, runs it
+    /// again in a new scope (fresh data, so its checks see the other change), up to <see cref="ConflictRetry.Attempts"/> times.
+    /// </summary>
     /// <param name="closingPassword">Allows changes dated in a closed period, when the user supplied it.</param>
     public async Task<T> RunAsync<T>(Func<IServiceProvider, Task<T>> work, string? closingPassword = null)
     {
-        await using var scope = scopes.CreateAsyncScope();
-        scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = circuitUser.Principal;
-        scope.ServiceProvider.GetRequiredService<ClosedPeriodOverride>().Password = closingPassword;
-        return await work(scope.ServiceProvider);
+        for (var attempt = 1; ; attempt++)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = circuitUser.Principal;
+            scope.ServiceProvider.GetRequiredService<ClosedPeriodOverride>().Password = closingPassword;
+            try
+            {
+                return await work(scope.ServiceProvider);
+            }
+            catch (Domain.Common.ConcurrencyConflictException ex) when (ConflictRetry.ShouldRetry(ex, attempt, scope.ServiceProvider.GetRequiredService<IUnitOfWork>()))
+            {
+            }
+        }
     }
 
     public Task<T> RunAsync<TService, T>(Func<TService, Task<T>> work, string? closingPassword = null) where TService : notnull =>

@@ -231,6 +231,10 @@ internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
 {
     public async Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct) => new Transaction(await db.Database.BeginTransactionAsync(ct));
 
+    public bool HasSaved => db.HasSaved;
+
+    public void DiscardPending() => db.ChangeTracker.Clear();
+
     private sealed class Transaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction inner) : IUnitOfWorkTransaction
     {
         public Task CommitAsync(CancellationToken ct) => inner.CommitAsync(ct);

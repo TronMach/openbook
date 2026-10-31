@@ -98,6 +98,24 @@ public interface ILedgerStore
 public interface IUnitOfWork
 {
     Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct);
+
+    /// <summary>Whether anything has been saved in this scope, so an operation that then hit a conflict can't simply be run again.</summary>
+    bool HasSaved { get; }
+
+    /// <summary>Forgets every unsaved change in this scope, before running an operation again after a conflict.</summary>
+    void DiscardPending();
+}
+
+/// <summary>
+/// Running an operation again after a <see cref="Domain.Common.ConcurrencyConflictException"/>: it starts over from
+/// fresh data, so its checks see what the other save did. Only while nothing has been saved in the scope.
+/// </summary>
+public static class ConflictRetry
+{
+    public const int Attempts = 3;
+
+    public static bool ShouldRetry(Exception ex, int attempt, IUnitOfWork work) =>
+        ex is Domain.Common.ConcurrencyConflictException && attempt < Attempts && !work.HasSaved;
 }
 
 public interface IUnitOfWorkTransaction : IAsyncDisposable

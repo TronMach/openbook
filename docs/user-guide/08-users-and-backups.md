@@ -17,6 +17,10 @@ Pages a role can't use are left out of its menu; trying to open one shows an "ac
 
 From the Users page an administrator can change someone's role, **reset their password** or **make them inactive** when they leave. Changing a role or making someone inactive signs them out everywhere at once. People are never deleted, so their name stays on what they entered. There's always at least one active administrator, and you can't change your own role or deactivate yourself.
 
+### Working at the same time
+
+Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, or both post the same bank line), OpenBook usually tries yours again with the other change included, so it still checks for overpayments and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.
+
 ## Closing the books
 
 Once a period is finished (a month you've reconciled, a year your accountant has filed taxes for), close it so nobody changes it by accident: **Settings → Close the books**.
