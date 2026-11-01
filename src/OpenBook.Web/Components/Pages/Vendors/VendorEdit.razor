@@ -202,7 +202,7 @@
             <button type="submit" class="secondary">@(_vendor.IsActive ? "Make inactive" : "Make active")</button>
         </form>
         <AuthorizeView>
-            <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.Can(OpenBook.Domain.Companies.UserRole.Accountant)" Error="@BankError" />
+            <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.CanPost($"/purchases/ach/vendors/{_vendor.Id}")" Error="@BankError" />
         </AuthorizeView>
         <CustomFieldPanel EntityType="vendor" EntityId="_vendor.Id" />
         <Notes EntityType="vendor" EntityId="_vendor.Id" />

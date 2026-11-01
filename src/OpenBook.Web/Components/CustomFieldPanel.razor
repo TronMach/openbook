@@ -121,7 +121,7 @@
         _error = query["fieldError"];
         _saved = query["fields"] == "saved";
         _returnUrl = Strip(uri.PathAndQuery);
-        _canWrite = AuthState is not null && (await AuthState).User.Can(UserRole.Standard);
+        _canWrite = AuthState is not null && (await AuthState).User.CanPost("/custom-fields");
         _entries = await FieldService.EntriesAsync(EntityType, EntityId);
     }
 

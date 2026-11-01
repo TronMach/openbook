@@ -256,6 +256,13 @@ public static class AccessRules
         return Allows(user, new PathString(path.Length == 0 ? "/" : path), HttpMethods.Get, out _);
     }
 
+    /// <summary>Whether a form posting to <paramref name="action"/> would be accepted for the user (to show or hide it).</summary>
+    public static bool CanPost(this ClaimsPrincipal user, string action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return Allows(user, new PathString(action.Split('?', '#')[0]), HttpMethods.Post, out _);
+    }
+
     public static UserRole? RoleOf(ClaimsPrincipal user) =>
         Enum.TryParse<UserRole>(user.FindFirstValue(ClaimTypes.Role), out var role) ? role : null;
 

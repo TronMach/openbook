@@ -17,7 +17,7 @@
         <a class="button secondary" href="/banking/positive-pay">Positive pay</a>
         <a class="button secondary" href="/banking/petty-cash">Petty cash</a>
         <AuthorizeView>
-            @if (context.User.Can(OpenBook.Domain.Companies.UserRole.Accountant))
+            @if (context.User.CanReach("/banking/connections"))
             {
                 <a class="button secondary" href="/banking/connections">Bank connections</a>
             }

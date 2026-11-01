@@ -12,7 +12,7 @@
         <h1>Collections</h1>
         <a class="button secondary" href="/reports/ar-aging">A/R aging</a>
         <a class="button secondary" href="/sales/write-offs/new">Write off bad debt</a>
-        @if (User.Can(OpenBook.Domain.Companies.UserRole.Accountant))
+        @if (User.CanReach("/sales/collections/settings"))
         {
             <a class="button secondary" href="/sales/collections/settings">Settings</a>
         }
@@ -176,7 +176,7 @@
 
     private string Name(Guid id) => _names.GetValueOrDefault(id) ?? "";
 
-    private RenderFragment SettingsLink(string text) => User.Can(OpenBook.Domain.Companies.UserRole.Accountant)
+    private RenderFragment SettingsLink(string text) => User.CanReach("/sales/collections/settings")
         ? @<a href="/sales/collections/settings">@text</a>
         : @<span>An accountant can set this up.</span>;
 

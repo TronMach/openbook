@@ -521,6 +521,11 @@ public sealed class AccessRulesTests
         Assert.False(AccessRules.Allows(clerk, "/settings/users", "GET", out _));
         Assert.True(clerk.CanReach("/sales?tab=open"));
         Assert.False(clerk.CanReach("/purchases"));
+        // Panels on record pages (notes, custom fields, printing) post to the data area.
+        Assert.False(clerk.CanPost("/notes"));
+        Assert.True(Principal(UserRole.Standard, new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard, ["data"] = UserRole.Standard }).CanPost("/notes"));
+        Assert.True(Principal(UserRole.Standard).CanPost("/notes"));
+        Assert.False(Principal(UserRole.ViewOnly).CanPost("/custom-fields"));
 
         // Accountant in the books still never reaches admin things.
         var books = Principal(UserRole.Accountant, new Dictionary<string, UserRole> { ["ledger"] = UserRole.Accountant });

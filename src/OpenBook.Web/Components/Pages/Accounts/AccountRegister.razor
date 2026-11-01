@@ -159,7 +159,7 @@
         _hasSubaccounts = _chart.ChildrenOf(_account.Id).Any();
         _to = To ?? today;
         _from = From ?? company.FiscalYearStart(_to);
-        _canPost = AuthState is not null && (await AuthState).User.Can(UserRole.Accountant);
+        _canPost = AuthState is not null && (await AuthState).User.CanPost($"/accounts/{Id}/register");
         _message = Posted is { } n ? $"Posted entry {n}." : null;
         Input ??= new QuickModel { Date = today };
         await LoadAsync();

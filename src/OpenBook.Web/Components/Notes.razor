@@ -72,7 +72,7 @@
         var uri = new Uri(Navigation.Uri);
         _returnUrl = uri.PathAndQuery.Split("noteError=")[0].TrimEnd('&', '?');
         _error = System.Web.HttpUtility.ParseQueryString(uri.Query)["noteError"];
-        _canWrite = AuthState is not null && (await AuthState).User.Can(UserRole.Standard);
+        _canWrite = AuthState is not null && (await AuthState).User.CanPost("/notes");
         _notes = await NoteService.ListAsync(EntityType, EntityId);
     }
 }
