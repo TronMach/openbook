@@ -41,6 +41,7 @@ public static class AccessRules
         ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/settings/users", UserRole.Admin, UserRole.Admin),
         ("/settings/sign-in", UserRole.Admin, UserRole.Admin),
+        ("/settings/permission-sets", UserRole.Admin, UserRole.Admin),
         ("/api/settings/sign-in", UserRole.Admin, UserRole.Admin),
         ("/settings/plugins", UserRole.Admin, UserRole.Admin),
         ("/settings/system", UserRole.Admin, UserRole.Admin),
@@ -155,6 +156,104 @@ public static class AccessRules
         || path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase)
         || (!path.StartsWithSegments("/api") && Path.HasExtension(path.Value ?? string.Empty));
 
+    /// <summary>
+    /// The area each page and form endpoint belongs to, for permission sets (API paths use <see cref="ApiScopes.Areas"/>,
+    /// so both lists agree). First match wins; a null area means "no area": a permission set reaches it only for what
+    /// view-only users may do there. <c>AccessRulesTests</c> checks every page route is listed or known to need none.
+    /// </summary>
+    private static readonly (string Prefix, string? Area)[] PageAreas =
+    [
+        ("/settings/api-keys", null),
+        ("/settings/custom-fields", "data"),
+        ("/sales/channels", "channels"),
+        ("/sales", "sales"),
+        ("/customers", "sales"),
+        ("/items", "sales"),
+        ("/pricing", "sales"),
+        ("/sales-tax", "sales"),
+        ("/purchases", "purchases"),
+        ("/vendors", "purchases"),
+        ("/documents", "documents"),
+        ("/banking", "banking"),
+        ("/checks", "banking"),
+        ("/inventory", "inventory"),
+        ("/projects", "projects"),
+        ("/time", "projects"),
+        ("/mileage", "projects"),
+        ("/assets", "assets"),
+        ("/loans", "assets"),
+        ("/nonprofit", "nonprofit"),
+        ("/reports", "reports"),
+        ("/dashboard", "reports"),
+        ("/accountant", "reports"),
+        ("/capture", "capture"),
+        ("/import", "data"),
+        ("/export", "data"),
+        ("/backup", "data"),
+        ("/print", "data"),
+        ("/notes", "data"),
+        ("/attachments", "data"),
+        ("/custom-fields", "data"),
+        ("/accounts", "ledger"),
+        ("/journal", "ledger"),
+        ("/segments", "ledger"),
+        ("/audit", "ledger"),
+        ("/settings", "ledger"),
+        ("/api/audit", "ledger"),
+    ];
+
+    /// <summary>The area a path belongs to (pages, form endpoints and the API); null when it has none.</summary>
+    public static string? AreaOf(PathString path)
+    {
+        if (path.StartsWithSegments("/api") && ApiScopes.AreaOf(path.Value ?? "/") is { } apiArea)
+            return apiArea;
+        foreach (var (prefix, area) in PageAreas)
+        {
+            if (path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase))
+                return area;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the user may make this request: their role against <see cref="Required"/>, or with a permission set,
+    /// their level in the path's area (admin things never; paths with no area only for what view-only may do).
+    /// </summary>
+    public static bool Allows(ClaimsPrincipal user, PathString path, string method, out UserRole needed)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        needed = Required(path, method);
+        if (RoleOf(user) is not { } role)
+            return false;
+        if (!user.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim))
+            return role >= needed;
+        if (needed == UserRole.Admin)
+            return false;
+        return AreaOf(path) is { } area
+            ? LevelIn(user, area) is { } level && level >= needed
+            : needed == UserRole.ViewOnly;
+    }
+
+    /// <summary>A permission set's level in an area (null: none); for users with a built-in role, their role.</summary>
+    public static UserRole? LevelIn(ClaimsPrincipal user, string area)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        if (!user.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim))
+            return RoleOf(user);
+        var prefix = area + ":";
+        return user.FindAll(WebSecurity.AreaClaim).Select(c => c.Value).FirstOrDefault(v => v.StartsWith(prefix, StringComparison.Ordinal)) is { } claim
+            && Enum.TryParse<UserRole>(claim[prefix.Length..], out var level) ? level : null;
+    }
+
+    /// <summary>Whether a link to <paramref name="href"/> would open for the user (menus, shortcuts, search results).</summary>
+    public static bool CanReach(this ClaimsPrincipal user, string href)
+    {
+        ArgumentNullException.ThrowIfNull(href);
+        var path = href.Split('?', '#')[0];
+        return Allows(user, new PathString(path.Length == 0 ? "/" : path), HttpMethods.Get, out _);
+    }
+
     public static UserRole? RoleOf(ClaimsPrincipal user) =>
         Enum.TryParse<UserRole>(user.FindFirstValue(ClaimTypes.Role), out var role) ? role : null;
 
@@ -183,7 +282,6 @@ public sealed class AccessMiddleware(RequestDelegate next)
                 return;
             }
 
-            var needed = AccessRules.Required(http.Request.Path, http.Request.Method);
             if (http.User.HasClaim(ApiKeyAuthenticationHandler.ScopedClaim, "true"))
             {
                 var scopes = http.User.FindAll(ApiKeyAuthenticationHandler.ScopeClaim).Select(c => c.Value).ToList();
@@ -196,16 +294,23 @@ public sealed class AccessMiddleware(RequestDelegate next)
                 }
             }
 
-            if (!http.User.Can(needed))
+            if (!AccessRules.Allows(http.User, http.Request.Path, http.Request.Method, out var needed))
             {
                 if (http.Request.Path.StartsWithSegments("/api"))
                 {
                     http.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    await http.Response.WriteAsJsonAsync(new { code = "auth.forbidden", message = $"This needs the {Describe(needed)} role or higher." });
+                    var area = AccessRules.AreaOf(http.Request.Path);
+                    var message = http.User.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim)
+                        ? needed == UserRole.Admin || area is null
+                            ? $"This needs the {Describe(needed)} role, which a permission set doesn't give."
+                            : $"This needs {Describe(needed)} access to {area}."
+                        : $"This needs the {Describe(needed)} role or higher.";
+                    await http.Response.WriteAsJsonAsync(new { code = "auth.forbidden", message });
                 }
                 else
                 {
-                    http.Response.Redirect($"/access-denied?needed={needed}");
+                    var area = AccessRules.AreaOf(http.Request.Path);
+                    http.Response.Redirect(area is null ? $"/access-denied?needed={needed}" : $"/access-denied?needed={needed}&area={area}");
                 }
 
                 return;

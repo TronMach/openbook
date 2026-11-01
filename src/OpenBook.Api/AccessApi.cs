@@ -12,9 +12,9 @@ namespace OpenBook.Api;
 
 public sealed record UserResponse(
     Guid Id, string Username, UserRole Role, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, bool TwoFactor = false,
-    string? Email = null, DateOnly? AccessEndsOn = null)
+    string? Email = null, DateOnly? AccessEndsOn = null, Guid? PermissionSetId = null)
 {
-    public static UserResponse From(User u) => new(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt, u.LastLoginAt, u.HasTwoFactor, u.Email, u.AccessEndsOn);
+    public static UserResponse From(User u) => new(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt, u.LastLoginAt, u.HasTwoFactor, u.Email, u.AccessEndsOn, u.PermissionSetId);
 }
 
 /// <param name="TwoFactorRequiredFrom">Null: nobody has to; otherwise this role and every role above it.</param>
@@ -27,7 +27,16 @@ public sealed record SignInSettingsResponse(UserRole? TwoFactorRequiredFrom)
 
 public sealed record CreateUserRequest(string Username, string Password, UserRole Role);
 
-public sealed record ChangeRoleRequest(UserRole Role);
+/// <param name="PermissionSetId">Give a permission set instead of a built-in role (the role is then ignored).</param>
+public sealed record ChangeRoleRequest(UserRole Role, Guid? PermissionSetId = null);
+
+/// <param name="Levels">Area key (as in API key scopes) → ViewOnly, Standard or Accountant; areas left out have none.</param>
+public sealed record PermissionSetRequest(string Name, IReadOnlyDictionary<string, UserRole> Levels, string? Description = null);
+
+public sealed record PermissionSetResponse(Guid Id, string Name, string? Description, IReadOnlyDictionary<string, UserRole> Levels, bool IsActive)
+{
+    public static PermissionSetResponse From(PermissionSet s) => new(s.Id, s.Name, s.Description, s.LevelMap, s.IsActive);
+}
 
 public sealed record ResetPasswordRequest(string NewPassword);
 
@@ -89,7 +98,20 @@ internal static class AccessApi
             var user = await s.CreateAsync(r.Username, r.Password, r.Role, ct);
             return Results.Created($"/api/users/{user.Id}", UserResponse.From(user));
         });
-        users.MapPut("/{id:guid}/role", async (Guid id, ChangeRoleRequest r, UserService s, CancellationToken ct) => UserResponse.From(await s.ChangeRoleAsync(id, r.Role, ct)));
+        users.MapPut("/{id:guid}/role", async (Guid id, ChangeRoleRequest r, UserService s, CancellationToken ct) =>
+            UserResponse.From(r.PermissionSetId is { } setId ? await s.AssignPermissionSetAsync(id, setId, ct) : await s.ChangeRoleAsync(id, r.Role, ct)));
+
+        var sets = users.MapGroup("/permission-sets");
+        sets.MapGet("/", async (PermissionSetService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(PermissionSetResponse.From));
+        sets.MapPost("/", async (PermissionSetRequest r, PermissionSetService s, CancellationToken ct) =>
+        {
+            var set = await s.CreateAsync(r.Name, r.Description, r.Levels ?? new Dictionary<string, UserRole>(), ct);
+            return Results.Created($"/api/users/permission-sets/{set.Id}", PermissionSetResponse.From(set));
+        });
+        sets.MapPut("/{id:guid}", async (Guid id, PermissionSetRequest r, PermissionSetService s, CancellationToken ct) =>
+            PermissionSetResponse.From(await s.UpdateAsync(id, r.Name, r.Description, r.Levels ?? new Dictionary<string, UserRole>(), ct)));
+        sets.MapPut("/{id:guid}/active", async (Guid id, SetActiveRequest r, PermissionSetService s, CancellationToken ct) =>
+            PermissionSetResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         users.MapPut("/{id:guid}/active", async (Guid id, SetActiveRequest r, UserService s, CancellationToken ct) => UserResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         users.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest r, UserService s, CancellationToken ct) =>
             UserResponse.From(await s.ResetPasswordAsync(id, r.NewPassword, ct)));

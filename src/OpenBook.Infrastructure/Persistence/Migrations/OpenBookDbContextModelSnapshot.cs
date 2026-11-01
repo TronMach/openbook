@@ -1519,6 +1519,37 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("FormFonts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.PermissionSet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Levels")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PermissionSets", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.PrintQueueItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1606,6 +1637,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PermissionSetId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ProtectedTwoFactorSecret")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -1636,6 +1670,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("PermissionSetId");
 
                     b.HasIndex("Username")
                         .IsUnique();
@@ -6537,6 +6573,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Texts");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Companies.User", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Companies.PermissionSet", null)
+                        .WithMany()
+                        .HasForeignKey("PermissionSetId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Companies.UserInvite", b =>

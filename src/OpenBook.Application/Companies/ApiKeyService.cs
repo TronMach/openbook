@@ -65,7 +65,7 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
             return null;
         if (key.RecordUse(now))
             await store.SaveChangesAsync(ct);
-        return new ApiKeyUser(AuthService.Authenticated(user), key.ScopeList);
+        return new ApiKeyUser(await store.AuthenticatedAsync(user, ct), key.ScopeList);
     }
 
     private static string Snapshot(ApiKey k, User? user) => JsonSerializer.Serialize(new

@@ -67,13 +67,25 @@ public static class WebSecurity
     }
 
     /// <summary>The claims for a signed-in user; the role is fixed for the session (changing it ends the session).</summary>
-    public static Claim[] Claims(AuthenticatedUser user) =>
-    [
-        new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-        new(ClaimTypes.Name, user.Username),
-        new(ClaimTypes.Role, user.Role.ToString()),
-        new(StampClaim, user.SecurityStamp),
-    ];
+    public static Claim[] Claims(AuthenticatedUser user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        Claim[] areas = user.Areas is { } levels
+            ? [new Claim(PermissionSetClaim, "true"), .. levels.Select(l => new Claim(AreaClaim, $"{l.Key}:{l.Value}"))]
+            : [];
+        return
+        [
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Role, user.Role.ToString()),
+            new(StampClaim, user.SecurityStamp),
+            .. areas,
+        ];
+    }
+
+    /// <summary>On the principal of a user with a permission set; their levels are <see cref="AreaClaim"/>s ("sales:Standard").</summary>
+    public const string PermissionSetClaim = "openbook:permission-set";
+    public const string AreaClaim = "openbook:area";
 
     /// <summary>
     /// Issues the sign-in cookie. Re-issuing it for the same user (after a password change) keeps the browser's

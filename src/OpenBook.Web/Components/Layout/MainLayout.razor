@@ -7,15 +7,15 @@
         <header class="topbar">
             <a class="brand" href="/">OpenBook</a>
             <nav>
-                @foreach (var href in Editions.Menu(_edition))
+                @foreach (var href in Editions.Menu(_edition).Where(context.User.CanReach))
                 {
                     @MenuLink(href)
                 }
-                @if (context.User.Can(UserRole.Accountant))
+                @if (context.User.CanReach("/settings"))
                 {
                     <NavLink href="/settings">@L["Settings"]</NavLink>
                 }
-                @if (context.User.Can(UserRole.Admin))
+                @if (context.User.CanReach("/backup"))
                 {
                     <NavLink href="/backup">@L["Backup"]</NavLink>
                 }

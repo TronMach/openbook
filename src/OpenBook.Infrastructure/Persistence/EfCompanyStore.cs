@@ -27,6 +27,12 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
 
     public void Add(UserInvite invite) => db.UserInvites.Add(invite);
 
+    public async Task<IReadOnlyList<PermissionSet>> ListPermissionSetsAsync(CancellationToken ct) => await db.PermissionSets.OrderBy(s => s.Name).ToListAsync(ct);
+
+    public Task<PermissionSet?> GetPermissionSetAsync(Guid id, CancellationToken ct) => db.PermissionSets.SingleOrDefaultAsync(s => s.Id == id, ct);
+
+    public void Add(PermissionSet permissionSet) => db.PermissionSets.Add(permissionSet);
+
     public Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct) => db.EmailConfigurations.SingleOrDefaultAsync(ct);
 
     public void Add(Company company) => db.Companies.Add(company);

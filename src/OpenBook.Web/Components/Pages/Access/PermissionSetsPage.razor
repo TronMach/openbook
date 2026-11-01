@@ -1,0 +1,55 @@
+@page "/settings/permission-sets"
+@using OpenBook.Domain.Companies
+@inject PermissionSetService Sets
+@inject UserService UserService
+
+<PageTitle>@L["Permission sets"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Permission sets"]</h1>
+        <a href="/settings/users">@L["Users"]</a>
+        <a class="button" href="/settings/permission-sets/new">@L["New permission set"]</a>
+    </div>
+    <p class="muted">
+        @L["A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role."]
+    </p>
+
+    @if (_sets.Count == 0)
+    {
+        <div class="card"><p>@L["No permission sets yet."]</p></div>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>@L["Name"]</th><th>@L["Areas"]</th><th>@L["Users"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var set in _sets)
+                {
+                    <tr class="@(set.IsActive ? null : "inactive")">
+                        <td><a href="/settings/permission-sets/@set.Id">@set.Name</a> @(set.IsActive ? "" : L["(switched off)"].Value)
+                            @if (set.Description is not null)
+                            {
+                                <br /><span class="muted">@set.Description</span>
+                            }
+                        </td>
+                        <td>@string.Join(", ", set.LevelMap.Select(l => $"{ApiScopes.Areas[l.Key].Label}: {PermissionSet.Describe(l.Value)}"))</td>
+                        <td>@string.Join(", ", _users.Where(u => u.PermissionSetId == set.Id && u.IsActive).Select(u => u.Username))</td>
+                        <td></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<PermissionSet> _sets = [];
+    private IReadOnlyList<User> _users = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sets = await Sets.ListAsync();
+        _users = await UserService.ListAsync();
+    }
+}

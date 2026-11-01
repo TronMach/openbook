@@ -58,7 +58,15 @@
     [SupplyParameterFromQuery]
     private string? Q { get; set; }
 
-    protected override async Task OnInitializedAsync() => _results = await SearchService.SearchAsync(Q);
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // People with a permission set see only what they could open.
+    protected override async Task OnInitializedAsync()
+    {
+        var results = await SearchService.SearchAsync(Q);
+        _results = results with { Hits = results.Hits.Where(h => HttpContext.User.CanReach(Link(h))).ToList() };
+    }
 
     private static string Heading(SearchKind kind) => kind switch
     {

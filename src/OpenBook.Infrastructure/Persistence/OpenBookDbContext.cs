@@ -43,6 +43,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<SignInSettings> SignInSettings => Set<SignInSettings>();
     public DbSet<UserInvite> UserInvites => Set<UserInvite>();
+    public DbSet<PermissionSet> PermissionSets => Set<PermissionSet>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
@@ -719,6 +720,18 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(u => u.RecoveryCodeHashes).HasMaxLength(1000);
             b.Property(u => u.Email).HasMaxLength(320);
             b.HasIndex(u => u.Email).IsUnique();
+            b.HasOne<PermissionSet>().WithMany().HasForeignKey(u => u.PermissionSetId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PermissionSet>(b =>
+        {
+            b.ToTable("PermissionSets");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Name).HasMaxLength(PermissionSet.MaxNameLength);
+            b.Property(s => s.Description).HasMaxLength(200);
+            b.Property(s => s.Levels).HasMaxLength(500);
+            b.Ignore(s => s.LevelMap);
+            b.Ignore(s => s.Highest);
         });
 
         modelBuilder.Entity<UserInvite>(b =>

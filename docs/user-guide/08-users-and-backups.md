@@ -43,6 +43,23 @@ The **Invitations** list shows each one as waiting, accepted, expired or withdra
 
 Select a username on the Users page to set their **Email** and **Access ends on**. From the day access ends, they can't sign in, their API keys stop working, and within the hour they're made inactive (signed out everywhere). Clear the date to keep them on. You can't end your own access, and there must always be an administrator whose access doesn't end.
 
+### Permission sets
+
+When the four roles are too coarse (a front-desk clerk who should enter sales but not see the bank, say), give someone a **permission set** instead of a role. Create sets on **Settings → Users** → **Permission sets** → **New permission set**: a name, and a level for each area of the books:
+
+| Level | Means in that area |
+| --- | --- |
+| None | Its pages are left out of the menu and refused |
+| View only | Look, change nothing |
+| Standard | The day-to-day work, as the standard role does it |
+| Accountant | Also that area's settings and the books themselves, as the accountant role does it |
+
+The areas are accounts and journal (including company settings and the audit log), customers, items and sales, vendors and purchases, the document inbox, banking, inventory, projects, time and mileage, sales channels, fixed assets and loans, nonprofit, reports (including the dashboard), offline capture, and imports, exports, notes and custom field values. Pages outside every area (home, search, your own password, two-factor and API keys) are open to everyone; search only lists what a person can open.
+
+To give someone a set, choose it in their **Role** list on the Users page (under **Permission sets**) and select **Change**; choose a role there to take it away. Admin things (users, backups, data export, webhooks, add-ins, system settings) always need the admin role, so no set reaches them. A set counts as its highest level where OpenBook asks for a role, for example when two-factor sign-in is required "for accountants and admins".
+
+Changing a set signs out everyone who has it, so their next sign-in uses the new levels. A set can be switched off once nobody active uses it. API keys of someone with a set reach only the set's areas (and a limited key narrows that further).
+
 ### Working at the same time
 
 Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.

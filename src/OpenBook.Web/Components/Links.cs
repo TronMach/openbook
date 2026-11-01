@@ -138,6 +138,7 @@ public static class Links
         "sign_in_settings" => "/settings/sign-in",
         "user" => $"/settings/users/{id}",
         "user_invite" => "/settings/users#invites",
+        "permission_set" => $"/settings/permission-sets/{id}",
         _ => null,
     };
 

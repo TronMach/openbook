@@ -105,7 +105,7 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
         await store.SaveChangesAsync(ct);
 
         var settings = await store.GetSignInSettingsAsync(ct);
-        return new AcceptedInvite(AuthService.Authenticated(user), settings?.RequiresTwoFactor(user.Role) == true);
+        return new AcceptedInvite(await store.AuthenticatedAsync(user, ct), settings?.RequiresTwoFactor(user.Role) == true);
     }
 
     public static string Link(string linkBase, string token) => $"{(linkBase ?? string.Empty).TrimEnd('/')}/invite/{token}";

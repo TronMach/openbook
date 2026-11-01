@@ -50,6 +50,12 @@ public interface ICompanyStore
     /// <summary>Tracked.</summary>
     Task<ApiKey?> FindApiKeyAsync(string tokenHash, CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<PermissionSet>> ListPermissionSetsAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<PermissionSet?> GetPermissionSetAsync(Guid id, CancellationToken ct);
+
     /// <summary>Tracked; null until sign-in settings are first saved.</summary>
     Task<SignInSettings?> GetSignInSettingsAsync(CancellationToken ct);
 
@@ -67,6 +73,7 @@ public interface ICompanyStore
     void Add(UserSession session);
     void Add(SignInSettings settings);
     void Add(UserInvite invite);
+    void Add(PermissionSet permissionSet);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);
@@ -90,6 +97,14 @@ public interface IBackupService
 
 public static class CompanyStoreExtensions
 {
+    /// <summary>What the user's sign-in cookie (or API key) carries: with a permission set, each area's level.</summary>
+    public static async Task<AuthenticatedUser> AuthenticatedAsync(this ICompanyStore store, User user, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var set = user.PermissionSetId is { } id ? await store.GetPermissionSetAsync(id, ct) : null;
+        return new AuthenticatedUser(user.Id, user.Username, user.SecurityStamp, user.Role, set?.LevelMap ?? (user.PermissionSetId is null ? null : new Dictionary<string, UserRole>()));
+    }
+
     public static async Task<Company> GetRequiredCompanyAsync(this ICompanyStore store, CancellationToken ct) =>
         await store.GetCompanyAsync(ct)
         ?? throw new DomainException("company.not_set_up", "Run the setup wizard before using the books.");

@@ -94,7 +94,7 @@ public static class ApiScopes
         ["projects"] = ("Projects, time and mileage", ["/api/projects"]),
         ["channels"] = ("Sales channels and payouts", ["/api/channels"]),
         ["assets"] = ("Fixed assets and loans", ["/api/assets"]),
-        ["nonprofit"] = ("Donor restrictions and releases", ["/api/nonprofit"]),
+        ["nonprofit"] = ("Nonprofit: gifts, pledges, grants and donor restrictions", ["/api/nonprofit"]),
         ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),
         ["capture"] = ("Offline capture (time, mileage, expenses, receipts)", ["/api/capture"]),
         ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields", "/api/print"]),
@@ -125,7 +125,11 @@ public static class ApiScopes
         ArgumentNullException.ThrowIfNull(path);
         if (path.Equals("/api/me", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/openapi", StringComparison.OrdinalIgnoreCase))
             return true;
-        var area = Areas.FirstOrDefault(a => a.Value.Paths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase) || path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase))).Key;
+        var area = AreaOf(path);
         return area is not null && (scopes.Contains($"{area}:write") || (!write && scopes.Contains($"{area}:read")));
     }
+
+    /// <summary>The area an API path belongs to; null for paths outside every area (users, keys, webhooks, …).</summary>
+    public static string? AreaOf(string path) =>
+        Areas.FirstOrDefault(a => a.Value.Paths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase) || path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase))).Key;
 }

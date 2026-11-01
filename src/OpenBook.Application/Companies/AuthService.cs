@@ -20,7 +20,8 @@ public enum SignInStatus
 }
 
 /// <summary>What a sign-in cookie needs to carry.</summary>
-public sealed record AuthenticatedUser(Guid Id, string Username, string SecurityStamp, UserRole Role);
+/// <param name="Areas">With a permission set: each area's level (areas left out have none); null for a built-in role.</param>
+public sealed record AuthenticatedUser(Guid Id, string Username, string SecurityStamp, UserRole Role, IReadOnlyDictionary<string, UserRole>? Areas = null);
 
 /// <param name="User">Signed in; for <see cref="SignInStatus.TwoFactorRequired"/> only who the second step is for.</param>
 /// <param name="MustSetUpTwoFactor">Signed in, but two-factor sign-in is required for the role and not set up yet: the session may only set it up.</param>
@@ -74,12 +75,12 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
 
         // The failed-attempt count isn't reset until the second step succeeds, so codes can't be guessed between passwords.
         if (user.HasTwoFactor)
-            return new SignInResult(SignInStatus.TwoFactorRequired, Authenticated(user), TwoFactorSince: user.TwoFactorEnabledAt);
+            return new SignInResult(SignInStatus.TwoFactorRequired, await store.AuthenticatedAsync(user, ct), TwoFactorSince: user.TwoFactorEnabledAt);
 
         user.RecordSuccessfulLogin(clock.UtcNow);
         await store.SaveChangesAsync(ct);
         var settings = await store.GetSignInSettingsAsync(ct);
-        return new SignInResult(SignInStatus.Succeeded, Authenticated(user), MustSetUpTwoFactor: settings?.RequiresTwoFactor(user.Role) == true);
+        return new SignInResult(SignInStatus.Succeeded, await store.AuthenticatedAsync(user, ct), MustSetUpTwoFactor: settings?.RequiresTwoFactor(user.Role) == true);
     }
 
     /// <summary>Whether the user's role has to use two-factor sign-in and they haven't set it up.</summary>
@@ -170,11 +171,10 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         await store.SaveChangesAsync(ct);
     }
 
-    internal static AuthenticatedUser Authenticated(User user) => new(user.Id, user.Username, user.SecurityStamp, user.Role);
 
     /// <summary>What the user's cookie carries now, for re-issuing it.</summary>
     public async Task<AuthenticatedUser> CurrentAsync(Guid userId, CancellationToken ct = default) =>
-        Authenticated(await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId));
+        await store.AuthenticatedAsync(await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId), ct);
 
     /// <returns>The user with a new security stamp, for re-issuing the caller's cookie.</returns>
     public async Task<AuthenticatedUser> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken ct = default)
@@ -188,7 +188,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         store.Add(AuditRecord.Create(clock.UtcNow, user.Username, AuditAction.Updated, "user", user.Id, null,
             JsonSerializer.Serialize(new { Changed = "password" })));
         await store.SaveChangesAsync(ct);
-        return Authenticated(user);
+        return await store.AuthenticatedAsync(user, ct);
     }
 
     /// <summary>
@@ -203,7 +203,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         store.Add(AuditRecord.Create(clock.UtcNow, user.Username, AuditAction.Updated, "user", user.Id, null,
             JsonSerializer.Serialize(new { Changed = "other sessions signed out" })));
         await store.SaveChangesAsync(ct);
-        return Authenticated(user);
+        return await store.AuthenticatedAsync(user, ct);
     }
 
     /// <summary>

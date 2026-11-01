@@ -3,6 +3,7 @@
 @using OpenBook.Domain.Companies
 @inject UserService UserService
 @inject InviteService Invites
+@inject PermissionSetService PermissionSets
 @inject IClock Clock
 @inject NavigationManager Navigation
 
@@ -11,6 +12,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Users</h1>
+        <a href="/settings/permission-sets">Permission sets</a>
         <a href="/settings/sign-in">Sign-in and two-factor</a>
         <a href="/settings">Company settings</a>
     </div>
@@ -62,7 +64,16 @@
                             <select name="Role" aria-label="Role for @user.Username" @onchange="e => _role = e.Value as string">
                                 @foreach (var role in Enum.GetValues<UserRole>().Reverse())
                                 {
-                                    <option value="@role" selected="@(role == user.Role)">@AccessMiddleware.Describe(role)</option>
+                                    <option value="@role" selected="@(user.PermissionSetId is null && role == user.Role)">@AccessMiddleware.Describe(role)</option>
+                                }
+                                @if (_sets.Count > 0)
+                                {
+                                    <optgroup label="Permission sets">
+                                        @foreach (var set in _sets.Where(s => s.IsActive || s.Id == user.PermissionSetId))
+                                        {
+                                            <option value="set:@set.Id" selected="@(set.Id == user.PermissionSetId)">@set.Name</option>
+                                        }
+                                    </optgroup>
                                 }
                             </select>
                             <button type="submit" class="secondary">Change</button>
@@ -245,6 +256,7 @@
     private async Task LoadAsync()
     {
         _users = await UserService.ListAsync();
+        _sets = await PermissionSets.ListAsync();
         // Waiting ones first, then the last 30 days of the rest.
         var now = Clock.UtcNow;
         _invites = (await Invites.ListAsync()).Where(i => i.Status == InviteStatus.Pending || i.CreatedAt >= now.AddDays(-30))
@@ -252,6 +264,7 @@
     }
 
     private IReadOnlyList<UserInvite> _invites = [];
+    private IReadOnlyList<PermissionSet> _sets = [];
     private SentInvite? _sent;
 
     [SupplyParameterFromForm(Name = "InviteEmail")] private string? InviteEmail { get; set; }
@@ -311,7 +324,14 @@
 
     private Task ChangeRoleAsync(Guid id) => RunAsync(async () =>
     {
-        var role = Enum.TryParse<UserRole>(PostedRole ?? _role, out var r) ? r : throw new DomainException("user.role_invalid", "Choose a role.");
+        var posted = PostedRole ?? _role;
+        if (posted?.StartsWith("set:", StringComparison.Ordinal) == true && Guid.TryParse(posted[4..], out var setId))
+        {
+            var withSet = await UserService.AssignPermissionSetAsync(id, setId);
+            return $"{withSet.Username} now has the permission set '{_sets.FirstOrDefault(s => s.Id == setId)?.Name}'.";
+        }
+
+        var role = Enum.TryParse<UserRole>(posted, out var r) ? r : throw new DomainException("user.role_invalid", "Choose a role.");
         var user = await UserService.ChangeRoleAsync(id, role);
         return $"{user.Username} is now {AccessMiddleware.Describe(user.Role)}.";
     });

@@ -96,12 +96,35 @@ public sealed class User
             IsActive = true,
         };
 
-    /// <summary>Ends the user's sessions, so they sign in again with the new role.</summary>
+    /// <summary>A permission set given in place of a built-in role; <see cref="Role"/> is then the set's highest level.</summary>
+    public Guid? PermissionSetId { get; private set; }
+
+    /// <summary>Ends the user's sessions, so they sign in again with the new role. Takes away a permission set.</summary>
     public void ChangeRole(UserRole role)
     {
-        if (ValidRole(role) == Role)
+        if (ValidRole(role) == Role && PermissionSetId is null)
             return;
         Role = role;
+        PermissionSetId = null;
+        SecurityStamp = NewStamp();
+    }
+
+    /// <summary>Gives the user a permission set instead of a built-in role; ends their sessions.</summary>
+    public void AssignPermissionSet(PermissionSet set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        if (!set.IsActive)
+            throw new DomainException("permission_set.inactive", $"The permission set '{set.Name}' is switched off.");
+        PermissionSetId = set.Id;
+        Role = set.Highest;
+        SecurityStamp = NewStamp();
+    }
+
+    /// <summary>After the user's set changed: the role follows its highest level, and sessions end so new cookies carry the change.</summary>
+    public void PermissionSetChanged(PermissionSet set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        Role = set.Highest;
         SecurityStamp = NewStamp();
     }
 

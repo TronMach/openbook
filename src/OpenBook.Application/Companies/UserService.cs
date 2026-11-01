@@ -35,7 +35,7 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
     public async Task<User> ChangeRoleAsync(Guid id, UserRole role, CancellationToken ct = default)
     {
         var user = await GetRequiredAsync(id, ct);
-        if (user.Role == role)
+        if (user.Role == role && user.PermissionSetId is null)
             return user;
         if (user.Role == UserRole.Admin)
         {
@@ -45,6 +45,26 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
 
         var before = Snapshot(user);
         user.ChangeRole(role);
+        store.Add(Audit(AuditAction.Updated, user, before));
+        await store.SaveChangesAsync(ct);
+        return user;
+    }
+
+    /// <summary>Gives the user a permission set in place of a built-in role; signs them out everywhere.</summary>
+    public async Task<User> AssignPermissionSetAsync(Guid id, Guid permissionSetId, CancellationToken ct = default)
+    {
+        var user = await GetRequiredAsync(id, ct);
+        if (user.PermissionSetId == permissionSetId)
+            return user;
+        var set = await store.GetPermissionSetAsync(permissionSetId, ct) ?? throw new EntityNotFoundException(PermissionSetService.EntityType, permissionSetId);
+        if (user.Role == UserRole.Admin)
+        {
+            EnsureNotSelf(user, "change your own role");
+            await EnsureAnotherAdminAsync(user, ct);
+        }
+
+        var before = Snapshot(user);
+        user.AssignPermissionSet(set);
         store.Add(Audit(AuditAction.Updated, user, before));
         await store.SaveChangesAsync(ct);
         return user;
@@ -167,5 +187,5 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
     private AuditRecord Audit(AuditAction action, User u, string? before) =>
         AuditRecord.Create(clock.UtcNow, currentUser.Actor, action, EntityType, u.Id, before, Snapshot(u));
 
-    internal static string Snapshot(User u) => JsonSerializer.Serialize(new { u.Username, Role = u.Role.ToString(), u.IsActive, u.Email, u.AccessEndsOn });
+    internal static string Snapshot(User u) => JsonSerializer.Serialize(new { u.Username, Role = u.Role.ToString(), u.PermissionSetId, u.IsActive, u.Email, u.AccessEndsOn });
 }

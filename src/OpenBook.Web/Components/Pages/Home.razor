@@ -10,7 +10,7 @@
     @if (Editions.Shortcuts(_company.Edition) is { Count: > 0 } shortcuts)
     {
         <div class="report-list" style="margin-bottom: 1.5rem">
-            @foreach (var s in shortcuts)
+            @foreach (var s in shortcuts.Where(s => HttpContext.User.CanReach(s.Href)))
             {
                 <a class="card" href="@s.Href">
                     <h3>@s.Label</h3>

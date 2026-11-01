@@ -126,6 +126,7 @@ public static class DependencyInjection
         services.AddScoped<UserService>();
         services.AddScoped<TwoFactorService>();
         services.AddScoped<InviteService>();
+        services.AddScoped<PermissionSetService>();
         services.AddScoped<ApiKeyService>();
         services.AddScoped<WebhookService>();
         services.AddScoped<WebhookDispatcher>();

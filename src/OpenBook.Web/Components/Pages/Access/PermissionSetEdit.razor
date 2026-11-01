@@ -1,0 +1,135 @@
+@page "/settings/permission-sets/new"
+@page "/settings/permission-sets/{Id:guid}"
+@using OpenBook.Domain.Companies
+@inject PermissionSetService Sets
+@inject NavigationManager Navigation
+
+<PageTitle>@(_set?.Name ?? L["New permission set"]) · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@(_set?.Name ?? L["New permission set"])</h1>
+        <a href="/settings/permission-sets">@L["Permission sets"]</a>
+    </div>
+
+    @if (Saved)
+    {
+        <div class="alert notice" role="status">@L["Saved. People with this set are signed out, so their next sign-in uses it."]</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (Id is not null && _set is null)
+    {
+        <p>@L["Permission set not found."]</p>
+    }
+    else
+    {
+        <form method="post" @formname="permission-set" @onsubmit="SaveAsync">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="name">@L["Name"]</label>
+                    <input id="name" name="Name" value="@(PostedName ?? _set?.Name)" maxlength="@PermissionSet.MaxNameLength" />
+                </div>
+                <div class="field">
+                    <label for="description">@L["Description (optional)"]</label>
+                    <input id="description" name="Description" value="@(PostedDescription ?? _set?.Description)" maxlength="200" />
+                </div>
+            </div>
+            <table class="data">
+                <thead><tr><th>@L["Area"]</th><th>@L["Level"]</th></tr></thead>
+                <tbody>
+                    @foreach (var (key, area) in ApiScopes.Areas)
+                    {
+                        var current = Level(key);
+                        <tr>
+                            <td><label for="@($"level-{key}")">@area.Label</label></td>
+                            <td>
+                                <select id="@($"level-{key}")" name="@($"level:{key}")">
+                                    <option value="" selected="@(current is null)">@L["None"]</option>
+                                    <option value="ViewOnly" selected="@(current == UserRole.ViewOnly)">@L["View only"]</option>
+                                    <option value="Standard" selected="@(current == UserRole.Standard)">@L["Standard (day-to-day work)"]</option>
+                                    <option value="Accountant" selected="@(current == UserRole.Accountant)">@L["Accountant (settings and the books themselves)"]</option>
+                                </select>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="hint">@L["Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open."]</p>
+            <div class="actions"><button type="submit">@L["Save"]</button></div>
+        </form>
+
+        @if (_set is not null)
+        {
+            <form method="post" @formname="active" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">@(_set.IsActive ? L["Switch off"] : L["Switch on"])</button>
+                <a href="/audit?entityId=@_set.Id">@L["History"]</a>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    private PermissionSet? _set;
+    private string? _error;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery] private bool Saved { get; set; }
+
+    [SupplyParameterFromForm(Name = "Name")] private string? PostedName { get; set; }
+    [SupplyParameterFromForm(Name = "Description")] private string? PostedDescription { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is { } id)
+            _set = await Sets.GetAsync(id);
+    }
+
+    private UserRole? Level(string area)
+    {
+        if (HttpMethods.IsPost(HttpContext.Request.Method) && HttpContext.Request.HasFormContentType)
+            return Enum.TryParse<UserRole>(HttpContext.Request.Form[$"level:{area}"], out var posted) ? posted : null;
+        return _set?.LevelMap.TryGetValue(area, out var level) == true ? level : null;
+    }
+
+    private async Task SaveAsync()
+    {
+        var levels = ApiScopes.Areas.Keys
+            .Select(a => (Area: a, Level: Enum.TryParse<UserRole>(HttpContext.Request.Form[$"level:{a}"], out var l) ? l : (UserRole?)null))
+            .Where(x => x.Level is not null)
+            .ToDictionary(x => x.Area, x => x.Level!.Value);
+        try
+        {
+            var saved = _set is null
+                ? await Sets.CreateAsync(PostedName ?? string.Empty, PostedDescription, levels)
+                : await Sets.UpdateAsync(_set.Id, PostedName ?? string.Empty, PostedDescription, levels);
+            Navigation.NavigateTo($"/settings/permission-sets/{saved.Id}?saved=true");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        try
+        {
+            await Sets.SetActiveAsync(_set!.Id, !_set.IsActive);
+            Navigation.NavigateTo($"/settings/permission-sets/{_set.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

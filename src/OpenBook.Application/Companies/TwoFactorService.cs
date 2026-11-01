@@ -48,7 +48,7 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
         user.EnableTwoFactor(protector.Protect(Base32.Encode(bytes)), step, codes.Select(TwoFactor.HashRecoveryCode), clock.UtcNow);
         store.Add(Audit(user, "two-factor sign-in turned on"));
         await store.SaveChangesAsync(ct);
-        return new TwoFactorEnabled(codes, AuthService.Authenticated(user));
+        return new TwoFactorEnabled(codes, await store.AuthenticatedAsync(user, ct));
     }
 
     /// <summary>Needs the password and a code (or a recovery code), so a borrowed signed-in browser can't turn it off.</summary>
@@ -107,7 +107,7 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
                 JsonSerializer.Serialize(new { Changed = "signed in with a recovery code", Left = user.RecoveryCodesLeft })));
         user.RecordSuccessfulLogin(now);
         await store.SaveChangesAsync(ct);
-        return new SignInResult(SignInStatus.Succeeded, AuthService.Authenticated(user), TwoFactorSince: user.TwoFactorEnabledAt,
+        return new SignInResult(SignInStatus.Succeeded, await store.AuthenticatedAsync(user, ct), TwoFactorSince: user.TwoFactorEnabledAt,
             UsedRecoveryCode: usedRecovery, RecoveryCodesLeft: user.RecoveryCodesLeft);
     }
 
@@ -124,7 +124,7 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
             return new SignInResult(SignInStatus.InvalidCredentials);
         user.RecordSuccessfulLogin(now);
         await store.SaveChangesAsync(ct);
-        return new SignInResult(SignInStatus.Succeeded, AuthService.Authenticated(user));
+        return new SignInResult(SignInStatus.Succeeded, await store.AuthenticatedAsync(user, ct));
     }
 
     public async Task<SignInSettings> SettingsAsync(CancellationToken ct = default) =>

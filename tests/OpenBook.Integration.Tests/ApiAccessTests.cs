@@ -58,6 +58,31 @@ public sealed class ApiAccessTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_key_of_a_user_with_a_permission_set_reaches_only_its_areas()
+    {
+        string token;
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var set = await sp.GetRequiredService<PermissionSetService>().CreateAsync("Sales clerk", null,
+                new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard, ["reports"] = UserRole.ViewOnly });
+            var pat = await sp.GetRequiredService<UserService>().CreateAsync("pat", "a long password", UserRole.ViewOnly);
+            await sp.GetRequiredService<UserService>().AssignPermissionSetAsync(pat.Id, set.Id);
+            token = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(pat.Id, "script")).Token;
+        }
+
+        var client = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/customers", new { displayName = "Shop" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/me")).StatusCode);
+        var banking = await client.GetAsync("/api/banking/rules");
+        Assert.Equal(HttpStatusCode.Forbidden, banking.StatusCode);
+        Assert.Contains("access to banking", await banking.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
+    }
+
+    [Fact]
     public async Task Requests_without_a_valid_key_are_refused()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await Client(null).GetAsync("/api/customers")).StatusCode);
@@ -276,6 +301,8 @@ public sealed class AccessRulesTests
     [InlineData("/settings", "GET", UserRole.Accountant)]
     [InlineData("/settings/api-keys", "POST", UserRole.ViewOnly)]
     [InlineData("/settings/users", "GET", UserRole.Admin)]
+    [InlineData("/settings/permission-sets/new", "GET", UserRole.Admin)]
+    [InlineData("/api/users/permission-sets", "POST", UserRole.Admin)]
     [InlineData("/settings/sign-in", "GET", UserRole.Admin)]
     [InlineData("/settings/sign-in", "POST", UserRole.Admin)]
     [InlineData("/api/settings/sign-in", "GET", UserRole.Admin)]
@@ -430,4 +457,72 @@ public sealed class AccessRulesTests
     [InlineData("/reports/cash-forecast/scenarios", "POST", UserRole.Standard)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
+
+    [Theory]
+    [InlineData("/sales/invoices/new", "sales")]
+    [InlineData("/sales/channels/payouts/x", "channels")]
+    [InlineData("/customers", "sales")]
+    [InlineData("/banking/reconciliations", "banking")]
+    [InlineData("/journal/new", "ledger")]
+    [InlineData("/settings/close-books", "ledger")]
+    [InlineData("/settings/api-keys", null)]
+    [InlineData("/reports/profit-and-loss", "reports")]
+    [InlineData("/api/sales/invoices", "sales")]
+    [InlineData("/api/accounts", "ledger")]
+    [InlineData("/api/audit", "ledger")]
+    [InlineData("/api/me", null)]
+    [InlineData("/", null)]
+    [InlineData("/search", null)]
+    public void Paths_belong_to_areas(string path, string? area) => Assert.Equal(area, AccessRules.AreaOf(new PathString(path)));
+
+    /// <summary>Pages outside every area are open to a permission set only for viewing, so each one is listed here on purpose.</summary>
+    [Fact]
+    public void Every_page_belongs_to_an_area_or_needs_none()
+    {
+        string[] withoutArea =
+        [
+            "/", "/Error", "/access-denied", "/not-found", "/login", "/setup", "/search", "/account", "/invite", "/portal", "/pay",
+            "/settings/api-keys", "/settings/users", "/settings/sign-in", "/settings/permission-sets", "/settings/webhooks",
+            "/settings/plugins", "/settings/system", "/settings/email", "/settings/online-payments", "/settings/document-reading",
+        ];
+        var routes = typeof(Program).Assembly.GetTypes()
+            .SelectMany(t => t.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), false).Cast<Microsoft.AspNetCore.Components.RouteAttribute>())
+            .Select(r => "/" + string.Join('/', r.Template.Split('/', StringSplitOptions.RemoveEmptyEntries).TakeWhile(s => !s.StartsWith('{'))))
+            .Distinct()
+            .ToList();
+        Assert.True(routes.Count > 100);
+        var unlisted = routes.Where(r => AccessRules.AreaOf(new PathString(r)) is null
+            && !withoutArea.Any(w => w == "/" ? r == "/" : new PathString(r).StartsWithSegments(w, StringComparison.OrdinalIgnoreCase))).ToList();
+        Assert.Empty(unlisted);
+    }
+
+    private static System.Security.Claims.ClaimsPrincipal Principal(UserRole role, IReadOnlyDictionary<string, UserRole>? areas = null) =>
+        new(new System.Security.Claims.ClaimsIdentity(WebSecurity.Claims(new AuthenticatedUser(Guid.NewGuid(), "pat", "stamp", role, areas)), "test"));
+
+    [Fact]
+    public void A_permission_set_decides_by_area()
+    {
+        var clerk = Principal(UserRole.Standard, new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard, ["reports"] = UserRole.ViewOnly });
+        Assert.True(AccessRules.Allows(clerk, "/sales/invoices/new", "GET", out _));
+        Assert.True(AccessRules.Allows(clerk, "/api/sales/invoices", "POST", out _));
+        Assert.True(AccessRules.Allows(clerk, "/reports/profit-and-loss", "GET", out _));
+        Assert.False(AccessRules.Allows(clerk, "/reports/budgets/x", "POST", out var needed));
+        Assert.Equal(UserRole.Accountant, needed);
+        Assert.False(AccessRules.Allows(clerk, "/banking", "GET", out _));
+        Assert.False(AccessRules.Allows(clerk, "/api/banking/transactions", "GET", out _));
+        Assert.True(AccessRules.Allows(clerk, "/", "GET", out _));
+        Assert.True(AccessRules.Allows(clerk, "/account/password", "POST", out _));
+        Assert.False(AccessRules.Allows(clerk, "/settings/users", "GET", out _));
+        Assert.True(clerk.CanReach("/sales?tab=open"));
+        Assert.False(clerk.CanReach("/purchases"));
+
+        // Accountant in the books still never reaches admin things.
+        var books = Principal(UserRole.Accountant, new Dictionary<string, UserRole> { ["ledger"] = UserRole.Accountant });
+        Assert.True(AccessRules.Allows(books, "/journal/new", "GET", out _));
+        Assert.False(AccessRules.Allows(books, "/backup/download", "GET", out _));
+
+        // A built-in role works as before.
+        Assert.True(AccessRules.Allows(Principal(UserRole.Standard), "/banking", "POST", out _));
+        Assert.False(AccessRules.Allows(Principal(UserRole.Standard), "/journal/new", "GET", out _));
+    }
 }
