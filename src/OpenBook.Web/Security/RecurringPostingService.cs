@@ -15,7 +15,7 @@ namespace OpenBook.Web.Security;
 /// the actor "system".
 /// </summary>
 internal sealed partial class RecurringPostingService(
-    IServiceScopeFactory scopes, SetupState setup, ILogger<RecurringPostingService> logger) : BackgroundService
+    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<RecurringPostingService> logger) : BackgroundService
 {
     public const string Actor = "system";
     private static readonly TimeSpan Period = TimeSpan.FromHours(1);
@@ -140,21 +140,26 @@ internal sealed partial class RecurringPostingService(
     /// <returns>The step's answer; false when it failed.</returns>
     private async Task<bool> StepAsync(string what, Func<IServiceProvider, Task<bool>> step, CancellationToken ct)
     {
+        var started = DateTimeOffset.UtcNow;
         try
         {
             await using var scope = scopes.CreateAsyncScope();
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
-            return await step(scope.ServiceProvider);
+            var result = await step(scope.ServiceProvider);
+            status.Record(what, started, DateTimeOffset.UtcNow - started, error: null);
+            return result;
         }
         catch (DomainException ex)
         {
             LogCollectionFailed(what, ex.Message);
+            status.Record(what, started, DateTimeOffset.UtcNow - started, ex.Message);
             return false;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // A restore can swap the company file mid-run, or a save can clash with someone else's; the next tick tries again.
             LogFailed(what, ex);
+            status.Record(what, started, DateTimeOffset.UtcNow - started, Diagnostics.JobStatus.Describe(ex));
             return false;
         }
     }

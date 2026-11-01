@@ -11,7 +11,7 @@ namespace OpenBook.Web.Security;
 /// auto-add rules) as actor "system"; failures are kept on the connection for its page, and logged.
 /// </summary>
 internal sealed partial class BankSyncHostedService(
-    IServiceScopeFactory scopes, SetupState setup, ILogger<BankSyncHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<BankSyncHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
 
@@ -27,6 +27,8 @@ internal sealed partial class BankSyncHostedService(
 
     private async Task SyncDueAsync(CancellationToken ct)
     {
+        var started = DateTimeOffset.UtcNow;
+        string? error = null;
         try
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -38,14 +40,20 @@ internal sealed partial class BankSyncHostedService(
                 if (result.Succeeded)
                     LogSynced(connection.Name, result.Queued, result.AutoAdded);
                 else
+                {
                     LogFailed(connection.Name, result.Error!);
+                    error ??= $"{connection.Name}: {result.Error}";
+                }
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // Anything (a restore swapping the company file mid-run, a network error): log it and let the next tick try again.
             LogError(ex);
+            error = Diagnostics.JobStatus.Describe(ex);
         }
+
+        status.Record("Bank feeds", started, DateTimeOffset.UtcNow - started, error);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Bank connection {Name} synced: {Queued} line(s) to review, {Added} added by rules.")]

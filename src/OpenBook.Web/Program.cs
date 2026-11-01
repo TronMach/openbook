@@ -26,6 +26,19 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var connectionString = builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db";
+// The log goes to files beside the company file (or the backups folder), and the System page shows recent problems.
+if (!isResetPassword)
+{
+    var logFolder = OpenBook.Web.Diagnostics.LogFolder.For(
+        builder.Configuration["OpenBook:LogDirectory"], builder.Configuration["OpenBook:BackupDirectory"], connectionString, builder.Environment.ContentRootPath);
+    // Made by the container, so it's disposed (and the file closed) when the app stops.
+    builder.Services.AddSingleton(_ => new OpenBook.Web.Diagnostics.FileLoggerProvider(logFolder));
+    builder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<OpenBook.Web.Diagnostics.FileLoggerProvider>());
+    builder.Logging.AddFilter<OpenBook.Web.Diagnostics.FileLoggerProvider>("Microsoft", LogLevel.Warning);
+    builder.Logging.AddFilter<OpenBook.Web.Diagnostics.FileLoggerProvider>("System", LogLevel.Warning);
+}
+
+builder.Services.AddSingleton<OpenBook.Web.Diagnostics.JobStatus>();
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
     new OpenBook.Infrastructure.Payments.ReceiptTextExtractor(builder.Configuration["OpenBook:Ocr:TesseractPath"]));

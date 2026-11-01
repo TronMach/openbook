@@ -68,3 +68,12 @@ The company file can be encrypted, so a stolen copy can't be read without the ke
 ## Exporting all your data
 
 **Backup → Export all data** downloads a ZIP with every table as a CSV file, every attachment, and a README describing each file and column. It's for taking your data elsewhere or analysing it in a spreadsheet; it isn't a backup you can restore. Passwords, keys and other secrets are left out, as are vendors' tax IDs.
+
+## The System page
+
+**Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. Below that:
+
+- **Background jobs**: the jobs OpenBook runs on its own (recurring documents, late fees and reminders, scheduled emails and reports, bank feeds, sales channels, scheduled backups, webhooks), each with when it last ran, whether it worked and its last failure. If automatic invoices or bank feeds seem to have stopped, look here first.
+- **Recent warnings and errors** since OpenBook last started.
+
+OpenBook also writes a log file for each day (`openbook-yyyymmdd.log`) to the log folder, keeping two weeks. By default the folder is called `logs`, next to the company file or the backups folder; whoever runs the server can choose another with the `OpenBook:LogDirectory` setting.

@@ -1,0 +1,139 @@
+@page "/settings/system"
+@using System.Data.Common
+@using System.Reflection
+@using System.Runtime.InteropServices
+@using OpenBook.Application.Plugins
+@using OpenBook.Infrastructure
+@using OpenBook.Infrastructure.Persistence
+@using OpenBook.Web.Diagnostics
+@inject OpenBookStorage Storage
+@inject JobStatus Jobs
+@inject PluginRegistry Plugins
+@inject OpenBook.Infrastructure.Net.OutboundPolicy Outbound
+@inject IConfiguration Configuration
+@inject IServiceProvider Services
+
+<PageTitle>System · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>System</h1>
+    <p class="muted">How this OpenBook server is set up and what its background jobs have been doing, for whoever looks after it. Times are in the company's time zone.</p>
+
+    <div class="card">
+        <h2>Server</h2>
+        <dl class="facts">
+            <dt>OpenBook</dt><dd>@Version</dd>
+            <dt>Runtime</dt><dd>@RuntimeInformation.FrameworkDescription on @RuntimeInformation.OSDescription</dd>
+            <dt>Running since</dt><dd>@Started.InCompanyTime().ToString("g") (@Uptime)</dd>
+            <dt>Company time zone</dt><dd>@CompanyTime.Zone.Id</dd>
+            <dt>Database</dt><dd>@Database</dd>
+            @if (DatabaseSize is { } size)
+            {
+                <dt>Company file size</dt><dd>@Size(size)</dd>
+            }
+            <dt>Backups folder</dt><dd>@(Storage.Provider == DatabaseProvider.Sqlite ? Storage.BackupDirectory : "PostgreSQL: use pg_dump")</dd>
+            <dt>Log folder</dt><dd>@(_log?.Directory ?? "not written")</dd>
+            <dt>Data protection keys</dt><dd>@(Configuration["OpenBook:DataProtectionKeys"] ?? "the default location for this user")</dd>
+            <dt>Webhooks to private networks</dt><dd>@(Outbound.AllowPrivateNetworks ? "allowed" : "refused")</dd>
+            <dt>Add-ins</dt><dd>@(Plugins.SafeMode ? "safe mode: none loaded" : $"{Plugins.Plugins.Count} found")</dd>
+        </dl>
+    </div>
+
+    <h2>Background jobs</h2>
+    @if (Jobs.Runs.Count == 0)
+    {
+        <p class="muted">No background job has run since OpenBook started. The hourly jobs run at startup; bank feeds and sales channels every half hour.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Job</th><th>Last run</th><th class="num">Took</th><th>Result</th><th>Last failure</th></tr></thead>
+                <tbody>
+                    @foreach (var run in Jobs.Runs)
+                    {
+                        <tr>
+                            <td>@run.Job</td>
+                            <td class="nowrap">@run.LastRunAt.InCompanyTime().ToString("g")</td>
+                            <td class="num">@($"{run.Took.TotalSeconds:0.0} s")</td>
+                            <td><span class="badge @(run.Succeeded ? "ok" : null)">@(run.Succeeded ? "Worked" : "Failed")</span></td>
+                            <td>@(run.LastFailureAt is { } at ? $"{at.InCompanyTime():g}: {run.LastError}" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <h2>Recent warnings and errors</h2>
+    @if (_log is null || _log.RecentProblems.Count == 0)
+    {
+        <p class="muted">None since OpenBook started.</p>
+    }
+    else
+    {
+        <p class="muted">The latest @_log.RecentProblems.Count since OpenBook started, newest first. The log files in the log folder have the full details.</p>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>When</th><th>Level</th><th>Where</th><th>What</th></tr></thead>
+                <tbody>
+                    @foreach (var problem in _log.RecentProblems)
+                    {
+                        <tr>
+                            <td class="nowrap">@problem.At.InCompanyTime().ToString("g")</td>
+                            <td>@problem.Level</td>
+                            <td>@problem.Category</td>
+                            <td>@problem.Message@(problem.Exception is null ? "" : $" ({problem.Exception})")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly DateTimeOffset Started = new(System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime(), TimeSpan.Zero);
+    private FileLoggerProvider? _log;
+
+    private static string Version =>
+        typeof(SystemPage).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
+        ?? typeof(SystemPage).Assembly.GetName().Version?.ToString() ?? "unknown";
+
+    private static string Uptime
+    {
+        get
+        {
+            var up = DateTimeOffset.UtcNow - Started;
+            return up.TotalDays >= 1 ? $"{(int)up.TotalDays} d {up.Hours} h" : up.TotalHours >= 1 ? $"{(int)up.TotalHours} h {up.Minutes} min" : $"{(int)up.TotalMinutes} min";
+        }
+    }
+
+    /// <summary>The provider and where the data is, never a password.</summary>
+    private string Database
+    {
+        get
+        {
+            var parts = new DbConnectionStringBuilder { ConnectionString = Storage.ConnectionString };
+            string? Part(string key) => parts.TryGetValue(key, out var value) ? value?.ToString() : null;
+            return Storage.Provider == DatabaseProvider.Postgres
+                ? $"PostgreSQL, database {Part("Database") ?? "(default)"} on {Part("Host") ?? "?"}"
+                : $"SQLite, {Path.GetFullPath(Part("Data Source") ?? "?")}{(Storage.Encrypted ? ", encrypted" : "")}";
+        }
+    }
+
+    private long? DatabaseSize
+    {
+        get
+        {
+            if (Storage.Provider != DatabaseProvider.Sqlite)
+                return null;
+            var parts = new DbConnectionStringBuilder { ConnectionString = Storage.ConnectionString };
+            return parts.TryGetValue("Data Source", out var file) && file?.ToString() is { Length: > 0 } path && File.Exists(path) ? new FileInfo(path).Length : null;
+        }
+    }
+
+    private static string Size(long bytes) => bytes >= 1 << 20 ? $"{bytes / (double)(1 << 20):0.0} MB" : $"{bytes / 1024.0:0} KB";
+
+    protected override void OnInitialized() => _log = Services.GetService<FileLoggerProvider>();
+}

@@ -10,7 +10,7 @@ namespace OpenBook.Web.Security;
 /// the channel for its page, and logged.
 /// </summary>
 internal sealed partial class ChannelSyncHostedService(
-    IServiceScopeFactory scopes, SetupState setup, ILogger<ChannelSyncHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<ChannelSyncHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
 
@@ -26,6 +26,8 @@ internal sealed partial class ChannelSyncHostedService(
 
     private async Task SyncDueAsync(CancellationToken ct)
     {
+        var started = DateTimeOffset.UtcNow;
+        string? error = null;
         try
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -37,14 +39,20 @@ internal sealed partial class ChannelSyncHostedService(
                 if (result.Succeeded)
                     LogSynced(channel.Name, result.Imported);
                 else
+                {
                     LogFailed(channel.Name, result.Error!);
+                    error ??= $"{channel.Name}: {result.Error}";
+                }
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // Anything (a restore swapping the company file mid-run, a network error): log it and let the next tick try again.
             LogError(ex);
+            error = Diagnostics.JobStatus.Describe(ex);
         }
+
+        status.Record("Sales channels", started, DateTimeOffset.UtcNow - started, error);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Channel {Name} synced: {Imported} new payout(s).")]

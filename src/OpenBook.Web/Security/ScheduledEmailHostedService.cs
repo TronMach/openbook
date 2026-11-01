@@ -9,7 +9,7 @@ namespace OpenBook.Web.Security;
 /// email for the invoice page, and logged. The audit log names the actor "system".
 /// </summary>
 internal sealed partial class ScheduledEmailHostedService(
-    IServiceScopeFactory scopes, SetupState setup, ILogger<ScheduledEmailHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<ScheduledEmailHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(1);
 
@@ -28,6 +28,8 @@ internal sealed partial class ScheduledEmailHostedService(
 
     private async Task SendDueAsync(CancellationToken ct)
     {
+        var started = DateTimeOffset.UtcNow;
+        string? error = null;
         try
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -39,13 +41,19 @@ internal sealed partial class ScheduledEmailHostedService(
                 if (result.Error is null)
                     LogSent(result.Email.To);
                 else
+                {
                     LogNotSent(result.Email.To, result.Error);
+                    error ??= $"To {result.Email.To}: {result.Error}";
+                }
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             LogError(ex);
+            error = Diagnostics.JobStatus.Describe(ex);
         }
+
+        status.Record("Scheduled emails", started, DateTimeOffset.UtcNow - started, error);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Scheduled invoice email sent to {To}.")]

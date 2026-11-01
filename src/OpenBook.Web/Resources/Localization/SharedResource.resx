@@ -881,6 +881,9 @@
   <data name="Store address" xml:space="preserve">
     <value>Store address</value>
   </data>
+  <data name="System" xml:space="preserve">
+    <value>System</value>
+  </data>
   <data name="Tax" xml:space="preserve">
     <value>Tax</value>
   </data>
@@ -955,6 +958,9 @@
   </data>
   <data name="Vendor" xml:space="preserve">
     <value>Vendor</value>
+  </data>
+  <data name="version, database, background jobs and recent errors (admins)" xml:space="preserve">
+    <value>version, database, background jobs and recent errors (admins)</value>
   </data>
   <data name="Void invoice" xml:space="preserve">
     <value>Void invoice</value>

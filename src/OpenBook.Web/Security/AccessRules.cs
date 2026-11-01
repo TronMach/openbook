@@ -39,6 +39,7 @@ public static class AccessRules
         ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/settings/users", UserRole.Admin, UserRole.Admin),
         ("/settings/plugins", UserRole.Admin, UserRole.Admin),
+        ("/settings/system", UserRole.Admin, UserRole.Admin),
         ("/api/users", UserRole.Admin, UserRole.Admin),
         ("/settings/webhooks", UserRole.Admin, UserRole.Admin),
         ("/api/webhooks", UserRole.Admin, UserRole.Admin),

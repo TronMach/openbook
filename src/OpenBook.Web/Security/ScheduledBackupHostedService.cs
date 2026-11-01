@@ -8,7 +8,7 @@ namespace OpenBook.Web.Security;
 /// so, makes and sends a backup. Failures are kept on the schedule for the backup page, and logged.
 /// </summary>
 internal sealed partial class ScheduledBackupHostedService(
-    IServiceScopeFactory scopes, SetupState setup, ILogger<ScheduledBackupHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<ScheduledBackupHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(15);
 
@@ -21,6 +21,8 @@ internal sealed partial class ScheduledBackupHostedService(
 
     private async Task RunDueAsync(CancellationToken ct)
     {
+        var started = DateTimeOffset.UtcNow;
+        string? error = null;
         try
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -30,12 +32,18 @@ internal sealed partial class ScheduledBackupHostedService(
             if (result is { Succeeded: true })
                 LogBackedUp(result.FileName!, result.Deleted);
             else if (result is { Succeeded: false })
+            {
                 LogFailed(result.Error!);
+                error = result.Error;
+            }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             LogError(ex);
+            error = Diagnostics.JobStatus.Describe(ex);
         }
+
+        status.Record("Scheduled backups", started, DateTimeOffset.UtcNow - started, error);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Scheduled backup {FileName} saved; {Deleted} older backup(s) removed.")]
