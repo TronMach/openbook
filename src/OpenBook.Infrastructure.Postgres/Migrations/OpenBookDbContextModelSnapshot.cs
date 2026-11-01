@@ -1562,6 +1562,21 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("PrintQueue", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.SignInSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TwoFactorRequiredFrom")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SignInSettings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1580,6 +1595,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("LastTwoFactorStep")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset?>("LockedUntil")
                         .HasColumnType("timestamp with time zone");
 
@@ -1587,6 +1605,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ProtectedTwoFactorSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("RecoveryCodeHashes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -1597,6 +1623,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("TwoFactorEnabledAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Username")
                         .IsRequired()

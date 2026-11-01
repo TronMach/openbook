@@ -12,7 +12,8 @@ var encryptionCommand = args is [EncryptionCommands.Encrypt or EncryptionCommand
 
 // "--safe-mode" starts without add-ins (for one that stops OpenBook starting); it isn't a configuration key.
 var safeModeArgument = args.Contains("--safe-mode", StringComparer.OrdinalIgnoreCase);
-var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)).ToArray());
+var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)
+    && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)).ToArray());
 if (isResetPassword || encryptionCommand is not null)
     builder.Logging.ClearProviders();
 

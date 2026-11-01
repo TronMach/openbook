@@ -41,6 +41,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Nonprofit.Grant> Grants => Set<OpenBook.Domain.Nonprofit.Grant>();
     public DbSet<OpenBook.Domain.Nonprofit.RecurringGift> RecurringGifts => Set<OpenBook.Domain.Nonprofit.RecurringGift>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<SignInSettings> SignInSettings => Set<SignInSettings>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
@@ -713,6 +714,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(u => u.PasswordHash).HasMaxLength(500);
             b.Property(u => u.SecurityStamp).HasMaxLength(64);
             b.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
+            b.Property(u => u.ProtectedTwoFactorSecret).HasMaxLength(2000);
+            b.Property(u => u.RecoveryCodeHashes).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<SignInSettings>(b =>
+        {
+            b.ToTable("SignInSettings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.TwoFactorRequiredFrom).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<Note>(b =>

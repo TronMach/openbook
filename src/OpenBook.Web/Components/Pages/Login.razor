@@ -2,6 +2,8 @@
 @attribute [AllowAnonymous]
 @using System.ComponentModel.DataAnnotations
 @inject AuthService Auth
+@inject TwoFactorService TwoFactor
+@inject TwoFactorCookies TwoFactorCookies
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Sign in"] · OpenBook</PageTitle>
@@ -58,8 +60,19 @@
         switch (result.Status)
         {
             case SignInStatus.Succeeded:
-                await WebSecurity.SignInAsync(HttpContext, result.User!);
-                Navigation.NavigateTo(WebSecurity.SafeReturnUrl(ReturnUrl));
+                Navigation.NavigateTo(await WebSecurity.CompleteSignInAsync(HttpContext, result, ReturnUrl));
+                break;
+            case SignInStatus.TwoFactorRequired:
+                // A browser remembered since two-factor was turned on skips the code.
+                if (TwoFactorCookies.Remembered(HttpContext, result.User!) is { } since && since == result.TwoFactorSince
+                    && await TwoFactor.SignInRememberedAsync(result.User!.Id, result.User.SecurityStamp, since, HttpContext.RequestAborted) is { Status: SignInStatus.Succeeded } remembered)
+                {
+                    Navigation.NavigateTo(await WebSecurity.CompleteSignInAsync(HttpContext, remembered, ReturnUrl));
+                    break;
+                }
+
+                TwoFactorCookies.StartPending(HttpContext, result.User!, WebSecurity.SafeReturnUrl(ReturnUrl));
+                Navigation.NavigateTo("/login/two-factor");
                 break;
             case SignInStatus.LockedOut:
                 _error = $"Too many failed attempts. Try again after {result.LockedUntil!.Value.InCompanyTime():t}.";

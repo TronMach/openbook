@@ -1,0 +1,205 @@
+@page "/account/two-factor"
+@using OpenBook.Domain.Companies
+@inject TwoFactorService TwoFactor
+@inject AuthService Auth
+@inject UserService Users
+@inject TwoFactorCookies TwoFactorCookies
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Two-factor sign-in"] · OpenBook</PageTitle>
+
+<div class="card narrow">
+    <h1>@L["Two-factor sign-in"]</h1>
+    <p class="muted">@L["With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough."]</p>
+
+    @if (Required && _user is { HasTwoFactor: false })
+    {
+        <div class="alert notice" role="status">@L["Two-factor sign-in is required for your role. Set it up to carry on."]</div>
+    }
+    @if (Recovery is { } left)
+    {
+        <div class="alert notice" role="status">@L["You signed in with a recovery code, which can't be used again. Recovery codes left: {0}.", left] @(left <= 3 ? L["Make new ones below."].Value : "")</div>
+    }
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_codes is not null)
+    {
+        <h2>@L["Your recovery codes"]</h2>
+        <p>@L["Each code signs you in once if you lose your phone. Save them somewhere safe now (print them or keep them in a password manager): they won't be shown again."]</p>
+        <ul class="recovery-codes">
+            @foreach (var recoveryCode in _codes)
+            {
+                <li><code>@recoveryCode</code></li>
+            }
+        </ul>
+        <p><a href="@(Required ? "/" : "/account/two-factor")">@L["I've saved them"]</a></p>
+    }
+    else if (_user is { HasTwoFactor: false } && _setup is not null)
+    {
+        <h2>@L["Set it up"]</h2>
+        <ol>
+            <li>@L["Open your authenticator app and add an account by scanning this code."]</li>
+        </ol>
+        <div class="qr-code" role="img" aria-label="@L["QR code for your authenticator app"]">@((MarkupString)QrCodes.Svg(_setup.Uri))</div>
+        <p class="hint">@L["Can't scan it? Type this key into the app instead:"] <code class="secret">@Grouped(_setup.Secret)</code></p>
+        <ol start="2">
+            <li>@L["Enter the 6-digit code the app shows for OpenBook."]</li>
+        </ol>
+        <form method="post" @formname="enable" @onsubmit="EnableAsync">
+            <AntiforgeryToken />
+            <input type="hidden" name="Setup" value="@TwoFactorCookies.ProtectSetup(_user.Id, _setup.Secret)" />
+            <div class="field">
+                <label for="code">@L["Code"]</label>
+                <input id="code" name="Code" autocomplete="one-time-code" inputmode="numeric" />
+            </div>
+            <button type="submit">@L["Turn on two-factor sign-in"]</button>
+        </form>
+    }
+    else if (_user is { HasTwoFactor: true })
+    {
+        <p><span class="badge">@L["On"]</span> @L["since {0}.", _user.TwoFactorEnabledAt!.Value.InCompanyTime().ToString("d")] @L["Recovery codes left: {0}.", _user.RecoveryCodesLeft]</p>
+
+        <h2>@L["New recovery codes"]</h2>
+        <p class="muted">@L["Replaces every recovery code; the old ones stop working."]</p>
+        <form method="post" @formname="codes" @onsubmit="NewCodesAsync">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="codes-password">@L["Password"]</label>
+                    <input id="codes-password" name="Password" type="password" autocomplete="current-password" />
+                </div>
+                <div class="field">
+                    <label for="codes-code">@L["Code from your app"]</label>
+                    <input id="codes-code" name="Code" autocomplete="one-time-code" />
+                </div>
+            </div>
+            <button type="submit" class="secondary">@L["Make new recovery codes"]</button>
+        </form>
+
+        <h2>@L["Turn it off"]</h2>
+        <p class="muted">@L["To move to a new phone, turn it off and set it up again. Browsers remembered for 30 days are forgotten."]</p>
+        <form method="post" @formname="disable" @onsubmit="DisableAsync">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="off-password">@L["Password"]</label>
+                    <input id="off-password" name="Password" type="password" autocomplete="current-password" />
+                </div>
+                <div class="field">
+                    <label for="off-code">@L["Code from your app"]</label>
+                    <input id="off-code" name="Code" autocomplete="one-time-code" />
+                </div>
+            </div>
+            <button type="submit" class="danger">@L["Turn off two-factor sign-in"]</button>
+        </form>
+    }
+
+    @if (HttpContext.User.MustSetUpTwoFactor())
+    {
+        <form method="post" action="/logout" data-enhance="false" style="margin-top: 1rem">
+            <AntiforgeryToken />
+            <button type="submit" class="link">@L["Sign out"]</button>
+        </form>
+    }
+</div>
+
+@code {
+    private User? _user;
+    private TwoFactorSetup? _setup;
+    private IReadOnlyList<string>? _codes;
+    private string? _message;
+    private string? _error;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery] private bool Required { get; set; }
+    [SupplyParameterFromQuery] private int? Recovery { get; set; }
+
+    [SupplyParameterFromForm(Name = "Setup")] private string? PostedSetup { get; set; }
+    [SupplyParameterFromForm(Name = "Code")] private string? PostedCode { get; set; }
+    [SupplyParameterFromForm(Name = "Password")] private string? PostedPassword { get; set; }
+
+    private Guid UserId => HttpContext.User.GetUserId();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (_user is { HasTwoFactor: false } && _setup is null)
+            _setup = await TwoFactor.NewSetupAsync(UserId, ct: HttpContext.RequestAborted);
+    }
+
+    private async Task LoadAsync() => _user = await Users.GetAsync(UserId, HttpContext.RequestAborted);
+
+    private async Task EnableAsync()
+    {
+        var secret = TwoFactorCookies.ReadSetup(UserId, PostedSetup);
+        try
+        {
+            if (secret is null)
+                throw new DomainException("twofactor.setup_expired", "The setup took too long. Scan the new code below and try again.");
+            var enabled = await TwoFactor.EnableAsync(UserId, secret, PostedCode ?? string.Empty, HttpContext.RequestAborted);
+            // Re-issue this browser's cookie without the "set up first" mark.
+            await WebSecurity.SignInAsync(HttpContext, enabled.User);
+            _codes = enabled.RecoveryCodes;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            // Keep the same secret, so a code already in the app still works.
+            _setup = await TwoFactor.NewSetupAsync(UserId, secret, HttpContext.RequestAborted);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task NewCodesAsync()
+    {
+        try
+        {
+            _codes = await TwoFactor.NewRecoveryCodesAsync(UserId, PostedPassword ?? string.Empty, PostedCode ?? string.Empty, HttpContext.RequestAborted);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task DisableAsync()
+    {
+        try
+        {
+            await TwoFactor.DisableAsync(UserId, PostedPassword ?? string.Empty, PostedCode ?? string.Empty, HttpContext.RequestAborted);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            await LoadAsync();
+            return;
+        }
+
+        // When the role requires it, this browser may only set it up again.
+        if (await Auth.MustSetUpTwoFactorAsync(UserId, HttpContext.RequestAborted))
+        {
+            await WebSecurity.SignInAsync(HttpContext, await Auth.CurrentAsync(UserId, HttpContext.RequestAborted), mustSetUpTwoFactor: true);
+            Navigation.NavigateTo("/account/two-factor?required=true");
+            return;
+        }
+
+        _message = L["Two-factor sign-in is off."];
+        await LoadAsync();
+        _setup = await TwoFactor.NewSetupAsync(UserId, ct: HttpContext.RequestAborted);
+    }
+
+    private static string Grouped(string secret) =>
+        string.Join(' ', Enumerable.Range(0, (secret.Length + 3) / 4).Select(i => secret.Substring(i * 4, Math.Min(4, secret.Length - i * 4))));
+}

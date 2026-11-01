@@ -1555,6 +1555,21 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("PrintQueue", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.SignInSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TwoFactorRequiredFrom")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SignInSettings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1573,12 +1588,23 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LastLoginAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("LastTwoFactorStep")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset?>("LockedUntil")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedTwoFactorSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecoveryCodeHashes")
+                        .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Role")
@@ -1589,6 +1615,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("TwoFactorEnabledAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Username")

@@ -418,3 +418,10 @@ input.lots { margin-top: 0.25rem; font-size: 0.9em; }
 @media print { .report-chart { break-inside: avoid; } }
 .legend { display: flex; gap: 1rem; color: var(--muted); font-size: 0.85rem; margin: 0.25rem 0; }
 .legend .key { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 2px; margin-right: 0.35rem; vertical-align: -1px; }
+
+/* Two-factor setup: the QR code stays dark on white in both themes, so phones can read it. */
+.qr-code { display: inline-block; background: #fff; padding: 0.75rem; border-radius: 6px; margin: 0.5rem 0 0.75rem; line-height: 0; }
+.qr-code svg { width: 12rem; height: 12rem; }
+code.secret { letter-spacing: 0.05em; word-break: break-all; }
+.recovery-codes { list-style: none; padding: 0; columns: 2 10rem; font-size: 1.05rem; }
+.recovery-codes li { margin-bottom: 0.35rem; }

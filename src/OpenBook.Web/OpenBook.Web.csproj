@@ -6,6 +6,10 @@
     <ProjectReference Include="..\OpenBook.Infrastructure.Postgres\OpenBook.Infrastructure.Postgres.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

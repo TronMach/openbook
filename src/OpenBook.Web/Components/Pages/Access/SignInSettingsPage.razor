@@ -1,0 +1,91 @@
+@page "/settings/sign-in"
+@using OpenBook.Domain.Companies
+@inject TwoFactorService TwoFactor
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Sign-in and two-factor"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Sign-in and two-factor"]</h1>
+        <a href="/settings/users">@L["Users"]</a>
+    </div>
+
+    @if (Saved)
+    {
+        <div class="alert notice" role="status">@L["Saved."]</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <div class="card">
+        <h2>@L["Require two-factor sign-in"]</h2>
+        <p class="muted">@L["Everyone can turn on two-factor sign-in for themselves under their account. Require it here for some roles: people in them who haven't set it up are asked to at their next sign-in and can't do anything else until they have. API keys aren't affected."]</p>
+        <form method="post" @formname="require" @onsubmit="SaveAsync">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="from">@L["Require it for"]</label>
+                <select id="from" name="From">
+                    @foreach (var (value, label) in Choices)
+                    {
+                        <option value="@value" selected="@(value == (_settings?.TwoFactorRequiredFrom?.ToString() ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
+            <button type="submit">@L["Save"]</button>
+        </form>
+        @if (_without.Count > 0)
+        {
+            <p class="hint">@L["Not set up yet, but required: {0}.", string.Join(", ", _without)]</p>
+        }
+    </div>
+</div>
+
+@code {
+    private SignInSettings? _settings;
+    private List<string> _without = [];
+    private string? _error;
+
+    [SupplyParameterFromQuery] private bool Saved { get; set; }
+
+    [SupplyParameterFromForm(Name = "From")] private string? PostedFrom { get; set; }
+
+    private (string Value, string Label)[] Choices =>
+    [
+        ("", L["Nobody (each person decides)"]),
+        (nameof(UserRole.Admin), L["Admins"]),
+        (nameof(UserRole.Accountant), L["Accountants and admins"]),
+        (nameof(UserRole.Standard), L["Everyone but view-only users"]),
+        (nameof(UserRole.ViewOnly), L["Everyone"]),
+    ];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _settings = await TwoFactor.SettingsAsync();
+        _without = (await UserService.ListAsync())
+            .Where(u => u.IsActive && !u.HasTwoFactor && _settings.RequiresTwoFactor(u.Role))
+            .Select(u => u.Username).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            UserRole? from = string.IsNullOrEmpty(PostedFrom) ? null
+                : Enum.TryParse<UserRole>(PostedFrom, out var role) ? role
+                : throw new DomainException("user.role_invalid", "Choose who must use two-factor sign-in.");
+            await TwoFactor.RequireAsync(from);
+            Navigation.NavigateTo("/settings/sign-in?saved=true");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            await LoadAsync();
+        }
+    }
+}

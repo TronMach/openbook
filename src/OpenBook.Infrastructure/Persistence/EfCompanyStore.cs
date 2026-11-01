@@ -43,6 +43,10 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
 
     public void Add(UserSession session) => db.UserSessions.Add(session);
 
+    public Task<SignInSettings?> GetSignInSettingsAsync(CancellationToken ct) => db.SignInSettings.SingleOrDefaultAsync(ct);
+
+    public void Add(SignInSettings settings) => db.SignInSettings.Add(settings);
+
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

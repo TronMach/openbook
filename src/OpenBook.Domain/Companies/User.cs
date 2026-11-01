@@ -56,6 +56,22 @@ public sealed class User
     /// <summary>Inactive users can't sign in, and their API keys stop working.</summary>
     public bool IsActive { get; private set; }
 
+    /// <summary>The authenticator app's secret, encrypted by the host (never shown again after setup); null without two-factor sign-in.</summary>
+    public string? ProtectedTwoFactorSecret { get; private set; }
+
+    /// <summary>When two-factor sign-in was turned on; browsers remembered before then don't count.</summary>
+    public DateTimeOffset? TwoFactorEnabledAt { get; private set; }
+
+    /// <summary>The last time step a code was accepted for, so a code can't be used twice.</summary>
+    public long? LastTwoFactorStep { get; private set; }
+
+    /// <summary>Comma-separated hashes of the recovery codes not used yet.</summary>
+    public string? RecoveryCodeHashes { get; private set; }
+
+    public bool HasTwoFactor => TwoFactorEnabledAt is not null;
+
+    public int RecoveryCodesLeft => RecoveryCodeHashes is { Length: > 0 } hashes ? hashes.Split(',').Length : 0;
+
     public static User Create(string username, string passwordHash, DateTimeOffset createdAt, UserRole role = UserRole.Admin) =>
         new()
         {
@@ -143,6 +159,47 @@ public sealed class User
         ChangePassword(newPasswordHash);
         FailedLoginCount = 0;
         LockedUntil = null;
+    }
+
+    /// <param name="firstStep">The step of the code that confirmed the setup, so it can't be used to sign in.</param>
+    public void EnableTwoFactor(string protectedSecret, long firstStep, IEnumerable<string> recoveryCodeHashes, DateTimeOffset now)
+    {
+        if (string.IsNullOrEmpty(protectedSecret))
+            throw new ArgumentException("The secret is required.", nameof(protectedSecret));
+        ProtectedTwoFactorSecret = protectedSecret;
+        TwoFactorEnabledAt = now.ToUniversalTime();
+        LastTwoFactorStep = firstStep;
+        ReplaceRecoveryCodes(recoveryCodeHashes);
+    }
+
+    /// <summary>Turns two-factor sign-in off; browsers remembered for it are forgotten (they name the old start).</summary>
+    public void DisableTwoFactor()
+    {
+        ProtectedTwoFactorSecret = null;
+        TwoFactorEnabledAt = null;
+        LastTwoFactorStep = null;
+        RecoveryCodeHashes = null;
+    }
+
+    public void ReplaceRecoveryCodes(IEnumerable<string> hashes) => RecoveryCodeHashes = string.Join(',', hashes);
+
+    /// <summary>False when the step was used already (or an earlier one was used after it).</summary>
+    public bool AcceptTwoFactorStep(long step)
+    {
+        if (LastTwoFactorStep is { } last && step <= last)
+            return false;
+        LastTwoFactorStep = step;
+        return true;
+    }
+
+    /// <summary>Crosses a recovery code off; false if it isn't one of the unused ones.</summary>
+    public bool UseRecoveryCode(string hash)
+    {
+        var hashes = (RecoveryCodeHashes ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!hashes.Remove(hash))
+            return false;
+        RecoveryCodeHashes = string.Join(',', hashes);
+        return true;
     }
 
     /// <summary>Re-hash with stronger parameters after a successful sign-in; sessions stay valid.</summary>

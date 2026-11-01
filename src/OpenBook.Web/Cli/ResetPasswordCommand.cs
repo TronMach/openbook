@@ -8,7 +8,7 @@ using OpenBook.Infrastructure.Persistence;
 namespace OpenBook.Web.Cli;
 
 /// <summary>
-/// <c>OpenBook.Web reset-password [username]</c>: recovery for a forgotten password. Runs against the same
+/// <c>OpenBook.Web reset-password [username] [--clear-two-factor]</c>: recovery for a forgotten password. Runs against the same
 /// company file the web app would use (same configuration and arguments), then exits.
 /// Reads the new password from the keyboard without echoing it, or one line per prompt when input is piped.
 /// </summary>
@@ -16,10 +16,14 @@ public static class ResetPasswordCommand
 {
     public const string Name = "reset-password";
 
+    /// <summary>Also turns the user's two-factor sign-in off (lost phone and recovery codes). Not a configuration key.</summary>
+    public const string ClearTwoFactor = "--clear-two-factor";
+
     public static async Task<int> RunAsync(IServiceProvider services, string[] args)
     {
         // The username is the first bare word after the command; "--key=value" arguments are configuration.
         var username = args.Skip(1).FirstOrDefault(a => !a.StartsWith('-'));
+        var clearTwoFactor = args.Contains(ClearTwoFactor, StringComparer.OrdinalIgnoreCase);
 
         var storage = services.GetRequiredService<OpenBookStorage>();
         Console.WriteLine("OpenBook password reset");
@@ -46,9 +50,11 @@ public static class ResetPasswordCommand
 
             await using var scope = services.CreateAsyncScope();
             var reset = await scope.ServiceProvider.GetRequiredService<AuthService>()
-                .ResetPasswordAsync(username, password, $"console:{Environment.UserName}");
+                .ResetPasswordAsync(username, password, $"console:{Environment.UserName}", clearTwoFactor);
 
             Console.WriteLine($"Password reset for '{reset}'. Any signed-in sessions have been signed out.");
+            if (clearTwoFactor)
+                Console.WriteLine("Two-factor sign-in is off for them; they can set it up again after signing in.");
             return 0;
         }
         catch (DomainException ex)

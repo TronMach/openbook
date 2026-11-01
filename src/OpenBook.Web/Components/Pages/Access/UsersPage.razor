@@ -9,6 +9,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Users</h1>
+        <a href="/settings/sign-in">Sign-in and two-factor</a>
         <a href="/settings">Company settings</a>
     </div>
     <p class="muted">
@@ -28,7 +29,7 @@
     }
 
     <table class="data">
-        <thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th></th><th></th></tr></thead>
+        <thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th>Two-factor</th><th></th><th></th></tr></thead>
         <tbody>
             @foreach (var user in _users)
             {
@@ -46,7 +47,24 @@
                             <button type="submit" class="secondary">Change</button>
                         </form>
                     </td>
-                    <td class="muted">@(user.LastLoginAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.LocalDateTime)) : "never")</td>
+                    <td class="muted">@(user.LastLoginAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime)) : "never")</td>
+                    <td>
+                        @if (user.HasTwoFactor)
+                        {
+                            <span>On</span>
+                            @if (user.Username != HttpContext.User.Identity?.Name)
+                            {
+                                <form method="post" @formname="@($"two-factor-{user.Id}")" @onsubmit="() => ResetTwoFactorAsync(user.Id)" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="link" title="For someone who lost their phone and recovery codes">Turn off</button>
+                                </form>
+                            }
+                        }
+                        else
+                        {
+                            <span class="muted">Off</span>
+                        }
+                    </td>
                     <td>
                         <form method="post" @formname="@($"active-{user.Id}")" @onsubmit="() => ToggleAsync(user.Id, !user.IsActive)" class="inline">
                             <AntiforgeryToken />
@@ -113,6 +131,8 @@
 
     [SupplyParameterFromQuery] private string? Done { get; set; }
 
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
     protected override async Task OnInitializedAsync()
     {
         Input ??= new NewUserModel();
@@ -145,6 +165,12 @@
     {
         var user = await UserService.ResetPasswordAsync(id, PostedPassword ?? string.Empty);
         return $"{user.Username}'s password was reset and their sessions ended.";
+    });
+
+    private Task ResetTwoFactorAsync(Guid id) => RunAsync(async () =>
+    {
+        var user = await UserService.ResetTwoFactorAsync(id);
+        return $"Two-factor sign-in is off for {user.Username} and their sessions ended. They can set it up again after signing in.";
     });
 
     private async Task RunAsync(Func<Task<string>> action)

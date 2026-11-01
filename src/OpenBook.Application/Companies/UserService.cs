@@ -85,6 +85,24 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
         return user;
     }
 
+    /// <summary>
+    /// For someone who lost their phone and recovery codes: turns their two-factor sign-in off and signs them out
+    /// everywhere. If their role requires it, they set it up again at their next sign-in.
+    /// </summary>
+    public async Task<User> ResetTwoFactorAsync(Guid id, CancellationToken ct = default)
+    {
+        var user = await GetRequiredAsync(id, ct);
+        EnsureNotSelf(user, "turn off your own two-factor sign-in here; use Two-factor sign-in under your account");
+        if (!user.HasTwoFactor)
+            return user;
+        user.DisableTwoFactor();
+        user.EndSessions();
+        store.Add(AuditRecord.Create(clock.UtcNow, currentUser.Actor, AuditAction.Updated, EntityType, user.Id, null,
+            JsonSerializer.Serialize(new { Changed = "two-factor sign-in turned off", Via = "admin" })));
+        await store.SaveChangesAsync(ct);
+        return user;
+    }
+
     private async Task<User> GetRequiredAsync(Guid id, CancellationToken ct) =>
         await store.GetUserAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
 

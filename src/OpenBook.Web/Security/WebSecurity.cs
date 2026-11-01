@@ -54,6 +54,7 @@ public static class WebSecurity
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, UserCircuitHandler>());
         services.AddScoped<ICurrentUser, WebCurrentUser>();
         services.AddScoped<Operations>();
+        services.AddSingleton<TwoFactorCookies>();
         services.AddSingleton<OpenBook.Application.Forms.ISecretProtector, DataProtectionSecretProtector>();
         services.AddSingleton<SetupState>();
         services.AddHostedService<RecurringPostingService>();
@@ -78,7 +79,8 @@ public static class WebSecurity
     /// Issues the sign-in cookie. Re-issuing it for the same user (after a password change) keeps the browser's
     /// session; otherwise a new session is started, named by the cookie.
     /// </summary>
-    public static async Task SignInAsync(HttpContext http, AuthenticatedUser user)
+    /// <param name="mustSetUpTwoFactor">The role requires two-factor sign-in and it isn't set up: the session can only set it up.</param>
+    public static async Task SignInAsync(HttpContext http, AuthenticatedUser user, bool mustSetUpTwoFactor = false)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(user);
@@ -88,9 +90,28 @@ public static class WebSecurity
             && await auth.RenewSessionAsync(current, user, ct)
                 ? current
                 : await auth.StartSessionAsync(user, UserAgents.Describe(http.Request.Headers.UserAgent), http.Connection.RemoteIpAddress?.ToString(), ct);
+        Claim[] setup = mustSetUpTwoFactor ? [new Claim(TwoFactorSetupClaim, "required")] : [];
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
-            [.. Claims(user), new Claim(AuthService.SessionClaim, sessionId.ToString())], CookieAuthenticationDefaults.AuthenticationScheme));
+            [.. Claims(user), new Claim(AuthService.SessionClaim, sessionId.ToString()), .. setup], CookieAuthenticationDefaults.AuthenticationScheme));
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+    }
+
+    /// <summary>On a cookie whose user has to set up two-factor sign-in before doing anything else.</summary>
+    public const string TwoFactorSetupClaim = "openbook:2fa-setup";
+
+    public static bool MustSetUpTwoFactor(this ClaimsPrincipal principal) => principal.HasClaim(c => c.Type == TwoFactorSetupClaim);
+
+    /// <summary>
+    /// Finishes a sign-in that passed its checks: two-factor cookies tidied, the session cookie issued, and where
+    /// to go next (the two-factor setup page when the role requires it and it isn't set up).
+    /// </summary>
+    public static async Task<string> CompleteSignInAsync(HttpContext http, SignInResult result, string? returnUrl)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        http.RequestServices.GetRequiredService<TwoFactorCookies>().EndPending(http);
+        await SignInAsync(http, result.User!, result.MustSetUpTwoFactor);
+        var back = SafeReturnUrl(returnUrl);
+        return result.MustSetUpTwoFactor ? "/account/two-factor?required=true" : back;
     }
 
     public static Guid? GetSessionId(this ClaimsPrincipal principal) => AuthService.SessionIdOf(principal);

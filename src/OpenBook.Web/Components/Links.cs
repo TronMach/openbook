@@ -135,6 +135,7 @@ public static class Links
         "form_style" => $"/settings/forms/{id}",
         "company" => "/settings",
         "closing_date" => "/settings/close-books",
+        "sign_in_settings" => "/settings/sign-in",
         _ => null,
     };
 

@@ -11,12 +11,28 @@ public enum SignInStatus
     Succeeded,
     InvalidCredentials,
     LockedOut,
+
+    /// <summary>The password was right; a code from the authenticator app (or a recovery code) comes next.</summary>
+    TwoFactorRequired,
+
+    /// <summary>The second step's code was wrong.</summary>
+    InvalidCode,
 }
 
 /// <summary>What a sign-in cookie needs to carry.</summary>
 public sealed record AuthenticatedUser(Guid Id, string Username, string SecurityStamp, UserRole Role);
 
-public sealed record SignInResult(SignInStatus Status, AuthenticatedUser? User = null, DateTimeOffset? LockedUntil = null);
+/// <param name="User">Signed in; for <see cref="SignInStatus.TwoFactorRequired"/> only who the second step is for.</param>
+/// <param name="MustSetUpTwoFactor">Signed in, but two-factor sign-in is required for the role and not set up yet: the session may only set it up.</param>
+/// <param name="TwoFactorSince">With <see cref="SignInStatus.TwoFactorRequired"/>: when it was turned on, for checking a remembered browser.</param>
+public sealed record SignInResult(
+    SignInStatus Status,
+    AuthenticatedUser? User = null,
+    DateTimeOffset? LockedUntil = null,
+    bool MustSetUpTwoFactor = false,
+    DateTimeOffset? TwoFactorSince = null,
+    bool UsedRecoveryCode = false,
+    int RecoveryCodesLeft = 0);
 
 /// <summary>Local username/password sign-in with lockout after repeated failures.</summary>
 public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, IClock clock)
@@ -56,10 +72,20 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
                 : new SignInResult(SignInStatus.InvalidCredentials);
         }
 
+        // The failed-attempt count isn't reset until the second step succeeds, so codes can't be guessed between passwords.
+        if (user.HasTwoFactor)
+            return new SignInResult(SignInStatus.TwoFactorRequired, Authenticated(user), TwoFactorSince: user.TwoFactorEnabledAt);
+
         user.RecordSuccessfulLogin(clock.UtcNow);
         await store.SaveChangesAsync(ct);
-        return new SignInResult(SignInStatus.Succeeded, Authenticated(user));
+        var settings = await store.GetSignInSettingsAsync(ct);
+        return new SignInResult(SignInStatus.Succeeded, Authenticated(user), MustSetUpTwoFactor: settings?.RequiresTwoFactor(user.Role) == true);
     }
+
+    /// <summary>Whether the user's role has to use two-factor sign-in and they haven't set it up.</summary>
+    public async Task<bool> MustSetUpTwoFactorAsync(Guid userId, CancellationToken ct = default) =>
+        await store.GetUserAsync(userId, ct) is { HasTwoFactor: false } user
+        && (await store.GetSignInSettingsAsync(ct))?.RequiresTwoFactor(user.Role) == true;
 
     /// <summary>Re-confirms the signed-in user's password before a destructive action. Failures count toward lockout.</summary>
     public async Task<bool> VerifyPasswordAsync(Guid userId, string password, CancellationToken ct = default)
@@ -143,6 +169,10 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
 
     internal static AuthenticatedUser Authenticated(User user) => new(user.Id, user.Username, user.SecurityStamp, user.Role);
 
+    /// <summary>What the user's cookie carries now, for re-issuing it.</summary>
+    public async Task<AuthenticatedUser> CurrentAsync(Guid userId, CancellationToken ct = default) =>
+        Authenticated(await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId));
+
     /// <returns>The user with a new security stamp, for re-issuing the caller's cookie.</returns>
     public async Task<AuthenticatedUser> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken ct = default)
     {
@@ -178,8 +208,9 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
     /// caller could already read or replace the company file. <paramref name="username"/> may be omitted
     /// when the file has a single user.
     /// </summary>
+    /// <param name="clearTwoFactor">Also turns two-factor sign-in off, for someone who lost their phone and recovery codes.</param>
     /// <returns>The username whose password was reset.</returns>
-    public async Task<string> ResetPasswordAsync(string? username, string newPassword, string actor, CancellationToken ct = default)
+    public async Task<string> ResetPasswordAsync(string? username, string newPassword, string actor, bool clearTwoFactor = false, CancellationToken ct = default)
     {
         var users = await store.ListUsersAsync(ct);
         if (users.Count == 0)
@@ -204,6 +235,12 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
         user.ResetPassword(hasher.Hash(newPassword));
         store.Add(AuditRecord.Create(clock.UtcNow, actor, AuditAction.Updated, "user", user.Id, null,
             JsonSerializer.Serialize(new { Changed = "password", Via = "reset" })));
+        if (clearTwoFactor && user.HasTwoFactor)
+        {
+            user.DisableTwoFactor();
+            store.Add(AuditRecord.Create(clock.UtcNow, actor, AuditAction.Updated, "user", user.Id, null,
+                JsonSerializer.Serialize(new { Changed = "two-factor sign-in turned off", Via = "reset" })));
+        }
         await store.SaveChangesAsync(ct);
         return user.Username;
     }

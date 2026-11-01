@@ -17,6 +17,20 @@ Pages a role can't use are left out of its menu; trying to open one shows an "ac
 
 From the Users page an administrator can change someone's role, **reset their password** or **make them inactive** when they leave. Changing a role or making someone inactive signs them out everywhere at once. People are never deleted, so their name stays on what they entered. There's always at least one active administrator, and you can't change your own role or deactivate yourself.
 
+## Two-factor sign-in
+
+Two-factor sign-in asks for a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others) after the password, so someone who learns your password still can't get in.
+
+**Turn it on:** select your username in the top bar, then **Two-factor sign-in: off, set it up** (or **Settings → Two-factor sign-in**). Scan the QR code with your app (or type the key shown under it), enter the code the app shows and select **Turn on two-factor sign-in**. OpenBook then shows ten **recovery codes**: save them somewhere safe (print them or keep them in a password manager). Each one signs you in once if you lose your phone; they aren't shown again.
+
+**Signing in:** after your password, enter the code your app shows for OpenBook, or one of your recovery codes. Tick **Remember this browser for 30 days** on a computer or phone that's yours, to skip the code there. Changing your password or **Sign out all other sessions** forgets every remembered browser. Wrong codes count like wrong passwords: after five in a row the account is locked for five minutes.
+
+On the same page you can **Make new recovery codes** (the old ones stop working) or **Turn off two-factor sign-in**; both ask for your password and a code. To move to a new phone, turn it off and set it up again.
+
+**Lost your phone and your recovery codes?** An administrator can select **Turn off** in the **Two-factor** column on **Settings → Users**; that also signs you out everywhere. If no administrator can sign in, the `reset-password` command with `--clear-two-factor` does it (see [Forgotten password](01-getting-started.md#forgotten-password)).
+
+**Requiring it (administrators):** **Settings → Sign-in and two-factor** → **Require it for**: nobody (each person decides), admins, accountants and admins, everyone but view-only users, or everyone. People in those roles who haven't set it up are taken to the setup page at their next sign-in and can't do anything else until they have; the page lists who that is. API keys keep working without a code.
+
 ### Working at the same time
 
 Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.

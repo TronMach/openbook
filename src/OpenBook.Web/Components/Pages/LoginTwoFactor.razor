@@ -1,0 +1,102 @@
+@page "/login/two-factor"
+@attribute [AllowAnonymous]
+@using System.ComponentModel.DataAnnotations
+@inject TwoFactorService TwoFactor
+@inject TwoFactorCookies TwoFactorCookies
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Two-factor sign-in"] · OpenBook</PageTitle>
+
+<div class="card narrow">
+    <h1>@L["Two-factor sign-in"]</h1>
+    <p class="muted">@L["Enter the 6-digit code your authenticator app shows for OpenBook. Lost your phone? Enter one of your recovery codes instead."]</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="two-factor" OnValidSubmit="VerifyAsync" method="post">
+        <DataAnnotationsValidator />
+        <div class="field">
+            <label for="code">@L["Code"]</label>
+            <InputText id="code" @bind-Value="Input.Code" autocomplete="one-time-code" inputmode="text" autofocus />
+            <ValidationMessage For="() => Input.Code" />
+        </div>
+        <div class="field">
+            <label class="check"><InputCheckbox @bind-Value="Input.Remember" /> @L["Remember this browser for 30 days"]</label>
+            <span class="hint">@L["Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it."]</span>
+        </div>
+        <button type="submit">@L["Sign in"]</button>
+    </EditForm>
+    <p class="hint muted"><a href="/login">@L["Start again"]</a></p>
+</div>
+
+@code {
+    private string? _error;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private CodeModel Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+        // Only reached from the password step; its cookie lasts five minutes.
+        if (TwoFactorCookies.Pending(HttpContext) is null)
+            Navigation.NavigateTo("/login");
+    }
+
+    private async Task VerifyAsync()
+    {
+        var pending = TwoFactorCookies.Pending(HttpContext);
+        if (pending is null)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        SignInResult result;
+        try
+        {
+            result = await TwoFactor.SignInAsync(pending.UserId, pending.SecurityStamp, Input.Code, HttpContext.RequestAborted);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            return;
+        }
+
+        switch (result.Status)
+        {
+            case SignInStatus.Succeeded:
+                if (Input.Remember && result.TwoFactorSince is { } since)
+                    TwoFactorCookies.Remember(HttpContext, result.User!, since);
+                var next = await WebSecurity.CompleteSignInAsync(HttpContext, result, pending.ReturnUrl);
+                Navigation.NavigateTo(result.UsedRecoveryCode ? $"/account/two-factor?recovery={result.RecoveryCodesLeft}" : next);
+                break;
+            case SignInStatus.LockedOut:
+                TwoFactorCookies.EndPending(HttpContext);
+                _error = $"Too many failed attempts. Try again after {result.LockedUntil!.Value.InCompanyTime():t}.";
+                break;
+            case SignInStatus.InvalidCode:
+                _error = "That code doesn't match. Use the newest code from your app, or a recovery code.";
+                break;
+            default:
+                // The password changed, or the user was made inactive, since the password step.
+                TwoFactorCookies.EndPending(HttpContext);
+                Navigation.NavigateTo("/login");
+                break;
+        }
+    }
+
+    private sealed class CodeModel
+    {
+        [Required(ErrorMessage = "Enter the code from your app.")]
+        public string Code { get; set; } = string.Empty;
+
+        public bool Remember { get; set; }
+    }
+}

@@ -38,6 +38,9 @@
   <data name="Account" xml:space="preserve">
     <value>Account</value>
   </data>
+  <data name="Accountants and admins" xml:space="preserve">
+    <value>Accountants and admins</value>
+  </data>
   <data name="Accounts" xml:space="preserve">
     <value>Accounts</value>
   </data>
@@ -62,11 +65,17 @@
   <data name="Admin API access token" xml:space="preserve">
     <value>Admin API access token</value>
   </data>
+  <data name="Admins" xml:space="preserve">
+    <value>Admins</value>
+  </data>
   <data name="also sign out my other sessions" xml:space="preserve">
     <value>also sign out my other sessions</value>
   </data>
   <data name="Amount" xml:space="preserve">
     <value>Amount</value>
+  </data>
+  <data name="an authenticator app code as well as your password" xml:space="preserve">
+    <value>an authenticator app code as well as your password</value>
   </data>
   <data name="an hour" xml:space="preserve">
     <value>an hour</value>
@@ -155,6 +164,9 @@
   <data name="By" xml:space="preserve">
     <value>By</value>
   </data>
+  <data name="Can't scan it? Type this key into the app instead:" xml:space="preserve">
+    <value>Can't scan it? Type this key into the app instead:</value>
+  </data>
   <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
@@ -208,6 +220,12 @@
   </data>
   <data name="closing date, closing password and year-end close" xml:space="preserve">
     <value>closing date, closing password and year-end close</value>
+  </data>
+  <data name="Code" xml:space="preserve">
+    <value>Code</value>
+  </data>
+  <data name="Code from your app" xml:space="preserve">
+    <value>Code from your app</value>
   </data>
   <data name="Company" xml:space="preserve">
     <value>Company</value>
@@ -314,6 +332,9 @@
   <data name="Each change reversed the previous journal entry on its date and posted a new one; all of them stay in the journal." xml:space="preserve">
     <value>Each change reversed the previous journal entry on its date and posted a new one; all of them stay in the journal.</value>
   </data>
+  <data name="Each code signs you in once if you lose your phone. Save them somewhere safe now (print them or keep them in a password manager): they won't be shown again." xml:space="preserve">
+    <value>Each code signs you in once if you lose your phone. Save them somewhere safe now (print them or keep them in a password manager): they won't be shown again.</value>
+  </data>
   <data name="Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting." xml:space="preserve">
     <value>Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</value>
   </data>
@@ -341,6 +362,12 @@
   <data name="Enter due bills" xml:space="preserve">
     <value>Enter due bills</value>
   </data>
+  <data name="Enter the 6-digit code the app shows for OpenBook." xml:space="preserve">
+    <value>Enter the 6-digit code the app shows for OpenBook.</value>
+  </data>
+  <data name="Enter the 6-digit code your authenticator app shows for OpenBook. Lost your phone? Enter one of your recovery codes instead." xml:space="preserve">
+    <value>Enter the 6-digit code your authenticator app shows for OpenBook. Lost your phone? Enter one of your recovery codes instead.</value>
+  </data>
   <data name="Entered" xml:space="preserve">
     <value>Entered</value>
   </data>
@@ -361,6 +388,15 @@
   </data>
   <data name="Every other session is signed out. This browser stays signed in." xml:space="preserve">
     <value>Every other session is signed out. This browser stays signed in.</value>
+  </data>
+  <data name="Everyone" xml:space="preserve">
+    <value>Everyone</value>
+  </data>
+  <data name="Everyone but view-only users" xml:space="preserve">
+    <value>Everyone but view-only users</value>
+  </data>
+  <data name="Everyone can turn on two-factor sign-in for themselves under their account. Require it here for some roles: people in them who haven't set it up are asked to at their next sign-in and can't do anything else until they have. API keys aren't affected." xml:space="preserve">
+    <value>Everyone can turn on two-factor sign-in for themselves under their account. Require it here for some roles: people in them who haven't set it up are asked to at their next sign-in and can't do anything else until they have. API keys aren't affected.</value>
   </data>
   <data name="extra fields for products, customers, vendors and documents, like pack size, printed on invoices and orders" xml:space="preserve">
     <value>extra fields for products, customers, vendors and documents, like pack size, printed on invoices and orders</value>
@@ -427,6 +463,9 @@
   </data>
   <data name="how the document inbox reads scans and PDFs, and whether Claude may read them (admins)" xml:space="preserve">
     <value>how the document inbox reads scans and PDFs, and whether Claude may read them (admins)</value>
+  </data>
+  <data name="I've saved them" xml:space="preserve">
+    <value>I've saved them</value>
   </data>
   <data name="Import" xml:space="preserve">
     <value>Import</value>
@@ -527,6 +566,12 @@
   <data name="Live connection" xml:space="preserve">
     <value>Live connection</value>
   </data>
+  <data name="Make new ones below." xml:space="preserve">
+    <value>Make new ones below.</value>
+  </data>
+  <data name="Make new recovery codes" xml:space="preserve">
+    <value>Make new recovery codes</value>
+  </data>
   <data name="Memo" xml:space="preserve">
     <value>Memo</value>
   </data>
@@ -563,6 +608,9 @@
   <data name="New password" xml:space="preserve">
     <value>New password</value>
   </data>
+  <data name="New recovery codes" xml:space="preserve">
+    <value>New recovery codes</value>
+  </data>
   <data name="New recurring bill" xml:space="preserve">
     <value>New recurring bill</value>
   </data>
@@ -587,6 +635,9 @@
   <data name="No SKUs yet: import or fetch some orders first." xml:space="preserve">
     <value>No SKUs yet: import or fetch some orders first.</value>
   </data>
+  <data name="Nobody (each person decides)" xml:space="preserve">
+    <value>Nobody (each person decides)</value>
+  </data>
   <data name="Nonprofit" xml:space="preserve">
     <value>Nonprofit</value>
   </data>
@@ -602,8 +653,20 @@
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
   </data>
+  <data name="off, set it up" xml:space="preserve">
+    <value>off, set it up</value>
+  </data>
+  <data name="on" xml:space="preserve">
+    <value>on</value>
+  </data>
+  <data name="On" xml:space="preserve">
+    <value>On</value>
+  </data>
   <data name="Online payments" xml:space="preserve">
     <value>Online payments</value>
+  </data>
+  <data name="Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it." xml:space="preserve">
+    <value>Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it.</value>
   </data>
   <data name="Only posted invoices can be changed." xml:space="preserve">
     <value>Only posted invoices can be changed.</value>
@@ -613,6 +676,9 @@
   </data>
   <data name="Open the capture page" xml:space="preserve">
     <value>Open the capture page</value>
+  </data>
+  <data name="Open your authenticator app and add an account by scanning this code." xml:space="preserve">
+    <value>Open your authenticator app and add an account by scanning this code.</value>
   </data>
   <data name="Opening balances" xml:space="preserve">
     <value>Opening balances</value>
@@ -707,6 +773,9 @@
   <data name="Put the stock back" xml:space="preserve">
     <value>Put the stock back</value>
   </data>
+  <data name="QR code for your authenticator app" xml:space="preserve">
+    <value>QR code for your authenticator app</value>
+  </data>
   <data name="Qty" xml:space="preserve">
     <value>Qty</value>
   </data>
@@ -764,6 +833,9 @@
   <data name="Region" xml:space="preserve">
     <value>Region</value>
   </data>
+  <data name="Remember this browser for 30 days" xml:space="preserve">
+    <value>Remember this browser for 30 days</value>
+  </data>
   <data name="Remove access" xml:space="preserve">
     <value>Remove access</value>
   </data>
@@ -772,6 +844,9 @@
   </data>
   <data name="Repeat every" xml:space="preserve">
     <value>Repeat every</value>
+  </data>
+  <data name="Replaces every recovery code; the old ones stop working." xml:space="preserve">
+    <value>Replaces every recovery code; the old ones stop working.</value>
   </data>
   <data name="Reported by the channel" xml:space="preserve">
     <value>Reported by the channel</value>
@@ -784,6 +859,12 @@
   </data>
   <data name="Reports open on" xml:space="preserve">
     <value>Reports open on</value>
+  </data>
+  <data name="Require it for" xml:space="preserve">
+    <value>Require it for</value>
+  </data>
+  <data name="Require two-factor sign-in" xml:space="preserve">
+    <value>Require two-factor sign-in</value>
   </data>
   <data name="Restore" xml:space="preserve">
     <value>Restore</value>
@@ -827,6 +908,9 @@
   <data name="Service" xml:space="preserve">
     <value>Service</value>
   </data>
+  <data name="Set it up" xml:space="preserve">
+    <value>Set it up</value>
+  </data>
   <data name="Sets the reporting year. Changing it doesn't alter any transactions." xml:space="preserve">
     <value>Sets the reporting year. Changing it doesn't alter any transactions.</value>
   </data>
@@ -851,6 +935,9 @@
   <data name="Sign out all other sessions" xml:space="preserve">
     <value>Sign out all other sessions</value>
   </data>
+  <data name="Sign-in and two-factor" xml:space="preserve">
+    <value>Sign-in and two-factor</value>
+  </data>
   <data name="Signed in" xml:space="preserve">
     <value>Signed in</value>
   </data>
@@ -865,6 +952,9 @@
   </data>
   <data name="Sorry, the content you are looking for does not exist." xml:space="preserve">
     <value>Sorry, the content you are looking for does not exist.</value>
+  </data>
+  <data name="Start again" xml:space="preserve">
+    <value>Start again</value>
   </data>
   <data name="starting balances when moving to OpenBook" xml:space="preserve">
     <value>starting balances when moving to OpenBook</value>
@@ -926,6 +1016,9 @@
   <data name="To bill someone else, void this invoice and enter a new one." xml:space="preserve">
     <value>To bill someone else, void this invoice and enter a new one.</value>
   </data>
+  <data name="To move to a new phone, turn it off and set it up again. Browsers remembered for 30 days are forgotten." xml:space="preserve">
+    <value>To move to a new phone, turn it off and set it up again. Browsers remembered for 30 days are forgotten.</value>
+  </data>
   <data name="Total" xml:space="preserve">
     <value>Total</value>
   </data>
@@ -940,6 +1033,27 @@
   </data>
   <data name="Try again" xml:space="preserve">
     <value>Try again</value>
+  </data>
+  <data name="Turn it off" xml:space="preserve">
+    <value>Turn it off</value>
+  </data>
+  <data name="Turn off two-factor sign-in" xml:space="preserve">
+    <value>Turn off two-factor sign-in</value>
+  </data>
+  <data name="Turn on two-factor sign-in" xml:space="preserve">
+    <value>Turn on two-factor sign-in</value>
+  </data>
+  <data name="Two-factor sign-in" xml:space="preserve">
+    <value>Two-factor sign-in</value>
+  </data>
+  <data name="Two-factor sign-in is off." xml:space="preserve">
+    <value>Two-factor sign-in is off.</value>
+  </data>
+  <data name="Two-factor sign-in is required for your role. Set it up to carry on." xml:space="preserve">
+    <value>Two-factor sign-in is required for your role. Set it up to carry on.</value>
+  </data>
+  <data name="Two-factor sign-in:" xml:space="preserve">
+    <value>Two-factor sign-in:</value>
   </data>
   <data name="Type" xml:space="preserve">
     <value>Type</value>
@@ -998,6 +1112,9 @@
   <data name="who can sign in, and their roles (admins)" xml:space="preserve">
     <value>who can sign in, and their roles (admins)</value>
   </data>
+  <data name="who must use two-factor sign-in (admins)" xml:space="preserve">
+    <value>who must use two-factor sign-in (admins)</value>
+  </data>
   <data name="Why" xml:space="preserve">
     <value>Why</value>
   </data>
@@ -1006,6 +1123,9 @@
   </data>
   <data name="Why it wasn't entered" xml:space="preserve">
     <value>Why it wasn't entered</value>
+  </data>
+  <data name="With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough." xml:space="preserve">
+    <value>With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough.</value>
   </data>
   <data name="Write off" xml:space="preserve">
     <value>Write off</value>
@@ -1024,5 +1144,8 @@
   </data>
   <data name="Your devices" xml:space="preserve">
     <value>Your devices</value>
+  </data>
+  <data name="Your recovery codes" xml:space="preserve">
+    <value>Your recovery codes</value>
   </data>
 </root>

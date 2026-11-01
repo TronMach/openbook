@@ -38,6 +38,8 @@ public static class AccessRules
         ("/api/settings/document-reading", UserRole.Admin, UserRole.Admin),
         ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/settings/users", UserRole.Admin, UserRole.Admin),
+        ("/settings/sign-in", UserRole.Admin, UserRole.Admin),
+        ("/api/settings/sign-in", UserRole.Admin, UserRole.Admin),
         ("/settings/plugins", UserRole.Admin, UserRole.Admin),
         ("/settings/system", UserRole.Admin, UserRole.Admin),
         ("/api/users", UserRole.Admin, UserRole.Admin),
@@ -140,6 +142,17 @@ public static class AccessRules
         return recurringEditor || segments.Any(WritePageSegments.Contains);
     }
 
+    /// <summary>
+    /// What a session that must set up two-factor sign-in may reach: the setup page, signing out, and the
+    /// framework's and site's static files (anything whose last segment has an extension).
+    /// </summary>
+    public static bool AllowedBeforeTwoFactorSetup(PathString path) =>
+        path.StartsWithSegments("/account/two-factor", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/logout", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase)
+        || (!path.StartsWithSegments("/api") && Path.HasExtension(path.Value ?? string.Empty));
+
     public static UserRole? RoleOf(ClaimsPrincipal user) =>
         Enum.TryParse<UserRole>(user.FindFirstValue(ClaimTypes.Role), out var role) ? role : null;
 
@@ -153,6 +166,21 @@ public sealed class AccessMiddleware(RequestDelegate next)
     {
         if (http.User.Identity?.IsAuthenticated == true)
         {
+            if (http.User.MustSetUpTwoFactor() && !AccessRules.AllowedBeforeTwoFactorSetup(http.Request.Path))
+            {
+                if (http.Request.Path.StartsWithSegments("/api"))
+                {
+                    http.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await http.Response.WriteAsJsonAsync(new { code = "auth.two_factor_setup", message = "Set up two-factor sign-in first: it's required for your role." });
+                }
+                else
+                {
+                    http.Response.Redirect("/account/two-factor?required=true");
+                }
+
+                return;
+            }
+
             var needed = AccessRules.Required(http.Request.Path, http.Request.Method);
             if (http.User.HasClaim(ApiKeyAuthenticationHandler.ScopedClaim, "true"))
             {

@@ -38,6 +38,9 @@ public interface ICompanyStore
     /// <summary>Tracked.</summary>
     Task<ApiKey?> FindApiKeyAsync(string tokenHash, CancellationToken ct);
 
+    /// <summary>Tracked; null until sign-in settings are first saved.</summary>
+    Task<SignInSettings?> GetSignInSettingsAsync(CancellationToken ct);
+
     /// <summary>Tracked.</summary>
     Task<UserSession?> GetSessionAsync(Guid id, CancellationToken ct);
 
@@ -50,6 +53,7 @@ public interface ICompanyStore
     void Add(User user);
     void Add(ApiKey key);
     void Add(UserSession session);
+    void Add(SignInSettings settings);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

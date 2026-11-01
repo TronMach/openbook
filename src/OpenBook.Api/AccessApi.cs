@@ -9,9 +9,17 @@ using OpenBook.Domain.Webhooks;
 
 namespace OpenBook.Api;
 
-public sealed record UserResponse(Guid Id, string Username, UserRole Role, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt)
+public sealed record UserResponse(Guid Id, string Username, UserRole Role, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, bool TwoFactor = false)
 {
-    public static UserResponse From(User u) => new(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt, u.LastLoginAt);
+    public static UserResponse From(User u) => new(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt, u.LastLoginAt, u.HasTwoFactor);
+}
+
+/// <param name="TwoFactorRequiredFrom">Null: nobody has to; otherwise this role and every role above it.</param>
+public sealed record SignInSettingsRequest(UserRole? TwoFactorRequiredFrom);
+
+public sealed record SignInSettingsResponse(UserRole? TwoFactorRequiredFrom)
+{
+    public static SignInSettingsResponse From(SignInSettings s) => new(s.TwoFactorRequiredFrom);
 }
 
 public sealed record CreateUserRequest(string Username, string Password, UserRole Role);
@@ -61,6 +69,12 @@ internal static class AccessApi
         users.MapPut("/{id:guid}/active", async (Guid id, SetActiveRequest r, UserService s, CancellationToken ct) => UserResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         users.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest r, UserService s, CancellationToken ct) =>
             UserResponse.From(await s.ResetPasswordAsync(id, r.NewPassword, ct)));
+        users.MapDelete("/{id:guid}/two-factor", async (Guid id, UserService s, CancellationToken ct) => UserResponse.From(await s.ResetTwoFactorAsync(id, ct)));
+
+        var signIn = api.MapGroup("/settings/sign-in");
+        signIn.MapGet("/", async (TwoFactorService s, CancellationToken ct) => SignInSettingsResponse.From(await s.SettingsAsync(ct)));
+        signIn.MapPut("/", async (SignInSettingsRequest r, TwoFactorService s, CancellationToken ct) =>
+            SignInSettingsResponse.From(await s.RequireAsync(r.TwoFactorRequiredFrom, ct)));
 
         // Each user's own keys.
         var keys = api.MapGroup("/api-keys");

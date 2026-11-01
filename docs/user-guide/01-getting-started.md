@@ -88,7 +88,11 @@ If another administrator can sign in, they can reset your password on the **User
 dotnet run --project src/OpenBook.Web -- reset-password yourname
 ```
 
-It asks for the new password twice.
+It asks for the new password twice. Add `--clear-two-factor` to turn off their two-factor sign-in as well, for someone who has also lost their phone and recovery codes.
+
+### Two-factor sign-in
+
+With two-factor sign-in, signing in takes your password and a 6-digit code from an authenticator app on your phone, so a stolen password isn't enough. See [Two-factor sign-in](08-users-and-backups.md#two-factor-sign-in).
 
 ## Upgrading
 
