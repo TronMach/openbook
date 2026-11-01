@@ -9,12 +9,13 @@ using OpenBook.Web.Security;
 
 var isResetPassword = args is [ResetPasswordCommand.Name, ..];
 var encryptionCommand = args is [EncryptionCommands.Encrypt or EncryptionCommands.Decrypt, ..] ? args[0] : null;
+var isMoveToPostgres = args is [MoveToPostgresCommand.Name, ..];
 
 // "--safe-mode" starts without add-ins (for one that stops OpenBook starting); it isn't a configuration key.
 var safeModeArgument = args.Contains("--safe-mode", StringComparer.OrdinalIgnoreCase);
 var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)
     && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)).ToArray());
-if (isResetPassword || encryptionCommand is not null)
+if (isResetPassword || encryptionCommand is not null || isMoveToPostgres)
     builder.Logging.ClearProviders();
 
 // Desktop or Server (L13). Desktop decides the company file and folders itself and ignores those settings.
@@ -29,6 +30,8 @@ if (installation.DataFolder is not null)
 // Before anything opens the file: the conversion needs it to be closed.
 if (encryptionCommand is not null)
     return await EncryptionCommands.RunAsync(builder.Configuration, connectionString, encryptionCommand);
+if (isMoveToPostgres)
+    return await MoveToPostgresCommand.RunAsync(builder.Configuration, installation, connectionString, args);
 
 // A desktop copy already running for this company: open its page instead of starting another.
 if (!isResetPassword && installation.IsDesktop)

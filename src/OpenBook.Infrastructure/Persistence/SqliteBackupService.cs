@@ -55,7 +55,8 @@ internal sealed class SqliteBackupService(
     public async Task<string> RestoreAsync(string backupPath, string originalFileName, CancellationToken ct)
     {
         var backup = FileConnectionString(backupPath, readOnly: true);
-        await ValidateAsync(backup, ct);
+        await using (var context = new OpenBookDbContext(dbOptions))
+            await ValidateAsync(backup, context.Database.GetMigrations().ToHashSet(StringComparer.Ordinal), storage.Encrypted, ct);
 
         Directory.CreateDirectory(storage.BackupDirectory);
         var safetyCopy = Path.Combine(storage.BackupDirectory, $"pre-restore-{clock.UtcNow:yyyyMMdd-HHmmss-fff}.openbook.db");
@@ -73,7 +74,12 @@ internal sealed class SqliteBackupService(
         return safetyCopy;
     }
 
-    private async Task ValidateAsync(string backupConnectionString, CancellationToken ct)
+    /// <summary>
+    /// Refuses a company file that isn't a whole, trustworthy OpenBook company: damaged, from a newer version (a migration
+    /// not in <paramref name="knownMigrations"/>), its ledger triggers removed, without a company, with broken references,
+    /// or with entries that are unsealed or don't balance. Used by restore and by the move to PostgreSQL.
+    /// </summary>
+    internal static async Task ValidateAsync(string backupConnectionString, IReadOnlySet<string> knownMigrations, bool encrypted, CancellationToken ct)
     {
         await using var connection = new SqliteConnection(backupConnectionString);
         try
@@ -87,13 +93,9 @@ internal sealed class SqliteBackupService(
             if (!tables.Contains("__EFMigrationsHistory") || !tables.Contains("Companies"))
                 throw Invalid("backup.invalid_file", "This file is not an OpenBook backup.");
 
-            await using (var db = new OpenBookDbContext(dbOptions))
-            {
-                var known = db.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
-                var applied = await ListAsync(connection, """SELECT "MigrationId" FROM "__EFMigrationsHistory";""", ct);
-                if (applied.Any(m => !known.Contains(m)))
-                    throw Invalid("backup.newer_version", "This backup was made by a newer version of OpenBook. Update OpenBook first.");
-            }
+            var applied = await ListAsync(connection, """SELECT "MigrationId" FROM "__EFMigrationsHistory";""", ct);
+            if (applied.Any(m => !knownMigrations.Contains(m)))
+                throw Invalid("backup.newer_version", "This backup was made by a newer version of OpenBook. Update OpenBook first.");
 
             var triggers = await ListAsync(connection, "SELECT name FROM sqlite_master WHERE type = 'trigger';", ct);
             if (SqliteLedgerTriggers.Names.Any(n => !triggers.Contains(n)))
@@ -115,7 +117,7 @@ internal sealed class SqliteBackupService(
         }
         catch (SqliteException)
         {
-            throw storage.Encrypted
+            throw encrypted
                 ? Invalid("backup.invalid_file", "This file can't be read: it's not an OpenBook backup, or it's encrypted with a different key (or not at all).")
                 : Invalid("backup.invalid_file", "This file is not an OpenBook backup.");
         }

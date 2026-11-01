@@ -144,6 +144,17 @@ OpenBook comes in two installs of the same program:
 
 Your books are the same either way. Some things only make sense when others can reach OpenBook (invitations to people on other computers, customer portal links, sending from the capture app on a phone, Stripe telling OpenBook about payments); on Desktop those pages say so, and everything still works on the computer itself.
 
+### Moving to a server
+
+When more people need the books, the company moves from OpenBook Desktop to OpenBook Server in one step, usually done by whoever looks after the server:
+
+1. Quit OpenBook Desktop (**Settings → System → Quit OpenBook**), so nothing changes during the move.
+2. Create an empty PostgreSQL database for the server.
+3. Run the `move-to-postgres` command with the company file, the new database and both keys folders (the server guide, `docs/admin/server.md`, has the exact command). OpenBook copies the company file, checks it like a restore, copies everything into PostgreSQL and checks again: every journal entry balances, every account has the same balance, and the audit log is complete. If anything differs, nothing is moved.
+4. Start OpenBook Server on the new database and sign in as before: users, passwords, two-factor sign-in, email, bank and payment connections all come along, because stored passwords and keys are re-encrypted for the server.
+
+The desktop company file isn't changed. Keep it as a backup, but stop using it: changes made there afterwards don't reach the server. The move is recorded in the server's audit log.
+
 ## The System page
 
 **Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. On OpenBook Desktop it shows the company file, backups and log folders instead, with **Quit OpenBook**. Below that:

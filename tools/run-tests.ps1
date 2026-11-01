@@ -32,7 +32,12 @@ if ($Postgres) {
     $envFile = if ($EnvFile) { $EnvFile } else { Join-Path $root '.env' }
     if (-not (Test-Path $envFile)) { throw "No .env beside the solution: PostgreSQL tests need OPENBOOK_TEST_POSTGRES." }
     foreach ($line in Get-Content $envFile) {
-        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"?(.*?)"?\s*$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
+        # Values may be in single or double quotes (they hold ';'), as a shell's ". ./.env" reads them.
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
+            $value = $Matches[2]
+            if ($value.Length -ge 2 -and ($value[0] -eq '"' -or $value[0] -eq "'") -and $value[-1] -eq $value[0]) { $value = $value.Substring(1, $value.Length - 2) }
+            [Environment]::SetEnvironmentVariable($Matches[1], $value, 'Process')
+        }
     }
     $env:OPENBOOK_TEST_ALL_ON_POSTGRES = '1'
 }

@@ -100,6 +100,9 @@ public static class DesktopHost
         }
     }
 
+    /// <summary>The address of the desktop copy running for this company, or null when none answers.</summary>
+    public static Task<string?> RunningUrlAsync(Installation installation) => AnsweringAsync(installation);
+
     private static async Task<string?> AnsweringAsync(Installation installation)
     {
         Running? running;
