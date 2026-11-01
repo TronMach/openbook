@@ -50,7 +50,8 @@ public sealed class PostgresTests : IAsyncLifetime
         if (PostgresFactAttribute.ConnectionString is not { Length: > 0 } server)
             return;
 
-        var connection = new NpgsqlConnectionStringBuilder(server) { Database = _database }.ToString();
+        // The same long timeouts as the rest of the suite: a full run on PostgreSQL creates hundreds of databases at once.
+        var connection = new NpgsqlConnectionStringBuilder(server) { Database = _database, Timeout = 120, CommandTimeout = 120 }.ToString();
         _services = new ServiceCollection()
             .AddOpenBookApplication()
             .AddOpenBookInfrastructure(connection, Path.GetTempPath(), provider: DatabaseProvider.Postgres)
