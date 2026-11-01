@@ -836,6 +836,9 @@
   <data name="More languages, and regions that write decimals with a comma, are on the way." xml:space="preserve">
     <value>More languages, and regions that write decimals with a comma, are on the way.</value>
   </data>
+  <data name="More options" xml:space="preserve">
+    <value>More options</value>
+  </data>
   <data name="Move in from another program" xml:space="preserve">
     <value>Move in from another program</value>
   </data>

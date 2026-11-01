@@ -46,8 +46,10 @@
 
             <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Items="_stockItems" Changed="StateHasChanged" />
 
-            <LocationField Options="_segments" @bind-Value="_locationId" />
-            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1)" Open="@(_locationId is not null || _warehouseId is not null)">
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+                <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />

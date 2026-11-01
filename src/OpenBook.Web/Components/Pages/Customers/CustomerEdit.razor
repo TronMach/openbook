@@ -169,87 +169,91 @@
                     <span class="hint">For terms like "2% 10, Net 30". Offered when you receive a payment in time.</span>
                 </div>
             </div>
-            <div class="field">
-                <label for="price-level">Price level</label>
-                <InputSelect id="price-level" @bind-Value="Input.PriceLevelId">
-                    <option value="">List prices</option>
-                    @foreach (var l in _levels.Where(l => l.IsActive || l.Id == Input.PriceLevelId))
-                    {
-                        <option value="@l.Id">@l.Name@(l.IsActive ? "" : " (inactive)")</option>
-                    }
-                </InputSelect>
-                <span class="hint">Their pricing baseline on new sales; <a href="/pricing">price rules</a> can add promotions on top.</span>
-            </div>
-            <fieldset>
-                <legend>Sub-customer</legend>
+            <MoreOptions Open="@(Input.PriceLevelId is not null || Input.ParentId is not null || Input.BillWithParent || Input.NoReminders || Input.NoLateFees)" Title="More options: pricing, sub-customer, collections">
                 <div class="field">
-                    <label for="parent">Sub-customer of <span class="muted">(optional)</span></label>
-                    <InputSelect id="parent" @bind-Value="Input.ParentId" data-search>
-                        <option value="">Nobody (a top-level customer)</option>
-                        @foreach (var c in _all.Where(c => c.Customer.Id != _customer?.Id && !_descendants.Contains(c.Customer.Id)
-                                                          && (c.Customer.IsActive || c.Customer.Id == Input.ParentId)))
+                    <label for="price-level">Price level</label>
+                    <InputSelect id="price-level" @bind-Value="Input.PriceLevelId">
+                        <option value="">List prices</option>
+                        @foreach (var l in _levels.Where(l => l.IsActive || l.Id == Input.PriceLevelId))
                         {
-                            <option value="@c.Customer.Id">@c.FullName@(c.Customer.IsActive ? "" : " (inactive)")</option>
+                            <option value="@l.Id">@l.Name@(l.IsActive ? "" : " (inactive)")</option>
                         }
                     </InputSelect>
-                    <span class="hint">For a job, project or location of another customer, up to @CustomerTree.MaxDepth levels.</span>
+                    <span class="hint">Their pricing baseline on new sales; <a href="/pricing">price rules</a> can add promotions on top.</span>
                 </div>
-                <label class="check">
-                    <InputCheckbox @bind-Value="Input.BillWithParent" />
-                    <span>Bill with the parent: its payments and credits can settle these invoices, and they go on its statement and reminders</span>
-                </label>
-            </fieldset>
-            <fieldset>
-                <legend>Collections</legend>
-                <label class="check">
-                    <InputCheckbox @bind-Value="Input.NoReminders" />
-                    <span>Don't send automatic payment reminders</span>
-                </label>
-                <label class="check">
-                    <InputCheckbox @bind-Value="Input.NoLateFees" />
-                    <span>Don't charge late fees</span>
-                </label>
-            </fieldset>
-            <fieldset>
-                <legend>Sales tax</legend>
-                <div class="row">
+                <fieldset>
+                    <legend>Sub-customer</legend>
                     <div class="field">
-                        <label for="tax-code">Tax code</label>
-                        <InputSelect id="tax-code" @bind-Value="Input.TaxCodeId">
-                            <option value="">No sales tax</option>
-                            @foreach (var c in _taxCodes.Where(c => c.IsActive || c.Id == Input.TaxCodeId))
+                        <label for="parent">Sub-customer of <span class="muted">(optional)</span></label>
+                        <InputSelect id="parent" @bind-Value="Input.ParentId" data-search>
+                            <option value="">Nobody (a top-level customer)</option>
+                            @foreach (var c in _all.Where(c => c.Customer.Id != _customer?.Id && !_descendants.Contains(c.Customer.Id)
+                                                              && (c.Customer.IsActive || c.Customer.Id == Input.ParentId)))
                             {
-                                <option value="@c.Id">@c.Name@(c.IsActive ? "" : " (inactive)")</option>
+                                <option value="@c.Customer.Id">@c.FullName@(c.Customer.IsActive ? "" : " (inactive)")</option>
                             }
                         </InputSelect>
-                        <span class="hint">Where you deliver to them decides the rate. New invoices, receipts and estimates start with it.</span>
+                        <span class="hint">For a job, project or location of another customer, up to @CustomerTree.MaxDepth levels.</span>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="field">
-                        <label for="exemption">Exemption certificate no. <span class="muted">(if exempt)</span></label>
-                        <InputText id="exemption" @bind-Value="Input.ExemptionCertificate" />
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.BillWithParent" />
+                        <span>Bill with the parent: its payments and credits can settle these invoices, and they go on its statement and reminders</span>
+                    </label>
+                </fieldset>
+                <fieldset>
+                    <legend>Collections</legend>
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.NoReminders" />
+                        <span>Don't send automatic payment reminders</span>
+                    </label>
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.NoLateFees" />
+                        <span>Don't charge late fees</span>
+                    </label>
+                </fieldset>
+            </MoreOptions>
+            <MoreOptions Open="@(_taxCodes.Any(c => c.IsActive) || Input.TaxCodeId is not null || Input.ExemptionCertificate is not null)" Title="Sales tax">
+                <fieldset>
+                    <legend>Sales tax</legend>
+                    <div class="row">
+                        <div class="field">
+                            <label for="tax-code">Tax code</label>
+                            <InputSelect id="tax-code" @bind-Value="Input.TaxCodeId">
+                                <option value="">No sales tax</option>
+                                @foreach (var c in _taxCodes.Where(c => c.IsActive || c.Id == Input.TaxCodeId))
+                                {
+                                    <option value="@c.Id">@c.Name@(c.IsActive ? "" : " (inactive)")</option>
+                                }
+                            </InputSelect>
+                            <span class="hint">Where you deliver to them decides the rate. New invoices, receipts and estimates start with it.</span>
+                        </div>
                     </div>
-                    <div class="field">
-                        <label for="exemption-reason">Reason</label>
-                        <InputSelect id="exemption-reason" @bind-Value="Input.ExemptionReason">
-                            <option value="">Choose…</option>
-                            @foreach (var r in Enum.GetValues<ExemptionReason>())
-                            {
-                                <option value="@r">@ExemptionReasons.Label(r)</option>
-                            }
-                        </InputSelect>
+                    <div class="row">
+                        <div class="field">
+                            <label for="exemption">Exemption certificate no. <span class="muted">(if exempt)</span></label>
+                            <InputText id="exemption" @bind-Value="Input.ExemptionCertificate" />
+                        </div>
+                        <div class="field">
+                            <label for="exemption-reason">Reason</label>
+                            <InputSelect id="exemption-reason" @bind-Value="Input.ExemptionReason">
+                                <option value="">Choose…</option>
+                                @foreach (var r in Enum.GetValues<ExemptionReason>())
+                                {
+                                    <option value="@r">@ExemptionReasons.Label(r)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="field">
+                            <label for="exemption-expires">Expires <span class="muted">(optional)</span></label>
+                            <InputDate id="exemption-expires" @bind-Value="Input.ExemptionExpiresOn" />
+                        </div>
                     </div>
-                    <div class="field">
-                        <label for="exemption-expires">Expires <span class="muted">(optional)</span></label>
-                        <InputDate id="exemption-expires" @bind-Value="Input.ExemptionExpiresOn" />
-                    </div>
-                </div>
-                <span class="hint">
-                    While the certificate is valid, their sales are taxed at zero and show as exempt on the liability report. Attach a copy
-                    of the certificate below.
-                </span>
-            </fieldset>
+                    <span class="hint">
+                        While the certificate is valid, their sales are taxed at zero and show as exempt on the liability report. Attach a copy
+                        of the certificate below.
+                    </span>
+                </fieldset>
+            </MoreOptions>
             <div class="row">
                 <div class="field">
                     <label for="notes">Notes <span class="muted">(private)</span></label>

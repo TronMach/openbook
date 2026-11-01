@@ -158,36 +158,38 @@
                 <label for="notes">Notes <span class="muted">(private)</span></label>
                 <InputText id="notes" @bind-Value="Input.Notes" />
             </div>
-            <fieldset>
-                <legend>1099</legend>
-                <label class="check">
-                    <InputCheckbox @bind-Value="Input.Track1099" />
-                    <span>Track payments for a 1099 (contractors, landlords, attorneys)</span>
-                </label>
-                <div class="row">
-                    <div class="field">
-                        <label for="box">Reported in</label>
-                        <InputSelect id="box" @bind-Value="Input.Form1099Box">
-                            @foreach (var box in Enum.GetValues<Form1099Box>())
-                            {
-                                <option value="@box">@Labels.For(box)</option>
-                            }
-                        </InputSelect>
-                    </div>
-                    <div class="field">
-                        <label for="tax-id">Tax ID (EIN or SSN) @(_vendor?.MaskedTaxId is { } masked ? $"· saved: {masked}" : "")</label>
-                        <InputText id="tax-id" @bind-Value="Input.TaxId" autocomplete="off" placeholder="@(_vendor?.MaskedTaxId is null ? "12-3456789" : "Leave blank to keep it")" />
-                        <span class="hint">From their W-9. It's never shown in full again; enter a new one to replace it.</span>
-                    </div>
-                </div>
-                @if (_vendor?.TaxId is not null)
-                {
+            <MoreOptions Open="@(Input.Track1099 || _vendor?.TaxId is not null)" Title="More options: 1099 reporting">
+                <fieldset>
+                    <legend>1099</legend>
                     <label class="check">
-                        <InputCheckbox @bind-Value="Input.ClearTaxId" />
-                        <span>Remove the saved tax ID</span>
+                        <InputCheckbox @bind-Value="Input.Track1099" />
+                        <span>Track payments for a 1099 (contractors, landlords, attorneys)</span>
                     </label>
-                }
-            </fieldset>
+                    <div class="row">
+                        <div class="field">
+                            <label for="box">Reported in</label>
+                            <InputSelect id="box" @bind-Value="Input.Form1099Box">
+                                @foreach (var box in Enum.GetValues<Form1099Box>())
+                                {
+                                    <option value="@box">@Labels.For(box)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="field">
+                            <label for="tax-id">Tax ID (EIN or SSN) @(_vendor?.MaskedTaxId is { } masked ? $"· saved: {masked}" : "")</label>
+                            <InputText id="tax-id" @bind-Value="Input.TaxId" autocomplete="off" placeholder="@(_vendor?.MaskedTaxId is null ? "12-3456789" : "Leave blank to keep it")" />
+                            <span class="hint">From their W-9. It's never shown in full again; enter a new one to replace it.</span>
+                        </div>
+                    </div>
+                    @if (_vendor?.TaxId is not null)
+                    {
+                        <label class="check">
+                            <InputCheckbox @bind-Value="Input.ClearTaxId" />
+                            <span>Remove the saved tax ID</span>
+                        </label>
+                    }
+                </fieldset>
+            </MoreOptions>
             <div class="actions">
                 <button type="submit">@(_vendor is null ? "Create vendor" : "Save changes")</button>
                 <a href="/vendors">Cancel</a>

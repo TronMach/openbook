@@ -155,7 +155,7 @@ public sealed class Item
         Barcode = NormalizeBarcode(details.Barcode);
         Taxable = details.Taxable;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
-            ? throw new DomainException("item.income_account_required", "Choose the income account sales of this item post to.")
+            ? throw new DomainException("item.income_account_required", "Choose the income account this item's sales are counted in.")
             : details.IncomeAccountId;
         PurchaseCost = details.PurchaseCost is >= 0m && decimal.Round(details.PurchaseCost, SalesLine.Precision) == details.PurchaseCost
             ? details.PurchaseCost

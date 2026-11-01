@@ -98,7 +98,7 @@ public sealed class PaymentService(
         }
 
         if (receivableIds.Count > 1)
-            throw new DomainException("payment.mixed_receivables", "These invoices post to different receivable accounts; receive separate payments.");
+            throw new DomainException("payment.mixed_receivables", "These invoices are kept in different accounts for money owed to you, so one payment can't cover them all. Receive a separate payment for each account's invoices.");
 
         var receivableId = receivableIds.Count == 1 ? receivableIds.Single() : (await salesAccounts.GetOrCreateReceivablesAsync(ct)).Id;
         var discount = applications.Sum(a => a.Discount);
@@ -163,7 +163,7 @@ public sealed class PaymentService(
             if (application.Amount + application.Discount > invoice.Balance + old.GetValueOrDefault(invoice.Id))
                 throw new DomainException("payment.exceeds_balance", $"Invoice {invoice.Number} has only {invoice.Balance + old.GetValueOrDefault(invoice.Id):N2} left to pay.");
             if (invoice.ReceivableAccountId != payment.ReceivableAccountId)
-                throw new DomainException("payment.mixed_receivables", $"Invoice {invoice.Number} posts to a different receivable account than this payment.");
+                throw new DomainException("payment.mixed_receivables", $"Invoice {invoice.Number} is kept in a different account for money owed to you than this payment. Receive a separate payment for it.");
         }
 
         var moneyChanged = amount != payment.Amount || depositId != payment.DepositAccountId;

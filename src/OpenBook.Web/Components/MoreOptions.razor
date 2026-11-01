@@ -1,0 +1,38 @@
+@using OpenBook.Domain.Companies
+@inject OpenBook.Web.Security.Operations Ops
+
+@* Accounting and advanced choices on everyday forms. In the full view the fields show as they are; in the simple view
+   they fold into "More options", which opens by itself when one of them isn't at its default (Open), so nothing a
+   record carries is ever out of sight. Works on static and interactive pages alike. *@
+@if (_simple && HasContent)
+{
+    <details class="more-options" open="@Open">
+        <summary>@(Title ?? L["More options"])</summary>
+        <div class="more-options-body">@ChildContent</div>
+    </details>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    private bool _simple;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>True when a field inside holds something other than its default: the box starts open.</summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    /// <summary>False when nothing inside would show (the fields hide themselves), so no empty box is drawn.</summary>
+    [Parameter]
+    public bool HasContent { get; set; } = true;
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _simple = (await Ops.RunAsync<ViewModeService, ViewState>(v => v.CurrentAsync())).Mode == ViewMode.Simple;
+}

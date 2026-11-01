@@ -40,6 +40,17 @@
                     <input id="date" type="date" @bind="_date" />
                 </div>
                 <div class="field">
+                    <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+            </div>
+
+            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
+
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+
+            <MoreOptions Open="@(_depositAccountId != _defaultDepositId || _locationId is not null || _warehouseId is not null)">
+                <div class="field">
                     <label for="deposit">Deposit to</label>
                     <select id="deposit" @bind="_depositAccountId">
                         @foreach (var a in _depositAccounts)
@@ -48,18 +59,9 @@
                         }
                     </select>
                 </div>
-            </div>
-            <div class="field">
-                <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
-                <input id="reference" @bind="_reference" maxlength="30" />
-            </div>
-
-            <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
-
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
-
-            <LocationField Options="_segments" @bind-Value="_locationId" />
-            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+                <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
@@ -135,6 +137,7 @@
             .ToList();
         _depositAccountId = (_depositAccounts.FirstOrDefault(a => string.Equals(a.Name, SalesAccounts.UndepositedFundsName, StringComparison.OrdinalIgnoreCase))
             ?? _depositAccounts.FirstOrDefault())?.Id ?? Guid.Empty;
+        _defaultDepositId = _depositAccountId;
         _customerId = PresetCustomer;
         DefaultTaxCode();
         _loaded = true;
@@ -142,6 +145,9 @@
 
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
+
+    // Undeposited Funds when the chart has it: the simple view folds the choice away while it's this.
+    private Guid _defaultDepositId;
 
     private async Task SaveAsync()
     {

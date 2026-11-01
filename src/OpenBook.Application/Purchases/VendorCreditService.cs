@@ -205,7 +205,7 @@ public sealed class VendorCreditService(
             if (bill.VendorId != vendorId || bill.Status != DocumentStatus.Posted || credit.VendorId != vendorId)
                 throw new DomainException("credit.wrong_vendor", "That credit and bill must both be this vendor's.");
             if (bill.PayableAccountId != credit.PayableAccountId)
-                throw new DomainException("credit.mixed_payables", "That credit and bill post to different payable accounts.");
+                throw new DomainException("credit.mixed_payables", "That credit and that bill are kept in different accounts for money you owe, so the credit can't go on that bill.");
             if (date < credit.Date)
                 throw new DomainException("credit.applied_before_payment", "Credit can't be applied before the credit's date.");
 

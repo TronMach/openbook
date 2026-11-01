@@ -96,8 +96,10 @@
                 </fieldset>
             }
 
-            <LocationField Options="_segments" @bind-Value="_locationId" />
-            <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1)" Open="@(_locationId is not null || _warehouseId is not null)">
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+                <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">@L["Message to customer"] <span class="muted">@L["(optional, printed on the invoice)"]</span></label>
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>

@@ -43,6 +43,21 @@ Each center puts a whole list and one record on the same page: the list down the
 
 A center only shows; it never changes anything itself. What you do from it happens on the usual pages, with the usual rules.
 
+## Simpler forms
+
+In the simple view, choices most people never need to change are folded under **More options** on the everyday forms. Select **More options** to open it. It opens by itself when something inside isn't at its usual setting, so nothing a record carries is ever out of sight. The full view shows the same fields as before.
+
+| Form | Under More options |
+| --- | --- |
+| **Receive Payments** | **Deposit to** (Undeposited Funds, so you can deposit several payments together with **Make Deposits**) |
+| **Enter Sales Receipts** | **Deposit to**, and location and warehouse when you use them |
+| **Create Invoices**, **Create Estimates**, **Create Credit Memos**, **Enter Bills** | Location and warehouse, when you use them |
+| **New Item** | Income account, stock accounts, lot or serial numbers, costing, building automatically |
+| **New customer** | Price level, sub-customer, collections; sales tax (open when you have tax codes) |
+| **New vendor** | 1099 reporting |
+
+The item form also asks in plain words: **What is it?** (a service, or an inventory product you keep in stock), **What do you sell it for?**, and for stock **What does it cost you?** and **Reorder when you're down to**. The accounts are filled in for you: your first income account, and Inventory Asset and Cost of Goods Sold for stock.
+
 ## The home page
 
 The home page draws your work as steps, in the order they usually happen:

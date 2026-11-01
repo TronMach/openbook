@@ -588,3 +588,9 @@ a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
     .center-detail { order: -1; }
     .center-names { max-height: 40vh; }
 }
+
+/* Simple view: accounting and advanced choices folded under "More options" on everyday forms. */
+.more-options { margin-top: 1rem; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; }
+.more-options > summary { cursor: pointer; color: var(--muted); }
+.more-options[open] > summary { margin-bottom: 0.5rem; }
+.more-options-body > :first-child { margin-top: 0; }

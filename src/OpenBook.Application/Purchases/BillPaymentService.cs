@@ -157,7 +157,7 @@ public sealed class BillPaymentService(
             if (!bills.TryGetValue(application.BillId, out var bill))
                 throw new EntityNotFoundException("bill", application.BillId);
             if (bill.VendorId != payment.VendorId || bill.PayableAccountId != payment.PayableAccountId)
-                throw new DomainException("payment.wrong_vendor", $"The bill {bill.Reference} isn't {vendor.DisplayName}'s, or posts to a different payable account.");
+                throw new DomainException("payment.wrong_vendor", $"Bill {bill.Reference} isn't {vendor.DisplayName}'s, or it's kept in a different account for money you owe than the others. Pay it separately.");
             if (bill.Status != DocumentStatus.Posted)
                 throw new DomainException("bill.voided", $"The bill {bill.Reference} is voided.");
             if (!bill.CanBePaid && !old.ContainsKey(bill.Id))

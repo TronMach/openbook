@@ -43,6 +43,16 @@
                     <input id="date" type="date" value="@_date.ToString("yyyy-MM-dd")" @onchange="ChangeDate" />
                 </div>
                 <div class="field">
+                    <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
+                    <input id="reference" @bind="_reference" maxlength="30" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" @bind="_memo" maxlength="1000" />
+            </div>
+            <MoreOptions Open="@(_depositAccountId != _defaultDepositId)">
+                <div class="field">
                     <label for="deposit">Deposit to</label>
                     <select id="deposit" @bind="_depositAccountId">
                         @foreach (var a in _depositAccounts)
@@ -55,17 +65,7 @@
                         <span class="hint">Held until you <a href="/banking/deposits/new" target="_blank">make a deposit</a> that matches the bank statement.</span>
                     }
                 </div>
-            </div>
-            <div class="row">
-                <div class="field">
-                    <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
-                    <input id="reference" @bind="_reference" maxlength="30" />
-                </div>
-                <div class="field">
-                    <label for="memo">Memo <span class="muted">(optional)</span></label>
-                    <input id="memo" @bind="_memo" maxlength="1000" />
-                </div>
-            </div>
+            </MoreOptions>
         </div>
 
         @if (_customerId is not null)
@@ -129,6 +129,8 @@
 </div>
 
 @code {
+    private Guid _defaultDepositId;
+
     private IReadOnlyList<CustomerSummary> _customers = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _depositAccounts = [];
@@ -169,9 +171,11 @@
             .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
             .OrderBy(a => a.Type != AccountType.Bank)
             .ToList();
-        // Undeposited Funds when the chart has it, as in QuickBooks; otherwise the first bank account.
+        // Undeposited Funds when the chart has it, as in QuickBooks; otherwise the first bank account. The simple
+        // view folds the choice away while it's still this.
         _depositAccountId = (_depositAccounts.FirstOrDefault(a => string.Equals(a.Name, SalesAccounts.UndepositedFundsName, StringComparison.OrdinalIgnoreCase))
             ?? _depositAccounts.FirstOrDefault())?.Id ?? Guid.Empty;
+        _defaultDepositId = _depositAccountId;
         if (PresetCustomer is { } preset)
             await LoadInvoicesAsync(preset);
         _loaded = true;

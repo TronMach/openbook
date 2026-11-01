@@ -7,6 +7,7 @@
 @inject AccountService AccountService
 @inject InventoryService Inventory
 @inject WarehouseService WarehouseService
+@inject ViewModeService Views
 @inject NavigationManager Navigation
 
 <PageTitle>@(_item?.Name ?? "New product or service") · OpenBook</PageTitle>
@@ -42,13 +43,17 @@
                 <ValidationMessage For="() => Input.Name" />
             </div>
             <div class="field">
-                <label for="type">Type</label>
+                <label for="type">@(_simple ? "What is it?" : "Type")</label>
                 <InputSelect id="type" @bind-Value="Input.Type">
                     @foreach (var type in Enum.GetValues<ItemType>())
                     {
                         <option value="@type">@Labels.For(type)</option>
                     }
                 </InputSelect>
+                @if (_simple)
+                {
+                    <span class="hint">A service is work you do. Choose "Inventory product" for something you keep in stock and want counted.</span>
+                }
             </div>
         </div>
         <div class="row">
@@ -69,94 +74,58 @@
         </div>
         <div class="row">
             <div class="field">
-                <label for="rate">Price</label>
+                <label for="rate">@(_simple ? "What do you sell it for?" : "Price")</label>
                 <InputNumber id="rate" step="any" @bind-Value="Input.Rate" />
                 <span class="hint">Up to 4 decimal places; line totals round to the cent.</span>
             </div>
-            <div class="field">
-                <label for="account">Income account</label>
-                <InputSelect id="account" @bind-Value="Input.IncomeAccountId" data-search>
-                    <option value="">Choose…</option>
-                    @foreach (var account in _incomeAccounts)
-                    {
-                        <option value="@account.Id">@_chart.FullName(account.Id)</option>
-                    }
-                </InputSelect>
-                <ValidationMessage For="() => Input.IncomeAccountId" />
-            </div>
+            @if (!_simple)
+            {
+                @IncomeField
+            }
         </div>
         <label class="check">
             <InputCheckbox @bind-Value="Input.Taxable" />
             <span>Taxable: charge sales tax on it where the customer or document has a tax code</span>
         </label>
         <fieldset>
-            <legend>Inventory products and assemblies only</legend>
-            <p class="hint">Stock and its cost are tracked: bills and builds add stock, sales take it out at cost. Leave the accounts on "Default" to use Inventory Asset and Cost of Goods Sold.</p>
-            <div class="row">
-                <div class="field">
-                    <label for="asset">Inventory asset account</label>
-                    <InputSelect id="asset" @bind-Value="Input.InventoryAssetAccountId" disabled="@_assetLocked" data-search>
-                        <option value="">Default (Inventory Asset)</option>
-                        @foreach (var account in _assetAccounts)
-                        {
-                            <option value="@account.Id">@_chart.FullName(account.Id)</option>
-                        }
-                    </InputSelect>
-                    @if (_assetLocked)
-                    {
-                        <span class="hint">Fixed once stock has moved.</span>
-                    }
-                </div>
-                <div class="field">
-                    <label for="cost-account">Cost of goods sold account</label>
-                    <InputSelect id="cost-account" @bind-Value="Input.CostAccountId" data-search>
-                        <option value="">Default (Cost of Goods Sold)</option>
-                        @foreach (var account in _costAccounts)
-                        {
-                            <option value="@account.Id">@_chart.FullName(account.Id)</option>
-                        }
-                    </InputSelect>
-                </div>
-            </div>
-            @if (Input.Type == ItemType.Assembly)
+            <legend>@(_simple ? "If you keep it in stock" : "Inventory products and assemblies only")</legend>
+            @if (_simple)
             {
-                <label class="check">
-                    <InputCheckbox @bind-Value="Input.AutoBuild" />
-                    <span>Build automatically when a sale is short: the shortfall is built from components in the sale's own entry (assemblies without lot or serial numbers)</span>
-                </label>
+                <p class="hint">For inventory products and assemblies: OpenBook counts what's on hand and what it cost.</p>
+            }
+            else
+            {
+                <p class="hint">Stock and its cost are tracked: bills and builds add stock, sales take it out at cost. Leave the accounts on "Default" to use Inventory Asset and Cost of Goods Sold.</p>
+                @StockAccounts
+                @AutoBuildField
             }
             <div class="row">
+                @if (!_simple)
+                {
+                    @TrackingFields
+                }
                 <div class="field">
-                    <label for="tracking">Lot or serial numbers</label>
-                    <InputSelect id="tracking" @bind-Value="Input.Tracking" disabled="@_assetLocked">
-                        <option value="@ItemTracking.None">Not tracked</option>
-                        <option value="@ItemTracking.Lot">Lot numbers</option>
-                        <option value="@ItemTracking.Serial">Serial numbers</option>
-                    </InputSelect>
-                    <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Receipts must name their lots or serials; sales can name them or take the oldest.")</span>
-                </div>
-                <div class="field">
-                    <label for="cost-method">Costing</label>
-                    <InputSelect id="cost-method" @bind-Value="Input.CostMethod" disabled="@_assetLocked">
-                        @foreach (var method in Enum.GetValues<InventoryCostMethod>())
-                        {
-                            <option value="@method">@Labels.For(method)</option>
-                        }
-                    </InputSelect>
-                    <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Average costs every sale at the average of what's on hand.")</span>
-                </div>
-                <div class="field">
-                    <label for="purchase-cost">Purchase cost</label>
+                    <label for="purchase-cost">@(_simple ? "What does it cost you?" : "Purchase cost")</label>
                     <InputNumber id="purchase-cost" step="any" @bind-Value="Input.PurchaseCost" />
                     <span class="hint">Default unit cost for stock added by adjustments.</span>
                 </div>
                 <div class="field">
-                    <label for="reorder">Reorder point <span class="muted">(optional)</span></label>
+                    <label for="reorder">@(_simple ? "Reorder when you're down to" : "Reorder point") <span class="muted">(optional)</span></label>
                     <InputNumber id="reorder" step="any" @bind-Value="Input.ReorderPoint" />
                     <span class="hint">Flagged for reordering at or below this quantity.</span>
                 </div>
             </div>
         </fieldset>
+        @if (_simple)
+        {
+            <MoreOptions Open="AccountingChanged" Title="More options: accounts and stock tracking">
+                <div class="row">@IncomeField</div>
+                <p class="hint">Leave the stock accounts on "Default" to use Inventory Asset and Cost of Goods Sold.</p>
+                @StockAccounts
+                @AutoBuildField
+                <div class="row">@TrackingFields</div>
+            </MoreOptions>
+        }
         <div class="actions">
             <button type="submit">@(_item is null ? "Create" : "Save changes")</button>
             <a href="/items">Cancel</a>
@@ -424,8 +393,89 @@
     [SupplyParameterFromForm(FormName = "item")]
     private ItemModel Input { get; set; } = default!;
 
+    // The simple view asks plain questions and folds the accounts and stock tracking under "More options".
+    private bool _simple;
+
+    // Anything under "More options" away from its default opens it, so a record's choices stay in sight.
+    private bool AccountingChanged =>
+        Input.IncomeAccountId is null || Input.IncomeAccountId != _incomeAccounts.FirstOrDefault()?.Id
+        || Input.InventoryAssetAccountId is not null || Input.CostAccountId is not null
+        || Input.Tracking != ItemTracking.None || Input.CostMethod != InventoryCostMethod.Fifo || Input.AutoBuild;
+
+    private RenderFragment IncomeField => @<div class="field">
+        <label for="account">Income account</label>
+        <InputSelect id="account" @bind-Value="Input.IncomeAccountId" data-search>
+            <option value="">Choose…</option>
+            @foreach (var account in _incomeAccounts)
+            {
+                <option value="@account.Id">@_chart.FullName(account.Id)</option>
+            }
+        </InputSelect>
+        <ValidationMessage For="() => Input.IncomeAccountId" />
+    </div>;
+
+    private RenderFragment StockAccounts => @<div class="row">
+        <div class="field">
+            <label for="asset">Inventory asset account</label>
+            <InputSelect id="asset" @bind-Value="Input.InventoryAssetAccountId" disabled="@_assetLocked" data-search>
+                <option value="">Default (Inventory Asset)</option>
+                @foreach (var account in _assetAccounts)
+                {
+                    <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                }
+            </InputSelect>
+            @if (_assetLocked)
+            {
+                <span class="hint">Fixed once stock has moved.</span>
+            }
+        </div>
+        <div class="field">
+            <label for="cost-account">Cost of goods sold account</label>
+            <InputSelect id="cost-account" @bind-Value="Input.CostAccountId" data-search>
+                <option value="">Default (Cost of Goods Sold)</option>
+                @foreach (var account in _costAccounts)
+                {
+                    <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                }
+            </InputSelect>
+        </div>
+    </div>;
+
+    private RenderFragment AutoBuildField => @<text>
+        @if (Input.Type == ItemType.Assembly)
+        {
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.AutoBuild" />
+                <span>Build automatically when a sale is short: the shortfall is built from components in the sale's own entry (assemblies without lot or serial numbers)</span>
+            </label>
+        }
+    </text>;
+
+    private RenderFragment TrackingFields => @<text>
+        <div class="field">
+            <label for="tracking">Lot or serial numbers</label>
+            <InputSelect id="tracking" @bind-Value="Input.Tracking" disabled="@_assetLocked">
+                <option value="@ItemTracking.None">Not tracked</option>
+                <option value="@ItemTracking.Lot">Lot numbers</option>
+                <option value="@ItemTracking.Serial">Serial numbers</option>
+            </InputSelect>
+            <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Receipts must name their lots or serials; sales can name them or take the oldest.")</span>
+        </div>
+        <div class="field">
+            <label for="cost-method">Costing</label>
+            <InputSelect id="cost-method" @bind-Value="Input.CostMethod" disabled="@_assetLocked">
+                @foreach (var method in Enum.GetValues<InventoryCostMethod>())
+                {
+                    <option value="@method">@Labels.For(method)</option>
+                }
+            </InputSelect>
+            <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Average costs every sale at the average of what's on hand.")</span>
+        </div>
+    </text>;
+
     protected override async Task OnInitializedAsync()
     {
+        _simple = (await Views.CurrentAsync()).Mode == OpenBook.Domain.Companies.ViewMode.Simple;
         _chart = await AccountService.GetChartAsync();
         _incomeAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();

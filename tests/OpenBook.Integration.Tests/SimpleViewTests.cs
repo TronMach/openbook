@@ -164,6 +164,24 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
 
     private static string TokenIn(string page) => WebUtility.HtmlDecode(Token().Match(page).Groups[1].Value);
 
+    // Sets up a company through the setup page (simple view, as suggested) and signs in as its owner.
+    private static async Task SetUp(HttpClient browser)
+    {
+        var setup = await browser.GetStringAsync("/setup");
+        var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["_handler"] = "setup",
+            ["__RequestVerificationToken"] = TokenIn(setup),
+            ["Input.CompanyName"] = "Corner Shop",
+            ["Input.FiscalYearStartMonth"] = "1",
+            ["Input.HomeCurrency"] = "USD",
+            ["Input.Username"] = "owner",
+            ["Input.Password"] = "correct horse battery",
+            ["Input.ConfirmPassword"] = "correct horse battery",
+        }));
+        Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
+    }
+
     private static Task<HttpResponseMessage> Switch(HttpClient browser, string page, string view, string returnUrl) =>
         browser.PostAsync("/account/view", new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -220,18 +238,7 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
     public async Task The_customer_center_shows_the_chosen_customer_and_their_transactions()
     {
         var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var setup = await browser.GetStringAsync("/setup");
-        await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["_handler"] = "setup",
-            ["__RequestVerificationToken"] = TokenIn(setup),
-            ["Input.CompanyName"] = "Corner Shop",
-            ["Input.FiscalYearStartMonth"] = "1",
-            ["Input.HomeCurrency"] = "USD",
-            ["Input.Username"] = "owner",
-            ["Input.Password"] = "correct horse battery",
-            ["Input.ConfirmPassword"] = "correct horse battery",
-        }));
+        await SetUp(browser);
 
         Guid acme, invoice;
         await using (var scope = _app.Services.CreateAsyncScope())
@@ -259,21 +266,33 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Everyday_forms_fold_accounting_choices_in_the_simple_view_only()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await SetUp(browser);
+        await using (var scope = _app.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<Application.Accounts.AccountService>().CreateAsync(new Application.Accounts.CreateAccountCommand("Sales", AccountType.Income));
+
+        var item = await browser.GetStringAsync("/items/new");
+        Assert.Contains("What do you sell it for?", item, StringComparison.Ordinal);
+        Assert.Contains("<details class=\"more-options\"><summary>More options: accounts and stock tracking</summary>", item, StringComparison.Ordinal);
+        Assert.Contains("id=\"account\"", item, StringComparison.Ordinal);
+        Assert.Contains("More options: pricing, sub-customer, collections", await browser.GetStringAsync("/customers/new"), StringComparison.Ordinal);
+        Assert.Contains("More options: 1099 reporting", await browser.GetStringAsync("/vendors/new"), StringComparison.Ordinal);
+
+        await Switch(browser, item, "Full", "/");
+        item = await browser.GetStringAsync("/items/new");
+        Assert.DoesNotContain("more-options", item, StringComparison.Ordinal);
+        Assert.Contains(">Price</label>", item, StringComparison.Ordinal);
+        Assert.Contains("id=\"account\"", item, StringComparison.Ordinal);
+        Assert.DoesNotContain("more-options", await browser.GetStringAsync("/vendors/new"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Write_checks_goes_to_the_only_bank_account()
     {
         var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var setup = await browser.GetStringAsync("/setup");
-        await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["_handler"] = "setup",
-            ["__RequestVerificationToken"] = TokenIn(setup),
-            ["Input.CompanyName"] = "Corner Shop",
-            ["Input.FiscalYearStartMonth"] = "1",
-            ["Input.HomeCurrency"] = "USD",
-            ["Input.Username"] = "owner",
-            ["Input.Password"] = "correct horse battery",
-            ["Input.ConfirmPassword"] = "correct horse battery",
-        }));
+        await SetUp(browser);
 
         Assert.Contains("no bank account to write a check from", await browser.GetStringAsync("/banking/write-checks"), StringComparison.Ordinal);
 

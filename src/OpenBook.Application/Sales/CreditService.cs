@@ -267,7 +267,7 @@ public sealed class CreditService(
             if (sourceCustomer != customerId)
                 throw new DomainException("credit.wrong_customer", "That credit belongs to a different customer.");
             if (receivable != invoice.ReceivableAccountId)
-                throw new DomainException("credit.mixed_receivables", "That credit and invoice post to different receivable accounts.");
+                throw new DomainException("credit.mixed_receivables", "That credit and that invoice are kept in different accounts for money owed to you, so the credit can't go on that invoice.");
             if (date < sourceDate)
                 throw new DomainException("credit.applied_before_payment", "Credit can't be applied before it was received.");
 
