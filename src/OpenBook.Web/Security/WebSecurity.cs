@@ -172,7 +172,37 @@ public sealed class SetupState
 {
     public bool IsSetUp { get; private set; }
 
-    public void MarkSetUp() => IsSetUp = true;
+    public void MarkSetUp()
+    {
+        IsSetUp = true;
+        lock (_lock)
+            _upload = null;
+    }
+
+    private readonly Lock _lock = new();
+    private SetupUpload? _upload;
+
+    /// <summary>
+    /// Keeps the export the setup page read, until the company is created from it: one file at a time (a newer upload
+    /// replaces it), for an hour, only before setup. The token goes in the form, so the file isn't sent twice.
+    /// </summary>
+    public string Hold(string source, string fileName, byte[] content, string summary)
+    {
+        var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+        lock (_lock)
+            _upload = new SetupUpload(token, source, fileName, content, summary, DateTimeOffset.UtcNow.AddHours(1));
+        return token;
+    }
+
+    public SetupUpload? Held(string? token)
+    {
+        lock (_lock)
+        {
+            return _upload is { } upload && token is not null && !IsSetUp && upload.ExpiresAt > DateTimeOffset.UtcNow
+                && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(upload.Token), System.Text.Encoding.ASCII.GetBytes(token))
+                ? upload : null;
+        }
+    }
 
     public async Task<bool> CheckAsync(CompanySetupService setup, CancellationToken ct)
     {
@@ -181,6 +211,10 @@ public sealed class SetupState
         return IsSetUp;
     }
 }
+
+/// <summary>An export uploaded on the setup page, waiting for the company to be created from it.</summary>
+/// <param name="Summary">What the file holds, as the setup page says it.</param>
+public sealed record SetupUpload(string Token, string Source, string FileName, byte[] Content, string Summary, DateTimeOffset ExpiresAt);
 
 /// <summary>Sends every page to the setup wizard until a company exists, and keeps the wizard closed afterwards.</summary>
 public sealed class SetupGateMiddleware(RequestDelegate next)

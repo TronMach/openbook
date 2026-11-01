@@ -98,6 +98,31 @@ internal static class GnuCashReader
         static bool Same(Node a, Node b) => Types.GetValueOrDefault(a.TypeCode) == Types.GetValueOrDefault(b.TypeCode) && Types.ContainsKey(a.TypeCode);
     }
 
+    /// <summary>
+    /// The company in File › Properties › Business (book options) and the currency most of its accounts use. GnuCash has
+    /// no tax form or fiscal year setting to read.
+    /// </summary>
+    public static SourceCompany? Company(XDocument document)
+    {
+        var book = document.Named("book").FirstOrDefault();
+        if (book is null)
+            return null;
+        var business = Frame(Frame(book.Child("slots"), "options"), "Business");
+        var currency = book.Children("account")
+            .Select(a => a.Child("commodity"))
+            .Where(c => c.Text("space") is "CURRENCY" or "ISO4217" && c.Text("id") is { Length: 3 })
+            .GroupBy(c => c.Text("id")!.ToUpperInvariant())
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefault();
+        return new SourceCompany(Slot(business, "Company Name"), null, Slot(business, "Company Email Address"), Slot(business, "Company Phone Number"),
+            Slot(business, "Company Address")?.ReplaceLineEndings("\n"), null, currency);
+
+        // Book options are nested key/value slots: <slot><slot:key>options</slot:key><slot:value type="frame">…
+        static XElement? Frame(XElement? slots, string key) => slots?.Children("slot").FirstOrDefault(s => s.Text("key") == key)?.Child("value");
+        static string? Slot(XElement? frame, string key) => frame?.Children("slot").FirstOrDefault(s => s.Text("key") == key).Text("value");
+    }
+
     /// <summary>GnuCash amounts are fractions: "4250/100" is 42.50.</summary>
     internal static decimal? Fraction(string? text)
     {

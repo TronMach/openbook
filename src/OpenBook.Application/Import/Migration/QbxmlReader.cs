@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 
@@ -101,6 +102,25 @@ internal static class QbxmlReader
         if (others.Count > 0)
             data.Warnings.Add($"Not imported: {string.Join(", ", others.Select(o => $"{o.count} {o.name[..^3]}"))}. Only journal entries come in from qbXML; use the IIF export for other transactions.");
         return data;
+    }
+
+    /// <summary>The CompanyRet of a CompanyQueryRs, if the file has one. The tax form gives the business type.</summary>
+    public static SourceCompany? Company(XDocument document)
+    {
+        var c = document.Named("CompanyRet").FirstOrDefault();
+        if (c is null)
+            return null;
+        BusinessType? type = c.Text("TaxForm") switch
+        {
+            "Form1040" => BusinessType.SoleProprietorship,
+            "Form1065" => BusinessType.Partnership,
+            "Form1120" => BusinessType.CCorporation,
+            "Form1120S" => BusinessType.SCorporation,
+            "Form990" or "Form990PF" or "Form990T" => BusinessType.Nonprofit,
+            _ => null,
+        };
+        return new SourceCompany(c.Text("CompanyName"), c.Text("LegalCompanyName"), c.Text("Email"), c.Text("Phone"),
+            Address(c.Child("Address")) ?? Address(c.Child("LegalAddress")), SourceCompany.Month(c.Text("FirstMonthFiscalYear")), null, type);
     }
 
     private static string? Address(XElement? address) => address is null ? null : MigrationReaders.Address(

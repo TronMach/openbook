@@ -122,6 +122,68 @@ internal static class QuickBooksOnlineReader
         }
     }
 
+    /// <summary>
+    /// CompanyInfo (from a query, or the companyinfo endpoint's single object) and the home currency from Preferences.
+    /// QuickBooks Online doesn't record a tax form, so the business type is left to the person.
+    /// </summary>
+    public static SourceCompany? Company(string json)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(json, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip, MaxDepth = 64 });
+        }
+        catch (JsonException ex)
+        {
+            throw new DomainException("import.not_json", $"The file isn't valid JSON ({ex.Message}).");
+        }
+
+        using (document)
+        {
+            var currency = Find(document.RootElement, "Preferences", 0) is { } p ? Str(p, "CurrencyPrefs", "HomeCurrency", "value") : null;
+            if (Find(document.RootElement, "CompanyInfo", 0) is not { } c)
+                return currency is null ? null : new SourceCompany(Currency: currency);
+            return new SourceCompany(Str(c, "CompanyName"), Str(c, "LegalName"), Str(c, "Email", "Address"), Str(c, "PrimaryPhone", "FreeFormNumber"),
+                Address(c, "CompanyAddr") ?? Address(c, "LegalAddr"), SourceCompany.Month(Str(c, "FiscalYearStartMonth")), currency);
+        }
+    }
+
+    /// <summary>The first object called <paramref name="name"/> (or the first object of an array called that), anywhere in the document.</summary>
+    private static JsonElement? Find(JsonElement element, string name, int depth)
+    {
+        if (depth > 8)
+            return null;
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                if (Find(item, name, depth + 1) is { } found)
+                    return found;
+            }
+
+            return null;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+            return null;
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Name == name)
+            {
+                if (property.Value.ValueKind == JsonValueKind.Object)
+                    return property.Value.Clone();
+                if (property.Value.ValueKind == JsonValueKind.Array && property.Value.EnumerateArray().FirstOrDefault() is { ValueKind: JsonValueKind.Object } first)
+                    return first.Clone();
+            }
+            else if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array && Find(property.Value, name, depth + 1) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Every array of objects under a QBO entity name, anywhere in the document.</summary>
     private static void Collect(JsonElement element, Dictionary<string, List<JsonElement>> lists, int depth)
     {

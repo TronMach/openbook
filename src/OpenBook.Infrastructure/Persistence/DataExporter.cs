@@ -228,10 +228,14 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
     }
 }
 
-/// <summary>Real database transactions around several saves; OpenBookDbContext.SaveChangesAsync joins one that's open.</summary>
+/// <summary>
+/// Real database transactions around several saves; OpenBookDbContext.SaveChangesAsync joins one that's open, and so
+/// does a transaction begun inside another (setting up a company from an import): the outer one commits or rolls back.
+/// </summary>
 internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
 {
-    public async Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct) => new Transaction(await db.Database.BeginTransactionAsync(ct));
+    public async Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct) =>
+        db.Database.CurrentTransaction is null ? new Transaction(await db.Database.BeginTransactionAsync(ct)) : new Joined();
 
     public bool HasSaved => db.HasSaved;
 
@@ -243,6 +247,13 @@ internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
 
         // Not committed: rolled back, so nothing the import saved is kept.
         public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
+    private sealed class Joined : IUnitOfWorkTransaction
+    {
+        public Task CommitAsync(CancellationToken ct) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
 

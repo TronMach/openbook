@@ -1,4 +1,5 @@
 using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 
@@ -48,6 +49,37 @@ public sealed record SourceLine(string Account, decimal Amount, string? Memo);
 public sealed record SourceTransaction(
     int Line, string Label, string? DateText, DateOnly? Date, string? Memo, IReadOnlyList<SourceLine> Lines,
     string? SkipReason = null, IReadOnlyList<string>? Errors = null);
+
+/// <summary>
+/// The company's own details as the export records them, for setting up a new company from the file. Anything the
+/// export doesn't say is null.
+/// </summary>
+public sealed record SourceCompany(
+    string? Name = null, string? LegalName = null, string? Email = null, string? Phone = null, string? Address = null,
+    int? FiscalYearStartMonth = null, string? Currency = null, BusinessType? BusinessType = null)
+{
+    public bool IsEmpty => this == new SourceCompany();
+
+    /// <summary>"January" … "December" (or "Jan", or 1–12), in English as the programs write them.</summary>
+    internal static int? Month(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+        var text = name.Trim();
+        if (int.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var number))
+            return number is >= 1 and <= 12 ? number : null;
+        if (text.Length < 3)
+            return null;
+        var months = System.Globalization.DateTimeFormatInfo.InvariantInfo.MonthNames;
+        for (var i = 0; i < 12; i++)
+        {
+            if (months[i].StartsWith(text, StringComparison.OrdinalIgnoreCase))
+                return i + 1;
+        }
+
+        return null;
+    }
+}
 
 /// <summary>
 /// What a reader found in another program's export, in OpenBook's terms. <see cref="MigrationImportService"/>

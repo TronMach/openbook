@@ -42,6 +42,28 @@ public static class MigrationReaders
         };
     }
 
+    /// <summary>
+    /// The company's details in an export, for setting up a company from it: QuickBooks Desktop qbXML (a CompanyQueryRs),
+    /// QuickBooks Online JSON (CompanyInfo, and Preferences for the currency) and GnuCash (the book's business options and
+    /// currency). IIF and the CSV exports don't carry them: null.
+    /// </summary>
+    public static SourceCompany? ReadCompany(MigrationSource source, byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (content.Length == 0)
+            throw new DomainException("import.empty", "The file is empty.");
+        if (content.Length > MigrationImportService.MaxBytes)
+            throw new DomainException("import.too_large", "The file is larger than 20 MB. Export in smaller parts.");
+        var company = source switch
+        {
+            MigrationSource.QuickBooksQbxml => QbxmlReader.Company(LoadXml(content)),
+            MigrationSource.QuickBooksOnline => QuickBooksOnlineReader.Company(Decode(content)),
+            MigrationSource.GnuCash => GnuCashReader.Company(LoadXml(Decompress(content))),
+            _ => null,
+        };
+        return company is null || company.IsEmpty ? null : company;
+    }
+
     /// <summary>UTF-8 (or the BOM's encoding); <paramref name="fallback"/> when it isn't valid UTF-8.</summary>
     internal static string Decode(byte[] content, Encoding? fallback = null)
     {

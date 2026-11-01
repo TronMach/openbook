@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IifImportService>();
         services.AddScoped<OpenBook.Application.Companies.ScheduledBackupService>();
         services.AddScoped<OpenBook.Application.Import.Migration.MigrationImportService>();
+        services.AddScoped<OpenBook.Application.Import.Migration.MigrationSetupService>();
         services.AddScoped<ChartTemplates>();
         services.AddScoped<BankingService>();
         services.AddScoped<BankImportService>();

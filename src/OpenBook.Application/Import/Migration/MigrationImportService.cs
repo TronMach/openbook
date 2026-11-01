@@ -83,10 +83,12 @@ public sealed class MigrationImportService(
     public async Task<MigrationResult> ImportAsync(string source, byte[] content, CancellationToken ct = default) =>
         await ImportAsync(await ReadAsync(source, content, ct), ct);
 
-    private async Task<MigrationData> ReadAsync(string source, byte[] content, CancellationToken ct)
+    private async Task<MigrationData> ReadAsync(string source, byte[] content, CancellationToken ct) => Read(source, content, await HomeCurrencyAsync(ct));
+
+    /// <summary>What an export holds, read without the books (company setup reads the file before there's a company).</summary>
+    public MigrationData Read(string source, byte[] content, string currency)
     {
         ArgumentNullException.ThrowIfNull(content);
-        var currency = await HomeCurrencyAsync(ct);
         if (Enum.TryParse<MigrationSource>(source, ignoreCase: true, out var builtIn) && Enum.IsDefined(builtIn))
             return MigrationReaders.Read(builtIn, content, currency);
         var importer = plugins.Importer(source)

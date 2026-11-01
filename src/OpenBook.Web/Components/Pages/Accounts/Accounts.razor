@@ -22,6 +22,13 @@
     {
         <div class="alert error" role="alert">@_error</div>
     }
+    @if (MovedIn)
+    {
+        <div class="alert notice" role="status">
+            Your company is set up and your export is imported. Check the accounts below; the transactions are in the <a href="/journal">Journal</a>,
+            and customers, vendors and products in their lists. Enter open invoices and bills you still need to collect or pay, since imported transactions don't list in aging.
+        </div>
+    }
     @if (_imported is { } imported)
     {
         <div class="alert notice" role="status">Added @imported accounts. Rename, renumber or deactivate any you don't need.</div>
@@ -96,6 +103,10 @@
 
     [SupplyParameterFromQuery]
     private bool ShowInactive { get; set; }
+
+    // Arriving from company setup with an import.
+    [SupplyParameterFromQuery]
+    private bool MovedIn { get; set; }
 
     private string? _recommended;
     private string? _error;

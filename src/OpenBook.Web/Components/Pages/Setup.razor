@@ -1,8 +1,12 @@
 @page "/setup"
 @attribute [AllowAnonymous]
 @using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using OpenBook.Application.Import.Migration
 @using OpenBook.Domain.Companies
 @inject CompanySetupService SetupService
+@inject MigrationImportService ImportService
+@inject MigrationSetupService MigrationSetup
 @inject SetupState State
 @inject NavigationManager Navigation
 
@@ -16,9 +20,63 @@
     {
         <div class="alert error" role="alert">@_error</div>
     }
+    @if (_errorRows.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Row</th><th>Kind</th><th>Name</th><th>Problem</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _errorRows.Take(50))
+                    {
+                        <tr><td class="num">@row.Line</td><td>@row.Kind</td><td>@row.Name</td><td class="out-of-balance">@row.Message</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (Upload is { } upload)
+    {
+        <div class="alert notice" role="status">
+            <strong>Setting up from @upload.FileName.</strong> @upload.Summary
+            Creating the company imports all of it, or nothing if a row has a problem.
+            <a href="/setup">Use another file, or start without one</a>
+        </div>
+    }
+    else
+    {
+        <form method="post" enctype="multipart/form-data" @formname="read" @onsubmit="ReadAsync">
+            <AntiforgeryToken />
+            <fieldset>
+                <legend>Moving from QuickBooks?</legend>
+                <p class="hint muted">Upload your export: OpenBook fills in the company details it finds below, and imports your accounts, customers, vendors, products and transactions when you create the company. Or skip this and start with a starter chart of accounts.</p>
+                <div class="row">
+                    <div class="field">
+                        <label for="source">Export from</label>
+                        <select id="source" name="Source">
+                            @foreach (var (key, label) in ImportService.Sources())
+                            {
+                                <option value="@key" selected="@(key == Source)">@label</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="file">Export file</label>
+                        <input id="file" type="file" name="file" accept=".iif,.xml,.qbxml,.json,.gnucash,.gz,.csv,.txt" required />
+                    </div>
+                </div>
+                <p class="hint muted">
+                    Company details come from QuickBooks Desktop qbXML files with a company query, QuickBooks Online files with CompanyInfo, and GnuCash books.
+                    IIF files don't include them, so type those in yourself. The user guide's Moving in chapter says what to export from each program.
+                </p>
+                <button type="submit" class="secondary">Read the file</button>
+            </fieldset>
+        </form>
+    }
 
     <EditForm Model="Input" FormName="setup" OnValidSubmit="SetUpAsync" method="post">
         <DataAnnotationsValidator />
+        <input type="hidden" name="Input.ImportToken" value="@Input.ImportToken" />
 
         <fieldset>
             <legend>1. Company</legend>
@@ -89,14 +147,6 @@
                     <ValidationMessage For="() => Input.HomeCurrency" />
                 </div>
             </div>
-            <fieldset class="field">
-                <legend>How do you want to start?</legend>
-                <InputRadioGroup @bind-Value="Input.Start">
-                    <label class="check"><InputRadio Value="@StartFresh" /> With a starter chart of accounts</label>
-                    <label class="check"><InputRadio Value="@StartImport" /> By importing my books from QuickBooks (or GnuCash, Xero, Wave, FreshBooks)</label>
-                </InputRadioGroup>
-                <span class="hint">Importing comes next, once the company is created: you upload your QuickBooks export and see a preview before anything comes in.</span>
-            </fieldset>
         </fieldset>
 
         <fieldset>
@@ -122,15 +172,13 @@
             <p class="hint muted">If you forget it, someone with access to this computer can reset it by running OpenBook with <code>reset-password</code>.</p>
         </fieldset>
 
-        <button type="submit">Create company</button>
+        <button type="submit">@(Upload is null ? "Create company" : "Create company and import")</button>
     </EditForm>
 </div>
 
 @code {
-    private const string StartFresh = "fresh";
-    private const string StartImport = "import";
-
     private string? _error;
+    private IReadOnlyList<MigrationRow> _errorRows = [];
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -138,29 +186,134 @@
     [SupplyParameterFromForm]
     private SetupModel Input { get; set; } = default!;
 
+    [SupplyParameterFromForm(FormName = "read")]
+    private string? Source { get; set; }
+
+    private SetupUpload? Upload => State.Held(Input.ImportToken);
+
     protected override void OnInitialized() => Input ??= new();
+
+    private async Task ReadAsync()
+    {
+        var file = HttpContext.Request.Form.Files.GetFile("file");
+        var source = ImportService.Sources().FirstOrDefault(s => s.Key == Source).Key ?? nameof(MigrationSource.QuickBooksIif);
+        if (file is null || file.Length == 0)
+        {
+            _error = "Choose the export file to read.";
+            return;
+        }
+
+        if (file.Length > MigrationImportService.MaxBytes)
+        {
+            _error = "That file is larger than 20 MB. Set up the company first, then import lists and transactions separately with Move in from another program.";
+            return;
+        }
+
+        byte[] content;
+        using (var buffer = new MemoryStream())
+        {
+            await file.CopyToAsync(buffer, HttpContext.RequestAborted);
+            content = buffer.ToArray();
+        }
+
+        try
+        {
+            var company = MigrationSetupService.CompanyIn(source, content);
+            var data = ImportService.Read(source, content, company?.Currency ?? Input.HomeCurrency);
+            Fill(company);
+            Input.ImportToken = State.Hold(source, Path.GetFileName(file.FileName), content, Describe(data, company));
+        }
+        catch (DomainException ex)
+        {
+            _error = $"That file couldn't be read: {ex.Message}";
+        }
+    }
+
+    private void Fill(SourceCompany? company)
+    {
+        if (company is null)
+            return;
+        Input.CompanyName = company.Name ?? Input.CompanyName;
+        Input.LegalName = company.LegalName ?? Input.LegalName;
+        Input.Email = company.Email ?? Input.Email;
+        Input.Phone = company.Phone ?? Input.Phone;
+        Input.Address = company.Address ?? Input.Address;
+        Input.FiscalYearStartMonth = company.FiscalYearStartMonth ?? Input.FiscalYearStartMonth;
+        Input.HomeCurrency = company.Currency?.ToUpperInvariant() ?? Input.HomeCurrency;
+        if (company.BusinessType is { } type)
+        {
+            Input.BusinessType = type;
+            if (type == BusinessType.Nonprofit)
+                Input.Edition = Edition.Nonprofit;
+        }
+    }
+
+    private static string Describe(MigrationData data, SourceCompany? company)
+    {
+        var counts = new (int Count, string One, string Many)[]
+        {
+            (data.Accounts.Count(a => a.SkipReason is null), "account", "accounts"),
+            (data.Customers.Count(c => c.SkipReason is null), "customer", "customers"),
+            (data.Vendors.Count(v => v.SkipReason is null), "vendor", "vendors"),
+            (data.Items.Count(i => i.Type is not null), "product or service", "products and services"),
+            (data.Transactions.Count(t => t.SkipReason is null), "transaction", "transactions"),
+        }.Where(c => c.Count > 0).Select(c => $"{c.Count} {(c.Count == 1 ? c.One : c.Many)}").ToList();
+        var found = counts.Count == 0 ? "It has nothing to import." : $"It has {string.Join(", ", counts)}.";
+        var details = company is null
+            ? "It doesn't include the company's details, so fill them in below."
+            : "The company details below come from it; check them.";
+        return $"{found} {details}";
+    }
 
     private async Task SetUpAsync()
     {
+        var upload = Upload;
+        if (Input.ImportToken is { Length: > 0 } && upload is null)
+        {
+            _error = "The uploaded file is no longer held (it's kept for an hour). Upload it again.";
+            Input.ImportToken = null;
+            return;
+        }
+
+        var command = new SetUpCompanyCommand(
+            Input.CompanyName,
+            Input.BusinessType,
+            Input.HomeCurrency,
+            Input.FiscalYearStartMonth,
+            Input.Username,
+            Input.Password,
+            Input.LegalName,
+            Input.Email,
+            Input.Phone,
+            Input.Address,
+            Input.Edition);
         try
         {
-            var owner = await SetupService.SetUpAsync(new SetUpCompanyCommand(
-                Input.CompanyName,
-                Input.BusinessType,
-                Input.HomeCurrency,
-                Input.FiscalYearStartMonth,
-                Input.Username,
-                Input.Password,
-                Input.LegalName,
-                Input.Email,
-                Input.Phone,
-                Input.Address,
-                Input.Edition), HttpContext.RequestAborted);
+            User owner;
+            if (upload is null)
+            {
+                owner = await SetupService.SetUpAsync(command, HttpContext.RequestAborted);
+            }
+            else
+            {
+                // Nobody is signed in yet: the imported records are audited as made by the owner being created.
+                HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, User.NormalizeUsername(Input.Username))], "setup"));
+                var result = await MigrationSetup.SetUpAsync(command, upload.Source, upload.Content, HttpContext.RequestAborted);
+                if (result.Owner is null)
+                {
+                    _errorRows = [.. result.Result.Rows.Where(r => r.Status == MigrationRowStatus.Error)];
+                    _error = $"{_errorRows.Count} row(s) in {upload.FileName} have problems, so nothing was set up. Fix them in your old program or the file and upload it again.";
+                    Input.ImportToken = null;
+                    return;
+                }
+
+                owner = result.Owner;
+            }
 
             State.MarkSetUp();
             await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp, owner.Role));
-            // A new company has no accounts: the chart page offers starter charts, the import page brings in the old ones.
-            Navigation.NavigateTo(Input.Start == StartImport ? "/import/quickbooks?welcome=true" : "/accounts");
+            // Without an import the company has no accounts yet; that page offers starter charts.
+            Navigation.NavigateTo(upload is null ? "/accounts" : "/accounts?movedIn=true");
         }
         catch (DomainException ex)
         {
@@ -176,8 +329,6 @@
 
         [StringLength(200)]
         public string? LegalName { get; set; }
-
-        public string Start { get; set; } = StartFresh;
 
         public BusinessType BusinessType { get; set; } = BusinessType.SoleProprietorship;
 
@@ -210,5 +361,8 @@
         [Required(ErrorMessage = "Repeat the password.")]
         [Compare(nameof(Password), ErrorMessage = "The passwords don't match.")]
         public string ConfirmPassword { get; set; } = string.Empty;
+
+        /// <summary>The export read by "Read the file", held by <see cref="SetupState"/>.</summary>
+        public string? ImportToken { get; set; }
     }
 }
