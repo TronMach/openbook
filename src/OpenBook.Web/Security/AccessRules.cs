@@ -207,6 +207,9 @@ public static class AccessRules
     /// <summary>The area a path belongs to (pages, form endpoints and the API); null when it has none.</summary>
     public static string? AreaOf(PathString path)
     {
+        // Search is open to everyone, like the page; its results are filtered by area.
+        if (path.StartsWithSegments("/api/search"))
+            return null;
         if (path.StartsWithSegments("/api") && ApiScopes.AreaOf(path.Value ?? "/") is { } apiArea)
             return apiArea;
         foreach (var (prefix, area) in PageAreas)
@@ -238,15 +241,7 @@ public static class AccessRules
     }
 
     /// <summary>A permission set's level in an area (null: none); for users with a built-in role, their role.</summary>
-    public static UserRole? LevelIn(ClaimsPrincipal user, string area)
-    {
-        ArgumentNullException.ThrowIfNull(user);
-        if (!user.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim))
-            return RoleOf(user);
-        var prefix = area + ":";
-        return user.FindAll(WebSecurity.AreaClaim).Select(c => c.Value).FirstOrDefault(v => v.StartsWith(prefix, StringComparison.Ordinal)) is { } claim
-            && Enum.TryParse<UserRole>(claim[prefix.Length..], out var level) ? level : null;
-    }
+    public static UserRole? LevelIn(ClaimsPrincipal user, string area) => AuthClaims.LevelIn(user, area);
 
     /// <summary>Whether a link to <paramref name="href"/> would open for the user (menus, shortcuts, search results).</summary>
     public static bool CanReach(this ClaimsPrincipal user, string href)

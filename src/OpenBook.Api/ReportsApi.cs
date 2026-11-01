@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
@@ -180,7 +181,14 @@ internal static class ReportsApi
         api.MapPut("/accounts/tax-lines", async (Dictionary<Guid, string?> map, AccountService accounts, CancellationToken ct) =>
             new { Changed = await accounts.MapTaxLinesAsync(map, ct) });
 
-        api.MapGet("/search", async (string? q, SearchService s, CancellationToken ct) => await s.SearchAsync(q, ct));
+        // People with a permission set see only results in the areas they may view.
+        api.MapGet("/search", async (string? q, ClaimsPrincipal user, SearchService s, CancellationToken ct) =>
+        {
+            var results = await s.SearchAsync(q, ct);
+            return AuthClaims.HasPermissionSet(user)
+                ? results with { Hits = results.Hits.Where(h => AuthClaims.LevelIn(user, SearchAreas.Of(h.Kind)) is not null).ToList() }
+                : results;
+        });
     }
 
     /// <summary>Opens in the browser's viewer (the page links it in a new tab) and still saves under a sensible name.</summary>

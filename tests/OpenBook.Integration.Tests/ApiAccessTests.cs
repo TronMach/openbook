@@ -81,6 +81,13 @@ public sealed class ApiAccessTests : IAsyncLifetime
         Assert.Contains("access to banking", await banking.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
         Assert.Equal("/access-denied?needed=ViewOnly&area=banking", (await client.GetAsync("/banking")).Headers.Location!.OriginalString);
+
+        // Search answers everyone, leaving out what the set can't view.
+        Assert.Equal(HttpStatusCode.Created, (await Client(UserRole.Accountant).PostAsJsonAsync("/api/accounts", new { name = "Shop fittings", type = "Expense" })).StatusCode);
+        var found = await client.GetStringAsync("/api/search?q=shop");
+        Assert.Contains("\"Shop\"", found, StringComparison.Ordinal);
+        Assert.DoesNotContain("Shop fittings", found, StringComparison.Ordinal);
+        Assert.Contains("Shop fittings", await Client(UserRole.ViewOnly).GetStringAsync("/api/search?q=shop"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -477,6 +484,7 @@ public sealed class AccessRulesTests
     [InlineData("/api/accounts", "ledger")]
     [InlineData("/api/audit", "ledger")]
     [InlineData("/api/me", null)]
+    [InlineData("/api/search", null)]
     [InlineData("/", null)]
     [InlineData("/search", null)]
     public void Paths_belong_to_areas(string path, string? area) => Assert.Equal(area, AccessRules.AreaOf(new PathString(path)));

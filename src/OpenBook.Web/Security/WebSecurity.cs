@@ -85,8 +85,8 @@ public static class WebSecurity
     }
 
     /// <summary>On the principal of a user with a permission set; their levels are <see cref="AreaClaim"/>s ("sales:Standard").</summary>
-    public const string PermissionSetClaim = "openbook:permission-set";
-    public const string AreaClaim = "openbook:area";
+    public const string PermissionSetClaim = AuthClaims.PermissionSet;
+    public const string AreaClaim = AuthClaims.Area;
 
     /// <summary>
     /// Issues the sign-in cookie. Re-issuing it for the same user (after a password change) keeps the browser's

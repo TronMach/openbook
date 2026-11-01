@@ -25,6 +25,18 @@ public enum SearchKind
     JournalEntry,
 }
 
+/// <summary>The area (as in permission sets and API key scopes) each kind of result belongs to.</summary>
+public static class SearchAreas
+{
+    public static string Of(SearchKind kind) => kind switch
+    {
+        SearchKind.Customer or SearchKind.Item or SearchKind.Invoice or SearchKind.SalesReceipt or SearchKind.CustomerPayment => "sales",
+        SearchKind.Vendor or SearchKind.Bill or SearchKind.BillPayment => "purchases",
+        SearchKind.BankTransaction => "banking",
+        _ => "ledger",
+    };
+}
+
 public sealed record SearchHit(SearchKind Kind, Guid Id, string Title, string? Detail = null, DateOnly? Date = null, decimal? Amount = null);
 
 public sealed record SearchResults(string Query, IReadOnlyList<SearchHit> Hits, bool Truncated);
