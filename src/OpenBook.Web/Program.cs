@@ -29,6 +29,8 @@ var connectionString = builder.Configuration.GetConnectionString("OpenBook") ?? 
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
     new OpenBook.Infrastructure.Payments.ReceiptTextExtractor(builder.Configuration["OpenBook:Ocr:TesseractPath"]));
+// Webhooks and bank connections go to addresses people type in: private networks only when allowed.
+builder.Services.AddSingleton(new OpenBook.Infrastructure.Net.OutboundPolicy(builder.Configuration.GetValue<bool>("OpenBook:Outbound:AllowPrivateNetworks")));
 // Add-ins load before the services that use them (the report catalog, the importer).
 builder.Services.AddSingleton(OpenBook.Web.Plugins.PluginLoader.Load(
     Path.GetFullPath(builder.Configuration["OpenBook:Plugins:Path"] ?? "plugins"),

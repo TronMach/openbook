@@ -94,10 +94,11 @@ public static class DependencyInjection
         services.TryAddSingleton<OpenBook.Application.Forms.IGoogleFonts>(_ => new Forms.GoogleFontsClient());
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IDataExporter, DataExporter>();
+        services.TryAddSingleton(new Net.OutboundPolicy());
         services.AddSingleton<OpenBook.Application.Webhooks.IWebhookSender, HttpWebhookSender>();
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.FolderBackupTarget>();
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.S3BackupTarget>();
-        services.AddSingleton<OpenBook.Application.Banking.IBankConnectionClient, Banking.SimpleFinClient>();
+        services.AddSingleton<OpenBook.Application.Banking.IBankConnectionClient>(sp => new Banking.SimpleFinClient(sp.GetRequiredService<Net.OutboundPolicy>()));
         services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway, Payments.StripeGateway>();
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));

@@ -15,8 +15,9 @@ public sealed class SimpleFinClient : IBankConnectionClient, IDisposable
     private const int MaxDaysPerRequest = 60;
     private readonly HttpClient _client;
 
-    public SimpleFinClient()
-        : this(new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+    /// <param name="policy">The claim and access URLs come from the setup token someone pastes in, so they're kept off private networks.</param>
+    public SimpleFinClient(Net.OutboundPolicy policy)
+        : this(Net.PublicNetwork.Handler(policy))
     {
     }
 

@@ -41,6 +41,8 @@ Programs send the key as `Authorization: Bearer obk_…`. The **REST API** link 
 
 Administrators can have OpenBook tell another system whenever something changes, for example to update a CRM when an invoice is paid. **Settings → Webhooks → Add webhook**: the **address** to call and the **events**, comma-separated (`*` for everything, or patterns like `invoice.*`, `*.voided`, `payment.created`). Each call is signed with a secret so the receiver can check it came from OpenBook. Failed calls are retried for several hours; the delivery log shows each attempt, with **Send again** and **Send a test event**.
 
+Webhook addresses must be on the internet: OpenBook won't call addresses on the server's own network (such as `localhost`, `192.168.…` or `10.…`), so a webhook can't be used to reach machines that aren't meant to be public. If you do want to call a system on your own network, whoever runs the OpenBook server can allow it with the `OpenBook:Outbound:AllowPrivateNetworks` setting.
+
 ## The command-line tool
 
 The `openbook` command talks to a running OpenBook server through the API, which is handy for scripts and scheduled jobs. From the OpenBook folder:
