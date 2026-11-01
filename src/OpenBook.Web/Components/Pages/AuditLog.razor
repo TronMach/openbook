@@ -75,7 +75,7 @@
                         var record = entry.Record;
                         var link = Links.ForAuditEntity(record.EntityType, record.EntityId);
                         <tr>
-                            <td class="nowrap">@record.OccurredAt.ToLocalTime().ToString("g")</td>
+                            <td class="nowrap">@record.OccurredAt.InCompanyTime().ToString("g")</td>
                             <td>@record.Actor</td>
                             <td>@ActionName(record.Action)</td>
                             <td>

@@ -30,7 +30,7 @@
                         <tr>
                             <td><a href="/banking/connections/@c.Id">@c.Name</a></td>
                             <td>@c.Accounts.Count(a => a.AccountId is not null) of @c.Accounts.Count linked</td>
-                            <td>@(c.LastSyncAt is { } at ? at.ToLocalTime().ToString("g") : "Never")</td>
+                            <td>@(c.LastSyncAt is { } at ? at.InCompanyTime().ToString("g") : "Never")</td>
                             <td>
                                 @if (!c.IsActive)
                                 {

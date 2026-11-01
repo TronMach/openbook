@@ -42,7 +42,7 @@
                         Connected@(_channel.ShopDomain is { } shop ? $" to {shop}" : ""). Payouts are fetched every few hours and wait below to be posted.
                         @if (_channel.LastSyncAt is { } at)
                         {
-                            <span class="muted">Last fetched @at.ToLocalTime().ToString("g")@(_channel.SyncedThrough is { } t ? $", payouts through {Labels.Date(t)}" : "").</span>
+                            <span class="muted">Last fetched @at.InCompanyTime().ToString("g")@(_channel.SyncedThrough is { } t ? $", payouts through {Labels.Date(t)}" : "").</span>
                         }
                     </p>
                     @if (_channel.LastSyncFailed)

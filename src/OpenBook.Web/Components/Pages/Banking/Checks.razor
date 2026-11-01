@@ -65,7 +65,7 @@
                                 </td>
                                 <td class="muted">@_chart.FullName(c.AccountId)</td>
                                 <td class="num">@Labels.Amount(c.Amount)</td>
-                                <td class="muted">@(c.PrintedAt is { } p ? p.ToLocalTime().ToString("d") : "")</td>
+                                <td class="muted">@(c.PrintedAt is { } p ? p.InCompanyTime().ToString("d") : "")</td>
                             </tr>
                         }
                     </tbody>

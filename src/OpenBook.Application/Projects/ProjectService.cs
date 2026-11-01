@@ -212,7 +212,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         if ((await RunningAsync(details.WorkerId, ct)).Count > 0)
             throw new DomainException("time.timer_running", "That person already has a timer running. Stop it first.");
         var now = clock.UtcNow;
-        details = details with { Date = DateOnly.FromDateTime(now.ToLocalTime().Date) };
+        details = details with { Date = CompanyTime.TodayAt(now, CompanyTime.Zone) };
         var (billRate, costRate, source) = await RatesAsync(details, ct);
         var entry = TimeEntry.Start(details, billRate, costRate, now, source);
         store.Add(entry);

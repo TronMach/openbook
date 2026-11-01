@@ -36,7 +36,7 @@
 
     <p class="muted">
         @_companyName · @_report.AccountName · statement ending @Labels.Date(r.StatementDate) ·
-        reconciled @r.CompletedAt?.ToLocalTime().ToString("g") by @r.CompletedBy
+        reconciled @r.CompletedAt?.InCompanyTime().ToString("g") by @r.CompletedBy
     </p>
 
     <div class="card">

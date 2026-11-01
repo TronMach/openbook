@@ -46,12 +46,12 @@
     @if (_changes.Count > 0)
     {
         var last = _changes[^1];
-        <p class="muted no-print">@L["Changed {0} by {1}: {2}", last.At.ToLocalTime().ToString("g"), last.By, last.Reason]</p>
+        <p class="muted no-print">@L["Changed {0} by {1}: {2}", last.At.InCompanyTime().ToString("g"), last.By, last.Reason]</p>
     }
 
     @if (_invoice.LastEmailedAt is { } emailed)
     {
-        <p class="muted no-print">Emailed @emailed.ToLocalTime().ToString("g").</p>
+        <p class="muted no-print">Emailed @emailed.InCompanyTime().ToString("g").</p>
     }
 
     @if (_error is not null)
@@ -217,7 +217,7 @@
     @if (_reminders.Count > 0)
     {
         <p class="muted no-print">
-            Payment reminders sent: @string.Join("; ", _reminders.Select(r => $"{r.SentAt.ToLocalTime():g} to {r.To}")).
+            Payment reminders sent: @string.Join("; ", _reminders.Select(r => $"{r.SentAt.InCompanyTime():g} to {r.To}")).
         </p>
     }
 

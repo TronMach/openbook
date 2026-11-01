@@ -21,7 +21,7 @@
             {
                 <li>
                     <a href="/attachments/@file.Id" target="_blank">@file.FileName</a>
-                    <span class="muted">@Size(file.Size) · @file.AddedBy · @file.AddedAt.ToLocalTime().ToString("d")</span>
+                    <span class="muted">@Size(file.Size) · @file.AddedBy · @file.AddedAt.InCompanyTime().ToString("d")</span>
                     <form method="post" action="/attachments/@file.Id/remove" class="inline-form">
                         <AntiforgeryToken />
                         <input type="hidden" name="returnUrl" value="@ReturnUrl" />

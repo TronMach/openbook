@@ -17,7 +17,7 @@
                     @foreach (var link in _links)
                     {
                         <tr class="@(link.Status == PaymentLinkStatus.Expired ? "inactive" : null)">
-                            <td>@link.CreatedAt.ToLocalTime().ToString("g")</td>
+                            <td>@link.CreatedAt.InCompanyTime().ToString("g")</td>
                             <td class="num">@Labels.Amount(link.Amount)</td>
                             <td>
                                 @link.Status

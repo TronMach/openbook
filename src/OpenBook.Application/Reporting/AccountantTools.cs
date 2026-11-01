@@ -359,7 +359,7 @@ public sealed class AccountantPackageService(
             await using (var stream = readme.Open())
             {
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(
-                    $"{company.Name}: accountant's package for {from:MMM d, yyyy} to {to:MMM d, yyyy}, made {clock.UtcNow.ToLocalTime():g} by {user.Actor}.\r\n\r\n"
+                    $"{company.Name}: accountant's package for {from:MMM d, yyyy} to {to:MMM d, yyyy}, made {clock.UtcNow.InCompanyTime():g} by {user.Actor}.\r\n\r\n"
                     + "Reports are on the company's default basis. The 1099 filing data has full taxpayer IDs: keep it private.\r\n"), ct);
             }
         }

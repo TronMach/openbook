@@ -32,7 +32,7 @@
     @if (_entry.Status == JournalEntryStatus.Voided)
     {
         <div class="alert notice" role="status">
-            Voided on @_entry.VoidedAt?.ToLocalTime().ToString("g"): @_entry.VoidReason.
+            Voided on @_entry.VoidedAt?.InCompanyTime().ToString("g"): @_entry.VoidReason.
             @if (_reversalId is { } reversalId)
             {
                 <a href="/journal/@reversalId">See the reversing entry</a>
@@ -56,7 +56,7 @@
             <dt>Counts toward</dt>
             <dd>@Labels.For(_entry.Basis)</dd>
             <dt>Posted</dt>
-            <dd>@_entry.PostedAt.ToLocalTime().ToString("g")</dd>
+            <dd>@_entry.PostedAt.InCompanyTime().ToString("g")</dd>
         </dl>
     </div>
 

@@ -41,7 +41,7 @@
     @if (_changes.Count > 0)
     {
         var last = _changes[^1];
-        <p class="muted no-print">Changed @last.At.ToLocalTime().ToString("g") by @last.By: @last.Reason</p>
+        <p class="muted no-print">Changed @last.At.InCompanyTime().ToString("g") by @last.By: @last.Reason</p>
     }
 
     <div class="card">

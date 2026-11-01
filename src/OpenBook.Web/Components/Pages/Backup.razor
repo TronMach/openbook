@@ -33,7 +33,7 @@
     @if (_schedule.LastAttemptAt is { } last)
     {
         <p>
-            Last run @last.ToLocalTime().ToString("g") ·
+            Last run @last.InCompanyTime().ToString("g") ·
             @if (_schedule.LastError is { } failure)
             {
                 <span class="out-of-balance">failed: @failure</span>

@@ -43,7 +43,7 @@
                 @foreach (var r in _receipts)
                 {
                     <tr class="@(r.Status == ReceiptStatus.Dismissed ? "inactive" : null)">
-                        <td>@r.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td>@r.CreatedAt.InCompanyTime().ToString("g")</td>
                         <td><a href="/purchases/receipts/@r.Id">@r.FileName</a></td>
                         <td>@r.VendorName</td>
                         <td>@(r.Date is { } d ? Labels.Date(d) : "")</td>

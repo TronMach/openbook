@@ -9,7 +9,7 @@
                 @foreach (var change in Changes)
                 {
                     <tr>
-                        <td>@change.At.ToLocalTime().ToString("g")</td>
+                        <td>@change.At.InCompanyTime().ToString("g")</td>
                         <td>@change.By</td>
                         <td>@change.Reason</td>
                         <td class="num">@Labels.Amount(change.TotalBefore)</td>

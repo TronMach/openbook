@@ -43,7 +43,7 @@
     }
     @if (_estimate.LastEmailedAt is { } emailed)
     {
-        <p class="muted no-print">Emailed @emailed.ToLocalTime().ToString("g").</p>
+        <p class="muted no-print">Emailed @emailed.InCompanyTime().ToString("g").</p>
     }
 
     <SalesDocument DocumentId="_estimate.Id" Company="_company" Customer="_customer" CustomerLabel="Prepared for" Facts="Facts" Lines="_estimate.Lines"

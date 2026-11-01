@@ -39,7 +39,7 @@
                         <td>
                             @if (s.LastRunAt is { } at)
                             {
-                                <span>@at.ToLocalTime().ToString("g")</span>
+                                <span>@at.InCompanyTime().ToString("g")</span>
                                 @if (s.LastRunFailed)
                                 {
                                     <div class="muted">Failed: @s.LastError</div>

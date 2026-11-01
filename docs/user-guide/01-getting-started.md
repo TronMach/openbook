@@ -65,7 +65,7 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 
 Choose a username and a password of at least 8 characters. This first person is an administrator and can add everyone else later.
 
-Select **Create company**. You're signed in and taken to the home page, which has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, and when the scheduled jobs run. The usual order is:
+Select **Create company**. You're signed in and taken to the home page, which has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
 
 1. Pick a chart of accounts ([chapter 3](03-chart-of-accounts.md)).
 2. Enter opening balances, if you're moving from other books.

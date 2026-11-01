@@ -49,7 +49,7 @@
             <div class="actions"><button type="submit" class="secondary">Show checks</button></div>
             @if (_settings?.LastExportedThrough is { } through)
             {
-                <p class="muted">Last exported @_settings.LastExportedAt?.ToLocalTime().ToString("g"), covering checks through @Labels.Date(through).</p>
+                <p class="muted">Last exported @_settings.LastExportedAt?.InCompanyTime().ToString("g"), covering checks through @Labels.Date(through).</p>
             }
         </form>
 

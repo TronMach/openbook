@@ -172,7 +172,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     {
         await using var scope = scopes.CreateAsyncScope();
         var sp = scope.ServiceProvider;
-        var today = DateOnly.FromDateTime(clock.UtcNow.ToLocalTime().Date);
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         var workers = await sp.GetRequiredService<WorkerService>().ListAsync(ct: ct);
         var me = await sp.GetRequiredService<WorkerService>().ForCurrentUserAsync(ct);
         var customers = await sp.GetRequiredService<CustomerService>().ListAsync(today, ct: ct);

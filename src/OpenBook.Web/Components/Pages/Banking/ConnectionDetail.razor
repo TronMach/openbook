@@ -36,14 +36,14 @@
         <div class="card">
             <p>
                 @(_connection.Provider == BankConnectionProvider.SimpleFin ? "SimpleFIN Bridge" : _connection.Provider.ToString()) ·
-                connected @_connection.CreatedAt.ToLocalTime().ToString("d") ·
+                connected @_connection.CreatedAt.InCompanyTime().ToString("d") ·
                 @if (!_connection.IsActive)
                 {
                     <span class="badge">Disconnected</span>
                 }
                 else
                 {
-                    <span>last sync @(_connection.LastSyncAt is { } at ? at.ToLocalTime().ToString("g") : "never")</span>
+                    <span>last sync @(_connection.LastSyncAt is { } at ? at.InCompanyTime().ToString("g") : "never")</span>
                 }
             </p>
             @if (_connection.LastError is { } problem)

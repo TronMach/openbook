@@ -198,7 +198,7 @@
                 @foreach (var (pending, assembly, preview) in _pending)
                 {
                     <tr>
-                        <td>@pending.CreatedAt.ToLocalTime().ToString("d") @pending.Reference</td>
+                        <td>@pending.CreatedAt.InCompanyTime().ToString("d") @pending.Reference</td>
                         <td><a href="/items/@assembly.Id#components">@assembly.Name</a></td>
                         <td class="num">@Labels.Quantity(pending.Quantity)</td>
                         <td>

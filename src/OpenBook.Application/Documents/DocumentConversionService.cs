@@ -264,5 +264,5 @@ public sealed class DocumentConversionService(
         await store.SaveChangesAsync(ct);
     }
 
-    private DateOnly Today() => DateOnly.FromDateTime(clock.UtcNow.ToLocalTime().Date);
+    private DateOnly Today() => CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
 }

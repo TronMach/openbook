@@ -24,14 +24,14 @@
                     {
                         <td><a href="/sales/invoices/@e.InvoiceId">@(Invoices.TryGetValue(e.InvoiceId, out var label) ? label : "Invoice")</a></td>
                     }
-                    <td>@e.SendAt.ToLocalTime().ToString("g")</td>
+                    <td>@e.SendAt.InCompanyTime().ToString("g")</td>
                     <td>@e.To</td>
                     <td>@e.Subject</td>
                     <td>
                         @(e.Status switch
                         {
                             ScheduledEmailStatus.Scheduled => "Waiting",
-                            ScheduledEmailStatus.Sent => $"Sent {e.SentAt?.ToLocalTime():g}",
+                            ScheduledEmailStatus.Sent => $"Sent {e.SentAt?.InCompanyTime():g}",
                             ScheduledEmailStatus.Failed => "Not sent",
                             _ => "Cancelled",
                         })

@@ -31,7 +31,7 @@
                 @foreach (var (draft, device) in _waiting)
                 {
                     <tr>
-                        <td>@draft.CapturedAt.ToLocalTime().ToString("g")</td>
+                        <td>@draft.CapturedAt.InCompanyTime().ToString("g")</td>
                         <td>@draft.Kind</td>
                         <td>@device.Name</td>
                         <td>@draft.Error</td>
@@ -67,7 +67,7 @@
                     <tr class="@(d.IsActive ? null : "inactive")">
                         <td>@d.Name</td>
                         <td>@Labels.Date(DateOnly.FromDateTime(d.CreatedAt.LocalDateTime))</td>
-                        <td>@(d.LastSyncAt?.ToLocalTime().ToString("g") ?? "")</td>
+                        <td>@(d.LastSyncAt?.InCompanyTime().ToString("g") ?? "")</td>
                         <td>
                             @if (d.IsActive)
                             {

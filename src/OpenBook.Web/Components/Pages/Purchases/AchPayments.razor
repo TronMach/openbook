@@ -111,7 +111,7 @@
                 @foreach (var b in _batches)
                 {
                     <tr>
-                        <td>@b.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td>@b.CreatedAt.InCompanyTime().ToString("g")</td>
                         <td>@Labels.Date(b.EffectiveDate)</td>
                         <td class="num">@b.EntryCount</td>
                         <td class="num">@Labels.Amount(b.Total)</td>

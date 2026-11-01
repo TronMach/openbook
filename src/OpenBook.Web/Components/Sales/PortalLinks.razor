@@ -28,8 +28,8 @@
                 {
                     <tr class="@(link.IsActive ? null : "inactive")">
                         <td><code>@link.Hint…</code></td>
-                        <td>@link.CreatedAt.ToLocalTime().ToString("g") by @link.CreatedBy</td>
-                        <td>@(link.LastUsedAt?.ToLocalTime().ToString("g") ?? "Never")</td>
+                        <td>@link.CreatedAt.InCompanyTime().ToString("g") by @link.CreatedBy</td>
+                        <td>@(link.LastUsedAt?.InCompanyTime().ToString("g") ?? "Never")</td>
                         <td>
                             @if (link.IsActive)
                             {

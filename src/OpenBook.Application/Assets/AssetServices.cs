@@ -362,7 +362,7 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         {
             var account = await accounts.CheckAsync(proceedsId, "account the loan went into", ct,
                 AccountType.Bank, AccountType.OtherCurrentAsset, AccountType.FixedAsset, AccountType.OtherAsset);
-            var date = command.ProceedsDate ?? DateOnly.FromDateTime(clock.UtcNow.ToLocalTime().Date);
+            var date = command.ProceedsDate ?? CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
             var entry = await engine.StageAsync(new PostJournalEntryCommand(date,
                 [JournalLineDraft.Dr(account.Id, loan.Principal), JournalLineDraft.Cr(loan.LiabilityAccountId, loan.Principal)],
                 $"Loan received · {loan.Name}", Loan.Source, loan.Id), ct);

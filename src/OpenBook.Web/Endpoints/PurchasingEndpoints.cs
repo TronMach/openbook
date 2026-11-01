@@ -129,7 +129,7 @@ public static class PurchasingEndpoints
         {
             if (await ach.GetBatchAsync(id, ct) is not { } batch)
                 return Results.NotFound();
-            var name = FormattableString.Invariant($"ach-{batch.CreatedAt.ToLocalTime():yyyyMMdd}-{batch.FileIdModifier}.txt");
+            var name = FormattableString.Invariant($"ach-{batch.CreatedAt.InCompanyTime():yyyyMMdd}-{batch.FileIdModifier}.txt");
             http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = name }.ToString();
             return Results.Bytes(Encoding.ASCII.GetBytes(batch.Content), "text/plain");
         }).RequireAuthorization();

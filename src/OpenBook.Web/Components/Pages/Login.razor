@@ -62,7 +62,7 @@
                 Navigation.NavigateTo(WebSecurity.SafeReturnUrl(ReturnUrl));
                 break;
             case SignInStatus.LockedOut:
-                _error = $"Too many failed attempts. Try again after {result.LockedUntil!.Value.ToLocalTime():t}.";
+                _error = $"Too many failed attempts. Try again after {result.LockedUntil!.Value.InCompanyTime():t}.";
                 break;
             default:
                 _error = "That username and password don't match.";

@@ -20,6 +20,9 @@ public static class CompanyTime
 
     public static void Use(Company? company) => Volatile.Write(ref _zone, company?.TimeZone ?? TimeZoneInfo.Local);
 
+    /// <summary>A moment as the company's clocks show it: how timestamps (audit, sessions, emails sent) are displayed.</summary>
+    public static DateTimeOffset InCompanyTime(this DateTimeOffset instant) => TimeZoneInfo.ConvertTime(instant, Zone);
+
     /// <summary>The calendar day at <paramref name="instant"/> in <paramref name="zone"/>.</summary>
     public static DateOnly TodayAt(DateTimeOffset instant, TimeZoneInfo zone) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);

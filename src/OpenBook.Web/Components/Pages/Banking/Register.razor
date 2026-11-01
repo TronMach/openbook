@@ -112,7 +112,7 @@
                             </td>
                             <td class="num">@Labels.Amount(r.StatementEndingBalance)</td>
                             <td>@(r.Status == ReconciliationStatus.Completed ? "Reconciled" : "In progress")</td>
-                            <td>@r.CompletedAt?.ToLocalTime().ToString("g") @r.CompletedBy</td>
+                            <td>@r.CompletedAt?.InCompanyTime().ToString("g") @r.CompletedBy</td>
                         </tr>
                     }
                 </tbody>
