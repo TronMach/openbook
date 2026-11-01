@@ -1,0 +1,99 @@
+@using System.Security.Claims
+@using OpenBook.Domain.Companies
+
+@* The simple view's menu bar: drop-down menus by task, named the way people who used desktop accounting software
+   expect. Every label is written out so the string catalog finds it; links people can't reach are left out. *@
+<nav class="menubar" aria-label="@L["Menu"]">
+    @Menu(L["Company"],
+        ("/settings", L["Company information"]),
+        ("/accounts", L["Chart of Accounts"]),
+        ("/backup", L["Back Up Company"]),
+        ("/settings/users", L["Users"]))
+    @Menu(Edition switch
+        {
+            Edition.Nonprofit => L["Donors"],
+            Edition.ProfessionalServices => L["Clients"],
+            _ => L["Customers"],
+        },
+        (Edition switch
+        {
+            Edition.Nonprofit => ("/customers", L["Donor List"]),
+            Edition.ProfessionalServices => ("/customers", L["Client List"]),
+            _ => ("/customers", L["Customer List"]),
+        }),
+        Edition == Edition.Nonprofit ? ("/nonprofit/gifts/new", L["Record a Gift"]) : default,
+        Edition == Edition.ProfessionalServices ? ("/time", L["Enter Time"]) : default,
+        ("/sales/estimates/new", L["Create Estimates"]),
+        ("/sales/invoices/new", L["Create Invoices"]),
+        ("/sales/receipts/new", L["Enter Sales Receipts"]),
+        ("/sales/payments/new", L["Receive Payments"]),
+        ("/sales/credit-memos/new", L["Create Credit Memos"]),
+        Edition == Edition.ECommerce ? ("/sales/channels", L["Sales Channels and Payouts"]) : default,
+        ("/sales", L["All Sales"]))
+    @Menu(L["Vendors"],
+        ("/vendors", L["Vendor List"]),
+        ("/purchases/orders/new", L["Create Purchase Orders"]),
+        ("/purchases/bills/new", L["Enter Bills"]),
+        ("/purchases/pay-bills", L["Pay Bills"]),
+        ("/purchases/vendor-credits/new", L["Enter Vendor Credits"]),
+        ("/purchases", L["All Purchases"]))
+    @Menu(L["Inventory"],
+        ("/items", L["Item List"]),
+        ("/items/new", L["New Item"]),
+        ("/purchases/orders", L["Receive Inventory"]),
+        ("/inventory/adjustments/new", L["Adjust Quantity on Hand"]),
+        ("/inventory/builds/new", L["Build Assemblies"]),
+        ("/inventory", L["Stock on Hand"]))
+    @Menu(L["Banking"],
+        ("/banking/write-checks", L["Write Checks"]),
+        ("/banking/deposits/new", L["Make Deposits"]),
+        ("/banking/transfer", L["Transfer Funds"]),
+        ("/banking", L["Registers and Reconciling"]),
+        ("/banking/checks", L["Print Checks"]))
+    @Menu(L["Reports"],
+        ("/reports/profit-and-loss", L["Profit & Loss"]),
+        ("/reports/balance-sheet", L["Balance Sheet"]),
+        ("/reports/ar-aging", L["Who Owes You"]),
+        ("/reports/ap-aging", L["What You Owe"]),
+        ("/reports/sales-by-customer", L["Sales by Customer"]),
+        ("/reports/sales-by-item", L["Sales by Item"]),
+        ("/reports/inventory-stock", L["Stock Status"]),
+        ("/reports", L["All Reports"]))
+    <form method="post" action="/account/view" class="view-switch">
+        <AntiforgeryToken />
+        <input type="hidden" name="view" value="Full" />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <button type="submit" class="link" title="@L["Every area of OpenBook in the menu"]">@L["Switch to full view"]</button>
+    </form>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public ClaimsPrincipal User { get; set; } = default!;
+
+    [Parameter]
+    public Edition Edition { get; set; }
+
+    [Parameter, EditorRequired]
+    public string ReturnUrl { get; set; } = "/";
+
+    // A menu of links (a default tuple is a link this edition doesn't have); left out when the person can reach none.
+    private RenderFragment Menu(string title, params (string? Href, string? Label)[] links)
+    {
+        var shown = links.Where(l => l.Href is not null && User.CanReach(l.Href)).ToList();
+        return @<text>
+            @if (shown.Count > 0)
+            {
+                <details class="menu">
+                    <summary>@title</summary>
+                    <div class="menu-list">
+                        @foreach (var (href, label) in shown)
+                        {
+                            <a href="@href">@label</a>
+                        }
+                    </div>
+                </details>
+            }
+        </text>;
+    }
+}

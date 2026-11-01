@@ -5,6 +5,7 @@
 Every page has the same bar across the top:
 
 - **The menu**: Home, Accounts, Banking, Sales, Purchases, Inventory, Projects, Journal, Reports and Dashboard (the order depends on your edition, below). **Settings** appears for accountants and administrators, **Backup** for administrators.
+- **Simple view** switches you to the simple view: a menu bar by task and a home page that walks through each step (see [The simple view](28-simple-view.md)). In the simple view, **Switch to full view** at the right of the menu bar comes back.
 - **Search** finds customers, vendors, products, accounts and transactions.
 - **Your username** opens your password and sign-in sessions.
 - **The region code** (for example `en-US`) opens language and region.

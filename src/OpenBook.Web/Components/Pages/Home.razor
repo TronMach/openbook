@@ -1,9 +1,17 @@
 @page "/"
+@using OpenBook.Web.Components.Home
 @inject ICompanyStore Companies
+@inject ViewModeService Views
+@inject HomeWorkflowService Workflow
 
 <PageTitle>@(_company?.Name ?? "OpenBook")</PageTitle>
 
-@if (_company is not null)
+@if (_company is not null && _figures is not null)
+{
+    <h1>@_company.Name</h1>
+    <WorkflowHome F="_figures" User="HttpContext.User" Edition="_company.Edition" />
+}
+else if (_company is not null)
 {
     <h1>@_company.Name</h1>
 
@@ -56,6 +64,13 @@
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
-    protected override async Task OnInitializedAsync() =>
+    // Set in the simple view only, which shows the workflow instead of the shortcuts and getting started.
+    private WorkflowFigures? _figures;
+
+    protected override async Task OnInitializedAsync()
+    {
         _company = await Companies.GetCompanyAsync(HttpContext.RequestAborted);
+        if (_company is not null && (await Views.CurrentAsync(HttpContext.RequestAborted)).Mode == OpenBook.Domain.Companies.ViewMode.Simple)
+            _figures = await Workflow.FiguresAsync(CompanyTime.Today, HttpContext.RequestAborted);
+    }
 }

@@ -1,0 +1,61 @@
+@using System.Security.Claims
+@using OpenBook.Domain.Companies
+
+@* The simple view's shortcut column: the few places a one-person business goes every day, plus its edition's own. *@
+<nav class="shortcuts" aria-label="@L["Shortcuts"]">
+    @Link("/", L["Home"], Icons.Home, NavLinkMatch.All)
+    @Link("/customers", Edition switch
+    {
+        Edition.Nonprofit => L["Donors"],
+        Edition.ProfessionalServices => L["Clients"],
+        _ => L["Customers"],
+    }, Icons.People)
+    @if (Edition == Edition.ProfessionalServices)
+    {
+        @Link("/time", L["Time"], Icons.Clock)
+    }
+    @if (Edition == Edition.Nonprofit)
+    {
+        @Link("/nonprofit/gifts", L["Gifts"], Icons.Gift)
+    }
+    @Link("/vendors", L["Vendors"], Icons.Store)
+    @Link("/items", L["Items"], Icons.Box)
+    @if (Edition == Edition.ECommerce)
+    {
+        @Link("/sales/channels", L["Sales channels"], Icons.Cart)
+    }
+    @Link("/banking", L["Banking"], Icons.Bank)
+    @Link("/reports", L["Reports"], Icons.Chart)
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public ClaimsPrincipal User { get; set; } = default!;
+
+    [Parameter]
+    public Edition Edition { get; set; }
+
+    private RenderFragment Link(string href, string label, string icon, NavLinkMatch match = NavLinkMatch.Prefix) => @<text>
+        @if (User.CanReach(href))
+        {
+            <NavLink href="@href" Match="match">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="@icon" /></svg>
+                <span>@label</span>
+            </NavLink>
+        }
+    </text>;
+
+    // Simple line drawings of our own, stroked in the text color (24 × 24).
+    private static class Icons
+    {
+        public const string Home = "M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5";
+        public const string People = "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.6-3.6 3.2-6 6.5-6s5.9 2.4 6.5 6M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.2c2 .8 3.2 2.9 3.5 5.8";
+        public const string Store = "M3.5 9.5 5 4h14l1.5 5.5M3.5 9.5h17M3.5 9.5c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 2.5 3s2.5-1.3 2.5-3c0 1.7 1.3 3 3 3s3-1.3 3-3M5 12.3V20h14v-7.7M10 20v-4.5h4V20";
+        public const string Box = "M12 3 20.5 7.5v9L12 21l-8.5-4.5v-9L12 3ZM3.5 7.5 12 12l8.5-4.5M12 12v9";
+        public const string Bank = "M3 9.5 12 4l9 5.5M4 9.5h16M6 9.5V18M10 9.5V18M14 9.5V18M18 9.5V18M3 20.5h18";
+        public const string Chart = "M4 20.5h16M6.5 20.5v-6M11 20.5V8M15.5 20.5v-9M20 20.5V5";
+        public const string Clock = "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5.5l3.5 2";
+        public const string Gift = "M4 11h16v9.5H4V11ZM3 7.5h18V11H3V7.5ZM12 7.5v13M12 7.5C10 4 7 4 7 6s3 1.5 5 1.5ZM12 7.5c2-3.5 5-3.5 5-1.5s-3 1.5-5 1.5Z";
+        public const string Cart = "M3 4h2.5l2.2 11h10.6L20.5 7.5H6.5M9.5 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM17 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z";
+    }
+}

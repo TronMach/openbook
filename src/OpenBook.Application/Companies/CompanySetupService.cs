@@ -16,7 +16,8 @@ public sealed record SetUpCompanyCommand(
     string? Email = null,
     string? Phone = null,
     string? Address = null,
-    Edition Edition = Edition.General);
+    Edition Edition = Edition.General,
+    ViewMode DefaultViewMode = ViewMode.Full);
 
 /// <summary>First-run wizard: creates the company and its owner in one save.</summary>
 public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignStore designs, IPasswordHasher hasher, IClock clock)
@@ -41,6 +42,7 @@ public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignSt
             command.Phone,
             command.Address);
         company.SetEdition(command.Edition);
+        company.SetDefaultViewMode(command.DefaultViewMode);
 
         User.ValidatePassword(command.Password);
         var owner = User.Create(command.Username, hasher.Hash(command.Password), now);
@@ -60,6 +62,7 @@ public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignSt
             company.Phone,
             company.Address,
             Edition = company.Edition.ToString(),
+            DefaultViewMode = company.DefaultViewMode.ToString(),
         })));
         store.Add(AuditRecord.Create(now, owner.Username, AuditAction.Created, "user", owner.Id, null,
             JsonSerializer.Serialize(new { owner.Username })));

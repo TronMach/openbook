@@ -1,0 +1,107 @@
+@using System.Security.Claims
+@using OpenBook.Domain.Companies
+
+@* The simple view's home page: the day-to-day work drawn as steps in order, each a link to start it and a line saying
+   what's waiting there. Steps the company hasn't used yet say what they're for instead. Drawn here, with our own
+   arrows and layout. *@
+<div class="wide workflow">
+    <section class="flow-panel vendors" aria-labelledby="flow-vendors">
+        <h2 id="flow-vendors">@L["Vendors"]</h2>
+        <div class="flow-steps four">
+            @Step("po", "/purchases/orders/new", L["Purchase Orders"],
+                !F.OrdersUsed ? L["Order stock from vendors"] : F.OpenOrders > 0 ? L["{0} open", F.OpenOrders] : L["None open"],
+                F.OpenOrders > 0 ? "/purchases/orders" : null)
+            @Arrow("a1")
+            @Step("recv", "/purchases/orders", L["Receive Inventory"],
+                !F.OrdersUsed ? L["Check in what arrives on an order"] : F.OrdersToReceive > 0 ? L["{0} orders to receive", F.OrdersToReceive] : L["Nothing to receive"])
+            @Arrow("a2")
+            @Step("bill", "/purchases/bills/new", L["Enter Bills"],
+                !F.BillsUsed ? L["Record what vendors bill you"] : F.BillsToPay > 0 ? L["{0} unpaid · {1} you owe", F.BillsToPay, Labels.Amount(F.YouOwe)] : L["All paid"],
+                F.BillsToPay > 0 ? "/purchases" : null)
+            @Arrow("a3")
+            @Step("pay", "/purchases/pay-bills", L["Pay Bills"],
+                !F.BillsUsed ? L["Pay what's due, several at once"] : F.BillsDueSoon > 0 ? L["{0} due within a week", F.BillsDueSoon] : F.BillsToPay > 0 ? L["Nothing due this week"] : L["Nothing to pay"])
+        </div>
+    </section>
+
+    <section class="flow-panel customers" aria-labelledby="flow-customers">
+        <h2 id="flow-customers">@(Edition switch { Edition.Nonprofit => L["Donors"], Edition.ProfessionalServices => L["Clients"], _ => L["Customers"] })</h2>
+        <div class="flow-steps sales">
+            @Step("est", "/sales/estimates/new", L["Estimates"],
+                !F.EstimatesUsed ? L["Quote a price before the work"] : F.OpenEstimates > 0 ? L["{0} open", F.OpenEstimates] : L["None open"],
+                F.OpenEstimates > 0 ? "/sales?show=estimates" : null)
+            @Arrow("a1")
+            @Step("inv", "/sales/invoices/new", L["Create Invoices"],
+                !F.InvoicesUsed ? L["Bill for what you sold"]
+                    : F.OverdueInvoices > 0 ? L["{0} overdue · {1} owed to you", F.OverdueInvoices, Labels.Amount(F.OwedToYou)]
+                    : F.OpenInvoices > 0 ? L["{0} open · {1} owed to you", F.OpenInvoices, Labels.Amount(F.OwedToYou)]
+                    : L["All paid"],
+                F.OpenInvoices > 0 ? "/sales" : null, F.OverdueInvoices > 0)
+            @Arrow("a2")
+            @Step("pay", "/sales/payments/new", L["Receive Payments"],
+                !F.InvoicesUsed && !F.PaymentsUsed ? L["Record money paid on an invoice"] : F.OpenInvoices > 0 ? L["{0} invoices to collect", F.OpenInvoices] : L["Nothing to collect"])
+            @Arrow("a3")
+            @Step("dep", "/banking/deposits/new", L["Make Deposits"],
+                !F.DepositsUsed ? L["Take payments to the bank together"] : F.PaymentsToDeposit > 0 ? L["{0} to deposit · {1}", F.PaymentsToDeposit, Labels.Amount(F.ToDeposit)] : L["Nothing to deposit"])
+            @Step("rec", "/sales/receipts/new", L["Sales Receipts"],
+                !F.SalesReceiptsUsed ? L["Paid on the spot, no invoice"] : L["Paid on the spot"])
+            @Arrow("a4")
+        </div>
+    </section>
+
+    <section class="flow-panel company" aria-labelledby="flow-company">
+        <h2 id="flow-company">@L["Company"]</h2>
+        <div class="flow-steps list">
+            @Step("items", "/items", L["Items"],
+                F.ActiveItems == 0 ? L["What you sell and buy"] : F.StockItems > 0 ? L["{0} items · {1} kept in stock", F.ActiveItems, F.StockItems] : L["{0} items", F.ActiveItems])
+            @Step("chart", "/accounts", L["Chart of Accounts"], L["Where the money is sorted"])
+            @Step("backup", "/backup", L["Back Up Company"], L["Keep a copy somewhere safe"])
+        </div>
+    </section>
+
+    <section class="flow-panel banking" aria-labelledby="flow-banking">
+        <h2 id="flow-banking">@L["Banking"]</h2>
+        <div class="flow-steps list">
+            @Step("checks", "/banking/write-checks", L["Write Checks"], L["Pay for something without a bill"])
+            @Step("register", "/banking", L["Registers"], L["Every bank and card account"])
+            @Step("reconcile", "/banking", L["Reconcile"], L["Match your bank statement"])
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public WorkflowFigures F { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public ClaimsPrincipal User { get; set; } = default!;
+
+    [Parameter]
+    public Edition Edition { get; set; }
+
+    // One step: the box starts the work; "see them" lists what's waiting. A step the person can't reach shows as plain text.
+    private RenderFragment Step(string area, string href, string title, string status, string? list = null, bool alert = false) => @<text>
+        <div class="flow-step" style="grid-area: @area">
+            @if (User.CanReach(href))
+            {
+                <a class="flow-box" href="@href">
+                    <strong>@title</strong>
+                    <span class="@(alert ? "flow-status alert" : "flow-status")">@status</span>
+                </a>
+            }
+            else
+            {
+                <div class="flow-box disabled">
+                    <strong>@title</strong>
+                    <span class="flow-status">@status</span>
+                </div>
+            }
+            @if (list is not null && User.CanReach(list))
+            {
+                <a class="flow-list" href="@list">@L["See them"]</a>
+            }
+        </div>
+    </text>;
+
+    private static RenderFragment Arrow(string area) => @<svg class="flow-arrow @area" style="grid-area: @area" viewBox="0 0 40 20" aria-hidden="true"><path d="M2 10h32M27 4l7 6-7 6" /></svg>;
+}

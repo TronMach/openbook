@@ -123,6 +123,8 @@ public static class DependencyInjection
         services.AddScoped<VendorImportService>();
         services.AddScoped<CompanySetupService>();
         services.AddScoped<CompanySettingsService>();
+        services.AddScoped<ViewModeService>();
+        services.AddScoped<HomeWorkflowService>();
         services.AddScoped<AuthService>();
         services.AddScoped<UserService>();
         services.AddScoped<TwoFactorService>();

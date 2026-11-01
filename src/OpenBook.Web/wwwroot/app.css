@@ -426,3 +426,140 @@ code.secret { letter-spacing: 0.05em; word-break: break-all; }
 .recovery-codes { list-style: none; padding: 0; columns: 2 10rem; font-size: 1.05rem; }
 .recovery-codes li { margin-bottom: 0.35rem; }
 input.copy-link { width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem; }
+
+/* Simple view: a menu bar of drop-downs under the top bar, a shortcut column beside the page, and the workflow home page. */
+.view-switch button.link { text-decoration: underline; }
+.menubar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.2rem 1rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    z-index: 20;
+}
+.menubar .view-switch { margin: 0 0 0 auto; }
+.menu { position: relative; }
+.menu > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.3rem 0.65rem;
+    border-radius: 4px;
+    user-select: none;
+}
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary:hover, .menu[open] > summary { background: var(--bg); }
+.menu-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 14rem;
+    display: flex;
+    flex-direction: column;
+    padding: 0.3rem 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.menu-list a { padding: 0.35rem 1rem; color: var(--text); text-decoration: none; white-space: nowrap; }
+.menu-list a:hover, .menu-list a:focus { background: var(--bg); }
+
+.simple-shell { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); align-items: start; }
+.simple-shell > .page { width: 100%; }
+.shortcuts {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 1rem 0.5rem;
+    min-height: calc(100vh - 6rem);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+}
+.shortcuts a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.5rem 0.25rem;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+    text-align: center;
+}
+.shortcuts a:hover { background: var(--bg); color: var(--text); }
+.shortcuts a.active { background: var(--notice-bg); color: var(--text); font-weight: 600; }
+.shortcuts svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (max-width: 700px) {
+    .simple-shell { grid-template-columns: 1fr; }
+    .shortcuts {
+        position: static;
+        flex-direction: row;
+        overflow-x: auto;
+        min-height: 0;
+        padding: 0.4rem 1rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .shortcuts a { min-width: 4.5rem; }
+    .menu-list { position: fixed; left: 1rem; right: 1rem; top: auto; min-width: 0; }
+}
+
+.workflow {
+    display: grid;
+    grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
+    grid-template-areas: "vendors company" "customers banking";
+    gap: 1rem;
+}
+.flow-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem 1rem; }
+.flow-panel h2 { font-size: 1rem; margin: 0 0 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.flow-panel.vendors { grid-area: vendors; }
+.flow-panel.customers { grid-area: customers; }
+.flow-panel.company { grid-area: company; }
+.flow-panel.banking { grid-area: banking; }
+.flow-steps { display: grid; align-items: stretch; gap: 0.5rem 0.25rem; }
+.flow-steps.four, .flow-steps.sales { grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 1fr) 2rem minmax(0, 1fr) 2rem minmax(0, 1fr); }
+.flow-steps.four { grid-template-areas: "po a1 recv a2 bill a3 pay"; }
+.flow-steps.sales { grid-template-areas: "est a1 inv a2 pay a3 dep" ". . . . rec a4 ."; }
+.flow-steps.list { display: flex; flex-direction: column; align-items: stretch; gap: 0.5rem; }
+.flow-step { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.flow-step > .flow-box { flex: 1; }
+.flow-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-height: 4.5rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    text-decoration: none;
+}
+a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
+.flow-box.disabled { border-left-color: var(--border); color: var(--muted); }
+.flow-status { color: var(--muted); font-size: 0.85rem; }
+.flow-status.alert { color: var(--danger); }
+.flow-list { font-size: 0.85rem; padding-left: 0.2rem; }
+.flow-arrow { align-self: center; width: 100%; height: 1.25rem; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.flow-steps.sales .flow-arrow.a4 { transform: rotate(-40deg); }
+
+@media (max-width: 1000px) {
+    .workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "customers" "vendors" "banking" "company"; }
+}
+
+@media (max-width: 700px) {
+    .flow-steps.four, .flow-steps.sales { grid-template-columns: minmax(0, 1fr); }
+    .flow-steps.four { grid-template-areas: "po" "a1" "recv" "a2" "bill" "a3" "pay"; }
+    .flow-steps.sales { grid-template-areas: "est" "a1" "inv" "a2" "pay" "a3" "dep" "rec"; }
+    .flow-arrow { width: 2rem; height: 1.5rem; justify-self: center; transform: rotate(90deg); }
+    .flow-steps.sales .flow-arrow.a4 { display: none; }
+    .flow-box { min-height: 0; }
+}

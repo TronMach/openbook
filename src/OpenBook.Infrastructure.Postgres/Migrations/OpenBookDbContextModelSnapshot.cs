@@ -1286,6 +1286,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("DefaultViewMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Edition")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1830,6 +1835,22 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("UserSessions", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Companies.ViewPreference", b =>
+                {
+                    b.Property<string>("Username")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Username");
+
+                    b.ToTable("ViewPreferences", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.CustomFields.CustomField", b =>

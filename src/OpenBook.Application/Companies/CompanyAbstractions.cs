@@ -68,6 +68,9 @@ public interface ICompanyStore
     /// <summary>Tracked; the user's sessions not yet ended.</summary>
     Task<IReadOnlyList<UserSession>> ListOpenSessionsAsync(Guid userId, CancellationToken ct);
 
+    /// <summary>Tracked; null while the user follows the company's default view.</summary>
+    Task<ViewPreference?> GetViewPreferenceAsync(string username, CancellationToken ct);
+
     void Add(Company company);
     void Add(EmailSettings settings);
     void Add(BackupSchedule schedule);
@@ -77,6 +80,7 @@ public interface ICompanyStore
     void Add(SignInSettings settings);
     void Add(UserInvite invite);
     void Add(PermissionSet permissionSet);
+    void Add(ViewPreference preference);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

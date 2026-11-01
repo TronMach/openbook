@@ -1,12 +1,16 @@
 @using OpenBook.Domain.Companies
 @inherits LayoutComponentBase
-@inject OpenBook.Application.Companies.ICompanyStore Companies
+@inject OpenBook.Application.Companies.ViewModeService Views
+@inject NavigationManager Navigation
 
 <AuthorizeView>
     <Authorized>
         <header class="topbar">
             <a class="brand" href="/">OpenBook</a>
             <nav>
+                @* The simple view's menus are in the bar below; here the nav only keeps the space. *@
+                @if (!_simple)
+                {
                 @foreach (var href in Editions.Menu(_edition).Where(context.User.CanReach))
                 {
                     @MenuLink(href)
@@ -18,6 +22,13 @@
                 @if (context.User.CanReach("/backup"))
                 {
                     <NavLink href="/backup">@L["Backup"]</NavLink>
+                }
+                <form method="post" action="/account/view" class="view-switch">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="view" value="Simple" />
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                    <button type="submit" class="link" title="@L["A shorter menu and a home page that shows each step of the work"]">@L["Simple view"]</button>
+                </form>
                 }
             </nav>
             <form class="search" method="get" action="/search" data-enhance="false" role="search">
@@ -31,12 +42,30 @@
                 <button type="submit" class="link">@L["Sign out"]</button>
             </form>
         </header>
+        @if (_simple)
+        {
+            <SimpleNav User="context.User" Edition="_edition" ReturnUrl="@ReturnUrl" />
+        }
     </Authorized>
 </AuthorizeView>
 
-<main class="page">
-    @Body
-</main>
+@if (_simple)
+{
+    <div class="simple-shell">
+        <AuthorizeView>
+            <SimpleShortcuts User="context.User" Edition="_edition" />
+        </AuthorizeView>
+        <main class="page">
+            @Body
+        </main>
+    </div>
+}
+else
+{
+    <main class="page">
+        @Body
+    </main>
+}
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -46,12 +75,22 @@
 
 @code {
     private Edition _edition;
+    private bool _simple;
 
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
-    protected override async Task OnInitializedAsync() =>
-        _edition = (await Companies.GetCompanyAsync(HttpContext?.RequestAborted ?? default))?.Edition ?? Edition.General;
+    // Where the view switch comes back to: this page, query included.
+    private string ReturnUrl => "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContext?.User.Identity?.IsAuthenticated != true)
+            return;
+        var view = await Views.CurrentAsync(HttpContext.RequestAborted);
+        _edition = view.Edition;
+        _simple = view.Mode == ViewMode.Simple;
+    }
 
     // Each label is written out so the string catalog finds it.
     private RenderFragment MenuLink(string href) => href switch

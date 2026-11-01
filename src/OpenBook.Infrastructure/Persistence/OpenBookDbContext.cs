@@ -102,6 +102,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Assets.Loan> Loans => Set<OpenBook.Domain.Assets.Loan>();
     public DbSet<ReportSubscription> ReportSubscriptions => Set<ReportSubscription>();
     public DbSet<DashboardPreference> DashboardPreferences => Set<DashboardPreference>();
+    public DbSet<ViewPreference> ViewPreferences => Set<ViewPreference>();
     public DbSet<ForecastScenario> ForecastScenarios => Set<ForecastScenario>();
     public DbSet<AdjustingEntry> AdjustingEntries => Set<AdjustingEntry>();
     public DbSet<OpenBook.Domain.Capture.CaptureDevice> CaptureDevices => Set<OpenBook.Domain.Capture.CaptureDevice>();
@@ -362,6 +363,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Address).HasMaxLength(1000);
             b.Property(c => c.DefaultReportBasis).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.Edition).HasConversion<string>().HasMaxLength(30);
+            b.Property(c => c.DefaultViewMode).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.TimeZoneId).HasMaxLength(64);
             b.Ignore(c => c.TimeZone);
             b.Property(c => c.ClosingPasswordHash).HasMaxLength(500);
@@ -2150,6 +2152,14 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(p => p.Username).HasMaxLength(100);
             b.Property(p => p.HiddenPanels).HasMaxLength(1000);
             b.Ignore(p => p.Hidden);
+        });
+
+        modelBuilder.Entity<ViewPreference>(b =>
+        {
+            b.ToTable("ViewPreferences");
+            b.HasKey(p => p.Username);
+            b.Property(p => p.Username).HasMaxLength(100);
+            b.Property(p => p.Mode).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<CollectionSettings>(b =>

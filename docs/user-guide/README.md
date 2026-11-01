@@ -7,8 +7,12 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 ## Start here
 
 1. [Installing and starting OpenBook](01-getting-started.md): running it, setting up your company, signing in.
-2. [Finding your way around](02-finding-your-way.md): the menu, editions, search, keyboard shortcuts, dark mode, language.
+2. [Finding your way around](02-finding-your-way.md): the menu, editions, the simple view, search, keyboard shortcuts, dark mode, language.
 3. [Your chart of accounts](03-chart-of-accounts.md): starter charts, account types, subaccounts, opening balances.
+
+## The simple view
+
+28. [The simple view](28-simple-view.md): a short menu bar by task and a home page that walks through each step, for a business one person runs; switching between it and the full view.
 
 ## Everyday work
 

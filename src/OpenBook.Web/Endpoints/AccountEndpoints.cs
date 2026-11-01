@@ -41,7 +41,17 @@ public static class AccountEndpoints
             return Results.Redirect("/account/password?ended=true");
         }).RequireAuthorization();
 
-        app.MapGet("/backup/download", async (IBackupService backups, CancellationToken ct) =>
+        // Switches the signed-in person between the simple and full views, then goes back to the page they were on.
+        // Form-bound, so the antiforgery token is validated automatically.
+        app.MapPost("/account/view", async (IFormCollection form, ViewModeService views, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<ViewMode>(form["view"], ignoreCase: true, out var mode) || !Enum.IsDefined(mode))
+                return Results.BadRequest();
+            await views.SetAsync(mode, ct);
+            return Results.Redirect(WebSecurity.SafeReturnUrl(form["returnUrl"]));
+        }).RequireAuthorization();
+
+        app.MapGet("/backup/download",async (IBackupService backups, CancellationToken ct) =>
         {
             BackupFile file;
             try

@@ -165,6 +165,12 @@ public sealed class Company
     public void SetEdition(Edition edition) =>
         Edition = Enum.IsDefined(edition) ? edition : throw new DomainException("company.edition_invalid", $"Unknown edition {edition}.");
 
+    /// <summary>The view people get until they choose their own (<see cref="ViewPreference"/>).</summary>
+    public ViewMode DefaultViewMode { get; private set; }
+
+    public void SetDefaultViewMode(ViewMode mode) =>
+        DefaultViewMode = Enum.IsDefined(mode) ? mode : throw new DomainException("view.invalid", $"Unknown view {mode}.");
+
     /// <summary>
     /// The company's time zone (IANA id, e.g. "America/New_York"), which decides what "today" is for defaults, due
     /// dates and the scheduled jobs; null = the server's own. A server in a container usually runs on UTC.

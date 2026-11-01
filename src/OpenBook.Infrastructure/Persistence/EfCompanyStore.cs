@@ -35,6 +35,11 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
 
     public void Add(PermissionSet permissionSet) => db.PermissionSets.Add(permissionSet);
 
+    public void Add(ViewPreference preference) => db.ViewPreferences.Add(preference);
+
+    public Task<ViewPreference?> GetViewPreferenceAsync(string username, CancellationToken ct) =>
+        db.ViewPreferences.SingleOrDefaultAsync(p => p.Username == username, ct);
+
     public Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct) => db.EmailConfigurations.SingleOrDefaultAsync(ct);
 
     public void Add(Company company) => db.Companies.Add(company);

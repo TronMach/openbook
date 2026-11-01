@@ -112,6 +112,14 @@
                 </InputSelect>
                 <span class="hint">Sets the menu and home page to suit. You can change it later in Settings; everything stays available either way.</span>
             </div>
+            <div class="field">
+                <label for="view">How should OpenBook look?</label>
+                <InputSelect id="view" @bind-Value="Input.DefaultViewMode">
+                    <option value="@ViewMode.Simple">Simple view: a short menu and a home page that walks through each step (suggested when one person runs the business)</option>
+                    <option value="@ViewMode.Full">Full view: every area of OpenBook in the menu</option>
+                </InputSelect>
+                <span class="hint">Both work on the same books. Anyone can switch between them at any time with the link at the top of the page.</span>
+            </div>
             <div class="row">
                 <div class="field">
                     <label for="email">Email <span class="muted">(optional)</span></label>
@@ -288,7 +296,8 @@
             Input.Email,
             Input.Phone,
             Input.Address,
-            Input.Edition);
+            Input.Edition,
+            Input.DefaultViewMode ?? ViewMode.Simple);
         try
         {
             User owner;
@@ -335,6 +344,9 @@
         public BusinessType BusinessType { get; set; } = BusinessType.SoleProprietorship;
 
         public Edition Edition { get; set; }
+
+        // Nullable because the form binder leaves an enum it isn't sent at its zero value (Full); not given means the suggested simple view.
+        public ViewMode? DefaultViewMode { get; set; }
 
         // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
         [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]

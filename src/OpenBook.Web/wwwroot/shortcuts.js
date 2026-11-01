@@ -29,6 +29,31 @@
         applyTheme();
     });
 
+    // Simple view menu bar (<details> drop-downs): one open at a time, closed by a click elsewhere or Esc, and while
+    // one is open, pointing at another menu opens that one, as menu bars do.
+    const openMenus = () => [...document.querySelectorAll('.menubar details.menu[open]')];
+    document.addEventListener('click', e => {
+        const inside = e.target instanceof Element ? e.target.closest('.menubar details.menu') : null;
+        for (const menu of openMenus()) if (menu !== inside) menu.open = false;
+    });
+    document.addEventListener('toggle', e => {
+        const menu = e.target;
+        if (!(menu instanceof HTMLDetailsElement) || !menu.open || !menu.matches('.menubar details.menu')) return;
+        for (const other of openMenus()) if (other !== menu) other.open = false;
+    }, true);
+    document.addEventListener('mouseover', e => {
+        const summary = e.target instanceof Element ? e.target.closest('.menubar details.menu > summary') : null;
+        if (!summary || openMenus().length === 0) return;
+        summary.parentElement.open = true;
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        const open = openMenus();
+        if (open.length === 0) return;
+        for (const menu of open) menu.open = false;
+        open[0].querySelector('summary')?.focus();
+    });
+
     // g + key goes somewhere; n + key starts something new.
     const go = { h: '/', s: '/sales', p: '/purchases', b: '/banking', i: '/inventory', j: '/journal', r: '/reports', a: '/accounts', c: '/customers', v: '/vendors' };
     const create = {

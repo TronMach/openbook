@@ -1,0 +1,38 @@
+@page "/banking/write-checks"
+@inject BankingService BankingService
+@inject NavigationManager Navigation
+
+@* "Write Checks" in the simple view's Banking menu: straight to the spend form when there's one bank account, else a choice. *@
+<PageTitle>@L["Write Checks"] · OpenBook</PageTitle>
+
+<h1>@L["Write Checks"]</h1>
+
+@if (_banks.Count == 0)
+{
+    <div class="card">
+        <p>@L["There's no bank account to write a check from yet."] <a href="/accounts/new">@L["Add a bank account"]</a></p>
+    </div>
+}
+else
+{
+    <div class="card">
+        <p>@L["Which account is the check from?"]</p>
+        <ul>
+            @foreach (var bank in _banks)
+            {
+                <li><a href="/banking/@bank.Account.Id/record/spend">@bank.FullName</a></li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<BankAccountSummary> _banks = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _banks = (await BankingService.ListAccountsAsync()).Where(a => a.Account.Type == AccountType.Bank && a.Account.IsActive).ToList();
+        if (_banks.Count == 1)
+            Navigation.NavigateTo($"/banking/{_banks[0].Account.Id}/record/spend");
+    }
+}

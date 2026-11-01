@@ -86,6 +86,18 @@
         </fieldset>
 
         <fieldset>
+            <legend>@L["View"]</legend>
+            <div class="field">
+                <label for="default-view">@L["View for people who haven't chosen one"]</label>
+                <InputSelect id="default-view" @bind-Value="Input.DefaultViewMode">
+                    <option value="@ViewMode.Simple">@L["Simple view"]</option>
+                    <option value="@ViewMode.Full">@L["Full view"]</option>
+                </InputSelect>
+                <span class="hint">@L["The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept."]</span>
+            </div>
+        </fieldset>
+
+        <fieldset>
             <legend>@L["Books"]</legend>
             <div class="row">
                 <div class="field">
@@ -189,6 +201,7 @@
             DefaultReportBasis = company.DefaultReportBasis,
             Edition = company.Edition,
             TimeZoneId = company.TimeZoneId,
+            DefaultViewMode = company.DefaultViewMode,
         };
     }
 
@@ -198,7 +211,7 @@
         {
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode));
             _saved = true;
         }
         catch (DomainException ex)
@@ -239,6 +252,8 @@
 
         /// <summary>IANA id; empty for the server's.</summary>
         public string? TimeZoneId { get; set; }
+
+        public ViewMode DefaultViewMode { get; set; }
     }
 
     /// <summary>The server's time zones by IANA id (as the company stores them), in offset order.</summary>

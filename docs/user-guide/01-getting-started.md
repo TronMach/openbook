@@ -56,6 +56,7 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 - **Company name** is what appears on screens; **legal name** (optional) is for forms.
 - **Business type** (sole proprietor, partnership, corporation, nonprofit and so on) decides which starter chart of accounts is recommended and which tax form your accounts map to.
 - **What kind of business is this?** picks an *edition*: General, Professional services, E-commerce or Nonprofit. It only changes the order of the menu and the home page shortcuts; every feature stays available. You can change it later in **Settings**.
+- **How should OpenBook look?** picks the view people start with: the *simple view* (a short menu bar by task and a home page that walks through each step, suggested when one person runs the business) or the *full view* (every area in the menu). Both work on the same books, and anyone can switch at any time. See [The simple view](28-simple-view.md).
 - **Email, phone and address** are optional; the address is printed on invoices.
 
 **2. Books**
