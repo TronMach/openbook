@@ -94,6 +94,7 @@ public sealed partial class InstallationTests : IAsyncLifetime
         Assert.Equal(Path.Combine(DataFolder, "Backups"), desktop.BackupFolder);
         Assert.Equal(Path.Combine(AppFolder, "keys"), desktop.KeysFolder);
         Assert.Equal(Path.Combine(AppFolder, "logs"), desktop.LogFolder);
+        Assert.Equal(Path.Combine(AppFolder, "plugins"), desktop.PluginsFolder);
         Assert.Equal(Installation.DefaultPort, desktop.Port);
         Assert.True(desktop.OpenBrowser);
 

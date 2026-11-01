@@ -67,7 +67,7 @@ builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtract
 builder.Services.AddSingleton(new OpenBook.Infrastructure.Net.OutboundPolicy(builder.Configuration.GetValue<bool>("OpenBook:Outbound:AllowPrivateNetworks")));
 // Add-ins load before the services that use them (the report catalog, the importer).
 builder.Services.AddSingleton(OpenBook.Web.Plugins.PluginLoader.Load(
-    Path.GetFullPath(builder.Configuration["OpenBook:Plugins:Path"] ?? "plugins"),
+    Path.GetFullPath(installation.PluginsFolder ?? builder.Configuration["OpenBook:Plugins:Path"] ?? "plugins"),
     safeModeArgument || builder.Configuration.GetValue<bool>("OpenBook:Plugins:SafeMode")));
 builder.Services
     .AddOpenBookApplication()

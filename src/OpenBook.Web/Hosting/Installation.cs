@@ -54,6 +54,9 @@ public sealed class Installation
     public string? KeysFolder => AppFolder is null ? null : Path.Combine(AppFolder, "keys");
     public string? LogFolder => AppFolder is null ? null : Path.Combine(AppFolder, "logs");
 
+    /// <summary>Desktop: add-ins live outside the program folder, which an update replaces.</summary>
+    public string? PluginsFolder => AppFolder is null ? null : Path.Combine(AppFolder, "plugins");
+
     /// <summary>Where a running desktop copy writes its address, so starting it again opens the browser there.</summary>
     public string? RunningFile => AppFolder is null ? null : Path.Combine(AppFolder, "running.json");
 

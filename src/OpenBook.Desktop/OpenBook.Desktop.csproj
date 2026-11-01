@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Start menu's OpenBook: starts the server (OpenBook.Web, beside it) without a console window and goes away. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>OpenBook.Desktop</RootNamespace>
+    <ApplicationIcon>..\..\packaging\windows\openbook.ico</ApplicationIcon>
+    <Description>Starts OpenBook Desktop.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

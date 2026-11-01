@@ -139,8 +139,10 @@ The company file can be encrypted, so a stolen copy can't be read without the ke
 
 OpenBook comes in two installs of the same program:
 
-- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run) until you choose **Settings → System → Quit OpenBook** or sign out of Windows.
+- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run) until you choose **Settings → System → Quit OpenBook** or sign out of Windows. It's installed on Windows from `OpenBook-Setup.exe` (for your Windows user, no administrator rights) and started from the Start menu; installing a newer version or uninstalling never touches the company file or its backups.
 - **OpenBook Server** runs on a server or in Docker, usually with PostgreSQL, for several people on several computers. Whoever runs it decides where the data lives and backs it up.
+
+Whoever installs or looks after OpenBook will find the details in `docs/admin/desktop.md` and `docs/admin/server.md` (HTTPS, keys, `pg_dump` backups, moving a company in).
 
 Your books are the same either way. Some things only make sense when others can reach OpenBook (invitations to people on other computers, customer portal links, sending from the capture app on a phone, Stripe telling OpenBook about payments); on Desktop those pages say so, and everything still works on the computer itself.
 
