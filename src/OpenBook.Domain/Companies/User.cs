@@ -70,6 +70,18 @@ public sealed class User
 
     public bool HasTwoFactor => TwoFactorEnabledAt is not null;
 
+    /// <summary>Lower-case; optional, unique among users. Filled from an invitation, editable by admins.</summary>
+    public string? Email { get; private set; }
+
+    /// <summary>From this day on the user can't sign in, and the hourly job makes them inactive; null for no end.</summary>
+    public DateOnly? AccessEndsOn { get; private set; }
+
+    public void SetEmail(string? email) => Email = UserInvite.NormalizeEmail(email);
+
+    public void SetAccessEnd(DateOnly? endsOn, DateOnly today) => AccessEndsOn = UserInvite.CheckAccessEnd(endsOn, today);
+
+    public bool AccessEnded(DateOnly today) => AccessEndsOn is { } end && today >= end;
+
     public int RecoveryCodesLeft => RecoveryCodeHashes is { Length: > 0 } hashes ? hashes.Split(',').Length : 0;
 
     public static User Create(string username, string passwordHash, DateTimeOffset createdAt, UserRole role = UserRole.Admin) =>

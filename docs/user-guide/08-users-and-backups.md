@@ -31,6 +31,18 @@ On the same page you can **Make new recovery codes** (the old ones stop working)
 
 **Requiring it (administrators):** **Settings → Sign-in and two-factor** → **Require it for**: nobody (each person decides), admins, accountants and admins, everyone but view-only users, or everyone. People in those roles who haven't set it up are taken to the setup page at their next sign-in and can't do anything else until they have; the page lists who that is. API keys keep working without a code.
 
+### Inviting someone
+
+To bring someone in, such as an outside accountant, invite them rather than making up a password for them: **Settings → Users** → **Invite someone**. Enter their email (and a name if you like), choose a role, and optionally **Access ends on**, for someone who needs the books for a while, like tax season. **Link works for** sets how long the invitation stays open (7 days unless you choose otherwise).
+
+**Send invitation** emails them a link when email is set up (**Settings → Email**); either way the page shows the link once, to copy and send yourself. Following it, they choose their own username and password and are signed in with the role you gave them. If their role must use two-factor sign-in, they set it up next.
+
+The **Invitations** list shows each one as waiting, accepted, expired or withdrawn. **Send again** makes a new link (the old one stops working); **Withdraw** cancels it. Each link works once.
+
+### Email and end of access
+
+Select a username on the Users page to set their **Email** and **Access ends on**. From the day access ends, they can't sign in, their API keys stop working, and within the hour they're made inactive (signed out everywhere). Clear the date to keep them on. You can't end your own access, and there must always be an administrator whose access doesn't end.
+
 ### Working at the same time
 
 Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.

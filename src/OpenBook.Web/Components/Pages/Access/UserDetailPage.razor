@@ -1,0 +1,79 @@
+@page "/settings/users/{Id:guid}"
+@using OpenBook.Domain.Companies
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_user?.Username ?? "User") · OpenBook</PageTitle>
+
+<div class="card narrow">
+    @if (_user is null)
+    {
+        <h1>@L["User not found"]</h1>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_user.Username</h1>
+            <a href="/settings/users">@L["Users"]</a>
+        </div>
+        <p class="muted">
+            @AccessMiddleware.Describe(_user.Role) · @(_user.IsActive ? L["active"] : L["inactive"]) ·
+            @L["two-factor"] @(_user.HasTwoFactor ? L["on"] : L["off"])
+        </p>
+
+        @if (Saved)
+        {
+            <div class="alert notice" role="status">@L["Saved."]</div>
+        }
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+
+        <form method="post" @formname="details" @onsubmit="SaveAsync">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="email">@L["Email"]</label>
+                <input id="email" name="Email" type="email" value="@_user.Email" autocomplete="off" />
+                <span class="hint">@L["Optional. Used to match single sign-on and shown on invitations."]</span>
+            </div>
+            <div class="field">
+                <label for="ends">@L["Access ends on"]</label>
+                <input id="ends" name="AccessEndsOn" type="date" value="@_user.AccessEndsOn?.ToString("yyyy-MM-dd")" />
+                <span class="hint">@L["Optional. From this day they can't sign in and are made inactive. Leave empty for no end."]</span>
+            </div>
+            <button type="submit">@L["Save"]</button>
+        </form>
+    }
+</div>
+
+@code {
+    private User? _user;
+    private string? _error;
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery] private bool Saved { get; set; }
+
+    [SupplyParameterFromForm(Name = "Email")] private string? PostedEmail { get; set; }
+    [SupplyParameterFromForm(Name = "AccessEndsOn")] private string? PostedEnd { get; set; }
+
+    protected override async Task OnInitializedAsync() => _user = await UserService.GetAsync(Id);
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            DateOnly? end = string.IsNullOrWhiteSpace(PostedEnd) ? null
+                : DateOnly.TryParseExact(PostedEnd, "yyyy-MM-dd", out var d) ? d
+                : throw new DomainException("user.access_end_invalid", "Enter the date access ends, or leave it empty.");
+            await UserService.SetDetailsAsync(Id, PostedEmail, end);
+            Navigation.NavigateTo($"/settings/users/{Id}?saved=true");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _user = await UserService.GetAsync(Id);
+        }
+    }
+}

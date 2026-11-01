@@ -46,6 +46,13 @@ internal sealed partial class RecurringPostingService(
             return;
 
         var today = CompanyTime.Today;
+        await StepAsync("Access end dates", async services =>
+        {
+            foreach (var username in await services.GetRequiredService<UserService>().EndExpiredAccessAsync(today, ct))
+                LogAccessEnded(username);
+            return true;
+        }, ct);
+
         await StepAsync("Recurring entries", async services =>
         {
             foreach (var result in await services.GetRequiredService<RecurringEntryService>().PostDueAsync(today, autoPostOnly: true, ct))
@@ -166,6 +173,9 @@ internal sealed partial class RecurringPostingService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Emailed report '{Report}' to {Recipients}.")]
     private partial void LogReportSent(string report, string recipients);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Made {Username} inactive: their access ended.")]
+    private partial void LogAccessEnded(string username);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} late fees.")]
     private partial void LogFeesCharged(int count);

@@ -60,7 +60,8 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
             return null;
         var key = await store.FindApiKeyAsync(ApiKey.HashToken(token), ct);
         var now = clock.UtcNow;
-        if (key is null || !key.IsUsable(now) || await store.GetUserAsync(key.UserId, ct) is not { IsActive: true } user)
+        if (key is null || !key.IsUsable(now) || await store.GetUserAsync(key.UserId, ct) is not { IsActive: true } user
+            || user.AccessEnded(CompanyTime.TodayAt(now, CompanyTime.Zone)))
             return null;
         if (key.RecordUse(now))
             await store.SaveChangesAsync(ct);

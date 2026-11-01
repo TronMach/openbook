@@ -26,6 +26,18 @@ public interface ICompanyStore
     Task<User?> GetUserAsync(Guid id, CancellationToken ct);
     Task<User?> FindUserAsync(string normalizedUsername, CancellationToken ct);
 
+    /// <summary>By lower-case email.</summary>
+    Task<User?> FindUserByEmailAsync(string email, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<UserInvite>> ListInvitesAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<UserInvite?> GetInviteAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<UserInvite?> FindInviteAsync(string tokenHash, CancellationToken ct);
+
     /// <summary>Tracked; null until email is first set up.</summary>
     Task<EmailSettings?> GetEmailSettingsAsync(CancellationToken ct);
 
@@ -54,6 +66,7 @@ public interface ICompanyStore
     void Add(ApiKey key);
     void Add(UserSession session);
     void Add(SignInSettings settings);
+    void Add(UserInvite invite);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

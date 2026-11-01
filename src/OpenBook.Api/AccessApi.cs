@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using OpenBook.Application;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Webhooks;
 using OpenBook.Domain.Companies;
@@ -9,9 +10,11 @@ using OpenBook.Domain.Webhooks;
 
 namespace OpenBook.Api;
 
-public sealed record UserResponse(Guid Id, string Username, UserRole Role, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, bool TwoFactor = false)
+public sealed record UserResponse(
+    Guid Id, string Username, UserRole Role, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, bool TwoFactor = false,
+    string? Email = null, DateOnly? AccessEndsOn = null)
 {
-    public static UserResponse From(User u) => new(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt, u.LastLoginAt, u.HasTwoFactor);
+    public static UserResponse From(User u) => new(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt, u.LastLoginAt, u.HasTwoFactor, u.Email, u.AccessEndsOn);
 }
 
 /// <param name="TwoFactorRequiredFrom">Null: nobody has to; otherwise this role and every role above it.</param>
@@ -27,6 +30,27 @@ public sealed record CreateUserRequest(string Username, string Password, UserRol
 public sealed record ChangeRoleRequest(UserRole Role);
 
 public sealed record ResetPasswordRequest(string NewPassword);
+
+/// <param name="Email">Null or empty for none.</param>
+/// <param name="AccessEndsOn">Null for no end.</param>
+public sealed record UserDetailsRequest(string? Email, DateOnly? AccessEndsOn);
+
+public sealed record InviteResponse(
+    Guid Id, string Email, string? Name, UserRole Role, DateOnly? AccessEndsOn, string InvitedBy, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
+    InviteStatus Status, bool Expired, Guid? UserId)
+{
+    public static InviteResponse From(UserInvite i, DateTimeOffset now) =>
+        new(i.Id, i.Email, i.Name, i.Role, i.AccessEndsOn, i.InvitedBy, i.CreatedAt, i.ExpiresAt, i.Status, i.IsExpired(now), i.UserId);
+}
+
+/// <param name="Link">The invitation link, shown only in this response.</param>
+public sealed record SentInviteResponse(InviteResponse Invite, string Link, bool Emailed, string? EmailError);
+
+/// <param name="Days">How long the link works, 1–30 (default 7).</param>
+/// <param name="SendEmail">Email the link (default); it's returned either way.</param>
+public sealed record InviteRequest(string Email, UserRole Role, string? Name = null, DateOnly? AccessEndsOn = null, int? Days = null, bool? SendEmail = null);
+
+public sealed record ResendInviteRequest(int? Days = null, bool? SendEmail = null);
 
 public sealed record ApiKeyResponse(
     Guid Id, Guid UserId, string Name, string Hint, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt,
@@ -69,6 +93,21 @@ internal static class AccessApi
         users.MapPut("/{id:guid}/active", async (Guid id, SetActiveRequest r, UserService s, CancellationToken ct) => UserResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         users.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest r, UserService s, CancellationToken ct) =>
             UserResponse.From(await s.ResetPasswordAsync(id, r.NewPassword, ct)));
+        users.MapPut("/{id:guid}/details", async (Guid id, UserDetailsRequest r, UserService s, CancellationToken ct) =>
+            UserResponse.From(await s.SetDetailsAsync(id, r.Email, r.AccessEndsOn, ct)));
+
+        var invites = users.MapGroup("/invites");
+        invites.MapGet("/", async (InviteService s, IClock clock, CancellationToken ct) =>
+            (await s.ListAsync(ct)).Select(i => InviteResponse.From(i, clock.UtcNow)));
+        invites.MapPost("/", async (InviteRequest r, HttpContext http, InviteService s, IClock clock, CancellationToken ct) =>
+        {
+            var sent = await s.InviteAsync(new InviteCommand(r.Email, r.Role, r.Name, r.AccessEndsOn, r.Days ?? UserInvite.DefaultDays, r.SendEmail ?? true), LinkBase(http), ct);
+            return Results.Created($"/api/users/invites/{sent.Invite.Id}", Sent(sent, clock));
+        });
+        invites.MapPost("/{id:guid}/resend", async (Guid id, ResendInviteRequest r, HttpContext http, InviteService s, IClock clock, CancellationToken ct) =>
+            Sent(await s.ResendAsync(id, LinkBase(http), r.Days ?? UserInvite.DefaultDays, r.SendEmail ?? true, ct), clock));
+        invites.MapDelete("/{id:guid}", async (Guid id, InviteService s, IClock clock, CancellationToken ct) =>
+            InviteResponse.From(await s.RevokeAsync(id, ct), clock.UtcNow));
         users.MapDelete("/{id:guid}/two-factor", async (Guid id, UserService s, CancellationToken ct) => UserResponse.From(await s.ResetTwoFactorAsync(id, ct)));
 
         var signIn = api.MapGroup("/settings/sign-in");
@@ -136,6 +175,12 @@ internal static class AccessApi
             s.Enabled, s.Frequency, s.Weekday, s.Hour, s.Destination, s.FolderPath, s.ServiceUrl, s.Region, s.Bucket, s.Prefix, s.AccessKeyId,
             s.ProtectedSecretKey is not null, s.Keep, s.LastAttemptAt, s.LastSuccessAt, s.LastFileName, s.LastError);
     }
+
+    /// <summary>The address this request reached OpenBook at, for links in invitations.</summary>
+    internal static string LinkBase(HttpContext http) => $"{http.Request.Scheme}://{http.Request.Host}{http.Request.PathBase}";
+
+    private static SentInviteResponse Sent(SentInvite sent, IClock clock) =>
+        new(InviteResponse.From(sent.Invite, clock.UtcNow), sent.Link, sent.Emailed, sent.EmailError);
 
     private static Guid UserId(ClaimsPrincipal principal) =>
         Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : throw new InvalidOperationException("No signed-in user.");

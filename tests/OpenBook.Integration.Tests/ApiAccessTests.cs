@@ -170,6 +170,92 @@ public sealed class ApiAccessTests : IAsyncLifetime
         Assert.Equal("frame-ancestors 'self'", login.Headers.GetValues("Content-Security-Policy").Single());
     }
 
+    [Fact]
+    public async Task Price_levels_and_rules_work_through_the_api()
+    {
+        var client = Client(UserRole.Standard);
+        var level = await (await client.PostAsJsonAsync("/api/pricing/levels", new { name = "Wholesale", kind = "FixedPercent", percent = -10 }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var account = await (await Client(UserRole.Accountant).PostAsJsonAsync("/api/accounts", new { name = "Sales", type = "Income" }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var item = await (await client.PostAsJsonAsync("/api/items", new { name = "Widget", type = "Service", incomeAccountId = account!["id"].GetGuid(), rate = 50 }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var customer = await (await client.PostAsJsonAsync("/api/customers", new { displayName = "Shop", priceLevelId = level!["id"].GetGuid() }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+
+        var rule = await client.PostAsJsonAsync("/api/pricing/rules", new { name = "Sale", adjustment = "Amount", value = -5, items = Array.Empty<Guid>() });
+        Assert.Equal(HttpStatusCode.Created, rule.StatusCode);
+        var quote = await client.GetFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>(
+            $"/api/pricing/quote?itemId={item!["id"].GetGuid()}&customerId={customer!["id"].GetGuid()}");
+        Assert.Equal(40m, quote!["price"].GetDecimal());
+        Assert.Equal("Wholesale (-10%) + Sale (-5)", quote["source"].GetString());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Client(UserRole.Accountant).PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Classes_work_through_the_api()
+    {
+        var client = Client(UserRole.Standard);
+        var created = await client.PostAsJsonAsync("/api/segments", new { kind = "Class", name = "Retail" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var parent = (await created.Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>())!["id"].GetGuid();
+        await client.PostAsJsonAsync("/api/segments", new { kind = "Class", name = "Stores", parentId = parent });
+        var classes = await client.GetFromJsonAsync<List<Dictionary<string, System.Text.Json.JsonElement>>>("/api/segments?kind=Class");
+        Assert.Contains(classes!, c => c["fullName"].GetString() == "Retail:Stores");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/segments/tracking", new { classes = true, locations = false, locationLabel = "Store" })).StatusCode);
+        var tracking = await Client(UserRole.Accountant).PutAsJsonAsync("/api/segments/tracking", new { classes = true, locations = true, locationLabel = "Store" });
+        Assert.Equal(HttpStatusCode.OK, tracking.StatusCode);
+    }
+
+    [Fact]
+    public async Task Pages_send_users_without_the_role_to_the_access_denied_page()
+    {
+        // Sign in as the view-only user with the real form flow is long; the middleware is shared, so an API
+        // key on a page request shows the same behaviour.
+        var response = await Client(UserRole.ViewOnly).GetAsync("/settings/users");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/access-denied?needed=Admin", response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_limited_key_reaches_only_its_areas()
+    {
+        string token;
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var owner = (await sp.GetRequiredService<UserService>().ListAsync()).Single(u => u.Username == "owner");
+            token = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(owner.Id, "shop", scopes: ["sales:read", "reports:write"])).Token;
+        }
+
+        var client = Client(null);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/reports/catalog")).StatusCode);
+        var refused = await client.PostAsJsonAsync("/api/customers", new { displayName = "Not allowed" });
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Contains("auth.scope", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/vendors")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/api-keys", new { name = "escalate" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_device_can_ask_whether_it_was_removed_without_signing_in()
+    {
+        var response = await Client(null).GetAsync($"/capture/device-status/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("{\"revoked\":false}", await response.Content.ReadAsStringAsync());
+    }
+}
+
+/// <summary>The access rules on their own: a pure function of path and method, so no web app or database.</summary>
+public sealed class AccessRulesTests
+{
     [Theory]
     [InlineData("/sales/invoices/new", "GET", UserRole.Standard)]
     [InlineData("/sales/invoices/0190a7a2-0000-7000-8000-000000000000", "GET", UserRole.ViewOnly)]
@@ -196,6 +282,10 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/api/settings/sign-in", "PUT", UserRole.Admin)]
     [InlineData("/api/users/0190a7a2-0000-7000-8000-000000000000/two-factor", "DELETE", UserRole.Admin)]
     [InlineData("/account/two-factor", "POST", UserRole.ViewOnly)]
+    [InlineData("/invite/obi_x", "POST", UserRole.ViewOnly)]
+    [InlineData("/settings/users/0190a7a2-0000-7000-8000-000000000000", "POST", UserRole.Admin)]
+    [InlineData("/api/users/invites", "POST", UserRole.Admin)]
+    [InlineData("/api/users/0190a7a2-0000-7000-8000-000000000000/details", "PUT", UserRole.Admin)]
     [InlineData("/backup/download", "GET", UserRole.Admin)]
     [InlineData("/reports/profit-and-loss", "GET", UserRole.ViewOnly)]
     [InlineData("/reports/saved", "POST", UserRole.ViewOnly)]
@@ -340,86 +430,4 @@ public sealed class ApiAccessTests : IAsyncLifetime
     [InlineData("/reports/cash-forecast/scenarios", "POST", UserRole.Standard)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
-
-    [Fact]
-    public async Task Price_levels_and_rules_work_through_the_api()
-    {
-        var client = Client(UserRole.Standard);
-        var level = await (await client.PostAsJsonAsync("/api/pricing/levels", new { name = "Wholesale", kind = "FixedPercent", percent = -10 }))
-            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
-        var account = await (await Client(UserRole.Accountant).PostAsJsonAsync("/api/accounts", new { name = "Sales", type = "Income" }))
-            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
-        var item = await (await client.PostAsJsonAsync("/api/items", new { name = "Widget", type = "Service", incomeAccountId = account!["id"].GetGuid(), rate = 50 }))
-            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
-        var customer = await (await client.PostAsJsonAsync("/api/customers", new { displayName = "Shop", priceLevelId = level!["id"].GetGuid() }))
-            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
-
-        var rule = await client.PostAsJsonAsync("/api/pricing/rules", new { name = "Sale", adjustment = "Amount", value = -5, items = Array.Empty<Guid>() });
-        Assert.Equal(HttpStatusCode.Created, rule.StatusCode);
-        var quote = await client.GetFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>(
-            $"/api/pricing/quote?itemId={item!["id"].GetGuid()}&customerId={customer!["id"].GetGuid()}");
-        Assert.Equal(40m, quote!["price"].GetDecimal());
-        Assert.Equal("Wholesale (-10%) + Sale (-5)", quote["source"].GetString());
-
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await Client(UserRole.Accountant).PutAsJsonAsync("/api/pricing/rounding", new { rounding = "Dollar" })).StatusCode);
-    }
-
-    [Fact]
-    public async Task Classes_work_through_the_api()
-    {
-        var client = Client(UserRole.Standard);
-        var created = await client.PostAsJsonAsync("/api/segments", new { kind = "Class", name = "Retail" });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var parent = (await created.Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>())!["id"].GetGuid();
-        await client.PostAsJsonAsync("/api/segments", new { kind = "Class", name = "Stores", parentId = parent });
-        var classes = await client.GetFromJsonAsync<List<Dictionary<string, System.Text.Json.JsonElement>>>("/api/segments?kind=Class");
-        Assert.Contains(classes!, c => c["fullName"].GetString() == "Retail:Stores");
-
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/segments/tracking", new { classes = true, locations = false, locationLabel = "Store" })).StatusCode);
-        var tracking = await Client(UserRole.Accountant).PutAsJsonAsync("/api/segments/tracking", new { classes = true, locations = true, locationLabel = "Store" });
-        Assert.Equal(HttpStatusCode.OK, tracking.StatusCode);
-    }
-
-    [Fact]
-    public async Task Pages_send_users_without_the_role_to_the_access_denied_page()
-    {
-        // Sign in as the view-only user with the real form flow is long; the middleware is shared, so an API
-        // key on a page request shows the same behaviour.
-        var response = await Client(UserRole.ViewOnly).GetAsync("/settings/users");
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/access-denied?needed=Admin", response.Headers.Location!.OriginalString);
-    }
-
-    [Fact]
-    public async Task A_limited_key_reaches_only_its_areas()
-    {
-        string token;
-        await using (var scope = _app.Services.CreateAsyncScope())
-        {
-            var sp = scope.ServiceProvider;
-            var owner = (await sp.GetRequiredService<UserService>().ListAsync()).Single(u => u.Username == "owner");
-            token = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(owner.Id, "shop", scopes: ["sales:read", "reports:write"])).Token;
-        }
-
-        var client = Client(null);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/customers")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/reports/catalog")).StatusCode);
-        var refused = await client.PostAsJsonAsync("/api/customers", new { displayName = "Not allowed" });
-        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        Assert.Contains("auth.scope", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/vendors")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/api-keys", new { name = "escalate" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
-    }
-
-    [Fact]
-    public async Task A_device_can_ask_whether_it_was_removed_without_signing_in()
-    {
-        var response = await Client(null).GetAsync($"/capture/device-status/{Guid.NewGuid()}");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("{\"revoked\":false}", await response.Content.ReadAsStringAsync());
-    }
 }

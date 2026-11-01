@@ -32,8 +32,14 @@
   <data name="(set at setup; can't be changed)" xml:space="preserve">
     <value>(set at setup; can't be changed)</value>
   </data>
+  <data name="3–64 characters: letters, digits, '.', '_', '-' or '@'." xml:space="preserve">
+    <value>3–64 characters: letters, digits, '.', '_', '-' or '@'.</value>
+  </data>
   <data name="A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick &quot;also sign out my other sessions&quot; so it can't start capturing again (this browser stays signed in)." xml:space="preserve">
     <value>A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick "also sign out my other sessions" so it can't start capturing again (this browser stays signed in).</value>
+  </data>
+  <data name="Access ends on" xml:space="preserve">
+    <value>Access ends on</value>
   </data>
   <data name="Account" xml:space="preserve">
     <value>Account</value>
@@ -46,6 +52,9 @@
   </data>
   <data name="Active" xml:space="preserve">
     <value>Active</value>
+  </data>
+  <data name="active" xml:space="preserve">
+    <value>active</value>
   </data>
   <data name="Add" xml:space="preserve">
     <value>Add</value>
@@ -238,6 +247,9 @@
   </data>
   <data name="Confirm new password" xml:space="preserve">
     <value>Confirm new password</value>
+  </data>
+  <data name="Confirm password" xml:space="preserve">
+    <value>Confirm password</value>
   </data>
   <data name="Connect" xml:space="preserve">
     <value>Connect</value>
@@ -479,6 +491,9 @@
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>
   </data>
+  <data name="inactive" xml:space="preserve">
+    <value>inactive</value>
+  </data>
   <data name="Inactive" xml:space="preserve">
     <value>Inactive</value>
   </data>
@@ -493,6 +508,9 @@
   </data>
   <data name="Inventory" xml:space="preserve">
     <value>Inventory</value>
+  </data>
+  <data name="Invitation not found" xml:space="preserve">
+    <value>Invitation not found</value>
   </data>
   <data name="Invoice" xml:space="preserve">
     <value>Invoice</value>
@@ -514,6 +532,12 @@
   </data>
   <data name="Items" xml:space="preserve">
     <value>Items</value>
+  </data>
+  <data name="Join and sign in" xml:space="preserve">
+    <value>Join and sign in</value>
+  </data>
+  <data name="Join the books" xml:space="preserve">
+    <value>Join the books</value>
   </data>
   <data name="Journal" xml:space="preserve">
     <value>Journal</value>
@@ -653,6 +677,9 @@
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
   </data>
+  <data name="off" xml:space="preserve">
+    <value>off</value>
+  </data>
   <data name="off, set it up" xml:space="preserve">
     <value>off, set it up</value>
   </data>
@@ -682,6 +709,12 @@
   </data>
   <data name="Opening balances" xml:space="preserve">
     <value>Opening balances</value>
+  </data>
+  <data name="Optional. From this day they can't sign in and are made inactive. Leave empty for no end." xml:space="preserve">
+    <value>Optional. From this day they can't sign in and are made inactive. Leave empty for no end.</value>
+  </data>
+  <data name="Optional. Used to match single sign-on and shown on invitations." xml:space="preserve">
+    <value>Optional. Used to match single sign-on and shown on invitations.</value>
   </data>
   <data name="Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device." xml:space="preserve">
     <value>Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device.</value>
@@ -995,6 +1028,9 @@
   <data name="This browser" xml:space="preserve">
     <value>This browser</value>
   </data>
+  <data name="This invitation has expired, been withdrawn or already been used. Ask whoever invited you for a new one." xml:space="preserve">
+    <value>This invitation has expired, been withdrawn or already been used. Ask whoever invited you for a new one.</value>
+  </data>
   <data name="This recurring bill is inactive, so no bills are entered from it." xml:space="preserve">
     <value>This recurring bill is inactive, so no bills are entered from it.</value>
   </data>
@@ -1043,6 +1079,9 @@
   <data name="Turn on two-factor sign-in" xml:space="preserve">
     <value>Turn on two-factor sign-in</value>
   </data>
+  <data name="two-factor" xml:space="preserve">
+    <value>two-factor</value>
+  </data>
   <data name="Two-factor sign-in" xml:space="preserve">
     <value>Two-factor sign-in</value>
   </data>
@@ -1063,6 +1102,9 @@
   </data>
   <data name="Use account numbers" xml:space="preserve">
     <value>Use account numbers</value>
+  </data>
+  <data name="User not found" xml:space="preserve">
+    <value>User not found</value>
   </data>
   <data name="Username" xml:space="preserve">
     <value>Username</value>

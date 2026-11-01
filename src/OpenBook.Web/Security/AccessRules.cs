@@ -31,6 +31,8 @@ public static class AccessRules
         ("/portal", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/pay/", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/hooks", UserRole.ViewOnly, UserRole.ViewOnly),
+        // Accepting an invitation (the page checks its token), even while signed in as someone else.
+        ("/invite", UserRole.ViewOnly, UserRole.ViewOnly),
 
         // Admins: people, data as a whole, outgoing connections.
         ("/settings/online-payments", UserRole.Admin, UserRole.Admin),

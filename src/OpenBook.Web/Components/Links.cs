@@ -136,6 +136,8 @@ public static class Links
         "company" => "/settings",
         "closing_date" => "/settings/close-books",
         "sign_in_settings" => "/settings/sign-in",
+        "user" => $"/settings/users/{id}",
+        "user_invite" => "/settings/users#invites",
         _ => null,
     };
 

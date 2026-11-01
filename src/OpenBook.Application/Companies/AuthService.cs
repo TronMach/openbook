@@ -58,8 +58,8 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
             return new SignInResult(SignInStatus.InvalidCredentials);
         }
 
-        // An inactive user gets the same answer as a wrong password, after the same work.
-        if (!user.IsActive)
+        // An inactive user, or one whose access has ended, gets the same answer as a wrong password, after the same work.
+        if (!user.IsActive || user.AccessEnded(Today))
         {
             hasher.Verify(_dummyHash.Value, password ?? string.Empty);
             return new SignInResult(SignInStatus.InvalidCredentials);
@@ -102,7 +102,10 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
 
     /// <summary>False once the user is gone or inactive, or their credentials or role changed after the cookie was issued.</summary>
     public async Task<bool> IsSessionValidAsync(Guid userId, string securityStamp, CancellationToken ct = default) =>
-        await store.GetUserAsync(userId, ct) is { IsActive: true } user && user.SecurityStamp == securityStamp;
+        await store.GetUserAsync(userId, ct) is { IsActive: true } user && user.SecurityStamp == securityStamp && !user.AccessEnded(Today);
+
+    /// <summary>The company's today, for access that ends on a date.</summary>
+    private DateOnly Today => CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
 
     /// <summary>
     /// As above, and the cookie's own session must still count (not signed out on its own, not left behind by a new
@@ -110,7 +113,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
     /// </summary>
     public async Task<bool> IsSessionValidAsync(Guid userId, string securityStamp, Guid sessionId, CancellationToken ct = default)
     {
-        if (await store.GetUserAsync(userId, ct) is not { IsActive: true } user || user.SecurityStamp != securityStamp)
+        if (await store.GetUserAsync(userId, ct) is not { IsActive: true } user || user.SecurityStamp != securityStamp || user.AccessEnded(Today))
             return false;
         var session = await store.GetSessionAsync(sessionId, ct);
         var now = clock.UtcNow;

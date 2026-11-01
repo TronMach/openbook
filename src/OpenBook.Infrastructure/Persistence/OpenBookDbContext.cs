@@ -42,6 +42,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Nonprofit.RecurringGift> RecurringGifts => Set<OpenBook.Domain.Nonprofit.RecurringGift>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<SignInSettings> SignInSettings => Set<SignInSettings>();
+    public DbSet<UserInvite> UserInvites => Set<UserInvite>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
@@ -716,6 +717,23 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
             b.Property(u => u.ProtectedTwoFactorSecret).HasMaxLength(2000);
             b.Property(u => u.RecoveryCodeHashes).HasMaxLength(1000);
+            b.Property(u => u.Email).HasMaxLength(320);
+            b.HasIndex(u => u.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<UserInvite>(b =>
+        {
+            b.ToTable("UserInvites");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Email).HasMaxLength(320);
+            b.HasIndex(i => i.Email);
+            b.Property(i => i.Name).HasMaxLength(100);
+            b.Property(i => i.Role).HasConversion<string>().HasMaxLength(20);
+            b.Property(i => i.TokenHash).HasMaxLength(64);
+            b.HasIndex(i => i.TokenHash).IsUnique();
+            b.Property(i => i.InvitedBy).HasMaxLength(100);
+            b.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<User>().WithMany().HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SignInSettings>(b =>

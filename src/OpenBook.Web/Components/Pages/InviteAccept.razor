@@ -1,0 +1,99 @@
+@page "/invite/{Token}"
+@attribute [AllowAnonymous]
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject InviteService Invites
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Join the books"] · OpenBook</PageTitle>
+
+<div class="card narrow">
+    @if (_invite is null)
+    {
+        <h1>@L["Invitation not found"]</h1>
+        <p>@L["This invitation has expired, been withdrawn or already been used. Ask whoever invited you for a new one."]</p>
+        <p><a href="/login">@L["Sign in"]</a></p>
+    }
+    else
+    {
+        <h1>@L["Join {0}", _invite.CompanyName]</h1>
+        <p>@L["{0} invited {1} to these books as {2}. Choose a username and password to sign in with.", _invite.Invite.InvitedBy, _invite.Invite.Email, InviteService.Describe(_invite.Invite.Role)]</p>
+        @if (_invite.Invite.AccessEndsOn is { } end)
+        {
+            <p class="muted">@L["Your access ends on {0}.", end.ToString("d")]</p>
+        }
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+
+        <EditForm Model="Input" FormName="accept" OnValidSubmit="AcceptAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label for="username">@L["Username"]</label>
+                <InputText id="username" @bind-Value="Input.Username" autocomplete="username" />
+                <span class="hint">@L["3–64 characters: letters, digits, '.', '_', '-' or '@'."]</span>
+                <ValidationMessage For="() => Input.Username" />
+            </div>
+            <div class="field">
+                <label for="password">@L["Password"]</label>
+                <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="new-password" />
+                <span class="hint">@L["At least {0} characters.", User.MinPasswordLength]</span>
+                <ValidationMessage For="() => Input.Password" />
+            </div>
+            <div class="field">
+                <label for="confirm">@L["Confirm password"]</label>
+                <InputText id="confirm" type="password" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" />
+                <ValidationMessage For="() => Input.ConfirmPassword" />
+            </div>
+            <button type="submit">@L["Join and sign in"]</button>
+        </EditForm>
+    }
+</div>
+
+@code {
+    private OpenInvite? _invite;
+    private string? _error;
+
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private AcceptModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _invite = await Invites.OpenAsync(Token, HttpContext.RequestAborted);
+        Input ??= new AcceptModel { Username = _invite?.SuggestedUsername ?? string.Empty };
+    }
+
+    private async Task AcceptAsync()
+    {
+        try
+        {
+            var accepted = await Invites.AcceptAsync(Token, Input.Username, Input.Password, HttpContext.RequestAborted);
+            var result = new SignInResult(SignInStatus.Succeeded, accepted.User, MustSetUpTwoFactor: accepted.MustSetUpTwoFactor);
+            Navigation.NavigateTo(await WebSecurity.CompleteSignInAsync(HttpContext, result, "/"));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class AcceptModel
+    {
+        [Required(ErrorMessage = "Choose a username.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Choose a password.")]
+        [StringLength(User.MaxPasswordLength, MinimumLength = User.MinPasswordLength, ErrorMessage = "Passwords need 8 to 128 characters.")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Repeat the password.")]
+        [Compare(nameof(Password), ErrorMessage = "The passwords don't match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

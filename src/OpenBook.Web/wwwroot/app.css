@@ -425,3 +425,4 @@ input.lots { margin-top: 0.25rem; font-size: 0.9em; }
 code.secret { letter-spacing: 0.05em; word-break: break-all; }
 .recovery-codes { list-style: none; padding: 0; columns: 2 10rem; font-size: 1.05rem; }
 .recovery-codes li { margin-bottom: 0.35rem; }
+input.copy-link { width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem; }

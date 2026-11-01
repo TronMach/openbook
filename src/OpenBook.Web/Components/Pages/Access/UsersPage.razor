@@ -2,6 +2,8 @@
 @using System.ComponentModel.DataAnnotations
 @using OpenBook.Domain.Companies
 @inject UserService UserService
+@inject InviteService Invites
+@inject IClock Clock
 @inject NavigationManager Navigation
 
 <PageTitle>Users · OpenBook</PageTitle>
@@ -17,6 +19,7 @@
         banking, inventory and sales tax. <strong>Accountants</strong> also keep the books: chart of accounts, journal entries, closing date,
         company settings, budgets and the audit log. <strong>Admins</strong> also manage users, backups, email and webhooks.
         Changing someone's role or making them inactive signs them out. Users are never deleted, so the audit log keeps its names.
+        To bring someone in (an outside accountant, say), invite them by email below: they choose their own username and password.
     </p>
 
     @if (_message is not null)
@@ -27,6 +30,14 @@
     {
         <div class="alert error" role="alert">@_error</div>
     }
+    @if (_sent is not null)
+    {
+        <div class="alert notice" role="status">
+            <p>@(_sent.Emailed ? $"Invitation emailed to {_sent.Invite.Email}." : $"Invitation for {_sent.Invite.Email} created.") @_sent.EmailError</p>
+            <p>Invitation link (shown only now; it works until @_sent.Invite.ExpiresAt.InCompanyTime().ToString("d")):</p>
+            <input type="text" readonly value="@_sent.Link" class="copy-link" aria-label="Invitation link" onfocus="this.select()" />
+        </div>
+    }
 
     <table class="data">
         <thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th>Two-factor</th><th></th><th></th></tr></thead>
@@ -34,7 +45,17 @@
             @foreach (var user in _users)
             {
                 <tr class="@(user.IsActive ? null : "inactive")">
-                    <td>@user.Username @(user.IsActive ? "" : "(inactive)")</td>
+                    <td>
+                        <a href="/settings/users/@user.Id">@user.Username</a> @(user.IsActive ? "" : "(inactive)")
+                        @if (user.Email is not null)
+                        {
+                            <br /><span class="muted">@user.Email</span>
+                        }
+                        @if (user.AccessEndsOn is { } ends && user.IsActive)
+                        {
+                            <br /><span class="muted">access ends @Labels.Date(ends)</span>
+                        }
+                    </td>
                     <td>
                         <form method="post" @formname="@($"role-{user.Id}")" @onsubmit="() => ChangeRoleAsync(user.Id)" class="inline">
                             <AntiforgeryToken />
@@ -82,6 +103,87 @@
             }
         </tbody>
     </table>
+
+    <div class="card" id="invites">
+        <h2>Invite someone</h2>
+        <p class="muted">They get a link to choose their own username and password. With email set up (Settings → Email) it's emailed to them; either way the link is shown here to copy.</p>
+        <form method="post" @formname="invite" @onsubmit="InviteAsync">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="invite-email">Email</label>
+                    <input id="invite-email" name="InviteEmail" type="email" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="invite-name">Name (optional)</label>
+                    <input id="invite-name" name="InviteName" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="invite-role">Role</label>
+                    <select id="invite-role" name="InviteRole">
+                        @foreach (var role in Enum.GetValues<UserRole>().Reverse())
+                        {
+                            <option value="@role" selected="@(role == UserRole.Accountant)">@AccessMiddleware.Describe(role)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="invite-ends">Access ends on (optional)</label>
+                    <input id="invite-ends" name="InviteEnds" type="date" />
+                    <span class="hint">For someone who needs the books for a while, like tax season.</span>
+                </div>
+                <div class="field">
+                    <label for="invite-days">Link works for</label>
+                    <select id="invite-days" name="InviteDays">
+                        @foreach (var days in new[] { 1, 3, 7, 14, 30 })
+                        {
+                            <option value="@days" selected="@(days == UserInvite.DefaultDays)">@days @(days == 1 ? "day" : "days")</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <label class="check"><input type="checkbox" name="InviteSend" value="true" checked /> <span>Email the link</span></label>
+            <div class="actions"><button type="submit">Send invitation</button></div>
+        </form>
+
+        @if (_invites.Count > 0)
+        {
+            <h3>Invitations</h3>
+            <table class="data">
+                <thead><tr><th>Email</th><th>Role</th><th>Invited</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var invite in _invites)
+                    {
+                        var now = Clock.UtcNow;
+                        <tr>
+                            <td>@invite.Email @(invite.Name is { } n ? $"({n})" : "")</td>
+                            <td>@AccessMiddleware.Describe(invite.Role)@(invite.AccessEndsOn is { } e ? $", until {Labels.Date(e)}" : "")</td>
+                            <td class="muted">@Labels.Date(DateOnly.FromDateTime(invite.CreatedAt.InCompanyTime().DateTime)) by @invite.InvitedBy</td>
+                            <td>@Status(invite, now)</td>
+                            <td>
+                                @if (invite.Status == InviteStatus.Pending)
+                                {
+                                    <form method="post" @formname="@($"resend-{invite.Id}")" @onsubmit="() => ResendAsync(invite.Id)" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link">Send again</button>
+                                    </form>
+                                }
+                                @if (invite.IsOpen(now))
+                                {
+                                    <form method="post" @formname="@($"revoke-{invite.Id}")" @onsubmit="() => RevokeAsync(invite.Id)" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link">Withdraw</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
 
     <div class="card">
         <h2>Add a user</h2>
@@ -140,7 +242,66 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync() => _users = await UserService.ListAsync();
+    private async Task LoadAsync()
+    {
+        _users = await UserService.ListAsync();
+        // Waiting ones first, then the last 30 days of the rest.
+        var now = Clock.UtcNow;
+        _invites = (await Invites.ListAsync()).Where(i => i.Status == InviteStatus.Pending || i.CreatedAt >= now.AddDays(-30))
+            .OrderBy(i => i.IsOpen(now) ? 0 : 1).ThenByDescending(i => i.CreatedAt).ToList();
+    }
+
+    private IReadOnlyList<UserInvite> _invites = [];
+    private SentInvite? _sent;
+
+    [SupplyParameterFromForm(Name = "InviteEmail")] private string? InviteEmail { get; set; }
+    [SupplyParameterFromForm(Name = "InviteName")] private string? InviteName { get; set; }
+    [SupplyParameterFromForm(Name = "InviteRole")] private string? InviteRole { get; set; }
+    [SupplyParameterFromForm(Name = "InviteEnds")] private string? InviteEnds { get; set; }
+    [SupplyParameterFromForm(Name = "InviteDays")] private int? InviteDays { get; set; }
+    [SupplyParameterFromForm(Name = "InviteSend")] private bool InviteSend { get; set; }
+
+    private string LinkBase => $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}{HttpContext.Request.PathBase}";
+
+    private static string Status(UserInvite invite, DateTimeOffset now) => invite.Status switch
+    {
+        InviteStatus.Accepted => "accepted",
+        InviteStatus.Revoked => "withdrawn",
+        _ when invite.IsExpired(now) => "expired",
+        _ => $"waiting, until {Labels.Date(DateOnly.FromDateTime(invite.ExpiresAt.InCompanyTime().DateTime))}",
+    };
+
+    // The link is shown in this response only (it holds the token), so these don't redirect.
+    private Task InviteAsync() => ShowSentAsync(async () =>
+    {
+        var role = Enum.TryParse<UserRole>(InviteRole, out var r) ? r : UserRole.Accountant;
+        DateOnly? ends = string.IsNullOrWhiteSpace(InviteEnds) ? null
+            : DateOnly.TryParseExact(InviteEnds, "yyyy-MM-dd", out var d) ? d
+            : throw new DomainException("user.access_end_invalid", "Enter the date access ends, or leave it empty.");
+        return await Invites.InviteAsync(new InviteCommand(InviteEmail ?? string.Empty, role, InviteName, ends, InviteDays ?? UserInvite.DefaultDays, InviteSend), LinkBase);
+    });
+
+    private Task ResendAsync(Guid id) => ShowSentAsync(() => Invites.ResendAsync(id, LinkBase));
+
+    private Task RevokeAsync(Guid id) => RunAsync(async () =>
+    {
+        var invite = await Invites.RevokeAsync(id);
+        return $"The invitation for {invite.Email} was withdrawn; its link no longer works.";
+    });
+
+    private async Task ShowSentAsync(Func<Task<SentInvite>> action)
+    {
+        try
+        {
+            _sent = await action();
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+
+        await LoadAsync();
+    }
 
     private Task CreateAsync() => RunAsync(async () =>
     {

@@ -103,6 +103,52 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
         return user;
     }
 
+    /// <param name="email">Null or blank for none.</param>
+    /// <param name="accessEndsOn">Null for no end; otherwise a day after today, from which they can't sign in.</param>
+    public async Task<User> SetDetailsAsync(Guid id, string? email, DateOnly? accessEndsOn, CancellationToken ct = default)
+    {
+        var user = await GetRequiredAsync(id, ct);
+        var normalized = UserInvite.NormalizeEmail(email);
+        if (normalized is not null && await store.FindUserByEmailAsync(normalized, ct) is { } other && other.Id != user.Id)
+            throw new DomainException("user.email_taken", $"{normalized} already belongs to {other.Username}.");
+        if (accessEndsOn != user.AccessEndsOn && accessEndsOn is not null)
+        {
+            EnsureNotSelf(user, "end your own access");
+            if (user.Role == UserRole.Admin && !(await store.ListUsersAsync(ct)).Any(u => u.Id != user.Id && u.IsActive && u.Role == UserRole.Admin && u.AccessEndsOn is null))
+                throw new DomainException("user.last_admin", "There must always be an admin whose access doesn't end. Make someone else an admin first.");
+        }
+
+        var before = Snapshot(user);
+        user.SetEmail(normalized);
+        if (accessEndsOn != user.AccessEndsOn)
+            user.SetAccessEnd(accessEndsOn, CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone));
+        var after = Snapshot(user);
+        if (after != before)
+        {
+            store.Add(AuditRecord.Create(clock.UtcNow, currentUser.Actor, AuditAction.Updated, EntityType, user.Id, before, after));
+            await store.SaveChangesAsync(ct);
+        }
+
+        return user;
+    }
+
+    /// <summary>Makes inactive (signed out everywhere) every user whose access has ended; run by the hourly job.</summary>
+    /// <returns>Their usernames.</returns>
+    public async Task<IReadOnlyList<string>> EndExpiredAccessAsync(DateOnly today, CancellationToken ct = default)
+    {
+        var ended = (await store.ListUsersAsync(ct)).Where(u => u.IsActive && u.AccessEnded(today)).ToList();
+        foreach (var user in ended)
+        {
+            var before = Snapshot(user);
+            user.Deactivate();
+            store.Add(AuditRecord.Create(clock.UtcNow, currentUser.Actor, AuditAction.Updated, EntityType, user.Id, before, Snapshot(user)));
+        }
+
+        if (ended.Count > 0)
+            await store.SaveChangesAsync(ct);
+        return ended.Select(u => u.Username).ToList();
+    }
+
     private async Task<User> GetRequiredAsync(Guid id, CancellationToken ct) =>
         await store.GetUserAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
 
@@ -121,5 +167,5 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
     private AuditRecord Audit(AuditAction action, User u, string? before) =>
         AuditRecord.Create(clock.UtcNow, currentUser.Actor, action, EntityType, u.Id, before, Snapshot(u));
 
-    private static string Snapshot(User u) => JsonSerializer.Serialize(new { u.Username, Role = u.Role.ToString(), u.IsActive });
+    internal static string Snapshot(User u) => JsonSerializer.Serialize(new { u.Username, Role = u.Role.ToString(), u.IsActive, u.Email, u.AccessEndsOn });
 }

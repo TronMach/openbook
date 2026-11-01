@@ -87,7 +87,7 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
     {
         var user = await store.GetUserAsync(userId, ct);
         var now = clock.UtcNow;
-        if (user is not { IsActive: true, HasTwoFactor: true } || user.SecurityStamp != securityStamp)
+        if (user is not { IsActive: true, HasTwoFactor: true } || user.SecurityStamp != securityStamp || user.AccessEnded(CompanyTime.TodayAt(now, CompanyTime.Zone)))
             return new SignInResult(SignInStatus.InvalidCredentials);
         if (user.IsLockedOut(now))
             return new SignInResult(SignInStatus.LockedOut, LockedUntil: user.LockedUntil);
@@ -119,7 +119,8 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
     {
         var user = await store.GetUserAsync(userId, ct);
         var now = clock.UtcNow;
-        if (user is not { IsActive: true, TwoFactorEnabledAt: { } since } || since != twoFactorSince || user.SecurityStamp != securityStamp)
+        if (user is not { IsActive: true, TwoFactorEnabledAt: { } since } || since != twoFactorSince || user.SecurityStamp != securityStamp
+            || user.AccessEnded(CompanyTime.TodayAt(now, CompanyTime.Zone)))
             return new SignInResult(SignInStatus.InvalidCredentials);
         user.RecordSuccessfulLogin(now);
         await store.SaveChangesAsync(ct);
