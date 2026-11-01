@@ -60,12 +60,13 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 
 - **Fiscal year starts in**: the first month of your financial year. Most small businesses use January.
 - **Home currency**: a three-letter code such as `USD`. **This can't be changed later.** OpenBook keeps books in one currency.
+- **How do you want to start?**: **With a starter chart of accounts**, or **By importing my books from QuickBooks** (or GnuCash, Xero, Wave, FreshBooks) if you're moving in with your history.
 
 **3. Your sign-in**
 
 Choose a username and a password of at least 8 characters. This first person is an administrator and can add everyone else later.
 
-Select **Create company**. You're signed in and taken to the home page, which has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
+Select **Create company**. You're signed in and taken to the next step: the **Chart of accounts** page, which offers starter charts, or, if you chose to import, **Move in from another program** with QuickBooks Desktop already selected (see [Moving in](24-moving-in.md#importing-the-history)). The home page has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
 
 1. Pick a chart of accounts ([chapter 3](03-chart-of-accounts.md)).
 2. Enter opening balances, if you're moving from other books.

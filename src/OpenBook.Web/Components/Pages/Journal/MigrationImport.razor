@@ -12,6 +12,14 @@
         <a class="button secondary" href="/journal/import">CSV import</a>
     </div>
 
+    @if (Welcome)
+    {
+        <div class="alert notice" role="status">
+            Your company is set up. Export your books from QuickBooks (or your other program) as described below and upload the file here.
+            Prefer to start fresh? <a href="/accounts">Choose a starter chart of accounts</a> instead.
+        </div>
+    }
+
     <div class="card">
         <p>
             Choose where your books are now and upload its export. OpenBook previews everything first, leaves anything it already has (same name) as it is,
@@ -113,6 +121,10 @@
 
     [SupplyParameterFromQuery(Name = "from")]
     private string? From { get; set; }
+
+    // Arriving from company setup.
+    [SupplyParameterFromQuery(Name = "welcome")]
+    private bool Welcome { get; set; }
 
     protected override async Task OnInitializedAsync()
     {

@@ -89,6 +89,14 @@
                     <ValidationMessage For="() => Input.HomeCurrency" />
                 </div>
             </div>
+            <fieldset class="field">
+                <legend>How do you want to start?</legend>
+                <InputRadioGroup @bind-Value="Input.Start">
+                    <label class="check"><InputRadio Value="@StartFresh" /> With a starter chart of accounts</label>
+                    <label class="check"><InputRadio Value="@StartImport" /> By importing my books from QuickBooks (or GnuCash, Xero, Wave, FreshBooks)</label>
+                </InputRadioGroup>
+                <span class="hint">Importing comes next, once the company is created: you upload your QuickBooks export and see a preview before anything comes in.</span>
+            </fieldset>
         </fieldset>
 
         <fieldset>
@@ -119,6 +127,9 @@
 </div>
 
 @code {
+    private const string StartFresh = "fresh";
+    private const string StartImport = "import";
+
     private string? _error;
 
     [CascadingParameter]
@@ -148,8 +159,8 @@
 
             State.MarkSetUp();
             await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp, owner.Role));
-            // A new company has no accounts; that page offers starter charts.
-            Navigation.NavigateTo("/accounts");
+            // A new company has no accounts: the chart page offers starter charts, the import page brings in the old ones.
+            Navigation.NavigateTo(Input.Start == StartImport ? "/import/quickbooks?welcome=true" : "/accounts");
         }
         catch (DomainException ex)
         {
@@ -165,6 +176,8 @@
 
         [StringLength(200)]
         public string? LegalName { get; set; }
+
+        public string Start { get; set; } = StartFresh;
 
         public BusinessType BusinessType { get; set; } = BusinessType.SoleProprietorship;
 

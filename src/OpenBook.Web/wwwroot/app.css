@@ -143,7 +143,7 @@ input, select, textarea {
     padding: 0.5rem 0.6rem;
     width: 100%;
 }
-input[type=checkbox] { width: auto; }
+input[type=checkbox], input[type=radio] { width: auto; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .check { display: flex; gap: 0.5rem; align-items: flex-start; margin-bottom: 0.9rem; }

@@ -20,7 +20,7 @@ All importing needs the accountant role.
 
 ## Importing the history
 
-**Settings → Move in from another program** (`/import/migrate`). Choose where your books are now under **From**, upload the export file, and look at the preview.
+**Settings → Move in from another program** (`/import/migrate`), or straight from company setup by choosing **By importing my books from QuickBooks** under **How do you want to start?**. Choose where your books are now under **From**, upload the export file, and look at the preview.
 
 | From | What to export | What's read |
 | --- | --- | --- |
