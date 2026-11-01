@@ -150,6 +150,7 @@ public sealed class SingleSignOnService(
         var username = await FreeUsernameAsync(invite.Email, ct);
         // The password is random and never shown: this person signs in through the provider (an admin can reset it).
         var user = User.Create(username, hasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))), now, invite.Role);
+        await InviteService.GiveSetAsync(store, invite, user, ct);
         user.SetEmail(invite.Email);
         if (invite.AccessEndsOn is { } end && end > CompanyTime.TodayAt(now, CompanyTime.Zone))
             user.SetAccessEnd(end, CompanyTime.TodayAt(now, CompanyTime.Zone));

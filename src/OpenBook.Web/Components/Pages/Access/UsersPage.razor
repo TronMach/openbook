@@ -136,6 +136,15 @@
                         {
                             <option value="@role" selected="@(role == UserRole.Accountant)">@AccessMiddleware.Describe(role)</option>
                         }
+                        @if (_sets.Any(s => s.IsActive))
+                        {
+                            <optgroup label="Permission sets">
+                                @foreach (var set in _sets.Where(s => s.IsActive))
+                                {
+                                    <option value="set:@set.Id">@set.Name</option>
+                                }
+                            </optgroup>
+                        }
                     </select>
                 </div>
             </div>
@@ -170,7 +179,7 @@
                         var now = Clock.UtcNow;
                         <tr>
                             <td>@invite.Email @(invite.Name is { } n ? $"({n})" : "")</td>
-                            <td>@AccessMiddleware.Describe(invite.Role)@(invite.AccessEndsOn is { } e ? $", until {Labels.Date(e)}" : "")</td>
+                            <td>@(invite.PermissionSetId is { } setId ? _sets.FirstOrDefault(s => s.Id == setId)?.Name : AccessMiddleware.Describe(invite.Role))@(invite.AccessEndsOn is { } e ? $", until {Labels.Date(e)}" : "")</td>
                             <td class="muted">@Labels.Date(DateOnly.FromDateTime(invite.CreatedAt.InCompanyTime().DateTime)) by @invite.InvitedBy</td>
                             <td>@Status(invite, now)</td>
                             <td>
@@ -287,11 +296,12 @@
     // The link is shown in this response only (it holds the token), so these don't redirect.
     private Task InviteAsync() => ShowSentAsync(async () =>
     {
+        Guid? setId = InviteRole?.StartsWith("set:", StringComparison.Ordinal) == true && Guid.TryParse(InviteRole[4..], out var s) ? s : null;
         var role = Enum.TryParse<UserRole>(InviteRole, out var r) ? r : UserRole.Accountant;
         DateOnly? ends = string.IsNullOrWhiteSpace(InviteEnds) ? null
             : DateOnly.TryParseExact(InviteEnds, "yyyy-MM-dd", out var d) ? d
             : throw new DomainException("user.access_end_invalid", "Enter the date access ends, or leave it empty.");
-        return await Invites.InviteAsync(new InviteCommand(InviteEmail ?? string.Empty, role, InviteName, ends, InviteDays ?? UserInvite.DefaultDays, InviteSend), LinkBase);
+        return await Invites.InviteAsync(new InviteCommand(InviteEmail ?? string.Empty, role, InviteName, ends, InviteDays ?? UserInvite.DefaultDays, InviteSend, setId), LinkBase);
     });
 
     private Task ResendAsync(Guid id) => ShowSentAsync(() => Invites.ResendAsync(id, LinkBase));

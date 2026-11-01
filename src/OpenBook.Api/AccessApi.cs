@@ -55,10 +55,10 @@ public sealed record UserDetailsRequest(string? Email, DateOnly? AccessEndsOn);
 
 public sealed record InviteResponse(
     Guid Id, string Email, string? Name, UserRole Role, DateOnly? AccessEndsOn, string InvitedBy, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
-    InviteStatus Status, bool Expired, Guid? UserId)
+    InviteStatus Status, bool Expired, Guid? UserId, Guid? PermissionSetId = null)
 {
     public static InviteResponse From(UserInvite i, DateTimeOffset now) =>
-        new(i.Id, i.Email, i.Name, i.Role, i.AccessEndsOn, i.InvitedBy, i.CreatedAt, i.ExpiresAt, i.Status, i.IsExpired(now), i.UserId);
+        new(i.Id, i.Email, i.Name, i.Role, i.AccessEndsOn, i.InvitedBy, i.CreatedAt, i.ExpiresAt, i.Status, i.IsExpired(now), i.UserId, i.PermissionSetId);
 }
 
 /// <param name="Link">The invitation link, shown only in this response.</param>
@@ -66,7 +66,9 @@ public sealed record SentInviteResponse(InviteResponse Invite, string Link, bool
 
 /// <param name="Days">How long the link works, 1–30 (default 7).</param>
 /// <param name="SendEmail">Email the link (default); it's returned either way.</param>
-public sealed record InviteRequest(string Email, UserRole Role, string? Name = null, DateOnly? AccessEndsOn = null, int? Days = null, bool? SendEmail = null);
+/// <param name="PermissionSetId">Give a permission set instead of the role.</param>
+public sealed record InviteRequest(
+    string Email, UserRole Role, string? Name = null, DateOnly? AccessEndsOn = null, int? Days = null, bool? SendEmail = null, Guid? PermissionSetId = null);
 
 public sealed record ResendInviteRequest(int? Days = null, bool? SendEmail = null);
 
@@ -132,7 +134,7 @@ internal static class AccessApi
             (await s.ListAsync(ct)).Select(i => InviteResponse.From(i, clock.UtcNow)));
         invites.MapPost("/", async (InviteRequest r, HttpContext http, InviteService s, IClock clock, CancellationToken ct) =>
         {
-            var sent = await s.InviteAsync(new InviteCommand(r.Email, r.Role, r.Name, r.AccessEndsOn, r.Days ?? UserInvite.DefaultDays, r.SendEmail ?? true), LinkBase(http), ct);
+            var sent = await s.InviteAsync(new InviteCommand(r.Email, r.Role, r.Name, r.AccessEndsOn, r.Days ?? UserInvite.DefaultDays, r.SendEmail ?? true, r.PermissionSetId), LinkBase(http), ct);
             return Results.Created($"/api/users/invites/{sent.Invite.Id}", Sent(sent, clock));
         });
         invites.MapPost("/{id:guid}/resend", async (Guid id, ResendInviteRequest r, HttpContext http, InviteService s, IClock clock, CancellationToken ct) =>

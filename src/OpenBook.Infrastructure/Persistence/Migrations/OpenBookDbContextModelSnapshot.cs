@@ -1749,6 +1749,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PermissionSetId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("TEXT");
 
@@ -1773,6 +1776,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email");
+
+                    b.HasIndex("PermissionSetId");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -6623,6 +6628,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Companies.UserInvite", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Companies.PermissionSet", null)
+                        .WithMany()
+                        .HasForeignKey("PermissionSetId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Companies.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

@@ -18,7 +18,7 @@
     else
     {
         <h1>@L["Join {0}", _invite.CompanyName]</h1>
-        <p>@L["{0} invited {1} to these books as {2}. Choose a username and password to sign in with.", _invite.Invite.InvitedBy, _invite.Invite.Email, InviteService.Describe(_invite.Invite.Role)]</p>
+        <p>@L["{0} invited {1} to these books as {2}. Choose a username and password to sign in with.", _invite.Invite.InvitedBy, _invite.Invite.Email, _invite.Access]</p>
         @if (_invite.Invite.AccessEndsOn is { } end)
         {
             <p class="muted">@L["Your access ends on {0}.", end.ToString("d")]</p>

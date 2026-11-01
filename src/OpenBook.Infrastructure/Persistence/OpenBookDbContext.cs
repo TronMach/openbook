@@ -749,6 +749,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.InvitedBy).HasMaxLength(100);
             b.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
             b.HasOne<User>().WithMany().HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<PermissionSet>().WithMany().HasForeignKey(i => i.PermissionSetId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SignInSettings>(b =>

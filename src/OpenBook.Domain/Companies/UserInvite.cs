@@ -36,6 +36,9 @@ public sealed class UserInvite
     public string? Name { get; private set; }
     public UserRole Role { get; private set; }
 
+    /// <summary>A permission set the new user gets in place of a built-in role (<see cref="Role"/> is then its highest level).</summary>
+    public Guid? PermissionSetId { get; private set; }
+
     /// <summary>The user made from this invite is made inactive from this day on; null for no end.</summary>
     public DateOnly? AccessEndsOn { get; private set; }
 
@@ -50,8 +53,13 @@ public sealed class UserInvite
 
     /// <returns>The invite and its token, which goes only into the link.</returns>
     public static (UserInvite Invite, string Token) Create(
-        string email, string? name, UserRole role, DateOnly? accessEndsOn, int days, string invitedBy, DateTimeOffset now, DateOnly today)
+        string email, string? name, UserRole role, DateOnly? accessEndsOn, int days, string invitedBy, DateTimeOffset now, DateOnly today,
+        PermissionSet? permissionSet = null)
     {
+        if (permissionSet is { IsActive: false })
+            throw new DomainException("permission_set.inactive", $"The permission set '{permissionSet.Name}' is switched off.");
+        if (permissionSet is not null)
+            role = permissionSet.Highest;
         if (!Enum.IsDefined(role))
             throw new DomainException("user.role_invalid", $"Unknown role {role}.");
         var invite = new UserInvite
@@ -60,6 +68,7 @@ public sealed class UserInvite
             Email = NormalizeEmail(email) ?? throw new DomainException("invite.email_required", "Enter the email address to invite."),
             Name = Text.Optional(name, 100, "invite.name_too_long", "Name"),
             Role = role,
+            PermissionSetId = permissionSet?.Id,
             AccessEndsOn = CheckAccessEnd(accessEndsOn, today),
             InvitedBy = invitedBy,
             CreatedAt = now.ToUniversalTime(),

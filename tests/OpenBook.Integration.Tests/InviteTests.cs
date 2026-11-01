@@ -117,6 +117,28 @@ public sealed class InviteTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_invitation_can_give_a_permission_set()
+    {
+        var set = await Run(sp => sp.GetRequiredService<PermissionSetService>().CreateAsync("Sales clerk", null,
+            new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard }));
+        var sent = await Run(sp => sp.GetRequiredService<InviteService>().InviteAsync(
+            new InviteCommand("pat@example.com", UserRole.Admin, SendEmail: false, PermissionSetId: set.Id), Base));
+        Assert.Equal(UserRole.Standard, sent.Invite.Role);
+        Assert.Equal("the permission set 'Sales clerk'", (await Run(sp => sp.GetRequiredService<InviteService>().OpenAsync(Token(sent))))!.Access);
+
+        var accepted = await Accept(sent);
+        Assert.Equal(new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard }, accepted.User.Areas);
+        Assert.Equal(set.Id, (await _db.InDb(db => db.Users.SingleAsync(u => u.Username == "pat"))).PermissionSetId);
+
+        // A set switched off since can't be given.
+        var other = await Run(sp => sp.GetRequiredService<InviteService>().InviteAsync(
+            new InviteCommand("lee@example.com", UserRole.Standard, SendEmail: false, PermissionSetId: set.Id), Base));
+        await Run(sp => sp.GetRequiredService<UserService>().ChangeRoleAsync(accepted.User.Id, UserRole.Standard));
+        await Run(sp => sp.GetRequiredService<PermissionSetService>().SetActiveAsync(set.Id, false));
+        Assert.Equal("invite.set_inactive", (await Assert.ThrowsAsync<DomainException>(() => Accept(other, "lee"))).Code);
+    }
+
+    [Fact]
     public async Task Admins_set_a_users_email_and_access_end()
     {
         var clerk = await Run(sp => sp.GetRequiredService<UserService>().CreateAsync("clerk", "a long password", UserRole.Standard));

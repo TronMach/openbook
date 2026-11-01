@@ -8,14 +8,17 @@ namespace OpenBook.Application.Companies;
 
 /// <param name="Days">How long the link works (1–30).</param>
 /// <param name="SendEmail">Email the link when email is set up; the link is returned either way.</param>
-public sealed record InviteCommand(string Email, UserRole Role, string? Name = null, DateOnly? AccessEndsOn = null, int Days = UserInvite.DefaultDays, bool SendEmail = true);
+/// <param name="PermissionSetId">Give a permission set instead of <paramref name="Role"/>.</param>
+public sealed record InviteCommand(
+    string Email, UserRole Role, string? Name = null, DateOnly? AccessEndsOn = null, int Days = UserInvite.DefaultDays, bool SendEmail = true, Guid? PermissionSetId = null);
 
 /// <param name="Link">The invitation link, holding the token: shown once, to copy.</param>
 /// <param name="EmailError">Why the email wasn't sent, when it was asked for and failed (or email isn't set up).</param>
 public sealed record SentInvite(UserInvite Invite, string Link, bool Emailed, string? EmailError);
 
 /// <summary>What the invitation page shows before someone accepts.</summary>
-public sealed record OpenInvite(UserInvite Invite, string CompanyName, string SuggestedUsername);
+/// <param name="Access">The role or permission set the invitation gives, in words ("accountant", "the permission set 'Sales clerk'").</param>
+public sealed record OpenInvite(UserInvite Invite, string CompanyName, string SuggestedUsername, string Access);
 
 public sealed record AcceptedInvite(AuthenticatedUser User, bool MustSetUpTwoFactor);
 
@@ -36,7 +39,10 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
     {
         ArgumentNullException.ThrowIfNull(command);
         var now = clock.UtcNow;
-        var (invite, token) = UserInvite.Create(command.Email, command.Name, command.Role, command.AccessEndsOn, command.Days, currentUser.Actor, now, Today);
+        var set = command.PermissionSetId is { } setId
+            ? await store.GetPermissionSetAsync(setId, ct) ?? throw new EntityNotFoundException(PermissionSetService.EntityType, setId)
+            : null;
+        var (invite, token) = UserInvite.Create(command.Email, command.Name, command.Role, command.AccessEndsOn, command.Days, currentUser.Actor, now, Today, set);
         if (await store.FindUserByEmailAsync(invite.Email, ct) is { } user)
             throw new DomainException("user.email_taken", $"{invite.Email} already belongs to {user.Username}.");
         if ((await store.ListInvitesAsync(ct)).Any(i => i.Email == invite.Email && i.IsOpen(now)))
@@ -75,7 +81,7 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
         if (await FindOpenAsync(token, ct) is not { } invite)
             return null;
         var company = await store.GetCompanyAsync(ct);
-        return new OpenInvite(invite, company?.Name ?? "OpenBook", await SuggestUsernameAsync(invite.Email, ct));
+        return new OpenInvite(invite, company?.Name ?? "OpenBook", await SuggestUsernameAsync(invite.Email, ct), await AccessAsync(invite, ct));
     }
 
     /// <summary>Creates the user with the invitation's role, email and access end. The caller signs them in.</summary>
@@ -94,6 +100,7 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
 
         var now = clock.UtcNow;
         var user = User.Create(normalized, hasher.Hash(password), now, invite.Role);
+        await GiveSetAsync(store, invite, user, ct);
         user.SetEmail(invite.Email);
         user.SetAccessEnd(invite.AccessEndsOn, Today);
         user.RecordSuccessfulLogin(now);
@@ -106,6 +113,26 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
 
         var settings = await store.GetSignInSettingsAsync(ct);
         return new AcceptedInvite(await store.AuthenticatedAsync(user, ct), settings?.RequiresTwoFactor(user.Role) == true);
+    }
+
+    /// <summary>Gives the new user the invitation's permission set, if it has one; refused when the set was switched off since.</summary>
+    internal static async Task GiveSetAsync(ICompanyStore store, UserInvite invite, User user, CancellationToken ct)
+    {
+        if (invite.PermissionSetId is not { } setId)
+            return;
+        var set = await store.GetPermissionSetAsync(setId, ct);
+        if (set is not { IsActive: true })
+            throw new DomainException("invite.set_inactive", "The permission set this invitation gives has been switched off. Ask for a new invitation.");
+        user.AssignPermissionSet(set);
+    }
+
+    /// <summary>The role or permission set an invitation gives, in words.</summary>
+    public async Task<string> AccessAsync(UserInvite invite, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(invite);
+        return invite.PermissionSetId is { } id && await store.GetPermissionSetAsync(id, ct) is { } set
+            ? $"the permission set '{set.Name}'"
+            : Describe(invite.Role);
     }
 
     public static string Link(string linkBase, string token) => $"{(linkBase ?? string.Empty).TrimEnd('/')}/invite/{token}";
@@ -123,7 +150,7 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
         var body = $"""
             {greeting}
 
-            {currentUser.Actor} has invited you to the books of {company} in OpenBook, as {Describe(invite.Role)}.
+            {currentUser.Actor} has invited you to the books of {company} in OpenBook, {(invite.PermissionSetId is null ? "as " : "with ")}{await AccessAsync(invite, ct)}.
 
             Choose your username and password here:
             {link}
@@ -184,6 +211,7 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
         i.Email,
         i.Name,
         Role = i.Role.ToString(),
+        i.PermissionSetId,
         i.AccessEndsOn,
         i.ExpiresAt,
         Status = i.Status.ToString(),

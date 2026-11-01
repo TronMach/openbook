@@ -33,7 +33,7 @@ On the same page you can **Make new recovery codes** (the old ones stop working)
 
 ### Inviting someone
 
-To bring someone in, such as an outside accountant, invite them rather than making up a password for them: **Settings → Users** → **Invite someone**. Enter their email (and a name if you like), choose a role, and optionally **Access ends on**, for someone who needs the books for a while, like tax season. **Link works for** sets how long the invitation stays open (7 days unless you choose otherwise).
+To bring someone in, such as an outside accountant, invite them rather than making up a password for them: **Settings → Users** → **Invite someone**. Enter their email (and a name if you like), choose a role (or a permission set, listed under **Permission sets** in the same list), and optionally **Access ends on**, for someone who needs the books for a while, like tax season. **Link works for** sets how long the invitation stays open (7 days unless you choose otherwise).
 
 **Send invitation** emails them a link when email is set up (**Settings → Email**); either way the page shows the link once, to copy and send yourself. Following it, they choose their own username and password and are signed in with the role you gave them. If their role must use two-factor sign-in, they set it up next.
 

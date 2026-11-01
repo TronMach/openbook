@@ -1756,6 +1756,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("PermissionSetId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1780,6 +1783,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email");
+
+                    b.HasIndex("PermissionSetId");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -6638,6 +6643,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Companies.UserInvite", b =>
                 {
+                    b.HasOne("OpenBook.Domain.Companies.PermissionSet", null)
+                        .WithMany()
+                        .HasForeignKey("PermissionSetId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OpenBook.Domain.Companies.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
