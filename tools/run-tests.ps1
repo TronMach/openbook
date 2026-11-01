@@ -5,7 +5,8 @@
 .DESCRIPTION
     xUnit runs as many tests at once as there are processor cores, and the PostgreSQL suite makes the database server
     work as hard, which can freeze the machine. This caps the tests running at once (-Threads, default a quarter of
-    the cores) and starts the run at below-normal priority (the test host inherits it). A trx results file is saved per test
+    the cores; 12 for PostgreSQL, whose tests spend most of their time waiting on the database server) and starts the
+    run at below-normal priority (the test host inherits it). A trx results file is saved per test
     project, so failures are named.
 
 .EXAMPLE
@@ -16,7 +17,7 @@
 #>
 param(
     [switch]$Postgres,
-    [int]$Threads = [Math]::Max(2, [int]([Environment]::ProcessorCount / 4)),
+    [int]$Threads = 0,
     [string]$Filter,
     [string]$EnvFile,
     [string]$Results = (Join-Path ([IO.Path]::GetTempPath()) 'openbook-test-results')
@@ -25,6 +26,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $name = if ($Postgres) { 'postgres' } else { 'sqlite' }
+if ($Threads -le 0) { $Threads = if ($Postgres) { [Math]::Min(12, [Environment]::ProcessorCount) } else { [Math]::Max(2, [int]([Environment]::ProcessorCount / 4)) } }
 $arguments = @('test')
 if ($Postgres) {
     $arguments += 'tests/OpenBook.Integration.Tests'
