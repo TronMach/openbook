@@ -80,6 +80,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, banking.StatusCode);
         Assert.Contains("access to banking", await banking.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/users")).StatusCode);
+        Assert.Equal("/access-denied?needed=ViewOnly&area=banking", (await client.GetAsync("/banking")).Headers.Location!.OriginalString);
     }
 
     [Fact]

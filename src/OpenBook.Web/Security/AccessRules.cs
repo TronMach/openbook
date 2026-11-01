@@ -311,7 +311,8 @@ public sealed class AccessMiddleware(RequestDelegate next)
                 }
                 else
                 {
-                    var area = AccessRules.AreaOf(http.Request.Path);
+                    // The area only matters to someone with a permission set (the page explains their level there).
+                    var area = http.User.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim) ? AccessRules.AreaOf(http.Request.Path) : null;
                     http.Response.Redirect(area is null ? $"/access-denied?needed={needed}" : $"/access-denied?needed={needed}&area={area}");
                 }
 
