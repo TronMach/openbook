@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpenBook.Application.Centers;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
@@ -92,6 +94,45 @@ public sealed class SimpleViewTests : IAsyncLifetime
         Assert.Equal((false, false), (f.OrdersUsed, f.SalesReceiptsUsed));
         Assert.Equal((1, 0), (f.ActiveItems, f.StockItems));
     }
+
+    [Fact]
+    public async Task Centers_list_every_transaction_of_a_customer_a_vendor_and_an_item()
+    {
+        var undeposited = await _db.CreateAccount("Undeposited Funds", AccountType.OtherCurrentAsset, "1200");
+        var income = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var widget = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Widget", ItemType.Inventory, income.Id, 10m, PurchaseCost: 4m)));
+        var acme = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Acme", PaymentTermsDays: 10)));
+        var globex = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Globex")));
+        var vendor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Parts Co")));
+
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(vendor.Id, new DateOnly(2026, 1, 2), [new BillLineDraft(Guid.Empty, 40m, null, widget.Id, 10m)], DueDate: Jan31.AddDays(10), Reference: "B-77")));
+        var old = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(acme.Id, new DateOnly(2026, 1, 5), [new SalesLineDraft(widget.Id, null, 3m, 10m)])));
+        var voided = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(acme.Id, new DateOnly(2026, 1, 6), [new SalesLineDraft(widget.Id, null, 1m, 10m)])));
+        await _db.InScope(sp => sp.GetRequiredService<InvoiceService>().VoidAsync(voided.Id, "Entered twice"));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(globex.Id, new DateOnly(2026, 1, 7), [new SalesLineDraft(widget.Id, null, 2m, 10m)])));
+        var payment = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(acme.Id, Jan31, undeposited.Id, [new ApplyToInvoice(old.Id, 10m)], "CHK 9", Amount: 15m)));
+        await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(acme.Id, Jan31, [new SalesLineDraft(widget.Id, null, 5m, 10m)])));
+        var shrink = await In<InventoryAdjustmentService, Domain.Inventory.InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Jan31, [new(widget.Id, -1m)], Reference: "Count")));
+
+        var customer = await In<CenterService, IReadOnlyList<CenterRow>>(s => s.CustomerAsync(acme.Id, Jan31));
+        Assert.Equal(["payment", "estimate", "invoice", "invoice"], customer.Select(r => r.EntityType));
+        Assert.Equal((payment.Id, 15m, 5m, CenterState.Posted), (customer[0].Id, customer[0].Amount, customer[0].Open, customer[0].State));
+        Assert.Equal(CenterState.Pending, customer[1].State);
+        Assert.Equal((voided.Id, CenterState.Voided, (decimal?)null), (customer[2].Id, customer[2].State, customer[2].Open));
+        Assert.Equal((old.Id, 30m, 20m, CenterState.Overdue), (customer[3].Id, customer[3].Amount, customer[3].Open, customer[3].State));
+
+        var bills = await In<CenterService, IReadOnlyList<CenterRow>>(s => s.VendorAsync(vendor.Id, Jan31));
+        var row = Assert.Single(bills);
+        Assert.Equal(("bill", bill.Id, "B-77", 40m, 40m, CenterState.Open), (row.EntityType, row.Id, row.Number, row.Amount, row.Open, row.State));
+
+        // Every document with a line for the item, any customer, with its quantity; and the stock adjustment.
+        var item = await In<CenterService, IReadOnlyList<CenterRow>>(s => s.ItemAsync(widget.Id));
+        Assert.Equal(
+            [("estimate", 5m), ("inventory_adjustment", -1m), ("invoice", 2m), ("invoice", 1m), ("invoice", 3m), ("bill", 10m)],
+            item.Select(r => (r.EntityType, r.Quantity ?? 0m)));
+        Assert.Equal((shrink.Id, -4m), (item[1].Id, item[1].Amount));
+        Assert.Equal(CenterState.Voided, item[3].State);
+    }
 }
 
 /// <summary>The simple view through the real pages: chosen at setup, drawn by the layout, switched by the link.</summary>
@@ -173,6 +214,48 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<OpenBookDbContext>();
         Assert.Equal(ViewMode.Simple, (await db.Companies.SingleAsync()).DefaultViewMode);
         Assert.Equal(("owner", ViewMode.Simple), await db.ViewPreferences.Select(p => ValueTuple.Create(p.Username, p.Mode)).SingleAsync());
+    }
+
+    [Fact]
+    public async Task The_customer_center_shows_the_chosen_customer_and_their_transactions()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var setup = await browser.GetStringAsync("/setup");
+        await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["_handler"] = "setup",
+            ["__RequestVerificationToken"] = TokenIn(setup),
+            ["Input.CompanyName"] = "Corner Shop",
+            ["Input.FiscalYearStartMonth"] = "1",
+            ["Input.HomeCurrency"] = "USD",
+            ["Input.Username"] = "owner",
+            ["Input.Password"] = "correct horse battery",
+            ["Input.ConfirmPassword"] = "correct horse battery",
+        }));
+
+        Guid acme, invoice;
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var income = await sp.GetRequiredService<Application.Accounts.AccountService>().CreateAsync(new Application.Accounts.CreateAccountCommand("Sales", AccountType.Income));
+            var item = await sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Repair", ItemType.Service, income.Id, 80m));
+            await sp.GetRequiredService<CustomerService>().CreateAsync(new CustomerDetails("Aardvark Ltd"));
+            acme = (await sp.GetRequiredService<CustomerService>().CreateAsync(new CustomerDetails("Acme"))).Id;
+            invoice = (await sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(acme, new DateOnly(2026, 1, 5), [new SalesLineDraft(item.Id, null, 1m, 80m)]))).Id;
+        }
+
+        // Without an id the first name is shown; with one, that customer, their invoice and links that fill them in.
+        Assert.Contains("<h2>Aardvark Ltd</h2>", await browser.GetStringAsync("/customers/center"), StringComparison.Ordinal);
+        var page = await browser.GetStringAsync($"/customers/center?id={acme}");
+        Assert.Contains("<h2>Acme</h2>", page, StringComparison.Ordinal);
+        Assert.Contains($"href=\"/sales/invoices/{invoice}\"", page, StringComparison.Ordinal);
+        Assert.Contains($"href=\"/sales/invoices/new?customer={acme}\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain($"href=\"/sales/invoices/{invoice}\"", await browser.GetStringAsync($"/customers/center?id={acme}&type=payment"), StringComparison.Ordinal);
+        Assert.Contains("Aardvark Ltd", await browser.GetStringAsync("/customers/center?q=aard"), StringComparison.Ordinal);
+        Assert.DoesNotContain(">Acme<", await browser.GetStringAsync("/customers/center?q=aard"), StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/vendors/center")).StatusCode);
+        Assert.Contains("Repair", await browser.GetStringAsync("/items/center"), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -9,6 +9,7 @@
     <div class="toolbar">
         <h1>@_terms.Customers</h1>
         <a class="button secondary" href="@(ShowInactive ? "/customers" : "/customers?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
+        <a class="button secondary" href="/customers/center">@_terms.Customer Center</a>
         <a class="button secondary" href="/customers/import">Import CSV</a>
         <a class="button" href="/customers/new">New @_terms.LowerCustomer</a>
     </div>

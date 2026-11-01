@@ -17,9 +17,9 @@
         },
         (Edition switch
         {
-            Edition.Nonprofit => ("/customers", L["Donor List"]),
-            Edition.ProfessionalServices => ("/customers", L["Client List"]),
-            _ => ("/customers", L["Customer List"]),
+            Edition.Nonprofit => ("/customers/center", L["Donor Center"]),
+            Edition.ProfessionalServices => ("/customers/center", L["Client Center"]),
+            _ => ("/customers/center", L["Customer Center"]),
         }),
         Edition == Edition.Nonprofit ? ("/nonprofit/gifts/new", L["Record a Gift"]) : default,
         Edition == Edition.ProfessionalServices ? ("/time", L["Enter Time"]) : default,
@@ -31,14 +31,14 @@
         Edition == Edition.ECommerce ? ("/sales/channels", L["Sales Channels and Payouts"]) : default,
         ("/sales", L["All Sales"]))
     @Menu(L["Vendors"],
-        ("/vendors", L["Vendor List"]),
+        ("/vendors/center", L["Vendor Center"]),
         ("/purchases/orders/new", L["Create Purchase Orders"]),
         ("/purchases/bills/new", L["Enter Bills"]),
         ("/purchases/pay-bills", L["Pay Bills"]),
         ("/purchases/vendor-credits/new", L["Enter Vendor Credits"]),
         ("/purchases", L["All Purchases"]))
     @Menu(L["Inventory"],
-        ("/items", L["Item List"]),
+        ("/items/center", L["Item Center"]),
         ("/items/new", L["New Item"]),
         ("/purchases/orders", L["Receive Inventory"]),
         ("/inventory/adjustments/new", L["Adjust Quantity on Hand"]),

@@ -442,15 +442,16 @@ input.copy-link { width: 100%; font-family: ui-monospace, SFMono-Regular, Consol
 }
 .menubar .view-switch { margin: 0 0 0 auto; }
 .menu { position: relative; }
-.menu > summary {
+.menubar .menu > summary {
     list-style: none;
     cursor: pointer;
     padding: 0.3rem 0.65rem;
     border-radius: 4px;
     user-select: none;
 }
+.menu > summary { list-style: none; cursor: pointer; }
 .menu > summary::-webkit-details-marker { display: none; }
-.menu > summary:hover, .menu[open] > summary { background: var(--bg); }
+.menubar .menu > summary:hover, .menubar .menu[open] > summary { background: var(--bg); }
 .menu-list {
     position: absolute;
     top: 100%;
@@ -562,4 +563,28 @@ a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
     .flow-arrow { width: 2rem; height: 1.5rem; justify-self: center; transform: rotate(90deg); }
     .flow-steps.sales .flow-arrow.a4 { display: none; }
     .flow-box { min-height: 0; }
+}
+
+/* Customer, vendor and item centers: a list of names beside the chosen record. */
+.center { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.center-list { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; }
+.center-list .toolbar { margin-bottom: 0.5rem; }
+.center-list h1 { font-size: 1.15rem; margin: 0; }
+.center-search input { width: 100%; }
+.center-names { list-style: none; margin: 0.5rem 0; padding: 0; max-height: 65vh; overflow-y: auto; }
+.center-names a { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.6rem; border-radius: 4px; color: var(--text); text-decoration: none; }
+.center-names a:hover { background: var(--bg); }
+.center-names li.selected a { background: var(--notice-bg); font-weight: 600; }
+.center-names li.inactive a { color: var(--muted); }
+.center-names .num { white-space: nowrap; }
+.center-detail h2 { margin: 0; }
+.center-filter { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin-bottom: 0.75rem; }
+.center-filter label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; color: var(--muted); }
+.center-new .menu-list { left: auto; right: 0; z-index: 10; }
+.center-new > summary.button { display: inline-block; }
+
+@media (max-width: 800px) {
+    .center { grid-template-columns: minmax(0, 1fr); }
+    .center-detail { order: -1; }
+    .center-names { max-height: 40vh; }
 }

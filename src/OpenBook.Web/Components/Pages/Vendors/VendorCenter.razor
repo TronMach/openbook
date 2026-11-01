@@ -1,0 +1,166 @@
+@page "/vendors/center"
+@using OpenBook.Application.Centers
+@using OpenBook.Web.Components.Centers
+@inject VendorService VendorService
+@inject CenterService Centers
+
+@* Vendor Center: every vendor with what you owe them on the left, the chosen one's details and transactions on the
+   right. Reads only; every action opens its usual page. *@
+<PageTitle>@L["Vendor Center"] · OpenBook</PageTitle>
+
+<div class="wide center">
+    <aside class="center-list" aria-label="@L["Vendor Center"]">
+        <div class="toolbar">
+            <h1>@L["Vendor Center"]</h1>
+            @if (HttpContext.User.CanReach("/vendors/new"))
+            {
+                <a class="button" href="/vendors/new">@L["New"]</a>
+            }
+        </div>
+        <form method="get" action="/vendors/center" class="center-search" role="search" data-enhance="false">
+            @if (_selected is not null)
+            {
+                <input type="hidden" name="id" value="@_selected.Vendor.Id" />
+            }
+            @if (ShowInactive)
+            {
+                <input type="hidden" name="showInactive" value="true" />
+            }
+            <input type="search" name="q" value="@Q" placeholder="@L["Find by name"]" aria-label="@L["Find by name"]" />
+        </form>
+        @if (_shown.Count == 0)
+        {
+            <p class="muted">@(_all.Count == 0 ? L["Nobody here yet."] : L["No names match."])</p>
+        }
+        <ul class="center-names">
+            @foreach (var v in _shown)
+            {
+                <li class="@(v.Vendor.Id == _selected?.Vendor.Id ? "selected" : null) @(v.Vendor.IsActive ? null : "inactive")">
+                    <a href="@Link(v.Vendor.Id)">
+                        <span>@v.Vendor.DisplayName</span>
+                        <span class="@(v.Overdue > 0m ? "num out-of-balance" : "num")">@Labels.AmountOrBlank(v.Balance)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+        <p><a class="muted" href="@(ShowInactive ? "/vendors/center" : "/vendors/center?showInactive=true")">@(ShowInactive ? L["Hide inactive"] : L["Show inactive"])</a></p>
+    </aside>
+
+    <section class="center-detail">
+        @if (_selected is { } sel)
+        {
+            var v = sel.Vendor;
+            <div class="toolbar">
+                <h2>@v.DisplayName</h2>
+                @if (!v.IsActive)
+                {
+                    <span class="badge">@L["Inactive"]</span>
+                }
+                <a class="button secondary" href="/vendors/@v.Id">@L["Edit details"]</a>
+                <details class="menu center-new">
+                    <summary class="button">@L["New transaction"]</summary>
+                    <div class="menu-list">
+                        @foreach (var (href, label) in NewLinks(v.Id).Where(l => HttpContext.User.CanReach(l.Href)))
+                        {
+                            <a href="@href">@label</a>
+                        }
+                    </div>
+                </details>
+            </div>
+            <div class="summary-bar">
+                <div><span class="label">@L["You owe"]</span><span class="value">@Labels.Amount(sel.Balance)</span></div>
+                <div><span class="label">@L["Overdue"]</span><span class="value @(sel.Overdue > 0m ? "off" : null)">@Labels.Amount(sel.Overdue)</span></div>
+                <div><span class="label">@L["Unpaid bills"]</span><span class="value">@sel.OpenBills</span></div>
+            </div>
+            <div class="card">
+                <dl class="facts">
+                    @if (v.CompanyName is not null)
+                    {
+                        <dt>@L["Company"]</dt>
+                        <dd>@v.CompanyName</dd>
+                    }
+                    @if (v.Email is not null)
+                    {
+                        <dt>@L["Email"]</dt>
+                        <dd><a href="mailto:@v.Email">@v.Email</a></dd>
+                    }
+                    @if (v.Phone is not null)
+                    {
+                        <dt>@L["Phone"]</dt>
+                        <dd>@v.Phone</dd>
+                    }
+                    @if (v.Address is not null)
+                    {
+                        <dt>@L["Address"]</dt>
+                        <dd style="white-space: pre-line">@v.Address</dd>
+                    }
+                    @if (v.AccountNumber is not null)
+                    {
+                        <dt>@L["Your account number"]</dt>
+                        <dd>@v.AccountNumber</dd>
+                    }
+                </dl>
+            </div>
+            <h3>@L["Transactions"]</h3>
+            <CenterTransactions Rows="_rows" Action="/vendors/center" Keep="Kept" Type="@Type" Dates="@Dates" />
+            <Notes EntityType="vendor" EntityId="v.Id" />
+        }
+        else if (_all.Count == 0 && HttpContext.User.CanReach("/vendors/new"))
+        {
+            <div class="card"><p><a href="/vendors/new">@L["Add the first one"]</a></p></div>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<VendorSummary> _all = [];
+    private List<VendorSummary> _shown = [];
+    private VendorSummary? _selected;
+    private IReadOnlyList<CenterRow> _rows = [];
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Q { get; set; }
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Type { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Dates { get; set; }
+
+    private IReadOnlyList<(string Name, string? Value)> Kept =>
+        [("id", _selected?.Vendor.Id.ToString()), ("q", Q), ("showInactive", ShowInactive ? "true" : null)];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = await VendorService.ListAsync(CompanyTime.Today, ShowInactive);
+        _shown = string.IsNullOrWhiteSpace(Q)
+            ? _all.ToList()
+            : _all.Where(v => v.Vendor.DisplayName.Contains(Q.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                || (v.Vendor.CompanyName?.Contains(Q.Trim(), StringComparison.CurrentCultureIgnoreCase) ?? false)).ToList();
+        // The chosen one, else the first in the list, so the page always shows someone.
+        _selected = (Id is { } id ? _all.FirstOrDefault(v => v.Vendor.Id == id) : null) ?? _shown.FirstOrDefault();
+        if (_selected is not null)
+            _rows = await Centers.VendorAsync(_selected.Vendor.Id, CompanyTime.Today, HttpContext.RequestAborted);
+    }
+
+    private string Link(Guid id) =>
+        $"/vendors/center?id={id}" + (string.IsNullOrWhiteSpace(Q) ? "" : $"&q={Uri.EscapeDataString(Q)}") + (ShowInactive ? "&showInactive=true" : "");
+
+    private IEnumerable<(string Href, string Label)> NewLinks(Guid id) =>
+    [
+        ($"/purchases/bills/new?vendor={id}", L["Enter Bills"]),
+        ($"/purchases/pay-bills?vendor={id}", L["Pay Bills"]),
+        ($"/purchases/orders/new?vendor={id}", L["Create Purchase Orders"]),
+        ($"/purchases/vendor-credits/new?vendor={id}", L["Enter Vendor Credits"]),
+        ("/banking/write-checks", L["Write Checks"]),
+    ];
+}

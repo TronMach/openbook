@@ -15,6 +15,8 @@ Use one or the other for the same purchase, never both, or it will be counted tw
 
 ## Vendors
 
+**Vendor Center** on the vendor list shows the list and one vendor side by side, with every bill, payment, expense, credit and purchase order they have; see [The simple view](28-simple-view.md#customer-vendor-and-item-centers).
+
 **Purchases → Vendors → New vendor** (or `n` then `v`):
 
 - **Display name** (unique), **company**, **email**, **phone** and **address**.

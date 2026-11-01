@@ -29,16 +29,16 @@
         applyTheme();
     });
 
-    // Simple view menu bar (<details> drop-downs): one open at a time, closed by a click elsewhere or Esc, and while
-    // one is open, pointing at another menu opens that one, as menu bars do.
-    const openMenus = () => [...document.querySelectorAll('.menubar details.menu[open]')];
+    // Drop-down menus (<details class="menu">: the simple view's menu bar, a center's "New transaction"): one open at
+    // a time, closed by a click elsewhere or Esc; in the menu bar, while one is open, pointing at another opens it.
+    const openMenus = () => [...document.querySelectorAll('details.menu[open]')];
     document.addEventListener('click', e => {
-        const inside = e.target instanceof Element ? e.target.closest('.menubar details.menu') : null;
+        const inside = e.target instanceof Element ? e.target.closest('details.menu') : null;
         for (const menu of openMenus()) if (menu !== inside) menu.open = false;
     });
     document.addEventListener('toggle', e => {
         const menu = e.target;
-        if (!(menu instanceof HTMLDetailsElement) || !menu.open || !menu.matches('.menubar details.menu')) return;
+        if (!(menu instanceof HTMLDetailsElement) || !menu.open || !menu.matches('details.menu')) return;
         for (const other of openMenus()) if (other !== menu) other.open = false;
     }, true);
     document.addEventListener('mouseover', e => {

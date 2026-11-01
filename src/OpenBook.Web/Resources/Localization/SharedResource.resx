@@ -47,6 +47,9 @@
   <data name="A shorter menu and a home page that shows each step of the work" xml:space="preserve">
     <value>A shorter menu and a home page that shows each step of the work</value>
   </data>
+  <data name="Accepted" xml:space="preserve">
+    <value>Accepted</value>
+  </data>
   <data name="Access ends on" xml:space="preserve">
     <value>Access ends on</value>
   </data>
@@ -77,6 +80,9 @@
   <data name="Add a rate" xml:space="preserve">
     <value>Add a rate</value>
   </data>
+  <data name="Add the first one" xml:space="preserve">
+    <value>Add the first one</value>
+  </data>
   <data name="Add-ins" xml:space="preserve">
     <value>Add-ins</value>
   </data>
@@ -95,6 +101,9 @@
   <data name="Admins" xml:space="preserve">
     <value>Admins</value>
   </data>
+  <data name="All dates" xml:space="preserve">
+    <value>All dates</value>
+  </data>
   <data name="All paid" xml:space="preserve">
     <value>All paid</value>
   </data>
@@ -106,6 +115,9 @@
   </data>
   <data name="All Sales" xml:space="preserve">
     <value>All Sales</value>
+  </data>
+  <data name="All transactions" xml:space="preserve">
+    <value>All transactions</value>
   </data>
   <data name="also sign out my other sessions" xml:space="preserve">
     <value>also sign out my other sessions</value>
@@ -142,6 +154,9 @@
   </data>
   <data name="As sold" xml:space="preserve">
     <value>As sold</value>
+  </data>
+  <data name="Assembly build" xml:space="preserve">
+    <value>Assembly build</value>
   </data>
   <data name="Audit log" xml:space="preserve">
     <value>Audit log</value>
@@ -182,6 +197,9 @@
   <data name="Backup restored. Sign in with an account from the restored file." xml:space="preserve">
     <value>Backup restored. Sign in with an account from the restored file.</value>
   </data>
+  <data name="Bad debt write-off" xml:space="preserve">
+    <value>Bad debt write-off</value>
+  </data>
   <data name="Balance due" xml:space="preserve">
     <value>Balance due</value>
   </data>
@@ -191,11 +209,20 @@
   <data name="Banking" xml:space="preserve">
     <value>Banking</value>
   </data>
+  <data name="Barcode" xml:space="preserve">
+    <value>Barcode</value>
+  </data>
   <data name="Biggest expenses, year to date" xml:space="preserve">
     <value>Biggest expenses, year to date</value>
   </data>
+  <data name="Bill" xml:space="preserve">
+    <value>Bill</value>
+  </data>
   <data name="Bill for what you sold" xml:space="preserve">
     <value>Bill for what you sold</value>
+  </data>
+  <data name="Bill payment" xml:space="preserve">
+    <value>Bill payment</value>
   </data>
   <data name="Bill to" xml:space="preserve">
     <value>Bill to</value>
@@ -230,6 +257,9 @@
   <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
   <data name="Capture" xml:space="preserve">
     <value>Capture</value>
   </data>
@@ -260,6 +290,12 @@
   <data name="Channel" xml:space="preserve">
     <value>Channel</value>
   </data>
+  <data name="Channel orders" xml:space="preserve">
+    <value>Channel orders</value>
+  </data>
+  <data name="Channel return" xml:space="preserve">
+    <value>Channel return</value>
+  </data>
   <data name="Chart of Accounts" xml:space="preserve">
     <value>Chart of Accounts</value>
   </data>
@@ -268,6 +304,9 @@
   </data>
   <data name="Check in what arrives on an order" xml:space="preserve">
     <value>Check in what arrives on an order</value>
+  </data>
+  <data name="Check or expense" xml:space="preserve">
+    <value>Check or expense</value>
   </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
@@ -278,8 +317,8 @@
   <data name="Client (application) ID" xml:space="preserve">
     <value>Client (application) ID</value>
   </data>
-  <data name="Client List" xml:space="preserve">
-    <value>Client List</value>
+  <data name="Client Center" xml:space="preserve">
+    <value>Client Center</value>
   </data>
   <data name="Client or project" xml:space="preserve">
     <value>Client or project</value>
@@ -292,6 +331,9 @@
   </data>
   <data name="Close the books" xml:space="preserve">
     <value>Close the books</value>
+  </data>
+  <data name="Closed" xml:space="preserve">
+    <value>Closed</value>
   </data>
   <data name="closing date, closing password and year-end close" xml:space="preserve">
     <value>closing date, closing password and year-end close</value>
@@ -323,6 +365,9 @@
   <data name="Connect" xml:space="preserve">
     <value>Connect</value>
   </data>
+  <data name="Cost" xml:space="preserve">
+    <value>Cost</value>
+  </data>
   <data name="Counts toward" xml:space="preserve">
     <value>Counts toward</value>
   </data>
@@ -343,6 +388,9 @@
   </data>
   <data name="Create Purchase Orders" xml:space="preserve">
     <value>Create Purchase Orders</value>
+  </data>
+  <data name="Create Sales Orders" xml:space="preserve">
+    <value>Create Sales Orders</value>
   </data>
   <data name="Created" xml:space="preserve">
     <value>Created</value>
@@ -371,8 +419,8 @@
   <data name="Customer" xml:space="preserve">
     <value>Customer</value>
   </data>
-  <data name="Customer List" xml:space="preserve">
-    <value>Customer List</value>
+  <data name="Customer Center" xml:space="preserve">
+    <value>Customer Center</value>
   </data>
   <data name="Customers" xml:space="preserve">
     <value>Customers</value>
@@ -386,11 +434,17 @@
   <data name="Date" xml:space="preserve">
     <value>Date</value>
   </data>
+  <data name="Dates" xml:space="preserve">
+    <value>Dates</value>
+  </data>
   <data name="Days to get paid" xml:space="preserve">
     <value>Days to get paid</value>
   </data>
   <data name="Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run." xml:space="preserve">
     <value>Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run.</value>
+  </data>
+  <data name="Declined" xml:space="preserve">
+    <value>Declined</value>
   </data>
   <data name="Defaults to the name." xml:space="preserve">
     <value>Defaults to the name.</value>
@@ -419,8 +473,8 @@
   <data name="Document reading" xml:space="preserve">
     <value>Document reading</value>
   </data>
-  <data name="Donor List" xml:space="preserve">
-    <value>Donor List</value>
+  <data name="Donor Center" xml:space="preserve">
+    <value>Donor Center</value>
   </data>
   <data name="Donors" xml:space="preserve">
     <value>Donors</value>
@@ -445,6 +499,9 @@
   </data>
   <data name="Edit" xml:space="preserve">
     <value>Edit</value>
+  </data>
+  <data name="Edit details" xml:space="preserve">
+    <value>Edit details</value>
   </data>
   <data name="Edition" xml:space="preserve">
     <value>Edition</value>
@@ -530,6 +587,12 @@
   <data name="Fetch payouts now" xml:space="preserve">
     <value>Fetch payouts now</value>
   </data>
+  <data name="Find by name" xml:space="preserve">
+    <value>Find by name</value>
+  </data>
+  <data name="Find by name, description or barcode" xml:space="preserve">
+    <value>Find by name, description or barcode</value>
+  </data>
   <data name="Finished" xml:space="preserve">
     <value>Finished</value>
   </data>
@@ -577,6 +640,9 @@
   </data>
   <data name="Gross margin" xml:space="preserve">
     <value>Gross margin</value>
+  </data>
+  <data name="Hide inactive" xml:space="preserve">
+    <value>Hide inactive</value>
   </data>
   <data name="History" xml:space="preserve">
     <value>History</value>
@@ -647,8 +713,8 @@
   <data name="Item" xml:space="preserve">
     <value>Item</value>
   </data>
-  <data name="Item List" xml:space="preserve">
-    <value>Item List</value>
+  <data name="Item Center" xml:space="preserve">
+    <value>Item Center</value>
   </data>
   <data name="Items" xml:space="preserve">
     <value>Items</value>
@@ -680,11 +746,23 @@
   <data name="Kind" xml:space="preserve">
     <value>Kind</value>
   </data>
+  <data name="Landed cost" xml:space="preserve">
+    <value>Landed cost</value>
+  </data>
   <data name="Language" xml:space="preserve">
     <value>Language</value>
   </data>
   <data name="Language and region" xml:space="preserve">
     <value>Language and region</value>
+  </data>
+  <data name="Last 12 months" xml:space="preserve">
+    <value>Last 12 months</value>
+  </data>
+  <data name="Last 30 days" xml:space="preserve">
+    <value>Last 30 days</value>
+  </data>
+  <data name="Last 90 days" xml:space="preserve">
+    <value>Last 90 days</value>
   </data>
   <data name="Last active" xml:space="preserve">
     <value>Last active</value>
@@ -779,6 +857,9 @@
   <data name="Net payout" xml:space="preserve">
     <value>Net payout</value>
   </data>
+  <data name="New" xml:space="preserve">
+    <value>New</value>
+  </data>
   <data name="New invoice" xml:space="preserve">
     <value>New invoice</value>
   </data>
@@ -803,11 +884,20 @@
   <data name="New recurring invoice" xml:space="preserve">
     <value>New recurring invoice</value>
   </data>
+  <data name="New transaction" xml:space="preserve">
+    <value>New transaction</value>
+  </data>
   <data name="Next" xml:space="preserve">
     <value>Next</value>
   </data>
   <data name="No device has used the capture page yet." xml:space="preserve">
     <value>No device has used the capture page yet.</value>
+  </data>
+  <data name="No items match." xml:space="preserve">
+    <value>No items match.</value>
+  </data>
+  <data name="No names match." xml:space="preserve">
+    <value>No names match.</value>
   </data>
   <data name="No payouts yet." xml:space="preserve">
     <value>No payouts yet.</value>
@@ -821,8 +911,17 @@
   <data name="No SKUs yet: import or fetch some orders first." xml:space="preserve">
     <value>No SKUs yet: import or fetch some orders first.</value>
   </data>
+  <data name="No transactions match." xml:space="preserve">
+    <value>No transactions match.</value>
+  </data>
+  <data name="No transactions yet." xml:space="preserve">
+    <value>No transactions yet.</value>
+  </data>
   <data name="Nobody (each person decides)" xml:space="preserve">
     <value>Nobody (each person decides)</value>
+  </data>
+  <data name="Nobody here yet." xml:space="preserve">
+    <value>Nobody here yet.</value>
   </data>
   <data name="None" xml:space="preserve">
     <value>None</value>
@@ -848,6 +947,9 @@
   <data name="Nothing due this week" xml:space="preserve">
     <value>Nothing due this week</value>
   </data>
+  <data name="Nothing here yet." xml:space="preserve">
+    <value>Nothing here yet.</value>
+  </data>
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
   </data>
@@ -863,11 +965,17 @@
   <data name="Nothing to receive" xml:space="preserve">
     <value>Nothing to receive</value>
   </data>
+  <data name="Number" xml:space="preserve">
+    <value>Number</value>
+  </data>
   <data name="off, set it up" xml:space="preserve">
     <value>off, set it up</value>
   </data>
   <data name="On" xml:space="preserve">
     <value>On</value>
+  </data>
+  <data name="On hand" xml:space="preserve">
+    <value>On hand</value>
   </data>
   <data name="Online payments" xml:space="preserve">
     <value>Online payments</value>
@@ -880,6 +988,12 @@
   </data>
   <data name="Open" xml:space="preserve">
     <value>Open</value>
+  </data>
+  <data name="Open balance" xml:space="preserve">
+    <value>Open balance</value>
+  </data>
+  <data name="Open invoices" xml:space="preserve">
+    <value>Open invoices</value>
   </data>
   <data name="Open the capture page" xml:space="preserve">
     <value>Open the capture page</value>
@@ -914,17 +1028,26 @@
   <data name="Orders" xml:space="preserve">
     <value>Orders</value>
   </data>
+  <data name="Other" xml:space="preserve">
+    <value>Other</value>
+  </data>
   <data name="Other OpenID Connect provider" xml:space="preserve">
     <value>Other OpenID Connect provider</value>
   </data>
   <data name="Other: issuer address" xml:space="preserve">
     <value>Other: issuer address</value>
   </data>
+  <data name="Overdue" xml:space="preserve">
+    <value>Overdue</value>
+  </data>
   <data name="Overdue invoice" xml:space="preserve">
     <value>Overdue invoice</value>
   </data>
   <data name="Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open." xml:space="preserve">
     <value>Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open.</value>
+  </data>
+  <data name="Paid" xml:space="preserve">
+    <value>Paid</value>
   </data>
   <data name="Paid and credited" xml:space="preserve">
     <value>Paid and credited</value>
@@ -956,6 +1079,9 @@
   <data name="Pay what's due, several at once" xml:space="preserve">
     <value>Pay what's due, several at once</value>
   </data>
+  <data name="Payment" xml:space="preserve">
+    <value>Payment</value>
+  </data>
   <data name="Payments" xml:space="preserve">
     <value>Payments</value>
   </data>
@@ -967,6 +1093,9 @@
   </data>
   <data name="PDF" xml:space="preserve">
     <value>PDF</value>
+  </data>
+  <data name="Pending" xml:space="preserve">
+    <value>Pending</value>
   </data>
   <data name="People and connections" xml:space="preserve">
     <value>People and connections</value>
@@ -1013,6 +1142,9 @@
   <data name="Posting" xml:space="preserve">
     <value>Posting</value>
   </data>
+  <data name="Price" xml:space="preserve">
+    <value>Price</value>
+  </data>
   <data name="Print Checks" xml:space="preserve">
     <value>Print Checks</value>
   </data>
@@ -1027,6 +1159,9 @@
   </data>
   <data name="Provider" xml:space="preserve">
     <value>Provider</value>
+  </data>
+  <data name="Purchase order" xml:space="preserve">
+    <value>Purchase order</value>
   </data>
   <data name="Purchase Orders" xml:space="preserve">
     <value>Purchase Orders</value>
@@ -1045,6 +1180,9 @@
   </data>
   <data name="Quantity" xml:space="preserve">
     <value>Quantity</value>
+  </data>
+  <data name="Quantity adjustment" xml:space="preserve">
+    <value>Quantity adjustment</value>
   </data>
   <data name="Quick ratio" xml:space="preserve">
     <value>Quick ratio</value>
@@ -1079,6 +1217,9 @@
   <data name="Receive Payments" xml:space="preserve">
     <value>Receive Payments</value>
   </data>
+  <data name="Received on an order" xml:space="preserve">
+    <value>Received on an order</value>
+  </data>
   <data name="Reconcile" xml:space="preserve">
     <value>Reconcile</value>
   </data>
@@ -1112,6 +1253,9 @@
   <data name="Reference" xml:space="preserve">
     <value>Reference</value>
   </data>
+  <data name="Refund" xml:space="preserve">
+    <value>Refund</value>
+  </data>
   <data name="Refunds" xml:space="preserve">
     <value>Refunds</value>
   </data>
@@ -1135,6 +1279,9 @@
   </data>
   <data name="Removed" xml:space="preserve">
     <value>Removed</value>
+  </data>
+  <data name="Reorder at" xml:space="preserve">
+    <value>Reorder at</value>
   </data>
   <data name="Repeat every" xml:space="preserve">
     <value>Repeat every</value>
@@ -1166,6 +1313,9 @@
   <data name="Restricted or secret key" xml:space="preserve">
     <value>Restricted or secret key</value>
   </data>
+  <data name="Retainer" xml:space="preserve">
+    <value>Retainer</value>
+  </data>
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>
   </data>
@@ -1180,6 +1330,12 @@
   </data>
   <data name="Sales Channels and Payouts" xml:space="preserve">
     <value>Sales Channels and Payouts</value>
+  </data>
+  <data name="Sales order" xml:space="preserve">
+    <value>Sales order</value>
+  </data>
+  <data name="Sales receipt" xml:space="preserve">
+    <value>Sales receipt</value>
   </data>
   <data name="Sales Receipts" xml:space="preserve">
     <value>Sales Receipts</value>
@@ -1244,6 +1400,9 @@
   <data name="Show" xml:space="preserve">
     <value>Show</value>
   </data>
+  <data name="Show inactive" xml:space="preserve">
+    <value>Show inactive</value>
+  </data>
   <data name="Sign in" xml:space="preserve">
     <value>Sign in</value>
   </data>
@@ -1301,6 +1460,9 @@
   <data name="State" xml:space="preserve">
     <value>State</value>
   </data>
+  <data name="Statement" xml:space="preserve">
+    <value>Statement</value>
+  </data>
   <data name="Status" xml:space="preserve">
     <value>Status</value>
   </data>
@@ -1309,6 +1471,9 @@
   </data>
   <data name="Stock Status" xml:space="preserve">
     <value>Stock Status</value>
+  </data>
+  <data name="Stock transfer" xml:space="preserve">
+    <value>Stock transfer</value>
   </data>
   <data name="Store address" xml:space="preserve">
     <value>Store address</value>
@@ -1445,6 +1610,9 @@
   <data name="Unlink" xml:space="preserve">
     <value>Unlink</value>
   </data>
+  <data name="Unpaid bills" xml:space="preserve">
+    <value>Unpaid bills</value>
+  </data>
   <data name="Use account numbers" xml:space="preserve">
     <value>Use account numbers</value>
   </data>
@@ -1457,11 +1625,20 @@
   <data name="Users" xml:space="preserve">
     <value>Users</value>
   </data>
+  <data name="Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
   <data name="Vendor" xml:space="preserve">
     <value>Vendor</value>
   </data>
-  <data name="Vendor List" xml:space="preserve">
-    <value>Vendor List</value>
+  <data name="Vendor Center" xml:space="preserve">
+    <value>Vendor Center</value>
+  </data>
+  <data name="Vendor credit" xml:space="preserve">
+    <value>Vendor credit</value>
+  </data>
+  <data name="Vendor refund" xml:space="preserve">
+    <value>Vendor refund</value>
   </data>
   <data name="Vendors" xml:space="preserve">
     <value>Vendors</value>
@@ -1486,6 +1663,9 @@
   </data>
   <data name="Void this invoice" xml:space="preserve">
     <value>Void this invoice</value>
+  </data>
+  <data name="Voided" xml:space="preserve">
+    <value>Voided</value>
   </data>
   <data name="Waiting to post" xml:space="preserve">
     <value>Waiting to post</value>
@@ -1556,11 +1736,17 @@
   <data name="You don't have access to that" xml:space="preserve">
     <value>You don't have access to that</value>
   </data>
+  <data name="You owe" xml:space="preserve">
+    <value>You owe</value>
+  </data>
   <data name="You owe vendors" xml:space="preserve">
     <value>You owe vendors</value>
   </data>
   <data name="You saved" xml:space="preserve">
     <value>You saved</value>
+  </data>
+  <data name="Your account number" xml:space="preserve">
+    <value>Your account number</value>
   </data>
   <data name="Your devices" xml:space="preserve">
     <value>Your devices</value>

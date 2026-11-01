@@ -1,0 +1,183 @@
+@page "/items/center"
+@using OpenBook.Application.Centers
+@using OpenBook.Web.Components.Centers
+@inject ItemService ItemService
+@inject OpenBook.Application.Inventory.InventoryService Inventory
+@inject CenterService Centers
+
+@* Item Center: every product and service with its price or stock on the left, the chosen one's details and every
+   document and stock movement it's on at the right. Reads only; every action opens its usual page. *@
+<PageTitle>@L["Item Center"] · OpenBook</PageTitle>
+
+<div class="wide center">
+    <aside class="center-list" aria-label="@L["Item Center"]">
+        <div class="toolbar">
+            <h1>@L["Item Center"]</h1>
+            @if (HttpContext.User.CanReach("/items/new"))
+            {
+                <a class="button" href="/items/new">@L["New"]</a>
+            }
+        </div>
+        <form method="get" action="/items/center" class="center-search" role="search" data-enhance="false">
+            @if (_selected is not null)
+            {
+                <input type="hidden" name="id" value="@_selected.Id" />
+            }
+            @if (ShowInactive)
+            {
+                <input type="hidden" name="showInactive" value="true" />
+            }
+            <input type="search" name="q" value="@Q" placeholder="@L["Find by name, description or barcode"]" aria-label="@L["Find by name, description or barcode"]" />
+        </form>
+        @if (_shown.Count == 0)
+        {
+            <p class="muted">@(_all.Count == 0 ? L["Nothing here yet."] : L["No items match."])</p>
+        }
+        <ul class="center-names">
+            @foreach (var it in _shown)
+            {
+                <li class="@(it.Id == _selected?.Id ? "selected" : null) @(it.IsActive ? null : "inactive")">
+                    <a href="@Link(it.Id)">
+                        <span>@it.Name</span>
+                        @if (_stock.TryGetValue(it.Id, out var level))
+                        {
+                            <span class="@(it.ReorderPoint is { } reorder && level.Quantity <= reorder ? "num out-of-balance" : "num")" title="@L["On hand"]">@level.Quantity.ToString("0.####")</span>
+                        }
+                        else
+                        {
+                            <span class="num muted">@Labels.AmountOrBlank(it.Rate)</span>
+                        }
+                    </a>
+                </li>
+            }
+        </ul>
+        <p><a class="muted" href="@(ShowInactive ? "/items/center" : "/items/center?showInactive=true")">@(ShowInactive ? L["Hide inactive"] : L["Show inactive"])</a></p>
+    </aside>
+
+    <section class="center-detail">
+        @if (_selected is { } item)
+        {
+            var stock = _stock.GetValueOrDefault(item.Id);
+            <div class="toolbar">
+                <h2>@item.Name</h2>
+                @if (!item.IsActive)
+                {
+                    <span class="badge">@L["Inactive"]</span>
+                }
+                <a class="button secondary" href="/items/@item.Id">@L["Edit details"]</a>
+                <details class="menu center-new">
+                    <summary class="button">@L["New transaction"]</summary>
+                    <div class="menu-list">
+                        @foreach (var (href, label) in NewLinks(item).Where(l => HttpContext.User.CanReach(l.Href)))
+                        {
+                            <a href="@href">@label</a>
+                        }
+                    </div>
+                </details>
+            </div>
+            @if (stock is not null)
+            {
+                <div class="summary-bar">
+                    <div><span class="label">@L["On hand"]</span><span class="value @(item.ReorderPoint is { } atLevel && stock.Quantity <= atLevel ? "off" : null)">@stock.Quantity.ToString("0.####")</span></div>
+                    <div><span class="label">@L["Value"]</span><span class="value">@Labels.Amount(stock.Value)</span></div>
+                    @if (item.ReorderPoint is { } point)
+                    {
+                        <div><span class="label">@L["Reorder at"]</span><span class="value">@point.ToString("0.####")</span></div>
+                    }
+                </div>
+            }
+            <div class="card">
+                <dl class="facts">
+                    <dt>@L["Type"]</dt>
+                    <dd>@Labels.For(item.Type)</dd>
+                    @if (item.Description is not null)
+                    {
+                        <dt>@L["Description"]</dt>
+                        <dd>@item.Description</dd>
+                    }
+                    <dt>@L["Price"]</dt>
+                    <dd>@Labels.Amount(item.Rate)</dd>
+                    @if (item.PurchaseCost > 0m)
+                    {
+                        <dt>@L["Cost"]</dt>
+                        <dd>@Labels.Amount(item.PurchaseCost)</dd>
+                    }
+                    @if (item.Barcode is not null)
+                    {
+                        <dt>@L["Barcode"]</dt>
+                        <dd>@item.Barcode</dd>
+                    }
+                </dl>
+            </div>
+            <h3>@L["Transactions"]</h3>
+            <CenterTransactions Rows="_rows" Action="/items/center" Keep="Kept" Type="@Type" Dates="@Dates" ShowQuantity="true" />
+            <Notes EntityType="item" EntityId="item.Id" />
+        }
+        else if (_all.Count == 0 && HttpContext.User.CanReach("/items/new"))
+        {
+            <div class="card"><p><a href="/items/new">@L["Add the first one"]</a></p></div>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<Item> _all = [];
+    private List<Item> _shown = [];
+    private Item? _selected;
+    private IReadOnlyDictionary<Guid, OpenBook.Application.Inventory.StockLevel> _stock = new Dictionary<Guid, OpenBook.Application.Inventory.StockLevel>();
+    private IReadOnlyList<CenterRow> _rows = [];
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Q { get; set; }
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Type { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Dates { get; set; }
+
+    private IReadOnlyList<(string Name, string? Value)> Kept =>
+        [("id", _selected?.Id.ToString()), ("q", Q), ("showInactive", ShowInactive ? "true" : null)];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = (await ItemService.ListAsync(ShowInactive)).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        _stock = (await Inventory.StockAsync(null, HttpContext.RequestAborted)).ToDictionary(s => s.Item.Id);
+        var q = Q?.Trim();
+        _shown = string.IsNullOrEmpty(q)
+            ? _all.ToList()
+            : _all.Where(i => i.Name.Contains(q, StringComparison.CurrentCultureIgnoreCase)
+                || (i.Description?.Contains(q, StringComparison.CurrentCultureIgnoreCase) ?? false)
+                || string.Equals(i.Barcode, q, StringComparison.OrdinalIgnoreCase)).ToList();
+        // The chosen one, else the first in the list, so the page always shows something.
+        _selected = (Id is { } id ? _all.FirstOrDefault(i => i.Id == id) : null) ?? _shown.FirstOrDefault();
+        if (_selected is not null)
+            _rows = await Centers.ItemAsync(_selected.Id, HttpContext.RequestAborted);
+    }
+
+    private string Link(Guid id) =>
+        $"/items/center?id={id}" + (string.IsNullOrWhiteSpace(Q) ? "" : $"&q={Uri.EscapeDataString(Q)}") + (ShowInactive ? "&showInactive=true" : "");
+
+    private IEnumerable<(string Href, string Label)> NewLinks(Item item)
+    {
+        yield return ("/sales/invoices/new", L["Create Invoices"]);
+        yield return ("/sales/receipts/new", L["Enter Sales Receipts"]);
+        yield return ("/sales/estimates/new", L["Create Estimates"]);
+        if (item.IsInventory)
+        {
+            yield return ("/purchases/orders/new", L["Create Purchase Orders"]);
+            yield return ("/inventory/adjustments/new", L["Adjust Quantity on Hand"]);
+        }
+        if (item.IsAssembly)
+            yield return ("/inventory/builds/new", L["Build Assemblies"]);
+    }
+}

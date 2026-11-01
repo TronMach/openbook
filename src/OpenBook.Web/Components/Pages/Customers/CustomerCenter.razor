@@ -1,0 +1,176 @@
+@page "/customers/center"
+@using OpenBook.Application.Centers
+@using OpenBook.Domain.Companies
+@using OpenBook.Web.Components.Centers
+@inject CustomerService CustomerService
+@inject CenterService Centers
+@inject ICompanyStore Companies
+
+@* Customer Center: every customer with what they owe on the left, the chosen one's details and transactions on the
+   right. Reads only; every action opens its usual page. *@
+<PageTitle>@Title · OpenBook</PageTitle>
+
+<div class="wide center">
+    <aside class="center-list" aria-label="@Title">
+        <div class="toolbar">
+            <h1>@Title</h1>
+            @if (HttpContext.User.CanReach("/customers/new"))
+            {
+                <a class="button" href="/customers/new">@L["New"]</a>
+            }
+        </div>
+        <form method="get" action="/customers/center" class="center-search" role="search" data-enhance="false">
+            @if (_selected is not null)
+            {
+                <input type="hidden" name="id" value="@_selected.Customer.Id" />
+            }
+            @if (ShowInactive)
+            {
+                <input type="hidden" name="showInactive" value="true" />
+            }
+            <input type="search" name="q" value="@Q" placeholder="@L["Find by name"]" aria-label="@L["Find by name"]" />
+        </form>
+        @if (_shown.Count == 0)
+        {
+            <p class="muted">@(_all.Count == 0 ? L["Nobody here yet."] : L["No names match."])</p>
+        }
+        <ul class="center-names">
+            @foreach (var s in _shown)
+            {
+                <li class="@(s.Customer.Id == _selected?.Customer.Id ? "selected" : null) @(s.Customer.IsActive ? null : "inactive")">
+                    <a href="@Link(s.Customer.Id)" style="@(s.Level > 0 ? $"padding-left: {0.6 + s.Level * 1}rem" : null)" title="@s.FullName">
+                        <span>@s.Customer.DisplayName</span>
+                        <span class="@(s.Overdue > 0m ? "num out-of-balance" : "num")">@Labels.AmountOrBlank(s.Balance)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+        <p><a class="muted" href="@(ShowInactive ? "/customers/center" : "/customers/center?showInactive=true")">@(ShowInactive ? L["Hide inactive"] : L["Show inactive"])</a></p>
+    </aside>
+
+    <section class="center-detail">
+        @if (_selected is { } sel)
+        {
+            var c = sel.Customer;
+            <div class="toolbar">
+                <h2>@c.DisplayName</h2>
+                @if (!c.IsActive)
+                {
+                    <span class="badge">@L["Inactive"]</span>
+                }
+                <a class="button secondary" href="/customers/@c.Id">@L["Edit details"]</a>
+                <details class="menu center-new">
+                    <summary class="button">@L["New transaction"]</summary>
+                    <div class="menu-list">
+                        @foreach (var (href, label) in NewLinks(c.Id).Where(l => HttpContext.User.CanReach(l.Href)))
+                        {
+                            <a href="@href">@label</a>
+                        }
+                    </div>
+                </details>
+            </div>
+            <div class="summary-bar">
+                <div><span class="label">@L["Open balance"]</span><span class="value">@Labels.Amount(sel.Balance)</span></div>
+                <div><span class="label">@L["Overdue"]</span><span class="value @(sel.Overdue > 0m ? "off" : null)">@Labels.Amount(sel.Overdue)</span></div>
+                <div><span class="label">@L["Open invoices"]</span><span class="value">@sel.OpenInvoices</span></div>
+            </div>
+            <div class="card">
+                <dl class="facts">
+                    @if (c.CompanyName is not null)
+                    {
+                        <dt>@L["Company"]</dt>
+                        <dd>@c.CompanyName</dd>
+                    }
+                    @if (c.Email is not null)
+                    {
+                        <dt>@L["Email"]</dt>
+                        <dd><a href="mailto:@c.Email">@c.Email</a></dd>
+                    }
+                    @if (c.Phone is not null)
+                    {
+                        <dt>@L["Phone"]</dt>
+                        <dd>@c.Phone</dd>
+                    }
+                    @if (c.BillingAddress is not null)
+                    {
+                        <dt>@L["Bill to"]</dt>
+                        <dd style="white-space: pre-line">@c.BillingAddress</dd>
+                    }
+                    <dt>@L["Terms"]</dt>
+                    <dd>@c.Terms.Label</dd>
+                </dl>
+            </div>
+            <h3>@L["Transactions"]</h3>
+            <CenterTransactions Rows="_rows" Action="/customers/center" Keep="Kept" Type="@Type" Dates="@Dates" />
+            <Notes EntityType="customer" EntityId="c.Id" />
+        }
+        else if (_all.Count == 0 && HttpContext.User.CanReach("/customers/new"))
+        {
+            <div class="card"><p><a href="/customers/new">@L["Add the first one"]</a></p></div>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<CustomerSummary> _all = [];
+    private List<CustomerSummary> _shown = [];
+    private CustomerSummary? _selected;
+    private IReadOnlyList<CenterRow> _rows = [];
+    private Edition _edition;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Q { get; set; }
+
+    [SupplyParameterFromQuery]
+    private bool ShowInactive { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Type { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Dates { get; set; }
+
+    private string Title => _edition switch
+    {
+        Edition.Nonprofit => L["Donor Center"],
+        Edition.ProfessionalServices => L["Client Center"],
+        _ => L["Customer Center"],
+    };
+
+    private IReadOnlyList<(string Name, string? Value)> Kept =>
+        [("id", _selected?.Customer.Id.ToString()), ("q", Q), ("showInactive", ShowInactive ? "true" : null)];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _edition = (await Companies.GetCompanyAsync(HttpContext.RequestAborted))?.Edition ?? Edition.General;
+        _all = await CustomerService.ListAsync(CompanyTime.Today, ShowInactive);
+        _shown = string.IsNullOrWhiteSpace(Q)
+            ? _all.ToList()
+            : _all.Where(s => (s.FullName ?? s.Customer.DisplayName).Contains(Q.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                || (s.Customer.CompanyName?.Contains(Q.Trim(), StringComparison.CurrentCultureIgnoreCase) ?? false)).ToList();
+        // The chosen one, else the first in the list, so the page always shows someone.
+        _selected = (Id is { } id ? _all.FirstOrDefault(s => s.Customer.Id == id) : null) ?? _shown.FirstOrDefault();
+        if (_selected is not null)
+            _rows = await Centers.CustomerAsync(_selected.Customer.Id, CompanyTime.Today, HttpContext.RequestAborted);
+    }
+
+    private string Link(Guid id) =>
+        $"/customers/center?id={id}" + (string.IsNullOrWhiteSpace(Q) ? "" : $"&q={Uri.EscapeDataString(Q)}") + (ShowInactive ? "&showInactive=true" : "");
+
+    private IEnumerable<(string Href, string Label)> NewLinks(Guid id) =>
+    [
+        ($"/sales/invoices/new?customer={id}", L["Create Invoices"]),
+        ($"/sales/payments/new?customer={id}", L["Receive Payments"]),
+        ($"/sales/estimates/new?customer={id}", L["Create Estimates"]),
+        ($"/sales/receipts/new?customer={id}", L["Enter Sales Receipts"]),
+        ($"/sales/credit-memos/new?customer={id}", L["Create Credit Memos"]),
+        ($"/sales/orders/new?customer={id}", L["Create Sales Orders"]),
+        ($"/customers/{id}/statement", L["Statement"]),
+    ];
+}

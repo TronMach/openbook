@@ -4,7 +4,7 @@
 @* The simple view's shortcut column: the few places a one-person business goes every day, plus its edition's own. *@
 <nav class="shortcuts" aria-label="@L["Shortcuts"]">
     @Link("/", L["Home"], Icons.Home, NavLinkMatch.All)
-    @Link("/customers", Edition switch
+    @Link("/customers/center", Edition switch
     {
         Edition.Nonprofit => L["Donors"],
         Edition.ProfessionalServices => L["Clients"],
@@ -18,8 +18,8 @@
     {
         @Link("/nonprofit/gifts", L["Gifts"], Icons.Gift)
     }
-    @Link("/vendors", L["Vendors"], Icons.Store)
-    @Link("/items", L["Items"], Icons.Box)
+    @Link("/vendors/center", L["Vendors"], Icons.Store)
+    @Link("/items/center", L["Items"], Icons.Box)
     @if (Edition == Edition.ECommerce)
     {
         @Link("/sales/channels", L["Sales channels"], Icons.Cart)

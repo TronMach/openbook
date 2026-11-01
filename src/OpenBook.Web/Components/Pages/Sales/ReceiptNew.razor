@@ -135,8 +135,13 @@
             .ToList();
         _depositAccountId = (_depositAccounts.FirstOrDefault(a => string.Equals(a.Name, SalesAccounts.UndepositedFundsName, StringComparison.OrdinalIgnoreCase))
             ?? _depositAccounts.FirstOrDefault())?.Id ?? Guid.Empty;
+        _customerId = PresetCustomer;
+        DefaultTaxCode();
         _loaded = true;
     }
+
+    [SupplyParameterFromQuery(Name = "customer")]
+    private Guid? PresetCustomer { get; set; }
 
     private async Task SaveAsync()
     {

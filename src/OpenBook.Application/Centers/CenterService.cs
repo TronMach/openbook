@@ -1,0 +1,162 @@
+using OpenBook.Application.Inventory;
+using OpenBook.Application.Purchases;
+using OpenBook.Application.Sales;
+using OpenBook.Domain.Banking;
+using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
+using OpenBook.Domain.Purchases;
+using OpenBook.Domain.Sales;
+
+namespace OpenBook.Application.Centers;
+
+/// <summary>Where a transaction stands, for the centers' lists.</summary>
+public enum CenterState
+{
+    Posted,
+    Open,
+    Overdue,
+    Paid,
+    Voided,
+    Pending,
+    Accepted,
+    Declined,
+    Closed,
+    Cancelled,
+}
+
+/// <summary>
+/// One transaction in a center's list. <see cref="EntityType"/> is the audit entity type (the page links it), the
+/// amount is the document's own total in its usual sign, <see cref="Open"/> what's still unpaid or unused, and
+/// <see cref="Quantity"/> the item's quantity on it (item center only).
+/// </summary>
+public sealed record CenterRow(
+    string EntityType,
+    Guid Id,
+    DateOnly Date,
+    string? Number,
+    string? Detail,
+    decimal Amount,
+    decimal? Open,
+    CenterState State,
+    decimal? Quantity = null);
+
+/// <summary>
+/// The customer, vendor and item centers: every transaction that belongs to one record, newest first. Reads only;
+/// each row links to the document's own page, where everything is done as usual.
+/// </summary>
+public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, IInventoryStore inventory)
+{
+    public async Task<IReadOnlyList<CenterRow>> CustomerAsync(Guid customerId, DateOnly today, CancellationToken ct = default)
+    {
+        var rows = new List<CenterRow>();
+        foreach (var i in await sales.ListInvoicesAsync(customerId, ct))
+            rows.Add(new(InvoiceType, i.Id, i.Date, i.Number, i.Memo, i.Total, i.IsOpen ? i.Balance : null,
+                i.Status == DocumentStatus.Voided ? CenterState.Voided : i.IsOverdue(today) ? CenterState.Overdue : i.IsOpen ? CenterState.Open : CenterState.Paid));
+        foreach (var p in await sales.ListPaymentsAsync(customerId, ct))
+            rows.Add(new("payment", p.Id, p.Date, p.Reference, p.Memo, p.Amount, p.Status == DocumentStatus.Posted && p.Unapplied > 0m ? p.Unapplied : null, Posted(p.Status)));
+        foreach (var r in (await sales.ListReceiptsAsync(ct)).Where(r => r.CustomerId == customerId))
+            rows.Add(new("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Total, null, Posted(r.Status)));
+        foreach (var c in await sales.ListCreditMemosAsync(customerId, ct))
+            rows.Add(new("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Total, c.Status == DocumentStatus.Posted && c.Balance > 0m ? c.Balance : null, Posted(c.Status)));
+        foreach (var r in await sales.ListRefundsAsync(customerId, ct))
+            rows.Add(new("refund", r.Id, r.Date, r.Reference, r.Memo, r.Amount, null, Posted(r.Status)));
+        foreach (var e in await sales.ListEstimatesAsync(customerId, ct))
+            rows.Add(new("estimate", e.Id, e.Date, e.Number, e.Memo, e.Total, null, e.Status switch
+            {
+                EstimateStatus.Accepted => CenterState.Accepted,
+                EstimateStatus.Declined => CenterState.Declined,
+                EstimateStatus.Closed => CenterState.Closed,
+                _ => CenterState.Pending,
+            }));
+        foreach (var o in await sales.ListSalesOrdersAsync(customerId, ct))
+            rows.Add(new("sales_order", o.Id, o.Date, o.Number, o.Memo, o.Total, null, Order(o.Status == SalesOrderStatus.Open, o.Status == SalesOrderStatus.Cancelled)));
+        foreach (var r in await sales.ListRetainersAsync(customerId, ct))
+            rows.Add(new("retainer", r.Id, r.Date, r.Reference, r.Memo, r.Amount, r.Status == DocumentStatus.Posted && r.Balance > 0m ? r.Balance : null, Posted(r.Status)));
+        foreach (var w in await sales.ListWriteOffsAsync(customerId, ct))
+            rows.Add(new("write_off", w.Id, w.Date, null, w.Memo, w.Amount, null, Posted(w.Status)));
+        return Newest(rows);
+    }
+
+    public async Task<IReadOnlyList<CenterRow>> VendorAsync(Guid vendorId, DateOnly today, CancellationToken ct = default)
+    {
+        var rows = new List<CenterRow>();
+        foreach (var b in await purchases.ListBillsAsync(vendorId, ct))
+            rows.Add(new("bill", b.Id, b.Date, b.Reference, b.Memo, b.Total, b.IsOpen ? b.Balance : null,
+                b.Status == DocumentStatus.Voided ? CenterState.Voided : b.IsOverdue(today) ? CenterState.Overdue : b.IsOpen ? CenterState.Open : CenterState.Paid));
+        foreach (var p in await purchases.ListPaymentsAsync(vendorId, ct))
+            rows.Add(new("bill_payment", p.Id, p.Date, p.Reference, p.Memo, p.Amount, null, Posted(p.Status)));
+        foreach (var e in await purchases.ListExpensesAsync(vendorId, ct))
+            rows.Add(new("bank_transaction", e.Id, e.Date, e.Reference, e.Memo ?? e.Payee, e.Amount, null,
+                e.Status == BankTransactionStatus.Voided ? CenterState.Voided : CenterState.Posted));
+        foreach (var c in await purchases.ListVendorCreditsAsync(vendorId, ct))
+            rows.Add(new("vendor_credit", c.Id, c.Date, c.Reference, c.Memo, c.Total, c.Status == DocumentStatus.Posted && c.Balance > 0m ? c.Balance : null, Posted(c.Status)));
+        foreach (var r in await purchases.ListVendorRefundsAsync(vendorId, ct))
+            rows.Add(new("vendor_refund", r.Id, r.Date, r.Reference, r.Memo, r.Amount, null, Posted(r.Status)));
+        foreach (var o in await purchases.ListPurchaseOrdersAsync(vendorId, ct))
+            rows.Add(new("purchase_order", o.Id, o.Date, o.Number, o.Memo, o.Total, null, Order(o.Status == PurchaseOrderStatus.Open, o.Status == PurchaseOrderStatus.Cancelled)));
+        return Newest(rows);
+    }
+
+    /// <summary>
+    /// Documents with a line for the item (quantity and amount summed over its lines), and the stock movements of
+    /// anything else that moved it (adjustments, builds, transfers, channel orders), at their cost.
+    /// </summary>
+    public async Task<IReadOnlyList<CenterRow>> ItemAsync(Guid itemId, CancellationToken ct = default)
+    {
+        var rows = new List<CenterRow>();
+        void Sold(string type, Guid id, DateOnly date, string? number, string? memo, IEnumerable<SalesLine> lines, CenterState state)
+        {
+            var mine = lines.Where(l => l.ItemId == itemId).ToList();
+            if (mine.Count > 0)
+                rows.Add(new(type, id, date, number, memo, mine.Sum(l => l.Amount), null, state, mine.Sum(l => l.Quantity)));
+        }
+
+        foreach (var i in await sales.ListInvoicesAsync(null, ct))
+            Sold(InvoiceType, i.Id, i.Date, i.Number, i.Memo, i.Lines, Posted(i.Status));
+        foreach (var r in await sales.ListReceiptsAsync(ct))
+            Sold("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Lines, Posted(r.Status));
+        foreach (var c in await sales.ListCreditMemosAsync(null, ct))
+            Sold("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Lines, Posted(c.Status));
+        foreach (var e in await sales.ListEstimatesAsync(null, ct))
+            Sold("estimate", e.Id, e.Date, e.Number, e.Memo, e.Lines, e.Status == EstimateStatus.Closed ? CenterState.Closed : CenterState.Pending);
+        foreach (var o in await sales.ListSalesOrdersAsync(null, ct))
+            Sold("sales_order", o.Id, o.Date, o.Number, o.Memo, o.Lines, Order(o.Status == SalesOrderStatus.Open, o.Status == SalesOrderStatus.Cancelled));
+
+        foreach (var b in await purchases.ListBillsAsync(null, ct))
+        {
+            var mine = b.Lines.Where(l => l.ItemId == itemId).ToList();
+            if (mine.Count > 0)
+                rows.Add(new("bill", b.Id, b.Date, b.Reference, b.Memo, mine.Sum(l => l.Amount), null, Posted(b.Status), mine.Sum(l => l.Quantity ?? 0m)));
+        }
+
+        foreach (var o in await purchases.ListPurchaseOrdersAsync(null, ct))
+        {
+            var mine = o.Lines.Where(l => l.ItemId == itemId).ToList();
+            if (mine.Count > 0)
+                rows.Add(new("purchase_order", o.Id, o.Date, o.Number, o.Memo, mine.Sum(l => decimal.Round(l.Quantity * l.UnitCost, 2, MidpointRounding.AwayFromZero)), null,
+                    Order(o.Status == PurchaseOrderStatus.Open, o.Status == PurchaseOrderStatus.Cancelled), mine.Sum(l => l.Quantity)));
+        }
+
+        // Documents above already show their own quantities; the rest of the stock ledger shows by source.
+        var shown = new HashSet<string>(StringComparer.Ordinal) { InventorySources.Bill, InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.CreditMemo };
+        foreach (var source in (await inventory.ListMovementsAsync(itemId, ct)).Where(m => !shown.Contains(m.SourceType)).GroupBy(m => (m.SourceType, m.SourceId)))
+        {
+            var quantity = source.Sum(m => m.Quantity);
+            var cost = source.Sum(m => m.Cost);
+            if (quantity == 0m && cost == 0m && source.Key.SourceType == InventorySources.Transfer)
+                continue; // a transfer moves stock between places, not in or out
+            rows.Add(new(source.Key.SourceType, source.Key.SourceId, source.Min(m => m.Date), null, null, cost, null, CenterState.Posted, quantity));
+        }
+
+        return Newest(rows);
+    }
+
+    private const string InvoiceType = "invoice";
+
+    private static CenterState Posted(DocumentStatus status) => status == DocumentStatus.Voided ? CenterState.Voided : CenterState.Posted;
+
+    private static CenterState Order(bool open, bool cancelled) => cancelled ? CenterState.Cancelled : open ? CenterState.Open : CenterState.Closed;
+
+    private static List<CenterRow> Newest(List<CenterRow> rows) =>
+        rows.OrderByDescending(r => r.Date).ThenByDescending(r => r.Number, StringComparer.OrdinalIgnoreCase).ToList();
+}

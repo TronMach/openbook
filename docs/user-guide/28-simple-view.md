@@ -17,9 +17,9 @@ Under the top bar is a row of menus. Select one to open it, select it again (or 
 | Menu | What's in it |
 | --- | --- |
 | **Company** | Company information (Settings), Chart of Accounts, Back Up Company, Users |
-| **Customers** | Customer List, Create Estimates, Create Invoices, Enter Sales Receipts, Receive Payments, Create Credit Memos, All Sales |
-| **Vendors** | Vendor List, Create Purchase Orders, Enter Bills, Pay Bills, Enter Vendor Credits, All Purchases |
-| **Inventory** | Item List, New Item, Receive Inventory, Adjust Quantity on Hand, Build Assemblies, Stock on Hand |
+| **Customers** | Customer Center, Create Estimates, Create Invoices, Enter Sales Receipts, Receive Payments, Create Credit Memos, All Sales |
+| **Vendors** | Vendor Center, Create Purchase Orders, Enter Bills, Pay Bills, Enter Vendor Credits, All Purchases |
+| **Inventory** | Item Center, New Item, Receive Inventory, Adjust Quantity on Hand, Build Assemblies, Stock on Hand |
 | **Banking** | Write Checks, Make Deposits, Transfer Funds, Registers and Reconciling, Print Checks |
 | **Reports** | Profit & Loss, Balance Sheet, Who Owes You, What You Owe, Sales by Customer, Sales by Item, Stock Status, All Reports |
 
@@ -31,7 +31,17 @@ Links you aren't allowed to use are left out of the menus. A menu with nothing y
 
 ## The shortcut column
 
-The column down the left side holds the places you'll go every day: **Home**, **Customers**, **Vendors**, **Items**, **Banking** and **Reports**, plus **Time**, **Gifts** or **Sales channels** in those editions. On a phone it becomes a row you can scroll sideways, above the page.
+The column down the left side holds the places you'll go every day: **Home**, **Customers**, **Vendors**, **Items** (the three centers, below), **Banking** and **Reports**, plus **Time**, **Gifts** or **Sales channels** in those editions. On a phone it becomes a row you can scroll sideways, above the page.
+
+## Customer, Vendor and Item Centers
+
+Each center puts a whole list and one record on the same page: the list down the left, the record you chose on the right. **Customers → Customer Center**, **Vendors → Vendor Center** and **Inventory → Item Center** open them, as do the shortcut column and the **Customer Center** / **Vendor Center** / **Item Center** buttons on the full view's lists. Both views can use them.
+
+- **The list** shows each customer's or vendor's open balance (in red when part of it is overdue), and each item's quantity on hand (in red at or below its reorder point) or, for items not kept in stock, its price. Type in **Find by name** and press Enter to narrow it; items can also be found by description or barcode. **Show inactive** adds the ones no longer in use. Sub-customers are indented under their parent.
+- **The record** shows its details and totals: open balance, overdue and open invoices for a customer; what you owe, overdue and unpaid bills for a vendor; on hand, value and reorder point for a stock item. **Edit details** opens the full record page, where everything else about it is (custom fields, attachments, pricing, sub-customers and so on). **New transaction** starts an invoice, payment, estimate, sales receipt, credit memo, sales order or statement for that customer, or a bill, bill payment, purchase order or vendor credit for that vendor, with the name already filled in. Notes are at the bottom.
+- **Transactions** lists everything that belongs to the record, newest first, each linking to its page: for customers invoices, payments, sales receipts, credit memos, refunds, estimates, sales orders, retainers and write-offs; for vendors bills, bill payments, checks and expenses, vendor credits, refunds and purchase orders; for items every document with a line for it (with its quantity) and stock changes such as quantity adjustments and builds. **Open** shows what's still unpaid on an invoice or bill, or unused on a payment or credit. Choose what to **Show** and which **Dates**, then select **Show**.
+
+A center only shows; it never changes anything itself. What you do from it happens on the usual pages, with the usual rules.
 
 ## The home page
 

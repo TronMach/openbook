@@ -1,0 +1,164 @@
+@using OpenBook.Application.Centers
+
+@* A center's transaction list with its filter (a plain GET form, so the choice is in the address). The center page
+   passes every row; filtering by kind and dates happens here. *@
+<form method="get" action="@Action" class="center-filter" data-enhance="false">
+    @foreach (var (name, value) in Keep)
+    {
+        if (value is not null)
+        {
+            <input type="hidden" name="@name" value="@value" />
+        }
+    }
+    <label>
+        @L["Show"]
+        <select name="type">
+            <option value="">@L["All transactions"]</option>
+            @foreach (var type in Rows.Select(r => r.EntityType).Distinct().OrderBy(t => TypeLabel(t).Value, StringComparer.CurrentCulture))
+            {
+                <option value="@type" selected="@(type == Type)">@TypeLabel(type)</option>
+            }
+        </select>
+    </label>
+    <label>
+        @L["Dates"]
+        <select name="dates">
+            <option value="">@L["All dates"]</option>
+            <option value="30" selected="@(Dates == "30")">@L["Last 30 days"]</option>
+            <option value="90" selected="@(Dates == "90")">@L["Last 90 days"]</option>
+            <option value="365" selected="@(Dates == "365")">@L["Last 12 months"]</option>
+        </select>
+    </label>
+    <button type="submit" class="secondary">@L["Show"]</button>
+</form>
+
+@if (Shown.Count == 0)
+{
+    <p class="muted">@(Rows.Count == 0 ? L["No transactions yet."] : L["No transactions match."])</p>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>@L["Type"]</th>
+                    <th>@L["Number"]</th>
+                    <th>@L["Date"]</th>
+                    <th>@L["Memo"]</th>
+                    @if (ShowQuantity)
+                    {
+                        <th class="num">@L["Quantity"]</th>
+                    }
+                    <th class="num">@L["Amount"]</th>
+                    @if (!ShowQuantity)
+                    {
+                        <th class="num">@L["Open"]</th>
+                    }
+                    <th>@L["Status"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Shown)
+                {
+                    var href = Links.ForAuditEntity(row.EntityType, row.Id);
+                    <tr class="@(row.State == CenterState.Voided ? "inactive" : null)">
+                        <td>
+                            @if (href is not null)
+                            {
+                                <a href="@href">@TypeLabel(row.EntityType)</a>
+                            }
+                            else
+                            {
+                                @TypeLabel(row.EntityType)
+                            }
+                        </td>
+                        <td>@row.Number</td>
+                        <td>@row.Date.ToString("d")</td>
+                        <td class="muted">@row.Detail</td>
+                        @if (ShowQuantity)
+                        {
+                            <td class="num">@row.Quantity?.ToString("0.####")</td>
+                        }
+                        <td class="num">@Labels.Amount(row.Amount)</td>
+                        @if (!ShowQuantity)
+                        {
+                            <td class="num">@(row.Open is { } open ? Labels.Amount(open) : "")</td>
+                        }
+                        <td class="@(row.State == CenterState.Overdue ? "out-of-balance" : "muted")">@StateLabel(row.State)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CenterRow> Rows { get; set; } = [];
+
+    /// <summary>The page the filter form submits to.</summary>
+    [Parameter, EditorRequired]
+    public string Action { get; set; } = "";
+
+    /// <summary>Query values the filter keeps (the chosen record, the list search).</summary>
+    [Parameter]
+    public IReadOnlyList<(string Name, string? Value)> Keep { get; set; } = [];
+
+    [Parameter]
+    public string? Type { get; set; }
+
+    [Parameter]
+    public string? Dates { get; set; }
+
+    /// <summary>The item center shows quantities instead of what's open.</summary>
+    [Parameter]
+    public bool ShowQuantity { get; set; }
+
+    private List<CenterRow> Shown =>
+        Rows.Where(r => string.IsNullOrEmpty(Type) || r.EntityType == Type)
+            .Where(r => !int.TryParse(Dates, out var days) || r.Date > CompanyTime.Today.AddDays(-days))
+            .ToList();
+
+    // Each label is written out so the string catalog finds it.
+    private LocalizedString TypeLabel(string entityType) => entityType switch
+    {
+        "invoice" => L["Invoice"],
+        "payment" => L["Payment"],
+        "sales_receipt" => L["Sales receipt"],
+        "credit_memo" => L["Credit memo"],
+        "refund" => L["Refund"],
+        "estimate" => L["Estimate"],
+        "sales_order" => L["Sales order"],
+        "retainer" => L["Retainer"],
+        "write_off" => L["Bad debt write-off"],
+        "bill" => L["Bill"],
+        "bill_payment" => L["Bill payment"],
+        "bank_transaction" => L["Check or expense"],
+        "vendor_credit" => L["Vendor credit"],
+        "vendor_refund" => L["Vendor refund"],
+        "purchase_order" => L["Purchase order"],
+        "inventory_adjustment" => L["Quantity adjustment"],
+        "assembly_build" => L["Assembly build"],
+        "landed_cost" => L["Landed cost"],
+        "stock_transfer" => L["Stock transfer"],
+        "channel_orders" => L["Channel orders"],
+        "channel_return" => L["Channel return"],
+        "purchase_receipt" => L["Received on an order"],
+        _ => L["Other"],
+    };
+
+    private LocalizedString StateLabel(CenterState state) => state switch
+    {
+        CenterState.Open => L["Open"],
+        CenterState.Overdue => L["Overdue"],
+        CenterState.Paid => L["Paid"],
+        CenterState.Voided => L["Voided"],
+        CenterState.Pending => L["Pending"],
+        CenterState.Accepted => L["Accepted"],
+        CenterState.Declined => L["Declined"],
+        CenterState.Closed => L["Closed"],
+        CenterState.Cancelled => L["Cancelled"],
+        _ => L["Posted"],
+    };
+}
