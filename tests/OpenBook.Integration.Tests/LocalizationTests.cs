@@ -96,6 +96,8 @@ public sealed partial class LocalizationTests : IAsyncLifetime
         var catalog = XDocument.Load(Path.Combine(web, "Resources", "Localization", "SharedResource.resx"))
             .Root!.Elements("data").Select(d => (string)d.Attribute("name")!).ToHashSet();
         Assert.True(used.SetEquals(catalog), "Run python tools/extract-strings.py. Missing: " + string.Join(", ", used.Except(catalog)) + ". Unused: " + string.Join(", ", catalog.Except(used)));
+        // Resource names ignore case, so "On" and "on" would be one key and the other text silently lost.
+        Assert.Empty(catalog.GroupBy(k => k, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => string.Join(" / ", g)));
     }
 
     [GeneratedRegex("""L\["((?:[^"\\]|\\.)*)"\]""")]

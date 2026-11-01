@@ -31,7 +31,7 @@
         @if (_sso is { IsSsoReady: true })
         {
             <p><a class="button" href="/login/sso" data-enhance-nav="false">@_sso.ButtonText</a></p>
-            <p class="muted">@L["Sign in with your {0} account to accept, using the email this invitation was sent to.", _sso.SsoProvider == SsoProvider.Other ? L["single sign-on"].Value : _sso.SsoProvider.ToString()]</p>
+            <p class="muted">@L["Sign in with your {0} account to accept, using the email this invitation was sent to.", _sso.SsoProvider == SsoProvider.Other ? L["sign-in provider"].Value : _sso.SsoProvider.ToString()]</p>
         }
         @if (!(_sso is { IsSsoReady: true, SsoOnly: true } && _invite.Invite.Role != UserRole.Admin))
         {

@@ -59,9 +59,6 @@
   <data name="Accounts" xml:space="preserve">
     <value>Accounts</value>
   </data>
-  <data name="active" xml:space="preserve">
-    <value>active</value>
-  </data>
   <data name="Active" xml:space="preserve">
     <value>Active</value>
   </data>
@@ -524,9 +521,6 @@
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>
   </data>
-  <data name="inactive" xml:space="preserve">
-    <value>inactive</value>
-  </data>
   <data name="Inactive" xml:space="preserve">
     <value>Inactive</value>
   </data>
@@ -743,17 +737,11 @@
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
   </data>
-  <data name="off" xml:space="preserve">
-    <value>off</value>
-  </data>
   <data name="off, set it up" xml:space="preserve">
     <value>off, set it up</value>
   </data>
   <data name="On" xml:space="preserve">
     <value>On</value>
-  </data>
-  <data name="on" xml:space="preserve">
-    <value>on</value>
   </data>
   <data name="Online payments" xml:space="preserve">
     <value>Online payments</value>
@@ -1067,6 +1055,9 @@
   <data name="Sign-in and two-factor" xml:space="preserve">
     <value>Sign-in and two-factor</value>
   </data>
+  <data name="sign-in provider" xml:space="preserve">
+    <value>sign-in provider</value>
+  </data>
   <data name="Signed in" xml:space="preserve">
     <value>Signed in</value>
   </data>
@@ -1075,9 +1066,6 @@
   </data>
   <data name="Single sign-on" xml:space="preserve">
     <value>Single sign-on</value>
-  </data>
-  <data name="single sign-on" xml:space="preserve">
-    <value>single sign-on</value>
   </data>
   <data name="Single sign-on only: everyone but admins must use it (admins keep their password, in case the provider is down)" xml:space="preserve">
     <value>Single sign-on only: everyone but admins must use it (admins keep their password, in case the provider is down)</value>
@@ -1202,8 +1190,8 @@
   <data name="Turn on two-factor sign-in" xml:space="preserve">
     <value>Turn on two-factor sign-in</value>
   </data>
-  <data name="two-factor" xml:space="preserve">
-    <value>two-factor</value>
+  <data name="turned on" xml:space="preserve">
+    <value>turned on</value>
   </data>
   <data name="Two-factor sign-in" xml:space="preserve">
     <value>Two-factor sign-in</value>
@@ -1213,6 +1201,12 @@
   </data>
   <data name="Two-factor sign-in is required for your role. Set it up to carry on." xml:space="preserve">
     <value>Two-factor sign-in is required for your role. Set it up to carry on.</value>
+  </data>
+  <data name="two-factor sign-in off" xml:space="preserve">
+    <value>two-factor sign-in off</value>
+  </data>
+  <data name="two-factor sign-in on" xml:space="preserve">
+    <value>two-factor sign-in on</value>
   </data>
   <data name="Two-factor sign-in:" xml:space="preserve">
     <value>Two-factor sign-in:</value>

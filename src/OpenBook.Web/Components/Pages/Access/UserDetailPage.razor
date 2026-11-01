@@ -18,8 +18,8 @@
             <a href="/settings/users">@L["Users"]</a>
         </div>
         <p class="muted">
-            @AccessMiddleware.Describe(_user.Role) · @(_user.IsActive ? L["active"] : L["inactive"]) ·
-            @L["two-factor"] @(_user.HasTwoFactor ? L["on"] : L["off"])
+            @AccessMiddleware.Describe(_user.Role) · @(_user.IsActive ? L["Active"] : L["Inactive"]) ·
+            @(_user.HasTwoFactor ? L["two-factor sign-in on"] : L["two-factor sign-in off"])
         </p>
 
         @if (Saved)
