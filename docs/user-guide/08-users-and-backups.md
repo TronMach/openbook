@@ -60,6 +60,27 @@ To give someone a set, choose it in their **Role** list on the Users page (under
 
 Changing a set signs out everyone who has it, so their next sign-in uses the new levels. A set can be switched off once nobody active uses it. API keys of someone with a set reach only the set's areas (and a limited key narrows that further).
 
+## Single sign-on
+
+People can sign in with their Microsoft (Entra ID), Google or other OpenID Connect account instead of an OpenBook password. Administrators set it up on **Settings → Sign-in and two-factor** → **Single sign-on**:
+
+1. At the provider, register OpenBook as a web application. Give it the **redirect address** the page shows (it ends in `/signin-oidc`). The provider gives you a **client (application) ID** and a **client secret**.
+2. Back in OpenBook, choose the **Provider**. For Microsoft, enter your **directory (tenant) ID or domain**; for another provider, its **issuer address** (https). Enter the client ID and secret (the secret is stored encrypted and never shown again; leave it empty later to keep it), tick **Turn on single sign-on** and select **Save**.
+
+The sign-in page then has a **Sign in with …** button (change its text with **Button text**). Only people OpenBook already knows get in:
+
+- someone who signed in that way before;
+- a user whose **Email** (on their user page) is the email the provider vouches for; their account is linked from then on;
+- someone with a waiting invitation for that email: signing in accepts it and creates their user (they have no OpenBook password).
+
+Anyone else is told to ask an admin for an invitation. Users can also link their account themselves: select their username in the top bar, then **link your account** under **Single sign-on**. An administrator can **Unlink** an account on the user's page.
+
+Microsoft vouches for emails only with a named directory (not "organizations" or "common"); Google always does. With another provider, people may need to link their account themselves the first time.
+
+OpenBook's own two-factor code isn't asked for after single sign-on: the provider does its own checks. Inactive users and users whose access has ended are refused as usual.
+
+**Single sign-on only**: tick it to make everyone but administrators use the provider; their passwords stop working here. Administrators keep their password (and two-factor) as a way in when the provider is down or set up wrongly.
+
 ### Working at the same time
 
 Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.

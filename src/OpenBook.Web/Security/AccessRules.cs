@@ -23,6 +23,8 @@ public static class AccessRules
         ("/api/api-keys", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/api/me", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/logout", UserRole.ViewOnly, UserRole.ViewOnly),
+        // Signing in (again, perhaps as someone else) is open to anyone.
+        ("/login", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/reports/saved", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/dashboard", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/api/saved-reports", UserRole.ViewOnly, UserRole.ViewOnly),

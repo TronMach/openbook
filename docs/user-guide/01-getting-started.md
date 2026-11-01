@@ -76,7 +76,7 @@ If you're moving from QuickBooks, GnuCash, Xero, Wave or FreshBooks, see [Moving
 
 ## Signing in and out
 
-Go to OpenBook's address and sign in with your username and password. You stay signed in on that browser while you keep using it; after 8 hours without activity you're asked to sign in again. **Sign out** is at the right of the top bar.
+Go to OpenBook's address and sign in with your username and password, or with **Sign in with …** when your company uses single sign-on (see [Single sign-on](08-users-and-backups.md#single-sign-on)). You stay signed in on that browser while you keep using it; after 8 hours without activity you're asked to sign in again. **Sign out** is at the right of the top bar.
 
 Select your username in the top bar to change your password. The same page lists every browser and device signed in as you, with when each was last used. You can sign out any one of them, or **Sign out all other sessions** if you think someone else has your password. Changing your password signs out every other session too.
 

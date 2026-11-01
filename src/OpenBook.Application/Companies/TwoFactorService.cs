@@ -185,5 +185,5 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
     private AuditRecord Audit(User user, string changed) =>
         AuditRecord.Create(clock.UtcNow, currentUser.Actor, AuditAction.Updated, UserEntity, user.Id, null, JsonSerializer.Serialize(new { Changed = changed }));
 
-    private static string Snapshot(SignInSettings s) => JsonSerializer.Serialize(new { TwoFactorRequiredFrom = s.TwoFactorRequiredFrom?.ToString() });
+    private static string Snapshot(SignInSettings s) => SingleSignOnService.Snapshot(s);
 }

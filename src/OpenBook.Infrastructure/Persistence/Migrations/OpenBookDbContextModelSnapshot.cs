@@ -1592,6 +1592,37 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProtectedSsoClientSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SsoAuthority")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SsoButtonLabel")
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SsoClientId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SsoEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SsoOnly")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SsoProvider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SsoTenant")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TwoFactorRequiredFrom")
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
@@ -1615,6 +1646,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Email")
                         .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalLogin")
+                        .HasMaxLength(400)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("FailedLoginCount")
@@ -1669,6 +1704,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("ExternalLogin")
                         .IsUnique();
 
                     b.HasIndex("PermissionSetId");

@@ -720,6 +720,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(u => u.RecoveryCodeHashes).HasMaxLength(1000);
             b.Property(u => u.Email).HasMaxLength(320);
             b.HasIndex(u => u.Email).IsUnique();
+            b.Property(u => u.ExternalLogin).HasMaxLength(User.MaxExternalLoginLength);
+            b.HasIndex(u => u.ExternalLogin).IsUnique();
             b.HasOne<PermissionSet>().WithMany().HasForeignKey(u => u.PermissionSetId).OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -754,6 +756,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.ToTable("SignInSettings");
             b.HasKey(s => s.Id);
             b.Property(s => s.TwoFactorRequiredFrom).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.SsoProvider).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.SsoTenant).HasMaxLength(100);
+            b.Property(s => s.SsoAuthority).HasMaxLength(300);
+            b.Property(s => s.SsoClientId).HasMaxLength(200);
+            b.Property(s => s.ProtectedSsoClientSecret).HasMaxLength(2000);
+            b.Property(s => s.SsoButtonLabel).HasMaxLength(60);
+            b.Ignore(s => s.Authority);
+            b.Ignore(s => s.ButtonText);
+            b.Ignore(s => s.IsSsoReady);
         });
 
         modelBuilder.Entity<Note>(b =>

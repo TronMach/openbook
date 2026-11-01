@@ -82,6 +82,14 @@ public sealed class User
 
     public bool AccessEnded(DateOnly today) => AccessEndsOn is { } end && today >= end;
 
+    /// <summary>The single sign-on account this user is ("issuer|subject"), remembered at their first sign-in through it.</summary>
+    public string? ExternalLogin { get; private set; }
+
+    public const int MaxExternalLoginLength = 400;
+
+    public void LinkExternalLogin(string? login) =>
+        ExternalLogin = login is { Length: > MaxExternalLoginLength } ? throw new DomainException("sso.subject_too_long", "The provider's account id is too long.") : login;
+
     public int RecoveryCodesLeft => RecoveryCodeHashes is { Length: > 0 } hashes ? hashes.Split(',').Length : 0;
 
     public static User Create(string username, string passwordHash, DateTimeOffset createdAt, UserRole role = UserRole.Admin) =>

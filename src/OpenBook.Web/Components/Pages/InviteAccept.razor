@@ -3,6 +3,7 @@
 @using System.ComponentModel.DataAnnotations
 @using OpenBook.Domain.Companies
 @inject InviteService Invites
+@inject SingleSignOnService SingleSignOn
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Join the books"] · OpenBook</PageTitle>
@@ -27,6 +28,13 @@
             <div class="alert error" role="alert">@_error</div>
         }
 
+        @if (_sso is { IsSsoReady: true })
+        {
+            <p><a class="button" href="/login/sso" data-enhance-nav="false">@_sso.ButtonText</a></p>
+            <p class="muted">@L["Sign in with your {0} account to accept, using the email this invitation was sent to.", _sso.SsoProvider == SsoProvider.Other ? L["single sign-on"].Value : _sso.SsoProvider.ToString()]</p>
+        }
+        @if (!(_sso is { IsSsoReady: true, SsoOnly: true } && _invite.Invite.Role != UserRole.Admin))
+        {
         <EditForm Model="Input" FormName="accept" OnValidSubmit="AcceptAsync" method="post">
             <DataAnnotationsValidator />
             <div class="field">
@@ -48,11 +56,13 @@
             </div>
             <button type="submit">@L["Join and sign in"]</button>
         </EditForm>
+        }
     }
 </div>
 
 @code {
     private OpenInvite? _invite;
+    private SignInSettings? _sso;
     private string? _error;
 
     [Parameter] public string Token { get; set; } = string.Empty;
@@ -66,6 +76,7 @@
     protected override async Task OnInitializedAsync()
     {
         _invite = await Invites.OpenAsync(Token, HttpContext.RequestAborted);
+        _sso = await SingleSignOn.SettingsAsync(HttpContext.RequestAborted);
         Input ??= new AcceptModel { Username = _invite?.SuggestedUsername ?? string.Empty };
     }
 

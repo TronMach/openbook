@@ -1599,6 +1599,37 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ProtectedSsoClientSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("SsoAuthority")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("SsoButtonLabel")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("SsoClientId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("SsoEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SsoOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SsoProvider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SsoTenant")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("TwoFactorRequiredFrom")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -1623,6 +1654,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
+
+                    b.Property<string>("ExternalLogin")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
 
                     b.Property<int>("FailedLoginCount")
                         .HasColumnType("integer");
@@ -1676,6 +1711,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("ExternalLogin")
                         .IsUnique();
 
                     b.HasIndex("PermissionSetId");

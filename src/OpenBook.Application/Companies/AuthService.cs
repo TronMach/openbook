@@ -17,6 +17,12 @@ public enum SignInStatus
 
     /// <summary>The second step's code was wrong.</summary>
     InvalidCode,
+
+    /// <summary>The password was right, but only admins may sign in with one: everyone else uses single sign-on.</summary>
+    SsoRequired,
+
+    /// <summary>Single sign-on worked, but nobody here is that person and no invitation is waiting for their email.</summary>
+    NotInvited,
 }
 
 /// <summary>What a sign-in cookie needs to carry.</summary>
@@ -73,13 +79,16 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
                 : new SignInResult(SignInStatus.InvalidCredentials);
         }
 
+        var settings = await store.GetSignInSettingsAsync(ct);
+        if (settings is { SsoOnly: true, IsSsoReady: true } && user.Role != UserRole.Admin)
+            return new SignInResult(SignInStatus.SsoRequired);
+
         // The failed-attempt count isn't reset until the second step succeeds, so codes can't be guessed between passwords.
         if (user.HasTwoFactor)
             return new SignInResult(SignInStatus.TwoFactorRequired, await store.AuthenticatedAsync(user, ct), TwoFactorSince: user.TwoFactorEnabledAt);
 
         user.RecordSuccessfulLogin(clock.UtcNow);
         await store.SaveChangesAsync(ct);
-        var settings = await store.GetSignInSettingsAsync(ct);
         return new SignInResult(SignInStatus.Succeeded, await store.AuthenticatedAsync(user, ct), MustSetUpTwoFactor: settings?.RequiresTwoFactor(user.Role) == true);
     }
 

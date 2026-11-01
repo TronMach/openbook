@@ -44,7 +44,8 @@ public static class WebSecurity
             o.Events.OnRedirectToLogin = ctx => ApiAwareRedirect(ctx, StatusCodes.Status401Unauthorized);
             o.Events.OnRedirectToAccessDenied = ctx => ApiAwareRedirect(ctx, StatusCodes.Status403Forbidden);
             o.Events.OnValidatePrincipal = ValidateSessionAsync;
-        });
+        })
+            .AddOpenBookSingleSignOn();
         services.AddAuthorization();
         services.AddCascadingAuthenticationState();
 

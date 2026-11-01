@@ -1,6 +1,7 @@
 @page "/settings/sign-in"
 @using OpenBook.Domain.Companies
 @inject TwoFactorService TwoFactor
+@inject SingleSignOnService Sso
 @inject UserService UserService
 @inject NavigationManager Navigation
 
@@ -42,6 +43,54 @@
             <p class="hint">@L["Not set up yet, but required: {0}.", string.Join(", ", _without)]</p>
         }
     </div>
+
+    <div class="card" id="sso">
+        <h2>@L["Single sign-on"]</h2>
+        <p class="muted">@L["Let people sign in with their Microsoft (Entra ID), Google or other OpenID Connect account. Only people who already have a user here (with the same email) or a waiting invitation get in; the provider's own two-factor check replaces OpenBook's."]</p>
+        <p class="hint">
+            @L["Register OpenBook with the provider as a web application with this redirect address:"]
+            <code>@($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}{HttpContext.Request.PathBase}{SingleSignOn.CallbackPath}")</code>
+        </p>
+        <form method="post" @formname="sso" @onsubmit="SaveSsoAsync">
+            <AntiforgeryToken />
+            <label class="check"><input type="checkbox" name="SsoEnabled" value="true" checked="@(_settings?.SsoEnabled == true)" /> <span>@L["Turn on single sign-on"]</span></label>
+            <div class="row">
+                <div class="field">
+                    <label for="provider">@L["Provider"]</label>
+                    <select id="provider" name="SsoProvider">
+                        <option value="Microsoft" selected="@(_settings?.SsoProvider == SsoProvider.Microsoft)">Microsoft Entra ID</option>
+                        <option value="Google" selected="@(_settings?.SsoProvider == SsoProvider.Google)">Google</option>
+                        <option value="Other" selected="@(_settings?.SsoProvider == SsoProvider.Other)">@L["Other OpenID Connect provider"]</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="tenant">@L["Microsoft: directory (tenant) ID or domain"]</label>
+                    <input id="tenant" name="SsoTenant" value="@_settings?.SsoTenant" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="authority">@L["Other: issuer address"]</label>
+                    <input id="authority" name="SsoAuthority" value="@_settings?.SsoAuthority" placeholder="https://" autocomplete="off" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="client">@L["Client (application) ID"]</label>
+                    <input id="client" name="SsoClientId" value="@_settings?.SsoClientId" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="secret">@L["Client secret"]</label>
+                    <input id="secret" name="SsoClientSecret" type="password" autocomplete="new-password"
+                           placeholder="@(_settings?.ProtectedSsoClientSecret is null ? "" : L["saved; leave empty to keep it"].Value)" />
+                </div>
+                <div class="field">
+                    <label for="label">@L["Button text (optional)"]</label>
+                    <input id="label" name="SsoButtonLabel" value="@_settings?.SsoButtonLabel" placeholder="@_settings?.ButtonText" />
+                </div>
+            </div>
+            <label class="check"><input type="checkbox" name="SsoOnly" value="true" checked="@(_settings?.SsoOnly == true)" /> <span>@L["Single sign-on only: everyone but admins must use it (admins keep their password, in case the provider is down)"]</span></label>
+            <div class="actions"><button type="submit">@L["Save"]</button></div>
+        </form>
+    </div>
 </div>
 
 @code {
@@ -52,6 +101,9 @@
     [SupplyParameterFromQuery] private bool Saved { get; set; }
 
     [SupplyParameterFromForm(Name = "From")] private string? PostedFrom { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
 
     private (string Value, string Label)[] Choices =>
     [
@@ -70,6 +122,24 @@
         _without = (await UserService.ListAsync())
             .Where(u => u.IsActive && !u.HasTwoFactor && _settings.RequiresTwoFactor(u.Role))
             .Select(u => u.Username).ToList();
+    }
+
+    private async Task SaveSsoAsync()
+    {
+        var form = HttpContext.Request.Form;
+        try
+        {
+            var provider = Enum.TryParse<SsoProvider>(form["SsoProvider"], out var p) ? p : SsoProvider.Microsoft;
+            var secret = form["SsoClientSecret"].ToString();
+            await Sso.SaveAsync(new SsoSettingsCommand(form["SsoEnabled"] == "true", provider, form["SsoTenant"], form["SsoAuthority"], form["SsoClientId"],
+                secret.Length == 0 ? null : secret, form["SsoButtonLabel"], form["SsoOnly"] == "true"));
+            Navigation.NavigateTo("/settings/sign-in?saved=true#sso");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            await LoadAsync();
+        }
     }
 
     private async Task SaveAsync()

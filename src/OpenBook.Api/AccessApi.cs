@@ -20,10 +20,19 @@ public sealed record UserResponse(
 /// <param name="TwoFactorRequiredFrom">Null: nobody has to; otherwise this role and every role above it.</param>
 public sealed record SignInSettingsRequest(UserRole? TwoFactorRequiredFrom);
 
-public sealed record SignInSettingsResponse(UserRole? TwoFactorRequiredFrom)
+/// <param name="HasClientSecret">The secret itself is never returned.</param>
+public sealed record SignInSettingsResponse(
+    UserRole? TwoFactorRequiredFrom, bool SsoEnabled = false, SsoProvider SsoProvider = SsoProvider.Microsoft, string? SsoTenant = null, string? SsoAuthority = null,
+    string? SsoClientId = null, bool HasClientSecret = false, string? SsoButtonLabel = null, bool SsoOnly = false)
 {
-    public static SignInSettingsResponse From(SignInSettings s) => new(s.TwoFactorRequiredFrom);
+    public static SignInSettingsResponse From(SignInSettings s) => new(
+        s.TwoFactorRequiredFrom, s.SsoEnabled, s.SsoProvider, s.SsoTenant, s.SsoAuthority, s.SsoClientId, s.ProtectedSsoClientSecret is not null, s.SsoButtonLabel, s.SsoOnly);
 }
+
+/// <param name="ClientSecret">Omit to keep the saved secret; empty clears it.</param>
+public sealed record SsoSettingsRequest(
+    bool Enabled, SsoProvider Provider, string? Tenant = null, string? Authority = null, string? ClientId = null, string? ClientSecret = null,
+    string? ButtonLabel = null, bool SsoOnly = false);
 
 public sealed record CreateUserRequest(string Username, string Password, UserRole Role);
 
@@ -136,6 +145,8 @@ internal static class AccessApi
         signIn.MapGet("/", async (TwoFactorService s, CancellationToken ct) => SignInSettingsResponse.From(await s.SettingsAsync(ct)));
         signIn.MapPut("/", async (SignInSettingsRequest r, TwoFactorService s, CancellationToken ct) =>
             SignInSettingsResponse.From(await s.RequireAsync(r.TwoFactorRequiredFrom, ct)));
+        signIn.MapPut("/sso", async (SsoSettingsRequest r, SingleSignOnService s, CancellationToken ct) =>
+            SignInSettingsResponse.From(await s.SaveAsync(new SsoSettingsCommand(r.Enabled, r.Provider, r.Tenant, r.Authority, r.ClientId, r.ClientSecret, r.ButtonLabel, r.SsoOnly), ct)));
 
         // Each user's own keys.
         var keys = api.MapGroup("/api-keys");

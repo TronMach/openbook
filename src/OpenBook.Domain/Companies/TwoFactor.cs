@@ -142,28 +142,3 @@ public static class TwoFactor
     /// </summary>
     public static bool Required(UserRole? from, UserRole role) => from is { } minimum && role >= minimum;
 }
-
-/// <summary>
-/// How people sign in (one row, created on first save): who must use two-factor sign-in. Single sign-on settings
-/// join it later.
-/// </summary>
-public sealed class SignInSettings
-{
-    private SignInSettings()
-    {
-    }
-
-    public Guid Id { get; private set; }
-
-    /// <summary>Null: two-factor is up to each person; otherwise required for this role and every role above it.</summary>
-    public UserRole? TwoFactorRequiredFrom { get; private set; }
-
-    public static SignInSettings Create() => new() { Id = Guid.CreateVersion7() };
-
-    public void RequireTwoFactor(UserRole? from) =>
-        TwoFactorRequiredFrom = from is null || Enum.IsDefined(from.Value)
-            ? from
-            : throw new DomainException("user.role_invalid", $"Unknown role {from}.");
-
-    public bool RequiresTwoFactor(UserRole role) => TwoFactor.Required(TwoFactorRequiredFrom, role);
-}

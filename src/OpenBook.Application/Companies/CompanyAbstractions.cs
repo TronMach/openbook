@@ -26,6 +26,9 @@ public interface ICompanyStore
     Task<User?> GetUserAsync(Guid id, CancellationToken ct);
     Task<User?> FindUserAsync(string normalizedUsername, CancellationToken ct);
 
+    /// <summary>By single sign-on account ("issuer|subject").</summary>
+    Task<User?> FindUserByExternalLoginAsync(string login, CancellationToken ct);
+
     /// <summary>By lower-case email.</summary>
     Task<User?> FindUserByEmailAsync(string email, CancellationToken ct);
 
