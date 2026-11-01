@@ -17,21 +17,37 @@ var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--
 if (isResetPassword || encryptionCommand is not null)
     builder.Logging.ClearProviders();
 
+// Desktop or Server (L13). Desktop decides the company file and folders itself and ignores those settings.
+var installation = OpenBook.Web.Hosting.Installation.Read(builder.Configuration);
+var connectionString = installation.CompanyFile is { } companyFile
+    ? $"Data Source={companyFile}"
+    : builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db";
+var backupDirectory = installation.BackupFolder ?? builder.Configuration["OpenBook:BackupDirectory"];
+if (installation.DataFolder is not null)
+    Directory.CreateDirectory(installation.DataFolder);
+
 // Before anything opens the file: the conversion needs it to be closed.
 if (encryptionCommand is not null)
-    return await EncryptionCommands.RunAsync(builder.Configuration, builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db", encryptionCommand);
+    return await EncryptionCommands.RunAsync(builder.Configuration, connectionString, encryptionCommand);
+
+// A desktop copy already running for this company: open its page instead of starting another.
+if (!isResetPassword && installation.IsDesktop)
+{
+    if (await OpenBook.Web.Hosting.DesktopHost.HandOverAsync(installation))
+        return 0;
+    OpenBook.Web.Hosting.DesktopHost.Listen(builder, installation);
+}
 
 // Add services to the container.
 builder.Services.AddLocalization(o => o.ResourcesPath = "Resources");
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-var connectionString = builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db";
 // The log goes to files beside the company file (or the backups folder), and the System page shows recent problems.
 if (!isResetPassword)
 {
     var logFolder = OpenBook.Web.Diagnostics.LogFolder.For(
-        builder.Configuration["OpenBook:LogDirectory"], builder.Configuration["OpenBook:BackupDirectory"], connectionString, builder.Environment.ContentRootPath);
+        installation.LogFolder ?? builder.Configuration["OpenBook:LogDirectory"], backupDirectory, connectionString, builder.Environment.ContentRootPath);
     // Made by the container, so it's disposed (and the file closed) when the app stops.
     builder.Services.AddSingleton(_ => new OpenBook.Web.Diagnostics.FileLoggerProvider(logFolder));
     builder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<OpenBook.Web.Diagnostics.FileLoggerProvider>());
@@ -39,6 +55,7 @@ if (!isResetPassword)
     builder.Logging.AddFilter<OpenBook.Web.Diagnostics.FileLoggerProvider>("System", LogLevel.Warning);
 }
 
+builder.Services.AddSingleton(installation);
 builder.Services.AddSingleton<OpenBook.Web.Diagnostics.JobStatus>();
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
@@ -53,11 +70,11 @@ builder.Services
     .AddOpenBookApplication()
     .AddOpenBookInfrastructure(
         connectionString,
-        builder.Configuration["OpenBook:BackupDirectory"],
+        backupDirectory,
         builder.Configuration["OpenBook:EncryptionKey"],
-        DatabaseProviders.Parse(builder.Configuration["OpenBook:Database"], connectionString))
+        installation.IsDesktop ? DatabaseProvider.Sqlite : DatabaseProviders.Parse(builder.Configuration["OpenBook:Database"], connectionString))
     .AddOpenBookApi()
-    .AddOpenBookWebSecurity(builder.Configuration["OpenBook:DataProtectionKeys"]);
+    .AddOpenBookWebSecurity(installation.KeysFolder ?? builder.Configuration["OpenBook:DataProtectionKeys"]);
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
 builder.Services.AddScoped<OpenBook.Web.Components.LineFieldCache>();
 
@@ -155,6 +172,18 @@ app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
     var back = form["back"].ToString();
     return Results.Redirect(back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) ? back : "/account/region");
 }).RequireAuthorization();
+// OpenBook Desktop runs in the background; this stops it (Settings > System). A server is stopped by whoever runs it.
+app.MapPost("/settings/system/quit", (OpenBook.Web.Hosting.Installation install, IHostApplicationLifetime lifetime) =>
+{
+    if (!install.IsDesktop)
+        return Results.NotFound();
+    lifetime.StopApplication();
+    return Results.Content("""
+        <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>OpenBook has stopped</title></head>
+        <body style="font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 32rem">
+        <h1>OpenBook has stopped</h1><p>You can close this tab. Start OpenBook again from the Start menu.</p></body></html>
+        """, "text/html");
+}).RequireAuthorization();
 app.MapPurchasingEndpoints();
 app.MapOnlineEndpoints();
 app.MapDocumentEndpoints();
@@ -165,6 +194,8 @@ app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+if (installation.IsDesktop)
+    OpenBook.Web.Hosting.DesktopHost.OnStarted(app, installation);
 app.Run();
 return 0;
 

@@ -7,6 +7,7 @@
 @using OpenBook.Infrastructure.Persistence
 @using OpenBook.Web.Diagnostics
 @inject OpenBookStorage Storage
+@inject OpenBook.Web.Hosting.Installation Install
 @inject JobStatus Jobs
 @inject PluginRegistry Plugins
 @inject OpenBook.Infrastructure.Net.OutboundPolicy Outbound
@@ -17,6 +18,41 @@
 
 <div class="wide">
     <h1>System</h1>
+    @if (Install.IsDesktop)
+    {
+        <p class="muted">OpenBook Desktop: where your company is kept and what the background jobs have been doing. Times are in the company's time zone.</p>
+
+        <div class="card">
+            <h2>This computer</h2>
+            <dl class="facts">
+                <dt>OpenBook</dt><dd>@Version, Desktop</dd>
+                <dt>Running since</dt><dd>@Started.InCompanyTime().ToString("g") (@Uptime)</dd>
+                <dt>Company time zone</dt><dd>@CompanyTime.Zone.Id</dd>
+                <dt>Company file</dt><dd>@Install.CompanyFile@(Storage.Encrypted ? " (encrypted)" : "")</dd>
+                @if (DatabaseSize is { } fileSize)
+                {
+                    <dt>Company file size</dt><dd>@Size(fileSize)</dd>
+                }
+                <dt>Backups folder</dt><dd>@Storage.BackupDirectory</dd>
+                <dt>Log folder</dt><dd>@(_log?.Directory ?? "not written")</dd>
+            </dl>
+            <p class="muted">
+                OpenBook Desktop can only be reached from this computer. To work on the books from several computers, move the company
+                to OpenBook Server (see "Moving to a server" in the user guide).
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Quit OpenBook</h2>
+            <p class="muted">OpenBook keeps running in the background after you close the browser, so scheduled backups and other jobs can run. Quit stops it until you start it again from the Start menu.</p>
+            <form method="post" action="/settings/system/quit">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Quit OpenBook</button>
+            </form>
+        </div>
+    }
+    else
+    {
     <p class="muted">How this OpenBook server is set up and what its background jobs have been doing, for whoever looks after it. Times are in the company's time zone.</p>
 
     <div class="card">
@@ -38,6 +74,7 @@
             <dt>Add-ins</dt><dd>@(Plugins.SafeMode ? "safe mode: none loaded" : $"{Plugins.Plugins.Count} found")</dd>
         </dl>
     </div>
+    }
 
     <h2>Background jobs</h2>
     @if (Jobs.Runs.Count == 0)

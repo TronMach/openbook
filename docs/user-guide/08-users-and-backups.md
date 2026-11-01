@@ -117,13 +117,15 @@ Set OpenBook to back itself up:
 
 **Save schedule**, then **Back up now** to check it works. The page shows the outcome of the last run. The first scheduled backup runs right after you save.
 
+On **OpenBook Desktop** this is already on: every day from noon to the `Backups` folder beside your company file (`Documents\OpenBook\Backups`), keeping 14. Backups only run while OpenBook is running; if the computer was off at noon, the next start makes one. Change it like any schedule, and consider a folder on another drive or one your cloud storage syncs.
+
 ### Restoring a backup
 
 **Restore from a backup**: choose the backup file, type your password and select **Restore backup**. OpenBook checks the file first (that it's an OpenBook company file, undamaged, and balances) and refuses it otherwise. Before replacing anything it saves a safety copy of the current books in a `backups` folder next to the company file, so a restore can itself be undone. Everyone else is signed out.
 
 ### With PostgreSQL
 
-The Backup page's buttons only work with the single company file. Back up a PostgreSQL database with your usual database tools, such as `pg_dump`.
+When the company is in PostgreSQL (usually OpenBook Server), the Backup page shows how to back it up with PostgreSQL's own tools instead of the download, schedule and restore buttons: the `pg_dump` command to schedule on the server and the `pg_restore` steps to bring a backup back, with your database's name filled in. **Export all data** works either way.
 
 ### Encrypted company files
 
@@ -133,9 +135,18 @@ The company file can be encrypted, so a stolen copy can't be read without the ke
 
 **Backup → Export all data** downloads a ZIP with every table as a CSV file, every attachment, and a README describing each file and column. It's for taking your data elsewhere or analysing it in a spreadsheet; it isn't a backup you can restore. Passwords, keys and other secrets are left out, as are vendors' tax IDs.
 
+## Desktop or Server
+
+OpenBook comes in two installs of the same program:
+
+- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run) until you choose **Settings → System → Quit OpenBook** or sign out of Windows.
+- **OpenBook Server** runs on a server or in Docker, usually with PostgreSQL, for several people on several computers. Whoever runs it decides where the data lives and backs it up.
+
+Your books are the same either way. Some things only make sense when others can reach OpenBook (invitations to people on other computers, customer portal links, sending from the capture app on a phone, Stripe telling OpenBook about payments); on Desktop those pages say so, and everything still works on the computer itself.
+
 ## The System page
 
-**Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. Below that:
+**Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. On OpenBook Desktop it shows the company file, backups and log folders instead, with **Quit OpenBook**. Below that:
 
 - **Background jobs**: the jobs OpenBook runs on its own (recurring documents, late fees and reminders, scheduled emails and reports, bank feeds, sales channels, scheduled backups, webhooks), each with when it last ran, whether it worked and its last failure. If automatic invoices or bank feeds seem to have stopped, look here first.
 - **Recent warnings and errors** since OpenBook last started.

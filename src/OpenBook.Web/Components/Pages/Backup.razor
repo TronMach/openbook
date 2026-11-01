@@ -1,12 +1,42 @@
 @page "/backup"
 @using OpenBook.Web.Endpoints
 @using OpenBook.Domain.Companies
+@using OpenBook.Infrastructure
+@using OpenBook.Infrastructure.Persistence
 @inject ScheduledBackupService Schedules
+@inject OpenBookStorage Storage
+@inject OpenBook.Web.Hosting.Installation Install
 
 <PageTitle>Backup &amp; restore · OpenBook</PageTitle>
 
 <h1>Backup &amp; restore</h1>
 
+@if (Storage.Provider == DatabaseProvider.Postgres)
+{
+    <div class="card">
+        <h2>Back up with pg_dump</h2>
+        <p class="muted">
+            This company is in PostgreSQL, so it's backed up with PostgreSQL's own tools rather than from this page: they copy the
+            database consistently while OpenBook runs and restore it whole. Schedule the backup command on the server (cron or a
+            scheduled task) and keep copies somewhere else.
+        </p>
+        <p>With the Docker Compose stack, from the folder with <code>docker-compose.yml</code>:</p>
+        <pre class="sample">docker compose exec -T db pg_dump -U @_pg.User -d @_pg.Database -Fc &gt; openbook-$(date +%Y%m%d).dump</pre>
+        <p>To restore, stop OpenBook, restore into the emptied database, and start it again:</p>
+        <pre class="sample">docker compose stop openbook
+docker compose exec -T db dropdb -U @_pg.User @_pg.Database
+docker compose exec -T db createdb -U @_pg.User @_pg.Database
+docker compose exec -T db pg_restore -U @_pg.User -d @_pg.Database --no-owner &lt; openbook-20261101.dump
+docker compose start openbook</pre>
+        <p class="muted">
+            Elsewhere, run the same <code>pg_dump</code> and <code>pg_restore</code> against database <strong>@_pg.Database</strong> on
+            <strong>@_pg.Host</strong>. Keep the Data Protection keys folder with your backups too: stored passwords, two-factor sign-in
+            and connection keys can't be read without it.
+        </p>
+    </div>
+}
+else
+{
 <div class="card">
     <h2>Download a backup</h2>
     <p class="muted">
@@ -18,9 +48,13 @@
 
 <div class="card">
     <h2>Scheduled backups</h2>
+    @if (Install.IsDesktop)
+    {
+        <p class="muted">OpenBook Desktop backs up every day to the Backups folder beside your company file until you change it here. Backups run while OpenBook is running: when the computer was off at the time, the next start makes one.</p>
+    }
     <p class="muted">
         Backs up automatically to a folder (a network share, an attached drive, or a folder your cloud storage syncs) or to S3-compatible
-        storage (Amazon S3, Backblaze B2, Cloudflare R2, Wasabi, MinIO), keeping the newest ones. Times are the server's.
+        storage (Amazon S3, Backblaze B2, Cloudflare R2, Wasabi, MinIO), keeping the newest ones. Times are the company's time zone.
     </p>
     @if (ScheduleError is not null)
     {
@@ -83,7 +117,7 @@
             <div class="field">
                 <label for="destination">Save to</label>
                 <select id="destination" name="destination">
-                    <option value="Folder" selected="@(_schedule.Destination == BackupDestination.Folder)">A folder on the server</option>
+                    <option value="Folder" selected="@(_schedule.Destination == BackupDestination.Folder)">@(Install.IsDesktop ? "A folder on this computer" : "A folder on the server")</option>
                     <option value="S3" selected="@(_schedule.Destination == BackupDestination.S3)">S3-compatible storage</option>
                 </select>
             </div>
@@ -137,6 +171,7 @@
         </form>
     }
 </div>
+}
 
 <div class="card">
     <h2>Export all data</h2>
@@ -148,6 +183,8 @@
     <a class="button secondary" href="/export/download">Download export (ZIP)</a>
 </div>
 
+@if (Storage.Provider != DatabaseProvider.Postgres)
+{
 <div class="card">
     <h2>Restore from a backup</h2>
     <p class="muted">
@@ -178,6 +215,7 @@
         <button type="submit" class="danger">Restore backup</button>
     </form>
 </div>
+}
 
 @code {
     private BackupSchedule _schedule = BackupSchedule.Default();
@@ -191,7 +229,21 @@
     [SupplyParameterFromQuery]
     private string? Scheduled { get; set; }
 
-    protected override async Task OnInitializedAsync() => _schedule = await Schedules.GetAsync();
+    private (string Host, string Database, string User) _pg;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Storage.Provider == DatabaseProvider.Postgres)
+        {
+            // Names only, never the password.
+            var parts = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = Storage.ConnectionString };
+            string Part(string key, string fallback) => parts.TryGetValue(key, out var value) && value?.ToString() is { Length: > 0 } text ? text : fallback;
+            var user = Part("Username", Part("User ID", "openbook"));
+            _pg = (Part("Host", "localhost"), Part("Database", user), user);
+        }
+        else
+            _schedule = await Schedules.GetAsync();
+    }
 
     private static string Message(string code) => code switch
     {

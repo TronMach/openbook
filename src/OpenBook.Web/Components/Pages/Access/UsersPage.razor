@@ -117,6 +117,7 @@
 
     <div class="card" id="invites">
         <h2>Invite someone</h2>
+        <DesktopNote>OpenBook Desktop can only be reached from this computer: an invitation works for someone who signs in here. To work from other computers, move the company to OpenBook Server.</DesktopNote>
         <p class="muted">They get a link to choose their own username and password. With email set up (Settings → Email) it's emailed to them; either way the link is shown here to copy.</p>
         <form method="post" @formname="invite" @onsubmit="InviteAsync">
             <AntiforgeryToken />

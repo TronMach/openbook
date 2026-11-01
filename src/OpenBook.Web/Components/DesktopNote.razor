@@ -1,0 +1,12 @@
+@* On OpenBook Desktop, says that something meant for people on other computers can't reach this one. Shows nothing on a server. *@
+@inject OpenBook.Web.Hosting.Installation Install
+
+@if (Install.IsDesktop)
+{
+    <div class="alert notice" role="note">@ChildContent</div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public RenderFragment ChildContent { get; set; } = null!;
+}

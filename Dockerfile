@@ -29,6 +29,7 @@ COPY --from=build /app .
 USER app
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
+    OpenBook__Install=Server \
     ConnectionStrings__OpenBook="Data Source=/data/openbook.db" \
     OpenBook__BackupDirectory=/data/backups \
     OpenBook__DataProtectionKeys=/data/keys

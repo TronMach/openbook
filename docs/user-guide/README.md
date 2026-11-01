@@ -19,7 +19,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 
 ## Running the books
 
-8. [People, backups and safety](08-users-and-backups.md): users and roles, permission sets, invitations, two-factor sign-in, single sign-on, closing the books, backups and restore, the audit log.
+8. [People, backups and safety](08-users-and-backups.md): users and roles, permission sets, invitations, two-factor sign-in, single sign-on, closing the books, backups and restore, the audit log, Desktop or Server.
 
 ## More on sales
 

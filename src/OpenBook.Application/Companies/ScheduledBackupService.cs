@@ -75,6 +75,21 @@ public sealed class ScheduledBackupService(
         return schedule;
     }
 
+    /// <summary>
+    /// OpenBook Desktop backs up on its own until someone changes it: when there's no schedule yet, saves one switched on,
+    /// every day from noon to <paramref name="folder"/>, keeping the default number. False when a schedule already exists.
+    /// </summary>
+    public async Task<bool> SetUpDefaultAsync(string folder, CancellationToken ct = default)
+    {
+        if (await store.GetBackupScheduleAsync(ct) is not null)
+            return false;
+        await UpdateAsync(new BackupScheduleDetails(true, BackupFrequency.Daily, DayOfWeek.Sunday, DefaultHour, BackupDestination.Folder, folder), null, ct);
+        return true;
+    }
+
+    /// <summary>The hour <see cref="SetUpDefaultAsync"/> picks: when a desktop computer is most likely on.</summary>
+    public const int DefaultHour = 12;
+
     /// <summary>Runs the schedule if it's due; null when it wasn't.</summary>
     public async Task<BackupRunResult?> RunDueAsync(TimeZoneInfo zone, CancellationToken ct = default)
     {

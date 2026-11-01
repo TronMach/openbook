@@ -761,6 +761,9 @@
   <data name="Open your authenticator app and add an account by scanning this code." xml:space="preserve">
     <value>Open your authenticator app and add an account by scanning this code.</value>
   </data>
+  <data name="OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go." xml:space="preserve">
+    <value>OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go.</value>
+  </data>
   <data name="Opening balances" xml:space="preserve">
     <value>Opening balances</value>
   </data>

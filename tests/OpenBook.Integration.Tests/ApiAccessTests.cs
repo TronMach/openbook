@@ -452,6 +452,7 @@ public sealed class AccessRulesTests
     [InlineData("/reports/builder", "GET", UserRole.ViewOnly)]
     [InlineData("/settings/plugins", "GET", UserRole.Admin)]
     [InlineData("/settings/system", "GET", UserRole.Admin)]
+    [InlineData("/settings/system/quit", "POST", UserRole.Admin)]
     [InlineData("/account/sessions/end-others", "POST", UserRole.ViewOnly)]
     [InlineData("/time/rates", "GET", UserRole.ViewOnly)]
     [InlineData("/sales/channels", "GET", UserRole.ViewOnly)]

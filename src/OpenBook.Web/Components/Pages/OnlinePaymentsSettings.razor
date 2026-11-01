@@ -74,6 +74,7 @@
                 and paste its signing secret above. Without it (say, OpenBook isn't reachable from the internet), payments are recorded when
                 the customer comes back to the thank-you page or when you check the link on the invoice.
             </p>
+            <DesktopNote>OpenBook Desktop can't be reached from the internet: Stripe can't call it and customers return to a thank-you page they can't open, so leave the webhook secret empty and record payments by checking the link on the invoice.</DesktopNote>
             <div class="actions"><button type="submit">Save</button></div>
         </form>
     </div>
