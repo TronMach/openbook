@@ -50,7 +50,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 
 ## Moving in and extending
 
-24. [Moving in from QuickBooks and other programs](24-moving-in.md): starting fresh or importing the history from QuickBooks, GnuCash, Xero, Wave or FreshBooks; transaction CSV imports.
+24. [Moving in from QuickBooks and other programs](24-moving-in.md): starting fresh or importing the history from QuickBooks (including company files, with the export helper), GnuCash, Xero, Wave or FreshBooks; transaction CSV imports.
 25. [Custom fields, notes and attachments](25-custom-fields-notes-attachments.md): your own fields on records and documents, notes, files.
 26. [Offline capture, the command line, the API and add-ins](26-offline-cli-api.md): the phone capture page, API keys, webhooks, the `openbook` command, add-ins.
 27. [Printed forms: designs, fonts and printing](27-printed-forms.md): invoice and form designs with logos and layout, fonts, printing in batches and the print-later queue.

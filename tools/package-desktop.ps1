@@ -3,7 +3,8 @@
     Builds the OpenBook Desktop installer for Windows (OpenBook-Setup-<version>.exe).
 
 .DESCRIPTION
-    Publishes the server (OpenBook.Web) and the launcher (OpenBook.Desktop) self-contained for win-x64 into one folder, adds
+    Publishes the server (OpenBook.Web) and the launcher (OpenBook.Desktop) self-contained for win-x64 into one folder (with
+    the QuickBooks export helper in its QuickBooks folder, from tools/package-qb-export.ps1), adds
     openbook.install.json so that copy always runs as OpenBook Desktop (its commands too), and runs Inno Setup's compiler
     (ISCC.exe, free: winget install JRSoftware.InnoSetup) on packaging/windows/OpenBook.iss. Without Inno Setup, or with
     -SkipInstaller, it stops after publishing; the folder runs as it is (start OpenBook.Desktop.exe).
@@ -28,6 +29,9 @@ foreach ($project in 'src/OpenBook.Web', 'src/OpenBook.Desktop') {
     dotnet publish (Join-Path $root $project) -c Release -r win-x64 --self-contained -o $publish -p:Version=$Version -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed." }
 }
+
+# The QuickBooks Desktop export helper, offered on the import page and in the Start menu (QuickBooksHelper).
+& (Join-Path $PSScriptRoot 'package-qb-export.ps1') -Version $Version -Out (Join-Path $publish 'QuickBooks')
 
 # Read at startup (Installation.InstallFile): this copy is OpenBook Desktop.
 Set-Content -Path (Join-Path $publish 'openbook.install.json') -Value '{ "Install": "Desktop" }' -Encoding ascii

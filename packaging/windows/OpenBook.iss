@@ -48,6 +48,7 @@ Type: filesandordirs; Name: "{app}\*"
 [Icons]
 Name: "{autoprograms}\OpenBook"; Filename: "{app}\OpenBook.Desktop.exe"; WorkingDir: "{app}"; Comment: "Start OpenBook"
 Name: "{autodesktop}\OpenBook"; Filename: "{app}\OpenBook.Desktop.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\OpenBook - Export from QuickBooks"; Filename: "{app}\QuickBooks\OpenBook.QuickBooksExport.exe"; WorkingDir: "{app}\QuickBooks"; Comment: "Save a QuickBooks Desktop company as files OpenBook imports"
 
 [Run]
 Filename: "{app}\OpenBook.Desktop.exe"; Description: "Start OpenBook now"; Flags: nowait postinstall skipifsilent

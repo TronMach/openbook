@@ -25,7 +25,7 @@ All importing needs the accountant role.
 | From | What to export | What's read |
 | --- | --- | --- |
 | QuickBooks Desktop (IIF) | File › Utilities › Export › Lists to IIF Files, plus transactions as exported by QuickBooks or another tool | Accounts, customers, vendors, products and services, and transactions; estimates and orders are skipped |
-| QuickBooks Desktop (qbXML) | SDK responses saved from a query tool | Accounts, customers, vendors, items and journal entries; jobs and other transaction types are listed but not imported |
+| QuickBooks Desktop (qbXML) | The files OpenBook's QuickBooks export helper saves (see [below](#quickbooks-desktop-company-files-qbw-qbm-qbb)), or other SDK responses saved from a query tool | From the helper: the company, accounts, customers, vendors, items and every transaction. Other qbXML files: journal entries only, other transaction types are listed but not imported. Jobs are listed but not imported |
 | QuickBooks Online | API query responses saved as JSON (for example from Intuit's API Explorer) for Account, Customer, Vendor, Item and JournalEntry | The same; include the accounts, because journal lines find them by id |
 | GnuCash | File › Save As, XML format (compressed is fine) | The account tree and every transaction in the book's currency |
 | Xero | Chart of accounts, contacts or manual journals as CSV, one file at a time | Whichever it is, recognized by its columns; journal lines find accounts by code |
@@ -33,6 +33,22 @@ All importing needs the accountant role.
 | FreshBooks | Clients › Export (CSV) | Clients, as customers; bring balances in with opening balances or a journal entry CSV |
 
 Files can be up to 20 MB; export larger books in parts (lists, then transactions by year).
+
+### QuickBooks Desktop company files (.QBW, .QBM, .QBB)
+
+OpenBook can't open a QuickBooks company file itself: the format is Intuit's own, and only QuickBooks reads it. The **QuickBooks export helper** asks QuickBooks for everything instead and saves it as files OpenBook imports. It brings the whole history: every transaction QuickBooks has posted, of any type, comes from QuickBooks' journal.
+
+1. **Get the helper.** OpenBook Desktop installs it: Start menu › **OpenBook - Export from QuickBooks**. On a server, **Settings → Move in from another program** with **From** set to **QuickBooks Desktop (qbXML)** has a **Download the QuickBooks export helper** link when the server has it; otherwise ask whoever runs OpenBook.
+2. **Open the company in QuickBooks Desktop** on that Windows PC. A portable file (.QBM) or backup (.QBB) has to be restored first: in QuickBooks, **File › Open or Restore Company**, then **Restore a portable file** or **Restore a backup copy**.
+3. **Run the helper.** The first time, QuickBooks asks whether to let "OpenBook export" read the company. Sign in to QuickBooks as the admin in single-user mode and choose **Yes, this time** (or **Yes, whenever this QuickBooks company file is open**). The helper shows what it reads (accounts, customers, vendors, items, then the journal year by year) and saves the files in **Documents › OpenBook QuickBooks export**, named after the company.
+4. **Import the files** under **Settings → Move in from another program**, **From: QuickBooks Desktop (qbXML)**. A large company is saved in several files ("part 1 of 3" and so on): import them one at a time and in order. The first one also works for **Read the file** when setting up a new company.
+
+Good to know:
+
+- Active customers, vendors and items come over; every account comes over, including inactive ones, because old transactions use them. Jobs (sub-customers) aren't imported; their transactions are, as journal entries.
+- Each transaction becomes one journal entry with QuickBooks' type, number and name in its memo (for example "Invoice 1001 · Acme"). As with every import, invoices and bills don't become documents, so the A/R and A/P aging won't list them (see [What to expect](#what-to-expect)).
+- The helper goes back month by month until it finds five years in a row with nothing. If your books have an older gap than that, run it from a command prompt with `--from` and the first date, for example `OpenBook.QuickBooksExport --from 2005-01-01`. `--help` lists the other options (another folder, a date range, a company file for QuickBooks to open).
+- If your antivirus stops the helper, it's because the program is new and not yet signed; allow it, or ask whoever runs OpenBook.
 
 ### What to expect
 

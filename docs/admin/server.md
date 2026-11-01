@@ -117,4 +117,5 @@ Nothing is changed when a check fails; the message says what differed. `move.tar
 - **A forgotten password**: `docker compose exec openbook dotnet OpenBook.Web.dll reset-password <username>` (add `--clear-two-factor` for a lost phone).
 - **Updating OpenBook**: take a backup, then `docker compose build --pull && docker compose up -d`. New database changes are applied when OpenBook starts.
 - **Logs**: one file per day in `/data/logs`; **Settings → System** shows background jobs and recent problems.
+- **Offering the QuickBooks export helper**: copy `OpenBook.QuickBooksExport.exe` (built by `tools/package-qb-export.ps1`, see [the desktop guide](desktop.md#the-quickbooks-export-helper)) into a `QuickBooks` folder beside `OpenBook.Web.dll` (in a container, `/app/QuickBooks`) and the import page links to it for accountants.
 - **SQLite on a server**: the image also runs without PostgreSQL (`docker run -p 8080:8080 -v openbook-data:/data openbook`): one company file in `/data`, with the in-app backups. PostgreSQL is better for several people.

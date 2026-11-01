@@ -34,6 +34,21 @@
             </div>
         </div>
         <p class="hint">@Help</p>
+        @if (BuiltIn == MigrationSource.QuickBooksQbxml)
+        {
+            <p class="hint">
+                @if (OpenBook.Web.Hosting.QuickBooksHelper.File is not null)
+                {
+                    <a href="@OpenBook.Web.Hosting.QuickBooksHelper.DownloadPath" download>Download the QuickBooks export helper</a>
+                }
+                else
+                {
+                    <span>The QuickBooks export helper comes with OpenBook Desktop (Start menu › OpenBook - Export from QuickBooks); ask whoever runs this server for a copy.</span>
+                }
+                Run it on the Windows PC where QuickBooks Desktop has the company open (restore a .QBM portable file or .QBB backup there first),
+                then upload the files it saves here, one at a time and in order.
+            </p>
+        }
     </div>
 
     @if (_error is not null)
@@ -148,8 +163,8 @@
 
     private string Help => Importer?.Help ?? BuiltIn switch
     {
-        MigrationSource.QuickBooksIif => "QuickBooks Desktop: File › Utilities › Export › Lists to IIF Files (transactions as exported by QuickBooks or another tool). Reads accounts, customers, vendors, products and services, and transactions; estimates and orders are skipped.",
-        MigrationSource.QuickBooksQbxml => "QuickBooks Desktop SDK responses (qbXML) from a query tool: accounts, customers, vendors, items and journal entries. Jobs and other transaction types are listed but not imported.",
+        MigrationSource.QuickBooksIif => "QuickBooks Desktop: File › Utilities › Export › Lists to IIF Files (transactions as exported by QuickBooks or another tool). Reads accounts, customers, vendors, products and services, and transactions; estimates and orders are skipped. Have a .QBM or .QBB file, or want every transaction? Choose QuickBooks Desktop (qbXML) and use the export helper.",
+        MigrationSource.QuickBooksQbxml => "QuickBooks Desktop files from OpenBook's QuickBooks export helper: the company, accounts, customers, vendors, items and every transaction (from QuickBooks' journal). Other qbXML query responses work too, but then only journal entries come in. Jobs are listed but not imported.",
         MigrationSource.QuickBooksOnline => "QuickBooks Online API query responses saved as JSON (for example from the API Explorer): Account, Customer, Vendor, Item and JournalEntry. Journal lines find their accounts by id, so include the accounts.",
         MigrationSource.GnuCash => "GnuCash: File › Save As, XML format (compressed is fine). Reads the account tree and every transaction in the books' currency; an account whose type differs from its parent's starts a new top-level account.",
         MigrationSource.Xero => "Xero: export the chart of accounts, contacts or manual journals as CSV, one file at a time; OpenBook tells which by its columns. Journal lines find accounts by code (the account number).",

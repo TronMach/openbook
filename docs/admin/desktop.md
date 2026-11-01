@@ -19,6 +19,7 @@ Installing a newer version over it keeps everything; it stops a running OpenBook
 | Data Protection keys (stored passwords, two-factor sign-in) | `%LOCALAPPDATA%\OpenBook\keys` |
 | Logs, add-ins | `%LOCALAPPDATA%\OpenBook\logs`, `%LOCALAPPDATA%\OpenBook\plugins` |
 | Program | `%LOCALAPPDATA%\Programs\OpenBook` |
+| QuickBooks export helper (Start menu: OpenBook - Export from QuickBooks) | `%LOCALAPPDATA%\Programs\OpenBook\QuickBooks\OpenBook.QuickBooksExport.exe` |
 
 To keep the company file somewhere else, set the environment variable `OpenBook__Desktop__DataFolder` to a folder; the port can be changed with `OpenBook__Desktop__Port`. There are no database or address settings on the pages.
 
@@ -36,4 +37,14 @@ On Windows, with the .NET 10 SDK and [Inno Setup 6](https://jrsoftware.org/isinf
 powershell -File tools/package-desktop.ps1 -Version 1.0.0
 ```
 
-It publishes `OpenBook.Web` (the server) and `OpenBook.Desktop` (the launcher: no console window, starts the server and leaves) self-contained for win-x64 into `artifacts/desktop/win-x64`, adds `openbook.install.json`, and compiles `packaging/windows/OpenBook.iss` into `artifacts/desktop/OpenBook-Setup-<version>.exe`. `-SkipInstaller` stops after publishing; that folder runs as it is. The icon is made from the app's icon by `python tools/make-icon.py`.
+It publishes `OpenBook.Web` (the server) and `OpenBook.Desktop` (the launcher: no console window, starts the server and leaves) self-contained for win-x64 into `artifacts/desktop/win-x64`, adds `openbook.install.json`, and compiles `packaging/windows/OpenBook.iss` into `artifacts/desktop/OpenBook-Setup-<version>.exe`. It also builds the QuickBooks Desktop export helper (`tools/package-qb-export.ps1`, below) into its `QuickBooks` folder. `-SkipInstaller` stops after publishing; that folder runs as it is. The icon is made from the app's icon by `python tools/make-icon.py`.
+
+## The QuickBooks export helper
+
+`src/OpenBook.QuickBooksExport` runs on the PC where QuickBooks Desktop has the company open and saves qbXML files for **Settings → Move in from another program** (user guide: [Moving in](../user-guide/24-moving-in.md#quickbooks-desktop-company-files-qbw-qbm-qbb)). It talks to QuickBooks through the request processor QuickBooks installs (`QBXMLRP2.RequestProcessor`), so neither Intuit's SDK nor .NET is needed on that PC.
+
+```
+powershell -File tools/package-qb-export.ps1 -Version 1.0.0
+```
+
+publishes it for win-x86 (it works with 32- and 64-bit QuickBooks) as one self-contained file, `artifacts/quickbooks-export/OpenBook.QuickBooksExport.exe` (about 70 MB). It isn't compressed: VIPRE quarantined the compressed, self-extracting build as a suspected packer. It isn't signed either, so antivirus may still distrust it until it is; on a build PC, exclude `artifacts` rather than the whole checkout.

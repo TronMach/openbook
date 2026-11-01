@@ -9,8 +9,9 @@ namespace OpenBook.Application.Import.Migration;
 
 /// <summary>
 /// QuickBooks Desktop SDK responses (qbXML): AccountQueryRs, CustomerQueryRs, VendorQueryRs, item queries and
-/// JournalEntryQueryRs, in one file or several concatenated under one root. Jobs (sub-customers) are skipped; other
-/// transaction types are reported but not imported (export them as journal entries or through IIF).
+/// JournalEntryQueryRs, in one file or several concatenated under one root. Jobs (sub-customers) are skipped. With a
+/// Journal report (<see cref="QbxmlJournal"/>, as OpenBook's QuickBooks export helper writes) every transaction comes
+/// from the report; without one, only journal entries are imported and other transaction types are reported.
 /// </summary>
 internal static class QbxmlReader
 {
@@ -72,6 +73,17 @@ internal static class QbxmlReader
                 : kind == "Inventory" ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
             data.Items.Add(new SourceItem(MigrationReaders.LineOf(i), i.Text("FullName") ?? i.Text("Name") ?? "", kind, type, income, Math.Abs(price),
                 terms.Text("Desc") ?? terms.Text("SalesDesc"), note));
+        }
+
+        var journals = document.Named("ReportRet").Where(QbxmlJournal.IsJournal).ToList();
+        if (journals.Count > 0)
+        {
+            var accounts = QbxmlJournal.AccountNames(document.Named("AccountRet"));
+            foreach (var report in journals)
+                QbxmlJournal.Read(report, accounts, data);
+            if (document.Named("JournalEntryRet").Any())
+                data.Warnings.Add("The journal entries listed on their own were left out: the Journal report already has them.");
+            return data;
         }
 
         foreach (var j in document.Named("JournalEntryRet"))

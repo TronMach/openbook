@@ -5,7 +5,10 @@ using OpenBook.Web.Security;
 
 namespace OpenBook.Web.Endpoints;
 
-/// <summary>Form posts for notes (from the Notes component on any record page) and the full data export download.</summary>
+/// <summary>
+/// Form posts for notes (from the Notes component on any record page), the full data export download and the QuickBooks
+/// Desktop export helper's download.
+/// </summary>
 public static class PortabilityEndpoints
 {
     public static IEndpointRouteBuilder MapPortabilityEndpoints(this IEndpointRouteBuilder app)
@@ -39,6 +42,10 @@ public static class PortabilityEndpoints
             var stream = new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.Delete, 81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
             return Results.File(stream, "application/zip", file.FileName);
         }).RequireAuthorization();
+
+        app.MapGet(Hosting.QuickBooksHelper.DownloadPath, () => Hosting.QuickBooksHelper.File is { } path
+            ? Results.File(path, "application/vnd.microsoft.portable-executable", Hosting.QuickBooksHelper.FileName)
+            : Results.NotFound()).RequireAuthorization();
 
         return app;
     }

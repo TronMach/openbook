@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Runs on the Windows PC where QuickBooks Desktop has the company open (a .QBW, or a .QBM/.QBB restored into one): asks
+    QuickBooks for the company, its lists and its journal through the request processor QuickBooks installs, and saves
+    qbXML files that OpenBook's QuickBooks Desktop (qbXML) import reads. No project references: it runs on its own.
+    Published 32-bit (win-x86) by tools/package-qb-export.ps1, which works with 32- and 64-bit QuickBooks.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OpenBook.QuickBooksExport</RootNamespace>
+    <ApplicationIcon>..\..\packaging\windows\openbook.ico</ApplicationIcon>
+    <Description>Exports a QuickBooks Desktop company for OpenBook.</Description>
+  </PropertyGroup>
+
+</Project>

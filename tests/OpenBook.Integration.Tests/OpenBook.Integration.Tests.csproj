@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\OpenBook.Infrastructure\OpenBook.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\OpenBook.Web\OpenBook.Web.csproj" />
     <ProjectReference Include="..\..\src\OpenBook.Cli\OpenBook.Cli.csproj" />
+    <ProjectReference Include="..\..\src\OpenBook.QuickBooksExport\OpenBook.QuickBooksExport.csproj" />
   </ItemGroup>
 
 </Project>
