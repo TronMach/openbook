@@ -42,8 +42,10 @@ public sealed record SearchHit(SearchKind Kind, Guid Id, string Title, string? D
 public sealed record SearchResults(string Query, IReadOnlyList<SearchHit> Hits, bool Truncated);
 
 /// <summary>
-/// One box that finds anything: names, numbers, references, memos, and amounts ("1,250", "$89.99").
-/// Searches in memory, which suits a small business's data; a full-text index can come later.
+/// One box that finds anything: names, numbers, references, memos, and amounts ("1,250", "$89.99"), ignoring case.
+/// Lists (customers, vendors, items, accounts, custom field values) are searched in memory; documents and journal
+/// entries are narrowed by the database (<see cref="DocumentSearch"/>: text in lower case, so on SQLite only ASCII
+/// letters' case is ignored), so a search doesn't read every document ever entered. The newest come first.
 /// </summary>
 public sealed class SearchService(
     AccountService accounts,
@@ -101,34 +103,27 @@ public sealed class SearchService(
         string Customer(Guid? id) => id is { } c && customers.TryGetValue(c, out var customer) ? customer.DisplayName : string.Empty;
         string Vendor(Guid id) => vendors.TryGetValue(id, out var vendor) ? vendor.DisplayName : string.Empty;
 
-        AddAll((await sales.ListInvoicesAsync(null, ct))
-            .Where(i => Text(i.Number, i.Memo, Customer(i.CustomerId)) || Money(i.Total) || Money(i.Balance) || Field(i.Id))
-            .Select(i => new SearchHit(SearchKind.Invoice, i.Id, $"Invoice {i.Number}", Customer(i.CustomerId), i.Date, i.Total)));
-        AddAll((await purchases.ListBillsAsync(null, ct))
-            .Where(b => Text(b.Reference, b.Memo, Vendor(b.VendorId)) || Money(b.Total) || Money(b.Balance) || Field(b.Id))
-            .Select(b => new SearchHit(SearchKind.Bill, b.Id, b.Reference is null ? "Bill" : $"Bill {b.Reference}", Vendor(b.VendorId), b.Date, b.Total)));
-        AddAll((await sales.ListReceiptsAsync(ct))
-            .Where(r => Text(r.Number, r.Reference, r.Memo, Customer(r.CustomerId)) || Money(r.Total) || Field(r.Id))
-            .Select(r => new SearchHit(SearchKind.SalesReceipt, r.Id, $"Sales receipt {r.Number}", Customer(r.CustomerId), r.Date, r.Total)));
-        AddAll((await sales.ListPaymentsAsync(null, ct))
-            .Where(p => Text(p.Reference, p.Memo, Customer(p.CustomerId)) || Money(p.Amount))
-            .Select(p => new SearchHit(SearchKind.CustomerPayment, p.Id, $"Payment from {Customer(p.CustomerId)}", p.Reference, p.Date, p.Amount)));
-        AddAll((await purchases.ListPaymentsAsync(null, ct))
-            .Where(p => Text(p.Reference, p.Memo, Vendor(p.VendorId)) || Money(p.Amount))
-            .Select(p => new SearchHit(SearchKind.BillPayment, p.Id, $"Bill payment to {Vendor(p.VendorId)}", p.Reference, p.Date, p.Amount)));
-        AddAll((await banking.ListAllTransactionsAsync(ct))
-            .Where(t => Text(t.Payee, t.Reference, t.Memo) || Money(t.Amount))
-            .OrderByDescending(t => t.Date)
+        // Documents: the database narrows them (one more than shown, to know there are more), names and field values
+        // having been matched above.
+        var text = q.ToLowerInvariant();
+        var fieldRecords = fieldValues.Where(f => Field(f.Key)).Select(f => f.Key).ToList();
+        DocumentSearch For(IEnumerable<Guid> parties) => new(text, amount, parties.ToList(), fieldRecords, MaxPerKind + 1);
+        var customerMatches = customers.Values.Where(c => Text(c.DisplayName)).Select(c => c.Id);
+        var vendorMatches = vendors.Values.Where(v => Text(v.DisplayName)).Select(v => v.Id);
+        var (invoices, receipts, payments) = await sales.SearchAsync(For(customerMatches), ct);
+        var (bills, billPayments) = await purchases.SearchAsync(For(vendorMatches), ct);
+
+        AddAll(invoices.Select(i => new SearchHit(SearchKind.Invoice, i.Id, $"Invoice {i.Number}", Customer(i.CustomerId), i.Date, i.Total)));
+        AddAll(bills.Select(b => new SearchHit(SearchKind.Bill, b.Id, b.Reference is null ? "Bill" : $"Bill {b.Reference}", Vendor(b.VendorId), b.Date, b.Total)));
+        AddAll(receipts.Select(r => new SearchHit(SearchKind.SalesReceipt, r.Id, $"Sales receipt {r.Number}", Customer(r.CustomerId), r.Date, r.Total)));
+        AddAll(payments.Select(p => new SearchHit(SearchKind.CustomerPayment, p.Id, $"Payment from {Customer(p.CustomerId)}", p.Reference, p.Date, p.Amount)));
+        AddAll(billPayments.Select(p => new SearchHit(SearchKind.BillPayment, p.Id, $"Bill payment to {Vendor(p.VendorId)}", p.Reference, p.Date, p.Amount)));
+        AddAll((await banking.SearchAsync(For([]), ct))
             .Select(t => new SearchHit(SearchKind.BankTransaction, t.Id, t.Payee ?? t.Memo ?? t.Kind.ToString(), chart.Find(t.AccountId) is null ? null : chart.FullName(t.AccountId), t.Date, t.Amount)));
 
         // Manual journal entries; documents' entries are found through their documents above.
-        AddAll((await ledger.GetLinesAsync(null, DateOnly.MaxValue, ct))
-            .Where(l => l.Source == JournalEntry.ManualSource)
-            .GroupBy(l => l.JournalEntryId)
-            .Where(g => entryNumber == g.First().EntryNumber || Text(g.First().EntryMemo) || g.Any(l => Text(l.LineMemo) || Money(l.Amount)))
-            .OrderByDescending(g => g.First().Date)
-            .Select(g => new SearchHit(SearchKind.JournalEntry, g.Key, $"Journal entry {g.First().EntryNumber}", g.First().EntryMemo,
-                g.First().Date, g.Where(l => l.Amount > 0m).Sum(l => l.Amount))));
+        AddAll((await ledger.SearchManualEntriesAsync(For([]), entryNumber, ct))
+            .Select(e => new SearchHit(SearchKind.JournalEntry, e.Id, $"Journal entry {e.Number}", e.Memo, e.Date, e.Lines.Where(l => l.Amount > 0m).Sum(l => l.Amount))));
 
         return new SearchResults(q, hits, truncated);
     }

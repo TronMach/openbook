@@ -47,6 +47,14 @@ public sealed record EntryHeader(
     public bool IsStanding => Status == JournalEntryStatus.Posted && Kind == JournalEntryKind.Standard;
 }
 
+/// <summary>
+/// What the search box looks for in documents, for the stores to narrow in the database: <paramref name="Text"/> (lower
+/// case) inside a number, reference or memo, an <paramref name="Amount"/>, the customers or vendors whose names matched
+/// (<paramref name="PartyIds"/>), and records whose custom field values matched (<paramref name="RecordIds"/>).
+/// Results are the newest first, at most <paramref name="Take"/> of each kind.
+/// </summary>
+public sealed record DocumentSearch(string Text, decimal? Amount, IReadOnlyCollection<Guid> PartyIds, IReadOnlyCollection<Guid> RecordIds, int Take);
+
 /// <summary>The newest documents of a kind (newest first), and how many there are in all.</summary>
 public sealed record RecentDocuments<T>(IReadOnlyList<T> Items, int Total);
 
@@ -91,6 +99,12 @@ public interface ILedgerStore
     /// neither are left out.
     /// </summary>
     Task<IReadOnlyDictionary<Guid, (decimal Before, decimal Through)>> GetAccrualTotalsAsync(DateOnly splitAt, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>
+    /// Hand-entered entries matching a search (its number, memo, a line's memo, or a line of the amount either way),
+    /// newest first, untracked, with lines.
+    /// </summary>
+    Task<IReadOnlyList<JournalEntry>> SearchManualEntriesAsync(DocumentSearch search, long? number, CancellationToken ct);
 
     /// <summary>Every entry's header, sealed or not, untracked.</summary>
     Task<IReadOnlyList<EntryHeader>> ListEntryHeadersAsync(CancellationToken ct);

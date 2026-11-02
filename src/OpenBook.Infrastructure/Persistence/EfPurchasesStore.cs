@@ -40,6 +40,22 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public Task<RecentDocuments<BankTransaction>> ListRecentExpensesAsync(int skip, int take, CancellationToken ct) =>
         db.BankTransactions.Where(t => t.Kind == BankTransactionKind.Spend).RecentAsync(t => t.Date, t => t.Id, t => t.CreatedAt, skip, take, ct);
 
+#pragma warning disable CA1304, CA1311, CA1862 // Translated to SQL lower(): the culture overloads these rules suggest don't translate.
+    public async Task<(IReadOnlyList<Bill> Bills, IReadOnlyList<BillPayment> Payments)> SearchAsync(DocumentSearch search, CancellationToken ct)
+    {
+        var (text, amount, parties, records) = (search.Text, search.Amount ?? -1m, search.PartyIds.ToList(), search.RecordIds.ToList());
+        var bills = await db.Bills.AsNoTracking()
+            .Where(b => (b.Reference != null && b.Reference.ToLower().Contains(text)) || (b.Memo != null && b.Memo.ToLower().Contains(text))
+                || parties.Contains(b.VendorId) || records.Contains(b.Id) || b.Total == amount || b.Total - b.AmountPaid == amount)
+            .OrderByDescending(b => b.Date).ThenByDescending(b => b.Id).Take(search.Take).ToListAsync(ct);
+        var payments = await db.BillPayments.AsNoTracking()
+            .Where(p => (p.Reference != null && p.Reference.ToLower().Contains(text)) || (p.Memo != null && p.Memo.ToLower().Contains(text))
+                || parties.Contains(p.VendorId) || p.Amount == amount)
+            .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Take(search.Take).ToListAsync(ct);
+        return (bills, payments);
+    }
+#pragma warning restore CA1304, CA1311, CA1862
+
     public async Task<IReadOnlyList<Bill>> FindBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         ids.Count == 0 ? [] : await db.Bills.AsNoTracking().Where(b => ids.Contains(b.Id)).ToListAsync(ct);
 

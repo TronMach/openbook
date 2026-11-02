@@ -62,9 +62,17 @@ public sealed record CustomerStatement(
 /// </summary>
 public sealed class ReceivablesService(ISalesStore store)
 {
-    public async Task<AgingReport> AgingAsync(DateOnly asOf, CancellationToken ct = default)
+    /// <summary>A/R aging on the date, from only the documents that can be open on it (<see cref="ISalesStore.ListReceivablesAsync"/>).</summary>
+    public async Task<AgingReport> AgingAsync(DateOnly asOf, CancellationToken ct = default) =>
+        Aging(await store.ListCustomersAsync(ct), await store.ListReceivablesAsync(asOf, ct), asOf);
+
+    /// <summary>
+    /// A/R aging worked out from the documents given: the calculation itself, so tests can check that the narrowed
+    /// documents give the same aging as every document.
+    /// </summary>
+    public static AgingReport Aging(IReadOnlyList<Customer> customers, ReceivableDocuments documents, DateOnly asOf)
     {
-        var data = await LoadAsync(ct);
+        var data = new Ledger(customers, documents);
         var settled = Settled(data, asOf);
         var result = new List<CustomerAging>();
         foreach (var (customer, _) in CustomerTree.Ordered(data.Customers))
@@ -79,7 +87,7 @@ public sealed class ReceivablesService(ISalesStore store)
 
     public async Task<CustomerAging> CustomerAgingAsync(Guid customerId, DateOnly asOf, CancellationToken ct = default)
     {
-        var data = await LoadAsync(ct);
+        var data = await LoadForAsync([customerId], ct);
         var customer = data.Customers.SingleOrDefault(c => c.Id == customerId) ?? throw new EntityNotFoundException("customer", customerId);
         return AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf, Settled(data, asOf));
     }
@@ -92,12 +100,14 @@ public sealed class ReceivablesService(ISalesStore store)
     {
         if (to < from)
             throw new DomainException("statement.dates_invalid", "The statement's end date is before its start date.");
-        var data = await LoadAsync(ct);
-        var byId = data.Customers.ToDictionary(c => c.Id);
+        var customers = await store.ListCustomersAsync(ct);
+        var byId = customers.ToDictionary(c => c.Id);
         if (!byId.ContainsKey(customerId))
             throw new EntityNotFoundException("customer", customerId);
         var customer = byId[CustomerTree.BillTo(customerId, byId)];
         var billed = CustomerTree.Billed(customer.Id, byId);
+        // That account's documents only (the customer and those billed to it).
+        var data = new Ledger(customers, await store.ListReceivablesForAsync(billed, ct));
         var names = CustomerTree.FullNames(data.Customers);
         string For(Guid id) => id == customer.Id ? "" : $" · {names[id]}";
 
@@ -196,14 +206,8 @@ public sealed class ReceivablesService(ISalesStore store)
         return new CustomerAging(customer, buckets, invoices, credits.OrderBy(c => c.Date).ToList());
     }
 
-    private async Task<Ledger> LoadAsync(CancellationToken ct) => new(
-        await store.ListCustomersAsync(ct),
-        await store.ListInvoicesAsync(null, ct),
-        await store.ListPaymentsAsync(null, ct),
-        await store.ListCreditMemosAsync(null, ct),
-        await store.ListRefundsAsync(null, ct),
-        await store.ListWriteOffsAsync(null, ct),
-        await store.ListRetainersAsync(null, ct));
+    private async Task<Ledger> LoadForAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken ct) =>
+        new(await store.ListCustomersAsync(ct), await store.ListReceivablesForAsync(customerIds, ct));
 
     private sealed record Ledger(
         IReadOnlyList<Customer> Customers,
@@ -214,6 +218,11 @@ public sealed class ReceivablesService(ISalesStore store)
         IReadOnlyList<BadDebtWriteOff> WriteOffs,
         IReadOnlyList<Retainer> Retainers)
     {
+        public Ledger(IReadOnlyList<Customer> customers, ReceivableDocuments documents)
+            : this(customers, documents.Invoices, documents.Payments, documents.CreditMemos, documents.Refunds, documents.WriteOffs, documents.Retainers)
+        {
+        }
+
         public ILookup<Guid, Invoice> InvoicesOf { get; } = Invoices.ToLookup(i => i.CustomerId);
         public ILookup<Guid, CustomerPayment> PaymentsOf { get; } = Payments.ToLookup(p => p.CustomerId);
         public ILookup<Guid, CreditMemo> CreditMemosOf { get; } = CreditMemos.ToLookup(c => c.CustomerId);

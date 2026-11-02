@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpenBook.Application;
 using OpenBook.Application.Banking;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
@@ -17,6 +18,17 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
             select new AccountLine(l.Id, e.Id, e.Number, e.Date, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Status, e.Kind, e.PostedAt))
             .AsNoTracking()
             .ToListAsync(ct);
+
+#pragma warning disable CA1304, CA1311, CA1862 // Translated to SQL lower(): the culture overloads these rules suggest don't translate.
+    public async Task<IReadOnlyList<BankTransaction>> SearchAsync(DocumentSearch search, CancellationToken ct)
+    {
+        var (text, amount) = (search.Text, search.Amount ?? -1m);
+        return await db.BankTransactions.AsNoTracking()
+            .Where(t => (t.Payee != null && t.Payee.ToLower().Contains(text)) || (t.Reference != null && t.Reference.ToLower().Contains(text))
+                || (t.Memo != null && t.Memo.ToLower().Contains(text)) || t.Amount == amount)
+            .OrderByDescending(t => t.Date).ThenByDescending(t => t.Id).Take(search.Take).ToListAsync(ct);
+    }
+#pragma warning restore CA1304, CA1311, CA1862
 
     public async Task<(decimal Balance, decimal Reconciled)> GetAccountTotalsAsync(Guid accountId, CancellationToken ct)
     {

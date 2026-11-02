@@ -29,6 +29,9 @@ public interface IBankingStore
     /// <summary>Every sealed ledger line on the account, oldest first (date, entry number, line).</summary>
     Task<IReadOnlyList<AccountLine>> GetAccountLinesAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>Spends, receives and transfers matching a search (payee, reference, memo or amount), newest first, untracked.</summary>
+    Task<IReadOnlyList<BankTransaction>> SearchAsync(DocumentSearch search, CancellationToken ct);
+
     /// <summary>
     /// The account's total of sealed lines and of those cleared in finished reconciliations, both debit-positive,
     /// added up by the database.

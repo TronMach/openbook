@@ -80,6 +80,19 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             .Where(t => t.Before != 0m || t.Through != 0m)
             .ToDictionary(t => t.AccountId, t => (t.Before, t.Through));
 
+#pragma warning disable CA1304, CA1311, CA1862 // Translated to SQL lower(): the culture overloads these rules suggest don't translate.
+    public async Task<IReadOnlyList<JournalEntry>> SearchManualEntriesAsync(DocumentSearch search, long? number, CancellationToken ct)
+    {
+        var (text, amount, wanted) = (search.Text, search.Amount ?? -1m, number ?? -1L);
+        return await db.JournalEntries.AsNoTracking().Include(e => e.Lines)
+            .Where(e => e.Source == JournalEntry.ManualSource && (e.Number == wanted || (e.Memo != null && e.Memo.ToLower().Contains(text))
+                || e.Lines.Any(l => (l.Memo != null && l.Memo.ToLower().Contains(text)) || l.Amount == amount || l.Amount == -amount)))
+            .OrderByDescending(e => e.Date).ThenByDescending(e => e.Number).Take(search.Take)
+            .AsSplitQuery()
+            .ToListAsync(ct);
+    }
+#pragma warning restore CA1304, CA1311, CA1862
+
     public async Task<IReadOnlyList<EntryHeader>> ListEntryHeadersAsync(CancellationToken ct) =>
         await db.JournalEntries.IgnoreQueryFilters().AsNoTracking()
             .Select(e => new EntryHeader(e.Id, e.Number, e.Date, e.Source, e.SourceId, e.Status, e.Kind,

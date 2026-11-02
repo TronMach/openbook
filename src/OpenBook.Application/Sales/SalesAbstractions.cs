@@ -11,6 +11,15 @@ public sealed record UndepositedDocuments(IReadOnlyList<CustomerPayment> Payment
 
 public sealed record SalesDocumentCounts(int Estimates, int PendingEstimates, int Invoices, int Receipts, int Payments, int Deposits);
 
+/// <summary>The documents A/R aging and statements are worked out from, untracked, with lines.</summary>
+public sealed record ReceivableDocuments(
+    IReadOnlyList<Invoice> Invoices,
+    IReadOnlyList<CustomerPayment> Payments,
+    IReadOnlyList<CreditMemo> CreditMemos,
+    IReadOnlyList<CustomerRefund> Refunds,
+    IReadOnlyList<BadDebtWriteOff> WriteOffs,
+    IReadOnlyList<Retainer> Retainers);
+
 public interface ISalesStore
 {
     Task<IReadOnlyList<Customer>> ListCustomersAsync(CancellationToken ct);
@@ -35,6 +44,25 @@ public interface ISalesStore
     Task<RecentDocuments<Estimate>> ListRecentEstimatesAsync(int skip, int take, CancellationToken ct);
     Task<RecentDocuments<CreditMemo>> ListRecentCreditMemosAsync(int skip, int take, CancellationToken ct);
     Task<RecentDocuments<CustomerRefund>> ListRecentRefundsAsync(int skip, int take, CancellationToken ct);
+
+    /// <summary>
+    /// What A/R aging on <paramref name="asOf"/> needs, and no more: posted invoices dated by then that are unpaid now or
+    /// were settled by something dated after it (the only ones that can have a balance on the date), everything that
+    /// settled them, and the payments and credit memos dated by then that hold credit now or were used or refunded
+    /// after it, with their refunds. Aging from these is exactly aging from everything.
+    /// </summary>
+    Task<ReceivableDocuments> ListReceivablesAsync(DateOnly asOf, CancellationToken ct);
+
+    /// <summary>
+    /// These customers' documents, whatever their date or status, plus anything another customer's payment, credit,
+    /// retainer or write-off applied to their invoices (a parent paying a sub-customer's): for statements and one
+    /// customer's aging.
+    /// </summary>
+    Task<ReceivableDocuments> ListReceivablesForAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken ct);
+
+    /// <summary>Invoices, sales receipts and customer payments matching a search, newest first, untracked.</summary>
+    Task<(IReadOnlyList<Invoice> Invoices, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<CustomerPayment> Payments)> SearchAsync(
+        DocumentSearch search, CancellationToken ct);
 
     /// <summary>These invoices (those that exist), untracked, with lines.</summary>
     Task<IReadOnlyList<Invoice>> FindInvoicesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);

@@ -48,6 +48,112 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public Task<RecentDocuments<CustomerRefund>> ListRecentRefundsAsync(int skip, int take, CancellationToken ct) =>
         db.CustomerRefunds.RecentAsync(r => r.Date, r => r.Id, r => r.CreatedAt, skip, take, ct);
 
+#pragma warning disable CA1304, CA1311, CA1862 // Translated to SQL lower(): the culture overloads these rules suggest don't translate.
+    public async Task<(IReadOnlyList<Invoice> Invoices, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<CustomerPayment> Payments)> SearchAsync(
+        DocumentSearch search, CancellationToken ct)
+    {
+        var (text, amount, parties, records) = (search.Text, search.Amount ?? -1m, search.PartyIds.ToList(), search.RecordIds.ToList());
+        var invoices = (await db.Invoices.AsNoTracking()
+            .Where(i => i.Number.ToLower().Contains(text) || (i.Memo != null && i.Memo.ToLower().Contains(text)) || parties.Contains(i.CustomerId)
+                || records.Contains(i.Id) || i.Total == amount || i.Total - i.AmountPaid == amount)
+            .OrderByDescending(i => i.Date).ThenByDescending(i => i.Id).Take(search.Take).ToListAsync(ct));
+        var receipts = await db.SalesReceipts.AsNoTracking()
+            .Where(r => r.Number.ToLower().Contains(text) || (r.Reference != null && r.Reference.ToLower().Contains(text))
+                || (r.Memo != null && r.Memo.ToLower().Contains(text)) || (r.CustomerId != null && parties.Contains(r.CustomerId.Value))
+                || records.Contains(r.Id) || r.Total == amount)
+            .OrderByDescending(r => r.Date).ThenByDescending(r => r.Id).Take(search.Take).ToListAsync(ct);
+        var payments = await db.CustomerPayments.AsNoTracking()
+            .Where(p => (p.Reference != null && p.Reference.ToLower().Contains(text)) || (p.Memo != null && p.Memo.ToLower().Contains(text))
+                || parties.Contains(p.CustomerId) || p.Amount == amount)
+            .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Take(search.Take).ToListAsync(ct);
+        return (invoices, receipts, payments);
+    }
+#pragma warning restore CA1304, CA1311, CA1862
+
+    public async Task<ReceivableDocuments> ListReceivablesAsync(DateOnly asOf, CancellationToken ct)
+    {
+        var posted = DocumentStatus.Posted;
+        // Invoices settled after the date may have had a balance on it, though they're paid now.
+        var settledLater = new HashSet<Guid>(await db.CustomerPayments.Where(p => p.Status == posted)
+            .SelectMany(p => p.Applications.Where(a => a.AppliedOn > asOf).Select(a => a.InvoiceId)).ToListAsync(ct));
+        settledLater.UnionWith(await db.CreditMemos.Where(c => c.Status == posted)
+            .SelectMany(c => c.Applications.Where(a => a.AppliedOn > asOf).Select(a => a.InvoiceId)).ToListAsync(ct));
+        settledLater.UnionWith(await db.BadDebtWriteOffs.Where(w => w.Status == posted && w.Date > asOf).Select(w => w.InvoiceId).ToListAsync(ct));
+        settledLater.UnionWith(await db.Retainers.Where(r => r.Status == posted)
+            .SelectMany(r => r.Applications.Where(a => !a.IsVoided && a.AppliedOn > asOf).Select(a => a.InvoiceId)).ToListAsync(ct));
+        var later = settledLater.ToList();
+        var invoices = await db.Invoices.AsNoTracking()
+            .Where(i => i.Status == posted && i.Date <= asOf && (i.Total > i.AmountPaid || later.Contains(i.Id)))
+            .ToListAsync(ct);
+
+        // Credit on the date: held now, or used or refunded after it.
+        var refundedLater = await db.CustomerRefunds.Where(r => r.Status == posted && r.Date > asOf)
+            .Select(r => new { r.CustomerPaymentId, r.CreditMemoId }).ToListAsync(ct);
+        var paymentsRefundedLater = refundedLater.Where(r => r.CustomerPaymentId != null).Select(r => r.CustomerPaymentId!.Value).ToList();
+        var memosRefundedLater = refundedLater.Where(r => r.CreditMemoId != null).Select(r => r.CreditMemoId!.Value).ToList();
+        var creditPayments = await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Status == posted && p.Date <= asOf && (p.Amount - p.Applications.Sum(a => a.Amount) - p.AmountRefunded != 0m
+                || p.Applications.Any(a => a.AppliedOn > asOf) || paymentsRefundedLater.Contains(p.Id)))
+            .ToListAsync(ct);
+        var creditMemos = await db.CreditMemos.AsNoTracking()
+            .Where(c => c.Status == posted && c.Date <= asOf && (c.Total - c.Applications.Sum(a => a.Amount) - c.AmountRefunded != 0m
+                || c.Applications.Any(a => a.AppliedOn > asOf) || memosRefundedLater.Contains(c.Id)))
+            .ToListAsync(ct);
+        return await WithSettlementsAsync(invoices, creditPayments, creditMemos, [], [], ct);
+    }
+
+    public async Task<ReceivableDocuments> ListReceivablesForAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken ct)
+    {
+        var ids = customerIds.Distinct().ToList();
+        return await WithSettlementsAsync(
+            await db.Invoices.AsNoTracking().Where(i => ids.Contains(i.CustomerId)).ToListAsync(ct),
+            await db.CustomerPayments.AsNoTracking().Where(p => ids.Contains(p.CustomerId)).ToListAsync(ct),
+            await db.CreditMemos.AsNoTracking().Where(c => ids.Contains(c.CustomerId)).ToListAsync(ct),
+            await db.BadDebtWriteOffs.AsNoTracking().Where(w => ids.Contains(w.CustomerId)).ToListAsync(ct),
+            await db.Retainers.AsNoTracking().Where(r => ids.Contains(r.CustomerId)).ToListAsync(ct),
+            ct);
+    }
+
+    /// <summary>
+    /// Adds whatever settled the invoices (payments, credit memos, write-offs and retainers applied to them, whoever's
+    /// they are) and the refunds of every payment and credit memo, without repeating any document.
+    /// </summary>
+    private async Task<ReceivableDocuments> WithSettlementsAsync(
+        List<Invoice> invoices, List<CustomerPayment> payments, List<CreditMemo> creditMemos, List<BadDebtWriteOff> writeOffs, List<Retainer> retainers,
+        CancellationToken ct)
+    {
+        var invoiceIds = invoices.Select(i => i.Id).ToList();
+        static List<T> Merge<T>(List<T> first, IEnumerable<T> more, Func<T, Guid> id)
+        {
+            var seen = first.Select(id).ToHashSet();
+            return [.. first, .. more.Where(x => seen.Add(id(x)))];
+        }
+
+        if (invoiceIds.Count > 0)
+        {
+            // From the applications (indexed by invoice) to their documents, rather than every document's applications.
+            var applyingPayments = await db.CustomerPayments.SelectMany(p => p.Applications).Where(a => invoiceIds.Contains(a.InvoiceId)).Select(a => EF.Property<Guid>(a, "CustomerPaymentId"))
+                .Distinct().ToListAsync(ct);
+            payments = Merge(payments, await db.CustomerPayments.AsNoTracking().Where(p => applyingPayments.Contains(p.Id)).ToListAsync(ct), p => p.Id);
+            var applyingMemos = await db.CreditMemos.SelectMany(c => c.Applications).Where(a => invoiceIds.Contains(a.InvoiceId)).Select(a => EF.Property<Guid>(a, "CreditMemoId"))
+                .Distinct().ToListAsync(ct);
+            creditMemos = Merge(creditMemos, await db.CreditMemos.AsNoTracking().Where(c => applyingMemos.Contains(c.Id)).ToListAsync(ct), c => c.Id);
+            writeOffs = Merge(writeOffs, await db.BadDebtWriteOffs.AsNoTracking()
+                .Where(w => invoiceIds.Contains(w.InvoiceId)).ToListAsync(ct), w => w.Id);
+            var applyingRetainers = await db.Retainers.SelectMany(r => r.Applications).Where(a => invoiceIds.Contains(a.InvoiceId)).Select(a => EF.Property<Guid>(a, "RetainerId"))
+                .Distinct().ToListAsync(ct);
+            retainers = Merge(retainers, await db.Retainers.AsNoTracking().Where(r => applyingRetainers.Contains(r.Id)).ToListAsync(ct), r => r.Id);
+        }
+
+        var paymentIds = payments.Select(p => p.Id).ToList();
+        var memoIds = creditMemos.Select(c => c.Id).ToList();
+        var refunds = paymentIds.Count + memoIds.Count == 0 ? [] : await db.CustomerRefunds.AsNoTracking()
+            .Where(r => (r.CustomerPaymentId != null && paymentIds.Contains(r.CustomerPaymentId.Value))
+                || (r.CreditMemoId != null && memoIds.Contains(r.CreditMemoId.Value)))
+            .ToListAsync(ct);
+        return new ReceivableDocuments(invoices, payments, creditMemos, refunds, writeOffs, retainers);
+    }
+
     public async Task<IReadOnlyList<Invoice>> FindInvoicesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         ids.Count == 0 ? [] : await db.Invoices.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(ct);
 

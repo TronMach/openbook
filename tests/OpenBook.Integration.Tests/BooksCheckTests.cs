@@ -145,9 +145,44 @@ public sealed class BooksCheckTests : IAsyncLifetime
             }
 
             if (step % 10 == 0)
+            {
                 AssertAgrees(await Check(), $"seed {seed}, step {step} ({string.Join("; ", done.TakeLast(10))})");
+                await AssertAgingFromNarrowedDocuments($"seed {seed}, step {step}");
+            }
         }
     }
+
+    /// <summary>
+    /// A/R aging reads only the documents that can be open on its date: it must come out exactly as from every
+    /// document, on past, present and far dates, and each customer's own aging must agree with it.
+    /// </summary>
+    private async Task AssertAgingFromNarrowedDocuments(string when)
+    {
+        foreach (var asOf in new[] { Start.AddDays(7), Start.AddDays(20), DateOnly.MaxValue })
+        {
+            var narrowed = await In<ReceivablesService, AgingReport>(s => s.AgingAsync(asOf));
+            var everything = await _db.InScope(async sp =>
+            {
+                var store = sp.GetRequiredService<ISalesStore>();
+                return ReceivablesService.Aging(await store.ListCustomersAsync(default), new ReceivableDocuments(
+                    await store.ListInvoicesAsync(null, default), await store.ListPaymentsAsync(null, default), await store.ListCreditMemosAsync(null, default),
+                    await store.ListRefundsAsync(null, default), await store.ListWriteOffsAsync(null, default), await store.ListRetainersAsync(null, default)), asOf);
+            });
+            Assert.True(Describe(everything) == Describe(narrowed), $"{when}, aging on {asOf}:{Environment.NewLine}{Describe(everything)}{Environment.NewLine}---{Environment.NewLine}{Describe(narrowed)}");
+            foreach (var customer in _customers)
+            {
+                var own = await In<ReceivablesService, CustomerAging>(s => s.CustomerAgingAsync(customer.Id, asOf));
+                var inReport = everything.Customers.SingleOrDefault(c => c.Customer.Id == customer.Id);
+                Assert.Equal(inReport is null ? "" : Describe(inReport), own.Invoices.Count + own.Credits.Count == 0 ? "" : Describe(own));
+            }
+        }
+    }
+
+    private static string Describe(AgingReport report) => string.Join(Environment.NewLine, report.Customers.Select(Describe));
+
+    private static string Describe(CustomerAging aging) =>
+        $"{aging.Customer.DisplayName} {aging.Buckets} " + string.Join(",", aging.Invoices.Select(i => $"{i.Invoice.Number}:{i.Balance}"))
+        + " | " + string.Join(",", aging.Credits.Select(c => $"{c.Label}:{c.Amount}"));
 
     private async Task<string> StepAsync(int operation, DateOnly date, Random random)
     {

@@ -31,6 +31,9 @@ public interface IPurchasesStore
     /// <summary>The newest spends from bank and card accounts (expenses), for lists that show a page at a time.</summary>
     Task<RecentDocuments<BankTransaction>> ListRecentExpensesAsync(int skip, int take, CancellationToken ct);
 
+    /// <summary>Bills and bill payments matching a search, newest first, untracked.</summary>
+    Task<(IReadOnlyList<Bill> Bills, IReadOnlyList<BillPayment> Payments)> SearchAsync(DocumentSearch search, CancellationToken ct);
+
     /// <summary>These bills (those that exist), untracked, with lines.</summary>
     Task<IReadOnlyList<Bill>> FindBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 
