@@ -2,7 +2,7 @@
 
 ## Users and roles
 
-Administrators add people on **Settings → Users**. Each person signs in with their own username, so the audit log shows who did what.
+Administrators add people on **Settings → Users and invitations**. Each person signs in with their own username, so the audit log shows who did what.
 
 **Add a user** asks for a username, a starting password (at least 8 characters; ask them to change it after signing in) and a role:
 
@@ -13,7 +13,7 @@ Administrators add people on **Settings → Users**. Each person signs in with t
 | Accountant | Also the books themselves: chart of accounts, journal entries and opening balances, imports, closing the books, most settings, the audit log, budgets, accountant reports |
 | Admin | Also people and the system: users, email and online payment settings, webhooks, backups and restore, data export, add-ins |
 
-Pages a role can't use are left out of its menu; trying to open one shows an "access denied" page.
+Pages a role can't use are left out of its menu. On pages, buttons and forms it can't use stay visible but greyed out, saying what they need; selecting one opens a page that says which access is missing and names the administrators who can give it. They work again as soon as an administrator changes the role (the person signs in once more).
 
 From the Users page an administrator can change someone's role, **reset their password** or **make them inactive** when they leave. Changing a role or making someone inactive signs them out everywhere at once. People are never deleted, so their name stays on what they entered. There's always at least one active administrator, and you can't change your own role or deactivate yourself.
 
@@ -21,19 +21,19 @@ From the Users page an administrator can change someone's role, **reset their pa
 
 Two-factor sign-in asks for a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others) after the password, so someone who learns your password still can't get in.
 
-**Turn it on:** select your username in the top bar, then **Two-factor sign-in: off, set it up** (or **Settings → Two-factor sign-in**). Scan the QR code with your app (or type the key shown under it), enter the code the app shows and select **Turn on two-factor sign-in**. OpenBook then shows ten **recovery codes**: save them somewhere safe (print them or keep them in a password manager). Each one signs you in once if you lose your phone; they aren't shown again.
+**Turn it on:** select your username in the top bar, then **Two-factor sign-in** (or **Settings → Your two-factor sign-in**). Scan the QR code with your app (or type the key shown under it), enter the code the app shows and select **Turn on two-factor sign-in**. OpenBook then shows ten **recovery codes**: save them somewhere safe (print them or keep them in a password manager). Each one signs you in once if you lose your phone; they aren't shown again.
 
 **Signing in:** after your password, enter the code your app shows for OpenBook, or one of your recovery codes. Tick **Remember this browser for 30 days** on a computer or phone that's yours, to skip the code there. Changing your password or **Sign out all other sessions** forgets every remembered browser. Wrong codes count like wrong passwords: after five in a row the account is locked for five minutes.
 
 On the same page you can **Make new recovery codes** (the old ones stop working) or **Turn off two-factor sign-in**; both ask for your password and a code. To move to a new phone, turn it off and set it up again.
 
-**Lost your phone and your recovery codes?** An administrator can select **Turn off** in the **Two-factor** column on **Settings → Users**; that also signs you out everywhere. If no administrator can sign in, the `reset-password` command with `--clear-two-factor` does it (see [Forgotten password](01-getting-started.md#forgotten-password)).
+**Lost your phone and your recovery codes?** An administrator can select **Turn off** in the **Two-factor** column on **Settings → Users and invitations**; that also signs you out everywhere. If no administrator can sign in, the `reset-password` command with `--clear-two-factor` does it (see [Forgotten password](01-getting-started.md#forgotten-password)).
 
 **Requiring it (administrators):** **Settings → Sign-in and two-factor** → **Require it for**: nobody (each person decides), admins, accountants and admins, everyone but view-only users, or everyone. People in those roles who haven't set it up are taken to the setup page at their next sign-in and can't do anything else until they have; the page lists who that is. API keys keep working without a code.
 
 ### Inviting someone
 
-To bring someone in, such as an outside accountant, invite them rather than making up a password for them: **Settings → Users** → **Invite someone**. Enter their email (and a name if you like), choose a role (or a permission set, listed under **Permission sets** in the same list), and optionally **Access ends on**, for someone who needs the books for a while, like tax season. **Link works for** sets how long the invitation stays open (7 days unless you choose otherwise).
+To bring someone in, such as an outside accountant, invite them rather than making up a password for them: **Settings → Users and invitations** → **Invite someone**. Enter their email (and a name if you like), choose a role (or a permission set, listed under **Permission sets** in the same list), and optionally **Access ends on**, for someone who needs the books for a while, like tax season. **Link works for** sets how long the invitation stays open (7 days unless you choose otherwise).
 
 **Send invitation** emails them a link when email is set up (**Settings → Email**); either way the page shows the link once, to copy and send yourself. Following it, they choose their own username and password and are signed in with the role you gave them. If their role must use two-factor sign-in, they set it up next.
 
@@ -45,7 +45,7 @@ Select a username on the Users page to set their **Email** and **Access ends on*
 
 ### Permission sets
 
-When the four roles are too coarse (a front-desk clerk who should enter sales but not see the bank, say), give someone a **permission set** instead of a role. Create sets on **Settings → Users** → **Permission sets** → **New permission set**: a name, and a level for each area of the books:
+When the four roles are too coarse (a front-desk clerk who should enter sales but not see the bank, say), give someone a **permission set** instead of a role. Create sets on **Settings → Users and invitations** → **Permission sets** → **New permission set**: a name, and a level for each area of the books:
 
 | Level | Means in that area |
 | --- | --- |
@@ -73,7 +73,7 @@ The sign-in page then has a **Sign in with …** button (change its text with **
 - a user whose **Email** (on their user page) is the email the provider vouches for; their account is linked from then on;
 - someone with a waiting invitation for that email: signing in accepts it and creates their user (they have no OpenBook password).
 
-Anyone else is told to ask an admin for an invitation. Users can also link their account themselves: select their username in the top bar, then **link your account** under **Single sign-on**. An administrator can **Unlink** an account on the user's page.
+Anyone else is told to ask an admin for an invitation. Users can also link their account themselves: select their username in the top bar, then **Password and sessions**, then **link your account** under **Single sign-on**. An administrator can **Unlink** an account on the user's page.
 
 Microsoft vouches for emails only with a named directory (not "organizations" or "common"); Google always does. With another provider, people may need to link their account themselves the first time.
 
@@ -87,7 +87,7 @@ Several people can work in the books at once. If two of you save a change to the
 
 ## Closing the books
 
-Once a period is finished (a month you've reconciled, a year your accountant has filed taxes for), close it so nobody changes it by accident: **Settings → Close the books**.
+Once a period is finished (a month you've reconciled, a year your accountant has filed taxes for), close it so nobody changes it by accident: **Settings → Closing date** (also **Accounts → Close the books**).
 
 - **Close the books through**: the last date that's closed. Nothing dated on or before it can be entered, voided or changed. Leave it empty to reopen every period.
 - **Closing date password** (optional, at least 6 characters, separate from sign-in passwords): with one, someone who knows it can still change a closed period by typing it when OpenBook asks. Without one, closed periods can't be changed at all until the closing date is moved. Every change made with the password is recorded in the audit log.
@@ -101,7 +101,7 @@ Once a period is finished (a month you've reconciled, a year your accountant has
 
 ## Backups
 
-If you use the single company file (not PostgreSQL), administrators back it up on the **Backup** page.
+If you use the single company file (not PostgreSQL), administrators back it up on the **Backup** page (**Settings → Backups**; in the simple view, **Company → Back Up Company**).
 
 ### Download a backup
 

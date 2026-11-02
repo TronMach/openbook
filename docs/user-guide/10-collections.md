@@ -24,7 +24,7 @@ For a sub-customer billed with its parent, the statement is the parent's, and in
 - **Late fees due today**: tick the ones to charge and **Charge ticked fees**.
 - **Bad debt written off**: past write-offs.
 
-Reminders and late fees are off until an accountant sets them up under **Settings** on this page.
+Reminders and late fees are off until an accountant sets them up under **Settings** on this page (also **Settings → Late fees and reminders**).
 
 ## Payment reminders
 

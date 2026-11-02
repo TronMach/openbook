@@ -4,7 +4,7 @@ Customers can pay invoices by card through Stripe, and see their account through
 
 ## Setting up online payments
 
-You need a [Stripe](https://stripe.com) account. An administrator then fills in **Settings → Online payments**:
+You need a [Stripe](https://stripe.com) account. An administrator then fills in **Settings → Online card payments**. The page's **Setting it up, step by step** list walks through the same steps and ticks off each one that's done:
 
 - **Take payments online**: the switch.
 - **Stripe secret key**: from Stripe's dashboard (Developers → API keys). It's stored encrypted and never shown again; enter a new one to replace it.

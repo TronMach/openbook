@@ -6,7 +6,7 @@ Open it from **Accounts** in the menu. Everyone can look at it; changing it, ent
 
 ## Start with a starter chart
 
-A new company has no accounts. The Accounts page offers four starter charts, with the one matching your business type marked **Recommended**:
+A new company has no accounts. The Accounts page offers four starter charts, with the one matching your legal structure (Settings → Company details) marked **Recommended**:
 
 | Starter chart | For |
 | --- | --- |
@@ -51,7 +51,7 @@ Bank and credit card accounts are what the **Banking** page lists. Accounts rece
 - **Type** (above).
 - **Subaccount of**: put an account under another to group it, for example "Utilities:Electric" and "Utilities:Water". A subaccount has the same type as its parent, and accounts nest up to five levels. Reports show subaccounts indented under their parent with a total.
 - **Description** (optional).
-- **Tax line** (profit and loss accounts): where the account's total goes on your tax form (Schedule C, 1065, 1120-S, 1120 or 990, depending on your business type). The **Tax summary** report adds these up for your tax preparer. A subaccount without a tax line uses its parent's.
+- **Tax line** (profit and loss accounts): where the account's total goes on your tax form (Schedule C, 1065, 1120-S, 1120 or 990, depending on your legal structure). The **Tax summary** report adds these up for your tax preparer. A subaccount without a tax line uses its parent's.
 
 You can rename an account or change its number, description, parent or tax line at any time. Its type can change too, except that once something is posted to it, it has to stay in the same group: asset, liability, equity, income or expense.
 

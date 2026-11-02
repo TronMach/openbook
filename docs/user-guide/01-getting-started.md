@@ -49,13 +49,13 @@ Before you do, change both `change-me` passwords in `docker-compose.yml` to the 
 
 The first time you open OpenBook it shows **Set up your company**. Fill in three parts:
 
-**Moving from QuickBooks?** Before filling anything in, choose your export under **Export from**, pick the file and select **Read the file**. OpenBook fills in the company details it finds (name, legal name, address, phone, email, fiscal year, currency, and the business type from QuickBooks Desktop's tax form) and says what the file holds. QuickBooks Desktop qbXML files with a company query, QuickBooks Online files with CompanyInfo and GnuCash books carry these details; IIF and CSV exports don't, so type them in. The button then reads **Create company and import**: the company is created and everything in the file is imported with it, or, if any row has a problem, nothing is created and the problems are listed. See [Moving in](24-moving-in.md#importing-the-history) for what to export.
+**Moving from QuickBooks?** Before filling anything in, choose your export under **Export from**, pick the file and select **Read the file**. OpenBook fills in the company details it finds (name, legal name, address, phone, email, fiscal year, currency, and the legal structure from QuickBooks Desktop's tax form) and says what the file holds. QuickBooks Desktop qbXML files with a company query, QuickBooks Online files with CompanyInfo and GnuCash books carry these details; IIF and CSV exports don't, so type them in. The button then reads **Create company and import**: the company is created and everything in the file is imported with it, or, if any row has a problem, nothing is created and the problems are listed. See [Moving in](24-moving-in.md#importing-the-history) for what to export.
 
 **1. Company**
 
 - **Company name** is what appears on screens; **legal name** (optional) is for forms.
-- **Business type** (sole proprietor, partnership, corporation, nonprofit and so on) decides which starter chart of accounts is recommended and which tax form your accounts map to.
-- **What kind of business is this?** picks an *edition*: General, Professional services, E-commerce or Nonprofit. It only changes the order of the menu and the home page shortcuts; every feature stays available. You can change it later in **Settings**.
+- **Legal structure** (sole proprietor, partnership, corporation, nonprofit and so on) picks the starter chart of accounts and the tax form your accounts are mapped to.
+- **Which menu suits your work?** picks an *edition*: General, Professional services, E-commerce or Nonprofit. It only changes the order of the menu and the home page shortcuts; every feature stays available. You can change it later in **Settings → Company details**.
 - **How should OpenBook look?** picks the view people start with: the *simple view* (a short menu bar by task and a home page that walks through each step, suggested when one person runs the business) or the *full view* (every area in the menu). Both work on the same books, and anyone can switch at any time. See [The simple view](28-simple-view.md).
 - **What do you sell?** (services, products or both), **I keep products in stock** and **I charge sales tax**: in the simple view these set up your chart of accounts for you (see below). In the full view you choose a starter chart on the next page instead.
 - **Email, phone and address** are optional; the address is printed on invoices.
@@ -69,7 +69,7 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 
 Choose a username and a password of at least 8 characters. This first person is an administrator and can add everyone else later.
 
-Select **Create company**. You're signed in and taken to the **Chart of accounts** page, which offers starter charts, or, after an import, shows the accounts that came in. In the simple view (without an import) the starter chart for your business type is set up for you, trimmed to what you sell (no product sales or cost of goods sold for a services business, an Inventory Asset account when you keep stock), and you go to the home page, or to **Sales tax** to add your tax agency if you said you charge it. The home page has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
+Select **Create company**. You're signed in and taken to the **Chart of accounts** page, which offers starter charts, or, after an import, shows the accounts that came in. In the simple view (without an import) the starter chart for your legal structure is set up for you, trimmed to what you sell (no product sales or cost of goods sold for a services business, an Inventory Asset account when you keep stock), and you go to the home page, or to **Sales tax** to add your tax agency if you said you charge it. The home page has a **Getting started** list that ticks off each step as you do it. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings → Company details** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
 
 1. Pick a chart of accounts ([chapter 3](03-chart-of-accounts.md)).
 2. Enter opening balances, if you're moving from other books.
@@ -80,9 +80,9 @@ If you're moving from QuickBooks, GnuCash, Xero, Wave or FreshBooks, see [Moving
 
 ## Signing in and out
 
-Go to OpenBook's address and sign in with your username and password, or with **Sign in with …** when your company uses single sign-on (see [Single sign-on](08-users-and-backups.md#single-sign-on)). You stay signed in on that browser while you keep using it; after 8 hours without activity you're asked to sign in again. **Sign out** is at the right of the top bar.
+Go to OpenBook's address and sign in with your username and password, or with **Sign in with …** when your company uses single sign-on (see [Single sign-on](08-users-and-backups.md#single-sign-on)). You stay signed in on that browser while you keep using it; after 8 hours without activity you're asked to sign in again. **Sign out** is in the menu under your username, at the right of the top bar.
 
-Select your username in the top bar to change your password. The same page lists every browser and device signed in as you, with when each was last used. You can sign out any one of them, or **Sign out all other sessions** if you think someone else has your password. Changing your password signs out every other session too.
+Select your username in the top bar, then **Password and sessions**, to change your password. The same page lists every browser and device signed in as you, with when each was last used. You can sign out any one of them, or **Sign out all other sessions** if you think someone else has your password. Changing your password signs out every other session too.
 
 ### Forgotten password
 

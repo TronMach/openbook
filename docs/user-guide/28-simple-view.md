@@ -5,8 +5,8 @@ The simple view is a quieter way to use OpenBook, made for a business one person
 ## Turning it on or off
 
 - **At setup**, **How should OpenBook look?** chooses the view everyone starts with. The simple view is suggested.
-- **For yourself**, use the link at the top of any page: **Switch to full view** at the right end of the simple view's menu bar, or **Simple view** in the full view's top bar. OpenBook remembers your choice and brings you back to the page you were on.
-- **For people who haven't chosen**, an administrator or accountant sets **Settings → View → View for people who haven't chosen one**.
+- **For yourself**, use **Switch to full view** at the right end of the simple view's menu bar, or select your username in the top bar and choose **Switch to simple view** or **Switch to full view**. OpenBook remembers your choice and brings you back to the page you were on.
+- **For people who haven't chosen**, an administrator or accountant sets **Settings → Company details → View → View for people who haven't chosen one**.
 
 The view only changes what's on screen. Roles and permission sets decide what each person may do, the same in both views.
 
@@ -16,7 +16,7 @@ Under the top bar is a row of menus. Select one to open it, select it again (or 
 
 | Menu | What's in it |
 | --- | --- |
-| **Company** | Company information (Settings), Chart of Accounts, Back Up Company, Users |
+| **Company** | Company information (Settings → Company details), All settings, Chart of Accounts, Back Up Company, Users |
 | **Customers** | Customer Center, Create Estimates, Create Invoices, Enter Sales Receipts, Receive Payments, Create Credit Memos, All Sales |
 | **Vendors** | Vendor Center, Create Purchase Orders, Enter Bills, Pay Bills, Enter Vendor Credits, All Purchases |
 | **Inventory** | Item Center, New Item, Receive Inventory, Adjust Quantity on Hand, Build Assemblies, Stock on Hand |
