@@ -34,7 +34,8 @@ public sealed record MakeDepositCommand(Guid BankAccountId, DateOnly Date, IRead
 /// grouped into one bank deposit to match the statement.
 /// </summary>
 public sealed class DepositService(
-    ISalesStore store, AccountService accounts, PostingEngine engine, IEnumerable<IUndepositedSource> sources, IClock clock, ICurrentUser user)
+    ISalesStore store, AccountService accounts, PostingEngine engine, IEnumerable<IUndepositedSource> sources, Banking.IBankingStore bank, ILedgerStore ledger,
+    IClock clock, ICurrentUser user)
 {
     public static string Describe(DepositedKind kind) => kind switch
     {
@@ -129,6 +130,155 @@ public sealed class DepositService(
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, EntityType, id, null, Snapshot(deposit)));
         await store.SaveChangesAsync(ct);
         return deposit;
+    }
+
+    /// <summary>
+    /// Corrects a deposit in place (same id, so its attachments and notes stay): its entry is voided on its date and a
+    /// new one posted for <paramref name="command"/>; items taken out go back to undeposited funds and new ones come
+    /// out, in one save. Refused once the deposit is reconciled or ticked (as a void is). A deposit matched to a bank
+    /// feed line keeps its bank account and total, and the match follows the new entry.
+    /// </summary>
+    public async Task<BankDeposit> ChangeAsync(Guid id, MakeDepositCommand command, string reason, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Items);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("deposit.change_reason_required", "Say why the deposit is being changed.");
+        var deposit = await store.GetDepositAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (deposit.Status == DocumentStatus.Voided)
+            throw new DomainException("deposit.already_voided", "This deposit is voided.");
+        var account = (await accounts.GetChartAsync(ct)).Get(command.BankAccountId);
+        if (account.Type != AccountType.Bank || !account.IsActive)
+            throw new DomainException("deposit.account_not_bank", $"'{account.Name}' isn't an active bank account.");
+
+        // What can be in it: anything waiting, plus what it holds now.
+        var waiting = (await UndepositedAsync(ct)).ToDictionary(i => (i.Kind, i.Id));
+        var current = deposit.Lines.ToDictionary(l => (l.Kind, l.SourceId));
+        var currentDates = await DatesAsync(deposit.Lines, ct);
+        var items = new List<DepositItem>();
+        foreach (var key in command.Items.Distinct())
+        {
+            if (current.TryGetValue(key, out var line))
+            {
+                if (currentDates.TryGetValue(key, out var received) && received > command.Date)
+                    throw new DomainException("deposit.before_payment", $"The deposit date is before one of its payments was received ({received:MMM d, yyyy}).");
+                items.Add(new DepositItem(line.Kind, line.SourceId, line.FromAccountId, line.Amount));
+                continue;
+            }
+
+            var item = waiting.GetValueOrDefault(key)
+                ?? throw new DomainException("deposit.not_undeposited", "One of those payments was already deposited or voided.");
+            if (item.Date > command.Date)
+                throw new DomainException("deposit.before_payment", $"The deposit date is before {item.Label} was received.");
+            items.Add(new DepositItem(item.Kind, item.Id, item.AccountId, item.Amount));
+        }
+
+        if (items.Count == 0)
+            throw new DomainException("deposit.empty", "Choose at least one payment to deposit. To undo the whole deposit, void it.");
+
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, deposit.BankAccountId, deposit.JournalEntryId, null, ct);
+        if (feed.Count > 0 && (command.BankAccountId != deposit.BankAccountId || items.Sum(i => i.Amount) != deposit.Total))
+            throw new DomainException("deposit.feed_amount",
+                $"This deposit is matched to a line from the bank feed, so it stays {deposit.Total:N2} in the same account. Undo the match first to change that.");
+
+        var before = Snapshot(deposit);
+        await engine.StageVoidAsync(deposit.JournalEntryId, $"Changed: {reason.Trim()}", fromDocument: true, ct);
+        var memo = command.Memo?.Trim() is { Length: > 0 } m ? m : $"Deposit · {items.Count} {(items.Count == 1 ? "item" : "items")}";
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(
+            command.Date, BankDeposit.Postings(account.Id, items, memo), memo, BankDeposit.Source, deposit.Id), ct);
+
+        // Only after staging succeeded: what came out goes back to waiting, what went in is marked.
+        var kept = items.Select(i => (i.Kind, i.SourceId)).ToHashSet();
+        var removed = deposit.Lines.Where(l => !kept.Contains((l.Kind, l.SourceId))).Select(l => new DepositItem(l.Kind, l.SourceId, l.FromAccountId, l.Amount)).ToList();
+        var added = items.Where(i => !current.ContainsKey((i.Kind, i.SourceId))).ToList();
+        await ClearAsync(removed, ct);
+        await MarkAsync(added, deposit.Id, ct);
+        deposit.Change(account.Id, command.Date, items, entry.Id, command.Memo);
+        foreach (var item in feed.Where(i => i.Status == Domain.Banking.BankFeedStatus.Matched))
+            item.FollowEntry(entry.Id);
+
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, id, before, DocumentChanges.WithReason(Snapshot(deposit), reason)));
+        await store.SaveChangesAsync(ct);
+        return deposit;
+    }
+
+    /// <summary>
+    /// A deposit's own items described like waiting ones (for the form that changes it). Gifts, whose documents this
+    /// service doesn't read, show as "Gift" dated with the deposit.
+    /// </summary>
+    public async Task<IReadOnlyList<UndepositedItem>> ContentsAsync(BankDeposit deposit, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(deposit);
+        var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
+        var payments = (await store.GetPaymentsAsync(deposit.Lines.Where(l => l.Kind == DepositedKind.Payment).Select(l => l.SourceId).ToList(), ct)).ToDictionary(p => p.Id);
+        var receipts = (await store.GetReceiptsAsync(deposit.Lines.Where(l => l.Kind == DepositedKind.SalesReceipt).Select(l => l.SourceId).ToList(), ct)).ToDictionary(r => r.Id);
+        var items = new List<UndepositedItem>();
+        foreach (var line in deposit.Lines.OrderBy(l => l.LineNumber))
+        {
+            items.Add(line.Kind switch
+            {
+                DepositedKind.Payment when payments.TryGetValue(line.SourceId, out var p) => new UndepositedItem(line.Kind, p.Id, p.Date, p.CustomerId,
+                    $"Payment from {customers.GetValueOrDefault(p.CustomerId)}", p.Reference, line.FromAccountId, line.Amount),
+                DepositedKind.SalesReceipt when receipts.TryGetValue(line.SourceId, out var r) => new UndepositedItem(line.Kind, r.Id, r.Date, r.CustomerId,
+                    r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}", r.Reference, line.FromAccountId, line.Amount),
+                DepositedKind.Retainer when await store.GetRetainerAsync(line.SourceId, ct) is { } retainer => new UndepositedItem(line.Kind, retainer.Id, retainer.Date,
+                    retainer.CustomerId, $"Retainer from {customers.GetValueOrDefault(retainer.CustomerId)}", retainer.Reference, line.FromAccountId, line.Amount),
+                _ => new UndepositedItem(line.Kind, line.SourceId, deposit.Date, null, Describe(line.Kind), null, line.FromAccountId, line.Amount),
+            });
+        }
+
+        return items;
+    }
+
+    /// <summary>The deposit's corrections, oldest first.</summary>
+    public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
+        DocumentChanges.ListAsync(ledger, EntityType, id, ct);
+
+    /// <summary>When each of a deposit's payments, receipts and retainers was received (gifts aren't looked up).</summary>
+    private async Task<Dictionary<(DepositedKind, Guid), DateOnly>> DatesAsync(IEnumerable<DepositLine> lines, CancellationToken ct)
+    {
+        var list = lines.ToList();
+        var dates = new Dictionary<(DepositedKind, Guid), DateOnly>();
+        foreach (var p in await store.GetPaymentsAsync(list.Where(l => l.Kind == DepositedKind.Payment).Select(l => l.SourceId).ToList(), ct))
+            dates[(DepositedKind.Payment, p.Id)] = p.Date;
+        foreach (var r in await store.GetReceiptsAsync(list.Where(l => l.Kind == DepositedKind.SalesReceipt).Select(l => l.SourceId).ToList(), ct))
+            dates[(DepositedKind.SalesReceipt, r.Id)] = r.Date;
+        foreach (var line in list.Where(l => l.Kind == DepositedKind.Retainer))
+            if (await store.GetRetainerAsync(line.SourceId, ct) is { } retainer)
+                dates[(DepositedKind.Retainer, retainer.Id)] = retainer.Date;
+        return dates;
+    }
+
+    private async Task MarkAsync(IReadOnlyCollection<DepositItem> items, Guid depositId, CancellationToken ct)
+    {
+        foreach (var payment in await store.GetPaymentsAsync(items.Where(i => i.Kind == DepositedKind.Payment).Select(i => i.SourceId).ToList(), ct))
+            payment.MarkDeposited(depositId);
+        foreach (var receipt in await store.GetReceiptsAsync(items.Where(i => i.Kind == DepositedKind.SalesReceipt).Select(i => i.SourceId).ToList(), ct))
+            receipt.MarkDeposited(depositId);
+        foreach (var item in items.Where(i => i.Kind == DepositedKind.Retainer))
+            (await store.GetRetainerAsync(item.SourceId, ct))!.MarkDeposited(depositId);
+        foreach (var source in sources)
+        {
+            var ids = items.Where(i => i.Kind == source.Kind).Select(i => i.SourceId).ToList();
+            if (ids.Count > 0)
+                await source.MarkAsync(ids, depositId, ct);
+        }
+    }
+
+    private async Task ClearAsync(IReadOnlyCollection<DepositItem> items, CancellationToken ct)
+    {
+        foreach (var payment in await store.GetPaymentsAsync(items.Where(i => i.Kind == DepositedKind.Payment).Select(i => i.SourceId).ToList(), ct))
+            payment.ClearDeposit();
+        foreach (var receipt in await store.GetReceiptsAsync(items.Where(i => i.Kind == DepositedKind.SalesReceipt).Select(i => i.SourceId).ToList(), ct))
+            receipt.ClearDeposit();
+        foreach (var item in items.Where(i => i.Kind == DepositedKind.Retainer))
+            (await store.GetRetainerAsync(item.SourceId, ct))?.ClearDeposit();
+        foreach (var source in sources)
+        {
+            var ids = items.Where(i => i.Kind == source.Kind).Select(i => i.SourceId).ToList();
+            if (ids.Count > 0)
+                await source.ClearAsync(ids, ct);
+        }
     }
 
     /// <summary>Voiding puts the payments back in undeposited funds.</summary>

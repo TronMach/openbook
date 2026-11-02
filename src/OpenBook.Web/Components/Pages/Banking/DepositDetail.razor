@@ -22,6 +22,10 @@
         }
         <ActionLink Class="button secondary" Href="@($"/banking/{_deposit.BankAccountId}")">Register</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_deposit.Id}")">History</ActionLink>
+        @if (_deposit.Status == DocumentStatus.Posted)
+        {
+            <ActionLink Class="button secondary" Href="@($"/banking/deposits/new?change={_deposit.Id}")">Change</ActionLink>
+        }
     </div>
 
     @if (_error is not null)
@@ -56,6 +60,8 @@
         </tbody>
         <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_deposit.Total)</td></tr></tfoot>
     </table>
+
+    <DocumentChangeList Changes="_changes" />
 
     @if (_deposit.Status == DocumentStatus.Posted)
     {
@@ -97,7 +103,10 @@
         VoidInput ??= new();
         _deposit = await Deposits.GetAsync(Id);
         _chart = await AccountService.GetChartAsync();
+        _changes = await Deposits.ChangesAsync(Id);
     }
+
+    private IReadOnlyList<DocumentChange> _changes = [];
 
     private async Task VoidAsync()
     {

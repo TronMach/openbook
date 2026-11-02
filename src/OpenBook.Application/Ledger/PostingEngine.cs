@@ -63,6 +63,55 @@ public sealed class PostingEngine(
         return reversal;
     }
 
+    /// <summary>
+    /// Corrects a journal entry entered by hand: voids it (a same-date reversal, as <see cref="VoidAsync"/>) and posts
+    /// <paramref name="command"/> in its place, in one save, so the books never show both or neither. The original
+    /// keeps its number; the replacement gets the next. Recorded as an <c>Updated</c> audit record on the original with
+    /// the reason and the replacement's number. Not for entries posted by documents, imports, recurring templates
+    /// or opening balances, nor for an entry with an automatic reversal (void that pair and enter it again).
+    /// </summary>
+    /// <returns>The replacement entry.</returns>
+    public async Task<JournalEntry> ChangeAsync(Guid entryId, PostJournalEntryCommand command, string reason, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("journal.change_reason_required", "Say why the entry is being changed.");
+        var entry = await store.GetEntryAsync(entryId, ct) ?? throw new EntityNotFoundException(EntityType, entryId);
+        if (entry.Source != JournalEntry.ManualSource || entry.Kind != JournalEntryKind.Standard)
+            throw new DomainException("journal.change_source",
+                "Only journal entries entered by hand can be changed. Change the transaction that posted this one, or void it and enter it again.");
+        if (entry.Status != JournalEntryStatus.Posted)
+            throw new DomainException("journal.already_voided", $"Entry #{entry.Number} is voided.");
+        var (reversing, _) = await store.ListEntriesAsync(new JournalEntryFilter(Take: 1, Source: JournalEntry.AutoReversalSource, SourceId: entry.Id), ct);
+        if (reversing.Any(e => e.Status == JournalEntryStatus.Posted))
+            throw new DomainException("journal.change_reversing",
+                "This entry has an automatic reversal. Void it (the reversal too) and enter it again.");
+
+        await StageVoidAsync(entry.Id, $"Changed: {reason.Trim()}", fromDocument: false, ct);
+        var replacement = await StageAsync(command with { Source = JournalEntry.ManualSource, SourceId = null }, ct);
+        store.Add(Audit(AuditAction.Updated, entry.Id, before: null,
+            after: JsonSerializer.Serialize(new Dictionary<string, object> { [DocumentChanges.ReasonKey] = reason.Trim(), ["ReplacedBy"] = replacement.Number })));
+        await store.SaveChangesAsync(ct);
+        return replacement;
+    }
+
+    /// <summary>
+    /// A saved entry as a command to post again: its lines (with classes), memo, basis, location and tags, for a form
+    /// that copies or changes it. Null when there's no such entry.
+    /// </summary>
+    public async Task<PostJournalEntryCommand?> DraftOfAsync(Guid entryId, CancellationToken ct = default)
+    {
+        if (await store.GetEntryAsync(entryId, ct) is not { } entry)
+            return null;
+        var segments = (await store.GetLineSegmentsAsync([entry.Id], ct)).ToDictionary(s => s.JournalLineId);
+        var tags = (await store.GetEntryTagsAsync([entry.Id], ct)).Select(t => t.TagId).ToList();
+        var lines = entry.Lines.OrderBy(l => l.LineNumber)
+            .Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo, segments.GetValueOrDefault(l.Id)?.ClassId))
+            .ToList();
+        return new PostJournalEntryCommand(entry.Date, lines, entry.Memo, Basis: entry.Basis,
+            LocationId: segments.Values.Select(s => s.LocationId).FirstOrDefault(l => l is not null), TagIds: tags);
+    }
+
     /// <summary>Saves everything staged, for callers that stage several entries without a document of their own.</summary>
     internal Task SaveAsync(CancellationToken ct) => store.SaveChangesAsync(ct);
 

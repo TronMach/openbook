@@ -90,6 +90,21 @@ public sealed class SalesLineModel
             Lots: l.IsDiscount || l.ItemId is null ? null : l.Lots))
         .ToList();
 
+    /// <summary>
+    /// A saved document's lines for a new one ("Copy"): at the same prices, without tax lines (worked out again),
+    /// lines that billed particular costs, time or mileage (those are billed once), or stock lots (picked again).
+    /// </summary>
+    public static List<SalesLineModel> CopiesOf(IEnumerable<SalesLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var copies = SalesLine.Drafts(lines)
+            .Where(d => d.PriceSource is not (OpenBook.Application.Sales.BillableExpenseService.PriceSource
+                or OpenBook.Application.Projects.ProjectBilling.TimePriceSource or OpenBook.Application.Projects.ProjectBilling.MileagePriceSource))
+            .Select(d => From(d with { Lots = null }))
+            .ToList();
+        return copies.Count == 0 ? [new()] : copies;
+    }
+
     public static SalesLineModel From(SalesLineDraft draft)
     {
         ArgumentNullException.ThrowIfNull(draft);

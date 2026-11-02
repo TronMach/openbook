@@ -24,6 +24,10 @@
         <h1>Bill from @_vendor.DisplayName</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
         <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
+        @if (_bill.PurchaseOrderId is null)
+        {
+            <ActionLink Class="button secondary" Href="@($"/purchases/bills/new?copy={_bill.Id}")">Copy</ActionLink>
+        }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_bill.Id}")">History</ActionLink>
         @if (_bill.Status == DocumentStatus.Posted)
         {

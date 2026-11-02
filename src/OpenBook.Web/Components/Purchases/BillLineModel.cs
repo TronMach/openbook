@@ -44,6 +44,14 @@ public sealed class BillLineModel
                 : new BillLineDraft(l.AccountId!.Value, l.Amount!.Value, l.Description, ClassId: l.ClassId))
             .ToList();
 
+    /// <summary>A saved bill's or vendor credit's lines for a new one ("Copy"), without stock lots (received again).</summary>
+    public static List<BillLineModel> CopiesOf(IEnumerable<BillLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var copies = lines.OrderBy(l => l.LineNumber).Select(l => From(l.ToDraft() with { Lots = null })).ToList();
+        return copies.Count == 0 ? [new()] : copies;
+    }
+
     public static BillLineModel From(BillLineDraft draft)
     {
         ArgumentNullException.ThrowIfNull(draft);

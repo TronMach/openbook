@@ -87,6 +87,10 @@
     [SupplyParameterFromQuery(Name = "vendor")]
     private Guid? PresetVendor { get; set; }
 
+    /// <summary>A bill to start from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
+
     private bool CanSave => _vendor is not null && BillLineModel.IsComplete(_lines);
 
     private SegmentOptions _segments = SegmentOptions.None;
@@ -108,7 +112,16 @@
         _categories = BillLineModel.Categories(_chart);
         _stockItems = await Ops.RunAsync(async sp =>
             (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory).ToList());
-        if (PresetVendor is { } preset)
+        if (Copy is { } copyId && await Ops.RunAsync(sp => sp.GetRequiredService<BillService>().GetAsync(copyId)) is { PurchaseOrderId: null } source)
+        {
+            // "Copy": the same vendor, lines and settings, dated today; the vendor's bill number is theirs to give.
+            _lines = BillLineModel.CopiesOf(source.Lines);
+            SetVendor(source.VendorId);
+            _memo = source.Memo;
+            _locationId = source.LocationId;
+            _warehouseId = source.WarehouseId;
+        }
+        else if (PresetVendor is { } preset)
             SetVendor(preset);
         _loaded = true;
     }

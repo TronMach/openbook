@@ -16,6 +16,7 @@
         <h1>Sales order @_order.Number</h1>
         <span class="badge @(_order.Status == SalesOrderStatus.Closed ? "ok" : null)">@_order.Status</span>
         <ActionLink Class="button secondary" Href="/sales/orders">Back to sales orders</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/sales/orders/new?copy={_order.Id}")">Copy</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_order.Id}")">History</ActionLink>
         @if (_order.Status == SalesOrderStatus.Open && !_progress.Started)
         {

@@ -132,6 +132,9 @@
 
     [SupplyParameterFromQuery(Name = "vendor")] private Guid? PresetVendor { get; set; }
 
+    /// <summary>A purchase order to start a new one from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")] private Guid? Copy { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
@@ -146,12 +149,22 @@
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
             (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory && !i.IsAssembly).ToList(),
             await sp.GetRequiredService<PurchaseOrderService>().SuggestNumberAsync(),
-            Id is { } id ? await sp.GetRequiredService<PurchaseOrderService>().GetAsync(id) : null,
+            (Id ?? Copy) is { } id ? await sp.GetRequiredService<PurchaseOrderService>().GetAsync(id) : null,
             Id is { } id2 && (await sp.GetRequiredService<PurchaseOrderService>().ProgressAsync(id2)).Started));
         _vendorOptions = PickerOptions.Vendors(_vendors);
         _itemOptions = PickerOptions.Items(_items);
         _categoryOptions = PickerOptions.Accounts(BillLineModel.Categories(chart), chart, useNumbers);
         _vendorId = PresetVendor;
+
+        if (Id is null && order is not null)
+        {
+            // "Copy": the same vendor, lines and settings, dated today with the next number.
+            _vendorId = order.VendorId;
+            _memo = order.Memo;
+            _warehouseId = order.WarehouseId;
+            _locationId = order.LocationId;
+            _lines = Lines(order);
+        }
 
         if (Id is not null)
         {
@@ -168,18 +181,20 @@
             _memo = order.Memo;
             _warehouseId = order.WarehouseId;
             _locationId = order.LocationId;
-            _lines = order.Lines.Select(l => new LineModel
-            {
-                ItemId = l.ItemId,
-                AccountId = l.AccountId,
-                Description = l.Description,
-                Quantity = l.IsItem ? l.Quantity : null,
-                UnitCost = l.UnitCost,
-            }).ToList();
+            _lines = Lines(order);
         }
 
         _loaded = true;
     }
+
+    private static List<LineModel> Lines(PurchaseOrder order) => order.Lines.Select(l => new LineModel
+    {
+        ItemId = l.ItemId,
+        AccountId = l.AccountId,
+        Description = l.Description,
+        Quantity = l.IsItem ? l.Quantity : null,
+        UnitCost = l.UnitCost,
+    }).ToList();
 
     private void ItemChanged(LineModel line)
     {

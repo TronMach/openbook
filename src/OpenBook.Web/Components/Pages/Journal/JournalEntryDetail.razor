@@ -20,6 +20,14 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Journal entry @_entry.Number</h1>
+        @if (JournalEntry.IsJournalSource(_entry.Source) && _entry.Kind == JournalEntryKind.Standard && _entry.Source != JournalEntry.AutoReversalSource)
+        {
+            <ActionLink Class="button secondary" Href="@($"/journal/new?copy={_entry.Id}")">Copy</ActionLink>
+        }
+        @if (_entry.Source == JournalEntry.ManualSource && _entry.Kind == JournalEntryKind.Standard && _entry.Status == JournalEntryStatus.Posted && _autoReversal is null)
+        {
+            <ActionLink Class="button secondary" Href="@($"/journal/new?change={_entry.Id}")">Change</ActionLink>
+        }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_entry.Id}")">History</ActionLink>
         <ActionLink Class="button secondary" Href="/journal">Back to journal</ActionLink>
         <ActionLink Class="button" Href="/journal/new">New entry</ActionLink>

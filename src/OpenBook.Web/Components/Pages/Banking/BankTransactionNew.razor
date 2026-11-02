@@ -147,6 +147,10 @@
     [Parameter]
     public string KindName { get; set; } = string.Empty;
 
+    /// <summary>A spend or receive to start from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
+
     private bool IsCheck => _kind == BankTransactionKind.Spend && _account?.Type == AccountType.Bank;
     private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
     private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
@@ -176,6 +180,28 @@
             _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != AccountId).ToList();
             if (IsCheck)
                 _reference ??= suggestion;
+
+            // "Copy": the same payee, splits and memo, dated today (with the next check number, not the old one).
+            if (Copy is { } copyId)
+            {
+                var copied = await Ops.RunAsync(async sp =>
+                {
+                    var banking = sp.GetRequiredService<BankingService>();
+                    return await banking.GetAsync(copyId) is { } t && t.Kind == _kind
+                        ? (t, await banking.SplitsAsync(t))
+                        : ((BankTransaction, IReadOnlyList<BankSplit>)?)null;
+                });
+                if (copied is var (source, splits))
+                {
+                    _vendorId = source.VendorId;
+                    _payee = source.Payee;
+                    _memo = source.Memo;
+                    _locationId = source.LocationId;
+                    _lines = splits.Select(s => new LineModel { AccountId = s.AccountId, Amount = s.Amount, Memo = s.Memo, ClassId = s.ClassId }).ToList();
+                    if (_lines.Count == 0)
+                        _lines.Add(new());
+                }
+            }
         }
         catch (DomainException ex)
         {

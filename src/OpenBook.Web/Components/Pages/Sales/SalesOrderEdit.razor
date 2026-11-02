@@ -99,6 +99,10 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
+    /// <summary>A sales order to start a new one from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
+
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
     private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
@@ -124,6 +128,17 @@
             Id is { } id2 && (await sp.GetRequiredService<SalesOrderService>().ProgressAsync(id2)).Started));
         _customerId = PresetCustomer;
         DefaultTaxCode();
+
+        if (Id is null && Copy is { } copyId && await Ops.RunAsync(sp => sp.GetRequiredService<SalesOrderService>().GetAsync(copyId)) is { } source)
+        {
+            // "Copy": the same customer, lines and settings, dated today with the next number (not their PO number).
+            _customerId = source.CustomerId;
+            _memo = source.Memo;
+            _lines = SalesLineModel.CopiesOf(source.Lines);
+            _locationId = source.LocationId;
+            _warehouseId = source.WarehouseId;
+            _taxCodeId = source.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+        }
 
         if (Id is not null)
         {

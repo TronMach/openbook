@@ -26,6 +26,7 @@
         <a class="button secondary" href="/api/sales/estimates/@_estimate.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Estimate" Id="_estimate.Id" PdfUrl="@($"/api/sales/estimates/{_estimate.Id}/pdf")" />
         <ActionLink Class="button secondary" Href="@($"/sales/email/estimates/{_estimate.Id}")">Email</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/sales/estimates/new?copy={_estimate.Id}")">Copy</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_estimate.Id}")">History</ActionLink>
         @if (_estimate.Status != EstimateStatus.Closed && !_progress.Started)
         {

@@ -140,11 +140,29 @@
         _defaultDepositId = _depositAccountId;
         _customerId = PresetCustomer;
         DefaultTaxCode();
+        if (Copy is { } copyId && await Ops.RunAsync(sp => sp.GetRequiredService<SalesReceiptService>().GetAsync(copyId)) is { } source)
+        {
+            // "Copy": the same customer, lines and settings, dated today with the next number.
+            _customerId = source.CustomerId;
+            DefaultTaxCode();
+            _lines = SalesLineModel.CopiesOf(source.Lines);
+            _memo = source.Memo;
+            _taxCodeId = source.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : _taxCodeId;
+            if (_depositAccounts.Any(a => a.Id == source.DepositAccountId))
+                _depositAccountId = source.DepositAccountId;
+            _locationId = source.LocationId;
+            _warehouseId = source.WarehouseId;
+        }
+
         _loaded = true;
     }
 
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
+
+    /// <summary>A sales receipt to start from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
 
     // Undeposited Funds when the chart has it: the simple view folds the choice away while it's this.
     private Guid _defaultDepositId;

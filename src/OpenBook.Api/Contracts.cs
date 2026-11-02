@@ -46,6 +46,11 @@ public sealed record PostJournalEntryRequest(
 
 public sealed record VoidJournalEntryRequest(string Reason);
 
+/// <summary>A hand-entered journal entry's replacement and why (<c>PUT /api/journal-entries/{id}</c>).</summary>
+public sealed record ChangeJournalEntryRequest(
+    DateOnly Date, IReadOnlyList<JournalLineRequest> Lines, string Reason, string? Memo = null, EntryBasis Basis = EntryBasis.Both,
+    Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null);
+
 public sealed record JournalLineResponse(int LineNumber, Guid AccountId, decimal Debit, decimal Credit, string? Memo);
 
 public sealed record JournalEntryResponse(

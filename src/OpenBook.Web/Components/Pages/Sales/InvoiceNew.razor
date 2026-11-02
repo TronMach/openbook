@@ -150,6 +150,10 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
+    /// <summary>An invoice to start from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
+
     private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) + BillableTotal + ProjectTotal > 0m && !string.IsNullOrWhiteSpace(_number);
 
     private IReadOnlyList<BillableExpense> _billable = [];
@@ -198,7 +202,17 @@
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
-        if (PresetCustomer is { } preset)
+        if (Copy is { } copyId && await Ops.RunAsync(sp => sp.GetRequiredService<InvoiceService>().GetAsync(copyId)) is { } source)
+        {
+            // "Copy": the same customer, lines and settings, dated today with the next number.
+            await SetCustomerAsync(source.CustomerId);
+            _lines = SalesLineModel.CopiesOf(source.Lines);
+            _memo = source.Memo;
+            _taxCodeId = source.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : _taxCodeId;
+            _locationId = source.LocationId;
+            _warehouseId = source.WarehouseId;
+        }
+        else if (PresetCustomer is { } preset)
             await SetCustomerAsync(preset);
         _loaded = true;
     }

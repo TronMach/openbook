@@ -19,6 +19,10 @@
     <div class="toolbar">
         <h1>@_title</h1>
         <ActionLink Class="button secondary" Href="@($"/banking/{_transaction.AccountId}")">Back to register</ActionLink>
+        @if (_transaction.Kind != BankTransactionKind.Transfer)
+        {
+            <ActionLink Class="button secondary" Href="@($"/banking/{_transaction.AccountId}/record/{(_transaction.Kind == BankTransactionKind.Spend ? "spend" : "receive")}?copy={_transaction.Id}")">Copy</ActionLink>
+        }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_transaction.Id}")">History</ActionLink>
         @if (_transaction.Status == BankTransactionStatus.Posted)
         {

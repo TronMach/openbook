@@ -66,14 +66,7 @@ public sealed class BankDeposit
     public static BankDeposit Create(
         Guid id, Guid bankAccountId, DateOnly date, IReadOnlyList<DepositItem> items, Guid journalEntryId, DateTimeOffset createdAt, string? memo = null)
     {
-        ArgumentNullException.ThrowIfNull(items);
-        if (items.Count == 0)
-            throw new DomainException("deposit.empty", "Choose at least one payment to deposit.");
-        if (items.Select(i => (i.Kind, i.SourceId)).Distinct().Count() != items.Count)
-            throw new DomainException("deposit.duplicate", "Each payment can be deposited only once.");
-        if (items.Any(i => i.Amount <= 0m))
-            throw new DomainException("deposit.amount_not_positive", "Deposited amounts must be more than zero.");
-
+        CheckItems(items);
         var deposit = new BankDeposit
         {
             Id = id,
@@ -87,6 +80,35 @@ public sealed class BankDeposit
         deposit._lines.AddRange(items.Select((item, i) => new DepositLine(i + 1, item)));
         deposit.Total = items.Sum(i => i.Amount);
         return deposit;
+    }
+
+    /// <summary>
+    /// A correction in place (the service voids the old entry and posts <paramref name="journalEntryId"/>): the bank
+    /// account, date, memo and the items deposited, renumbered in their new order.
+    /// </summary>
+    public void Change(Guid bankAccountId, DateOnly date, IReadOnlyList<DepositItem> items, Guid journalEntryId, string? memo)
+    {
+        if (Status == DocumentStatus.Voided)
+            throw new DomainException("deposit.already_voided", "This deposit is voided.");
+        CheckItems(items);
+        BankAccountId = bankAccountId;
+        Date = date;
+        Memo = Text.Optional(memo, 1000, "deposit.memo_too_long", "Memo");
+        JournalEntryId = journalEntryId;
+        _lines.Clear();
+        _lines.AddRange(items.Select((item, i) => new DepositLine(i + 1, item)));
+        Total = items.Sum(i => i.Amount);
+    }
+
+    private static void CheckItems(IReadOnlyList<DepositItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0)
+            throw new DomainException("deposit.empty", "Choose at least one payment to deposit.");
+        if (items.Select(i => (i.Kind, i.SourceId)).Distinct().Count() != items.Count)
+            throw new DomainException("deposit.duplicate", "Each payment can be deposited only once.");
+        if (items.Any(i => i.Amount <= 0m))
+            throw new DomainException("deposit.amount_not_positive", "Deposited amounts must be more than zero.");
     }
 
     /// <summary>Debit the bank for the total; credit each holding account for what came out of it.</summary>

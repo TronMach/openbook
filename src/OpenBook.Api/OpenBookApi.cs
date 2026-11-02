@@ -129,6 +129,13 @@ public static class OpenBookApi
         api.MapGet("/journal-entries/{id:guid}", async (Guid id, PostingEngine engine, CancellationToken ct) =>
             await engine.GetAsync(id, ct) is { } entry ? Results.Ok(JournalEntryResponse.From(entry)) : Results.NotFound());
 
+        // Correct a hand-entered entry: it's voided and the replacement posted in one save (the response is the replacement).
+        api.MapPut("/journal-entries/{id:guid}", async (Guid id, ChangeJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
+        {
+            var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo, l.ClassId)).ToList();
+            return JournalEntryResponse.From(await engine.ChangeAsync(id, new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis,
+                LocationId: request.LocationId, TagIds: request.TagIds), request.Reason, ct));
+        });
         api.MapPost("/journal-entries/{id:guid}/void", async (Guid id, VoidJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
             JournalEntryResponse.From(await engine.VoidAsync(id, request.Reason, ct)));
 

@@ -134,6 +134,8 @@ public sealed record DepositItemRequest(DepositedKind Kind, Guid Id);
 
 public sealed record MakeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string? Memo = null);
 
+public sealed record ChangeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string Reason, string? Memo = null);
+
 public sealed record ApplyCreditRequest(Guid CustomerId, DateOnly Date, IReadOnlyList<ApplyCredit> Applications);
 
 public sealed record ConvertEstimateRequest(DateOnly? Date = null);
@@ -347,6 +349,9 @@ internal static class ReceivablesApi
             var d = await s.DepositAsync(new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo), ct);
             return Results.Created($"/api/sales/deposits/{d.Id}", DepositResponse.From(d));
         });
+        // Correct a deposit in place: its entry reversed and a new one posted, items added or taken out.
+        sales.MapPut("/deposits/{id:guid}", async (Guid id, ChangeDepositRequest r, DepositService s, CancellationToken ct) =>
+            DepositResponse.From(await s.ChangeAsync(id, new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo), r.Reason, ct)));
         sales.MapPost("/deposits/{id:guid}/void", async (Guid id, VoidRequest r, DepositService s, CancellationToken ct) =>
             DepositResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

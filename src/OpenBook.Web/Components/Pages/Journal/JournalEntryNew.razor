@@ -4,11 +4,11 @@
 @inject Operations Ops
 @inject NavigationManager Navigation
 
-<PageTitle>New journal entry · OpenBook</PageTitle>
+<PageTitle>@Title · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>New journal entry</h1>
+        <h1>@Title</h1>
         <ActionLink Class="button secondary" Href="/journal">Back to journal</ActionLink>
     </div>
 
@@ -39,11 +39,14 @@
                     </select>
                     <span class="hint">Leave on "Both bases" unless this is a cash- or accrual-only adjustment.</span>
                 </div>
-                <div class="field">
-                    <label for="reverse-on">Reverse on <span class="muted">(optional)</span></label>
-                    <input id="reverse-on" type="date" @bind="_reverseOn" />
-                    <span class="hint">For accruals: posts the opposite entry on this date, such as the first day of next month.</span>
-                </div>
+                @if (Change is null)
+                {
+                    <div class="field">
+                        <label for="reverse-on">Reverse on <span class="muted">(optional)</span></label>
+                        <input id="reverse-on" type="date" @bind="_reverseOn" />
+                        <span class="hint">For accruals: posts the opposite entry on this date, such as the first day of next month.</span>
+                    </div>
+                }
             </div>
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field">
@@ -58,9 +61,20 @@
 
             <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
 
+            @if (Change is not null)
+            {
+                <div class="field">
+                    <label for="reason">Why is it changing?</label>
+                    <input id="reason" @bind="_reason" @bind:event="oninput" maxlength="500" />
+                    <span class="hint">Entry #@_changing voids with this reason, and the changed entry posts with the next number. Both stay in the journal.</span>
+                </div>
+            }
             <div class="actions">
-                <button type="button" @onclick="PostAsync" disabled="@(!CanPost || _busy)">Post entry</button>
-                <span class="muted">Posted entries can't be edited. To correct one, void it and record a new entry.</span>
+                <button type="button" @onclick="PostAsync" disabled="@(!CanPost || _busy || (Change is not null && string.IsNullOrWhiteSpace(_reason)))">@(Change is null ? "Post entry" : "Save change")</button>
+                @if (Change is null)
+                {
+                    <span class="muted">To correct an entry later, use Change on its page: the old one is voided and the new one posted together.</span>
+                }
             </div>
         </div>
     }
@@ -94,6 +108,20 @@
 
     private bool _adjusting;
 
+    /// <summary>An entry to start from ("Copy" on its page): dated today.</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
+
+    /// <summary>A hand-entered entry being changed ("Change" on its page): voided and replaced when saved.</summary>
+    [SupplyParameterFromQuery(Name = "change")]
+    private Guid? Change { get; set; }
+
+    private long? _changing;
+    private string? _reason;
+    private IReadOnlyCollection<Guid> _tagIds = [];
+
+    private string Title => Change is null ? "New journal entry" : $"Change entry #{_changing}";
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -104,6 +132,32 @@
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
         _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _adjusting = Adjusting;
+        if ((Change ?? Copy) is { } sourceId)
+        {
+            var (draft, entry, adjusting) = await Ops.RunAsync(async sp => (
+                await sp.GetRequiredService<PostingEngine>().DraftOfAsync(sourceId),
+                await sp.GetRequiredService<PostingEngine>().GetAsync(sourceId),
+                (await sp.GetRequiredService<AdjustingEntryService>().MarkedAsync()).Contains(sourceId)));
+            if (draft is not null && entry is not null)
+            {
+                _lines = draft.Lines.Select(JournalLineModel.From).ToList();
+                _memo = draft.Memo;
+                _basis = draft.Basis;
+                _locationId = draft.LocationId;
+                _tagIds = draft.TagIds ?? [];
+                _adjusting |= adjusting;
+                if (Change is not null)
+                {
+                    _date = entry.Date;
+                    _changing = entry.Number;
+                }
+            }
+            else
+            {
+                Change = null;
+            }
+        }
+
         _loaded = true;
     }
 
@@ -114,8 +168,10 @@
         try
         {
             var drafts = JournalLines.Drafts(_lines);
-            var entry = await Ops.RunAsync<PostingEngine, JournalEntry>(
-                e => e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId)), _closingPassword);
+            var entry = await Ops.RunAsync<PostingEngine, JournalEntry>(e => Change is { } changeId
+                ? e.ChangeAsync(changeId, new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, LocationId: _locationId, TagIds: _tagIds), _reason ?? "")
+                : e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId, TagIds: _tagIds)),
+                _closingPassword);
             if (_adjusting)
                 await Ops.RunAsync<AdjustingEntryService, bool>(async s => { await s.SetAsync(entry.Id, true); return true; });
             Navigation.NavigateTo($"/journal/{entry.Id}");

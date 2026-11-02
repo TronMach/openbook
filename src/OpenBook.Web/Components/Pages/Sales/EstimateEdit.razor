@@ -89,6 +89,10 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
+    /// <summary>An estimate to start a new one from ("Copy" on its page).</summary>
+    [SupplyParameterFromQuery(Name = "copy")]
+    private Guid? Copy { get; set; }
+
     private IReadOnlyList<TaxCodeChoice> _taxCodes = [];
     private Guid? _taxCodeId;
 
@@ -121,9 +125,19 @@
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<EstimateService>().SuggestNumberAsync(),
-            Id is { } id ? await sp.GetRequiredService<EstimateService>().GetAsync(id) : null));
+            (Id ?? Copy) is { } id ? await sp.GetRequiredService<EstimateService>().GetAsync(id) : null));
         _customerId = PresetCustomer;
         DefaultTaxCode();
+
+        if (Id is null && estimate is not null)
+        {
+            // "Copy": the same customer, lines and settings, dated today with the next number.
+            _customerId = estimate.CustomerId;
+            _memo = estimate.Memo;
+            _lines = SalesLineModel.CopiesOf(estimate.Lines);
+            _locationId = estimate.LocationId;
+            _taxCodeId = estimate.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+        }
 
         if (Id is not null)
         {

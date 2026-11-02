@@ -22,6 +22,7 @@
         <h1>Purchase order @_order.Number</h1>
         <span class="badge @(_order.Status == PurchaseOrderStatus.Closed ? "ok" : null)">@_order.Status</span>
         <ActionLink Class="button secondary" Href="/purchases/orders">Back to purchase orders</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/purchases/orders/new?copy={_order.Id}")">Copy</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_order.Id}")">History</ActionLink>
         <a class="button secondary" href="/purchases/orders/@_order.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.PurchaseOrder" Id="_order.Id" PdfUrl="@($"/purchases/orders/{_order.Id}/pdf")" />

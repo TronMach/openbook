@@ -29,6 +29,7 @@
         {
             <ActionLink Class="button secondary" Href="@($"/sales/email/receipts/{_receipt.Id}")">Email</ActionLink>
         }
+        <ActionLink Class="button secondary" Href="@($"/sales/receipts/new?copy={_receipt.Id}")">Copy</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_receipt.Id}")">History</ActionLink>
         @if (_receipt.Status == DocumentStatus.Posted)
         {

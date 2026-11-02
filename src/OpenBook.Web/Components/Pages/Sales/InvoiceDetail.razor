@@ -30,6 +30,7 @@
         <a class="button secondary" href="/api/sales/invoices/@_invoice.Id/pdf" target="_blank">@L["PDF"]</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Invoice" Id="_invoice.Id" PdfUrl="@($"/api/sales/invoices/{_invoice.Id}/pdf")" />
         <ActionLink Class="button secondary" Href="@($"/sales/email/invoices/{_invoice.Id}")">@L["Email"]</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/sales/invoices/new?copy={_invoice.Id}")">@L["Copy"]</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_invoice.Id}")">@L["History"]</ActionLink>
         @if (_invoice.Status == DocumentStatus.Posted)
         {
