@@ -3,6 +3,7 @@
 @inject OpenBook.Application.Companies.ViewModeService Views
 @inject NavigationManager Navigation
 
+<a class="skip-link" href="#main">@L["Skip to content"]</a>
 <AuthorizeView>
     <Authorized>
         <header class="topbar">
@@ -92,14 +93,14 @@
         <AuthorizeView>
             <SimpleShortcuts User="context.User" Edition="_edition" />
         </AuthorizeView>
-        <main class="page">
+        <main class="page" id="main" tabindex="-1">
             @Body
         </main>
     </div>
 }
 else
 {
-    <main class="page">
+    <main class="page" id="main" tabindex="-1">
         @Body
     </main>
 }

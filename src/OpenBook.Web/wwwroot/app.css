@@ -729,3 +729,33 @@ details.setup-steps li.done::marker { content: "✓  "; color: var(--accent); }
 .hub-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .hub-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-right: 0.15rem; }
 .hub-actions .button { padding: 0.25rem 0.65rem; font-size: 0.9rem; font-weight: 500; }
+
+/* Home page: what's waiting, and the getting-started checklist. */
+.todo-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+.todo-list li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; align-items: baseline; }
+.todo-list li a { font-weight: 600; }
+.todo-list li.urgent .badge { border-color: var(--danger); color: var(--danger); }
+.todo-list li .muted { flex-basis: 100%; font-size: 0.85rem; }
+.checklist { list-style: none; padding: 0; margin: 0 0 0.75rem; display: grid; gap: 0.5rem; }
+.checklist li { display: flex; gap: 0.6rem; align-items: baseline; }
+.checklist .tick { color: var(--accent); font-weight: 700; width: 1rem; }
+.checklist li.done a { color: var(--muted); }
+.checklist .muted { font-size: 0.85rem; margin-left: 0.35rem; }
+details.company-facts > summary { cursor: pointer; font-weight: 600; }
+details.company-facts[open] > summary { margin-bottom: 0.75rem; }
+
+/* Phones: nothing wider than the screen. Tables and wide grids scroll inside their own box; rows of buttons wrap. */
+@media (max-width: 760px) {
+    .page { margin: 1rem auto; }
+    .page table { display: block; max-width: 100%; overflow-x: auto; }
+    .summary-bar { flex-wrap: wrap; }
+    .toolbar h1 { flex-basis: 100%; }
+    .card { padding: 1rem; }
+    code, .copy-link { overflow-wrap: anywhere; }
+    .topbar { gap: 0.6rem 1rem; padding: 0.6rem 1rem; }
+    .topbar .search { flex: 1 1 10rem; }
+    .full-menu .menu-list, .topbar .menu-list { max-width: calc(100vw - 2rem); }
+}
+.skip-link { position: absolute; left: 0.5rem; top: -3rem; z-index: 100; background: var(--surface); padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 6px; }
+.skip-link:focus { top: 0.5rem; }
+main.page:focus { outline: none; }

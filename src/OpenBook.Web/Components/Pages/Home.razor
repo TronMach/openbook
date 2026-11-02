@@ -28,8 +28,10 @@ else if (_company is not null)
         </div>
     }
 
-    <div class="card">
-        <h2>@L["Company"]</h2>
+    <TodoList User="HttpContext.User" Company="_company" />
+
+    <details class="card company-facts">
+        <summary>@L["Company"]</summary>
         <dl class="facts">
             @if (_company.LegalName is not null)
             {
@@ -43,19 +45,8 @@ else if (_company is not null)
             <dt>@L["Fiscal year"]</dt>
             <dd>@L["Starts in {0}; current year began {1}", Labels.Month(_company.FiscalYearStartMonth), _company.FiscalYearStart(CompanyTime.Today).ToString("d")]</dd>
         </dl>
-    </div>
-
-    <div class="card">
-        <h2>@L["Getting started"]</h2>
-        <ol>
-            <li>Set up your <a href="/accounts">chart of accounts</a>: add accounts one by one, or <ActionLink Href="/accounts/import">import a CSV</ActionLink> (there's a starter chart to download).</li>
-            <li>Add your <a href="/customers">customers</a>, <a href="/vendors">vendors</a> and <a href="/items">products and services</a>, or import them.</li>
-            <li>Record day-to-day work: <a href="/sales">invoices and payments</a>, <a href="/purchases">bills</a>, and <a href="/banking">bank and card transactions</a>.</li>
-            <li>Reconcile each bank and card account against its statement.</li>
-            <li>See where you stand in <a href="/reports">reports</a>: profit and loss, balance sheet, and more.</li>
-        </ol>
-        <p class="muted">Everything is also available through the REST API under <code>/api</code>. Back up regularly from <ActionLink Href="/backup">Backup</ActionLink>.</p>
-    </div>
+        <p class="muted">@L["Everything is also available through the REST API under /api."] <ActionLink Href="/settings/company">@L["Company details"]</ActionLink></p>
+    </details>
 }
 
 @code {
