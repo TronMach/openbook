@@ -189,9 +189,14 @@ public sealed class FormDesignService(
     public async Task<FormStyle> DefaultStyleAsync(CancellationToken ct = default) =>
         await StyleAsync((await store.ListAsync(ct)).FirstOrDefault(d => d.IsDefault) ?? Standard(), ct);
 
-    /// <summary>A design's look, with its font's faces loaded.</summary>
-    public async Task<FormStyle> StyleAsync(FormDesign design, CancellationToken ct = default) =>
-        FormStyle.From(design, await fonts.FaceAsync(design.FontKey, ct));
+    /// <summary>A design's look, with its fonts' faces loaded.</summary>
+    public async Task<FormStyle> StyleAsync(FormDesign design, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        var font = await fonts.FaceAsync(design.FontKey, ct);
+        var company = design.CompanyFontKey is { } key && key != FormDesign.BuiltInFont ? await fonts.FaceAsync(key, ct) : null;
+        return FormStyle.From(design, font, company);
+    }
 
     /// <summary>A form with a design applied (<see cref="Apply(SalesForm, FormDesign, FormDocuments, FormStyle)"/>), its font loaded.</summary>
     public async Task<SalesForm> ApplyAsync(SalesForm form, FormDesign design, FormDocuments document, CancellationToken ct = default) =>
@@ -327,8 +332,15 @@ public sealed class FormDesignService(
         return column with
         {
             Label = column.Label ?? field.Name,
-            Align = field.Type is CustomFieldType.WholeNumber or CustomFieldType.DecimalNumber or CustomFieldType.Money ? ColumnAlign.Right : ColumnAlign.Left,
+            Align = column.AlignChosen ? column.Align : UsualAlign(field),
         };
+    }
+
+    /// <summary>Numeric fields on the right, the rest on the left.</summary>
+    public static ColumnAlign UsualAlign(CustomField field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return field.Type is CustomFieldType.WholeNumber or CustomFieldType.DecimalNumber or CustomFieldType.Money ? ColumnAlign.Right : ColumnAlign.Left;
     }
 
     private static string SampleValue(CustomField field, DateOnly today) => field.Type switch
@@ -360,9 +372,12 @@ public sealed class FormDesignService(
         return design;
     }
 
+    /// <summary>Blank keys (the built-in font, or "the same font" for the company) are what the design stores as null.</summary>
     private async Task EnsureFontAsync(FormDesignDetails details, CancellationToken ct)
     {
-        if (!await fonts.ExistsAsync(details.FontKey, ct))
+        static string? Key(string? key) => string.IsNullOrWhiteSpace(key) ? null : key.Trim();
+        if (!await fonts.ExistsAsync(Key(details.FontKey), ct)
+            || (Key(details.CompanyFontKey) is { } company && company != FormDesign.BuiltInFont && !await fonts.ExistsAsync(company, ct)))
             throw new DomainException("font.unknown", "That font isn't available: choose one from the list, or add it first.");
     }
 
@@ -408,12 +423,14 @@ public sealed class FormDesignService(
         d.AccentColor,
         d.Footer,
         Font = d.FontKey,
+        CompanyFont = d.CompanyFontKey,
         PaperSize = d.PaperSize.ToString(),
         Logo = d.Logo is { } logo ? $"{d.LogoContentType}, {logo.Length:N0} bytes, {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo))[..12]}" : null,
         LogoPosition = d.LogoPosition.ToString(),
         LogoSize = d.LogoSize.ToString(),
         Show = d.Show.ToString(),
-        Columns = d.Columns.Select(c => c.Label is null ? $"{c.Key} ({c.Width})" : $"{c.Key} \"{c.Label}\" ({c.Width})"),
+        Columns = d.Columns.Select(c => (c.Label is null ? c.Key : $"{c.Key} \"{c.Label}\"") + (c.AutoWidth ? " (auto)" : $" ({c.Width})")
+            + (c.Align is { } align ? $" {align.ToString().ToLowerInvariant()}" : "")),
         d.AutoFieldColumns,
         d.Landscape,
         Margins = d.Margins.ToString(),

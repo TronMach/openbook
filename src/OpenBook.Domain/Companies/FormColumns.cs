@@ -1,7 +1,18 @@
 namespace OpenBook.Domain.Companies;
 
-/// <summary>A column of a design's line table: its key, heading (null = the usual one) and relative width.</summary>
-public sealed record FormColumnDraft(string Key, string? Label = null, int? Width = null);
+/// <summary>How a column's heading and values line up.</summary>
+public enum ColumnAlign
+{
+    Left,
+    Center,
+    Right,
+}
+
+/// <summary>
+/// A column of a design's line table: its key, heading (null = the usual one), relative width, whether it's as wide as
+/// its contents instead (<paramref name="AutoWidth"/>), and its alignment (null = the usual one).
+/// </summary>
+public sealed record FormColumnDraft(string Key, string? Label = null, int? Width = null, bool AutoWidth = false, ColumnAlign? Align = null);
 
 /// <summary>A built-in column a design can print, with its usual heading and width.</summary>
 /// <param name="Numeric">Right-aligned.</param>
@@ -65,6 +76,9 @@ public static class FormColumns
     public static bool IsOptional(string key) => FieldId(key) is not null || Find(key)?.Optional == true;
 
     public static int DefaultWidth(string key) => Find(key)?.Width ?? FieldWidth;
+
+    /// <summary>Numbers on the right, the rest on the left; null for a custom field (its type decides).</summary>
+    public static ColumnAlign? UsualAlign(string key) => Find(key) is { } choice ? choice.Numeric ? ColumnAlign.Right : ColumnAlign.Left : null;
 
     /// <summary>The usual heading; null for a custom field (its name is used).</summary>
     public static string? DefaultLabel(string key) => Find(key)?.Label;

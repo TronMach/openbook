@@ -91,6 +91,36 @@ public sealed class FormFontTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_company_name_and_details_can_print_in_a_font_of_their_own()
+    {
+        var design = (await In<FormDesignService, IReadOnlyList<FormDesign>>(s => s.ListAsync())).Single(d => d.IsDefault);
+        async Task<string> Print(string? font, string? companyFont)
+        {
+            await In<FormDesignService, FormDesign>(s => s.UpdateAsync(design.Id, design.ToDetails() with { FontKey = font, CompanyFontKey = companyFont }));
+            return Encoding.ASCII.GetString((await In<FormService, RenderedForm>(s => s.RenderAsync(FormKind.Invoice, _invoice.Id))).Pdf);
+        }
+
+        var both = await Print("lora", "montserrat");
+        Assert.Matches("/BaseFont\\s*/[A-Z]{6}\\+Lora", both);
+        Assert.Matches("/BaseFont\\s*/[A-Z]{6}\\+Montserrat", both);
+        Assert.DoesNotMatch("/BaseFont\\s*/[A-Z]{6}\\+Montserrat", await Print("lora", null));
+        // "built-in" prints the company in the built-in font while the rest keeps Lora.
+        Assert.Matches("/BaseFont\\s*/[A-Z]{6}\\+Lora", await Print("lora", FormDesign.BuiltInFont));
+        Assert.Equal(FormDesign.BuiltInFont, (await In<FormDesignService, FormDesign?>(s => s.GetAsync(design.Id)))!.CompanyFontKey);
+        Assert.Equal("font.unknown", await Refused(() => Print(null, "comic-sans")));
+        // The editor posts blank for the built-in font and for "the same font".
+        await Print("", " ");
+        Assert.Equal((null, null), ((await In<FormDesignService, FormDesign?>(s => s.GetAsync(design.Id)))!.FontKey, (await In<FormDesignService, FormDesign?>(s => s.GetAsync(design.Id)))!.CompanyFontKey));
+
+        // An added font used only for company details is in use too.
+        _db.GoogleFonts.Families["Work Sans"] = (ShippedFile("lato", "Regular.ttf"), ShippedFile("lato", "Bold.ttf"));
+        var added = await Fonts(s => s.AddFromGoogleAsync("Work Sans"));
+        await Print(null, added.Key);
+        Assert.Equal("font.in_use", await Refused(() => Fonts(async s => { await s.RemoveAsync(added.Key); return 0; })));
+        Assert.False((await Fonts(s => s.ChoicesAsync())).Single(c => c.Key == added.Key).CanRemove);
+    }
+
+    [Fact]
     public async Task Uploads_must_be_truetype_and_bold_is_optional()
     {
         var regular = ShippedFile("roboto", "Regular.ttf");

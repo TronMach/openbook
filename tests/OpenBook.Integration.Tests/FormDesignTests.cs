@@ -210,6 +210,61 @@ public sealed class FormDesignTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Columns_can_fit_their_contents_and_line_up_left_center_or_right()
+    {
+        var standard = (await Designs(s => s.ListAsync())).Single();
+        Assert.Equal("formdesign.column_align", await Refused(() => Designs(s => s.UpdateAsync(standard.Id, standard.ToDetails() with
+        {
+            Columns = [new FormColumnDraft(FormColumns.Description, Align: (ColumnAlign)7)],
+        }))));
+
+        await Designs(s => s.UpdateAsync(standard.Id, standard.ToDetails() with
+        {
+            Columns = [new(FormColumns.Description), new(FormColumns.Quantity, AutoWidth: true, Align: ColumnAlign.Center),
+                new(FormColumns.Rate, Align: ColumnAlign.Right), new(FormColumns.Amount, AutoWidth: true, Align: ColumnAlign.Left)],
+        }));
+        var design = (await Designs(s => s.GetAsync(standard.Id)))!;
+        // A column's usual alignment is kept as "usual".
+        Assert.Equal([(false, null), (true, ColumnAlign.Center), (false, null), (true, ColumnAlign.Left)],
+            design.Columns.Select(c => (c.AutoWidth, c.Align)));
+        Assert.Equal(design.Columns.Select(c => c.ToDraft()), design.ToDetails().Columns!);
+
+        var invoice = await InvoiceFor(_acme);
+        var form = await Form(FormKind.Invoice, invoice.Id);
+        Assert.Equal([(ColumnAlign.Left, false), (ColumnAlign.Center, true), (ColumnAlign.Right, false), (ColumnAlign.Left, true)],
+            form.Style.TableColumns.Select(c => (c.Align, c.AutoWidth)));
+        foreach (var template in Enum.GetValues<FormTemplate>())
+        {
+            await Designs(s => s.UpdateAsync(standard.Id, design.ToDetails() with { Template = template }));
+            Assert.StartsWith("%PDF", Encoding.ASCII.GetString((await In<FormService, RenderedForm>(s => s.RenderAsync(FormKind.Invoice, invoice.Id))).Pdf, 0, 4), StringComparison.Ordinal);
+        }
+
+        var audit = await _db.InDb(db => Task.FromResult(db.AuditRecords.Where(a => a.EntityType == FormDesignService.EntityType).OrderBy(a => a.Id).Select(a => a.After).ToList()));
+        Assert.Contains(audit, a => a!.Contains("quantity (auto) center", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Auto_columns_take_what_they_need_and_the_others_share_the_rest()
+    {
+        static int[] Share(int textIndex, double available, params (int Weight, double? Need)[] columns)
+        {
+            var widths = FormColumnWidths.Share(columns, available, textIndex);
+            Assert.Equal(available, widths.Sum(), 6);
+            return [.. widths.Select(w => (int)Math.Round(w))];
+        }
+
+        Assert.Equal([430, 30, 40], Share(0, 500, (50, null), (10, 30), (14, 40)));
+        Assert.Equal([200, 100, 200], Share(0, 500, (20, null), (10, 100), (20, null)));
+        // Every column fits its contents: the room left goes to the text column, else to all by their needs.
+        Assert.Equal([470, 30], Share(0, 500, (50, 100), (10, 30)));
+        Assert.Equal([200, 600], Share(-1, 800, (1, 100), (1, 300)));
+        // Too wide: the text column (which can wrap) gives way first.
+        Assert.Equal([500, 40, 60], Share(0, 600, (50, 900), (10, 40), (10, 60)));
+        // One auto column takes at most 60% while others share the table.
+        Assert.Equal([200, 300], Share(0, 500, (50, null), (10, 2000)));
+    }
+
+    [Fact]
     public async Task What_is_shown_follows_the_design()
     {
         var invoice = await InvoiceFor(_acme);
@@ -242,6 +297,14 @@ public sealed class FormDesignTests : IAsyncLifetime
             var made = await Designs(s => s.CreateFromPresetAsync(preset.Key));
             Assert.Equal((preset.Details.Name, preset.Details.Template, preset.Details.Columns!.Count), (made.Name, made.Template, made.Columns.Count));
         }
+
+        // The ink savers: black, no fills, columns fitted to their contents, the company in a font of its own.
+        var ink = (await Designs(s => s.ListAsync())).Single(d => d.Name == "Ink saver");
+        Assert.Equal((FormTemplate.Minimal, "#000000", "eb-garamond", "lato"), (ink.Template, ink.AccentColor, ink.FontKey, ink.CompanyFontKey));
+        Assert.Equal([false, true, true, true], ink.Columns.Select(c => c.AutoWidth));
+        Assert.DoesNotContain(FormParts.StripedRows, FormDesign.EachPart(ink.Show));
+        var compact = (await Designs(s => s.ListAsync())).Single(d => d.Name == "Ink saver, compact");
+        Assert.Equal((FormMargins.Narrow, FormTextSize.Small), (compact.Margins, compact.TextSize));
 
         Assert.Equal("Bold 2", (await Designs(s => s.CreateFromPresetAsync("bold"))).Name);
         Assert.Equal("Our slip", (await Designs(s => s.CreateFromPresetAsync("packing-slip", "Our slip"))).Name);

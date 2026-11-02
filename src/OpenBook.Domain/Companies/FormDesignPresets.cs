@@ -63,6 +63,17 @@ public static class FormDesignPresets
                     [FormDocuments.Invoice] = ("Packing slip", "Please check the goods against this slip and let us know of anything missing."),
                     [FormDocuments.SalesReceipt] = ("Packing slip", null),
                 })),
+
+        new("ink-saver", "Black text, thin rules and no bands, fills or shading, in a light serif that lays down less ink or toner. Leave the logo off to save more.",
+            new FormDesignDetails("Ink saver", FormTemplate.Minimal, "#000000", FontKey: "eb-garamond", CompanyFontKey: "lato",
+                Columns: [new(FormColumns.Description), new(FormColumns.Quantity, AutoWidth: true), new(FormColumns.Rate, AutoWidth: true),
+                    new(FormColumns.Amount, AutoWidth: true)])),
+
+        new("ink-saver-compact", "The ink saver in small type with narrow margins and columns only as wide as they need, so long documents take fewer pages too.",
+            new FormDesignDetails("Ink saver, compact", FormTemplate.Minimal, "#000000", FontKey: "source-sans-3", CompanyFontKey: "source-serif-4",
+                Margins: FormMargins.Narrow, TextSize: FormTextSize.Small,
+                Columns: [new(FormColumns.Number, AutoWidth: true), new(FormColumns.Item, AutoWidth: true), new(FormColumns.Description),
+                    new(FormColumns.Quantity, AutoWidth: true), new(FormColumns.Rate, AutoWidth: true), new(FormColumns.Amount, AutoWidth: true)])),
     ];
 
     public static FormDesignPreset? Find(string? key) => All.FirstOrDefault(p => p.Key == key);

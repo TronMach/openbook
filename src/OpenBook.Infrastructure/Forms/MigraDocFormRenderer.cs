@@ -5,6 +5,7 @@ using MigraDoc.DocumentObjectModel.Tables;
 using MigraDoc.Rendering;
 using OpenBook.Application.Forms;
 using OpenBook.Domain.Companies;
+using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -15,7 +16,9 @@ namespace OpenBook.Infrastructure.Forms;
 /// Invoices, estimates, credit memos, receipts and statements as PDF, with MigraDoc (PDFsharp 6.2, MIT), in one of the
 /// <see cref="FormTemplate"/> looks: Classic (accent rule under the heading), Modern (accent band across the top),
 /// Compact (smaller type), Bold (accent bar, filled heading and total rows), Minimal (hairlines), Boxed (boxes and a
-/// full grid) and Elegant (centered heading between double rules). The line table prints the design's columns.
+/// full grid) and Elegant (centered heading between double rules). The line table prints the design's columns, each a
+/// share of the width or as wide as its contents, aligned as the design says. The company's name and details can have a
+/// font of their own.
 /// </summary>
 internal sealed class MigraDocFormRenderer : IFormRenderer
 {
@@ -231,7 +234,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
     {
         var document = new Document();
         var normal = document.Styles[StyleNames.Normal]!;
-        normal.Font.Name = look.Style.Font is { } font ? FormFontRegistry.Register(font) : SystemFontResolver.FamilyName;
+        normal.Font.Name = look.Family;
         normal.Font.Size = look.Body;
         normal.Font.Color = Ink;
         return (document, AddSection(document, look, footer, perSection));
@@ -337,14 +340,14 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             AddLogo(place, logo, width * 0.5);
         }
 
-        var name = left.AddParagraph(company.Name);
+        var name = CompanyText(left.AddParagraph(company.Name), look);
         name.Format.Font.Size = look.Body + 5;
         name.Format.Font.Bold = true;
         if (modern)
             name.Format.Font.Color = Colors.White;
         foreach (var line in PartyLines(company))
         {
-            var p = left.AddParagraph(line);
+            var p = CompanyText(left.AddParagraph(line), look);
             p.Format.Font.Size = look.Small;
             p.Format.Font.Color = modern ? Colors.White : look.Template == FormTemplate.Minimal ? Grey : Ink;
         }
@@ -444,13 +447,13 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             AddLogo(place, logo, width * 0.5);
         }
 
-        var name = Centered(section.AddParagraph(company.Name));
+        var name = CompanyText(Centered(section.AddParagraph(company.Name)), look);
         name.Format.Font.Size = look.Body + 7;
         name.Format.Font.Bold = true;
         var contact = PartyLines(company).ToList();
         if (contact.Count > 0)
         {
-            var line = Centered(section.AddParagraph(string.Join("   ·   ", contact)));
+            var line = CompanyText(Centered(section.AddParagraph(string.Join("   ·   ", contact))), look);
             line.Format.Font.Size = look.Small;
             line.Format.Font.Color = Grey;
         }
@@ -476,6 +479,14 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
                 p.AddFormattedText(facts[i].Value, TextFormat.Bold);
             }
         }
+    }
+
+    /// <summary>The company's name or details, in the company font when the design has one.</summary>
+    private static Paragraph CompanyText(Paragraph paragraph, Look look)
+    {
+        if (look.CompanyFamily is { } family)
+            paragraph.Format.Font.Name = family;
+        return paragraph;
     }
 
     private static Paragraph Centered(Paragraph paragraph)
@@ -642,16 +653,22 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             : columns[0].Key;
         var textIndex = columns.FindIndex(c => c.Key == text);
         var aligns = columns.Select(c => c.Align).ToArray();
-
-        var table = Table(section, look, [.. columns.Select(c => (double)c.Width)]);
-        Heading(table, look, [.. columns.Select(c => (c.Label!, c.Align))]);
         var number = 0;
-        var stripe = 0;
-        foreach (var line in form.Lines)
+        var rows = form.Lines.Select(line =>
         {
             int? n = line.Style == FormLineStyle.Normal && line.Quantity is not null ? ++number : null;
-            var cells = columns.Select(c => c.Key == text ? TextOf(line, text, lots) : Value(line, c.Key, n)).ToArray();
-            var row = Body(table, look, aligns, line.Style == FormLineStyle.Normal ? stripe++ : 0, cells);
+            return columns.Select(c => c.Key == text ? TextOf(line, text, lots) : Value(line, c.Key, n)).ToArray();
+        }).ToList();
+
+        var table = columns.Any(c => c.AutoWidth)
+            ? SizedTable(section, look, [.. FormColumnWidths.Share(Needs(look, columns, form.Lines, rows, textIndex), ContentWidth(section).Point, textIndex).Select(Unit.FromPoint)])
+            : Table(section, look, [.. columns.Select(c => (double)c.Width)]);
+        Heading(table, look, [.. columns.Select(c => (c.Label!, c.Align))]);
+        var stripe = 0;
+        for (var i = 0; i < form.Lines.Count; i++)
+        {
+            var line = form.Lines[i];
+            var row = Body(table, look, aligns, line.Style == FormLineStyle.Normal ? stripe++ : 0, rows[i]);
             if (line.Style != FormLineStyle.Normal)
                 row.Format.Font.Bold = true;
             if (!string.IsNullOrEmpty(line.Details))
@@ -661,6 +678,42 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
                 details.Format.Font.Color = Grey;
             }
         }
+    }
+
+    /// <summary>
+    /// Each column's weight, and for auto columns the width their heading and values need in points (the widest line of
+    /// each, in the size and weight it prints in, plus the cell's padding).
+    /// </summary>
+    private static List<(int Weight, double? Need)> Needs(
+        Look look, IReadOnlyList<FormTableColumn> columns, IReadOnlyList<FormLine> lines, List<string[]> rows, int textIndex)
+    {
+        using var measure = XGraphics.CreateMeasureContext(new XSize(2000, 2000), XGraphicsUnit.Point, XPageDirection.Downwards);
+        var fonts = new Dictionary<(double, bool), XFont>();
+        double Width(string? text, double size, bool bold)
+        {
+            if (string.IsNullOrEmpty(text))
+                return 0;
+            if (!fonts.TryGetValue((size, bold), out var font))
+                fonts[(size, bold)] = font = new XFont(look.Family, size, bold ? XFontStyleEx.Bold : XFontStyleEx.Regular);
+            return text.Split('\n').Max(part => part.Length == 0 ? 0 : measure.MeasureString(part, font).Width);
+        }
+
+        var padding = (2 * SidePadding(look)) + 8;
+        return [.. columns.Select((column, c) =>
+        {
+            if (!column.AutoWidth)
+                return (column.Width, (double?)null);
+            var heading = look.Template == FormTemplate.Minimal ? column.Label!.ToUpperInvariant() : column.Label!;
+            var need = Width(heading, look.Small, bold: true);
+            for (var i = 0; i < lines.Count; i++)
+            {
+                need = Math.Max(need, Width(rows[i][c], look.Body, lines[i].Style != FormLineStyle.Normal));
+                if (c == textIndex)
+                    need = Math.Max(need, Width(lines[i].Details, look.Small, bold: false));
+            }
+
+            return (column.Width, need + padding);
+        })];
     }
 
     private static string TextOf(FormLine line, string key, bool lotsColumn)
@@ -714,13 +767,19 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
     /// <summary>A full-width table with columns in the given proportions.</summary>
     private static Table Table(Section section, Look look, double[] weights)
     {
-        var table = section.AddTable();
         var width = ContentWidth(section);
         var total = weights.Sum();
-        foreach (var weight in weights)
-            table.AddColumn(width * (weight / total));
+        return SizedTable(section, look, [.. weights.Select(weight => width * (weight / total))]);
+    }
+
+    /// <summary>A table with columns of the given widths.</summary>
+    private static Table SizedTable(Section section, Look look, Unit[] widths)
+    {
+        var table = section.AddTable();
+        foreach (var width in widths)
+            table.AddColumn(width);
         var padding = Unit.FromPoint(look.Template == FormTemplate.Compact ? 2 : look.Template == FormTemplate.Minimal ? 5 : 4);
-        var side = Unit.FromPoint(look.Template is FormTemplate.Boxed or FormTemplate.Bold ? 4 : 2);
+        var side = Unit.FromPoint(SidePadding(look));
         (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (padding, padding, side, side);
         if (look.Template == FormTemplate.Boxed)
             GridBorders(table);
@@ -728,6 +787,9 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             table.Rows.LeftIndent = 0;
         return table;
     }
+
+    /// <summary>Space inside a table cell on each side, in points.</summary>
+    private static double SidePadding(Look look) => look.Template is FormTemplate.Boxed or FormTemplate.Bold ? 4 : 2;
 
     private static void Heading(Table table, Look look, (string Text, ColumnAlign Align)[] cells)
     {
@@ -908,7 +970,10 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
 
     /// <param name="Tint">The accent mixed into white, for boxed headings.</param>
     /// <param name="Margin">Page margin in points.</param>
-    private sealed record Look(FormTemplate Template, Color Accent, Color Tint, double Body, double Small, double Margin, FormStyle Style)
+    /// <param name="Family">The font family name to ask for.</param>
+    /// <param name="CompanyFamily">The company details' family name; null = <paramref name="Family"/>.</param>
+    private sealed record Look(
+        FormTemplate Template, Color Accent, Color Tint, double Body, double Small, double Margin, FormStyle Style, string Family, string? CompanyFamily)
     {
         public static Look For(FormStyle style)
         {
@@ -926,8 +991,10 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
                 FormMargins.Wide => 66,
                 _ => compact ? CompactMargin : PageMargin,
             };
+            var family = style.Font is { } font ? FormFontRegistry.Register(font) : SystemFontResolver.FamilyName;
+            var company = style.CompanyFont is { } own ? FormFontRegistry.Register(own) : style.CompanyFontBuiltIn ? SystemFontResolver.FamilyName : null;
             return new Look(style.Template, new Color(r, g, b), new Color(Mix(r), Mix(g), Mix(b)),
-                (compact ? 8.5 : 10) + size, (compact ? 7.5 : 8.5) + size, margin, style);
+                (compact ? 8.5 : 10) + size, (compact ? 7.5 : 8.5) + size, margin, style, family, company == family ? null : company);
         }
     }
 }

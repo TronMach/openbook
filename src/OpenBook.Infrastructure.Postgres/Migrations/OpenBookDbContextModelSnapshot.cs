@@ -1413,6 +1413,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("AutoFieldColumns")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("CompanyFontKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -6636,6 +6640,13 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<string>("Key")
                                 .HasMaxLength(50)
                                 .HasColumnType("character varying(50)");
+
+                            b1.Property<string>("Align")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)");
+
+                            b1.Property<bool>("AutoWidth")
+                                .HasColumnType("boolean");
 
                             b1.Property<string>("Label")
                                 .HasMaxLength(30)

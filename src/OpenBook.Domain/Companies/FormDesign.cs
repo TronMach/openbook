@@ -67,6 +67,8 @@ public sealed class FormDesignText
 /// <param name="AutoFieldColumns">Item custom fields set to print as a column get one even when they aren't in <paramref name="Columns"/>.</param>
 /// <param name="Texts">Per document: its title and message; documents left out (or with both empty) print as usual.</param>
 /// <param name="FontKey">The font family's key (<c>null</c> = the built-in sans-serif).</param>
+/// <param name="CompanyFontKey">The font for the company's name and contact details: <c>null</c> = the same as <paramref name="FontKey"/>,
+/// <see cref="FormDesign.BuiltInFont"/> = the built-in sans-serif, else a font's key.</param>
 public sealed record FormDesignDetails(
     string Name,
     FormTemplate Template = FormTemplate.Classic,
@@ -82,7 +84,8 @@ public sealed record FormDesignDetails(
     bool Landscape = false,
     FormMargins Margins = FormMargins.Normal,
     FormTextSize TextSize = FormTextSize.Medium,
-    IReadOnlyDictionary<FormDocuments, (string? Title, string? Message)>? Texts = null);
+    IReadOnlyDictionary<FormDocuments, (string? Title, string? Message)>? Texts = null,
+    string? CompanyFontKey = null);
 
 /// <summary>The four headings designs had before columns could be chosen (the API still takes them).</summary>
 public sealed record FormColumnLabels(string? Description = null, string? Quantity = null, string? Rate = null, string? Amount = null)
@@ -100,8 +103,14 @@ public sealed class FormColumn
     /// <summary>The heading; null = the usual one (a custom field's name).</summary>
     public string? Label { get; private set; }
 
-    /// <summary>A relative weight, 1–100.</summary>
+    /// <summary>A relative weight, 1–100 (kept while <see cref="AutoWidth"/> is on, for when it's turned off).</summary>
     public int Width { get; private set; }
+
+    /// <summary>As wide as its heading and values need, rather than a share of the page.</summary>
+    public bool AutoWidth { get; private set; }
+
+    /// <summary>Null = the usual alignment (numbers on the right).</summary>
+    public ColumnAlign? Align { get; private set; }
 
     public int Position { get; private set; }
 
@@ -113,16 +122,21 @@ public sealed class FormColumn
         var width = draft.Width ?? FormColumns.DefaultWidth(key);
         if (width is < 1 or > FormColumns.MaxWidth)
             throw new DomainException("formdesign.column_width", $"Column widths go from 1 to {FormColumns.MaxWidth}.");
+        if (draft.Align is { } align && !Enum.IsDefined(align))
+            throw new DomainException("formdesign.column_align", "Columns line up left, center or right.");
         return new FormColumn
         {
             Key = key,
             Label = Text.Optional(draft.Label, FormColumns.MaxLabelLength, "formdesign.column_too_long", "Column headings"),
             Width = width,
+            AutoWidth = draft.AutoWidth,
+            // A built-in column's usual alignment is kept as "usual", so it follows if the usual one ever changes.
+            Align = draft.Align == FormColumns.UsualAlign(key) ? null : draft.Align,
             Position = position,
         };
     }
 
-    public FormColumnDraft ToDraft() => new(Key, Label, Width);
+    public FormColumnDraft ToDraft() => new(Key, Label, Width, AutoWidth, Align);
 }
 
 /// <summary>
@@ -136,6 +150,9 @@ public sealed class FormDesign
     public const int MaxNameLength = 60;
     public const int MaxLogoBytes = 1024 * 1024;
     public const int MaxFontKeyLength = 80;
+
+    /// <summary>A <see cref="CompanyFontKey"/> naming the built-in sans-serif (null there means "the design's font").</summary>
+    public const string BuiltInFont = "built-in";
 
     public const FormDocuments AllDocuments = FormDocuments.Invoice | FormDocuments.Estimate | FormDocuments.CreditMemo
         | FormDocuments.SalesReceipt | FormDocuments.Statement | FormDocuments.PurchaseOrder;
@@ -161,6 +178,10 @@ public sealed class FormDesign
     public string AccentColor { get; private set; }
     public string? Footer { get; private set; }
     public string? FontKey { get; private set; }
+
+    /// <summary>The font of the company's name and contact details: null = <see cref="FontKey"/>, <see cref="BuiltInFont"/>, or a font's key.</summary>
+    public string? CompanyFontKey { get; private set; }
+
     public FormPaperSize PaperSize { get; private set; }
     public byte[]? Logo { get; private set; }
 
@@ -250,6 +271,7 @@ public sealed class FormDesign
         AccentColor = color;
         Footer = Text.Optional(details.Footer, 1000, "company.footer_too_long", "Footer");
         FontKey = Text.Optional(details.FontKey, MaxFontKeyLength, "formdesign.font_invalid", "The font name");
+        CompanyFontKey = Text.Optional(details.CompanyFontKey, MaxFontKeyLength, "formdesign.font_invalid", "The font name");
         PaperSize = details.PaperSize;
         LogoPosition = details.LogoPosition;
         LogoSize = details.LogoSize;
@@ -266,8 +288,8 @@ public sealed class FormDesign
 
     /// <summary>The design's settings, to change a few and save them back.</summary>
     public FormDesignDetails ToDetails() => new(
-        Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, Show, [.. _columns.Select(c => c.ToDraft())], AutoFieldColumns,
-        Landscape, Margins, TextSize, _texts.ToDictionary(t => t.Document, t => (t.Title, t.Message)));
+        Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, Show, [.. Columns.Select(c => c.ToDraft())], AutoFieldColumns,
+        Landscape, Margins, TextSize, _texts.ToDictionary(t => t.Document, t => (t.Title, t.Message)), CompanyFontKey);
 
     /// <summary>The design's title for a document, else <paramref name="usual"/>.</summary>
     public string TitleFor(FormDocuments document, string usual) => _texts.FirstOrDefault(t => t.Document == document)?.Title ?? usual;

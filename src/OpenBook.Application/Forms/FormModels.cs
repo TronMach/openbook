@@ -7,49 +7,54 @@ public sealed record FormParty(string Name, string? Address = null, string? Emai
 
 public sealed record FormLogo(byte[] Content, FormLogoPosition Position, FormLogoSize Size);
 
-public enum ColumnAlign
-{
-    Left,
-    Center,
-    Right,
-}
-
 /// <summary>A line table column as it prints.</summary>
 /// <param name="Key">A <see cref="FormColumns"/> key.</param>
 /// <param name="Label">The heading; null until a custom field's name is filled in (such a column doesn't print).</param>
 /// <param name="Width">A relative weight.</param>
 /// <param name="Optional">Left out when every line is blank.</param>
-public sealed record FormTableColumn(string Key, string? Label, int Width, ColumnAlign Align = ColumnAlign.Left, bool Optional = false)
+/// <param name="AutoWidth">As wide as its heading and values need; columns with a weight share what's left.</param>
+/// <param name="AlignChosen">The design chose <paramref name="Align"/>; otherwise it's the usual one (a custom field's type may change it).</param>
+public sealed record FormTableColumn(
+    string Key, string? Label, int Width, ColumnAlign Align = ColumnAlign.Left, bool Optional = false, bool AutoWidth = false, bool AlignChosen = false)
 {
-    /// <summary>A column with its usual heading (unless <paramref name="label"/>), alignment and width.</summary>
-    public static FormTableColumn For(string key, string? label = null, int? width = null)
+    /// <summary>A column with its usual heading (unless <paramref name="label"/>), alignment (unless <paramref name="align"/>) and width.</summary>
+    public static FormTableColumn For(string key, string? label = null, int? width = null, bool autoWidth = false, ColumnAlign? align = null)
     {
         var choice = FormColumns.Find(key);
         return new FormTableColumn(key, label ?? choice?.Label, width ?? FormColumns.DefaultWidth(key),
-            choice?.Numeric == true ? ColumnAlign.Right : ColumnAlign.Left, FormColumns.IsOptional(key));
+            align ?? FormColumns.UsualAlign(key) ?? ColumnAlign.Left, FormColumns.IsOptional(key), autoWidth, align is not null);
+    }
+
+    public static FormTableColumn For(FormColumn column)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        return For(column.Key, column.Label, column.Width, column.AutoWidth, column.Align);
     }
 }
 
 /// <summary>How a form looks: from a <see cref="FormDesign"/> (<see cref="From"/>).</summary>
 /// <param name="Font">The font to print with; null = the built-in sans-serif.</param>
+/// <param name="CompanyFont">The font for the company's name and contact details; null = <paramref name="Font"/>, unless <paramref name="CompanyFontBuiltIn"/>.</param>
+/// <param name="CompanyFontBuiltIn">The company's details print with the built-in sans-serif whatever <paramref name="Font"/> is.</param>
 /// <param name="Columns">The line table's columns; null = description, quantity, rate and amount.</param>
 /// <param name="Show">What prints besides the lines; the renderer reads page numbers and striped rows, the rest is applied to the form.</param>
 /// <param name="AutoFieldColumns">Item fields set to print as a column get one when the design doesn't place them.</param>
 public sealed record FormStyle(
     FormTemplate Template, string AccentColor, string? Footer, FormPaperSize PaperSize = FormPaperSize.Letter, FormLogo? Logo = null,
     FormFontFace? Font = null, IReadOnlyList<FormTableColumn>? Columns = null, FormParts Show = FormParts.Default, bool AutoFieldColumns = true,
-    bool Landscape = false, FormMargins Margins = FormMargins.Normal, FormTextSize TextSize = FormTextSize.Medium)
+    bool Landscape = false, FormMargins Margins = FormMargins.Normal, FormTextSize TextSize = FormTextSize.Medium,
+    FormFontFace? CompanyFont = null, bool CompanyFontBuiltIn = false)
 {
     public IReadOnlyList<FormTableColumn> TableColumns => Columns ?? [.. FormColumns.Standard.Select(c => FormTableColumn.For(c.Key))];
 
-    public static FormStyle From(FormDesign design, FormFontFace? font = null)
+    public static FormStyle From(FormDesign design, FormFontFace? font = null, FormFontFace? companyFont = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         return new FormStyle(
             design.Template, design.AccentColor, design.Footer, design.PaperSize,
             design.Logo is { } logo ? new FormLogo(logo, design.LogoPosition, design.LogoSize) : null,
-            font, [.. design.Columns.Select(c => FormTableColumn.For(c.Key, c.Label, c.Width))], design.Show, design.AutoFieldColumns,
-            design.Landscape, design.Margins, design.TextSize);
+            font, [.. design.Columns.Select(FormTableColumn.For)], design.Show, design.AutoFieldColumns,
+            design.Landscape, design.Margins, design.TextSize, companyFont, design.CompanyFontKey == FormDesign.BuiltInFont);
     }
 }
 

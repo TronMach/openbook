@@ -1867,6 +1867,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(d => d.AccentColor).HasMaxLength(7);
             b.Property(d => d.Footer).HasMaxLength(1000);
             b.Property(d => d.FontKey).HasMaxLength(FormDesign.MaxFontKeyLength);
+            b.Property(d => d.CompanyFontKey).HasMaxLength(FormDesign.MaxFontKeyLength);
             b.Property(d => d.PaperSize).HasConversion<string>().HasMaxLength(10);
             b.Property(d => d.LogoContentType).HasMaxLength(20);
             b.Property(d => d.LogoPosition).HasConversion<string>().HasMaxLength(10);
@@ -1884,6 +1885,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 c.HasKey("FormDesignId", nameof(FormColumn.Key));
                 c.Property(x => x.Key).HasMaxLength(FormColumns.MaxKeyLength);
                 c.Property(x => x.Label).HasMaxLength(FormColumns.MaxLabelLength);
+                c.Property(x => x.Align).HasConversion<string>().HasMaxLength(10);
             });
             b.Navigation(d => d.Columns).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.OwnsMany(d => d.Texts, t =>

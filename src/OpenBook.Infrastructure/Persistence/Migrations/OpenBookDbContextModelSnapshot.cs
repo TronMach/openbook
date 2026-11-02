@@ -1406,6 +1406,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("AutoFieldColumns")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CompanyFontKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -6621,6 +6625,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<string>("Key")
                                 .HasMaxLength(50)
                                 .HasColumnType("TEXT");
+
+                            b1.Property<string>("Align")
+                                .HasMaxLength(10)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("AutoWidth")
+                                .HasColumnType("INTEGER");
 
                             b1.Property<string>("Label")
                                 .HasMaxLength(30)

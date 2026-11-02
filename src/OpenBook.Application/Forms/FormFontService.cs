@@ -56,7 +56,7 @@ public sealed class FormFontService(IFormFontStore store, IBundledFonts bundled,
     /// <summary>The built-in font first, then the shipped ones by category, then those added, by name.</summary>
     public async Task<IReadOnlyList<FormFontChoice>> ChoicesAsync(CancellationToken ct = default)
     {
-        var used = (await designs.ListAsync(ct)).Select(d => d.FontKey).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        var used = (await designs.ListAsync(ct)).SelectMany(d => new[] { d.FontKey, d.CompanyFontKey }).OfType<string>().ToHashSet(StringComparer.Ordinal);
         return
         [
             new FormFontChoice(null, $"{BuiltInName} (built in)", "Built in", false),
@@ -101,7 +101,7 @@ public sealed class FormFontService(IFormFontStore store, IBundledFonts bundled,
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
         var font = (await store.ListAsync(ct)).FirstOrDefault(f => f.Key == key) ?? throw new EntityNotFoundException(EntityType, Guid.Empty);
-        if ((await designs.ListAsync(ct)).FirstOrDefault(d => d.FontKey == key) is { } design)
+        if ((await designs.ListAsync(ct)).FirstOrDefault(d => d.FontKey == key || d.CompanyFontKey == key) is { } design)
             throw new DomainException("font.in_use", $"The {design.Name} design uses {font.Family}. Choose another font there first.");
         store.Remove(font);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, EntityType, font.Id, Snapshot(font), null));

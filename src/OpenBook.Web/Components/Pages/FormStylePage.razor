@@ -40,7 +40,7 @@
                             </td>
                             <td>@UsedFor(design)</td>
                             <td class="muted">@Labels.For(design.Template)</td>
-                            <td class="muted">@(_fonts.FirstOrDefault(f => f.Key == design.FontKey)?.Family ?? FormFontService.BuiltInName)</td>
+                            <td class="muted">@FontName(design.FontKey)</td>
                             <td class="muted">@design.PaperSize@(design.Landscape ? ", landscape" : "")</td>
                             <td class="muted">@design.Columns.Count</td>
                             <td class="muted">@(design.Logo is null ? "" : "Yes")</td>
@@ -70,10 +70,10 @@
                         <div class="preset-text">
                             <strong>@details.Name</strong>
                             <span class="muted">@preset.Description</span>
-                            <span class="hint">@Labels.For(details.Template) · @(_fonts.FirstOrDefault(f => f.Key == details.FontKey)?.Family ?? FormFontService.BuiltInName)@(details.Landscape ? " · landscape" : "")</span>
+                            <span class="hint">@Labels.For(details.Template) · @FontName(details.FontKey)@(details.CompanyFontKey is { } company ? $" · company name in {FontName(company)}" : "")@(details.Landscape ? " · landscape" : "")</span>
                             <span class="inline-actions">
-                                <a href="/settings/forms/preview?preset=@preset.Key&document=@FormDocuments.Invoice" target="preset-preview">Preview</a>
-                                <a href="/settings/forms/preview?preset=@preset.Key&document=@FormDocuments.Estimate" target="preset-preview">as an estimate</a>
+                                <a href="@PresetPreview(preset.Key, FormDocuments.Invoice)" target="preset-preview">Preview</a>
+                                <a href="@PresetPreview(preset.Key, FormDocuments.Estimate)" target="preset-preview">as an estimate</a>
                                 <form method="post" action="/settings/forms/new" class="inline-form" data-enhance="false">
                                     <AntiforgeryToken />
                                     <input type="hidden" name="copyFrom" value="@(FormDesignEndpoints.PresetPrefix + preset.Key)" />
@@ -85,7 +85,7 @@
                 }
             </ul>
             <div class="design-preview">
-                <iframe name="preset-preview" title="Preview of a ready-made design" src="/settings/forms/preview?preset=@FormDesignPresets.All[0].Key&document=@FormDocuments.Invoice"></iframe>
+                <iframe name="preset-preview" title="Preview of a ready-made design" src="@PresetPreview(FormDesignPresets.All[0].Key, FormDocuments.Invoice)"></iframe>
                 <p class="muted">A sample document with your company's details. <a class="preset-back" href="#ready-made">Back to the designs</a></p>
             </div>
         </div>
@@ -197,6 +197,12 @@
     private IReadOnlyList<FormDesign> _designs = [];
 
     private IReadOnlyList<FormFontChoice> _fonts = [];
+
+    /// <summary>A ready-made design on a sample document, opened fitted to the page's width without the viewer's thumbnails.</summary>
+    private static string PresetPreview(string key, FormDocuments document) => $"/settings/forms/preview?preset={key}&document={document}#navpanes=0&view=FitH";
+
+    /// <summary>A font key's family name; null and unknown keys are the built-in font.</summary>
+    private string FontName(string? key) => _fonts.FirstOrDefault(f => f.Key == key && key != FormDesign.BuiltInFont)?.Family ?? FormFontService.BuiltInName;
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? FontError { get; set; }

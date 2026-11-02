@@ -120,10 +120,11 @@ public static class FormDesignEndpoints
     }
 
     /// <summary>
-    /// The editor's fields: name, template, accentColor, footer, fontKey, paperSize, logoPosition, logoSize, margins,
-    /// textSize, landscape / autoFieldColumns ("true" when ticked), show (each part ticked), the column table (columnKey for
-    /// every row in the table's order, and per key col:{key} = "true" when it prints, order:{key}, label:{key},
-    /// width:{key}), and title:{document} / message:{document}.
+    /// The editor's fields: name, template, accentColor, footer, fontKey, companyFontKey (empty = the same font),
+    /// paperSize, logoPosition, logoSize, margins, textSize, landscape / autoFieldColumns ("true" when ticked), show (each
+    /// part ticked), the column table (columnKey for every row in the table's order, and per key col:{key} = "true" when it
+    /// prints, order:{key}, label:{key}, width:{key}, auto:{key} = "true" to fit its contents, align:{key} = Left / Center /
+    /// Right), and title:{document} / message:{document}.
     /// </summary>
     private static FormDesignDetails Details(IFormCollection form)
     {
@@ -136,7 +137,8 @@ public static class FormDesignEndpoints
             .Select((key, index) => (Key: key, Index: index))
             .Where(c => form[$"col:{c.Key}"] == "true")
             .OrderBy(c => Number($"order:{c.Key}") ?? int.MaxValue).ThenBy(c => c.Index)
-            .Select(c => new FormColumnDraft(c.Key, form[$"label:{c.Key}"].ToString(), Number($"width:{c.Key}")))
+            .Select(c => new FormColumnDraft(c.Key, form[$"label:{c.Key}"].ToString(), Number($"width:{c.Key}"), form[$"auto:{c.Key}"] == "true",
+                Enum.TryParse<ColumnAlign>(form[$"align:{c.Key}"], out var align) && Enum.IsDefined(align) ? align : null))
             .ToList();
         return new FormDesignDetails(
             form["name"].ToString(),
@@ -153,7 +155,8 @@ public static class FormDesignEndpoints
             form["landscape"] == "true",
             Pick("margins", FormMargins.Normal),
             Pick("textSize", FormTextSize.Medium),
-            texts);
+            texts,
+            form["companyFontKey"]);
     }
 
     private static async Task<IResult> Fonts(Func<Task<string>> change)

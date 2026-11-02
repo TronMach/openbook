@@ -7,7 +7,7 @@
 
 <PageTitle>@(_design?.Name ?? "Design") · OpenBook</PageTitle>
 
-<div class="wide">
+<div class="wide design-page">
     @if (_design is null)
     {
         <h1>Design</h1>
@@ -38,119 +38,160 @@
             <div class="alert notice" role="status">This design is switched off: nothing prints with it.</div>
         }
 
-        <div class="design-editor">
-            <div>
-                <form method="post" action="/settings/forms/@_design.Id" data-enhance="false" data-preview="design-preview" data-logo="@(_design.Logo is null ? "" : _design.Id.ToString())" class="card">
+        <div class="design-editor" data-design-editor>
+            <div class="design-settings">
+                <form method="post" action="/settings/forms/@_design.Id" data-enhance="false" data-preview="design-preview" data-logo="@(_design.Logo is null ? "" : _design.Id.ToString())" class="card design-form">
                     <AntiforgeryToken />
-                    <div class="row">
-                        <div class="field">
-                            <label for="name">Name</label>
-                            <input id="name" name="name" required maxlength="@FormDesign.MaxNameLength" value="@_design.Name" />
+                    <details class="design-section" open>
+                        <summary>Look</summary>
+                        <div class="row">
+                            <div class="field">
+                                <label for="name">Name</label>
+                                <input id="name" name="name" required maxlength="@FormDesign.MaxNameLength" value="@_design.Name" />
+                            </div>
+                            <div class="field">
+                                <label for="template">Template</label>
+                                <select id="template" name="template">
+                                    @foreach (var choice in Enum.GetValues<FormTemplate>())
+                                    {
+                                        <option value="@choice" selected="@(choice == _design.Template)">@Labels.For(choice)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="color">Accent color</label>
+                                <input id="color" name="accentColor" type="color" value="@_design.AccentColor" />
+                            </div>
+                            <div class="field">
+                                <label for="paper">Paper</label>
+                                <select id="paper" name="paperSize">
+                                    <option value="@FormPaperSize.Letter" selected="@(_design.PaperSize == FormPaperSize.Letter)">US Letter</option>
+                                    <option value="@FormPaperSize.A4" selected="@(_design.PaperSize == FormPaperSize.A4)">A4</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="margins">Margins</label>
+                                <select id="margins" name="margins">
+                                    <option value="@FormMargins.Normal" selected="@(_design.Margins == FormMargins.Normal)">Normal</option>
+                                    <option value="@FormMargins.Narrow" selected="@(_design.Margins == FormMargins.Narrow)">Narrow (more room for lines)</option>
+                                    <option value="@FormMargins.Wide" selected="@(_design.Margins == FormMargins.Wide)">Wide</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="textSize">Text size</label>
+                                <select id="textSize" name="textSize">
+                                    <option value="@FormTextSize.Small" selected="@(_design.TextSize == FormTextSize.Small)">Small</option>
+                                    <option value="@FormTextSize.Medium" selected="@(_design.TextSize == FormTextSize.Medium)">Medium</option>
+                                    <option value="@FormTextSize.Large" selected="@(_design.TextSize == FormTextSize.Large)">Large</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="logoPosition">Logo</label>
+                                <select id="logoPosition" name="logoPosition">
+                                    <option value="@FormLogoPosition.Left" selected="@(_design.LogoPosition == FormLogoPosition.Left)">Above the company name</option>
+                                    <option value="@FormLogoPosition.Right" selected="@(_design.LogoPosition == FormLogoPosition.Right)">Above the title, on the right</option>
+                                    <option value="@FormLogoPosition.Center" selected="@(_design.LogoPosition == FormLogoPosition.Center)">Centered at the top</option>
+                                </select>
+                                <span class="hint"><a href="#logo">Upload or remove the logo</a></span>
+                            </div>
+                            <div class="field">
+                                <label for="logoSize">Logo size</label>
+                                <select id="logoSize" name="logoSize">
+                                    @foreach (var size in Enum.GetValues<FormLogoSize>())
+                                    {
+                                        <option value="@size" selected="@(size == _design.LogoSize)">@size</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
-                        <div class="field">
-                            <label for="template">Template</label>
-                            <select id="template" name="template">
-                                @foreach (var choice in Enum.GetValues<FormTemplate>())
-                                {
-                                    <option value="@choice" selected="@(choice == _design.Template)">@Labels.For(choice)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="color">Accent color</label>
-                            <input id="color" name="accentColor" type="color" value="@_design.AccentColor" />
-                        </div>
-                        <div class="field">
-                            <label for="font">Font</label>
-                            <select id="font" name="fontKey">
-                                @foreach (var group in _fonts.GroupBy(f => f.Group))
-                                {
-                                    <optgroup label="@group.Key">
-                                        @foreach (var font in group)
-                                        {
-                                            <option value="@font.Key" selected="@(font.Key == _design.FontKey)">@font.Family</option>
-                                        }
-                                    </optgroup>
-                                }
-                            </select>
-                            <span class="hint"><a href="/settings/forms#fonts">Add a Google font or your own</a></span>
-                        </div>
-                        <div class="field">
-                            <label for="paper">Paper</label>
-                            <select id="paper" name="paperSize">
-                                <option value="@FormPaperSize.Letter" selected="@(_design.PaperSize == FormPaperSize.Letter)">US Letter</option>
-                                <option value="@FormPaperSize.A4" selected="@(_design.PaperSize == FormPaperSize.A4)">A4</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="logoPosition">Logo</label>
-                            <select id="logoPosition" name="logoPosition">
-                                <option value="@FormLogoPosition.Left" selected="@(_design.LogoPosition == FormLogoPosition.Left)">Above the company name</option>
-                                <option value="@FormLogoPosition.Right" selected="@(_design.LogoPosition == FormLogoPosition.Right)">Above the title, on the right</option>
-                                <option value="@FormLogoPosition.Center" selected="@(_design.LogoPosition == FormLogoPosition.Center)">Centered at the top</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="logoSize">Logo size</label>
-                            <select id="logoSize" name="logoSize">
-                                @foreach (var size in Enum.GetValues<FormLogoSize>())
-                                {
-                                    <option value="@size" selected="@(size == _design.LogoSize)">@size</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="margins">Margins</label>
-                            <select id="margins" name="margins">
-                                <option value="@FormMargins.Normal" selected="@(_design.Margins == FormMargins.Normal)">Normal</option>
-                                <option value="@FormMargins.Narrow" selected="@(_design.Margins == FormMargins.Narrow)">Narrow (more room for lines)</option>
-                                <option value="@FormMargins.Wide" selected="@(_design.Margins == FormMargins.Wide)">Wide</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="textSize">Text size</label>
-                            <select id="textSize" name="textSize">
-                                <option value="@FormTextSize.Small" selected="@(_design.TextSize == FormTextSize.Small)">Small</option>
-                                <option value="@FormTextSize.Medium" selected="@(_design.TextSize == FormTextSize.Medium)">Medium</option>
-                                <option value="@FormTextSize.Large" selected="@(_design.TextSize == FormTextSize.Large)">Large</option>
-                            </select>
-                        </div>
-                    </div>
-                    <label class="check"><input type="checkbox" name="landscape" value="true" checked="@_design.Landscape" /> <span>Landscape pages <span class="muted">(wider, for many columns)</span></span></label>
+                        <label class="check"><input type="checkbox" name="landscape" value="true" checked="@_design.Landscape" /> <span>Landscape pages <span class="muted">(wider, for many columns)</span></span></label>
+                    </details>
 
-                    <fieldset>
-                        <legend>Columns</legend>
+                    <details class="design-section" open>
+                        <summary>Fonts</summary>
+                        <div class="row">
+                            <div class="field">
+                                <label for="font">Font</label>
+                                <select id="font" name="fontKey">
+                                    @foreach (var group in _fonts.GroupBy(f => f.Group))
+                                    {
+                                        <optgroup label="@group.Key">
+                                            @foreach (var font in group)
+                                            {
+                                                <option value="@(font.Key ?? "")" selected="@(font.Key == _design.FontKey)">@font.Family</option>
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="companyFont">Your company's name and details</label>
+                                <select id="companyFont" name="companyFontKey">
+                                    <option value="" selected="@(_design.CompanyFontKey is null)">The same font</option>
+                                    @foreach (var group in _fonts.GroupBy(f => f.Group))
+                                    {
+                                        <optgroup label="@group.Key">
+                                            @foreach (var font in group)
+                                            {
+                                                var key = font.Key ?? FormDesign.BuiltInFont;
+                                                <option value="@key" selected="@(key == _design.CompanyFontKey)">@font.Family</option>
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <p class="hint">
+                            The company font prints your name, address, phone and email at the top. A light font for the rest
+                            (EB Garamond, Lato, Source Sans 3) uses less ink. <a href="/settings/forms#fonts">Add a Google font or your own</a>.
+                        </p>
+                    </details>
+
+                    <details class="design-section" open>
+                        <summary>Columns</summary>
                         <p class="hint">
                             Tick the columns to print and number them in the order you want, left to right (at most @FormColumns.MaxColumns).
-                            Widths are shares of the page: a column of 20 is twice as wide as one of 10. Columns marked "when used" are left out
-                            of a document where every line is blank.
+                            Widths are shares of the page: a column of 20 is twice as wide as one of 10. <strong>Fit</strong> makes a column
+                            just as wide as its heading and longest entry; the other columns share what's left. Columns marked
+                            "when used" are left out of a document where every line is blank.
                         </p>
                         <div class="table-wrap">
                             <table class="data design-columns">
-                                <thead><tr><th>Print</th><th>Order</th><th>Column</th><th>Heading</th><th>Width</th></tr></thead>
+                                <thead><tr><th>Print</th><th>Order</th><th>Column</th><th>Heading</th><th>Width</th><th>Align</th></tr></thead>
                                 <tbody>
                                     @foreach (var row in _rows)
                                     {
-                                        <tr>
+                                        <tr class="@(row.Position is null ? "unused" : null)">
                                             <td>
                                                 <input type="hidden" name="columnKey" value="@row.Key" />
                                                 <input type="checkbox" name="col:@row.Key" value="true" checked="@(row.Position is not null)" aria-label="Print @row.Name" />
                                             </td>
                                             <td><input type="number" name="order:@row.Key" min="1" max="99" value="@row.Position" aria-label="Order of @row.Name" /></td>
                                             <td>
-                                                @row.Name
+                                                <span class="column-name">@row.Name</span>
                                                 @if (row.Field is not null)
                                                 {
-                                                    <span class="muted"> · item custom field@(row.Field.IsActive ? "" : ", switched off")</span>
+                                                    <span class="badge">item field@(row.Field.IsActive ? "" : ", off")</span>
                                                 }
                                                 @if (row.Optional)
                                                 {
-                                                    <span class="muted"> · when used</span>
+                                                    <span class="badge">when used</span>
                                                 }
                                                 <span class="hint">@row.Help</span>
                                             </td>
                                             <td><input name="label:@row.Key" maxlength="@FormColumns.MaxLabelLength" value="@row.Label" placeholder="@row.Name" aria-label="Heading of @row.Name" /></td>
-                                            <td><input type="number" name="width:@row.Key" min="1" max="@FormColumns.MaxWidth" value="@row.Width" aria-label="Width of @row.Name" /></td>
+                                            <td class="column-width">
+                                                <input type="number" name="width:@row.Key" min="1" max="@FormColumns.MaxWidth" value="@row.Width" aria-label="Width of @row.Name" />
+                                                <label class="fit"><input type="checkbox" name="auto:@row.Key" value="true" checked="@row.Auto" /> Fit</label>
+                                            </td>
+                                            <td>
+                                                <select name="align:@row.Key" aria-label="Alignment of @row.Name">
+                                                    @foreach (var align in Enum.GetValues<ColumnAlign>())
+                                                    {
+                                                        <option value="@align" selected="@(align == row.Align)">@align</option>
+                                                    }
+                                                </select>
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
@@ -161,25 +202,29 @@
                         {
                             <p class="hint">To print more about each item (pack size, color, warranty…), <a href="/settings/custom-fields">add an item custom field</a>; it then appears here.</p>
                         }
-                    </fieldset>
+                    </details>
 
-                    <fieldset>
-                        <legend>What's shown</legend>
+                    <details class="design-section" open>
+                        <summary>What's shown</summary>
                         @foreach (var (part, label) in Parts)
                         {
                             <label class="check"><input type="checkbox" name="show" value="@part" checked="@_design.Show.HasFlag(part)" /> <span>@label</span></label>
                         }
                         <p class="hint">Fields of your own on customers and documents (PO number, ship via, sales rep…) print under the title when they're set to print on forms.</p>
-                    </fieldset>
+                    </details>
 
-                    <div class="field">
-                        <label for="footer">Footer <span class="muted">(optional)</span></label>
-                        <textarea id="footer" name="footer" rows="3" maxlength="1000">@_design.Footer</textarea>
-                        <span class="hint">Printed at the bottom of every page, e.g. how to pay: bank details, or "Make checks payable to…".</span>
-                    </div>
+                    <details class="design-section" open="@(_design.Footer is not null)">
+                        <summary>Footer</summary>
+                        <div class="field">
+                            <label for="footer">Footer <span class="muted">(optional)</span></label>
+                            <textarea id="footer" name="footer" rows="3" maxlength="1000">@_design.Footer</textarea>
+                            <span class="hint">Printed at the bottom of every page, e.g. how to pay: bank details, or "Make checks payable to…".</span>
+                        </div>
+                    </details>
 
-                    <fieldset>
-                        <legend>Titles and messages <span class="muted">(blank keeps the usual title and adds no message)</span></legend>
+                    <details class="design-section" open="@(_design.Texts.Count > 0)">
+                        <summary>Titles and messages</summary>
+                        <p class="hint">Blank keeps the usual title and adds no message.</p>
                         @foreach (var document in FormDesign.Each(FormDesign.AllDocuments))
                         {
                             var usual = FormDesignService.UsualTitle(document);
@@ -194,11 +239,15 @@
                                 </div>
                             </div>
                         }
-                    </fieldset>
-                    <button type="submit">Save design</button>
+                    </details>
+
+                    <div class="design-save">
+                        <button type="submit">Save design</button>
+                        <span class="muted">The preview shows your changes now; they're kept once you save.</span>
+                    </div>
                 </form>
 
-                <div class="card">
+                <div class="card" id="logo">
                     <h2>Logo</h2>
                     @if (_design.Logo is not null)
                     {
@@ -267,8 +316,8 @@
                 </div>
             </div>
 
-            <div class="design-preview">
-                <div class="toolbar">
+            <section class="design-preview" data-preview-pane="design-preview" aria-label="Preview">
+                <div class="preview-bar">
                     <h2>Preview</h2>
                     <select id="design-preview-document" aria-label="Document to preview" data-preview-document="design-preview">
                         @foreach (var document in FormDesign.Each(FormDesign.AllDocuments))
@@ -276,10 +325,21 @@
                             <option value="@document">@FormDesignService.UsualTitle(document)</option>
                         }
                     </select>
+                    <span class="preview-buttons">
+                        <span class="segmented" role="group" aria-label="Zoom">
+                            <button type="button" class="secondary" data-preview-fit="FitH" aria-pressed="true" title="Fit the page's width">Page width</button>
+                            <button type="button" class="secondary" data-preview-fit="Fit" aria-pressed="false" title="Show the whole page">Whole page</button>
+                        </span>
+                        <button type="button" class="secondary preview-larger" data-preview-larger aria-pressed="false" title="Give the preview more of the screen">Larger preview</button>
+                        <button type="button" class="secondary" data-preview-full aria-pressed="false" title="Fill the window with the preview (Esc to close)">Full screen</button>
+                    </span>
                 </div>
-                <iframe id="design-preview" title="Preview of a sample document with these settings" src="@PreviewUrl()"></iframe>
-                <p class="muted">A sample document with your company's details. It follows the settings as you change them; nothing is saved until you press Save design.</p>
-            </div>
+                <p class="preview-status muted" role="status" data-preview-status></p>
+                <div class="preview-frames">
+                    <iframe id="design-preview" class="current" title="Preview of a sample document with these settings" src="@PreviewUrl()"></iframe>
+                </div>
+                <p class="muted preview-note">A sample document with your company's details. It follows the settings as you change them; nothing is saved until you press Save design.</p>
+            </section>
         </div>
     }
 </div>
@@ -307,7 +367,8 @@
     ];
 
     /// <summary>A row of the column table: a built-in column or an item custom field, chosen (with its position) or not.</summary>
-    private sealed record ColumnRow(string Key, string Name, string Help, bool Optional, int? Position, string? Label, int Width, CustomField? Field);
+    private sealed record ColumnRow(
+        string Key, string Name, string Help, bool Optional, int? Position, string? Label, int Width, bool Auto, ColumnAlign Align, CustomField? Field);
 
     [Parameter] public Guid Id { get; set; }
 
@@ -330,8 +391,9 @@
         {
             var field = FormColumns.FieldId(key) is { } id ? fields.FirstOrDefault(f => f.Id == id) : null;
             var choice = FormColumns.Find(key);
+            var align = chosen?.Align ?? FormColumns.UsualAlign(key) ?? (field is null ? ColumnAlign.Left : FormDesignService.UsualAlign(field));
             return new ColumnRow(key, field?.Name ?? choice?.Label ?? key, field is null ? choice?.Help ?? "" : $"Each item's {field.Name.ToLowerInvariant()}",
-                FormColumns.IsOptional(key), chosen?.Position, chosen?.Label, chosen?.Width ?? FormColumns.DefaultWidth(key), field);
+                FormColumns.IsOptional(key), chosen?.Position, chosen?.Label, chosen?.Width ?? FormColumns.DefaultWidth(key), chosen?.AutoWidth == true, align, field);
         }
 
         var rows = design.Columns.Where(c => FormColumns.FieldId(c.Key) is null || fields.Any(f => FormColumns.Field(f.Id) == c.Key))
@@ -342,5 +404,5 @@
     }
 
     /// <summary>The first preview, from the saved design; forms.js replaces it from the form as it changes.</summary>
-    private string PreviewUrl() => $"/settings/forms/preview?design={_design!.Id}&document={FormDocuments.Invoice}";
+    private string PreviewUrl() => $"/settings/forms/preview?design={_design!.Id}&document={FormDocuments.Invoice}#navpanes=0&view=FitH";
 }

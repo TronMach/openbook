@@ -12,26 +12,31 @@ public sealed record FormDesignTextResponse(FormDocuments Document, string? Titl
 /// <param name="Key">A built-in column (number, item, description, sku, lots, class, taxable, quantity, rate, amount) or "field:{item custom field id}".</param>
 /// <param name="Label">The heading; null = the usual one (a custom field's name).</param>
 /// <param name="Width">A relative weight, 1–100; null = the column's usual width.</param>
-public sealed record FormColumnRequest(string Key, string? Label = null, int? Width = null);
+/// <param name="AutoWidth">As wide as its heading and values need; the other columns share what's left by width.</param>
+/// <param name="Align">Left, Center or Right; null = the usual (numbers on the right).</param>
+public sealed record FormColumnRequest(string Key, string? Label = null, int? Width = null, bool AutoWidth = false, ColumnAlign? Align = null);
 
 /// <param name="Show">What prints besides the lines (FormParts names).</param>
 /// <param name="ShowShipTo">Kept for older clients: the same as ShipTo in <paramref name="Show"/>.</param>
 /// <param name="ShowQuantityAndRate">Kept for older clients: whether <paramref name="Columns"/> has quantity and rate.</param>
+/// <param name="CompanyFontKey">The font of the company's name and details: null = the same as <paramref name="FontKey"/>, "built-in" = the built-in sans-serif.</param>
 public sealed record FormDesignResponse(
     Guid Id, string Name, bool IsDefault, bool IsActive, IReadOnlyList<FormDocuments> DefaultFor, FormTemplate Template, string AccentColor, string? Footer,
     string? FontKey, FormPaperSize PaperSize, bool HasLogo, FormLogoPosition LogoPosition, FormLogoSize LogoSize, IReadOnlyList<FormParts> Show,
     IReadOnlyList<FormColumnRequest> Columns, bool AutoFieldColumns, bool Landscape, FormMargins Margins, FormTextSize TextSize,
-    bool ShowShipTo, bool ShowTerms, bool ShowQuantityAndRate, FormColumnLabels ColumnLabels, IReadOnlyList<FormDesignTextResponse> Texts)
+    bool ShowShipTo, bool ShowTerms, bool ShowQuantityAndRate, FormColumnLabels ColumnLabels, IReadOnlyList<FormDesignTextResponse> Texts,
+    string? CompanyFontKey)
 {
     public static FormDesignResponse From(FormDesign d) => new(
         d.Id, d.Name, d.IsDefault, d.IsActive, [.. FormDesign.Each(d.DefaultFor)], d.Template, d.AccentColor, d.Footer, d.FontKey, d.PaperSize,
-        d.Logo is not null, d.LogoPosition, d.LogoSize, [.. FormDesign.EachPart(d.Show)], [.. d.Columns.Select(c => new FormColumnRequest(c.Key, c.Label, c.Width))],
+        d.Logo is not null, d.LogoPosition, d.LogoSize, [.. FormDesign.EachPart(d.Show)], [.. d.Columns.Select(c => new FormColumnRequest(c.Key, c.Label, c.Width, c.AutoWidth, c.Align))],
         d.AutoFieldColumns, d.Landscape, d.Margins, d.TextSize, d.ShowShipTo, d.ShowTerms, d.ShowQuantityAndRate, d.ColumnLabels,
-        [.. d.Texts.Select(t => new FormDesignTextResponse(t.Document, t.Title, t.Message))]);
+        [.. d.Texts.Select(t => new FormDesignTextResponse(t.Document, t.Title, t.Message))], d.CompanyFontKey);
 }
 
 /// <param name="Show">What prints besides the lines (FormParts names); null = the usual parts, with <paramref name="ShowShipTo"/> and <paramref name="ShowTerms"/>.</param>
 /// <param name="Columns">The line table's columns in order; null = description, (quantity, rate,) amount from <paramref name="ShowQuantityAndRate"/> and <paramref name="ColumnLabels"/>.</param>
+/// <param name="CompanyFontKey">The font of the company's name and details: null = the same as <paramref name="FontKey"/>, "built-in" = the built-in sans-serif, else a font's key.</param>
 public sealed record FormDesignRequest(
     string Name,
     FormTemplate Template = FormTemplate.Classic,
@@ -51,7 +56,8 @@ public sealed record FormDesignRequest(
     bool ShowTerms = true,
     bool ShowQuantityAndRate = true,
     FormColumnLabels? ColumnLabels = null,
-    IReadOnlyList<FormDesignTextResponse>? Texts = null)
+    IReadOnlyList<FormDesignTextResponse>? Texts = null,
+    string? CompanyFontKey = null)
 {
     public FormDesignDetails Details()
     {
@@ -59,15 +65,16 @@ public sealed record FormDesignRequest(
             ? parts.Aggregate(FormParts.None, (all, p) => all | p)
             : FormParts.Default & ~(ShowShipTo ? FormParts.None : FormParts.ShipTo) & ~(ShowTerms ? FormParts.None : FormParts.Terms);
         var columns = Columns is { } chosen
-            ? chosen.Select(c => new FormColumnDraft(c.Key, c.Label, c.Width)).ToList()
+            ? chosen.Select(c => new FormColumnDraft(c.Key, c.Label, c.Width, c.AutoWidth, c.Align)).ToList()
             : FormColumns.FromLegacy(ShowQuantityAndRate, ColumnLabels);
         return new FormDesignDetails(
             Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, show, columns, AutoFieldColumns, Landscape, Margins, TextSize,
-            (Texts ?? []).ToDictionary(t => t.Document, t => (t.Title, t.Message)));
+            (Texts ?? []).ToDictionary(t => t.Document, t => (t.Title, t.Message)), CompanyFontKey);
     }
 }
 
-public sealed record FormDesignPresetResponse(string Key, string Name, string Description, FormTemplate Template, string? AccentColor, string? FontKey);
+public sealed record FormDesignPresetResponse(
+    string Key, string Name, string Description, FormTemplate Template, string? AccentColor, string? FontKey, string? CompanyFontKey);
 
 /// <param name="Name">The new design's name; null = the ready-made name (numbered when taken).</param>
 public sealed record FormDesignFromPresetRequest(string? Name = null);
@@ -109,7 +116,7 @@ internal static class FormDesignsApi
             return Results.Created($"/api/settings/form-designs/{d.Id}", FormDesignResponse.From(d));
         });
         designs.MapGet("/presets", () => FormDesignPresets.All.Select(p =>
-            new FormDesignPresetResponse(p.Key, p.Details.Name, p.Description, p.Details.Template, p.Details.AccentColor, p.Details.FontKey)));
+            new FormDesignPresetResponse(p.Key, p.Details.Name, p.Description, p.Details.Template, p.Details.AccentColor, p.Details.FontKey, p.Details.CompanyFontKey)));
         designs.MapGet("/presets/{key}/preview", async (string key, FormDocuments? document, FormDesignService s, CancellationToken ct) =>
             FormDesignPresets.Find(key) is { } preset
                 ? Results.File(await s.PreviewAsync(preset.Details, document ?? FormDocuments.Invoice, ct: ct), "application/pdf")
