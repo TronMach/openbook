@@ -145,11 +145,26 @@
         if (empty) empty.hidden = shown > 0;
     });
 
+    // Parts of a form that only matter for some choices (<x data-shown-by="#select" data-shown-for="A B">): shown while
+    // the select has one of those values. Without script everything shows, which still works.
+    const showChosen = () => {
+        for (const part of document.querySelectorAll('[data-shown-by]')) {
+            const select = document.querySelector(part.dataset.shownBy);
+            if (select) part.hidden = !(part.dataset.shownFor || '').split(' ').includes(select.value);
+        }
+    };
+    document.addEventListener('change', e => {
+        if (e.target instanceof HTMLSelectElement && document.querySelector('[data-shown-by]')) showChosen();
+    });
+
     // Installable app: the service worker caches static files and shows an offline page (never your data).
     if ('serviceWorker' in navigator && window.isSecureContext)
         navigator.serviceWorker.register('/sw.js').catch(() => { });
 
     applyTheme();
-    if (window.Blazor && typeof window.Blazor.addEventListener === 'function')
+    showChosen();
+    if (window.Blazor && typeof window.Blazor.addEventListener === 'function') {
         window.Blazor.addEventListener('enhancedload', applyTheme);
+        window.Blazor.addEventListener('enhancedload', showChosen);
+    }
 })();

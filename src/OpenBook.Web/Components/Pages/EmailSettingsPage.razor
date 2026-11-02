@@ -35,9 +35,22 @@
                 <option value="@EmailDelivery.Smtp">Send with an SMTP server</option>
                 <option value="@EmailDelivery.Folder">Save to a folder instead of sending (for testing)</option>
             </InputSelect>
+            <span class="hint" data-shown-by="#delivery" data-shown-for="None">Nothing can be emailed until you choose a way to send. Invoices can still be printed or downloaded.</span>
+            <span class="hint" data-shown-by="#delivery" data-shown-for="Folder">Each message is saved as an .eml file in the <code>mail</code> folder beside the company file instead of being sent, so you can open it and check how it looks.</span>
         </div>
-        <fieldset>
+        <fieldset data-shown-by="#delivery" data-shown-for="Smtp">
             <legend>SMTP server</legend>
+            <details class="presets">
+                <summary>Settings for common providers</summary>
+                <dl class="facts">
+                    <dt>Gmail or Google Workspace</dt>
+                    <dd>Server <code>smtp.gmail.com</code>, port 587, STARTTLS. Your Google account needs 2-Step Verification; use an <em>app password</em> from your Google account's security page as the password, not your usual one.</dd>
+                    <dt>Microsoft 365, Outlook.com</dt>
+                    <dd>Server <code>smtp.office365.com</code>, port 587, STARTTLS, your full email address as the user name. Your administrator may need to allow "authenticated SMTP" for the mailbox.</dd>
+                    <dt>Others</dt>
+                    <dd>Look for "SMTP settings" in your email provider's help: they give the server, port and whether to use STARTTLS or SSL. Port 587 with STARTTLS is the usual choice.</dd>
+                </dl>
+            </details>
             <div class="row">
                 <div class="field">
                     <label for="host">Server</label>
@@ -75,12 +88,13 @@
                 </label>
             }
         </fieldset>
-        <fieldset>
+        <fieldset data-shown-by="#delivery" data-shown-for="Smtp Folder">
             <legend>Messages</legend>
             <div class="row">
                 <div class="field">
                     <label for="from">From address</label>
                     <InputText id="from" type="email" @bind-Value="Input.FromAddress" />
+                    <span class="hint">What customers see and reply to. Many providers only send from your own address.</span>
                 </div>
                 <div class="field">
                     <label for="from-name">From name <span class="muted">(optional)</span></label>
@@ -90,6 +104,7 @@
             <div class="field">
                 <label for="bcc">Send a copy to <span class="muted">(optional)</span></label>
                 <InputText id="bcc" type="email" @bind-Value="Input.BccAddress" />
+                <span class="hint">A hidden copy of every message goes here, so you have a record of what was sent.</span>
             </div>
         </fieldset>
         <button type="submit">Save</button>
@@ -99,7 +114,7 @@
     {
         <form method="post" @formname="test" @onsubmit="TestAsync" class="inline" style="margin-top: 1.5rem">
             <AntiforgeryToken />
-            <label for="test-to">Send a test message to</label>
+            <label for="test-to">Check it works: send a test message to</label>
             <input id="test-to" name="TestTo" type="email" required />
             <button type="submit" class="secondary">Send test</button>
         </form>

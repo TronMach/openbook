@@ -27,6 +27,23 @@
     }
 
     <div class="card">
+        <details class="setup-steps" open="@(!_settings.IsReady)">
+            <summary>Setting it up, step by step</summary>
+            <ol>
+                <li class="@(_settings.ProtectedSecretKey is not null ? "done" : null)">
+                    Sign in to Stripe (or open an account at stripe.com). Under <strong>Developers → API keys</strong>, copy the <strong>secret key</strong>
+                    and paste it below. A key starting <code>sk_test_</code> lets you try everything with Stripe's test cards first.
+                </li>
+                <li class="@(_settings.DepositAccountId is not null ? "done" : null)">Choose where payments go: Undeposited Funds, unless Stripe pays out to one bank account and you'd rather skip deposits.</li>
+                <li class="@(_settings.PublicUrl is not null ? "done" : null)">Enter the address customers use to reach OpenBook (the one in your browser's address bar, if they reach it the same way).</li>
+                <li class="@(_settings.ProtectedWebhookSecret is not null ? "done" : null)">
+                    So payments are recorded the moment they're made: in Stripe under <strong>Developers → Webhooks</strong>, add an endpoint with the
+                    address shown below the form, then copy its <strong>signing secret</strong> (<code>whsec_…</code>) into the form. Without it, use
+                    "Check if paid" on the invoice.
+                </li>
+                <li class="@(_settings.Enabled ? "done" : null)">Tick <strong>Take payments online</strong> and save. Invoices then get a "Pay now" link, in their emails too.</li>
+            </ol>
+        </details>
         <PostForm Action="/settings/online-payments" data-enhance="false">
             <AntiforgeryToken />
             <label class="check">

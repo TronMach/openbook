@@ -9,6 +9,12 @@
         <ActionLink Class="button secondary" Href="/purchases/approvals">Bill approvals</ActionLink>
         <ActionLink Class="button secondary" Href="/audit?entityType=purchasing_settings">History</ActionLink>
     </div>
+    <p class="muted">
+        Bills that need approval are held: they can't be paid until someone approves them on the Bill approvals page. A bill is held
+        when its total reaches the amount below, or, for a bill from a purchase order, when it doesn't match the order (more than was
+        ordered or received, or a price above the order's beyond the tolerance). The person who entered a bill can't approve it unless
+        you allow that below.
+    </p>
 
     @if (Error is not null)
     {
