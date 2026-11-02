@@ -15,12 +15,12 @@
         var fund = _summary.Fund;
         <div class="toolbar">
             <h1>@_summary.AccountName</h1>
-            <a class="button secondary" href="/banking/petty-cash">All boxes</a>
+            <ActionLink Class="button secondary" Href="/banking/petty-cash">All boxes</ActionLink>
             @if (fund.IsActive)
             {
-                <a class="button secondary" href="/banking/@fund.AccountId/record/spend">Record spending</a>
+                <ActionLink Class="button secondary" Href="@($"/banking/{fund.AccountId}/record/spend")">Record spending</ActionLink>
             }
-            <a class="button secondary" href="/banking/@fund.AccountId">Register</a>
+            <ActionLink Class="button secondary" Href="@($"/banking/{fund.AccountId}")">Register</ActionLink>
         </div>
 
         @if (Error is not null)
@@ -53,7 +53,7 @@
                     Enter what's in the box. If it differs from the books on that date, the difference posts to
                     “@PettyCashService.OverShortName” (created on first use) so the books match the box.
                 </p>
-                <form method="post" action="/banking/petty-cash/@Id/count" data-enhance="false">
+                <PostForm Action="@($"/banking/petty-cash/{Id}/count")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field">
@@ -75,13 +75,13 @@
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Record count</button></div>
-                </form>
+                </PostForm>
             </div>
 
             <div class="card">
                 <h2>Replenish</h2>
                 <p class="muted">Transfers the float less the balance on the date (@Labels.Amount(_summary.ToReplenish) today) from a bank account into the box.</p>
-                <form method="post" action="/banking/petty-cash/@Id/replenish" data-enhance="false" class="row">
+                <PostForm Action="@($"/banking/petty-cash/{Id}/replenish")" data-enhance="false" class="row">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="from">From</label>
@@ -98,7 +98,7 @@
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" disabled="@(_summary.ToReplenish <= 0m || _banks.Count == 0)">Replenish</button></div>
-                </form>
+                </PostForm>
             </div>
         }
 
@@ -140,7 +140,7 @@
 
         <div class="card">
             <h2>Settings</h2>
-            <form method="post" action="/banking/petty-cash/@Id/edit" data-enhance="false">
+            <PostForm Action="@($"/banking/petty-cash/{Id}/edit")" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -154,7 +154,7 @@
                 </div>
                 <label class="check"><input type="checkbox" name="active" value="true" checked="@fund.IsActive" /> <span>Box in use</span></label>
                 <div class="actions"><button type="submit" class="secondary">Save</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

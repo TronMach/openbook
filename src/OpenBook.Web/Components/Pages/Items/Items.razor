@@ -10,15 +10,15 @@
     <div class="toolbar">
         <h1>Products and services</h1>
         <a class="button secondary" href="@(ShowInactive ? "/items" : "/items?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
-        <a class="button secondary" href="/inventory">Inventory</a>
-        <a class="button secondary" href="/items/center">Item Center</a>
-        <a class="button secondary" href="/items/import">Import CSV</a>
-        <a class="button" href="/items/new">New item</a>
+        <ActionLink Class="button secondary" Href="/inventory">Inventory</ActionLink>
+        <ActionLink Class="button secondary" Href="/items/center">Item Center</ActionLink>
+        <ActionLink Class="button secondary" Href="/items/import">Import CSV</ActionLink>
+        <ActionLink Class="button" Href="/items/new">New item</ActionLink>
     </div>
 
     @if (_items.Count == 0)
     {
-        <div class="card"><p>Nothing yet. <a href="/items/new">Add a product or service</a> or <a href="/items/import">import a list</a>.</p></div>
+        <div class="card"><p>Nothing yet. <ActionLink Href="/items/new">Add a product or service</ActionLink> or <ActionLink Href="/items/import">import a list</ActionLink>.</p></div>
     }
     else
     {

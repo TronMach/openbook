@@ -7,8 +7,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Recurring bills"]</h1>
-        <a class="button secondary" href="/purchases">@L["Back to purchases"]</a>
-        <a class="button" href="/purchases/recurring/new">@L["New recurring bill"]</a>
+        <ActionLink Class="button secondary" Href="/purchases">@L["Back to purchases"]</ActionLink>
+        <ActionLink Class="button" Href="/purchases/recurring/new">@L["New recurring bill"]</ActionLink>
     </div>
     <p class="muted">
         Bills entered on a schedule, such as rent or a subscription. Ones set to enter automatically are entered when
@@ -37,7 +37,7 @@
 
     @if (_templates.Count == 0)
     {
-        <div class="card"><p>No recurring bills yet. <a href="/purchases/recurring/new">Set one up</a>.</p></div>
+        <div class="card"><p>No recurring bills yet. <ActionLink Href="/purchases/recurring/new">Set one up</ActionLink>.</p></div>
     }
     else
     {
@@ -57,7 +57,7 @@
                     @foreach (var t in _templates)
                     {
                         <tr class="@(t.IsActive ? null : "inactive")">
-                            <td><a href="/purchases/recurring/@t.Id">@t.Name</a></td>
+                            <td><ActionLink Href="@($"/purchases/recurring/{t.Id}")">@t.Name</ActionLink></td>
                             <td>@_vendors.GetValueOrDefault(t.VendorId)</td>
                             <td>@RecurrenceLabels.Schedule(t.Frequency, t.Interval, t.StartDate, t.EndDate, t.MaxOccurrences)</td>
                             <td class="num">@Labels.Amount(t.Lines.Sum(l => l.Amount))</td>

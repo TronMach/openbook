@@ -11,11 +11,11 @@
         <a class="button secondary" href="@(ShowInactive ? "/accounts" : "/accounts?showInactive=true")">
             @(ShowInactive ? "Hide inactive" : "Show inactive")
         </a>
-        <a class="button secondary" href="/segments">Classes and locations</a>
-        <a class="button secondary" href="/assets">Fixed assets</a>
-        <a class="button secondary" href="/loans">Loans</a>
-        <a class="button secondary" href="/accounts/import">Import CSV</a>
-        <a class="button" href="/accounts/new">New account</a>
+        <ActionLink Class="button secondary" Href="/segments">Classes and locations</ActionLink>
+        <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
+        <ActionLink Class="button secondary" Href="/loans">Loans</ActionLink>
+        <ActionLink Class="button secondary" Href="/accounts/import">Import CSV</ActionLink>
+        <ActionLink Class="button" Href="/accounts/new">New account</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -38,7 +38,7 @@
     {
         <div class="card">
             <h2>Start with a chart of accounts</h2>
-            <p class="muted">Pick a starter chart to begin with; you can change it afterwards. Or <a href="/accounts/new">add accounts one by one</a>, or <a href="/accounts/import">import your own from a CSV file</a>.</p>
+            <p class="muted">Pick a starter chart to begin with; you can change it afterwards. Or <ActionLink Href="/accounts/new">add accounts one by one</ActionLink>, or <ActionLink Href="/accounts/import">import your own from a CSV file</ActionLink>.</p>
             <form method="post" @formname="template" @onsubmit="ApplyTemplateAsync">
                 <AntiforgeryToken />
                 <div class="choices">

@@ -7,7 +7,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Billable expenses</h1>
-        <a class="button secondary" href="/sales">Back to sales</a>
+        <ActionLink Class="button secondary" Href="/sales">Back to sales</ActionLink>
     </div>
     <p class="muted">
         Costs on bills and expenses marked to be passed on to a customer. Make a line billable from its bill or expense page; add it to an
@@ -39,7 +39,7 @@
                     }
                 </tbody>
                 <tfoot>
-                    <tr><td colspan="5"><a href="/sales/invoices/new?customer=@group.Key">Invoice them</a></td><td class="num">@Labels.Amount(group.Sum(b => b.Amount))</td></tr>
+                    <tr><td colspan="5"><ActionLink Href="@($"/sales/invoices/new?customer={group.Key}")">Invoice them</ActionLink></td><td class="num">@Labels.Amount(group.Sum(b => b.Amount))</td></tr>
                 </tfoot>
             </table>
         }

@@ -13,7 +13,7 @@
         <h1>@(_selected is null ? "Webhooks" : "Webhook")</h1>
         @if (_selected is not null)
         {
-            <a href="/settings/webhooks">All webhooks</a>
+            <ActionLink Href="/settings/webhooks">All webhooks</ActionLink>
         }
     </div>
 
@@ -42,7 +42,7 @@
                     @foreach (var w in _list)
                     {
                         <tr class="@(w.IsActive ? null : "inactive")">
-                            <td><a href="/settings/webhooks/@w.Id">@w.Url</a></td>
+                            <td><ActionLink Href="@($"/settings/webhooks/{w.Id}")">@w.Url</ActionLink></td>
                             <td><code>@w.Events</code></td>
                             <td>@w.Description</td>
                             <td>@(w.IsActive ? "Active" : "Off")</td>

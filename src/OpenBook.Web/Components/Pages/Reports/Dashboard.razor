@@ -27,7 +27,7 @@
             <div class="tiles">
                 <div class="tile"><a href="/banking"><div class="label">@L["Money in the bank"]</div><div class="value">@Labels.Amount(_k.Cash)</div></a></div>
                 <div class="tile"><a href="/reports/ar-aging?asOf=@Iso(_asOf)"><div class="label">@L["Owed to you"]</div><div class="value">@Labels.Amount(_k.Receivables)</div><div class="sub">@Labels.Amount(_k.OverdueReceivables) overdue</div></a></div>
-                <div class="tile"><a href="/purchases/pay-bills"><div class="label">@L["Bills to pay"]</div><div class="value">@Labels.Amount(_k.Payables)</div><div class="sub">@Labels.Amount(_k.OverduePayables) overdue</div></a></div>
+                <div class="tile"><ActionLink Href="/purchases/pay-bills"><div class="label">@L["Bills to pay"]</div><div class="value">@Labels.Amount(_k.Payables)</div><div class="sub">@Labels.Amount(_k.OverduePayables) overdue</div></ActionLink></div>
             </div>
         }
         else if (Shown("position"))
@@ -162,7 +162,7 @@
 
         <details style="margin-top: 2rem" class="no-print">
             <summary>@L["Choose what the dashboard shows"]</summary>
-            <form method="post" action="/dashboard/panels" data-enhance="false">
+            <PostForm Action="/dashboard/panels" data-enhance="false">
                 <AntiforgeryToken />
                 @foreach (var (key, label) in Panels)
                 {
@@ -178,7 +178,7 @@
                     <label class="check"><input type="checkbox" name="show" value="@key" checked="@Show(key)" /> @label</label>
                 }
                 <div class="actions"><button type="submit" class="secondary">Save</button></div>
-            </form>
+            </PostForm>
         </details>
     }
 </div>

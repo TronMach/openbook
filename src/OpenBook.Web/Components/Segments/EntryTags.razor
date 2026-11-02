@@ -6,7 +6,7 @@
 {
     <section class="card">
         <h2>Tags</h2>
-        <form method="post" action="/segments/tags" class="tag-picker">
+        <PostForm Action="/segments/tags" class="tag-picker">
             <AntiforgeryToken />
             <input type="hidden" name="entryId" value="@EntryId" />
             <input type="hidden" name="back" value="@Navigation.ToBaseRelativePath(Navigation.Uri)" />
@@ -15,7 +15,7 @@
                 <label class="tag-option"><input type="checkbox" name="tagId" value="@tag.Segment.Id" checked="@_current.Contains(tag.Segment.Id)" /> @tag.FullName</label>
             }
             <button type="submit" class="secondary">Save tags</button>
-        </form>
+        </PostForm>
     </section>
 }
 

@@ -18,9 +18,9 @@
             <h1>@(a.Number is { } n ? $"{n} " : "")@a.Name</h1>
             @if (!a.IsDisposed)
             {
-                <a class="button secondary" href="/assets/@a.Id/edit">Edit</a>
+                <ActionLink Class="button secondary" Href="@($"/assets/{a.Id}/edit")">Edit</ActionLink>
             }
-            <a class="button secondary" href="/assets">Fixed assets</a>
+            <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -75,12 +75,12 @@
         {
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Undo the disposal</h2>
-                <form method="post" action="/assets/@a.Id/undispose" data-enhance="false">
+                <PostForm Action="@($"/assets/{a.Id}/undispose")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Undo disposal</button></div>
-                </form>
+                </PostForm>
             </div>
         }
         else
@@ -88,7 +88,7 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Sell or dispose of it</h2>
                 <p class="muted">Depreciation through the disposal date is posted with it; the cost and accumulated depreciation come off the books and the difference from what it sold for is a gain or loss.</p>
-                <form method="post" action="/assets/@a.Id/dispose" data-enhance="false">
+                <PostForm Action="@($"/assets/{a.Id}/dispose")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
@@ -106,7 +106,7 @@
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Dispose</button></div>
-                </form>
+                </PostForm>
             </div>
         }
     }

@@ -11,25 +11,17 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Purchases</h1>
-        <a class="button secondary" href="/purchases/orders">Purchase orders</a>
-        <a class="button secondary" href="/purchases/receipts">Receipts</a>
-        <a class="button secondary" href="/documents">Document inbox</a>
-        <a class="button secondary" href="/print">Print</a>
-        <AuthorizeView>
-            @if (context.User.CanReach("/purchases/approvals"))
-            {
-                <a class="button secondary" href="/purchases/approvals">Approvals</a>
-            }
-            @if (context.User.CanReach("/purchases/ach"))
-            {
-                <a class="button secondary" href="/purchases/ach">ACH payments</a>
-            }
-        </AuthorizeView>
-        <a class="button secondary" href="/vendors">Vendors</a>
-        <a class="button secondary" href="/purchases/recurring">Recurring</a>
-        <a class="button secondary" href="/purchases/vendor-credits/new">Vendor credit</a>
-        <a class="button secondary" href="/purchases/pay-bills">Pay bills</a>
-        <a class="button" href="/purchases/bills/new">New bill</a>
+        <ActionLink Class="button secondary" Href="/purchases/orders">Purchase orders</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/receipts">Receipts</ActionLink>
+        <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
+        <ActionLink Class="button secondary" Href="/print">Print</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/approvals">Approvals</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/ach">ACH payments</ActionLink>
+        <ActionLink Class="button secondary" Href="/vendors">Vendors</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/recurring">Recurring</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/vendor-credits/new">Vendor credit</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/pay-bills">Pay bills</ActionLink>
+        <ActionLink Class="button" Href="/purchases/bills/new">New bill</ActionLink>
     </div>
 
     <div class="summary-bar">
@@ -44,7 +36,7 @@
             Paid on the spot? Record an expense from
             @foreach (var (account, i) in _bankAccounts.Select((a, i) => (a, i)))
             {
-                @(i > 0 ? ", " : "")<a href="/banking/@account.Account.Id/record/spend">@account.FullName</a>
+                @(i > 0 ? ", " : "")<ActionLink Href="@($"/banking/{account.Account.Id}/record/spend")">@account.FullName</ActionLink>
             }.
         </p>
     }
@@ -61,7 +53,7 @@
         case "credits":
             @if (_credits.Count == 0)
             {
-                <div class="card"><p>No vendor credits. <a href="/purchases/vendor-credits/new">Enter one</a>.</p></div>
+                <div class="card"><p>No vendor credits. <ActionLink Href="/purchases/vendor-credits/new">Enter one</ActionLink>.</p></div>
             }
             else
             {
@@ -122,7 +114,7 @@
             var shown = Show == "all-bills" ? _bills : _bills.Where(b => b.IsOpen).OrderBy(b => b.DueDate).ToList();
             @if (shown.Count == 0)
             {
-                <div class="card"><p>@(Show == "all-bills" ? "No bills yet." : "Nothing unpaid.") <a href="/purchases/bills/new">Enter a bill</a>.</p></div>
+                <div class="card"><p>@(Show == "all-bills" ? "No bills yet." : "Nothing unpaid.") <ActionLink Href="/purchases/bills/new">Enter a bill</ActionLink>.</p></div>
             }
             else
             {

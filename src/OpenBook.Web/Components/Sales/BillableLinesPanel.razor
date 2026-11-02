@@ -40,16 +40,16 @@
                                 }
                                 else
                                 {
-                                    <form method="post" action="/sales/billable/@b.Id/remove" data-enhance="false" class="inline">
+                                    <PostForm Action="@($"/sales/billable/{b.Id}/remove")" data-enhance="false" class="inline">
                                         <AntiforgeryToken />
                                         <input type="hidden" name="back" value="@Back" />
                                         <button type="submit" class="secondary">@(b.IsBillable ? "Not billable" : "Remove")</button>
-                                    </form>
+                                    </PostForm>
                                 }
                             }
                             else if (Active)
                             {
-                                <form method="post" action="/sales/billable" data-enhance="false" class="inline">
+                                <PostForm Action="/sales/billable" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
                                     <input type="hidden" name="kind" value="@Kind" />
                                     <input type="hidden" name="documentId" value="@DocumentId" />
@@ -65,7 +65,7 @@
                                     <input name="markup" class="short" inputmode="decimal" placeholder="0" aria-label="Markup percent" /> <span>% markup</span>
                                     <label class="inline"><input type="checkbox" name="billable" value="true" checked /> Bill it</label>
                                     <button type="submit" class="secondary">Mark</button>
-                                </form>
+                                </PostForm>
                             }
                         </td>
                     </tr>

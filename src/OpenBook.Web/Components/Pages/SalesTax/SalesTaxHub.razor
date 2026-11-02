@@ -8,8 +8,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Sales tax</h1>
-        <a class="button secondary" href="/reports/sales-tax">Liability report</a>
-        <a class="button" href="/sales-tax/pay">Pay sales tax</a>
+        <ActionLink Class="button secondary" Href="/reports/sales-tax">Liability report</ActionLink>
+        <ActionLink Class="button" Href="/sales-tax/pay">Pay sales tax</ActionLink>
     </div>
     @if (Welcome)
     {
@@ -28,11 +28,11 @@
     <section class="card">
         <div class="toolbar">
             <h2>Agencies</h2>
-            <a class="button secondary" href="/sales-tax/agencies/new">New agency</a>
+            <ActionLink Class="button secondary" Href="/sales-tax/agencies/new">New agency</ActionLink>
         </div>
         @if (_agencies.Count == 0)
         {
-            <p>No agencies yet. Start by <a href="/sales-tax/agencies/new">adding the agency you file with</a>, such as your state's department of revenue.</p>
+            <p>No agencies yet. Start by <ActionLink Href="/sales-tax/agencies/new">adding the agency you file with</ActionLink>, such as your state's department of revenue.</p>
         }
         else
         {
@@ -54,7 +54,7 @@
                                 <td>
                                     @if (_owed.GetValueOrDefault(a.Id) > 0m)
                                     {
-                                        <a class="button secondary" href="/sales-tax/pay?agency=@a.Id">Pay</a>
+                                        <ActionLink Class="button secondary" Href="@($"/sales-tax/pay?agency={a.Id}")">Pay</ActionLink>
                                     }
                                 </td>
                             </tr>
@@ -71,7 +71,7 @@
                 <h2>Rates</h2>
                 @if (_agencies.Any(a => a.IsActive))
                 {
-                    <a class="button secondary" href="/sales-tax/rates/new">New rate</a>
+                    <ActionLink Class="button secondary" Href="/sales-tax/rates/new">New rate</ActionLink>
                 }
             </div>
             @if (_rates.Count == 0)
@@ -101,7 +101,7 @@
                 <h2>Tax codes</h2>
                 @if (_rates.Any(r => r.IsActive))
                 {
-                    <a class="button secondary" href="/sales-tax/codes/new">New code</a>
+                    <ActionLink Class="button secondary" Href="/sales-tax/codes/new">New code</ActionLink>
                 }
             </div>
             @if (_codes.Count == 0)

@@ -14,7 +14,7 @@
     {
         <div class="toolbar">
             <h1>@_loan.Name</h1>
-            <a class="button secondary" href="/loans">Loans</a>
+            <ActionLink Class="button secondary" Href="/loans">Loans</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -32,7 +32,7 @@
         {
             <div class="card">
                 <h2>Record a payment</h2>
-                <form method="post" action="/loans/@_loan.Id/pay" data-enhance="false">
+                <PostForm Action="@($"/loans/{_loan.Id}/pay")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@(_remaining.Count > 0 ? _remaining[0].Date.ToString("yyyy-MM-dd") : CompanyTime.Today.ToString("yyyy-MM-dd"))" /></div>
@@ -50,7 +50,7 @@
                     <p class="hint">Interest is a month on the balance owed; anything above the interest pays down the loan.</p>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Record payment</button></div>
-                </form>
+                </PostForm>
             </div>
         }
 
@@ -74,11 +74,11 @@
                                 }
                                 else if (_loan.LatestPayment?.Id == p.Id)
                                 {
-                                    <form method="post" action="/loans/@_loan.Id/payments/@p.Id/void" data-enhance="false" class="inline">
+                                    <PostForm Action="@($"/loans/{_loan.Id}/payments/{p.Id}/void")" data-enhance="false" class="inline">
                                         <AntiforgeryToken />
                                         <input name="reason" required placeholder="Reason" aria-label="Reason" maxlength="500" />
                                         <button type="submit" class="secondary">Void</button>
-                                    </form>
+                                    </PostForm>
                                 }
                             </td>
                         </tr>

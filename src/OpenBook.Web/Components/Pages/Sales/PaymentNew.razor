@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Receive payment</h1>
-        <a class="button secondary" href="/sales">Back to sales</a>
+        <ActionLink Class="button secondary" Href="/sales">Back to sales</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -27,7 +27,7 @@
                     {
                         <span class="hint">
                             This customer has @Labels.Amount(_credits.Sum(c => c.Available)) of unused credit.
-                            <a href="/sales/credits/apply?customer=@_customerId">Apply it to invoices</a> instead of, or as well as, a payment.
+                            <ActionLink Href="@($"/sales/credits/apply?customer={_customerId}")">Apply it to invoices</ActionLink> instead of, or as well as, a payment.
                         </span>
                     }
                 </div>

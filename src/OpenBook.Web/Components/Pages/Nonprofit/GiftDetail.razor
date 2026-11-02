@@ -28,9 +28,9 @@
             {
                 <a class="button secondary" href="/nonprofit/gifts/@_gift.Id/letter" target="_blank">Acknowledgment (PDF)</a>
             }
-            <a class="button secondary" href="/journal/@_gift.JournalEntryId">Journal entry</a>
-            <a class="button secondary" href="/audit?entityId=@_gift.Id">History</a>
-            <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+            <ActionLink Class="button secondary" Href="@($"/journal/{_gift.JournalEntryId}")">Journal entry</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_gift.Id}")">History</ActionLink>
+            <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -74,7 +74,7 @@
         {
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Send the acknowledgment</h2>
-                <form method="post" action="/nonprofit/gifts/@_gift.Id/email" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/email")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field"><label for="to">To</label><input id="to" name="to" type="email" value="@_draft?.To" required /></div>
@@ -82,27 +82,27 @@
                     </div>
                     <div class="field"><label for="body">Message</label><textarea id="body" name="body" rows="5">@_draft?.Body</textarea></div>
                     <div class="actions"><button type="submit">Email the letter</button></div>
-                </form>
+                </PostForm>
                 @if (_gift.AcknowledgedAt is null)
                 {
-                    <form method="post" action="/nonprofit/thanks/mark" data-enhance="false" style="margin-top: 0.75rem">
+                    <PostForm Action="/nonprofit/thanks/mark" data-enhance="false" style="margin-top: 0.75rem">
                         <AntiforgeryToken />
                         <input type="hidden" name="id" value="@_gift.Id" />
                         <input type="hidden" name="back" value="/nonprofit/gifts/@_gift.Id" />
                         <button type="submit" class="secondary">Mark as thanked (printed or sent another way)</button>
-                    </form>
+                    </PostForm>
                 }
             </div>
 
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>
                 <p class="muted">Takes the gift out of the books on its date@(_gift.PledgeId is null ? "" : ", and puts it back on the pledge").</p>
-                <form method="post" action="/nonprofit/gifts/@_gift.Id/void" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/void")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Void</button></div>
-                </form>
+                </PostForm>
             </div>
         }
     }

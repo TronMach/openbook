@@ -32,7 +32,7 @@
     }
     @if (_incomeAccounts.Count == 0)
     {
-        <div class="alert error" role="alert">There are no income accounts yet. <a href="/accounts/new">Add one</a> first.</div>
+        <div class="alert error" role="alert">There are no income accounts yet. <ActionLink Href="/accounts/new">Add one</ActionLink> first.</div>
     }
 
     <EditForm Model="Input" FormName="item" OnValidSubmit="SaveAsync" method="post">
@@ -157,7 +157,7 @@
             Volume pricing on automatically priced lines, by this item's total quantity on the document (all its lines together). Applied after
             the customer's price level; a unit price break never raises the price.
         </p>
-        <form method="post" action="/pricing/items/@_item.Id/breaks">
+        <PostForm Action="@($"/pricing/items/{_item.Id}/breaks")">
             <AntiforgeryToken />
             <table class="data entry">
                 <thead><tr><th class="num">From quantity</th><th>Break</th><th class="num">Percent off or unit price</th></tr></thead>
@@ -181,7 +181,7 @@
                 </tbody>
             </table>
             <div class="actions"><button type="submit" class="secondary">Save quantity breaks</button></div>
-        </form>
+        </PostForm>
     </div>
 }
 
@@ -192,7 +192,7 @@
             <h2>@(_item.IsAssembly ? "Bill of materials" : "Bundle contents")</h2>
             @if (_item.IsAssembly)
             {
-                <a href="/inventory/builds/new?item=@_item.Id">Build</a>
+                <ActionLink Href="@($"/inventory/builds/new?item={_item.Id}")">Build</ActionLink>
             }
         </div>
         @if (ComponentError is not null)
@@ -214,7 +214,7 @@
                     A bundle keeps no stock of its own: for kits you keep pre-packed on the shelf, make an assembly instead (it can build itself when a sale is short).</span>
             }
         </p>
-        <form method="post" action="/items/@_item.Id/components" data-enhance="false">
+        <PostForm Action="@($"/items/{_item.Id}/components")" data-enhance="false">
             <AntiforgeryToken />
             <table class="data entry">
                 <thead><tr><th>Item</th><th class="num">Quantity per unit</th></tr></thead>
@@ -238,7 +238,7 @@
                 </tbody>
             </table>
             <div class="actions"><button type="submit" class="secondary">Save components</button></div>
-        </form>
+        </PostForm>
     </div>
 }
 
@@ -247,7 +247,7 @@
     <div class="card">
         <div class="toolbar">
             <h2>Stock</h2>
-            <a href="/inventory/adjustments/new?item=@_item.Id">Adjust quantity</a>
+            <ActionLink Href="@($"/inventory/adjustments/new?item={_item.Id}")">Adjust quantity</ActionLink>
             <a href="/reports/inventory-valuation?detail=true">Valuation</a>
         </div>
         <p>
@@ -281,7 +281,7 @@
                     }
                 </tbody>
             </table>
-            <p><a href="/inventory/transfers/new?item=@_item.Id">Transfer stock</a></p>
+            <p><ActionLink Href="@($"/inventory/transfers/new?item={_item.Id}")">Transfer stock</ActionLink></p>
         }
         @if (_item.Tracking == ItemTracking.Lot && _byPlace.Any(p => p.Lot is not null))
         {
@@ -305,7 +305,7 @@
                             <td>@lot.Key</td>
                             <td class="num">@Labels.Quantity(lot.Sum(p => p.Quantity))</td>
                             <td>
-                                <form method="post" action="/items/@_item.Id/lots/expiry" data-enhance="false" class="inline">
+                                <PostForm Action="@($"/items/{_item.Id}/lots/expiry")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
                                     <input type="hidden" name="lot" value="@lot.Key" />
                                     <input type="date" name="expiresOn" value="@expires?.ToString("yyyy-MM-dd")" aria-label="Expiry of lot @lot.Key" />
@@ -314,7 +314,7 @@
                                     {
                                         <span class="badge warn">Expired</span>
                                     }
-                                </form>
+                                </PostForm>
                             </td>
                         </tr>
                     }
@@ -323,7 +323,7 @@
         }
         @if (_movements.Count == 0)
         {
-            <p class="muted">No stock yet. Enter a bill with this item, or <a href="/inventory/adjustments/new?item=@_item.Id">add starting stock</a>.</p>
+            <p class="muted">No stock yet. Enter a bill with this item, or <ActionLink Href="@($"/inventory/adjustments/new?item={_item.Id}")">add starting stock</ActionLink>.</p>
         }
         else
         {

@@ -19,10 +19,10 @@
             </div>
             <button type="submit" class="secondary">Filter</button>
         </form>
-        <a class="button secondary" href="/journal/recurring">Recurring</a>
-        <a class="button secondary" href="/journal/opening-balances">Opening balances</a>
-        <a class="button secondary" href="/journal/import">Import</a>
-        <a class="button" href="/journal/new">New entry</a>
+        <ActionLink Class="button secondary" Href="/journal/recurring">Recurring</ActionLink>
+        <ActionLink Class="button secondary" Href="/journal/opening-balances">Opening balances</ActionLink>
+        <ActionLink Class="button secondary" Href="/journal/import">Import</ActionLink>
+        <ActionLink Class="button" Href="/journal/new">New entry</ActionLink>
     </div>
 
     @if (_entries.Count == 0)
@@ -30,7 +30,7 @@
         <div class="card">
             <p>
                 @(From is null && To is null ? "No journal entries yet." : "No entries in that date range.")
-                <a href="/journal/new">Record one</a>.
+                <ActionLink Href="/journal/new">Record one</ActionLink>.
             </p>
         </div>
     }

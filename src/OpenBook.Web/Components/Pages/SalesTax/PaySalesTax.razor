@@ -11,7 +11,7 @@
 <div class="card">
     <div class="toolbar">
         <h1>Pay sales tax</h1>
-        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        <ActionLink Class="button secondary" Href="/sales-tax">Back to sales tax</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -21,11 +21,11 @@
 
     @if (_agencies.Count == 0)
     {
-        <p>There are no tax agencies yet. <a href="/sales-tax/agencies/new">Add one</a> first.</p>
+        <p>There are no tax agencies yet. <ActionLink Href="/sales-tax/agencies/new">Add one</ActionLink> first.</p>
     }
     else if (_payFrom.Count == 0)
     {
-        <p>Sales tax is paid from a bank or credit card account. <a href="/accounts/new">Add one</a> first.</p>
+        <p>Sales tax is paid from a bank or credit card account. <ActionLink Href="/accounts/new">Add one</ActionLink> first.</p>
     }
     else
     {

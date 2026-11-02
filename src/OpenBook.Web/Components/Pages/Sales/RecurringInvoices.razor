@@ -7,8 +7,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Recurring invoices"]</h1>
-        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
-        <a class="button" href="/sales/recurring/new">@L["New recurring invoice"]</a>
+        <ActionLink Class="button secondary" Href="/sales">@L["Back to sales"]</ActionLink>
+        <ActionLink Class="button" Href="/sales/recurring/new">@L["New recurring invoice"]</ActionLink>
     </div>
     <p class="muted">
         Invoices created on a schedule, such as a monthly retainer. Ones set to create automatically are created (and
@@ -45,7 +45,7 @@
 
     @if (_templates.Count == 0)
     {
-        <div class="card"><p>No recurring invoices yet. <a href="/sales/recurring/new">Set one up</a>.</p></div>
+        <div class="card"><p>No recurring invoices yet. <ActionLink Href="/sales/recurring/new">Set one up</ActionLink>.</p></div>
     }
     else
     {
@@ -67,7 +67,7 @@
                     @foreach (var template in _templates)
                     {
                         <tr class="@(template.IsActive ? null : "inactive")">
-                            <td><a href="/sales/recurring/@template.Id">@template.Name</a></td>
+                            <td><ActionLink Href="@($"/sales/recurring/{template.Id}")">@template.Name</ActionLink></td>
                             <td>@_customers.GetValueOrDefault(template.CustomerId)</td>
                             <td>@RecurrenceLabels.Schedule(template.Frequency, template.Interval, template.StartDate, template.EndDate, template.MaxOccurrences)</td>
                             <td>

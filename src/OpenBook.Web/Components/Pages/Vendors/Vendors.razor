@@ -8,14 +8,14 @@
     <div class="toolbar">
         <h1>Vendors</h1>
         <a class="button secondary" href="@(ShowInactive ? "/vendors" : "/vendors?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
-        <a class="button secondary" href="/vendors/center">Vendor Center</a>
-        <a class="button secondary" href="/vendors/import">Import CSV</a>
-        <a class="button" href="/vendors/new">New vendor</a>
+        <ActionLink Class="button secondary" Href="/vendors/center">Vendor Center</ActionLink>
+        <ActionLink Class="button secondary" Href="/vendors/import">Import CSV</ActionLink>
+        <ActionLink Class="button" Href="/vendors/new">New vendor</ActionLink>
     </div>
 
     @if (_vendors.Count == 0)
     {
-        <div class="card"><p>No vendors yet. <a href="/vendors/new">Add one</a> or <a href="/vendors/import">import a list</a>.</p></div>
+        <div class="card"><p>No vendors yet. <ActionLink Href="/vendors/new">Add one</ActionLink> or <ActionLink Href="/vendors/import">import a list</ActionLink>.</p></div>
     }
     else
     {

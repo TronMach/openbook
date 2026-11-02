@@ -8,19 +8,19 @@
     @if (_connection is null)
     {
         <h1>Bank connection</h1>
-        <p>That connection doesn't exist. <a href="/banking/connections">Back to bank connections</a></p>
+        <p>That connection doesn't exist. <ActionLink Href="/banking/connections">Back to bank connections</ActionLink></p>
     }
     else
     {
         <div class="toolbar">
             <h1>@_connection.Name</h1>
-            <a class="button secondary" href="/banking/connections">All connections</a>
+            <ActionLink Class="button secondary" Href="/banking/connections">All connections</ActionLink>
             @if (_connection.IsActive)
             {
-                <form method="post" action="/banking/connections/@Id/sync" data-enhance="false">
+                <PostForm Action="@($"/banking/connections/{Id}/sync")" data-enhance="false">
                     <AntiforgeryToken />
                     <button type="submit">Sync now</button>
-                </form>
+                </PostForm>
             }
         </div>
 
@@ -97,17 +97,17 @@
                                     }
                                     @if (remote.AccountId is { } linked)
                                     {
-                                        <div><a href="/banking/@linked/feed">Review feed</a></div>
+                                        <div><ActionLink Href="@($"/banking/{linked}/feed")">Review feed</ActionLink></div>
                                     }
                                 </td>
                                 <td>
                                     @if (_connection.IsActive)
                                     {
-                                        <form id="@formId" method="post" action="/banking/connections/@Id/link" data-enhance="false">
+                                        <PostForm id="@formId" Action="@($"/banking/connections/{Id}/link")" data-enhance="false">
                                             <AntiforgeryToken />
                                             <input type="hidden" name="remoteId" value="@remote.RemoteId" />
                                             <button type="submit" class="secondary">Save</button>
-                                        </form>
+                                        </PostForm>
                                     }
                                 </td>
                             </tr>
@@ -121,20 +121,19 @@
         {
             <div class="card">
                 <h2>Settings</h2>
-                <form method="post" action="/banking/connections/@Id/rename" data-enhance="false" class="row">
+                <PostForm Action="@($"/banking/connections/{Id}/rename")" data-enhance="false" class="row">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="name">Name</label>
                         <input id="name" name="name" value="@_connection.Name" maxlength="100" required />
                     </div>
                     <div class="actions"><button type="submit" class="secondary">Rename</button></div>
-                </form>
-                <form method="post" action="/banking/connections/@Id/disconnect" data-enhance="false"
-                      onsubmit="return confirm('Disconnect? OpenBook forgets the key and stops fetching. Transactions already fetched stay in the bank feed.')">
+                </PostForm>
+                <PostForm Action="@($"/banking/connections/{Id}/disconnect")" data-enhance="false" onsubmit="return confirm('Disconnect? OpenBook forgets the key and stops fetching. Transactions already fetched stay in the bank feed.')">
                     <AntiforgeryToken />
                     <p class="muted">Disconnecting forgets the access key. Also remove OpenBook's access in SimpleFIN Bridge.</p>
                     <button type="submit" class="danger">Disconnect</button>
-                </form>
+                </PostForm>
             </div>
         }
     }

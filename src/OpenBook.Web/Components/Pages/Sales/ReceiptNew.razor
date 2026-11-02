@@ -8,9 +8,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>New sales receipt</h1>
-        <a class="button secondary" href="/sales?show=receipts">Back to sales receipts</a>
+        <ActionLink Class="button secondary" Href="/sales?show=receipts">Back to sales receipts</ActionLink>
     </div>
-    <p class="muted">For sales paid on the spot. To bill now and be paid later, <a href="/sales/invoices/new">create an invoice</a> instead.</p>
+    <p class="muted">For sales paid on the spot. To bill now and be paid later, <ActionLink Href="/sales/invoices/new">create an invoice</ActionLink> instead.</p>
 
     @if (_error is not null)
     {
@@ -19,7 +19,7 @@
 
     @if (_loaded && _items.Count == 0)
     {
-        <div class="card"><p>Add a <a href="/items/new">product or service</a> first.</p></div>
+        <div class="card"><p>Add a <ActionLink Href="/items/new">product or service</ActionLink> first.</p></div>
     }
     else if (_loaded)
     {

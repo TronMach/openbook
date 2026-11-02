@@ -9,14 +9,14 @@
     <div class="toolbar">
         <h1>@_terms.Customers</h1>
         <a class="button secondary" href="@(ShowInactive ? "/customers" : "/customers?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
-        <a class="button secondary" href="/customers/center">@_terms.Customer Center</a>
-        <a class="button secondary" href="/customers/import">Import CSV</a>
-        <a class="button" href="/customers/new">New @_terms.LowerCustomer</a>
+        <ActionLink Class="button secondary" Href="/customers/center">@_terms.Customer Center</ActionLink>
+        <ActionLink Class="button secondary" Href="/customers/import">Import CSV</ActionLink>
+        <ActionLink Class="button" Href="/customers/new">New @_terms.LowerCustomer</ActionLink>
     </div>
 
     @if (_customers.Count == 0)
     {
-        <div class="card"><p>No @_terms.LowerCustomers yet. <a href="/customers/new">Add one</a> or <a href="/customers/import">import a list</a>.</p></div>
+        <div class="card"><p>No @_terms.LowerCustomers yet. <ActionLink Href="/customers/new">Add one</ActionLink> or <ActionLink Href="/customers/import">import a list</ActionLink>.</p></div>
     }
     else
     {

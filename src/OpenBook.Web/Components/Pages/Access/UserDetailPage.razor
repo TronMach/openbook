@@ -15,7 +15,7 @@
     {
         <div class="toolbar">
             <h1>@_user.Username</h1>
-            <a href="/settings/users">@L["Users"]</a>
+            <ActionLink Href="/settings/users">@L["Users"]</ActionLink>
         </div>
         <p class="muted">
             @AccessMiddleware.Describe(_user.Role) · @(_user.IsActive ? L["Active"] : L["Inactive"]) ·

@@ -15,8 +15,8 @@
     {
         <div class="toolbar">
             <h1>@_channel.Name · @_payout.ExternalId</h1>
-            <a class="button secondary" href="/sales/channels/@_channel.Id">@L["Back to the channel"]</a>
-            <a class="button secondary" href="/audit?entityId=@_payout.Id">@L["History"]</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/channels/{_channel.Id}")">@L["Back to the channel"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_payout.Id}")">@L["History"]</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -68,30 +68,30 @@
             <div class="actions">
                 @if (_payout.Status == PayoutStatus.Pending)
                 {
-                    <form method="post" action="/sales/channels/payouts/@_payout.Id/post" data-enhance="false" class="inline">
+                    <PostForm Action="@($"/sales/channels/payouts/{_payout.Id}/post")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
                         <button type="submit" disabled="@(_payout.Difference != 0m)">@L["Post payout"]</button>
-                    </form>
-                    <form method="post" action="/sales/channels/payouts/@_payout.Id/dismiss" data-enhance="false" class="inline">
+                    </PostForm>
+                    <PostForm Action="@($"/sales/channels/payouts/{_payout.Id}/dismiss")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
                         <button type="submit" class="secondary">@L["Dismiss"]</button>
-                    </form>
+                    </PostForm>
                 }
                 else if (_payout.Status == PayoutStatus.Dismissed)
                 {
-                    <form method="post" action="/sales/channels/payouts/@_payout.Id/dismiss" data-enhance="false" class="inline">
+                    <PostForm Action="@($"/sales/channels/payouts/{_payout.Id}/dismiss")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
                         <input type="hidden" name="restore" value="true" />
                         <button type="submit" class="secondary">@L["Restore"]</button>
-                    </form>
+                    </PostForm>
                 }
                 else
                 {
-                    <form method="post" action="/sales/channels/payouts/@_payout.Id/void" data-enhance="false" class="inline">
+                    <PostForm Action="@($"/sales/channels/payouts/{_payout.Id}/void")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
                         <input name="reason" placeholder="Reason for voiding" maxlength="500" />
                         <button type="submit" class="danger">@L["Void the entry"]</button>
-                    </form>
+                    </PostForm>
                 }
             </div>
         </div>

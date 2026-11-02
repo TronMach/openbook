@@ -43,7 +43,7 @@ else
         A complete copy of your company file: every transaction, setting and the audit log. It's a standard
         SQLite database, so any SQLite tool can open it. Keep copies somewhere other than this computer.
     </p>
-    <a class="button" href="/backup/download">Download backup</a>
+    <ActionLink Class="button" Href="/backup/download">Download backup</ActionLink>
 </div>
 
 <div class="card">
@@ -79,7 +79,7 @@ else
         </p>
     }
 
-    <form method="post" action="/backup/schedule">
+    <PostForm Action="/backup/schedule">
         <AntiforgeryToken />
         <label class="check"><input type="checkbox" name="enabled" value="true" checked="@_schedule.Enabled" /> <span>Back up automatically</span></label>
         <div class="row">
@@ -162,13 +162,13 @@ else
         <div class="actions">
             <button type="submit">Save schedule</button>
         </div>
-    </form>
+    </PostForm>
     @if (_schedule.LastAttemptAt is not null || _schedule.FolderPath is not null || _schedule.Bucket is not null)
     {
-        <form method="post" action="/backup/schedule/run" style="margin-top: 0.75rem">
+        <PostForm Action="/backup/schedule/run" style="margin-top: 0.75rem">
             <AntiforgeryToken />
             <button type="submit" class="secondary">Back up now</button>
-        </form>
+        </PostForm>
     }
 </div>
 }
@@ -180,7 +180,7 @@ else
         and a README that explains each file and column. Works with SQLite and PostgreSQL. Passwords, API keys, secrets and full tax IDs
         are left out.
     </p>
-    <a class="button secondary" href="/export/download">Download export (ZIP)</a>
+    <ActionLink Class="button secondary" Href="/export/download">Download export (ZIP)</ActionLink>
 </div>
 
 @if (Storage.Provider != DatabaseProvider.Postgres)
@@ -197,7 +197,7 @@ else
         <div class="alert error" role="alert">@Message(Error)</div>
     }
 
-    <form method="post" action="/backup/restore" enctype="multipart/form-data">
+    <PostForm Action="/backup/restore" enctype="multipart/form-data">
         <AntiforgeryToken />
         <div class="field">
             <label for="file">Backup file</label>
@@ -213,7 +213,7 @@ else
             <span>I understand that restoring replaces all current data.</span>
         </label>
         <button type="submit" class="danger">Restore backup</button>
-    </form>
+    </PostForm>
 </div>
 }
 

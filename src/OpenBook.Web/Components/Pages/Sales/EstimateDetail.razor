@@ -22,14 +22,14 @@
         <span class="badge @(_estimate.Status == EstimateStatus.Accepted ? "ok" : _estimate.IsExpired(today) || _estimate.Status == EstimateStatus.Declined ? "warn" : null)">
             @(_estimate.IsExpired(today) ? "Expired" : Labels.For(_estimate.Status))
         </span>
-        <a class="button secondary" href="/sales?show=estimates">Back to estimates</a>
+        <ActionLink Class="button secondary" Href="/sales?show=estimates">Back to estimates</ActionLink>
         <a class="button secondary" href="/api/sales/estimates/@_estimate.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Estimate" Id="_estimate.Id" PdfUrl="@($"/api/sales/estimates/{_estimate.Id}/pdf")" />
-        <a class="button secondary" href="/sales/email/estimates/@_estimate.Id">Email</a>
-        <a class="button secondary" href="/audit?entityId=@_estimate.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/sales/email/estimates/{_estimate.Id}")">Email</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_estimate.Id}")">History</ActionLink>
         @if (_estimate.Status != EstimateStatus.Closed && !_progress.Started)
         {
-            <a class="button secondary" href="/sales/estimates/@_estimate.Id/edit">Edit</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/estimates/{_estimate.Id}/edit")">Edit</ActionLink>
         }
     </div>
 

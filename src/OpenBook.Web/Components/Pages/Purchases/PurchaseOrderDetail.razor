@@ -21,13 +21,13 @@
     <div class="toolbar">
         <h1>Purchase order @_order.Number</h1>
         <span class="badge @(_order.Status == PurchaseOrderStatus.Closed ? "ok" : null)">@_order.Status</span>
-        <a class="button secondary" href="/purchases/orders">Back to purchase orders</a>
-        <a class="button secondary" href="/audit?entityId=@_order.Id">History</a>
+        <ActionLink Class="button secondary" Href="/purchases/orders">Back to purchase orders</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_order.Id}")">History</ActionLink>
         <a class="button secondary" href="/purchases/orders/@_order.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.PurchaseOrder" Id="_order.Id" PdfUrl="@($"/purchases/orders/{_order.Id}/pdf")" />
         @if (open && !_progress.Started && !anyReceived)
         {
-            <a class="button secondary" href="/purchases/orders/@_order.Id/edit">Edit</a>
+            <ActionLink Class="button secondary" Href="@($"/purchases/orders/{_order.Id}/edit")">Edit</ActionLink>
         }
     </div>
 
@@ -47,7 +47,7 @@
     {
         <details class="card">
             <summary>Email to the vendor</summary>
-            <form method="post" action="/purchases/orders/@_order.Id/email" data-enhance="false">
+            <PostForm Action="@($"/purchases/orders/{_order.Id}/email")" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field"><label for="po-to">To</label><input id="po-to" name="to" type="email" value="@_draft.To" required /></div>
@@ -55,7 +55,7 @@
                 </div>
                 <div class="field"><label for="po-body">Message</label><textarea id="po-body" name="body" rows="4">@_draft.Body</textarea></div>
                 <div class="actions"><button type="submit">Send with the PDF</button></div>
-            </form>
+            </PostForm>
         </details>
     }
 
@@ -112,10 +112,10 @@
                         <td>
                             @if (!voided && open)
                             {
-                                <form method="post" action="/purchases/orders/@_order.Id/receipts/@group.Key/void" data-enhance="false" class="inline">
+                                <PostForm Action="@($"/purchases/orders/{_order.Id}/receipts/{group.Key}/void")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
                                     <button type="submit" class="secondary">Take back</button>
-                                </form>
+                                </PostForm>
                             }
                         </td>
                     </tr>
@@ -148,7 +148,7 @@
         <div class="card" style="margin-top: 1.5rem" id="receive">
             <h2>Receive goods</h2>
             <p class="muted">Record what arrived, to match against the vendor's bill. Stock goes into the books when the bill is entered.</p>
-            <form method="post" action="/purchases/orders/@_order.Id/receive" data-enhance="false">
+            <PostForm Action="@($"/purchases/orders/{_order.Id}/receive")" data-enhance="false">
                 <AntiforgeryToken />
                 <table class="data">
                     <thead><tr><th>Item</th><th class="num">Still to come</th><th class="num">Arrived now</th></tr></thead>
@@ -168,7 +168,7 @@
                     <div class="field"><label for="receive-note">Note <span class="muted">(optional)</span></label><input id="receive-note" name="note" maxlength="500" placeholder="Packing slip number" /></div>
                 </div>
                 <div class="actions"><button type="submit">Record receipt</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 
@@ -180,7 +180,7 @@
                 Filled in with @(anyReceived ? "what's been received and not billed yet" : "everything still to bill"); change the quantities and the vendor's
                 costs to match their invoice. @MatchRule()
             </p>
-            <form method="post" action="/purchases/orders/@_order.Id/bill" data-enhance="false">
+            <PostForm Action="@($"/purchases/orders/{_order.Id}/bill")" data-enhance="false">
                 <AntiforgeryToken />
                 <table class="data">
                     <thead><tr><th>Line</th><th class="num">Quantity</th><th class="num">Their unit cost / amount</th></tr></thead>
@@ -210,13 +210,13 @@
                 </div>
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <div class="actions"><button type="submit">Enter bill</button></div>
-            </form>
+            </PostForm>
         </div>
 
-        <form method="post" action="/purchases/orders/@_order.Id/cancel" data-enhance="false" class="actions">
+        <PostForm Action="@($"/purchases/orders/{_order.Id}/cancel")" data-enhance="false" class="actions">
             <AntiforgeryToken />
             <button type="submit" class="secondary">Cancel the rest of the order</button>
-        </form>
+        </PostForm>
     }
 
     <Attachments EntityType="purchase_order" EntityId="_order.Id" />

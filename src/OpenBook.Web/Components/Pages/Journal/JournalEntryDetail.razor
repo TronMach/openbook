@@ -20,9 +20,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Journal entry @_entry.Number</h1>
-        <a class="button secondary" href="/audit?entityId=@_entry.Id">History</a>
-        <a class="button secondary" href="/journal">Back to journal</a>
-        <a class="button" href="/journal/new">New entry</a>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_entry.Id}")">History</ActionLink>
+        <ActionLink Class="button secondary" Href="/journal">Back to journal</ActionLink>
+        <ActionLink Class="button" Href="/journal/new">New entry</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -104,16 +104,16 @@
     }
     @if (_entry.Source == JournalEntry.RecurringSource && _entry.SourceId is { } templateId)
     {
-        <div class="alert notice" role="status">Posted from a <a href="/journal/recurring/@templateId">recurring entry</a>.</div>
+        <div class="alert notice" role="status">Posted from a <ActionLink Href="@($"/journal/recurring/{templateId}")">recurring entry</ActionLink>.</div>
     }
     @if (_entry.Source == JournalEntry.OpeningBalanceSource)
     {
-        <div class="alert notice" role="status">Opening balances. <a href="/journal/opening-balances">Enter more opening balances</a>.</div>
+        <div class="alert notice" role="status">Opening balances. <ActionLink Href="/journal/opening-balances">Enter more opening balances</ActionLink>.</div>
     }
 
     @if (JournalEntry.IsJournalSource(_entry.Source) && _entry.Source != JournalEntry.AutoReversalSource && _entry.Kind == JournalEntryKind.Standard)
     {
-        <form method="post" action="/journal/@_entry.Id/adjusting" data-enhance="false" class="inline no-print" style="margin-top: 1rem">
+        <PostForm Action="@($"/journal/{_entry.Id}/adjusting")" data-enhance="false" class="inline no-print" style="margin-top: 1rem">
             <AntiforgeryToken />
             <input type="hidden" name="adjusting" value="@(!_isAdjusting ? "true" : "false")" />
             @if (_isAdjusting)
@@ -121,7 +121,7 @@
                 <span class="badge">Adjusting entry</span>
             }
             <button type="submit" class="link">@(_isAdjusting ? "Not an adjusting entry" : "Mark as an adjusting entry")</button>
-        </form>
+        </PostForm>
     }
 
     @if (!JournalEntry.IsJournalSource(_entry.Source) && _entry.SourceId is { } documentId)

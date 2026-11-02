@@ -20,10 +20,10 @@
         <div class="toolbar">
             <h1>@_project.FullName</h1>
             <span class="badge">@ProjectReports.Status(p.Status)</span>
-            <a class="button" href="/sales/invoices/new?customer=@_project.Customer.Id">Invoice</a>
-            <a class="button secondary" href="/time?customer=@_project.Customer.Id">Time</a>
-            <a class="button secondary" href="/customers/@_project.Customer.Id">Customer record</a>
-            <a class="button secondary" href="/projects">Projects</a>
+            <ActionLink Class="button" Href="@($"/sales/invoices/new?customer={_project.Customer.Id}")">Invoice</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/time?customer={_project.Customer.Id}")">Time</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/customers/{_project.Customer.Id}")">Customer record</ActionLink>
+            <ActionLink Class="button secondary" Href="/projects">Projects</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -48,7 +48,7 @@
         </table>
         @if (_figures.Unbilled > 0m)
         {
-            <p>Not billed yet: @Labels.Amount(_figures.Unbilled) (time @Labels.Amount(_figures.UnbilledTime), expenses @Labels.Amount(_figures.UnbilledExpenses), mileage @Labels.Amount(_figures.UnbilledMileage)). <a href="/sales/invoices/new?customer=@_project.Customer.Id">Put it on an invoice</a>.</p>
+            <p>Not billed yet: @Labels.Amount(_figures.Unbilled) (time @Labels.Amount(_figures.UnbilledTime), expenses @Labels.Amount(_figures.UnbilledExpenses), mileage @Labels.Amount(_figures.UnbilledMileage)). <ActionLink Href="@($"/sales/invoices/new?customer={_project.Customer.Id}")">Put it on an invoice</ActionLink>.</p>
         }
 
         <h2>Time</h2>
@@ -123,11 +123,11 @@
 
         <div class="card" style="margin-top: 1.5rem">
             <h2>Status and budget</h2>
-            <form method="post" action="/projects/@p.Id" data-enhance="false">
+            <PostForm Action="@($"/projects/{p.Id}")" data-enhance="false">
                 <AntiforgeryToken />
                 <ProjectFields Project="p" />
                 <div class="actions"><button type="submit">Save</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

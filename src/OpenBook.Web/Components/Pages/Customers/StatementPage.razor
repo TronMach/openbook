@@ -6,12 +6,12 @@
 <div class="wide">
     <div class="toolbar no-print">
         <h1>Statement for @_statement?.Customer.DisplayName</h1>
-        <a class="button secondary" href="/customers/@Id">Back to customer</a>
+        <ActionLink Class="button secondary" Href="@($"/customers/{Id}")">Back to customer</ActionLink>
         @if (_statement is not null)
         {
             <a class="button secondary" href="/api/sales/customers/@Id/statement/pdf?from=@D(_statement.From)&to=@D(_statement.To)" target="_blank">PDF</a>
             <button type="button" class="button secondary" data-print="/api/sales/customers/@Id/statement/pdf?from=@D(_statement.From)&to=@D(_statement.To)">Print</button>
-            <a class="button" href="/sales/email/statement/@Id?from=@D(_statement.From)&to=@D(_statement.To)">Email</a>
+            <ActionLink Class="button" Href="@($"/sales/email/statement/{Id}?from={D(_statement.From)}&to={D(_statement.To)}")">Email</ActionLink>
         }
     </div>
 

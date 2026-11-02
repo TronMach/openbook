@@ -34,10 +34,10 @@
                         <td>
                             @if (link.IsActive)
                             {
-                                <form method="post" action="/customers/@CustomerId/portal/@link.Id/revoke" data-enhance="false" class="inline">
+                                <PostForm Action="@($"/customers/{CustomerId}/portal/{link.Id}/revoke")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
                                     <button type="submit" class="secondary">Turn off</button>
-                                </form>
+                                </PostForm>
                             }
                             else
                             {

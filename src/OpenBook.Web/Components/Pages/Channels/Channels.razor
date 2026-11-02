@@ -11,7 +11,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Sales channels"]</h1>
-        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
+        <ActionLink Class="button secondary" Href="/sales">@L["Back to sales"]</ActionLink>
     </div>
     <p class="muted">
         Where you sell online: a Shopify store, Amazon, Etsy, eBay, PayPal or Stripe. Import each channel's payout report; every payout
@@ -44,11 +44,11 @@
 
     <div class="card" style="margin-top: 1.5rem">
         <h2>@L["Add a channel"]</h2>
-        <form method="post" action="/sales/channels" data-enhance="false">
+        <PostForm Action="/sales/channels" data-enhance="false">
             <AntiforgeryToken />
             <ChannelForm Chart="_chart" />
             <div class="actions"><button type="submit">@L["Add"]</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

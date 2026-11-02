@@ -7,10 +7,10 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Projects</h1>
-        <a class="button secondary" href="/time">Time</a>
-        <a class="button secondary" href="/mileage">Mileage</a>
-        <a class="button secondary" href="/assets">Fixed assets</a>
-        <a class="button secondary" href="/reports/project-profitability">Profitability report</a>
+        <ActionLink Class="button secondary" Href="/time">Time</ActionLink>
+        <ActionLink Class="button secondary" Href="/mileage">Mileage</ActionLink>
+        <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/project-profitability">Profitability report</ActionLink>
     </div>
     <p class="muted">
         A project is a job for a customer, kept as its own sub-customer (billed with the customer unless you change it), so its invoices and
@@ -60,7 +60,7 @@
 
     <div class="card" style="margin-top: 1.5rem">
         <h2>New project</h2>
-        <form method="post" action="/projects" data-enhance="false">
+        <PostForm Action="/projects" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -91,7 +91,7 @@
             </div>
             <ProjectFields />
             <div class="actions"><button type="submit">Create project</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

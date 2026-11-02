@@ -10,10 +10,10 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@(_field is null ? _target is { } t ? $"New field for {CustomField.Label(t).ToLowerInvariant()}" : "New field" : _field.Name)</h1>
-        <a class="button secondary" href="/settings/custom-fields">Custom fields</a>
+        <ActionLink Class="button secondary" Href="/settings/custom-fields">Custom fields</ActionLink>
         @if (_field is not null)
         {
-            <a class="button secondary" href="/audit?entityType=custom_field&entityId=@_field.Id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityType=custom_field&entityId={_field.Id}")">History</ActionLink>
         }
     </div>
 
@@ -37,7 +37,7 @@
             <ul class="links">
                 @foreach (var choice in Enum.GetValues<CustomFieldTarget>())
                 {
-                    <li><a href="/settings/custom-fields/new?target=@choice">@CustomField.Label(choice)</a> <span class="muted">@Explain(choice)</span></li>
+                    <li><ActionLink Href="@($"/settings/custom-fields/new?target={choice}")">@CustomField.Label(choice)</ActionLink> <span class="muted">@Explain(choice)</span></li>
                 }
             </ul>
         </div>
@@ -167,11 +167,11 @@
                         ? "Fields aren't deleted, because documents keep values copied onto them. Switched off, it's no longer shown on records or copied onto new documents."
                         : "It shows on records and is copied onto new documents again, with the values it had.")
                 </p>
-                <form method="post" action="/settings/custom-fields/@_field.Id/active" data-enhance="false">
+                <PostForm Action="@($"/settings/custom-fields/{_field.Id}/active")" data-enhance="false">
                     <AntiforgeryToken />
                     <input type="hidden" name="active" value="@(_field.IsActive ? "false" : "true")" />
                     <button type="submit" class="secondary">@(_field.IsActive ? "Switch off" : "Switch on")</button>
-                </form>
+                </PostForm>
             </div>
         }
     }

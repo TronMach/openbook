@@ -133,7 +133,7 @@
         <div class="alert error" role="alert">@_error</div>
         @if (Has(ReportInputs.Budget) && _budgets.Count == 0)
         {
-            <p><a class="button" href="/reports/budgets">Create a budget</a></p>
+            <p><ActionLink Class="button" Href="/reports/budgets">Create a budget</ActionLink></p>
         }
     }
     else if (_table is not null)

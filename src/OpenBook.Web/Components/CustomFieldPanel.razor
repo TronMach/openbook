@@ -19,7 +19,7 @@
         }
         @if (_canWrite)
         {
-            <form method="post" action="/custom-fields" data-enhance="false">
+            <PostForm Action="/custom-fields" data-enhance="false">
                 <AntiforgeryToken />
                 <input type="hidden" name="entityType" value="@EntityType" />
                 <input type="hidden" name="entityId" value="@EntityId" />
@@ -79,7 +79,7 @@
                     }
                 </div>
                 <button type="submit" class="secondary">Save @((Title ?? "details").ToLowerInvariant())</button>
-            </form>
+            </PostForm>
         }
         else
         {

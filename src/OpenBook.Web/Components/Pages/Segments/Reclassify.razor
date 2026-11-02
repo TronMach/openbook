@@ -10,7 +10,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Reclassify transactions</h1>
-        <a class="button secondary" href="/segments">Classes and @(_label.ToLowerInvariant())s</a>
+        <ActionLink Class="button secondary" Href="/segments">Classes and @(_label.ToLowerInvariant())s</ActionLink>
     </div>
     <p class="muted">
         Change the class or @_label.ToLowerInvariant() of posted lines in bulk. Amounts and accounts never change, so nothing is reposted; the
@@ -71,7 +71,7 @@
         <div class="alert success" role="status">@Done @(Done == "1" ? "line" : "lines") reclassified.</div>
     }
 
-    <form method="post" action="/segments/reclassify">
+    <PostForm Action="/segments/reclassify">
         <AntiforgeryToken />
         <input type="hidden" name="back" value="@_back" />
         <div class="table-wrap">
@@ -132,7 +132,7 @@
             </div>
             <div class="actions"><button type="submit">Reclassify selected lines</button></div>
         </div>
-    </form>
+    </PostForm>
 </div>
 
 @code {

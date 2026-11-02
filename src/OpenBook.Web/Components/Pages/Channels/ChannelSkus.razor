@@ -16,7 +16,7 @@
     {
         <div class="toolbar">
             <h1>@_channel.Name · SKUs</h1>
-            <a class="button secondary" href="/sales/channels/@_channel.Id">@L["Back to the channel"]</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/channels/{_channel.Id}")">@L["Back to the channel"]</ActionLink>
         </div>
         <p class="muted">
             Which product each SKU in this channel's orders is, so posting orders takes the right item out of stock. A SKU matching an
@@ -42,7 +42,7 @@
                             <td>@s.Sku</td>
                             <td class="muted">@s.Title</td>
                             <td>
-                                <form method="post" action="/sales/channels/@_channel.Id/skus" data-enhance="false" class="inline">
+                                <PostForm Action="@($"/sales/channels/{_channel.Id}/skus")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
                                     <input type="hidden" name="sku" value="@s.Sku" />
                                     <select name="itemId" data-search>
@@ -57,7 +57,7 @@
                                         }
                                     </select>
                                     <button type="submit" class="secondary">@L["Save"]</button>
-                                </form>
+                                </PostForm>
                             </td>
                             <td class="muted">@(s.Automatic ? "matched by barcode or name" : s.Mapped ? "" : "not mapped")</td>
                         </tr>

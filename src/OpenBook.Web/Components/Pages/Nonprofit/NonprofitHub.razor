@@ -13,14 +13,14 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Donor restrictions</h1>
-        <a class="button" href="/nonprofit/gifts/new">Record a gift</a>
-        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
-        <a class="button secondary" href="/nonprofit/pledges">Pledges</a>
-        <a class="button secondary" href="/nonprofit/thanks">Thank donors</a>
-        <a class="button secondary" href="/nonprofit/grants">Grants</a>
-        <a class="button secondary" href="/reports/statement-of-activities">Statement of activities</a>
-        <a class="button secondary" href="/reports/statement-of-financial-position">Financial position</a>
-        <a class="button secondary" href="/reports/functional-expenses">Functional expenses</a>
+        <ActionLink Class="button" Href="/nonprofit/gifts/new">Record a gift</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/pledges">Pledges</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/thanks">Thank donors</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/grants">Grants</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/statement-of-activities">Statement of activities</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/statement-of-financial-position">Financial position</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/functional-expenses">Functional expenses</ActionLink>
     </div>
     <p class="muted">
         Gifts and grants a donor restricted to a purpose or a later time are held "with donor restrictions" until the purpose is met.
@@ -73,7 +73,7 @@
                         <td>
                             @if (p.Balance > 0m)
                             {
-                                <form method="post" action="/nonprofit/releases" class="inline" data-enhance="false">
+                                <PostForm Action="/nonprofit/releases" class="inline" data-enhance="false">
                                     <AntiforgeryToken />
                                     <input type="hidden" name="date" value="@_asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
                                     <input type="hidden" name="classId" value="@p.ClassId" />
@@ -82,7 +82,7 @@
                                     <input name="memo" maxlength="@RestrictionRelease.MaxMemoLength" placeholder="Memo (optional)" aria-label="Memo" />
                                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                                     <button type="submit" class="secondary">Release</button>
-                                </form>
+                                </PostForm>
                             }
                         </td>
                     </tr>
@@ -148,11 +148,11 @@
                 </tbody>
             </table>
         }
-        <form method="post" action="/nonprofit/functional-classes" data-enhance="false">
+        <PostForm Action="/nonprofit/functional-classes" data-enhance="false">
             <AntiforgeryToken />
             <div class="actions"><button type="submit" class="secondary">Set up the usual classes</button></div>
             <span class="hint">Adds "Programs", "Management and General" and "Fundraising" with their areas where missing, and turns class tracking on.</span>
-        </form>
+        </PostForm>
     </div>
 </div>
 

@@ -26,15 +26,15 @@
         {
             <span class="badge @(_credit.Balance > 0m ? "ok" : null)">@(_credit.Balance > 0m ? $"{Labels.Amount(_credit.Balance)} available" : "Used")</span>
         }
-        <a class="button secondary" href="/purchases?show=credits">Back to vendor credits</a>
-        <a class="button secondary" href="/audit?entityId=@_credit.Id">History</a>
+        <ActionLink Class="button secondary" Href="/purchases?show=credits">Back to vendor credits</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_credit.Id}")">History</ActionLink>
         @if (_credit.Status == DocumentStatus.Posted)
         {
-            <a class="button secondary" href="/purchases/vendor-credits/@_credit.Id/edit">Change</a>
+            <ActionLink Class="button secondary" Href="@($"/purchases/vendor-credits/{_credit.Id}/edit")">Change</ActionLink>
         }
         @if (_credit.Balance > 0m)
         {
-            <a class="button" href="/purchases/vendor-credits/apply?vendor=@_credit.VendorId">Apply to bills</a>
+            <ActionLink Class="button" Href="@($"/purchases/vendor-credits/apply?vendor={_credit.VendorId}")">Apply to bills</ActionLink>
         }
     </div>
     @if (_changes.Count > 0)

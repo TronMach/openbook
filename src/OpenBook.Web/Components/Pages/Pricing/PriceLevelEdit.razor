@@ -10,11 +10,11 @@
 <div class="@(_level?.Kind == PriceLevelKind.PerItem ? "wide" : "card")">
     <div class="toolbar">
         <h1>@(Id is null ? "New price level" : _level?.Name ?? "Price level")</h1>
-        <a class="button secondary" href="/pricing">Back to pricing</a>
+        <ActionLink Class="button secondary" Href="/pricing">Back to pricing</ActionLink>
         @if (_level is not null)
         {
-            <a class="button secondary" href="/reports/price-list?levelId=@_level.Id">Price list</a>
-            <a class="button secondary" href="/audit?entityId=@_level.Id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/reports/price-list?levelId={_level.Id}")">Price list</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_level.Id}")">History</ActionLink>
         }
     </div>
 
@@ -64,7 +64,7 @@
             <section class="card">
                 <h2>Item prices</h2>
                 <p class="muted">Leave a price blank for the item's own price. Quantity breaks and rules still apply on top.</p>
-                <form method="post" action="/pricing/levels/@_level.Id/prices">
+                <PostForm Action="@($"/pricing/levels/{_level.Id}/prices")">
                     <AntiforgeryToken />
                     <div class="table-wrap">
                         <table class="data entry">
@@ -83,13 +83,13 @@
                         </table>
                     </div>
                     <div class="actions"><button type="submit">Save item prices</button></div>
-                </form>
+                </PostForm>
             </section>
 
             <section class="card">
                 <h2>Import or export</h2>
                 <p class="muted">A CSV with an <strong>Item</strong> column (the item's name) and a <strong>Price</strong> column. Items not in the file keep their level price; any error and nothing changes.</p>
-                <form method="post" action="/pricing/levels/@_level.Id/import" enctype="multipart/form-data" class="row">
+                <PostForm Action="@($"/pricing/levels/{_level.Id}/import")" enctype="multipart/form-data" class="row">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="file">CSV file</label>
@@ -99,7 +99,7 @@
                         <button type="submit" class="secondary">Import prices</button>
                         <a class="button secondary" href="/api/pricing/levels/@_level.Id/export">Export CSV</a>
                     </div>
-                </form>
+                </PostForm>
             </section>
         }
 

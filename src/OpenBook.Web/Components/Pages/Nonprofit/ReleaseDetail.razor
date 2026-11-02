@@ -22,9 +22,9 @@
             {
                 <span class="badge">Voided</span>
             }
-            <a class="button secondary" href="/journal/@_release.JournalEntryId">Journal entry</a>
-            <a class="button secondary" href="/audit?entityId=@_release.Id">History</a>
-            <a class="button secondary" href="/nonprofit">Donor restrictions</a>
+            <ActionLink Class="button secondary" Href="@($"/journal/{_release.JournalEntryId}")">Journal entry</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_release.Id}")">History</ActionLink>
+            <ActionLink Class="button secondary" Href="/nonprofit">Donor restrictions</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -46,12 +46,12 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>
                 <p class="muted">Puts the amount back with donor restrictions, on the same date.</p>
-                <form method="post" action="/nonprofit/releases/@_release.Id/void" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/releases/{_release.Id}/void")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Void</button></div>
-                </form>
+                </PostForm>
             </div>
         }
     }

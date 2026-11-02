@@ -21,8 +21,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@DocumentKinds.Label(_document.Kind): @_document.FileName</h1>
-        <a class="button secondary" href="/documents">Inbox</a>
-        <a class="button secondary" href="/audit?entityId=@_document.Id">History</a>
+        <ActionLink Class="button secondary" Href="/documents">Inbox</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_document.Id}")">History</ActionLink>
     </div>
 
     @if (Error is not null)
@@ -46,10 +46,10 @@
     {
         <div class="alert notice" role="status">
             Dismissed.
-            <form method="post" action="/documents/@_document.Id/restore" data-enhance="false" style="display:inline">
+            <PostForm Action="@($"/documents/{_document.Id}/restore")" data-enhance="false" style="display:inline">
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">Put it back in the inbox</button>
-            </form>
+            </PostForm>
         </div>
     }
 
@@ -87,7 +87,7 @@
     {
         <div class="card">
             <h2>Check what was read</h2>
-            <form method="post" action="/documents/@_document.Id/review" data-enhance="false">
+            <PostForm Action="@($"/documents/{_document.Id}/review")" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -196,26 +196,26 @@
                     }
                 }
                 <div class="actions"><button type="submit">Save</button></div>
-            </form>
+            </PostForm>
 
             <div class="actions">
                 @if (_settings.IsReady)
                 {
-                    <form method="post" action="/documents/@_document.Id/read" data-enhance="false" style="display:inline">
+                    <PostForm Action="@($"/documents/{_document.Id}/read")" data-enhance="false" style="display:inline">
                         <AntiforgeryToken />
                         <input type="hidden" name="with" value="claude" />
                         <button type="submit" class="secondary">Read again with Claude</button>
-                    </form>
+                    </PostForm>
                 }
-                <form method="post" action="/documents/@_document.Id/read" data-enhance="false" style="display:inline">
+                <PostForm Action="@($"/documents/{_document.Id}/read")" data-enhance="false" style="display:inline">
                     <AntiforgeryToken />
                     <input type="hidden" name="with" value="server" />
                     <button type="submit" class="secondary">Read again on the server</button>
-                </form>
-                <form method="post" action="/documents/@_document.Id/dismiss" data-enhance="false" style="display:inline">
+                </PostForm>
+                <PostForm Action="@($"/documents/{_document.Id}/dismiss")" data-enhance="false" style="display:inline">
                     <AntiforgeryToken />
                     <button type="submit" class="secondary">Dismiss</button>
-                </form>
+                </PostForm>
             </div>
             <p class="hint">Reading again replaces the fields above, including anything you corrected.</p>
         </div>
@@ -301,14 +301,14 @@
             }
             else if (_document.Kind == DocumentKind.CustomerOrder)
             {
-                <form method="post" action="/documents/@_document.Id/sales-order" data-enhance="false">
+                <PostForm Action="@($"/documents/{_document.Id}/sales-order")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="actions"><button type="submit">Make the sales order</button></div>
-                </form>
+                </PostForm>
             }
             else
             {
-                <form method="post" action="/documents/@_document.Id/receive" data-enhance="false">
+                <PostForm Action="@($"/documents/{_document.Id}/receive")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="received">Received on</label>
@@ -316,7 +316,7 @@
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Receive the goods</button></div>
-                </form>
+                </PostForm>
             }
         </div>
     }

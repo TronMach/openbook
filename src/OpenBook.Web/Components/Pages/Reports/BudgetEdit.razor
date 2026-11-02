@@ -33,7 +33,7 @@
         <div class="alert error" role="alert">@Error</div>
     }
 
-    <form method="post" action="/reports/budgets/@_budget.Id" data-enhance="false">
+    <PostForm Action="@($"/reports/budgets/{_budget.Id}")" data-enhance="false">
         <AntiforgeryToken />
         <div class="field">
             <label for="name">Name</label>
@@ -86,15 +86,15 @@
         <div class="actions">
             <button type="submit">Save budget</button>
         </div>
-    </form>
+    </PostForm>
 
     <div class="card">
         <h2>Delete budget</h2>
         <p class="muted">Deleting a budget removes its amounts. Your books aren't affected.</p>
-        <form method="post" action="/reports/budgets/@_budget.Id/delete" data-enhance="false" onsubmit="return confirm('Delete this budget?')">
+        <PostForm Action="@($"/reports/budgets/{_budget.Id}/delete")" data-enhance="false" onsubmit="return confirm('Delete this budget?')">
             <AntiforgeryToken />
             <button type="submit" class="secondary">Delete budget</button>
-        </form>
+        </PostForm>
     </div>
 </div>
 

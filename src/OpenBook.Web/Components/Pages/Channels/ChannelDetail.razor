@@ -17,8 +17,8 @@
     {
         <div class="toolbar">
             <h1>@_channel.Name</h1>
-            <a class="button secondary" href="/sales/channels">@L["Sales channels"]</a>
-            <a class="button secondary" href="/audit?entityId=@_channel.Id">@L["History"]</a>
+            <ActionLink Class="button secondary" Href="/sales/channels">@L["Sales channels"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_channel.Id}")">@L["History"]</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -50,14 +50,14 @@
                         <div class="alert error" role="alert">The last fetch failed: @_channel.LastError</div>
                     }
                     <div class="actions">
-                        <form method="post" action="/sales/channels/connections/@_channel.Id/sync" data-enhance="false" class="inline">
+                        <PostForm Action="@($"/sales/channels/connections/{_channel.Id}/sync")" data-enhance="false" class="inline">
                             <AntiforgeryToken />
                             <button type="submit">@L["Fetch payouts now"]</button>
-                        </form>
-                        <form method="post" action="/sales/channels/connections/@_channel.Id/disconnect" data-enhance="false" class="inline">
+                        </PostForm>
+                        <PostForm Action="@($"/sales/channels/connections/{_channel.Id}/disconnect")" data-enhance="false" class="inline">
                             <AntiforgeryToken />
                             <button type="submit" class="secondary">@L["Disconnect"]</button>
-                        </form>
+                        </PostForm>
                     </div>
                 }
                 else
@@ -73,7 +73,7 @@
                         }
                         The key is stored encrypted and never shown again.
                     </p>
-                    <form method="post" action="/sales/channels/connections/@_channel.Id" data-enhance="false" autocomplete="off">
+                    <PostForm Action="@($"/sales/channels/connections/{_channel.Id}")" data-enhance="false" autocomplete="off">
                         <AntiforgeryToken />
                         <div class="row">
                             @if (_channel.Kind == ChannelKind.Shopify)
@@ -89,7 +89,7 @@
                             </div>
                         </div>
                         <div class="actions"><button type="submit">@L["Connect"]</button></div>
-                    </form>
+                    </PostForm>
                 }
             </div>
         }
@@ -97,13 +97,13 @@
         <div class="card">
             <h2>@L["Import a payout report"]</h2>
             <p class="muted">@ChannelLabels.ReportHelp(_channel.Kind)</p>
-            <form method="post" action="/sales/channels/@_channel.Id/import" enctype="multipart/form-data" data-enhance="false">
+            <PostForm Action="@($"/sales/channels/{_channel.Id}/import")" enctype="multipart/form-data" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="field">
                     <input type="file" name="file" accept=".csv,.txt,.tsv" required />
                 </div>
                 <div class="actions"><button type="submit" disabled="@(!_channel.IsActive)">@L["Import"]</button></div>
-            </form>
+            </PostForm>
         </div>
 
         <div class="card" style="margin-top: 1.5rem">
@@ -124,11 +124,11 @@
             {
                 <div class="alert notice" role="status">Imported @Orders new @(Orders == 1 ? "order" : "orders")@(Skipped > 0 ? $"; {Skipped} already imported were skipped" : ""). @Note</div>
             }
-            <form method="post" action="/sales/channels/@_channel.Id/orders" enctype="multipart/form-data" data-enhance="false">
+            <PostForm Action="@($"/sales/channels/{_channel.Id}/orders")" enctype="multipart/form-data" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="field"><input type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
                 <div class="actions"><button type="submit" class="secondary" disabled="@(!_channel.IsActive)">@L["Import orders"]</button></div>
-            </form>
+            </PostForm>
             @if (_batches.Count > 0)
             {
                 <table class="data" style="margin-top: 1rem">
@@ -184,12 +184,12 @@
 
         <div class="card" style="margin-top: 1.5rem">
             <h2>@L["Settings"]</h2>
-            <form method="post" action="/sales/channels/@_channel.Id" data-enhance="false">
+            <PostForm Action="@($"/sales/channels/{_channel.Id}")" data-enhance="false">
                 <AntiforgeryToken />
                 <ChannelForm Channel="_channel" Chart="_chart" />
                 <label class="check"><input type="checkbox" name="active" value="true" checked="@_channel.IsActive" /> <span>@L["Active"]</span></label>
                 <div class="actions"><button type="submit">@L["Save"]</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

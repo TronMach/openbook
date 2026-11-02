@@ -7,8 +7,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Bill approvals</h1>
-        <a class="button secondary" href="/purchases">Back to purchases</a>
-        <a class="button secondary" href="/purchases/approvals/settings">Settings</a>
+        <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/approvals/settings">Settings</ActionLink>
     </div>
     <p class="muted">
         Bills held for approval can't be paid until they're approved: bills at or over the approval limit
@@ -46,7 +46,7 @@
                     <dt>Held because</dt><dd style="white-space: pre-line">@b.HoldReason</dd>
                     @if (b.Approval == BillApproval.Rejected) { <dt>Rejected by</dt><dd>@b.ApprovedBy: @b.ApprovalNote</dd> }
                 </dl>
-                <form method="post" action="/purchases/approvals/@b.Id" data-enhance="false">
+                <PostForm Action="@($"/purchases/approvals/{b.Id}")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="note-@b.Id">Note <span class="muted">(needed to reject)</span></label>
@@ -59,7 +59,7 @@
                             <button type="submit" name="decision" value="reject" class="secondary">Reject</button>
                         }
                     </div>
-                </form>
+                </PostForm>
             </div>
         }
     }

@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Capture"]</h1>
-        <a class="button" href="/capture.html">@L["Open the capture page"]</a>
+        <ActionLink Class="button" Href="/capture.html">@L["Open the capture page"]</ActionLink>
     </div>
     <p class="muted">
         @L["The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below."]
@@ -36,14 +36,14 @@
                         <td>@device.Name</td>
                         <td>@draft.Error</td>
                         <td>
-                            <form method="post" action="/capture/drafts/@draft.Id/retry" data-enhance="false" class="inline">
+                            <PostForm Action="@($"/capture/drafts/{draft.Id}/retry")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <button type="submit" class="secondary">@L["Try again"]</button>
-                            </form>
-                            <form method="post" action="/capture/drafts/@draft.Id/dismiss" data-enhance="false" class="inline">
+                            </PostForm>
+                            <PostForm Action="@($"/capture/drafts/{draft.Id}/dismiss")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">@L["Dismiss"]</button>
-                            </form>
+                            </PostForm>
                         </td>
                     </tr>
                 }
@@ -72,11 +72,11 @@
                         <td>
                             @if (d.IsActive)
                             {
-                                <form method="post" action="/capture/devices/@d.Id/revoke" data-enhance="false" class="inline">
+                                <PostForm Action="@($"/capture/devices/{d.Id}/revoke")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
                                     <label class="check"><input type="checkbox" name="endSessions" value="true" /> @L["also sign out my other sessions"]</label>
                                     <button type="submit" class="link">@L["Remove access"]</button>
-                                </form>
+                                </PostForm>
                             }
                             else
                             {

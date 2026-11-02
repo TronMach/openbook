@@ -26,19 +26,19 @@
         {
             <span class="badge @(_credit.Balance > 0m ? "ok" : null)">@(_credit.Balance > 0m ? $"{Labels.Amount(_credit.Balance)} available" : "Used")</span>
         }
-        <a class="button secondary" href="/sales?show=credits">Back to credit memos</a>
+        <ActionLink Class="button secondary" Href="/sales?show=credits">Back to credit memos</ActionLink>
         <a class="button secondary" href="/api/sales/credit-memos/@_credit.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.CreditMemo" Id="_credit.Id" PdfUrl="@($"/api/sales/credit-memos/{_credit.Id}/pdf")" />
-        <a class="button secondary" href="/sales/email/credit-memos/@_credit.Id">Email</a>
-        <a class="button secondary" href="/audit?entityId=@_credit.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/sales/email/credit-memos/{_credit.Id}")">Email</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_credit.Id}")">History</ActionLink>
         @if (_credit.Status == DocumentStatus.Posted)
         {
-            <a class="button secondary" href="/sales/credit-memos/@_credit.Id/edit">Change</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/credit-memos/{_credit.Id}/edit")">Change</ActionLink>
         }
         @if (_credit.Balance > 0m)
         {
-            <a class="button secondary" href="/sales/refunds/new?creditMemo=@_credit.Id">Refund</a>
-            <a class="button" href="/sales/credits/apply?customer=@_credit.CustomerId">Apply to invoices</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/refunds/new?creditMemo={_credit.Id}")">Refund</ActionLink>
+            <ActionLink Class="button" Href="@($"/sales/credits/apply?customer={_credit.CustomerId}")">Apply to invoices</ActionLink>
         }
     </div>
     @if (_changes.Count > 0)

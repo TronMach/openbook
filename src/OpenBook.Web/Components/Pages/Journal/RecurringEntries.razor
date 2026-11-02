@@ -6,8 +6,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Recurring entries"]</h1>
-        <a class="button secondary" href="/journal">@L["Back to journal"]</a>
-        <a class="button" href="/journal/recurring/new">@L["New recurring entry"]</a>
+        <ActionLink Class="button secondary" Href="/journal">@L["Back to journal"]</ActionLink>
+        <ActionLink Class="button" Href="/journal/recurring/new">@L["New recurring entry"]</ActionLink>
     </div>
     <p class="muted">
         Journal entries that repeat on a schedule, such as monthly depreciation or rent. Ones set to post automatically
@@ -36,7 +36,7 @@
 
     @if (_templates.Count == 0)
     {
-        <div class="card"><p>No recurring entries yet. <a href="/journal/recurring/new">Set one up</a>.</p></div>
+        <div class="card"><p>No recurring entries yet. <ActionLink Href="/journal/recurring/new">Set one up</ActionLink>.</p></div>
     }
     else
     {
@@ -65,7 +65,7 @@
                     @foreach (var template in _templates)
                     {
                         <tr class="@(template.IsActive ? null : "inactive")">
-                            <td><a href="/journal/recurring/@template.Id">@template.Name</a></td>
+                            <td><ActionLink Href="@($"/journal/recurring/{template.Id}")">@template.Name</ActionLink></td>
                             <td>@RecurrenceLabels.Schedule(template)</td>
                             <td class="num">@Labels.Amount(template.Lines.Sum(l => l.Debit))</td>
                             <td>

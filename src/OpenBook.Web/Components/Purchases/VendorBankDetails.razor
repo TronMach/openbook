@@ -13,11 +13,11 @@
     }
     else
     {
-        <p class="muted">None yet. Add them to pay this vendor by direct deposit from the <a href="/purchases/ach">ACH payments</a> page.</p>
+        <p class="muted">None yet. Add them to pay this vendor by direct deposit from the <ActionLink Href="/purchases/ach">ACH payments</ActionLink> page.</p>
     }
     @if (CanEdit)
     {
-        <form method="post" action="/purchases/ach/vendors/@VendorId" data-enhance="false">
+        <PostForm Action="@($"/purchases/ach/vendors/{VendorId}")" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field"><label for="routing">Routing number</label><input id="routing" name="routing" maxlength="9" inputmode="numeric" value="@_account?.RoutingNumber" /></div>
@@ -43,7 +43,7 @@
                 }
             </div>
             <p class="hint">The account number is stored encrypted and only its last four digits are shown again.</p>
-        </form>
+        </PostForm>
     }
 </div>
 

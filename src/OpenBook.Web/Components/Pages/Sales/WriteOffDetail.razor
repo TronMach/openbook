@@ -19,8 +19,8 @@
         {
             <span class="badge">Voided</span>
         }
-        <a class="button secondary" href="/customers/@_writeOff.CustomerId">Customer</a>
-        <a class="button secondary" href="/audit?entityId=@_writeOff.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/customers/{_writeOff.CustomerId}")">Customer</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_writeOff.Id}")">History</ActionLink>
     </div>
 
     @if (Error is not null)
@@ -49,7 +49,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this write-off</h2>
             <p class="muted">For when the customer pays after all: voiding reverses the expense and puts the balance back on the invoice, ready for the payment.</p>
-            <form method="post" action="/sales/write-offs/@_writeOff.Id/void" data-enhance="false">
+            <PostForm Action="@($"/sales/write-offs/{_writeOff.Id}/void")" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -57,7 +57,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <button type="submit" class="danger">Void write-off</button>
-            </form>
+            </PostForm>
         </div>
     }
 

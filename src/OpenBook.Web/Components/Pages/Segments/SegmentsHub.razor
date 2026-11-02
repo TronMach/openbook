@@ -8,9 +8,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Classes, @(_tracking.LocationLabel.ToLowerInvariant())s and tags</h1>
-        <a class="button secondary" href="/reports/profit-and-loss-by-class">P&amp;L by class</a>
-        <a class="button secondary" href="/reports/profit-and-loss-by-location">P&amp;L by @_tracking.LocationLabel.ToLowerInvariant()</a>
-        <a class="button" href="/segments/reclassify">Reclassify transactions</a>
+        <ActionLink Class="button secondary" Href="/reports/profit-and-loss-by-class">P&amp;L by class</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/profit-and-loss-by-location">P&amp;L by @_tracking.LocationLabel.ToLowerInvariant()</ActionLink>
+        <ActionLink Class="button" Href="/segments/reclassify">Reclassify transactions</ActionLink>
     </div>
     <p class="muted">
         Slice your books without adding accounts. A <strong>class</strong> goes on each line (a product line, fund or service type);
@@ -26,7 +26,7 @@
 
     <section class="card">
         <h2>On transaction forms</h2>
-        <form method="post" action="/segments/tracking" class="row">
+        <PostForm Action="/segments/tracking" class="row">
             <AntiforgeryToken />
             <div class="field checkbox">
                 <label><input type="checkbox" name="classes" value="true" checked="@_tracking.Classes" /> Track classes on each line</label>
@@ -40,7 +40,7 @@
                 <datalist id="location-labels"><option value="Location" /><option value="Department" /><option value="Division" /><option value="Store" /><option value="Property" /></datalist>
             </div>
             <div class="actions"><button type="submit" class="secondary">Save</button></div>
-        </form>
+        </PostForm>
         <p class="hint">Needs the accountant role. Turning tracking off only hides the fields; segments already on transactions stay.</p>
     </section>
 
@@ -64,7 +64,7 @@
                         }
                     </ul>
                 }
-                <form method="post" action="/segments" class="row">
+                <PostForm Action="/segments" class="row">
                     <AntiforgeryToken />
                     <input type="hidden" name="kind" value="@kind" />
                     <div class="field">
@@ -85,7 +85,7 @@
                         </div>
                     }
                     <div class="actions"><button type="submit" class="secondary">Add</button></div>
-                </form>
+                </PostForm>
             </section>
         }
     </div>

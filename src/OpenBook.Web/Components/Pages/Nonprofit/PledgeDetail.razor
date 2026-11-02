@@ -25,11 +25,11 @@
             }
             else if (_pledge.Balance > 0m)
             {
-                <a class="button" href="/nonprofit/gifts/new?pledge=@p.Id">Record a payment</a>
+                <ActionLink Class="button" Href="@($"/nonprofit/gifts/new?pledge={p.Id}")">Record a payment</ActionLink>
             }
-            <a class="button secondary" href="/journal/@p.JournalEntryId">Journal entry</a>
-            <a class="button secondary" href="/audit?entityId=@p.Id">History</a>
-            <a class="button secondary" href="/nonprofit/pledges">Pledges</a>
+            <ActionLink Class="button secondary" Href="@($"/journal/{p.JournalEntryId}")">Journal entry</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={p.Id}")">History</ActionLink>
+            <ActionLink Class="button secondary" Href="/nonprofit/pledges">Pledges</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -83,24 +83,24 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Cancel the rest</h2>
                 <p class="muted">When the donor won't pay the @Labels.Amount(_pledge.Balance) left: it comes off the contribution income (accrual basis) and out of Pledges Receivable.</p>
-                <form method="post" action="/nonprofit/pledges/@p.Id/cancel" data-enhance="false" class="inline">
+                <PostForm Action="@($"/nonprofit/pledges/{p.Id}/cancel")" data-enhance="false" class="inline">
                     <AntiforgeryToken />
                     <label>On <input type="date" name="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></label>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <button type="submit" class="secondary">Cancel the rest</button>
-                </form>
+                </PostForm>
             </div>
         }
         else if (p.CancelEntryId is not null)
         {
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Undo the cancellation</h2>
-                <form method="post" action="/nonprofit/pledges/@p.Id/uncancel" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/pledges/{p.Id}/uncancel")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="undo-reason">Reason</label><input id="undo-reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="secondary">Undo</button></div>
-                </form>
+                </PostForm>
             </div>
         }
 
@@ -109,12 +109,12 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>
                 <p class="muted">For a pledge recorded by mistake or withdrawn before anything was paid.</p>
-                <form method="post" action="/nonprofit/pledges/@p.Id/void" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/pledges/{p.Id}/void")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Void</button></div>
-                </form>
+                </PostForm>
             </div>
         }
     }

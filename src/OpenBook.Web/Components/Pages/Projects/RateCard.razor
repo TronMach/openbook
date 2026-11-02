@@ -10,8 +10,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Rate card"]</h1>
-        <a class="button secondary" href="/time/people">@L["People and rates"]</a>
-        <a class="button secondary" href="/time">@L["Time"]</a>
+        <ActionLink Class="button secondary" Href="/time/people">@L["People and rates"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/time">@L["Time"]</ActionLink>
     </div>
     <p class="muted">
         Hourly rates for clients, people, roles and services. Time takes the most specific rate when it's entered: a rate for the client
@@ -38,10 +38,10 @@
                         <td>@(r.StartsOn is { } s ? Labels.Date(s) : "")</td>
                         <td class="num">
                             <a href="/time/rates?edit=@r.Id#edit">@L["Edit"]</a>
-                            <form method="post" action="/time/rates/@r.Id/delete" data-enhance="false" class="inline">
+                            <PostForm Action="@($"/time/rates/{r.Id}/delete")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">@L["Delete"]</button>
-                            </form>
+                            </PostForm>
                         </td>
                     </tr>
                 }

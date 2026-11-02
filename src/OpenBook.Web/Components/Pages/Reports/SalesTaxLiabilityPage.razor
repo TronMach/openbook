@@ -68,7 +68,7 @@
                             Owed at @Labels.Date(_report.To)
                             @if (agency.OwedAtEnd > 0m)
                             {
-                                <a class="no-print" href="/sales-tax/pay?agency=@agency.Agency.Id"> · Pay</a>
+                                <ActionLink Class="no-print" Href="@($"/sales-tax/pay?agency={agency.Agency.Id}")"> · Pay</ActionLink>
                             }
                         </td>
                         <td class="num"><a href="/reports/general-ledger?accountId=@agency.Agency.LiabilityAccountId&amp;@_query.ToQueryString()">@Labels.Amount(agency.OwedAtEnd)</a></td>

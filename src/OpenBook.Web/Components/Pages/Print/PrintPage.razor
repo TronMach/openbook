@@ -9,8 +9,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Print</h1>
-        <a class="button secondary" href="/sales">Sales</a>
-        <a class="button secondary" href="/settings/forms">Form designs</a>
+        <ActionLink Class="button secondary" Href="/sales">Sales</ActionLink>
+        <ActionLink Class="button secondary" Href="/settings/forms">Form designs</ActionLink>
     </div>
     <p class="muted">
         Print many documents at once: they come out as one PDF, each starting on its own page with its own design, and the print
@@ -29,7 +29,7 @@
         }
         else
         {
-            <form method="post" action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
+            <PostForm Action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
                 <AntiforgeryToken />
                 <input type="hidden" name="returnUrl" value="/print" />
                 <div class="table-wrap">
@@ -71,7 +71,7 @@
                 </div>
                 <button type="submit">Print the ticked documents</button>
                 <span class="hint">They're marked printed; "Printed recently" below can put them back.</span>
-            </form>
+            </PostForm>
         }
     </section>
 
@@ -94,7 +94,7 @@
         }
         else
         {
-            <form method="post" action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
+            <PostForm Action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
                 <AntiforgeryToken />
                 <div class="table-wrap">
                     <table class="data">
@@ -114,7 +114,7 @@
                     </table>
                 </div>
                 <button type="submit">Print the ticked documents</button>
-            </form>
+            </PostForm>
         }
     </section>
 
@@ -126,7 +126,7 @@
         }
         else
         {
-            <form method="post" action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
+            <PostForm Action="/print/pdf" target="_blank" data-enhance="false" data-print-form>
                 <AntiforgeryToken />
                 <div class="inline-actions">
                     <label>Activity from <input type="date" name="from" value="@_today.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" required /></label>
@@ -144,7 +144,7 @@
                     }
                 </ul>
                 <button type="submit">Print statements</button>
-            </form>
+            </PostForm>
         }
     </section>
 
@@ -163,12 +163,12 @@
                                 <td>@entry.Document?.Party</td>
                                 <td class="muted">@entry.Item.PrintedBy · @entry.Item.PrintedAt?.LocalDateTime.ToString("g", CultureInfo.CurrentCulture)</td>
                                 <td>
-                                    <form method="post" action="/print/put-back" class="inline-form" data-enhance="false">
+                                    <PostForm Action="/print/put-back" class="inline-form" data-enhance="false">
                                         <AntiforgeryToken />
                                         <input type="hidden" name="item" value="@entry.Item.Id" />
                                         <input type="hidden" name="returnUrl" value="/print" />
                                         <button type="submit" class="link">Put back in the queue</button>
-                                    </form>
+                                    </PostForm>
                                 </td>
                             </tr>
                         }

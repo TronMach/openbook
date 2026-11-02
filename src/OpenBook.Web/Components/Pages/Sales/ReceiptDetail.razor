@@ -22,17 +22,17 @@
         {
             <span class="badge">Voided</span>
         }
-        <a class="button secondary" href="/sales?show=receipts">Back to sales receipts</a>
+        <ActionLink Class="button secondary" Href="/sales?show=receipts">Back to sales receipts</ActionLink>
         <a class="button secondary" href="/api/sales/receipts/@_receipt.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.SalesReceipt" Id="_receipt.Id" PdfUrl="@($"/api/sales/receipts/{_receipt.Id}/pdf")" />
         @if (_receipt.CustomerId is not null)
         {
-            <a class="button secondary" href="/sales/email/receipts/@_receipt.Id">Email</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/email/receipts/{_receipt.Id}")">Email</ActionLink>
         }
-        <a class="button secondary" href="/audit?entityId=@_receipt.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_receipt.Id}")">History</ActionLink>
         @if (_receipt.Status == DocumentStatus.Posted)
         {
-            <a class="button secondary" href="/sales/receipts/@_receipt.Id/edit">Change</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/receipts/{_receipt.Id}/edit")">Change</ActionLink>
         }
     </div>
     @if (_changes.Count > 0)

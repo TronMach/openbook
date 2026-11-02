@@ -22,23 +22,23 @@
                 <li>
                     <a href="/attachments/@file.Id" target="_blank">@file.FileName</a>
                     <span class="muted">@Size(file.Size) · @file.AddedBy · @file.AddedAt.InCompanyTime().ToString("d")</span>
-                    <form method="post" action="/attachments/@file.Id/remove" class="inline-form">
+                    <PostForm Action="@($"/attachments/{file.Id}/remove")" class="inline-form">
                         <AntiforgeryToken />
                         <input type="hidden" name="returnUrl" value="@ReturnUrl" />
                         <button type="submit" class="link" onclick="return confirm('Remove @file.FileName?')">Remove</button>
-                    </form>
+                    </PostForm>
                 </li>
             }
         </ul>
     }
-    <form method="post" action="/attachments" enctype="multipart/form-data" class="inline" data-enhance="false">
+    <PostForm Action="/attachments" enctype="multipart/form-data" class="inline" data-enhance="false">
         <AntiforgeryToken />
         <input type="hidden" name="entityType" value="@EntityType" />
         <input type="hidden" name="entityId" value="@EntityId" />
         <input type="hidden" name="returnUrl" value="@ReturnUrl" />
         <input type="file" name="file" aria-label="File to attach" accept="@Accept" required />
         <button type="submit" class="secondary">Attach</button>
-    </form>
+    </PostForm>
     <p class="hint">PDF, images, text, CSV, Word or Excel; up to @(Attachment.MaxBytes / (1024 * 1024)) MB. Files are kept in the company file and its backups.</p>
 </section>
 

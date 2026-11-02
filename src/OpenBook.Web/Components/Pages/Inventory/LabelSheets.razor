@@ -6,7 +6,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Barcode labels</h1>
-        <a class="button secondary" href="/inventory">Inventory</a>
+        <ActionLink Class="button secondary" Href="/inventory">Inventory</ActionLink>
     </div>
     <p class="muted">
         Prints Code 128 barcode labels on Letter sheets of 30 (2⅝" × 1", the common address-label stock such as Avery 5160).
@@ -24,7 +24,7 @@
     }
     else
     {
-        <form method="post" action="/inventory/labels" target="_blank" data-enhance="false">
+        <PostForm Action="/inventory/labels" target="_blank" data-enhance="false">
             <AntiforgeryToken />
             <div class="table-wrap">
                 <table class="data">
@@ -44,7 +44,7 @@
             </div>
             <label class="check"><input type="checkbox" name="showPrice" value="true" checked /> <span>Show the price</span></label>
             <div class="actions"><button type="submit">Print labels (PDF)</button></div>
-        </form>
+        </PostForm>
     }
 </div>
 

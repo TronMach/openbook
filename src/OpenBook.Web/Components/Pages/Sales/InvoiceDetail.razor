@@ -26,20 +26,20 @@
     <div class="toolbar">
         <h1>Invoice @_invoice.Number</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
-        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
+        <ActionLink Class="button secondary" Href="/sales">@L["Back to sales"]</ActionLink>
         <a class="button secondary" href="/api/sales/invoices/@_invoice.Id/pdf" target="_blank">@L["PDF"]</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.Invoice" Id="_invoice.Id" PdfUrl="@($"/api/sales/invoices/{_invoice.Id}/pdf")" />
-        <a class="button secondary" href="/sales/email/invoices/@_invoice.Id">@L["Email"]</a>
-        <a class="button secondary" href="/audit?entityId=@_invoice.Id">@L["History"]</a>
+        <ActionLink Class="button secondary" Href="@($"/sales/email/invoices/{_invoice.Id}")">@L["Email"]</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_invoice.Id}")">@L["History"]</ActionLink>
         @if (_invoice.Status == DocumentStatus.Posted)
         {
-            <a class="button secondary" href="/sales/invoices/@_invoice.Id/edit">@L["Change"]</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/invoices/{_invoice.Id}/edit")">@L["Change"]</ActionLink>
         }
         @if (_invoice.IsOpen)
         {
-            <a class="button secondary" href="/sales/credits/apply?customer=@_customer.Id">@L["Apply credit"]</a>
-            <a class="button secondary" href="/sales/write-offs/new?invoice=@_invoice.Id">@L["Write off"]</a>
-            <a class="button" href="/sales/payments/new?customer=@(_billTo ?? _customer.Id)">@L["Receive payment"]</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/credits/apply?customer={_customer.Id}")">@L["Apply credit"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/write-offs/new?invoice={_invoice.Id}")">@L["Write off"]</ActionLink>
+            <ActionLink Class="button" Href="@($"/sales/payments/new?customer={(_billTo ?? _customer.Id)}")">@L["Receive payment"]</ActionLink>
         }
     </div>
 
@@ -90,7 +90,7 @@
                 }
                 @if (_invoice.RecurringInvoiceId is { } recurringId)
                 {
-                    <dt class="no-print">@L["Created by"]</dt><dd class="no-print"><a href="/sales/recurring/@recurringId">@L["Recurring invoice"]</a></dd>
+                    <dt class="no-print">@L["Created by"]</dt><dd class="no-print"><ActionLink Href="@($"/sales/recurring/{recurringId}")">@L["Recurring invoice"]</ActionLink></dd>
                 }
             </dl>
         </div>

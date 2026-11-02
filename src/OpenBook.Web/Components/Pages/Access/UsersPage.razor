@@ -12,9 +12,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Users</h1>
-        <a href="/settings/permission-sets">Permission sets</a>
-        <a href="/settings/sign-in">Sign-in and two-factor</a>
-        <a href="/settings">Company settings</a>
+        <ActionLink Href="/settings/permission-sets">Permission sets</ActionLink>
+        <ActionLink Href="/settings/sign-in">Sign-in and two-factor</ActionLink>
+        <ActionLink Href="/settings">Company settings</ActionLink>
     </div>
     <p class="muted">
         <strong>View-only</strong> users read everything and change nothing. <strong>Standard</strong> users do the day-to-day work: sales, purchases,
@@ -48,7 +48,7 @@
             {
                 <tr class="@(user.IsActive ? null : "inactive")">
                     <td>
-                        <a href="/settings/users/@user.Id">@user.Username</a> @(user.IsActive ? "" : "(inactive)")
+                        <ActionLink Href="@($"/settings/users/{user.Id}")">@user.Username</ActionLink> @(user.IsActive ? "" : "(inactive)")
                         @if (user.Email is not null)
                         {
                             <br /><span class="muted">@user.Email</span>

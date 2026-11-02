@@ -9,8 +9,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Invoice and form designs</h1>
-        <a class="button secondary" href="/settings">Settings</a>
-        <a class="button secondary" href="/audit?entityType=form_style">History</a>
+        <ActionLink Class="button secondary" Href="/settings">Settings</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=form_style">History</ActionLink>
     </div>
     <p class="muted">
         How printed invoices, estimates, credit memos, sales receipts, statements and purchase orders look. Every document uses the
@@ -32,7 +32,7 @@
                     {
                         <tr class="@(design.IsActive ? null : "inactive")">
                             <td>
-                                <a href="/settings/forms/@design.Id">@design.Name</a>@(design.IsDefault ? " " : "")
+                                <ActionLink Href="@($"/settings/forms/{design.Id}")">@design.Name</ActionLink>@(design.IsDefault ? " " : "")
                                 @if (design.IsDefault)
                                 {
                                     <span class="badge ok">Default</span>
@@ -74,11 +74,11 @@
                             <span class="inline-actions">
                                 <a href="@PresetPreview(preset.Key, FormDocuments.Invoice)" target="preset-preview">Preview</a>
                                 <a href="@PresetPreview(preset.Key, FormDocuments.Estimate)" target="preset-preview">as an estimate</a>
-                                <form method="post" action="/settings/forms/new" class="inline-form" data-enhance="false">
+                                <PostForm Action="/settings/forms/new" class="inline-form" data-enhance="false">
                                     <AntiforgeryToken />
                                     <input type="hidden" name="copyFrom" value="@(FormDesignEndpoints.PresetPrefix + preset.Key)" />
                                     <button type="submit" class="secondary">Use this design</button>
-                                </form>
+                                </PostForm>
                             </span>
                         </div>
                     </li>
@@ -117,10 +117,10 @@
                         <strong>@font.Family</strong> <span class="muted">· @font.Group</span>
                         @if (font.CanRemove)
                         {
-                            <form method="post" action="/settings/forms/fonts/@font.Key/remove" class="inline-form" data-enhance="false">
+                            <PostForm Action="@($"/settings/forms/fonts/{font.Key}/remove")" class="inline-form" data-enhance="false">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">Remove</button>
-                            </form>
+                            </PostForm>
                         }
                         else
                         {
@@ -131,7 +131,7 @@
             </ul>
         }
         <div class="row">
-            <form method="post" action="/settings/forms/fonts/google" data-enhance="false">
+            <PostForm Action="/settings/forms/fonts/google" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="field">
                     <label for="google-family">Add from Google Fonts</label>
@@ -139,8 +139,8 @@
                     <span class="hint">The family's name as fonts.google.com shows it. The server downloads its regular and bold weights once.</span>
                 </div>
                 <button type="submit" class="secondary">Add</button>
-            </form>
-            <form method="post" action="/settings/forms/fonts/upload" enctype="multipart/form-data" data-enhance="false">
+            </PostForm>
+            <PostForm Action="/settings/forms/fonts/upload" enctype="multipart/form-data" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="field">
                     <label for="upload-family">Upload your own</label>
@@ -156,13 +156,13 @@
                     <span class="hint">Check that the font's license lets you embed it in PDFs.</span>
                 </div>
                 <button type="submit" class="secondary">Upload</button>
-            </form>
+            </PostForm>
         </div>
     </section>
 
     <div class="card">
         <h2>New design</h2>
-        <form method="post" action="/settings/forms/new" data-enhance="false">
+        <PostForm Action="/settings/forms/new" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -189,7 +189,7 @@
                 </div>
             </div>
             <button type="submit">Create</button>
-        </form>
+        </PostForm>
     </div>
 </div>
 

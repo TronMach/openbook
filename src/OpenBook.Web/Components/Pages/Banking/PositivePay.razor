@@ -7,7 +7,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Positive pay</h1>
-        <a class="button secondary" href="/banking">Back to banking</a>
+        <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
     </div>
     <p class="muted">
         With positive pay, your bank only cashes checks listed in an issue file you send it. This makes that file: every numbered check
@@ -78,7 +78,7 @@
                 </table>
             </div>
 
-            <form class="card" method="post" action="/banking/positive-pay/export" data-enhance="false">
+            <PostForm class="card" Action="/banking/positive-pay/export" data-enhance="false">
                 <AntiforgeryToken />
                 <input type="hidden" name="accountId" value="@_accountId" />
                 <input type="hidden" name="from" value="@_from.ToString("yyyy-MM-dd")" />
@@ -102,7 +102,7 @@
                 <label class="check"><input type="checkbox" name="includeHeader" value="true" checked="@(_settings?.IncludeHeader ?? true)" /> <span>Include a header row</span></label>
                 <p class="muted">Columns: account number, check number, issue date, amount, payee, void (V). OpenBook remembers these settings for the account.</p>
                 <div class="actions"><button type="submit">Download CSV</button></div>
-            </form>
+            </PostForm>
         }
     }
 </div>

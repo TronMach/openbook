@@ -23,16 +23,16 @@
         <h1>@(_customer?.DisplayName ?? $"New {_terms.LowerCustomer}")</h1>
         @if (_customer is not null)
         {
-            <a class="button secondary" href="/customers/@_customer.Id/statement">Statement</a>
-            <a class="button secondary" href="/audit?entityId=@_customer.Id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/customers/{_customer.Id}/statement")">Statement</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_customer.Id}")">History</ActionLink>
         }
         @if (_customer is { IsActive: true })
         {
-            <a class="button secondary" href="/customers/new?parent=@_customer.Id">New sub-customer</a>
-            <a class="button secondary" href="/sales/estimates/new?customer=@_customer.Id">New estimate</a>
-            <a class="button secondary" href="/sales/credit-memos/new?customer=@_customer.Id">Credit memo</a>
-            <a class="button secondary" href="/sales/payments/new?customer=@_customer.Id">Receive payment</a>
-            <a class="button" href="/sales/invoices/new?customer=@_customer.Id">New invoice</a>
+            <ActionLink Class="button secondary" Href="@($"/customers/new?parent={_customer.Id}")">New sub-customer</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/estimates/new?customer={_customer.Id}")">New estimate</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/credit-memos/new?customer={_customer.Id}")">Credit memo</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/payments/new?customer={_customer.Id}")">Receive payment</ActionLink>
+            <ActionLink Class="button" Href="@($"/sales/invoices/new?customer={_customer.Id}")">New invoice</ActionLink>
         }
     </div>
 
@@ -286,7 +286,7 @@
                 {
                     <div class="alert error" role="alert">@DesignError</div>
                 }
-                <form method="post" action="/customers/@_customer.Id/form-design" data-enhance="false" class="inline-actions">
+                <PostForm Action="@($"/customers/{_customer.Id}/form-design")" data-enhance="false" class="inline-actions">
                     <AntiforgeryToken />
                     <select name="designId" aria-label="Design for this customer's documents">
                         <option value="">The usual design for each document</option>
@@ -296,8 +296,8 @@
                         }
                     </select>
                     <button type="submit" class="secondary">Save</button>
-                </form>
-                <p class="hint">Their invoices, estimates, credit memos, sales receipts and statements print with it. <a href="/settings/forms">Designs</a></p>
+                </PostForm>
+                <p class="hint">Their invoices, estimates, credit memos, sales receipts and statements print with it. <ActionLink Href="/settings/forms">Designs</ActionLink></p>
             </section>
         }
         <CustomFieldPanel EntityType="customer" EntityId="_customer.Id" />

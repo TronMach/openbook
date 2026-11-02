@@ -10,11 +10,11 @@
 <div class="card">
     <div class="toolbar">
         <h1>@(_segment?.Name ?? "Not found")</h1>
-        <a class="button secondary" href="/segments">Back</a>
+        <ActionLink Class="button secondary" Href="/segments">Back</ActionLink>
         @if (_segment is not null)
         {
             <a class="button secondary" href="@ReportLink">Profit and loss</a>
-            <a class="button secondary" href="/audit?entityId=@_segment.Id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_segment.Id}")">History</ActionLink>
         }
     </div>
 
@@ -57,7 +57,7 @@
 
         @if (_segment.Kind == SegmentKind.Class)
         {
-            <form method="post" action="/segments/@_segment.Id/functional-area" data-enhance="false" style="margin-top: 1rem">
+            <PostForm Action="@($"/segments/{_segment.Id}/functional-area")" data-enhance="false" style="margin-top: 1rem">
                 <AntiforgeryToken />
                 <div class="field">
                     <label for="area">Functional area <span class="muted">(nonprofits)</span></label>
@@ -71,7 +71,7 @@
                     <span class="hint">Where this class's expenses go on the statement of functional expenses.</span>
                 </div>
                 <div class="actions"><button type="submit" class="secondary">Save area</button></div>
-            </form>
+            </PostForm>
         }
 
         <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">

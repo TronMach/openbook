@@ -163,6 +163,16 @@ button, .button {
 button.secondary, .button.secondary { background: transparent; color: var(--accent); }
 button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.link { background: none; border: 0; color: var(--muted); padding: 0; font-weight: 400; }
+/* An action the person's access doesn't reach (ActionLink): greyed out; it opens the page saying who can give it. */
+a.unavailable { color: var(--muted); border-color: var(--border); border-style: dashed; background: transparent; cursor: help; opacity: 0.75; }
+a.unavailable:not(.button) { text-decoration: line-through dotted; }
+/* A form the person's access doesn't reach (PostForm): its controls disabled in place, with a note on what it needs. */
+fieldset.unavailable-form { display: contents; }
+fieldset.unavailable-form :is(button, .button, input, select, textarea) { opacity: 0.55; cursor: not-allowed; }
+fieldset.unavailable-form :is(button, .button):not(.link) { background: transparent; color: var(--muted); border-color: var(--border); border-style: dashed; }
+.unavailable-note { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+form.inline .unavailable-note { display: inline; margin-left: 0.4rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .price-note { font-size: 0.75rem; margin-top: 0.15rem; max-width: 16rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .price-note button.link { font-size: 0.75rem; text-decoration: underline; }
 

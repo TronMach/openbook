@@ -18,8 +18,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@_title</h1>
-        <a class="button secondary" href="/banking/@_transaction.AccountId">Back to register</a>
-        <a class="button secondary" href="/audit?entityId=@_transaction.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/banking/{_transaction.AccountId}")">Back to register</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_transaction.Id}")">History</ActionLink>
         @if (_transaction.Status == BankTransactionStatus.Posted)
         {
             <a class="button secondary" href="@(_transaction.Kind == BankTransactionKind.Transfer ? $"/banking/transfers/{_transaction.Id}/edit" : $"/banking/transactions/{_transaction.Id}/edit")">Change</a>

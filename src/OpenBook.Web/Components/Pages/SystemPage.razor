@@ -46,10 +46,10 @@
         <div class="card">
             <h2>Quit OpenBook</h2>
             <p class="muted">OpenBook keeps running in the background after you close the browser, so scheduled backups and other jobs can run; its icon in the system tray can open, back up and quit it too. Quit backs up your books first, then stops OpenBook until you start it again from the Start menu.</p>
-            <form method="post" action="/settings/system/quit">
+            <PostForm Action="/settings/system/quit">
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">Quit OpenBook</button>
-            </form>
+            </PostForm>
         </div>
     }
     else
@@ -122,7 +122,7 @@ docker compose up -d</pre>
         }
         @if (Install.IsDesktop && update.Ready is not null && update.Available is { } ready)
         {
-            <form method="post" action="/settings/system/updates/install" data-enhance="false">
+            <PostForm Action="/settings/system/updates/install" data-enhance="false">
                 <AntiforgeryToken />
                 <p>Installing backs up your books first, then OpenBook closes, updates and starts again by itself in a minute or two.</p>
                 @if (InstallError is not null)
@@ -130,20 +130,20 @@ docker compose up -d</pre>
                     <label class="check"><input type="checkbox" name="anyway" value="true" /> <span>Install even though the backup didn't work</span></label>
                 }
                 <button type="submit">Install version @ready.Version now</button>
-            </form>
+            </PostForm>
         }
         <div class="actions">
-            <form method="post" action="/settings/system/updates/check" data-enhance="false" class="inline">
+            <PostForm Action="/settings/system/updates/check" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">Check now</button>
-            </form>
+            </PostForm>
             @if (Install.IsDesktop)
             {
-                <form method="post" action="/settings/system/updates/auto" data-enhance="false" class="inline">
+                <PostForm Action="/settings/system/updates/auto" data-enhance="false" class="inline">
                     <AntiforgeryToken />
                     <input type="hidden" name="check" value="@(update.Enabled ? "false" : "true")" />
                     <button type="submit" class="link">@(update.Enabled ? "Stop checking automatically" : "Check automatically every day")</button>
-                </form>
+                </PostForm>
             }
         </div>
         <p class="muted">

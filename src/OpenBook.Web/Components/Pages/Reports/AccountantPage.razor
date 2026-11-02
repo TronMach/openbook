@@ -42,9 +42,9 @@
         <h2>Adjusting entries</h2>
         <p class="muted">Journal entries marked as adjusting entries show as their own columns on the trial balance worksheet.</p>
         <p>
-            <a class="button" href="/journal/new?adjusting=true">Enter an adjusting entry</a>
+            <ActionLink Class="button" Href="/journal/new?adjusting=true">Enter an adjusting entry</ActionLink>
             <a class="button secondary" href="/reports/trial-balance-worksheet?asOf=@_to.ToString("yyyy-MM-dd")">Trial balance worksheet</a>
-            <a class="button secondary" href="/reports/adjusting-entries">Adjusting entries report</a>
+            <ActionLink Class="button secondary" Href="/reports/adjusting-entries">Adjusting entries report</ActionLink>
         </p>
         @if (_entries.Count == 0)
         {

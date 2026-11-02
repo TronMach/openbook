@@ -15,12 +15,12 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@_register.FullName</h1>
-        <a class="button secondary" href="/banking/@AccountId/import">Import</a>
-        <a class="button secondary" href="/banking/@AccountId/feed">Review</a>
-        <a class="button secondary" href="/banking/@AccountId/reconcile">Reconcile</a>
-        <a class="button secondary" href="/banking/transfer?from=@AccountId">Transfer</a>
-        <a class="button secondary" href="/banking/@AccountId/record/receive">@Labels.For(BankTransactionKind.Receive, _register.Account.Type)</a>
-        <a class="button" href="/banking/@AccountId/record/spend">@Labels.For(BankTransactionKind.Spend, _register.Account.Type)</a>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}/import")">Import</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}/feed")">Review</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}/reconcile")">Reconcile</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/banking/transfer?from={AccountId}")">Transfer</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}/record/receive")">@Labels.For(BankTransactionKind.Receive, _register.Account.Type)</ActionLink>
+        <ActionLink Class="button" Href="@($"/banking/{AccountId}/record/spend")">@Labels.For(BankTransactionKind.Spend, _register.Account.Type)</ActionLink>
     </div>
 
     <div class="summary-bar">
@@ -107,7 +107,7 @@
                                 }
                                 else
                                 {
-                                    <a href="/banking/@AccountId/reconcile">@Labels.Date(r.StatementDate)</a>
+                                    <ActionLink Href="@($"/banking/{AccountId}/reconcile")">@Labels.Date(r.StatementDate)</ActionLink>
                                 }
                             </td>
                             <td class="num">@Labels.Amount(r.StatementEndingBalance)</td>

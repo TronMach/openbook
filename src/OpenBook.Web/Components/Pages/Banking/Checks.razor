@@ -7,7 +7,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Print checks</h1>
-        <a class="button secondary" href="/banking">Back to banking</a>
+        <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
     </div>
     <p class="muted">
         Payments from bank accounts, printed on standard voucher check stock (check at the top, two stubs below). Load the stock
@@ -48,7 +48,7 @@
     }
     else
     {
-        <form method="post" action="/checks/print" target="_blank" data-enhance="false">
+        <PostForm Action="/checks/print" target="_blank" data-enhance="false">
             <AntiforgeryToken />
             <div class="table-wrap">
                 <table class="data">
@@ -75,7 +75,7 @@
                 <button type="submit">Print selected</button>
                 <span class="muted">Opens the PDF in a new tab. Reload this page afterwards to see them marked as printed.</span>
             </div>
-        </form>
+        </PostForm>
     }
 </div>
 

@@ -45,7 +45,7 @@
         @if (EntityId is { } entityId)
         {
             <input type="hidden" name="entityId" value="@entityId" />
-            <p class="muted">Showing the history of one record. <a href="/audit">Show everything</a>.</p>
+            <p class="muted">Showing the history of one record. <ActionLink Href="/audit">Show everything</ActionLink>.</p>
         }
         <div class="actions">
             <button type="submit">Filter</button>
@@ -89,7 +89,7 @@
                                 }
                                 @if (EntityId is null && record.EntityType is not ("company" or "closing_date"))
                                 {
-                                    <a class="muted" href="/audit?entityId=@record.EntityId" title="History of this record"> · history</a>
+                                    <ActionLink Class="muted" Href="@($"/audit?entityId={record.EntityId}")" Title="History of this record"> · history</ActionLink>
                                 }
                             </td>
                             <td>

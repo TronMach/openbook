@@ -24,7 +24,7 @@
     }
     @if (_stock.Count == 0)
     {
-        <div class="alert notice" role="status">There are no active inventory products. <a href="/items/new">Add one</a> first.</div>
+        <div class="alert notice" role="status">There are no active inventory products. <ActionLink Href="/items/new">Add one</ActionLink> first.</div>
     }
 
     <EditForm Model="Input" FormName="adjustment" OnValidSubmit="SaveAsync" method="post">

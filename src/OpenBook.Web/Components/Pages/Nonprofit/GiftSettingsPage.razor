@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Letter settings</h1>
-        <a class="button secondary" href="/nonprofit/thanks">Thank donors</a>
+        <ActionLink Class="button secondary" Href="/nonprofit/thanks">Thank donors</ActionLink>
     </div>
     <p class="muted">What goes on gift acknowledgments and giving statements. They use the company's name, address and form style from Settings.</p>
     @if (Error is not null)
@@ -20,7 +20,7 @@
         <div class="alert notice" role="status">Saved.</div>
     }
     <div class="card">
-        <form method="post" action="/nonprofit/settings" data-enhance="false">
+        <PostForm Action="/nonprofit/settings" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -37,7 +37,7 @@
                 <span class="hint">Leave empty for a plain thank-you that names the organization (and the year on statements).</span>
             </div>
             <div class="actions"><button type="submit">Save</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

@@ -7,8 +7,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>ACH payments</h1>
-        <a class="button secondary" href="/purchases">Back to purchases</a>
-        <a class="button secondary" href="/purchases/pay-bills">Pay bills</a>
+        <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/pay-bills">Pay bills</ActionLink>
     </div>
     <p class="muted">
         Pay vendors by direct deposit: pay their bills as usual from a bank account, then send the payments to your bank in a NACHA file
@@ -26,7 +26,7 @@
 
     @if (_banks.Count == 0)
     {
-        <div class="card"><p>ACH payments come out of a bank account. <a href="/accounts/new">Add one</a> first.</p></div>
+        <div class="card"><p>ACH payments come out of a bank account. <ActionLink Href="/accounts/new">Add one</ActionLink> first.</p></div>
         return;
     }
 
@@ -46,7 +46,7 @@
     <div class="card" id="settings">
         <h2>Your bank's ACH details</h2>
         <p class="muted">From your bank's ACH (or "direct deposit origination") setup; they're the same for every file.</p>
-        <form method="post" action="/purchases/ach/settings" data-enhance="false">
+        <PostForm Action="/purchases/ach/settings" data-enhance="false">
             <AntiforgeryToken />
             <input type="hidden" name="accountId" value="@_accountId" />
             <div class="row">
@@ -63,17 +63,17 @@
                 <div class="field"><label for="description">Entry description</label><input id="description" name="entryDescription" maxlength="10" value="@(_settings?.EntryDescription ?? "VENDOR PAY")" /></div>
             </div>
             <div class="actions"><button type="submit" class="secondary">Save bank details</button></div>
-        </form>
+        </PostForm>
     </div>
 
     <h2>Payments ready to send</h2>
     @if (_candidates.Count == 0)
     {
-        <div class="card"><p>No bill payments from this account to vendors with bank details are waiting. <a href="/purchases/pay-bills">Pay bills</a> first.</p></div>
+        <div class="card"><p>No bill payments from this account to vendors with bank details are waiting. <ActionLink Href="/purchases/pay-bills">Pay bills</ActionLink> first.</p></div>
     }
     else
     {
-        <form method="post" action="/purchases/ach/file" data-enhance="false">
+        <PostForm Action="/purchases/ach/file" data-enhance="false">
             <AntiforgeryToken />
             <input type="hidden" name="accountId" value="@_accountId" />
             <table class="data">
@@ -99,7 +99,7 @@
                 </div>
             </div>
             <div class="actions"><button type="submit" disabled="@(_settings is null)">Make ACH file</button></div>
-        </form>
+        </PostForm>
     }
 
     @if (_batches.Count > 0)
@@ -115,7 +115,7 @@
                         <td>@Labels.Date(b.EffectiveDate)</td>
                         <td class="num">@b.EntryCount</td>
                         <td class="num">@Labels.Amount(b.Total)</td>
-                        <td><a href="/purchases/ach/files/@b.Id">Download</a></td>
+                        <td><ActionLink Href="@($"/purchases/ach/files/{b.Id}")">Download</ActionLink></td>
                     </tr>
                 }
             </tbody>

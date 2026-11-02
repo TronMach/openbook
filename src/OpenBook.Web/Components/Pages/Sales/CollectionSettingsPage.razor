@@ -6,8 +6,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Collection settings</h1>
-        <a class="button secondary" href="/sales/collections">Collections</a>
-        <a class="button secondary" href="/audit?entityType=collection_settings">History</a>
+        <ActionLink Class="button secondary" Href="/sales/collections">Collections</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=collection_settings">History</ActionLink>
     </div>
 
     @if (Error is not null)
@@ -21,7 +21,7 @@
 
     <div class="card" id="late-fees">
         <h2>Late fees</h2>
-        <form method="post" action="/sales/collections/settings/late-fees" data-enhance="false">
+        <PostForm Action="/sales/collections/settings/late-fees" data-enhance="false">
             <AntiforgeryToken />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.LateFeesEnabled" />
@@ -58,12 +58,12 @@
                 Check that your state allows the rate you set.
             </p>
             <div class="actions"><button type="submit">Save late fees</button></div>
-        </form>
+        </PostForm>
     </div>
 
     <div class="card" id="reminders" style="margin-top: 1.5rem">
         <h2>Payment reminders</h2>
-        <form method="post" action="/sales/collections/settings/reminders" data-enhance="false">
+        <PostForm Action="/sales/collections/settings/reminders" data-enhance="false">
             <AntiforgeryToken />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.RemindersEnabled" />
@@ -86,11 +86,11 @@
                 <textarea id="body" name="body" rows="8" maxlength="4000">@_settings.ReminderBody</textarea>
                 <span class="hint">
                     Placeholders: {customer}, {invoice}, {balance}, {due}, {days} (days late), {when} ("is due on …" or "was due on …, 9 days ago")
-                    and {company}. The invoice PDF is attached. Uses the <a href="/settings/email">email settings</a>.
+                    and {company}. The invoice PDF is attached. Uses the <ActionLink Href="/settings/email">email settings</ActionLink>.
                 </span>
             </div>
             <div class="actions"><button type="submit">Save reminders</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

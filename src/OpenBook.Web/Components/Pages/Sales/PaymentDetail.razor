@@ -22,16 +22,16 @@
         {
             <span class="badge">Voided</span>
         }
-        <a class="button secondary" href="/sales?show=payments">Back to payments</a>
-        <a class="button secondary" href="/audit?entityId=@_payment.Id">History</a>
+        <ActionLink Class="button secondary" Href="/sales?show=payments">Back to payments</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_payment.Id}")">History</ActionLink>
         @if (_payment.Status == DocumentStatus.Posted)
         {
-            <a class="button secondary" href="/sales/payments/@_payment.Id/edit">Change</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/payments/{_payment.Id}/edit")">Change</ActionLink>
         }
         @if (_payment.Unapplied > 0m)
         {
-            <a class="button secondary" href="/sales/credits/apply?customer=@_payment.CustomerId">Apply credit</a>
-            <a class="button secondary" href="/sales/refunds/new?payment=@_payment.Id">Refund</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/credits/apply?customer={_payment.CustomerId}")">Apply credit</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/refunds/new?payment={_payment.Id}")">Refund</ActionLink>
         }
     </div>
 

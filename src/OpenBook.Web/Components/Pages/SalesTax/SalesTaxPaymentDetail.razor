@@ -21,8 +21,8 @@
         {
             <span class="badge">Voided</span>
         }
-        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
-        <a class="button secondary" href="/audit?entityId=@_payment.Id">History</a>
+        <ActionLink Class="button secondary" Href="/sales-tax">Back to sales tax</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_payment.Id}")">History</ActionLink>
     </div>
 
     @if (_error is not null)

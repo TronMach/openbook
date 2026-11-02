@@ -43,19 +43,19 @@
                     <td class="actions">
                         @if (e.Status == ScheduledEmailStatus.Failed)
                         {
-                            <form method="post" action="/sales/scheduled-emails/@e.Id/retry" style="display:inline">
+                            <PostForm Action="@($"/sales/scheduled-emails/{e.Id}/retry")" style="display:inline">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="back" value="@Back" />
                                 <button type="submit" class="secondary">Try again</button>
-                            </form>
+                            </PostForm>
                         }
                         @if (e.Status is ScheduledEmailStatus.Scheduled or ScheduledEmailStatus.Failed)
                         {
-                            <form method="post" action="/sales/scheduled-emails/@e.Id/cancel" style="display:inline">
+                            <PostForm Action="@($"/sales/scheduled-emails/{e.Id}/cancel")" style="display:inline">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="back" value="@Back" />
                                 <button type="submit" class="secondary">Cancel</button>
-                            </form>
+                            </PostForm>
                         }
                     </td>
                 </tr>

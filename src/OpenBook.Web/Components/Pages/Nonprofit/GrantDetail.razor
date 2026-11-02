@@ -22,9 +22,9 @@
             {
                 <span class="badge">@g.Status</span>
             }
-            <a class="button secondary" href="/reports/profit-and-loss?classId=@g.ClassId&preset=Custom&from=@Iso(g.StartsOn)&to=@Iso(g.EndsOn)">Profit and loss for its class</a>
-            <a class="button secondary" href="/audit?entityId=@g.Id">History</a>
-            <a class="button secondary" href="/nonprofit/grants">Grants</a>
+            <ActionLink Class="button secondary" Href="@($"/reports/profit-and-loss?classId={g.ClassId}&preset=Custom&from={Iso(g.StartsOn)}&to={Iso(g.EndsOn)}")">Profit and loss for its class</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={g.Id}")">History</ActionLink>
+            <ActionLink Class="button secondary" Href="/nonprofit/grants">Grants</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -79,18 +79,18 @@
                 <div class="card" style="margin-top: 1.5rem">
                     <h2>Recognize income earned</h2>
                     <p class="muted">@Labels.Amount(_position.ReadyToRecognize) spent through today hasn't been recognized yet. Recognizing posts it as grant income on its date.</p>
-                    <form method="post" action="/nonprofit/grants/@g.Id/recognize" data-enhance="false" class="inline">
+                    <PostForm Action="@($"/nonprofit/grants/{g.Id}/recognize")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
                         <label>Through <input type="date" name="through" value="@Iso(CompanyTime.Today)" /></label>
                         <ClosedPeriodPassword Visible="Password" Interactive="false" />
                         <button type="submit">Recognize</button>
-                    </form>
+                    </PostForm>
                 </div>
             }
 
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Money from the funder</h2>
-                <form method="post" action="/nonprofit/grants/@g.Id/receive" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/receive")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" required /></div>
@@ -107,12 +107,12 @@
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Record payment</button></div>
-                </form>
+                </PostForm>
             </div>
 
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Budget</h2>
-                <form method="post" action="/nonprofit/grants/@g.Id/budget" data-enhance="false">
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/budget")" data-enhance="false">
                     <AntiforgeryToken />
                     <table class="data">
                         <thead><tr><th>Expense account</th><th class="num">Amount</th></tr></thead>
@@ -136,7 +136,7 @@
                         </tbody>
                     </table>
                     <div class="actions"><button type="submit" class="secondary">Save budget</button></div>
-                </form>
+                </PostForm>
             </div>
         }
 
@@ -172,28 +172,28 @@
             <h2>Status</h2>
             @if (g.Status == GrantStatus.Active)
             {
-                <form method="post" action="/nonprofit/grants/@g.Id/close" data-enhance="false" class="inline">
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/close")" data-enhance="false" class="inline">
                     <AntiforgeryToken />
                     <button type="submit" class="secondary">Close the grant</button>
                     <span class="hint">When it's finished: nothing more is expected.</span>
-                </form>
+                </PostForm>
             }
             else if (g.Status == GrantStatus.Closed)
             {
-                <form method="post" action="/nonprofit/grants/@g.Id/reopen" data-enhance="false" class="inline">
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/reopen")" data-enhance="false" class="inline">
                     <AntiforgeryToken />
                     <button type="submit" class="secondary">Reopen</button>
-                </form>
+                </PostForm>
             }
             @if (g.Status != GrantStatus.Voided)
             {
-                <form method="post" action="/nonprofit/grants/@g.Id/void" data-enhance="false" style="margin-top: 1rem">
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/void")" data-enhance="false" style="margin-top: 1rem">
                     <AntiforgeryToken />
                     <p class="muted">Void a grant recorded by mistake (after voiding its payments and recognized income).</p>
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Void grant</button></div>
-                </form>
+                </PostForm>
             }
         </div>
     }

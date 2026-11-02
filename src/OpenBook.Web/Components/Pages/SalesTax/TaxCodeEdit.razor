@@ -9,10 +9,10 @@
 <div class="card">
     <div class="toolbar">
         <h1>@(Id is null ? "New tax code" : _code?.Name ?? "Tax code")</h1>
-        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        <ActionLink Class="button secondary" Href="/sales-tax">Back to sales tax</ActionLink>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={id}")">History</ActionLink>
         }
     </div>
 
@@ -60,7 +60,7 @@
                 }
                 @if (_rates.Count == 0)
                 {
-                    <p>No rates yet. <a href="/sales-tax/rates/new">Add a rate</a> first.</p>
+                    <p>No rates yet. <ActionLink Href="/sales-tax/rates/new">Add a rate</ActionLink> first.</p>
                 }
             </fieldset>
             <div class="actions">

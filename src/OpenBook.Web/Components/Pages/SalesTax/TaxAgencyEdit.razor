@@ -9,10 +9,10 @@
 <div class="card">
     <div class="toolbar">
         <h1>@(Id is null ? "New tax agency" : _agency?.Name ?? "Tax agency")</h1>
-        <a class="button secondary" href="/sales-tax">Back to sales tax</a>
+        <ActionLink Class="button secondary" Href="/sales-tax">Back to sales tax</ActionLink>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={id}")">History</ActionLink>
         }
     </div>
 

@@ -16,13 +16,13 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Recurring gifts</h1>
-        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
         @if (_templates.Any(t => t.IsDue(_today)))
         {
-            <form method="post" action="/nonprofit/recurring/record" data-enhance="false" class="inline">
+            <PostForm Action="/nonprofit/recurring/record" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <button type="submit">Record what's due (@_templates.Count(t => t.IsDue(_today)))</button>
-            </form>
+            </PostForm>
         }
     </div>
     <p class="muted">Monthly card gifts, standing transfers and pledges paid in installments. Each one becomes an ordinary gift on its date, by hand here or automatically within the hour.</p>
@@ -51,11 +51,11 @@
                         <td>@(t.AutoCreate ? "Yes" : "No")</td>
                         <td>
                             <a href="/nonprofit/recurring?edit=@t.Id">Edit</a>
-                            <form method="post" action="/nonprofit/recurring/@t.Id/active" data-enhance="false" class="inline">
+                            <PostForm Action="@($"/nonprofit/recurring/{t.Id}/active")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="active" value="@(t.IsActive ? "false" : "true")" />
                                 <button type="submit" class="secondary">@(t.IsActive ? "Stop" : "Restart")</button>
-                            </form>
+                            </PostForm>
                         </td>
                     </tr>
                 }

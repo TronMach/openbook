@@ -7,10 +7,10 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Pricing</h1>
-        <a class="button secondary" href="/reports/price-list">Price list</a>
-        <a class="button secondary" href="/reports/discounts-given">Discounts given</a>
-        <a class="button secondary" href="/pricing/levels/new">New price level</a>
-        <a class="button" href="/pricing/rules/new">New price rule</a>
+        <ActionLink Class="button secondary" Href="/reports/price-list">Price list</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/discounts-given">Discounts given</ActionLink>
+        <ActionLink Class="button secondary" Href="/pricing/levels/new">New price level</ActionLink>
+        <ActionLink Class="button" Href="/pricing/rules/new">New price rule</ActionLink>
     </div>
     <p class="muted">
         A customer's <strong>price level</strong> is their baseline (wholesale, retail, gold…). Items can have <strong>quantity breaks</strong>
@@ -30,7 +30,7 @@
         </div>
         @if (_levels.Count == 0)
         {
-            <p class="muted">No price levels yet. <a href="/pricing/levels/new">Add one</a>, then choose it on a customer.</p>
+            <p class="muted">No price levels yet. <ActionLink Href="/pricing/levels/new">Add one</ActionLink>, then choose it on a customer.</p>
         }
         else
         {
@@ -56,7 +56,7 @@
         </div>
         @if (_rules.Count == 0)
         {
-            <p class="muted">No price rules yet. <a href="/pricing/rules/new">Add one</a> for a sale, a customer's special price or a volume deal.</p>
+            <p class="muted">No price rules yet. <ActionLink Href="/pricing/rules/new">Add one</ActionLink> for a sale, a customer's special price or a volume deal.</p>
         }
         else
         {
@@ -81,7 +81,7 @@
 
     <section class="card">
         <h2>Rounding</h2>
-        <form method="post" action="/pricing/rounding" class="row">
+        <PostForm Action="/pricing/rounding" class="row">
             <AntiforgeryToken />
             <div class="field">
                 <label for="rounding">Round prices changed by levels, breaks and rules to</label>
@@ -94,7 +94,7 @@
                 <span class="hint">A rule can round its own prices differently. List prices are never rounded. Needs the accountant role.</span>
             </div>
             <div class="actions"><button type="submit" class="secondary">Save rounding</button></div>
-        </form>
+        </PostForm>
     </section>
 </div>
 

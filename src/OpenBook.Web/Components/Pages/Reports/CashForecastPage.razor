@@ -46,13 +46,13 @@
     {
         <div class="card no-print" style="margin-bottom: 1rem">
             <h3>@s.Name</h3>
-            <form method="post" action="/reports/cash-forecast/scenarios/@s.Id" data-enhance="false" class="inline">
+            <PostForm Action="@($"/reports/cash-forecast/scenarios/{s.Id}")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <input name="name" value="@s.Name" maxlength="100" aria-label="Name" />
                 <label>Customers pay <input name="collectionDelay" type="number" class="short" value="@s.CollectionDelayDays" /> days late</label>
                 <label>Bills paid <input name="paymentDelay" type="number" class="short" value="@s.PaymentDelayDays" /> days late</label>
                 <button type="submit" class="secondary">Save</button>
-            </form>
+            </PostForm>
             @if (s.Items.Count > 0)
             {
                 <table class="data">
@@ -64,17 +64,17 @@
                                 <td>@i.Description</td><td class="num">@Labels.Amount(i.Amount)</td><td>@Labels.Date(i.StartDate)</td><td>@i.Recurrence</td>
                                 <td>@(i.EndDate is { } end ? Labels.Date(end) : "")</td>
                                 <td>
-                                    <form method="post" action="/reports/cash-forecast/scenarios/@s.Id/items/@i.Id/remove" data-enhance="false" class="inline">
+                                    <PostForm Action="@($"/reports/cash-forecast/scenarios/{s.Id}/items/{i.Id}/remove")" data-enhance="false" class="inline">
                                         <AntiforgeryToken />
                                         <button type="submit" class="link">Remove</button>
-                                    </form>
+                                    </PostForm>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             }
-            <form method="post" action="/reports/cash-forecast/scenarios/@s.Id/items" data-enhance="false" class="inline">
+            <PostForm Action="@($"/reports/cash-forecast/scenarios/{s.Id}/items")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <input name="description" placeholder="New hire, equipment, big order…" maxlength="200" required aria-label="Description" />
                 <input name="amount" class="amount" inputmode="decimal" placeholder="-4000.00" required aria-label="Amount (negative for money out)" />
@@ -87,20 +87,20 @@
                 </select>
                 <input name="endDate" type="date" aria-label="Until" />
                 <button type="submit" class="secondary">Add</button>
-            </form>
-            <form method="post" action="/reports/cash-forecast/scenarios/@s.Id/delete" data-enhance="false" class="inline">
+            </PostForm>
+            <PostForm Action="@($"/reports/cash-forecast/scenarios/{s.Id}/delete")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <button type="submit" class="link">Delete scenario</button>
-            </form>
+            </PostForm>
         </div>
     }
-    <form method="post" action="/reports/cash-forecast/scenarios" data-enhance="false" class="inline no-print">
+    <PostForm Action="/reports/cash-forecast/scenarios" data-enhance="false" class="inline no-print">
         <AntiforgeryToken />
         <input name="name" placeholder="Scenario name" maxlength="100" required aria-label="Scenario name" />
         <label>Customers pay <input name="collectionDelay" type="number" class="short" value="0" /> days late</label>
         <label>Bills paid <input name="paymentDelay" type="number" class="short" value="0" /> days late</label>
         <button type="submit" class="secondary">Add scenario</button>
-    </form>
+    </PostForm>
 </div>
 
 @code {

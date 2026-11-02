@@ -21,8 +21,8 @@
         {
             <span class="badge">Voided</span>
         }
-        <a class="button secondary" href="/customers/@_refund.CustomerId">Customer</a>
-        <a class="button secondary" href="/audit?entityId=@_refund.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/customers/{_refund.CustomerId}")">Customer</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_refund.Id}")">History</ActionLink>
     </div>
 
     @if (_error is not null)

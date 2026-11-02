@@ -9,11 +9,11 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Time</h1>
-        <a class="button secondary" href="/time/week">Week grid</a>
-        <a class="button secondary" href="/time/people">People and rates</a>
-        <a class="button secondary" href="/capture">Capture on a phone</a>
-        <a class="button secondary" href="/projects">Projects</a>
-        <a class="button secondary" href="/reports/time-by-customer">Time by customer</a>
+        <ActionLink Class="button secondary" Href="/time/week">Week grid</ActionLink>
+        <ActionLink Class="button secondary" Href="/time/people">People and rates</ActionLink>
+        <ActionLink Class="button secondary" Href="/capture">Capture on a phone</ActionLink>
+        <ActionLink Class="button secondary" Href="/projects">Projects</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/time-by-customer">Time by customer</ActionLink>
     </div>
     @if (Error is not null)
     {
@@ -32,20 +32,20 @@
                 <h2>Running</h2>
                 @foreach (var t in _running)
                 {
-                    <form method="post" action="/time/@t.Id/stop" data-enhance="false" class="inline" style="display:block; margin-bottom: .5rem">
+                    <PostForm Action="@($"/time/{t.Id}/stop")" data-enhance="false" class="inline" style="display:block; margin-bottom: .5rem">
                         <AntiforgeryToken />
                         <strong>@Worker(t.WorkerId)</strong>
                         <span>@(t.CustomerId is { } c ? _customerNames.GetValueOrDefault(c) : "no customer")@(t.Notes is { } n ? $" · {n}" : "")</span>
                         <span class="muted">since @t.StartedAt!.Value.InCompanyTime().ToString("t")</span>
                         <button type="submit">Stop</button>
-                    </form>
+                    </PostForm>
                 }
             </div>
         }
 
         <div class="card">
             <h2>Start a timer or add time</h2>
-            <form method="post" action="/time" data-enhance="false">
+            <PostForm Action="/time" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -103,7 +103,7 @@
                     <button type="submit" name="mode" value="add">Add time</button>
                     <button type="submit" name="mode" value="start" class="secondary">Start timer</button>
                 </div>
-            </form>
+            </PostForm>
         </div>
     }
 
@@ -153,7 +153,7 @@
                             }
                             else
                             {
-                                <a href="/time/@t.Id/edit">Edit</a>
+                                <ActionLink Href="@($"/time/{t.Id}/edit")">Edit</ActionLink>
                             }
                         </td>
                     </tr>

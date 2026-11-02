@@ -14,15 +14,15 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Inventory</h1>
-        <a class="button secondary" href="/reports/inventory-valuation">Valuation</a>
-        <a class="button secondary" href="/reports/inventory-stock">Stock status</a>
-        <a class="button secondary" href="/items/new">New item</a>
-        <a class="button secondary" href="/inventory/warehouses">Warehouses</a>
-        <a class="button secondary" href="/inventory/labels">Labels</a>
-        <a class="button secondary" href="/inventory/transfers/new">Transfer</a>
-        <a class="button secondary" href="/inventory/landed-costs/new">Landed cost</a>
-        <a class="button secondary" href="/inventory/builds/new">Build assemblies</a>
-        <a class="button" href="/inventory/adjustments/new">Adjust quantities</a>
+        <ActionLink Class="button secondary" Href="/reports/inventory-valuation">Valuation</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/inventory-stock">Stock status</ActionLink>
+        <ActionLink Class="button secondary" Href="/items/new">New item</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/warehouses">Warehouses</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/labels">Labels</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/transfers/new">Transfer</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/landed-costs/new">Landed cost</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/builds/new">Build assemblies</ActionLink>
+        <ActionLink Class="button" Href="/inventory/adjustments/new">Adjust quantities</ActionLink>
     </div>
     <p class="muted">
         Inventory products and assemblies are counted and costed first in, first out (or at weighted average, per item): bills add stock
@@ -33,7 +33,7 @@
 
     @if (_stock.Count == 0)
     {
-        <div class="card"><p>No inventory products yet. <a href="/items/new">Add one</a> with the type "Inventory product".</p></div>
+        <div class="card"><p>No inventory products yet. <ActionLink Href="/items/new">Add one</ActionLink> with the type "Inventory product".</p></div>
     }
     else
     {
@@ -217,11 +217,11 @@
                             }
                         </td>
                         <td class="inline">
-                            <a class="button secondary" href="/inventory/builds/new?pending=@pending.Id">Build now</a>
-                            <form method="post" action="/inventory/pending-builds/@pending.Id/cancel" data-enhance="false">
+                            <ActionLink Class="button secondary" Href="@($"/inventory/builds/new?pending={pending.Id}")">Build now</ActionLink>
+                            <PostForm Action="@($"/inventory/pending-builds/{pending.Id}/cancel")" data-enhance="false">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">Cancel</button>
-                            </form>
+                            </PostForm>
                         </td>
                     </tr>
                 }

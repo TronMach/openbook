@@ -10,7 +10,7 @@
 @if (_banks.Count == 0)
 {
     <div class="card">
-        <p>@L["There's no bank account to write a check from yet."] <a href="/accounts/new">@L["Add a bank account"]</a></p>
+        <p>@L["There's no bank account to write a check from yet."] <ActionLink Href="/accounts/new">@L["Add a bank account"]</ActionLink></p>
     </div>
 }
 else
@@ -20,7 +20,7 @@ else
         <ul>
             @foreach (var bank in _banks)
             {
-                <li><a href="/banking/@bank.Account.Id/record/spend">@bank.FullName</a></li>
+                <li><ActionLink Href="@($"/banking/{bank.Account.Id}/record/spend")">@bank.FullName</ActionLink></li>
             }
         </ul>
     </div>

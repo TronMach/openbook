@@ -7,10 +7,10 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Fixed assets</h1>
-        <a class="button" href="/assets/new">Add an asset</a>
-        <a class="button secondary" href="/loans">Loans</a>
-        <a class="button secondary" href="/reports/fixed-assets">Register report</a>
-        <a class="button secondary" href="/reports/depreciation-schedule">Depreciation schedule</a>
+        <ActionLink Class="button" Href="/assets/new">Add an asset</ActionLink>
+        <ActionLink Class="button secondary" Href="/loans">Loans</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/fixed-assets">Register report</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/depreciation-schedule">Depreciation schedule</ActionLink>
     </div>
     <p class="muted">
         Equipment, vehicles, furniture and buildings the business uses for more than a year. Record the purchase the usual way (a bill,
@@ -68,12 +68,12 @@
                 </tbody>
                 <tfoot><tr><td>Total</td><td class="num">@Labels.Amount(_due.Sum(d => d.Amount))</td></tr></tfoot>
             </table>
-            <form method="post" action="/assets/depreciation" data-enhance="false">
+            <PostForm Action="/assets/depreciation" data-enhance="false">
                 <AntiforgeryToken />
                 <input type="hidden" name="through" value="@_through.ToString("yyyy-MM-dd")" />
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <div class="actions"><button type="submit">Post depreciation through @Labels.Date(_through)</button></div>
-            </form>
+            </PostForm>
         }
     </div>
 

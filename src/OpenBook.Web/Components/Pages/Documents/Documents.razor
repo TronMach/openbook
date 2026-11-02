@@ -13,7 +13,7 @@
         <a class="button secondary" href="@(ShowAll ? "/documents" : "/documents?showAll=true")">@(ShowAll ? "Waiting only" : "Show all")</a>
         @if (_admin)
         {
-            <a class="button secondary" href="/settings/document-reading">Reading settings</a>
+            <ActionLink Class="button secondary" Href="/settings/document-reading">Reading settings</ActionLink>
         }
     </div>
     <p class="muted">
@@ -36,7 +36,7 @@
     }
 
     <div class="card">
-        <form method="post" action="/documents/upload" enctype="multipart/form-data" data-enhance="false">
+        <PostForm Action="/documents/upload" enctype="multipart/form-data" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -61,7 +61,7 @@
                 </label>
             }
             <div class="actions"><button type="submit">Upload and read</button></div>
-        </form>
+        </PostForm>
     </div>
 
     @if (_documents.Count == 0)

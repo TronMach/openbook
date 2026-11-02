@@ -7,11 +7,11 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Receive a retainer</h1>
-        <a class="button secondary" href="/sales/retainers">Retainers</a>
+        <ActionLink Class="button secondary" Href="/sales/retainers">Retainers</ActionLink>
     </div>
     <p class="muted">
         For money received before you invoice: a deposit on an order, or a retainer for work to come. It goes into the bank and is held in
-        "@RetainerService.LiabilityAccountName" until you apply it to invoices. For payments of invoices already sent, <a href="/sales/payments/new">receive a payment</a> instead.
+        "@RetainerService.LiabilityAccountName" until you apply it to invoices. For payments of invoices already sent, <ActionLink Href="/sales/payments/new">receive a payment</ActionLink> instead.
     </p>
 
     @if (Error is not null)
@@ -21,12 +21,12 @@
 
     @if (_banks.Count == 0)
     {
-        <div class="card"><p>Retainers are deposited to a bank account. <a href="/accounts/new">Add one</a> first.</p></div>
+        <div class="card"><p>Retainers are deposited to a bank account. <ActionLink Href="/accounts/new">Add one</ActionLink> first.</p></div>
     }
     else
     {
         <div class="card">
-            <form method="post" action="/sales/retainers" data-enhance="false">
+            <PostForm Action="/sales/retainers" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -69,7 +69,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <div class="actions"><button type="submit">Receive retainer</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

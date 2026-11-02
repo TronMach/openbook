@@ -8,8 +8,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Permission sets"]</h1>
-        <a href="/settings/users">@L["Users"]</a>
-        <a class="button" href="/settings/permission-sets/new">@L["New permission set"]</a>
+        <ActionLink Href="/settings/users">@L["Users"]</ActionLink>
+        <ActionLink Class="button" Href="/settings/permission-sets/new">@L["New permission set"]</ActionLink>
     </div>
     <p class="muted">
         @L["A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role."]
@@ -27,7 +27,7 @@
                 @foreach (var set in _sets)
                 {
                     <tr class="@(set.IsActive ? null : "inactive")">
-                        <td><a href="/settings/permission-sets/@set.Id">@set.Name</a> @(set.IsActive ? "" : L["(switched off)"].Value)
+                        <td><ActionLink Href="@($"/settings/permission-sets/{set.Id}")">@set.Name</ActionLink> @(set.IsActive ? "" : L["(switched off)"].Value)
                             @if (set.Description is not null)
                             {
                                 <br /><span class="muted">@set.Description</span>

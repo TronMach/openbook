@@ -20,8 +20,8 @@
         {
             <span class="badge">Voided</span>
         }
-        <a class="button secondary" href="/banking/@_deposit.BankAccountId">Register</a>
-        <a class="button secondary" href="/audit?entityId=@_deposit.Id">History</a>
+        <ActionLink Class="button secondary" Href="@($"/banking/{_deposit.BankAccountId}")">Register</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_deposit.Id}")">History</ActionLink>
     </div>
 
     @if (_error is not null)

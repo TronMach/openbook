@@ -7,7 +7,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Pay bills</h1>
-        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -64,7 +64,7 @@
 
         @if (_rows.Count == 0)
         {
-            <div class="card"><p>No unpaid bills. <a href="/purchases/bills/new">Enter a bill</a>.</p></div>
+            <div class="card"><p>No unpaid bills. <ActionLink Href="/purchases/bills/new">Enter a bill</ActionLink>.</p></div>
         }
         else
         {

@@ -13,11 +13,11 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Record a gift</h1>
-        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
-        <a class="button secondary" href="/nonprofit/pledges/new">Record a pledge instead</a>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/pledges/new">Record a pledge instead</ActionLink>
     </div>
     <p class="muted">
-        Donors are customer records (<a href="/customers/new">add one</a>). A money gift goes into a bank account; an in-kind gift is recorded at its fair value to the
+        Donors are customer records (<ActionLink Href="/customers/new">add one</ActionLink>). A money gift goes into a bank account; an in-kind gift is recorded at its fair value to the
         asset or expense it became. For a restricted gift, choose a restricted contribution account and the purpose's class.
     </p>
 
@@ -27,7 +27,7 @@
     }
 
     <div class="card">
-        <form method="post" action="/nonprofit/gifts" data-enhance="false">
+        <PostForm Action="/nonprofit/gifts" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -136,7 +136,7 @@
             </div>
             <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <div class="actions"><button type="submit">Record gift</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

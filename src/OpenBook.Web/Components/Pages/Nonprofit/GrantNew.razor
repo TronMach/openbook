@@ -12,14 +12,14 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Add a grant</h1>
-        <a class="button secondary" href="/nonprofit/grants">Grants</a>
+        <ActionLink Class="button secondary" Href="/nonprofit/grants">Grants</ActionLink>
     </div>
     @if (Error is not null)
     {
         <div class="alert error" role="alert">@Error</div>
     }
     <div class="card">
-        <form method="post" action="/nonprofit/grants" data-enhance="false">
+        <PostForm Action="/nonprofit/grants" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field"><label for="name">Name</label><input id="name" name="name" required maxlength="@Grant.MaxNameLength" placeholder="Youth literacy 2026" /></div>
@@ -32,7 +32,7 @@
                             <option value="@c.Customer.Id">@c.FullName</option>
                         }
                     </select>
-                    <span class="hint">A customer record (<a href="/customers/new">add one</a>).</span>
+                    <span class="hint">A customer record (<ActionLink Href="/customers/new">add one</ActionLink>).</span>
                 </div>
                 <div class="field"><label for="reference">Award number <span class="muted">(optional)</span></label><input id="reference" name="reference" maxlength="50" /></div>
             </div>
@@ -75,7 +75,7 @@
             </div>
             <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <div class="actions"><button type="submit">Add grant</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

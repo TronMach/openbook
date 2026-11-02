@@ -19,7 +19,7 @@
     }
     <div class="toolbar">
         <h1>Reconciliation report</h1>
-        <a class="button secondary" href="/banking/@_report.Account.Id">Back to register</a>
+        <ActionLink Class="button secondary" Href="@($"/banking/{_report.Account.Id}")">Back to register</ActionLink>
         <button type="button" class="secondary" onclick="window.print()">Print</button>
         @if (_isLatest)
         {

@@ -8,8 +8,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Import transactions</h1>
-        <a class="button secondary" href="/banking/@AccountId/feed">Review queue</a>
-        <a class="button secondary" href="/banking/@AccountId">Back to register</a>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}/feed")">Review queue</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}")">Back to register</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -20,7 +20,7 @@
     {
         <div class="alert notice" role="status">
             @result.Queued @(result.Queued == 1 ? "line is" : "lines are") waiting for review@(result.AutoAdded > 0 ? $"; rules added {result.AutoAdded} straight to the books" : "")@(result.Skipped > 0 ? $"; {result.Skipped} already imported were skipped" : "").
-            <a href="/banking/@AccountId/feed">Review them now</a>.
+            <ActionLink Href="@($"/banking/{AccountId}/feed")">Review them now</ActionLink>.
         </div>
     }
 

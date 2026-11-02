@@ -10,12 +10,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Collections</h1>
-        <a class="button secondary" href="/reports/ar-aging">A/R aging</a>
-        <a class="button secondary" href="/sales/write-offs/new">Write off bad debt</a>
-        @if (User.CanReach("/sales/collections/settings"))
-        {
-            <a class="button secondary" href="/sales/collections/settings">Settings</a>
-        }
+        <ActionLink Class="button secondary" Href="/reports/ar-aging">A/R aging</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/write-offs/new">Write off bad debt</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/collections/settings">Settings</ActionLink>
     </div>
     <p class="muted">
         Late fees and payment reminders for overdue invoices. With automatic charging or sending switched on in the settings,
@@ -52,7 +49,7 @@
         }
         else
         {
-            <form method="post" action="/sales/collections/reminders" data-enhance="false">
+            <PostForm Action="/sales/collections/reminders" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="table-wrap">
                     <table class="data">
@@ -74,7 +71,7 @@
                     </table>
                 </div>
                 <div class="actions"><button type="submit">Send ticked reminders</button></div>
-            </form>
+            </PostForm>
         }
     }
 
@@ -95,7 +92,7 @@
         }
         else
         {
-            <form method="post" action="/sales/collections/late-fees" data-enhance="false">
+            <PostForm Action="/sales/collections/late-fees" data-enhance="false">
                 <AntiforgeryToken />
                 <input type="hidden" name="date" value="@_today.ToString("yyyy-MM-dd")" />
                 <div class="table-wrap">
@@ -120,14 +117,14 @@
                 </div>
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <div class="actions"><button type="submit">Charge ticked fees</button></div>
-            </form>
+            </PostForm>
         }
     }
 
     <h2>Bad debt written off</h2>
     @if (_writeOffs.Count == 0)
     {
-        <div class="card"><p>None yet. Invoices you won't collect can be <a href="/sales/write-offs/new">written off</a> to a bad debt expense.</p></div>
+        <div class="card"><p>None yet. Invoices you won't collect can be <ActionLink Href="/sales/write-offs/new">written off</ActionLink> to a bad debt expense.</p></div>
     }
     else
     {
@@ -177,7 +174,7 @@
     private string Name(Guid id) => _names.GetValueOrDefault(id) ?? "";
 
     private RenderFragment SettingsLink(string text) => User.CanReach("/sales/collections/settings")
-        ? @<a href="/sales/collections/settings">@text</a>
+        ? @<ActionLink Href="/sales/collections/settings">@text</ActionLink>
         : @<span>An accountant can set this up.</span>;
 
     private static string Step(int days) => days switch

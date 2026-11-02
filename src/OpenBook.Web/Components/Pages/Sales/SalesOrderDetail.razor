@@ -15,11 +15,11 @@
     <div class="toolbar">
         <h1>Sales order @_order.Number</h1>
         <span class="badge @(_order.Status == SalesOrderStatus.Closed ? "ok" : null)">@_order.Status</span>
-        <a class="button secondary" href="/sales/orders">Back to sales orders</a>
-        <a class="button secondary" href="/audit?entityId=@_order.Id">History</a>
+        <ActionLink Class="button secondary" Href="/sales/orders">Back to sales orders</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_order.Id}")">History</ActionLink>
         @if (_order.Status == SalesOrderStatus.Open && !_progress.Started)
         {
-            <a class="button secondary" href="/sales/orders/@_order.Id/edit">Edit</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/orders/{_order.Id}/edit")">Edit</ActionLink>
         }
     </div>
 
@@ -53,11 +53,11 @@
     {
         <PartialInvoiceForm Lines="_order.Lines" Progress="_progress" Action="@($"/sales/orders/{_order.Id}/invoice")" Title="Invoice this order" Password="Password" />
 
-        <form method="post" action="/sales/orders/@_order.Id/cancel" data-enhance="false" class="no-print actions">
+        <PostForm Action="@($"/sales/orders/{_order.Id}/cancel")" data-enhance="false" class="no-print actions">
             <AntiforgeryToken />
             <button type="submit" class="secondary">Cancel the rest of the order</button>
             <span class="muted">What's invoiced stays; nothing more can be invoiced from it.</span>
-        </form>
+        </PostForm>
     }
 
     <Attachments EntityType="sales_order" EntityId="_order.Id" />

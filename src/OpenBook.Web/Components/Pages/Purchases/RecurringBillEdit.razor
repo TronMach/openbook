@@ -9,10 +9,10 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@(Id is null ? L["New recurring bill"].Value : _name)</h1>
-        <a class="button secondary" href="/purchases/recurring">@L["Back to recurring bills"]</a>
+        <ActionLink Class="button secondary" Href="/purchases/recurring">@L["Back to recurring bills"]</ActionLink>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">@L["History"]</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={id}")">@L["History"]</ActionLink>
         }
     </div>
 
@@ -31,7 +31,7 @@
     }
     else if (_loaded && _vendors.Count == 0)
     {
-        <div class="card"><p>Recurring bills need a vendor. <a href="/vendors/new">Add one</a> first.</p></div>
+        <div class="card"><p>Recurring bills need a vendor. <ActionLink Href="/vendors/new">Add one</ActionLink> first.</p></div>
     }
     else if (_loaded)
     {

@@ -23,16 +23,16 @@
     <div class="toolbar">
         <h1>Bill from @_vendor.DisplayName</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
-        <a class="button secondary" href="/purchases">Back to purchases</a>
-        <a class="button secondary" href="/audit?entityId=@_bill.Id">History</a>
+        <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_bill.Id}")">History</ActionLink>
         @if (_bill.Status == DocumentStatus.Posted)
         {
-            <a class="button secondary" href="/purchases/bills/@_bill.Id/edit">Change</a>
+            <ActionLink Class="button secondary" Href="@($"/purchases/bills/{_bill.Id}/edit")">Change</ActionLink>
         }
         @if (_bill.IsOpen)
         {
-            <a class="button secondary" href="/purchases/vendor-credits/apply?vendor=@_vendor.Id">Apply credit</a>
-            <a class="button" href="/purchases/pay-bills?vendor=@_vendor.Id">Pay bills</a>
+            <ActionLink Class="button secondary" Href="@($"/purchases/vendor-credits/apply?vendor={_vendor.Id}")">Apply credit</ActionLink>
+            <ActionLink Class="button" Href="@($"/purchases/pay-bills?vendor={_vendor.Id}")">Pay bills</ActionLink>
         }
     </div>
     @if (_changes.Count > 0)
@@ -43,7 +43,7 @@
 
     @if (_bill.RecurringBillId is { } recurringId)
     {
-        <p class="muted">Entered by a <a href="/purchases/recurring/@recurringId">recurring bill</a>.</p>
+        <p class="muted">Entered by a <ActionLink Href="@($"/purchases/recurring/{recurringId}")">recurring bill</ActionLink>.</p>
     }
 
     @if (_error is not null)
@@ -70,7 +70,7 @@
                     @PurchaseOrderDetail.Approval(_bill.Approval)@(_bill.ApprovedBy is { } by ? $" by {by}" : "")@(_bill.ApprovalNote is { } note ? $": {note}" : "")
                     @if (_bill.Approval is BillApproval.Pending or BillApproval.Rejected)
                     {
-                        <span> · <a href="/purchases/approvals">Approvals</a></span>
+                        <span> · <ActionLink Href="/purchases/approvals">Approvals</ActionLink></span>
                     }
                 </dd>
                 @if (_bill.Approval is BillApproval.Pending or BillApproval.Rejected) { <dt>Held because</dt><dd style="white-space: pre-line">@_bill.HoldReason</dd> }

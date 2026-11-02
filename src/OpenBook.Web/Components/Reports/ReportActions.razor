@@ -16,13 +16,13 @@
     <a class="button secondary" href="@Export("csv")">CSV</a>
     <a class="button secondary" href="@Export("xlsx")">Excel</a>
     <a class="button secondary" href="@Export("pdf")" target="_blank" rel="noopener">PDF</a>
-    <form method="post" action="/reports/saved" class="inline" data-enhance="false">
+    <PostForm Action="/reports/saved" class="inline" data-enhance="false">
         <AntiforgeryToken />
         <input type="hidden" name="report" value="@Key" />
         <input type="hidden" name="query" value="@_query" />
         <input name="name" aria-label="Name for the saved report" placeholder="Name to save as" maxlength="100" required />
         <button type="submit" class="secondary">Save report</button>
-    </form>
+    </PostForm>
 </div>
 
 @code {

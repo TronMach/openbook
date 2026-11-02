@@ -8,8 +8,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Online payments</h1>
-        <a class="button secondary" href="/settings">Settings</a>
-        <a class="button secondary" href="/audit?entityType=online_payment_settings">History</a>
+        <ActionLink Class="button secondary" Href="/settings">Settings</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=online_payment_settings">History</ActionLink>
     </div>
     <p class="muted">
         Let customers pay invoices by card through Stripe Checkout: from a link on the invoice, its email, or their portal. Each payment is
@@ -27,7 +27,7 @@
     }
 
     <div class="card">
-        <form method="post" action="/settings/online-payments" data-enhance="false">
+        <PostForm Action="/settings/online-payments" data-enhance="false">
             <AntiforgeryToken />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.Enabled" />
@@ -76,7 +76,7 @@
             </p>
             <DesktopNote>OpenBook Desktop can't be reached from the internet: Stripe can't call it and customers return to a thank-you page they can't open, so leave the webhook secret empty and record payments by checking the link on the invoice.</DesktopNote>
             <div class="actions"><button type="submit">Save</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

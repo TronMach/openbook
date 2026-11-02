@@ -9,8 +9,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Thank donors</h1>
-        <a class="button secondary" href="/nonprofit/gifts">Gifts</a>
-        <a class="button secondary" href="/nonprofit/settings">Letter settings</a>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/settings">Letter settings</ActionLink>
     </div>
     @if (Error is not null)
     {
@@ -28,7 +28,7 @@
     }
     else
     {
-        <form method="post" action="/nonprofit/thanks/mark" data-enhance="false">
+        <PostForm Action="/nonprofit/thanks/mark" data-enhance="false">
             <AntiforgeryToken />
             <input type="hidden" name="back" value="/nonprofit/thanks" />
             <table class="data">
@@ -48,7 +48,7 @@
                 </tbody>
             </table>
             <div class="actions"><button type="submit" class="secondary">Mark the ticked gifts as thanked</button></div>
-        </form>
+        </PostForm>
     }
 
     <h2 style="margin-top: 2rem">Year-end giving statements</h2>
@@ -80,10 +80,10 @@
         </table>
         <div class="actions">
             <a class="button secondary" href="/nonprofit/statements/@_year" target="_blank">Download all to print (one PDF)</a>
-            <form method="post" action="/nonprofit/statements/@_year/email" data-enhance="false" class="inline">
+            <PostForm Action="@($"/nonprofit/statements/{_year}/email")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <button type="submit">Email every donor with an address (@_givers.Count(g => !string.IsNullOrWhiteSpace(g.Donor.Email)))</button>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

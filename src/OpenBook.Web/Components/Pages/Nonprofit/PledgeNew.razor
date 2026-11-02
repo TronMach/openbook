@@ -12,7 +12,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Record a pledge</h1>
-        <a class="button secondary" href="/nonprofit/pledges">Pledges</a>
+        <ActionLink Class="button secondary" Href="/nonprofit/pledges">Pledges</ActionLink>
     </div>
     <p class="muted">
         A donor's promise to give later. It goes to "@GiftService.PledgesReceivableName" until paid; record each payment as a gift that names the pledge.
@@ -23,7 +23,7 @@
         <div class="alert error" role="alert">@Error</div>
     }
     <div class="card">
-        <form method="post" action="/nonprofit/pledges" data-enhance="false">
+        <PostForm Action="/nonprofit/pledges" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -65,7 +65,7 @@
             <div class="field"><label for="memo">Memo <span class="muted">(optional)</span></label><input id="memo" name="memo" maxlength="@Donation.MaxTextLength" /></div>
             <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <div class="actions"><button type="submit">Record pledge</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

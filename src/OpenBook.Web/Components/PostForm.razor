@@ -1,0 +1,50 @@
+@inject NavigationManager Navigation
+
+@* A form posting to an endpoint the person may not be allowed to use. Allowed: an ordinary form. Not allowed: the same
+   form with its fields and buttons greyed out (a disabled fieldset), saying what it needs and linking to who can give
+   it. Nothing is hidden, and it works again by itself once an admin gives the person that access. *@
+<form method="post" action="@Action" @attributes="Attributes">
+    @if (_allowed)
+    {
+        @ChildContent
+    }
+    else
+    {
+        <fieldset disabled class="unavailable-form" title="@_needs">
+            @ChildContent
+        </fieldset>
+        <a class="unavailable-note" href="@_deniedUrl">@_needs</a>
+    }
+</form>
+
+@code {
+    private bool _allowed = true;
+    private string? _deniedUrl;
+    private string? _needs;
+
+    [Parameter, EditorRequired]
+    public string Action { get; set; } = "/";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object>? Attributes { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Attributes?.Remove("method");
+        if (AuthState is null)
+            return;
+        var user = (await AuthState).User;
+        _allowed = user.CanPost(Action);
+        if (_allowed)
+            return;
+        var path = new PathString(Action.Split('?', '#')[0]);
+        AccessRules.Allows(user, path, HttpMethods.Post, out var needed);
+        _deniedUrl = AccessRules.DeniedUrl(user, path, needed, "/" + Navigation.ToBaseRelativePath(Navigation.Uri));
+        _needs = AccessRules.NeedsText(user, Action, HttpMethods.Post);
+    }
+}

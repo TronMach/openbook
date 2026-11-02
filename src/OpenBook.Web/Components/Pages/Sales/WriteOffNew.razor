@@ -9,7 +9,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Write off bad debt</h1>
-        <a class="button secondary" href="/sales/collections">Collections</a>
+        <ActionLink Class="button secondary" Href="/sales/collections">Collections</ActionLink>
     </div>
     <p class="muted">
         Writes off what's left of invoices you won't collect: the balance moves from accounts receivable to a bad debt expense, and the
@@ -48,7 +48,7 @@
     }
     else
     {
-        <form method="post" action="/sales/write-offs" data-enhance="false">
+        <PostForm Action="/sales/write-offs" data-enhance="false">
             <AntiforgeryToken />
             <input type="hidden" name="back" value="@_back" />
             <div class="table-wrap">
@@ -97,7 +97,7 @@
             <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <p class="hint">Sales tax already charged on these invoices stays owed in OpenBook; adjust it on your return if your state allows a bad debt deduction.</p>
             <div class="actions"><button type="submit" class="danger">Write off ticked invoices</button></div>
-        </form>
+        </PostForm>
     }
 </div>
 

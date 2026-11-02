@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Change bill@(_vendor is null ? "" : $" from {_vendor.DisplayName}")</h1>
-        <a class="button secondary" href="/purchases/bills/@Id">Back to the bill</a>
+        <ActionLink Class="button secondary" Href="@($"/purchases/bills/{Id}")">Back to the bill</ActionLink>
     </div>
 
     @if (_error is not null)

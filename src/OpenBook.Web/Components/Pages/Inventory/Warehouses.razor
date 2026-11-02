@@ -9,8 +9,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Warehouses and bins</h1>
-        <a class="button secondary" href="/inventory">Inventory</a>
-        <a class="button" href="/inventory/transfers/new">Transfer stock</a>
+        <ActionLink Class="button secondary" Href="/inventory">Inventory</ActionLink>
+        <ActionLink Class="button" Href="/inventory/transfers/new">Transfer stock</ActionLink>
     </div>
     <p class="muted">
         Stock is kept in warehouses, and optionally in bins (shelves, aisles) inside them. Bills, sales and credit memos name a
@@ -58,11 +58,11 @@
                                 <td>@b.Name</td>
                                 <td class="num">@Labels.Quantity(OnHand(w.Key, b.Id))</td>
                                 <td>
-                                    <form method="post" action="/inventory/bins/@b.Id/active" data-enhance="false">
+                                    <PostForm Action="@($"/inventory/bins/{b.Id}/active")" data-enhance="false">
                                         <AntiforgeryToken />
                                         <input type="hidden" name="active" value="@(b.IsActive ? "false" : "true")" />
                                         <button type="submit" class="link">@(b.IsActive ? "Make inactive" : "Make active")</button>
-                                    </form>
+                                    </PostForm>
                                 </td>
                             </tr>
                         }
@@ -70,15 +70,15 @@
                 </table>
             }
             <div class="row">
-                <form method="post" action="/inventory/warehouses/@w.Id/bins" data-enhance="false" class="row">
+                <PostForm Action="@($"/inventory/warehouses/{w.Id}/bins")" data-enhance="false" class="row">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="bin-@w.Id">New bin</label>
                         <input id="bin-@w.Id" name="name" maxlength="@Bin.MaxNameLength" placeholder="A-1" required />
                     </div>
                     <div class="actions"><button type="submit" class="secondary">Add bin</button></div>
-                </form>
-                <form method="post" action="/inventory/warehouses/@w.Id" data-enhance="false" class="row">
+                </PostForm>
+                <PostForm Action="@($"/inventory/warehouses/{w.Id}")" data-enhance="false" class="row">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="name-@w.Id">Name</label>
@@ -97,14 +97,14 @@
                         <input type="hidden" name="active" value="true" />
                     }
                     <div class="actions"><button type="submit" class="secondary">Save</button></div>
-                </form>
+                </PostForm>
             </div>
         </div>
     }
 
     <div class="card">
         <h2>New warehouse</h2>
-        <form method="post" action="/inventory/warehouses" data-enhance="false" class="row">
+        <PostForm Action="/inventory/warehouses" data-enhance="false" class="row">
             <AntiforgeryToken />
             <div class="field">
                 <label for="new-name">Name</label>
@@ -115,7 +115,7 @@
                 <input id="new-address" name="address" maxlength="500" />
             </div>
             <div class="actions"><button type="submit">Add warehouse</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

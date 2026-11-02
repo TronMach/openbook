@@ -8,8 +8,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Bank rules</h1>
-        <a class="button secondary" href="/banking">Back to banking</a>
-        <a class="button" href="/banking/rules/new">New rule</a>
+        <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
+        <ActionLink Class="button" Href="/banking/rules/new">New rule</ActionLink>
     </div>
     <p class="muted">
         When an imported line's payee or memo contains a rule's text, the review queue fills in the rule's category, payee and
@@ -18,7 +18,7 @@
 
     @if (_rules.Count == 0)
     {
-        <div class="card"><p>No rules yet. <a href="/banking/rules/new">Make one</a>, or use "Rule…" on a line in the review queue.</p></div>
+        <div class="card"><p>No rules yet. <ActionLink Href="/banking/rules/new">Make one</ActionLink>, or use "Rule…" on a line in the review queue.</p></div>
     }
     else
     {

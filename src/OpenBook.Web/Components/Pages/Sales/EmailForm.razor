@@ -23,7 +23,7 @@
 
     @if (!_configured)
     {
-        <p>Email isn't set up yet. <a href="/settings/email">Set it up in Settings</a>, then come back to send.</p>
+        <p>Email isn't set up yet. <ActionLink Href="/settings/email">Set it up in Settings</ActionLink>, then come back to send.</p>
         <p><a href="@_pdfLink" target="_blank">Download the PDF</a> to send it yourself instead.</p>
     }
     else if (!_sent && _known)

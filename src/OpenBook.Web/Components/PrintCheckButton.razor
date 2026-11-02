@@ -1,10 +1,10 @@
 @* Prints one check in a new tab, through the same form endpoint as the checks page. *@
 
-<form method="post" action="/checks/print" target="_blank" class="inline-form" data-enhance="false">
+<PostForm Action="/checks/print" target="_blank" class="inline-form" data-enhance="false">
     <AntiforgeryToken />
     <input type="hidden" name="check" value="@($"{Kind}:{Id}")" />
     <button type="submit" class="secondary">@(PrintedAt is null ? "Print check" : "Print check again")</button>
-</form>
+</PostForm>
 
 @code {
     [Parameter, EditorRequired]

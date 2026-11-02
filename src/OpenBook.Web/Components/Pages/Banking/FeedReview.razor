@@ -7,9 +7,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Review @_accountName</h1>
-        <a class="button secondary" href="/banking/@AccountId">Register</a>
-        <a class="button secondary" href="/banking/rules">Bank rules</a>
-        <a class="button" href="/banking/@AccountId/import">Import a statement</a>
+        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}")">Register</ActionLink>
+        <ActionLink Class="button secondary" Href="/banking/rules">Bank rules</ActionLink>
+        <ActionLink Class="button" Href="@($"/banking/{AccountId}/import")">Import a statement</ActionLink>
     </div>
     <p class="muted">
         Each imported line waits here until you <strong>add</strong> it as a new transaction, <strong>match</strong> it to one already
@@ -34,7 +34,7 @@
 
     @if (_loaded && _rows.Count == 0)
     {
-        <div class="card"><p>@(_status == BankFeedStatus.Pending ? "Nothing to review." : $"Nothing {Labels.For(_status).ToLowerInvariant()}.") <a href="/banking/@AccountId/import">Import a statement</a>.</p></div>
+        <div class="card"><p>@(_status == BankFeedStatus.Pending ? "Nothing to review." : $"Nothing {Labels.For(_status).ToLowerInvariant()}.") <ActionLink Href="@($"/banking/{AccountId}/import")">Import a statement</ActionLink>.</p></div>
     }
     else if (_loaded && _status == BankFeedStatus.Pending)
     {

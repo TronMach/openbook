@@ -10,21 +10,16 @@
         <h1>Banking</h1>
         @if (_undeposited > 0)
         {
-            <a class="button" href="/banking/deposits/new">Make deposit (@_undeposited waiting)</a>
+            <ActionLink Class="button" Href="/banking/deposits/new">Make deposit (@_undeposited waiting)</ActionLink>
         }
-        <a class="button secondary" href="/banking/rules">Bank rules</a>
-        <a class="button secondary" href="/banking/checks">Print checks</a>
-        <a class="button secondary" href="/banking/positive-pay">Positive pay</a>
-        <a class="button secondary" href="/banking/petty-cash">Petty cash</a>
-        <AuthorizeView>
-            @if (context.User.CanReach("/banking/connections"))
-            {
-                <a class="button secondary" href="/banking/connections">Bank connections</a>
-            }
-        </AuthorizeView>
+        <ActionLink Class="button secondary" Href="/banking/rules">Bank rules</ActionLink>
+        <ActionLink Class="button secondary" Href="/banking/checks">Print checks</ActionLink>
+        <ActionLink Class="button secondary" Href="/banking/positive-pay">Positive pay</ActionLink>
+        <ActionLink Class="button secondary" Href="/banking/petty-cash">Petty cash</ActionLink>
+        <ActionLink Class="button secondary" Href="/banking/connections">Bank connections</ActionLink>
         @if (_accounts.Count >= 2)
         {
-            <a class="button secondary" href="/banking/transfer">Transfer</a>
+            <ActionLink Class="button secondary" Href="/banking/transfer">Transfer</ActionLink>
         }
     </div>
 
@@ -32,7 +27,7 @@
     {
         <div class="card">
             <p>
-                No bank or credit card accounts yet. <a href="/accounts/new">Add an account</a> with type
+                No bank or credit card accounts yet. <ActionLink Href="/accounts/new">Add an account</ActionLink> with type
                 <strong>Bank</strong> or <strong>Credit card</strong>, and it will appear here.
             </p>
         </div>
@@ -60,7 +55,7 @@
                                 <a href="/banking/@account.Id">@summary.FullName</a>
                                 @if (_pending.GetValueOrDefault(account.Id) is > 0 and var pending)
                                 {
-                                    <a class="badge warn" href="/banking/@account.Id/feed">@pending to review</a>
+                                    <ActionLink Class="badge warn" Href="@($"/banking/{account.Id}/feed")">@pending to review</ActionLink>
                                 }
                             </td>
                             <td class="muted">@Labels.For(account.Type)</td>
@@ -74,11 +69,11 @@
                                 }
                             </td>
                             <td>
-                                <a href="/banking/@account.Id/record/spend">@Labels.For(BankTransactionKind.Spend, account.Type)</a> ·
-                                <a href="/banking/@account.Id/record/receive">@Labels.For(BankTransactionKind.Receive, account.Type)</a> ·
-                                <a href="/banking/@account.Id/import">Import</a> ·
-                                <a href="/banking/@account.Id/feed">Review</a> ·
-                                <a href="/banking/@account.Id/reconcile">Reconcile</a>
+                                <ActionLink Href="@($"/banking/{account.Id}/record/spend")">@Labels.For(BankTransactionKind.Spend, account.Type)</ActionLink> ·
+                                <ActionLink Href="@($"/banking/{account.Id}/record/receive")">@Labels.For(BankTransactionKind.Receive, account.Type)</ActionLink> ·
+                                <ActionLink Href="@($"/banking/{account.Id}/import")">Import</ActionLink> ·
+                                <ActionLink Href="@($"/banking/{account.Id}/feed")">Review</ActionLink> ·
+                                <ActionLink Href="@($"/banking/{account.Id}/reconcile")">Reconcile</ActionLink>
                             </td>
                         </tr>
                     }

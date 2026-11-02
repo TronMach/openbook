@@ -18,8 +18,8 @@
             {
                 <span class="badge">Voided</span>
             }
-            <a class="button secondary" href="/journal/@_run.JournalEntryId">Journal entry</a>
-            <a class="button secondary" href="/assets">Fixed assets</a>
+            <ActionLink Class="button secondary" Href="@($"/journal/{_run.JournalEntryId}")">Journal entry</ActionLink>
+            <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -40,12 +40,12 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>
                 <p class="muted">Only the latest depreciation can be voided. Its amounts come due again in the next run.</p>
-                <form method="post" action="/assets/runs/@_run.Id/void" data-enhance="false">
+                <PostForm Action="@($"/assets/runs/{_run.Id}/void")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Void</button></div>
-                </form>
+                </PostForm>
             </div>
         }
     }

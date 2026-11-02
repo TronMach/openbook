@@ -9,7 +9,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Scheduled reports</h1>
-        <a class="button secondary" href="/reports">Reports</a>
+        <ActionLink Class="button secondary" Href="/reports">Reports</ActionLink>
     </div>
     <p class="muted">
         Saved reports emailed as PDF, Excel or CSV every day, week or month (in the company's time zone). Dates in a saved report stay relative, so
@@ -47,14 +47,14 @@
                             }
                         </td>
                         <td>
-                            <form method="post" action="/reports/schedules/@s.Id/send" data-enhance="false" class="inline">
+                            <PostForm Action="@($"/reports/schedules/{s.Id}/send")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <button type="submit" class="secondary">Send now</button>
-                            </form>
-                            <form method="post" action="/reports/schedules/@s.Id/delete" data-enhance="false" class="inline">
+                            </PostForm>
+                            <PostForm Action="@($"/reports/schedules/{s.Id}/delete")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">Delete</button>
-                            </form>
+                            </PostForm>
                         </td>
                     </tr>
                 }
@@ -70,7 +70,7 @@
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Email a report on a schedule</h2>
-            <form method="post" action="/reports/schedules" data-enhance="false">
+            <PostForm Action="/reports/schedules" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -129,7 +129,7 @@
                     </div>
                 </div>
                 <div class="actions"><button type="submit">Schedule</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

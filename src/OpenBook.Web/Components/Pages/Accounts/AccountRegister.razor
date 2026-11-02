@@ -22,9 +22,9 @@
         <h1>@Labels.AccountName(_chart, _account.Id, _useNumbers) register</h1>
         @if (OpenBook.Domain.Banking.BankTransaction.IsBankingAccount(_account.Type))
         {
-            <a class="button secondary" href="/banking/@_account.Id">Banking register</a>
+            <ActionLink Class="button secondary" Href="@($"/banking/{_account.Id}")">Banking register</ActionLink>
         }
-        <a class="button secondary" href="/accounts/@_account.Id">Account</a>
+        <ActionLink Class="button secondary" Href="@($"/accounts/{_account.Id}")">Account</ActionLink>
         <form method="get" data-enhance="false" class="inline">
             <label for="from" class="muted">From</label>
             <input id="from" name="from" type="date" value="@_from.ToString("yyyy-MM-dd")" />

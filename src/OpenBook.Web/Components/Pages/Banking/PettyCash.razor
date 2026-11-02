@@ -7,7 +7,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Petty cash</h1>
-        <a class="button secondary" href="/banking">Back to banking</a>
+        <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
     </div>
     <p class="muted">
         A petty cash box holds a fixed float. Record what's spent from it as ordinary spends from its account (keep the receipts),
@@ -49,7 +49,7 @@
 
     <div class="card">
         <h2>New petty cash box</h2>
-        <form method="post" action="/banking/petty-cash/new" data-enhance="false">
+        <PostForm Action="/banking/petty-cash/new" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -95,7 +95,7 @@
             </div>
             <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <div class="actions"><button type="submit">Create box</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

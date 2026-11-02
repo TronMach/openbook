@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["Change invoice {0}", _invoice?.Number ?? ""]</h1>
-        <a class="button secondary" href="/sales/invoices/@Id">@L["Back to the invoice"]</a>
+        <ActionLink Class="button secondary" Href="@($"/sales/invoices/{Id}")">@L["Back to the invoice"]</ActionLink>
     </div>
 
     @if (_error is not null)

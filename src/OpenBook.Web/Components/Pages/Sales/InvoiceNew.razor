@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@L["New invoice"]</h1>
-        <a class="button secondary" href="/sales">@L["Back to sales"]</a>
+        <ActionLink Class="button secondary" Href="/sales">@L["Back to sales"]</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -21,9 +21,9 @@
         <div class="card">
             <p>
                 Invoices need a customer and at least one product or service.
-                @if (_customers.Count == 0) { <a href="/customers/new">Add a customer</a> }
+                @if (_customers.Count == 0) { <ActionLink Href="/customers/new">Add a customer</ActionLink> }
                 @if (_customers.Count == 0 && _items.Count == 0) { <span> and </span> }
-                @if (_items.Count == 0) { <a href="/items/new">add a product or service</a> }.
+                @if (_items.Count == 0) { <ActionLink Href="/items/new">add a product or service</ActionLink> }.
             </p>
         </div>
     }

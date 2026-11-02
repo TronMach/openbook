@@ -13,8 +13,8 @@
     <div class="wide">
         <div class="toolbar">
             <h1>Reports</h1>
-            <a class="button secondary" href="/dashboard">Dashboard</a>
-            <a class="button secondary" href="/reports?all=true">All reports</a>
+            <ActionLink Class="button secondary" Href="/dashboard">Dashboard</ActionLink>
+            <ActionLink Class="button secondary" Href="/reports?all=true">All reports</ActionLink>
         </div>
         <div class="report-list">
             @foreach (var report in Everyday.Select(Catalog.Find).OfType<ReportDefinition>().Where(r => HttpContext.User.CanReach(r.Path)))
@@ -48,11 +48,11 @@
     </p>
 
     <p>
-        <a class="button" href="/dashboard">Dashboard</a>
-        <a class="button secondary" href="/reports/builder">Build a custom report</a>
-        <a class="button secondary" href="/reports/schedules">Email reports on a schedule</a>
-        <a class="button secondary" href="/reports/cash-forecast">Cash-flow forecast</a>
-        <a class="button secondary" href="/accountant">Accountant tools</a>
+        <ActionLink Class="button" Href="/dashboard">Dashboard</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/builder">Build a custom report</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/schedules">Email reports on a schedule</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/cash-forecast">Cash-flow forecast</ActionLink>
+        <ActionLink Class="button secondary" Href="/accountant">Accountant tools</ActionLink>
     </p>
 
     @if (_saved.Count > 0)
@@ -69,10 +69,10 @@
                         <td>@(definition?.Title ?? report.ReportKey)</td>
                         <td class="muted">@report.CreatedBy, @Labels.Date(DateOnly.FromDateTime(report.CreatedAt.LocalDateTime))</td>
                         <td class="num">
-                            <form method="post" action="/reports/saved/@report.Id/delete" class="inline-form" data-enhance="false">
+                            <PostForm Action="@($"/reports/saved/{report.Id}/delete")" class="inline-form" data-enhance="false">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">Delete</button>
-                            </form>
+                            </PostForm>
                         </td>
                     </tr>
                 }

@@ -1,0 +1,47 @@
+@inject NavigationManager Navigation
+
+@* A link to a page that may need more access than the person has. Allowed: an ordinary link. Not allowed: the same
+   link greyed out, saying what it needs, and opening the access denied page (which names the admins to ask) rather
+   than the page. Nothing is hidden, and it works again by itself once an admin gives the person that access. *@
+@if (_allowed)
+{
+    <a class="@Class" href="@Href" title="@Title">@ChildContent</a>
+}
+else
+{
+    <a class="@($"{Class} unavailable".Trim())" href="@_deniedUrl" title="@_needs" aria-disabled="true">@ChildContent<span class="visually-hidden"> (@_needs)</span></a>
+}
+
+@code {
+    private bool _allowed = true;
+    private string? _deniedUrl;
+    private string? _needs;
+
+    [Parameter, EditorRequired]
+    public string Href { get; set; } = "/";
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is null)
+            return;
+        var user = (await AuthState).User;
+        _allowed = user.CanReach(Href);
+        if (_allowed)
+            return;
+        var path = new PathString(Href.Split('?', '#')[0]);
+        AccessRules.Allows(user, path, HttpMethods.Get, out var needed);
+        _deniedUrl = AccessRules.DeniedUrl(user, path, needed, "/" + Navigation.ToBaseRelativePath(Navigation.Uri));
+        _needs = AccessRules.NeedsText(user, Href, HttpMethods.Get);
+    }
+}

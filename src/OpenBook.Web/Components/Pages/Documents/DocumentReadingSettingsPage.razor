@@ -8,9 +8,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Document reading</h1>
-        <a class="button secondary" href="/settings">Settings</a>
-        <a class="button secondary" href="/documents">Document inbox</a>
-        <a class="button secondary" href="/audit?entityType=document_reading_settings">History</a>
+        <ActionLink Class="button secondary" Href="/settings">Settings</ActionLink>
+        <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=document_reading_settings">History</ActionLink>
     </div>
     <p class="muted">
         Documents in the inbox are read on this server: the text inside PDFs exactly, and photos and scans through Tesseract OCR
@@ -35,7 +35,7 @@
     }
 
     <div class="card">
-        <form method="post" action="/settings/document-reading" data-enhance="false">
+        <PostForm Action="/settings/document-reading" data-enhance="false">
             <AntiforgeryToken />
             <label class="check">
                 <input type="checkbox" name="useClaude" value="true" checked="@_settings.UseClaude" />
@@ -58,7 +58,7 @@
                 </div>
             </div>
             <div class="actions"><button type="submit">Save</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

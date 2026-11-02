@@ -14,10 +14,7 @@
     <aside class="center-list" aria-label="@Title">
         <div class="toolbar">
             <h1>@Title</h1>
-            @if (HttpContext.User.CanReach("/customers/new"))
-            {
-                <a class="button" href="/customers/new">@L["New"]</a>
-            }
+            <ActionLink Class="button" Href="/customers/new">@L["New"]</ActionLink>
         </div>
         <form method="get" action="/customers/center" class="center-search" role="search" data-enhance="false">
             @if (_selected is not null)
@@ -58,7 +55,7 @@
                 {
                     <span class="badge">@L["Inactive"]</span>
                 }
-                <a class="button secondary" href="/customers/@c.Id">@L["Edit details"]</a>
+                <ActionLink Class="button secondary" Href="@($"/customers/{c.Id}")">@L["Edit details"]</ActionLink>
                 <details class="menu center-new">
                     <summary class="button">@L["New transaction"]</summary>
                     <div class="menu-list">
@@ -106,7 +103,7 @@
         }
         else if (_all.Count == 0 && HttpContext.User.CanReach("/customers/new"))
         {
-            <div class="card"><p><a href="/customers/new">@L["Add the first one"]</a></p></div>
+            <div class="card"><p><ActionLink Href="/customers/new">@L["Add the first one"]</ActionLink></p></div>
         }
     </section>
 </div>

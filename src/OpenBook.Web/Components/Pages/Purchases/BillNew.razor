@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>New bill</h1>
-        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -18,7 +18,7 @@
 
     @if (_loaded && _vendors.Count == 0)
     {
-        <div class="card"><p>Bills need a vendor. <a href="/vendors/new">Add one</a> first.</p></div>
+        <div class="card"><p>Bills need a vendor. <ActionLink Href="/vendors/new">Add one</ActionLink> first.</p></div>
     }
     else if (_loaded)
     {

@@ -7,8 +7,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Loans</h1>
-        <a class="button secondary" href="/assets">Fixed assets</a>
-        <a class="button secondary" href="/reports/loans">Loans report</a>
+        <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/loans">Loans report</ActionLink>
     </div>
     <p class="muted">Loans and other debts repaid monthly. Each payment is split into interest (an expense) and principal (paying down the loan account).</p>
     @if (Error is not null)
@@ -36,13 +36,13 @@
 
     @if (_liabilities.Count == 0)
     {
-        <div class="card"><p>Loans are kept in a Long-term liability or Other current liability account (such as "Bank Loan"). <a href="/accounts/new">Add one</a> first.</p></div>
+        <div class="card"><p>Loans are kept in a Long-term liability or Other current liability account (such as "Bank Loan"). <ActionLink Href="/accounts/new">Add one</ActionLink> first.</p></div>
     }
     else
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Add a loan</h2>
-            <form method="post" action="/loans" data-enhance="false">
+            <PostForm Action="/loans" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field"><label for="name">Name</label><input id="name" name="name" maxlength="200" required placeholder="Van loan" /></div>
@@ -78,7 +78,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <div class="actions"><button type="submit">Add loan</button></div>
-            </form>
+            </PostForm>
         </div>
     }
 </div>

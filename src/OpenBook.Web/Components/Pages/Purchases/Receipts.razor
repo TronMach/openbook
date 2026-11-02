@@ -6,7 +6,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Receipts</h1>
-        <a class="button secondary" href="/purchases">Back to purchases</a>
+        <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
         <a class="button secondary" href="@(ShowAll ? "/purchases/receipts" : "/purchases/receipts?showAll=true")">@(ShowAll ? "Waiting only" : "Show all")</a>
     </div>
     <p class="muted">
@@ -24,11 +24,11 @@
     }
 
     <div class="card">
-        <form method="post" action="/purchases/receipts/upload" enctype="multipart/form-data" data-enhance="false" class="inline">
+        <PostForm Action="/purchases/receipts/upload" enctype="multipart/form-data" data-enhance="false" class="inline">
             <AntiforgeryToken />
             <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt" required aria-label="Receipt file" />
             <button type="submit">Upload receipt</button>
-        </form>
+        </PostForm>
     </div>
 
     @if (_receipts.Count == 0)

@@ -7,15 +7,15 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Sales orders</h1>
-        <a class="button secondary" href="/sales">Back to sales</a>
+        <ActionLink Class="button secondary" Href="/sales">Back to sales</ActionLink>
         <a class="button secondary" href="@(ShowAll ? "/sales/orders" : "/sales/orders?showAll=true")">@(ShowAll ? "Open only" : "Show all")</a>
-        <a class="button" href="/sales/orders/new">New sales order</a>
+        <ActionLink Class="button" Href="/sales/orders/new">New sales order</ActionLink>
     </div>
     <p class="muted">Orders post nothing. Invoice them in full or in parts as you deliver; an order closes once every line is invoiced.</p>
 
     @if (_orders.Count == 0)
     {
-        <div class="card"><p>@(ShowAll ? "No sales orders yet." : "No open sales orders.") <a href="/sales/orders/new">Enter one</a>.</p></div>
+        <div class="card"><p>@(ShowAll ? "No sales orders yet." : "No open sales orders.") <ActionLink Href="/sales/orders/new">Enter one</ActionLink>.</p></div>
     }
     else
     {

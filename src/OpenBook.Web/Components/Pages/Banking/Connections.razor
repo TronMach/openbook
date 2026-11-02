@@ -6,7 +6,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Bank connections</h1>
-        <a class="button secondary" href="/banking">Back to banking</a>
+        <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
     </div>
     <p class="muted">
         A connection fetches your bank and card transactions automatically, every @((int)BankConnectionService.SyncEvery.TotalHours) hours,
@@ -28,7 +28,7 @@
                     @foreach (var c in _connections)
                     {
                         <tr>
-                            <td><a href="/banking/connections/@c.Id">@c.Name</a></td>
+                            <td><ActionLink Href="@($"/banking/connections/{c.Id}")">@c.Name</ActionLink></td>
                             <td>@c.Accounts.Count(a => a.AccountId is not null) of @c.Accounts.Count linked</td>
                             <td>@(c.LastSyncAt is { } at ? at.InCompanyTime().ToString("g") : "Never")</td>
                             <td>
@@ -59,7 +59,7 @@
             Canadian banks for a small yearly fee. Connect your banks there, then create a <strong>setup token</strong> and paste it here.
             The token works once; OpenBook swaps it for a key it stores encrypted.
         </p>
-        <form method="post" action="/banking/connections/connect" data-enhance="false">
+        <PostForm Action="/banking/connections/connect" data-enhance="false">
             <AntiforgeryToken />
             <div class="field">
                 <label for="setup-token">Setup token</label>
@@ -70,7 +70,7 @@
                 <input id="name" name="name" maxlength="100" placeholder="SimpleFIN" />
             </div>
             <div class="actions"><button type="submit">Connect</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

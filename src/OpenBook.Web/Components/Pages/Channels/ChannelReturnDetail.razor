@@ -21,10 +21,10 @@
             }
             @if (_return.JournalEntryId is { } entry)
             {
-                <a class="button secondary" href="/journal/@entry">Journal entry</a>
+                <ActionLink Class="button secondary" Href="@($"/journal/{entry}")">Journal entry</ActionLink>
             }
-            <a class="button secondary" href="/sales/channels/orders/@_batch.Id">The orders</a>
-            <a class="button secondary" href="/audit?entityId=@_return.Id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/sales/channels/orders/{_batch.Id}")">The orders</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_return.Id}")">History</ActionLink>
         </div>
         @if (Error is not null)
         {
@@ -50,12 +50,12 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>
                 <p class="muted">Takes the items out of stock again (refused once they've been sold or moved since).</p>
-                <form method="post" action="/sales/channels/returns/@_return.Id/void" data-enhance="false">
+                <PostForm Action="@($"/sales/channels/returns/{_return.Id}/void")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="reason">Reason</label><input id="reason" name="reason" required maxlength="500" /></div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit" class="danger">Void</button></div>
-                </form>
+                </PostForm>
             </div>
         }
     }

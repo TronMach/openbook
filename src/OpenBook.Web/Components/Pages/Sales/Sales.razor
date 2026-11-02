@@ -12,24 +12,24 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Sales</h1>
-        <a class="button secondary" href="/customers">@_terms.Customers</a>
-        <a class="button secondary" href="/items">Products and services</a>
-        <a class="button secondary" href="/sales/recurring">Recurring</a>
-        <a class="button secondary" href="/sales/collections">Collections</a>
-        <a class="button secondary" href="/sales/scheduled-emails">Scheduled emails</a>
-        <a class="button secondary" href="/documents">Document inbox</a>
-        <a class="button secondary" href="/print">Print</a>
-        <a class="button secondary" href="/sales/orders">Sales orders</a>
-        <a class="button secondary" href="/sales/retainers">Retainers</a>
-        <a class="button secondary" href="/sales/billable">Billable expenses</a>
-        <a class="button secondary" href="/sales/channels">Sales channels</a>
-        <a class="button secondary" href="/pricing">Pricing</a>
-        <a class="button secondary" href="/sales-tax">Sales tax</a>
-        <a class="button secondary" href="/sales/estimates/new">New estimate</a>
-        <a class="button secondary" href="/sales/credit-memos/new">Credit memo</a>
-        <a class="button secondary" href="/sales/receipts/new">Sales receipt</a>
-        <a class="button secondary" href="/sales/payments/new">Receive payment</a>
-        <a class="button" href="/sales/invoices/new">New invoice</a>
+        <ActionLink Class="button secondary" Href="/customers">@_terms.Customers</ActionLink>
+        <ActionLink Class="button secondary" Href="/items">Products and services</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/recurring">Recurring</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/collections">Collections</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/scheduled-emails">Scheduled emails</ActionLink>
+        <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
+        <ActionLink Class="button secondary" Href="/print">Print</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/orders">Sales orders</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/retainers">Retainers</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/billable">Billable expenses</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/channels">Sales channels</ActionLink>
+        <ActionLink Class="button secondary" Href="/pricing">Pricing</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales-tax">Sales tax</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/estimates/new">New estimate</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/credit-memos/new">Credit memo</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/receipts/new">Sales receipt</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/payments/new">Receive payment</ActionLink>
+        <ActionLink Class="button" Href="/sales/invoices/new">New invoice</ActionLink>
     </div>
 
     <div class="summary-bar">
@@ -50,7 +50,7 @@
         case "estimates":
             @if (_estimates.Count == 0)
             {
-                <div class="card"><p>No estimates yet. <a href="/sales/estimates/new">Create one</a>.</p></div>
+                <div class="card"><p>No estimates yet. <ActionLink Href="/sales/estimates/new">Create one</ActionLink>.</p></div>
             }
             else
             {
@@ -153,7 +153,7 @@
             var shown = Show == "all-invoices" ? _invoices : _invoices.Where(i => i.IsOpen).ToList();
             @if (shown.Count == 0)
             {
-                <div class="card"><p>@(Show == "all-invoices" ? "No invoices yet." : "Nothing unpaid.") <a href="/sales/invoices/new">Create an invoice</a>.</p></div>
+                <div class="card"><p>@(Show == "all-invoices" ? "No invoices yet." : "Nothing unpaid.") <ActionLink Href="/sales/invoices/new">Create an invoice</ActionLink>.</p></div>
             }
             else
             {

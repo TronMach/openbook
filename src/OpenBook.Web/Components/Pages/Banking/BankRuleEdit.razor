@@ -11,10 +11,10 @@
 <div class="card">
     <div class="toolbar">
         <h1>@(Id is null ? "New bank rule" : _rule?.Name ?? "Bank rule")</h1>
-        <a class="button secondary" href="/banking/rules">Back to rules</a>
+        <ActionLink Class="button secondary" Href="/banking/rules">Back to rules</ActionLink>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">History</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={id}")">History</ActionLink>
         }
     </div>
 

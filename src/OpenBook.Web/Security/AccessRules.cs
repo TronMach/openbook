@@ -258,6 +258,41 @@ public static class AccessRules
         return Allows(user, new PathString(action.Split('?', '#')[0]), HttpMethods.Post, out _);
     }
 
+    /// <summary>
+    /// The access denied page for a request the user isn't allowed (what it needs, the area for someone with a
+    /// permission set, and where to go back to: a local path only).
+    /// </summary>
+    public static string DeniedUrl(ClaimsPrincipal user, PathString path, UserRole needed, string? back)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        // The area only matters to someone with a permission set (the page explains their level there).
+        var area = user.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim) ? AreaOf(path) : null;
+        var url = $"/access-denied?needed={needed}";
+        if (area is not null)
+            url += $"&area={Uri.EscapeDataString(area)}";
+        if (LocalPath(back) is { } local)
+            url += $"&back={Uri.EscapeDataString(local)}";
+        return url;
+    }
+
+    /// <summary>What a greyed-out action says about itself: the access it needs.</summary>
+    public static string NeedsText(ClaimsPrincipal user, string href, string method)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var path = new PathString(href.Split('?', '#')[0]);
+        Allows(user, path, method, out var needed);
+        return user.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim) && needed != UserRole.Admin && AreaOf(path) is { } area
+            && ApiScopes.Areas.TryGetValue(area, out var info)
+            ? $"Needs {PermissionSet.Describe(needed)} access to {info.Label}. Ask an admin."
+            : $"Needs the {AccessMiddleware.Describe(needed)} role. Ask an admin.";
+    }
+
+    /// <summary>A path on this site (starts with one slash), or null: never another site.</summary>
+    public static string? LocalPath(string? url) =>
+        url is { Length: > 0 } && url[0] == '/' && !url.StartsWith("//", StringComparison.Ordinal) && !url.StartsWith("/\\", StringComparison.Ordinal)
+            ? url
+            : null;
+
     public static UserRole? RoleOf(ClaimsPrincipal user) =>
         Enum.TryParse<UserRole>(user.FindFirstValue(ClaimTypes.Role), out var role) ? role : null;
 
@@ -313,9 +348,12 @@ public sealed class AccessMiddleware(RequestDelegate next)
                 }
                 else
                 {
-                    // The area only matters to someone with a permission set (the page explains their level there).
-                    var area = http.User.HasClaim(c => c.Type == WebSecurity.PermissionSetClaim) ? AccessRules.AreaOf(http.Request.Path) : null;
-                    http.Response.Redirect(area is null ? $"/access-denied?needed={needed}" : $"/access-denied?needed={needed}&area={area}");
+                    // Back to the page the link was on, when it was one of ours.
+                    var back = Uri.TryCreate(http.Request.Headers.Referer.ToString(), UriKind.Absolute, out var referer)
+                        && string.Equals(referer.Authority, http.Request.Host.Value, StringComparison.OrdinalIgnoreCase)
+                        ? referer.PathAndQuery
+                        : null;
+                    http.Response.Redirect(AccessRules.DeniedUrl(http.User, http.Request.Path, needed, back));
                 }
 
                 return;

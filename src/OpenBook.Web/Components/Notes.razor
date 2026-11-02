@@ -25,11 +25,11 @@
                         @note.CreatedBy · @note.CreatedAt.LocalDateTime.ToString("g")
                         @if (_canWrite)
                         {
-                            <form method="post" action="/notes/@note.Id/delete" class="inline-form" data-enhance="false">
+                            <PostForm Action="@($"/notes/{note.Id}/delete")" class="inline-form" data-enhance="false">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="returnUrl" value="@_returnUrl" />
                                 <button type="submit" class="link">Remove</button>
-                            </form>
+                            </PostForm>
                         }
                     </p>
                 </li>
@@ -38,7 +38,7 @@
     }
     @if (_canWrite)
     {
-        <form method="post" action="/notes" data-enhance="false">
+        <PostForm Action="/notes" data-enhance="false">
             <AntiforgeryToken />
             <input type="hidden" name="entityType" value="@EntityType" />
             <input type="hidden" name="entityId" value="@EntityId" />
@@ -49,7 +49,7 @@
                 <span class="hint">Ctrl+Enter to save.</span>
             </div>
             <button type="submit" class="secondary">Add note</button>
-        </form>
+        </PostForm>
     }
 </section>
 

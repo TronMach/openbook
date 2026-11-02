@@ -9,7 +9,7 @@
 <div class="card">
     <div class="toolbar">
         <h1>@(_set?.Name ?? L["New permission set"])</h1>
-        <a href="/settings/permission-sets">@L["Permission sets"]</a>
+        <ActionLink Href="/settings/permission-sets">@L["Permission sets"]</ActionLink>
     </div>
 
     @if (Saved)
@@ -68,7 +68,7 @@
             <form method="post" @formname="active" @onsubmit="ToggleAsync" style="margin-top: 1rem">
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_set.IsActive ? L["Switch off"] : L["Switch on"])</button>
-                <a href="/audit?entityId=@_set.Id">@L["History"]</a>
+                <ActionLink Href="@($"/audit?entityId={_set.Id}")">@L["History"]</ActionLink>
             </form>
         }
     }

@@ -9,10 +9,10 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@(Id is null ? L["New recurring invoice"].Value : _name)</h1>
-        <a class="button secondary" href="/sales/recurring">@L["Back to recurring invoices"]</a>
+        <ActionLink Class="button secondary" Href="/sales/recurring">@L["Back to recurring invoices"]</ActionLink>
         @if (Id is { } id)
         {
-            <a class="button secondary" href="/audit?entityId=@id">@L["History"]</a>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={id}")">@L["History"]</ActionLink>
         }
     </div>
 

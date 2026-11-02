@@ -14,8 +14,8 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Receipt: @_receipt.FileName</h1>
-        <a class="button secondary" href="/purchases/receipts">Receipts</a>
-        <a class="button secondary" href="/audit?entityId=@_receipt.Id">History</a>
+        <ActionLink Class="button secondary" Href="/purchases/receipts">Receipts</ActionLink>
+        <ActionLink Class="button secondary" Href="@($"/audit?entityId={_receipt.Id}")">History</ActionLink>
     </div>
 
     @if (Error is not null)
@@ -43,7 +43,7 @@
             {
                 <p class="muted">Filled in from the receipt; check them against it below.@(_receipt.Tax is { } tax ? $" Tax on it: {Labels.Amount(tax)}." : "")</p>
             }
-            <form method="post" action="/purchases/receipts/@_receipt.Id/record" data-enhance="false">
+            <PostForm Action="@($"/purchases/receipts/{_receipt.Id}/record")" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -99,11 +99,11 @@
                 </div>
                 <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <div class="actions"><button type="submit">Record expense</button></div>
-            </form>
-            <form method="post" action="/purchases/receipts/@_receipt.Id/dismiss" data-enhance="false" class="actions">
+            </PostForm>
+            <PostForm Action="@($"/purchases/receipts/{_receipt.Id}/dismiss")" data-enhance="false" class="actions">
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">Dismiss (not an expense, or entered already)</button>
-            </form>
+            </PostForm>
         </div>
     }
 

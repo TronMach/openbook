@@ -8,9 +8,9 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Custom fields</h1>
-        <a class="button" href="/settings/custom-fields/new">New field</a>
-        <a class="button secondary" href="/settings">Settings</a>
-        <a class="button secondary" href="/audit?entityType=custom_field">History</a>
+        <ActionLink Class="button" Href="/settings/custom-fields/new">New field</ActionLink>
+        <ActionLink Class="button secondary" Href="/settings">Settings</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=custom_field">History</ActionLink>
     </div>
     <p class="muted">
         Extra fields for products and services, customers, vendors and documents. Fill them in on each record's page. A product,
@@ -33,7 +33,7 @@
         <section class="card">
             <div class="toolbar">
                 <h2>@CustomField.Label(target)</h2>
-                <a class="button secondary" href="/settings/custom-fields/new?target=@target">Add a field</a>
+                <ActionLink Class="button secondary" Href="@($"/settings/custom-fields/new?target={target}")">Add a field</ActionLink>
             </div>
             @if (fields.Count == 0)
             {
@@ -61,7 +61,7 @@
                             {
                                 <tr class="@(field.IsActive ? null : "muted")">
                                     <td>
-                                        <a href="/settings/custom-fields/@field.Id">@field.Name</a>
+                                        <ActionLink Href="@($"/settings/custom-fields/{field.Id}")">@field.Name</ActionLink>
                                         @if (field.IsRequired)
                                         {
                                             <span class="badge">Required</span>
@@ -89,7 +89,7 @@
             {
                 <details class="presets">
                     <summary>Ready-made fields (@presets.Count)</summary>
-                    <form method="post" action="/settings/custom-fields/presets" data-enhance="false">
+                    <PostForm Action="/settings/custom-fields/presets" data-enhance="false">
                         <AntiforgeryToken />
                         <ul class="check-list">
                             @foreach (var preset in presets)
@@ -111,7 +111,7 @@
                             <button type="submit" class="secondary">Add the ticked fields</button>
                             <button type="submit" class="secondary" name="all" value="@target">Add all @presets.Count</button>
                         </div>
-                    </form>
+                    </PostForm>
                 </details>
             }
         </section>

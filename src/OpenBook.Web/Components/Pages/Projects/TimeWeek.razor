@@ -12,7 +12,7 @@
         <h1>Week of @Labels.Date(_monday)</h1>
         <a class="button secondary" href="@Link(_monday.AddDays(-7))">Previous week</a>
         <a class="button secondary" href="@Link(_monday.AddDays(7))">Next week</a>
-        <a class="button secondary" href="/time">Time list</a>
+        <ActionLink Class="button secondary" Href="/time">Time list</ActionLink>
     </div>
     @if (Error is not null)
     {
@@ -42,7 +42,7 @@
             <noscript><button type="submit" class="secondary">Show</button></noscript>
         </form>
 
-        <form method="post" action="/time/week" data-enhance="false">
+        <PostForm Action="/time/week" data-enhance="false">
             <AntiforgeryToken />
             <input type="hidden" name="workerId" value="@_worker.Id" />
             <input type="hidden" name="week" value="@Iso(_monday)" />
@@ -135,7 +135,7 @@
             </div>
             <p class="muted">Clearing a cell deletes its time. Billable time needs a client and a service; rates come from the rate card. Running timers aren't shown.</p>
             <div class="actions"><button type="submit">Save the week</button></div>
-        </form>
+        </PostForm>
     }
 </div>
 
