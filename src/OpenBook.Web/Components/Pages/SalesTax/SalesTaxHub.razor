@@ -11,6 +11,13 @@
         <a class="button secondary" href="/reports/sales-tax">Liability report</a>
         <a class="button" href="/sales-tax/pay">Pay sales tax</a>
     </div>
+    @if (Welcome)
+    {
+        <div class="alert notice" role="status">
+            Your company is set up. Since you charge sales tax, add the agency you pay it to and its rate here; then
+            customers and invoices can charge it. Or <a href="/">go to the home page</a> and do it later.
+        </div>
+    }
     <p class="muted">
         Each <strong>agency</strong> you collect for has its own account under "Sales Tax Payable", so what you owe it is always in the
         books. <strong>Rates</strong> belong to an agency; a <strong>tax code</strong> charges one rate or combines several (state + county +
@@ -179,6 +186,10 @@
 </div>
 
 @code {
+    // Coming straight from setup, having said they charge sales tax.
+    [SupplyParameterFromQuery]
+    private bool Welcome { get; set; }
+
     private readonly DateOnly _today = CompanyTime.Today;
     private IReadOnlyList<TaxAgency> _agencies = [];
     private IReadOnlyList<TaxRate> _rates = [];

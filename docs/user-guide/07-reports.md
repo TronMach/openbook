@@ -1,6 +1,6 @@
 # Reports
 
-**Reports** in the menu lists every report, in groups. This chapter covers the ones most businesses use and how all reports work. Budgets, the custom report builder, the dashboard and scheduled reports are in [chapter 20](20-budgets-and-analysis.md).
+**Reports** in the menu lists every report, in groups (in the simple view it starts with a short list; **All reports** shows the rest, see [The simple view](28-simple-view.md#reports-and-the-dashboard)). This chapter covers the ones most businesses use and how all reports work. Budgets, the custom report builder, the dashboard and scheduled reports are in [chapter 20](20-budgets-and-analysis.md).
 
 ## The main reports
 

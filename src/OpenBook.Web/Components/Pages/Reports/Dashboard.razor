@@ -3,6 +3,7 @@
 @using OpenBook.Application.Reporting
 @inject KpiService Kpis
 @inject DashboardService Preferences
+@inject ViewModeService Views
 
 <PageTitle>@L["Dashboard"] · OpenBook</PageTitle>
 
@@ -20,7 +21,16 @@
     {
         <p class="muted">@Labels.For(_k.Basis), the company's default. Year to date is the fiscal year from @Labels.Date(_yearStart).</p>
 
-        @if (Show("position"))
+        @if (_simple && Shown("position"))
+        {
+            <h2>@L["Where you stand"]</h2>
+            <div class="tiles">
+                <div class="tile"><a href="/banking"><div class="label">@L["Money in the bank"]</div><div class="value">@Labels.Amount(_k.Cash)</div></a></div>
+                <div class="tile"><a href="/reports/ar-aging?asOf=@Iso(_asOf)"><div class="label">@L["Owed to you"]</div><div class="value">@Labels.Amount(_k.Receivables)</div><div class="sub">@Labels.Amount(_k.OverdueReceivables) overdue</div></a></div>
+                <div class="tile"><a href="/purchases/pay-bills"><div class="label">@L["Bills to pay"]</div><div class="value">@Labels.Amount(_k.Payables)</div><div class="sub">@Labels.Amount(_k.OverduePayables) overdue</div></a></div>
+            </div>
+        }
+        else if (Shown("position"))
         {
             <h2>@L["Position"]</h2>
             <div class="tiles">
@@ -30,7 +40,16 @@
             </div>
         }
 
-        @if (Show("income"))
+        @if (_simple && Shown("income"))
+        {
+            <h2>@L["Sales and profit"]</h2>
+            <div class="tiles">
+                <div class="tile"><div class="label">@L["Sales this month"]</div><div class="value">@Labels.Amount(_k.IncomeMonth)</div><div class="sub">profit @Labels.Amount(_k.IncomeMonth - _k.ExpensesMonth)</div></div>
+                <div class="tile"><a href="/reports/sales-by-customer?preset=ThisFiscalYearToDate"><div class="label">@L["Sales this year"]</div><div class="value">@Labels.Amount(_k.IncomeYear)</div><div class="sub">@Change(_k.IncomeYear, _k.IncomePriorYear) on last year</div></a></div>
+                <div class="tile"><a href="/reports/profit-and-loss?preset=ThisFiscalYearToDate"><div class="label">@L["Profit this year"]</div><div class="value">@Labels.Amount(_k.NetIncomeYear)</div><div class="sub">last year by now @Labels.Amount(_k.NetIncomePriorYear)</div></a></div>
+            </div>
+        }
+        else if (Shown("income"))
         {
             <h2>@L["Profit"]</h2>
             <div class="tiles">
@@ -40,7 +59,7 @@
             </div>
         }
 
-        @if (Show("ratios"))
+        @if (Shown("ratios"))
         {
             <h2>@L["Ratios"]</h2>
             <div class="tiles">
@@ -51,7 +70,7 @@
             </div>
         }
 
-        @if (Show("trend"))
+        @if (Shown("trend"))
         {
             var max = Math.Max(1m, _k.Months.Max(m => Math.Max(m.Income, m.Expenses)));
             <h2>@L["Income and expenses by month"]</h2>
@@ -97,7 +116,7 @@
             </details>
         }
 
-        @if (Show("cash"))
+        @if (Shown("cash"))
         {
             var low = Math.Min(0m, _k.Months.Min(m => m.Cash));
             var high = Math.Max(1m, _k.Months.Max(m => m.Cash));
@@ -128,7 +147,7 @@
             </svg>
         }
 
-        @if (Show("expenses") && _k.TopExpenses.Count > 0)
+        @if (Shown("expenses") && _k.TopExpenses.Count > 0)
         {
             <h2>@L["Biggest expenses, year to date"]</h2>
             <table class="data">
@@ -147,6 +166,15 @@
                 <AntiforgeryToken />
                 @foreach (var (key, label) in Panels)
                 {
+                    if (_simple && FullViewOnly.Contains(key))
+                    {
+                        // Not on the simple dashboard; kept as it is for the full view.
+                        if (Show(key))
+                        {
+                            <input type="hidden" name="show" value="@key" />
+                        }
+                        continue;
+                    }
                     <label class="check"><input type="checkbox" name="show" value="@key" checked="@Show(key)" /> @label</label>
                 }
                 <div class="actions"><button type="submit" class="secondary">Save</button></div>
@@ -182,9 +210,16 @@
         _k = await Kpis.SnapshotAsync(_asOf);
         _yearStart = _k.YearStart;
         _hidden = await Preferences.HiddenAsync();
+        _simple = (await Views.CurrentAsync()).Mode == OpenBook.Domain.Companies.ViewMode.Simple;
     }
 
     private bool Show(string key) => !_hidden.Contains(key);
+
+    // The simple view's dashboard leaves out the ratios and the month-end cash chart.
+    private static readonly HashSet<string> FullViewOnly = ["ratios", "cash"];
+    private bool _simple;
+
+    private bool Shown(string key) => Show(key) && !(_simple && FullViewOnly.Contains(key));
 
     private static decimal Y(decimal value, decimal max) => Bottom - value / max * 190m;
 

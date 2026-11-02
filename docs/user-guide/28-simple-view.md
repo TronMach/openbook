@@ -21,7 +21,7 @@ Under the top bar is a row of menus. Select one to open it, select it again (or 
 | **Vendors** | Vendor Center, Create Purchase Orders, Enter Bills, Pay Bills, Enter Vendor Credits, All Purchases |
 | **Inventory** | Item Center, New Item, Receive Inventory, Adjust Quantity on Hand, Build Assemblies, Stock on Hand |
 | **Banking** | Write Checks, Make Deposits, Transfer Funds, Registers and Reconciling, Print Checks |
-| **Reports** | Profit & Loss, Balance Sheet, Who Owes You, What You Owe, Sales by Customer, Sales by Item, Stock Status, All Reports |
+| **Reports** | Dashboard, Profit & Loss, Balance Sheet, Who Owes You, What You Owe, Sales by Customer, Sales by Item, Stock Status, All Reports |
 
 Your edition adds its own: **Enter Time** (professional services) and **Record a Gift** (nonprofit) in the Customers menu, and **Sales Channels and Payouts** (e-commerce). In the professional services and nonprofit editions the Customers menu is called **Clients** or **Donors**.
 
@@ -70,6 +70,22 @@ The home page draws your work as steps, in the order they usually happen:
 Select a step to start it: **Create Invoices** opens a new invoice, **Pay Bills** opens the list of bills to pay, and so on. Under each step's name is what's waiting there, for example "2 overdue · 1,250.00 owed to you" or "3 to deposit · 480.00". Where there's a list to look at, **See them** opens it. Overdue invoices are shown in red.
 
 A step you haven't used yet stays on the page and says what it's for (Purchase Orders says "Order stock from vendors"), so you can find it when you need it. Bills waiting for approval don't count as bills to pay. **Pay Bills** counts bills due within a week, including overdue ones.
+
+## Setting up in the simple view
+
+Company setup asks three more questions: **What do you sell?** (services and products, services, or products), **I keep products in stock and want them counted**, and **I charge sales tax**. When the company starts in the simple view, and you're not starting from an export, OpenBook sets up the starter chart of accounts for your business type, fitted to the answers:
+
+- Services only: no Product Sales or Cost of Goods Sold accounts.
+- Products only: no Service Revenue account.
+- Keeping stock: an Inventory Asset account for what your stock cost.
+
+Anything left out is created the first time it's needed. If you charge sales tax, you go to **Sales tax** next to add the agency you pay it to and its rate; otherwise to the home page. In the full view you choose a starter chart yourself, as before.
+
+## Reports and the dashboard
+
+**Reports** in the simple view starts with the reports a one-person business uses: Profit and loss, Balance sheet, A/R aging, A/P aging, Sales by customer, Sales by product or service, Expenses by vendor, Inventory stock status, Sales tax liability and Tax summary, then your saved reports. **All reports** shows the whole list, the same as the full view.
+
+The **Dashboard** (in the Reports menu) shows **Where you stand** (money in the bank, what's owed to you and what you owe, each with what's overdue), **Sales and profit** (this month, and this year against the same point last year), income and expenses by month, and your biggest expenses. The ratios and the month-end cash chart are left for the full view; choosing what the dashboard shows there keeps working as before.
 
 ## Where the rest is
 

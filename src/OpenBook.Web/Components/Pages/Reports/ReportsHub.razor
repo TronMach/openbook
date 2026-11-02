@@ -3,8 +3,42 @@
 @inject SavedReportService SavedReports
 @inject ReportCatalog Catalog
 @inject OpenBook.Application.Companies.ICompanyStore Companies
+@inject ViewModeService Views
 
 <PageTitle>Reports · OpenBook</PageTitle>
+
+@if (_simple && !All)
+{
+    @* The simple view starts with the reports a one-person business uses; every other report is a link away. *@
+    <div class="wide">
+        <div class="toolbar">
+            <h1>Reports</h1>
+            <a class="button secondary" href="/dashboard">Dashboard</a>
+            <a class="button secondary" href="/reports?all=true">All reports</a>
+        </div>
+        <div class="report-list">
+            @foreach (var report in Everyday.Select(Catalog.Find).OfType<ReportDefinition>().Where(r => HttpContext.User.CanReach(r.Path)))
+            {
+                <a class="card" href="@report.Path">
+                    <h3>@report.Title</h3>
+                    <p class="muted">@report.Description</p>
+                </a>
+            }
+        </div>
+        @if (_saved.Count > 0)
+        {
+            <h2>Saved reports</h2>
+            <ul>
+                @foreach (var report in _saved)
+                {
+                    <li><a href="@Href(report)">@report.Name</a></li>
+                }
+            </ul>
+        }
+        <p><a href="/reports?all=true">All reports</a>: comparisons, budgets, inventory valuation, the general ledger, custom reports and more.</p>
+    </div>
+    return;
+}
 
 <div class="wide">
     <h1>Reports</h1>
@@ -85,9 +119,25 @@
 @code {
     private IReadOnlyList<OpenBook.Domain.Reporting.SavedReport> _saved = [];
     private List<string> _first = [];
+    private bool _simple;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // The whole catalog, also in the simple view.
+    [SupplyParameterFromQuery]
+    private bool All { get; set; }
+
+    // What the simple view lists first, in this order.
+    private static readonly string[] Everyday =
+    [
+        "profit-and-loss", "balance-sheet", "ar-aging", "ap-aging", "sales-by-customer", "sales-by-item",
+        "expenses-by-vendor", "inventory-stock", "sales-tax", "tax-summary",
+    ];
 
     protected override async Task OnInitializedAsync()
     {
+        _simple = (await Views.CurrentAsync()).Mode == OpenBook.Domain.Companies.ViewMode.Simple;
         _saved = await SavedReports.ListAsync();
         if (await Companies.GetCompanyAsync(default) is { } company)
             _first = Editions.ReportGroupsFirst(company.Edition).ToList();

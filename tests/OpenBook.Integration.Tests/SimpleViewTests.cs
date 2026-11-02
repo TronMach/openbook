@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpenBook.Application.Accounts;
 using OpenBook.Application.Centers;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Inventory;
@@ -55,6 +56,25 @@ public sealed class SimpleViewTests : IAsyncLifetime
         Assert.Equal(1, await _db.InDb(db => db.ViewPreferences.CountAsync()));
         // A choice of view is a screen preference: nothing more is audited.
         Assert.Single(await _db.InDb(db => db.AuditRecords.Where(a => a.EntityType == "company" && a.Action == Domain.Auditing.AuditAction.Updated).ToListAsync()));
+    }
+
+    [Fact]
+    public void Starter_charts_are_trimmed_to_what_the_business_sells()
+    {
+        static List<string> Names(string csv) => csv.Split('\n', StringSplitOptions.RemoveEmptyEntries).Skip(1).Select(l => l.Split(',')[1]).ToList();
+
+        var services = Names(ChartTemplates.Csv("sole-proprietor", new StarterAnswers(StarterSales.Services, KeepsStock: true)));
+        Assert.Contains("Service Revenue", services);
+        Assert.DoesNotContain("Product Sales", services);
+        Assert.DoesNotContain("Cost of Goods Sold", services);
+        Assert.DoesNotContain("Inventory Asset", services);
+
+        var products = Names(ChartTemplates.Csv("sole-proprietor", new StarterAnswers(StarterSales.Products, KeepsStock: true)));
+        Assert.DoesNotContain("Service Revenue", products);
+        Assert.Equal(products.IndexOf("Prepaid Expenses") + 1, products.IndexOf("Inventory Asset"));
+        Assert.Equal(Names(ChartTemplates.Csv("corporation")), Names(ChartTemplates.Csv("corporation", new StarterAnswers(StarterSales.Both, KeepsStock: false))));
+        // The nonprofit chart has more columns, so it gets no inventory row.
+        Assert.DoesNotContain("Inventory Asset", Names(ChartTemplates.Csv("nonprofit", new StarterAnswers(StarterSales.Products, KeepsStock: true))));
     }
 
     [Fact]
@@ -164,11 +184,12 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
 
     private static string TokenIn(string page) => WebUtility.HtmlDecode(Token().Match(page).Groups[1].Value);
 
-    // Sets up a company through the setup page (simple view, as suggested) and signs in as its owner.
-    private static async Task SetUp(HttpClient browser)
+    // Sets up a company through the setup page and signs in as its owner: the simple view unless told otherwise,
+    // with any other setup fields given. Returns where setup sent the browser.
+    private static async Task<string?> SetUp(HttpClient browser, params (string Name, string Value)[] fields)
     {
         var setup = await browser.GetStringAsync("/setup");
-        var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
+        var form = new Dictionary<string, string>
         {
             ["_handler"] = "setup",
             ["__RequestVerificationToken"] = TokenIn(setup),
@@ -178,8 +199,18 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
             ["Input.Username"] = "owner",
             ["Input.Password"] = "correct horse battery",
             ["Input.ConfirmPassword"] = "correct horse battery",
-        }));
+        };
+        foreach (var (name, value) in fields)
+            form[name] = value;
+        var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(form));
         Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
+        return created.Headers.Location?.PathAndQuery;
+    }
+
+    private async Task<List<string>> AccountNames()
+    {
+        await using var scope = _app.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<OpenBookDbContext>().Accounts.Select(a => a.Name).ToListAsync();
     }
 
     private static Task<HttpResponseMessage> Switch(HttpClient browser, string page, string view, string returnUrl) =>
@@ -289,10 +320,46 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Simple_setup_sets_up_the_accounts_from_the_answers()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        Assert.Equal("/sales-tax?welcome=true", await SetUp(browser, ("Input.Sells", "Services"), ("Input.ChargesSalesTax", "true")));
+        var names = await AccountNames();
+        Assert.Contains("Service Revenue", names);
+        Assert.Contains("Checking", names);
+        Assert.DoesNotContain("Product Sales", names);
+        Assert.DoesNotContain("Cost of Goods Sold", names);
+        Assert.Contains("add the agency you pay it to", await browser.GetStringAsync("/sales-tax?welcome=true"), StringComparison.Ordinal);
+
+        // The chart's changes are audited as the owner.
+        await using var scope = _app.Services.CreateAsyncScope();
+        var actors = await scope.ServiceProvider.GetRequiredService<OpenBookDbContext>().AuditRecords.Where(a => a.EntityType == "account").Select(a => a.Actor).Distinct().ToListAsync();
+        Assert.Equal(["owner"], actors);
+    }
+
+    [Fact]
+    public async Task The_simple_reports_page_lists_the_everyday_reports_and_links_to_all()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        Assert.Equal("/", await SetUp(browser));
+        var reports = await browser.GetStringAsync("/reports");
+        Assert.Contains("href=\"/reports/profit-and-loss\"", reports, StringComparison.Ordinal);
+        Assert.Contains("href=\"/reports?all=true\"", reports, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/reports/trial-balance\"", reports, StringComparison.Ordinal);
+        Assert.Contains("href=\"/reports/trial-balance\"", await browser.GetStringAsync("/reports?all=true"), StringComparison.Ordinal);
+
+        var dashboard = await browser.GetStringAsync("/dashboard");
+        Assert.Contains("Money in the bank", dashboard, StringComparison.Ordinal);
+        Assert.DoesNotContain("Current ratio", dashboard, StringComparison.Ordinal);
+        Assert.Contains("name=\"show\" value=\"ratios\"", dashboard, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Write_checks_goes_to_the_only_bank_account()
     {
         var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        await SetUp(browser);
+        // The full view's setup leaves the chart of accounts empty, so there's no bank account yet.
+        Assert.Equal("/accounts", await SetUp(browser, ("Input.DefaultViewMode", "Full")));
 
         Assert.Contains("no bank account to write a check from", await browser.GetStringAsync("/banking/write-checks"), StringComparison.Ordinal);
 

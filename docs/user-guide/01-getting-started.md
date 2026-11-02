@@ -57,6 +57,7 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 - **Business type** (sole proprietor, partnership, corporation, nonprofit and so on) decides which starter chart of accounts is recommended and which tax form your accounts map to.
 - **What kind of business is this?** picks an *edition*: General, Professional services, E-commerce or Nonprofit. It only changes the order of the menu and the home page shortcuts; every feature stays available. You can change it later in **Settings**.
 - **How should OpenBook look?** picks the view people start with: the *simple view* (a short menu bar by task and a home page that walks through each step, suggested when one person runs the business) or the *full view* (every area in the menu). Both work on the same books, and anyone can switch at any time. See [The simple view](28-simple-view.md).
+- **What do you sell?** (services, products or both), **I keep products in stock** and **I charge sales tax**: in the simple view these set up your chart of accounts for you (see below). In the full view you choose a starter chart on the next page instead.
 - **Email, phone and address** are optional; the address is printed on invoices.
 
 **2. Books**
@@ -68,7 +69,7 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 
 Choose a username and a password of at least 8 characters. This first person is an administrator and can add everyone else later.
 
-Select **Create company**. You're signed in and taken to the **Chart of accounts** page, which offers starter charts, or, after an import, shows the accounts that came in. The home page has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
+Select **Create company**. You're signed in and taken to the **Chart of accounts** page, which offers starter charts, or, after an import, shows the accounts that came in. In the simple view (without an import) the starter chart for your business type is set up for you, trimmed to what you sell (no product sales or cost of goods sold for a services business, an Inventory Asset account when you keep stock), and you go to the home page, or to **Sales tax** to add your tax agency if you said you charge it. The home page has a **Getting started** list. If OpenBook runs on a server in another time zone (a hosted or Docker server usually runs on UTC), set your **Time zone** under **Settings** first: it decides which day "today" is for new documents, what's overdue, when the scheduled jobs run, and the times shown on pages (history, sign-ins, emails sent). The usual order is:
 
 1. Pick a chart of accounts ([chapter 3](03-chart-of-accounts.md)).
 2. Enter opening balances, if you're moving from other books.

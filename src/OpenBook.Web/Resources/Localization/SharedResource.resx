@@ -236,6 +236,9 @@
   <data name="Billable time and mileage for this customer" xml:space="preserve">
     <value>Billable time and mileage for this customer</value>
   </data>
+  <data name="Bills to pay" xml:space="preserve">
+    <value>Bills to pay</value>
+  </data>
   <data name="Books" xml:space="preserve">
     <value>Books</value>
   </data>
@@ -833,6 +836,9 @@
   <data name="Microsoft: directory (tenant) ID or domain" xml:space="preserve">
     <value>Microsoft: directory (tenant) ID or domain</value>
   </data>
+  <data name="Money in the bank" xml:space="preserve">
+    <value>Money in the bank</value>
+  </data>
   <data name="More languages, and regions that write decimals with a comma, are on the way." xml:space="preserve">
     <value>More languages, and regions that write decimals with a comma, are on the way.</value>
   </data>
@@ -1046,6 +1052,9 @@
   <data name="Overdue invoice" xml:space="preserve">
     <value>Overdue invoice</value>
   </data>
+  <data name="Owed to you" xml:space="preserve">
+    <value>Owed to you</value>
+  </data>
   <data name="Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open." xml:space="preserve">
     <value>Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open.</value>
   </data>
@@ -1156,6 +1165,9 @@
   </data>
   <data name="Profit &amp; Loss" xml:space="preserve">
     <value>Profit &amp; Loss</value>
+  </data>
+  <data name="Profit this year" xml:space="preserve">
+    <value>Profit this year</value>
   </data>
   <data name="Projects" xml:space="preserve">
     <value>Projects</value>
@@ -1322,6 +1334,9 @@
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>
   </data>
+  <data name="Sales and profit" xml:space="preserve">
+    <value>Sales and profit</value>
+  </data>
   <data name="Sales by Customer" xml:space="preserve">
     <value>Sales by Customer</value>
   </data>
@@ -1342,6 +1357,12 @@
   </data>
   <data name="Sales Receipts" xml:space="preserve">
     <value>Sales Receipts</value>
+  </data>
+  <data name="Sales this month" xml:space="preserve">
+    <value>Sales this month</value>
+  </data>
+  <data name="Sales this year" xml:space="preserve">
+    <value>Sales this year</value>
   </data>
   <data name="Save" xml:space="preserve">
     <value>Save</value>
@@ -1696,6 +1717,9 @@
   </data>
   <data name="Where the money is sorted" xml:space="preserve">
     <value>Where the money is sorted</value>
+  </data>
+  <data name="Where you stand" xml:space="preserve">
+    <value>Where you stand</value>
   </data>
   <data name="Where you're signed in" xml:space="preserve">
     <value>Where you're signed in</value>

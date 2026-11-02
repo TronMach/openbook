@@ -8,6 +8,7 @@
 @inject MigrationImportService ImportService
 @inject MigrationSetupService MigrationSetup
 @inject SetupState State
+@inject ChartTemplates Templates
 @inject NavigationManager Navigation
 
 <PageTitle>Set up your company · OpenBook</PageTitle>
@@ -120,6 +121,27 @@
                 </InputSelect>
                 <span class="hint">Both work on the same books. Anyone can switch between them at any time with the link at the top of the page.</span>
             </div>
+            <div class="row">
+                <div class="field">
+                    <label for="sells">What do you sell?</label>
+                    <InputSelect id="sells" @bind-Value="Input.Sells">
+                        <option value="@StarterSales.Both">Services and products</option>
+                        <option value="@StarterSales.Services">Services: work I do</option>
+                        <option value="@StarterSales.Products">Products: things I sell</option>
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.KeepsStock" />
+                        <span>I keep products in stock and want them counted</span>
+                    </label>
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.ChargesSalesTax" />
+                        <span>I charge sales tax</span>
+                    </label>
+                </div>
+            </div>
+            <span class="hint">In the simple view these set up your chart of accounts for you, and sales tax is next if you charge it. In the full view you choose a starter chart on the next page. Starting from an export uses the accounts in it instead.</span>
             <div class="row">
                 <div class="field">
                     <label for="email">Email <span class="muted">(optional)</span></label>
@@ -323,12 +345,38 @@
 
             State.MarkSetUp();
             await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp, owner.Role));
-            // Without an import the company has no accounts yet; that page offers starter charts.
-            Navigation.NavigateTo(upload is null ? "/accounts" : "/accounts?movedIn=true");
+            if (upload is not null)
+            {
+                Navigation.NavigateTo("/accounts?movedIn=true");
+                return;
+            }
+
+            // The simple view sets the accounts up from the answers; the full view's next page offers the starter charts.
+            if (command.DefaultViewMode == ViewMode.Simple && await StarterChartAsync(owner))
+                Navigation.NavigateTo(Input.ChargesSalesTax ? "/sales-tax?welcome=true" : "/");
+            else
+                Navigation.NavigateTo("/accounts");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+        }
+    }
+
+    // The starter chart for the business type, trimmed to what they sell, audited as the new owner. False when it
+    // couldn't be applied, so they choose one themselves on the accounts page.
+    private async Task<bool> StarterChartAsync(User owner)
+    {
+        HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, owner.Username)], "setup"));
+        try
+        {
+            var template = Input.Edition == Edition.Nonprofit ? "nonprofit" : ChartTemplates.ForBusinessType(Input.BusinessType).Key;
+            await Templates.ApplyAsync(template, new StarterAnswers(Input.Sells ?? StarterSales.Both, Input.KeepsStock), HttpContext.RequestAborted);
+            return true;
+        }
+        catch (DomainException)
+        {
+            return false;
         }
     }
 
@@ -347,6 +395,13 @@
 
         // Nullable because the form binder leaves an enum it isn't sent at its zero value (Full); not given means the suggested simple view.
         public ViewMode? DefaultViewMode { get; set; }
+
+        // Nullable for the same reason: not given means both.
+        public StarterSales? Sells { get; set; }
+
+        public bool KeepsStock { get; set; }
+
+        public bool ChargesSalesTax { get; set; }
 
         // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
         [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
