@@ -165,6 +165,14 @@ public sealed class Company
     public void SetEdition(Edition edition) =>
         Edition = Enum.IsDefined(edition) ? edition : throw new DomainException("company.edition_invalid", $"Unknown edition {edition}.");
 
+    /// <summary>
+    /// Whether sales may take more stock than is on hand, for items that follow the company (<see cref="Sales.Item.SellShort"/>):
+    /// for businesses that don't keep exact counts. Off by default.
+    /// </summary>
+    public bool AllowSellingShort { get; private set; }
+
+    public void SetAllowSellingShort(bool allow) => AllowSellingShort = allow;
+
     /// <summary>The view people get until they choose their own (<see cref="ViewPreference"/>).</summary>
     public ViewMode DefaultViewMode { get; private set; }
 

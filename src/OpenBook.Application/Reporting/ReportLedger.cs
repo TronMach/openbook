@@ -24,7 +24,8 @@ public sealed record SegmentFilter(Guid? ClassId = null, Guid? LocationId = null
 /// their lines. Credit applied to an invoice moves no cash, so it's recognized nowhere; credit applied later
 /// from an unapplied payment counts on the payment's date. A refund of a credit memo reverses income on the
 /// refund date; a refund of an unapplied payment just reverses that cash. The inventory cost lines on invoices
-/// and credit memos (cost of goods sold against the inventory asset) are kept as posted: stock leaves when it's sold.
+/// and credit memos (cost of goods sold against the inventory asset) are kept as posted: stock leaves when it's sold. So
+/// are a bill's corrections of the cost of stock sold before it came in (<see cref="Inventory.InventoryService.ShortfallMemo"/>).
 /// </summary>
 public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases, Companies.ICompanyStore companies)
 {
@@ -84,7 +85,9 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             .SelectMany(i => new[] { i.InventoryAssetAccountId!.Value, i.CostAccountId!.Value })
             .ToHashSet();
         var cash = lines.Where(l => l.Basis.AppliesTo(ReportBasis.Cash)
-            && (!AccrualDocuments.Contains(l.Source) || l.Source is Invoice.Source or CreditMemo.Source && stockAccounts.Contains(l.AccountId))).ToList();
+            && (!AccrualDocuments.Contains(l.Source) || l.Source is Invoice.Source or CreditMemo.Source && stockAccounts.Contains(l.AccountId)
+                // A bill's correction of the cost of stock sold before it came in: cost of goods sold, recognized as posted.
+                || l.Source == Bill.Source && l.LineMemo?.StartsWith(Inventory.InventoryService.ShortfallMemo, StringComparison.Ordinal) == true)).ToList();
         var entryNumbers = lines.GroupBy(l => l.JournalEntryId).ToDictionary(g => g.Key, g => g.First().EntryNumber);
         // Each document's posted lines, looked up once rather than by scanning every line per document.
         var byEntry = lines.ToLookup(l => l.JournalEntryId);

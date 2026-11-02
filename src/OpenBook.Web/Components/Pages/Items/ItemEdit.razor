@@ -8,6 +8,7 @@
 @inject InventoryService Inventory
 @inject WarehouseService WarehouseService
 @inject ViewModeService Views
+@inject ICompanyStore Companies
 @inject NavigationManager Navigation
 
 <PageTitle>@(_item?.Name ?? "New product or service") · OpenBook</PageTitle>
@@ -395,12 +396,13 @@
 
     // The simple view asks plain questions and folds the accounts and stock tracking under "More options".
     private bool _simple;
+    private bool _sellShortAllowed;
 
     // Anything under "More options" away from its default opens it, so a record's choices stay in sight.
     private bool AccountingChanged =>
         Input.IncomeAccountId is null || Input.IncomeAccountId != _incomeAccounts.FirstOrDefault()?.Id
         || Input.InventoryAssetAccountId is not null || Input.CostAccountId is not null
-        || Input.Tracking != ItemTracking.None || Input.CostMethod != InventoryCostMethod.Fifo || Input.AutoBuild;
+        || Input.Tracking != ItemTracking.None || Input.CostMethod != InventoryCostMethod.Fifo || Input.AutoBuild || Input.SellShort != ShortStock.Company;
 
     private RenderFragment IncomeField => @<div class="field">
         <label for="account">Income account</label>
@@ -471,11 +473,21 @@
             </InputSelect>
             <span class="hint">@(_assetLocked ? "Fixed once stock has moved." : "Average costs every sale at the average of what's on hand.")</span>
         </div>
+        <div class="field">
+            <label for="sell-short">Selling more than is on hand</label>
+            <InputSelect id="sell-short" @bind-Value="Input.SellShort">
+                <option value="@ShortStock.Company">@(_sellShortAllowed ? "Allowed (the company's setting)" : "Not allowed (the company's setting)")</option>
+                <option value="@ShortStock.Allow">Always allowed</option>
+                <option value="@ShortStock.Never">Never allowed</option>
+            </InputSelect>
+            <span class="hint">When allowed, the count goes below zero and the cost is corrected when stock comes in. Not for lot or serial numbers.</span>
+        </div>
     </text>;
 
     protected override async Task OnInitializedAsync()
     {
         _simple = (await Views.CurrentAsync()).Mode == OpenBook.Domain.Companies.ViewMode.Simple;
+        _sellShortAllowed = (await Companies.GetCompanyAsync(default))?.AllowSellingShort ?? false;
         _chart = await AccountService.GetChartAsync();
         _incomeAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
@@ -505,7 +517,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
-                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild,
+                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
             };
     }
 
@@ -537,7 +549,7 @@
             var method = _assetLocked ? _item!.CostMethod : Input.CostMethod;
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
-                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild);
+                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
             Navigation.NavigateTo(_item is null && Item.HasComponents(saved.Type) ? $"/items/{saved.Id}#components" : "/items");
@@ -585,6 +597,8 @@
         public ItemTracking Tracking { get; set; }
 
         public bool AutoBuild { get; set; }
+
+        public ShortStock SellShort { get; set; }
 
         [StringLength(50)]
         public string? Barcode { get; set; }

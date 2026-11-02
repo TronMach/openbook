@@ -1266,6 +1266,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<bool>("AllowSellingShort")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("BusinessType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -5125,6 +5128,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<long?>("ReorderPoint")
                         .HasColumnType("bigint")
                         .HasColumnName("ReorderPointTenThousandths");
+
+                    b.Property<string>("SellShort")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool>("Taxable")
                         .HasColumnType("boolean");

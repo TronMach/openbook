@@ -54,6 +54,7 @@ public sealed class InventoryAdjustmentService(
         var lines = new List<(Guid ItemId, decimal QuantityChange, decimal ValueChange, StockPlace Place, string? Lots)>();
         var histories = new Dictionary<Guid, List<InventoryMovement>>();
         var postings = new List<JournalLineDraft>();
+        var corrections = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
         foreach (var draft in command.Lines)
         {
@@ -74,8 +75,11 @@ public sealed class InventoryAdjustmentService(
                 InventoryService.EnsureNewSerials(item, received, history);
                 value = decimal.Round(draft.QuantityChange * (draft.UnitCost ?? item.PurchaseCost), 2, MidpointRounding.AwayFromZero);
                 var receipts = received.Count > 0 ? received.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(draft.QuantityChange, (string?)null)];
-                foreach (var (quantity, lot, share) in InventoryService.Split(receipts, value).ToList())
-                    movements.Add((type, id, at) => InventoryMovement.Receipt(item.Id, command.Date, quantity, share, type, id, at, place, lot));
+                // Stock found fills what was sold before it was counted, correcting that cost (InventoryService.Receive).
+                var stock = InventoryService.Receive(item, history, InventoryService.Split(receipts, value)
+                    .Select(r => InventoryService.PlannedReceipt(item, command.Date, r.Quantity, r.Cost, place, r.Lot)).ToList(), command.Date);
+                movements.AddRange(stock.Movements);
+                corrections.AddRange(stock.Postings);
                 lots = LotText.Format(received, item.Tracking);
             }
             else
@@ -107,6 +111,7 @@ public sealed class InventoryAdjustmentService(
             postings.Add(JournalLineDraft.Cr(adjustmentAccount.Id, total, "Inventory adjustment"));
         else if (total < 0m)
             postings.Add(JournalLineDraft.Dr(adjustmentAccount.Id, -total, "Inventory adjustment"));
+        postings.AddRange(corrections);
 
         var id = Guid.CreateVersion7();
         var memo = command.Reference is { Length: > 0 } r ? $"Inventory adjustment {r.Trim()}" : "Inventory adjustment";

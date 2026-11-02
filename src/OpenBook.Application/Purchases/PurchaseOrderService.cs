@@ -354,11 +354,14 @@ public sealed class PurchaseOrderService(
         var stockId = Guid.CreateVersion7();
         Guid? entryId = null;
         var total = values.Values.Sum();
-        if (total != 0m)
+        if (total != 0m || plan.Postings.Count > 0)
         {
             var memo = $"PO {order.Number} delivery {number}";
             var postings = posted.Where(d => d.Amount != 0m).Select(d => JournalLineDraft.Dr(d.AccountId, d.Amount, d.Description)).ToList();
-            postings.Add(JournalLineDraft.Cr((await ReceivedNotBilledAsync(ct)).Id, total, memo));
+            if (total != 0m)
+                postings.Add(JournalLineDraft.Cr((await ReceivedNotBilledAsync(ct)).Id, total, memo));
+            // Stock sold before it came in: the cost correction (InventoryService.Receive).
+            postings.AddRange(plan.Postings);
             entryId = (await engine.StageAsync(new PostJournalEntryCommand(date, postings, memo, ReceiptSource, stockId, LocationId: order.LocationId), ct)).Id;
         }
 

@@ -4,6 +4,17 @@ using OpenBook.Domain.Pricing;
 
 namespace OpenBook.Domain.Sales;
 
+/// <summary>
+/// Whether sales may take more of a tracked item than is on hand (the count goes below zero until stock comes in):
+/// as the company's setting says, always, or never. Items with lot or serial numbers never do.
+/// </summary>
+public enum ShortStock
+{
+    Company,
+    Allow,
+    Never,
+}
+
 /// <summary>What you sell.</summary>
 public enum ItemType
 {
@@ -82,6 +93,16 @@ public sealed class Item
     /// in the same entry, so pre-packed kits can be assembled to order.
     /// </summary>
     public bool AutoBuild { get; private set; }
+
+    /// <summary>Tracked items: whether sales may take more than is on hand (<see cref="CanSellShort"/>).</summary>
+    public ShortStock SellShort { get; private set; }
+
+    /// <summary>
+    /// Whether a sale (or a build) may take more of this item than is on hand: the extra units are costed at an estimate
+    /// until stock comes in, which then fills the shortfall and corrects the cost. Never for lot or serial items.
+    /// </summary>
+    public bool CanSellShort(bool companyAllows) =>
+        IsInventory && Tracking == Inventory.ItemTracking.None && (SellShort == ShortStock.Allow || SellShort == ShortStock.Company && companyAllows);
 
     /// <summary>What a scanner reads off the product (UPC, EAN, or your own code); unique among items.</summary>
     public string? Barcode { get; private set; }
@@ -169,6 +190,7 @@ public sealed class Item
             CostMethod = InventoryCostMethod.Fifo;
             Tracking = Inventory.ItemTracking.None;
             AutoBuild = false;
+            SellShort = ShortStock.Company;
             return;
         }
 
@@ -180,6 +202,11 @@ public sealed class Item
             : false;
 
         CostMethod = Enum.IsDefined(details.CostMethod) ? details.CostMethod : throw new DomainException("item.cost_method_invalid", "Unknown costing method.");
+        SellShort = !Enum.IsDefined(details.SellShort)
+            ? throw new DomainException("item.short_stock_invalid", "Unknown setting for selling more than is on hand.")
+            : details.SellShort == ShortStock.Allow && Tracking != Inventory.ItemTracking.None
+                ? throw new DomainException("item.short_stock_tracked", "Items with lot or serial numbers can't be sold beyond what's on hand: every unit sold needs its number.")
+                : details.SellShort;
 
         InventoryAssetAccountId = details.InventoryAssetAccountId is { } asset && asset != Guid.Empty
             ? asset
@@ -261,4 +288,5 @@ public sealed record ItemDetails(
     InventoryCostMethod CostMethod = InventoryCostMethod.Fifo,
     Inventory.ItemTracking Tracking = Inventory.ItemTracking.None,
     string? Barcode = null,
-    bool AutoBuild = false);
+    bool AutoBuild = false,
+    ShortStock SellShort = ShortStock.Company);

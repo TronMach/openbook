@@ -98,6 +98,15 @@
         </fieldset>
 
         <fieldset>
+            <legend>@L["Stock"]</legend>
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.AllowSellingShort" />
+                <span>@L["Allow selling more than is on hand"]</span>
+            </label>
+            <span class="hint">@L["For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do."]</span>
+        </fieldset>
+
+        <fieldset>
             <legend>@L["Books"]</legend>
             <div class="row">
                 <div class="field">
@@ -202,6 +211,7 @@
             Edition = company.Edition,
             TimeZoneId = company.TimeZoneId,
             DefaultViewMode = company.DefaultViewMode,
+            AllowSellingShort = company.AllowSellingShort,
         };
     }
 
@@ -211,7 +221,7 @@
         {
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort));
             _saved = true;
         }
         catch (DomainException ex)
@@ -254,6 +264,8 @@
         public string? TimeZoneId { get; set; }
 
         public ViewMode DefaultViewMode { get; set; }
+
+        public bool AllowSellingShort { get; set; }
     }
 
     /// <summary>The server's time zones by IANA id (as the company stores them), in offset order.</summary>

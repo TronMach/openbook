@@ -175,6 +175,7 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         CostMethod = i.CostMethod.ToString(),
         Tracking = i.Tracking.ToString(),
         i.AutoBuild,
+        SellShort = i.SellShort.ToString(),
         i.Barcode,
         Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),

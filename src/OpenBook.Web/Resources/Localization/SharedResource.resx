@@ -119,6 +119,9 @@
   <data name="All transactions" xml:space="preserve">
     <value>All transactions</value>
   </data>
+  <data name="Allow selling more than is on hand" xml:space="preserve">
+    <value>Allow selling more than is on hand</value>
+  </data>
   <data name="also sign out my other sessions" xml:space="preserve">
     <value>also sign out my other sessions</value>
   </data>
@@ -622,6 +625,9 @@
   </data>
   <data name="For an account given to someone else at the provider; their next single sign-on links again by email." xml:space="preserve">
     <value>For an account given to someone else at the provider; their next single sign-on links again by email.</value>
+  </data>
+  <data name="For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do." xml:space="preserve">
+    <value>For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do.</value>
   </data>
   <data name="Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one." xml:space="preserve">
     <value>Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one.</value>
@@ -1489,6 +1495,9 @@
   </data>
   <data name="Status" xml:space="preserve">
     <value>Status</value>
+  </data>
+  <data name="Stock" xml:space="preserve">
+    <value>Stock</value>
   </data>
   <data name="Stock on Hand" xml:space="preserve">
     <value>Stock on Hand</value>

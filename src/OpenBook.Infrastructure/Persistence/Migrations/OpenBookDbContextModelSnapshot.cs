@@ -1259,6 +1259,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("AllowSellingShort")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("BusinessType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -5118,6 +5121,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long?>("ReorderPoint")
                         .HasColumnType("INTEGER")
                         .HasColumnName("ReorderPointTenThousandths");
+
+                    b.Property<string>("SellShort")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("Taxable")
                         .HasColumnType("INTEGER");

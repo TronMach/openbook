@@ -90,13 +90,17 @@ public sealed class InventoryMovement
         WarehouseId = WarehouseId, BinId = BinId, Lot = Lot,
     };
 
-    /// <summary>Takes <paramref name="take"/>'s quantity (positive) out of a layer, at the take's place.</summary>
+    /// <summary>
+    /// Takes <paramref name="take"/>'s quantity (positive) out of a layer, at the take's place. A shortfall take (sold
+    /// beyond what's on hand) is its own layer instead: a receipt of minus the quantity at minus its estimated cost, which
+    /// stock coming in later fills (<see cref="Cover"/>).
+    /// </summary>
     public static InventoryMovement Issue(FifoTake take, Guid itemId, DateOnly date, string sourceType, Guid sourceId, DateTimeOffset createdAt)
     {
         ArgumentNullException.ThrowIfNull(take);
         return new InventoryMovement
         {
-            Id = Guid.CreateVersion7(), ItemId = itemId, LayerId = take.LayerId, Date = date, Quantity = -take.Quantity, Cost = -take.Cost,
+            Id = take.Shortfall ? take.LayerId : Guid.CreateVersion7(), ItemId = itemId, LayerId = take.LayerId, Date = date, Quantity = -take.Quantity, Cost = -take.Cost,
             SourceType = sourceType, SourceId = sourceId, CreatedAt = createdAt.ToUniversalTime(),
             WarehouseId = take.Place.WarehouseId, BinId = take.Place.BinId, Lot = take.Lot,
         };
@@ -117,6 +121,21 @@ public sealed class InventoryMovement
         };
         return (Make(-from.Quantity, from.Place), Make(from.Quantity, to));
     }
+
+    /// <summary>
+    /// Fills part of a shortfall layer (stock sold before it was on hand) with stock received since: the shortfall goes up
+    /// by <paramref name="quantity"/> at its own estimated cost, while the same quantity leaves the new receipt's layer
+    /// (an ordinary issue), so the units sold early end up costed at what the stock really cost.
+    /// </summary>
+    public static InventoryMovement Cover(Guid shortfallLayerId, Guid itemId, DateOnly date, decimal quantity, decimal cost, StockPlace place, string sourceType, Guid sourceId, DateTimeOffset createdAt) => new()
+    {
+        Id = Guid.CreateVersion7(), ItemId = itemId, LayerId = shortfallLayerId, Date = date, Quantity = quantity, Cost = cost,
+        SourceType = sourceType, SourceId = sourceId, CreatedAt = createdAt.ToUniversalTime(),
+        WarehouseId = place.WarehouseId, BinId = place.BinId,
+    };
+
+    /// <summary>A shortfall layer: opened by a sale of more than was on hand (a receipt of a negative quantity).</summary>
+    public bool IsShortfall => IsReceipt && Quantity < 0m;
 
     /// <summary>Adds cost (landed cost: freight, duty) to what's left of a layer without changing its quantity.</summary>
     public static InventoryMovement CostAdjustment(Guid layerId, Guid itemId, DateOnly date, decimal cost, string sourceType, Guid sourceId, DateTimeOffset createdAt)
@@ -143,8 +162,11 @@ public sealed class InventoryMovement
 public sealed record InventoryLayer(
     Guid LayerId, Guid ItemId, DateOnly Date, DateTimeOffset CreatedAt, decimal Quantity, decimal Cost, decimal RemainingQuantity, decimal RemainingCost, string? Lot = null);
 
-/// <summary>Quantity and cost taken from one layer, at one place.</summary>
-public sealed record FifoTake(Guid LayerId, decimal Quantity, decimal Cost, StockPlace Place = default, string? Lot = null);
+/// <summary>
+/// Quantity and cost taken from one layer, at one place. <see cref="Shortfall"/>: taken beyond what was on hand, at an
+/// estimated cost; <see cref="LayerId"/> is then the new shortfall layer's id.
+/// </summary>
+public sealed record FifoTake(Guid LayerId, decimal Quantity, decimal Cost, StockPlace Place = default, string? Lot = null, bool Shortfall = false);
 
 /// <summary>Part of a layer sitting at one place (transfers spread a layer over places).</summary>
 public sealed record StockSlice(Guid LayerId, Guid ItemId, DateOnly Date, DateTimeOffset CreatedAt, StockPlace Place, string? Lot, decimal Quantity);
@@ -236,15 +258,7 @@ public static class Fifo
         if (quantity <= 0m)
             return [];
         var remaining = Layers(movements).ToDictionary(l => l.LayerId, l => (l.RemainingQuantity, l.RemainingCost));
-        var open = Slices(movements).Where(s => s.Quantity > 0m && s.Date <= date && filter.Matches(s)).ToList();
-        var expired = 0m;
-        if (filter.Lot is null && filter.Expiries is not null)
-        {
-            // First expiry, first out; a lot past its date is only taken when named.
-            expired = open.Where(s => filter.ExpiryOf(s) < date).Sum(s => s.Quantity);
-            open = open.Where(s => !(filter.ExpiryOf(s) < date)).OrderBy(s => filter.ExpiryOf(s) ?? DateOnly.MaxValue).ToList();
-        }
-
+        var open = Open(movements, date, filter, out var expired);
         var available = open.Sum(s => s.Quantity);
         if (available < quantity)
         {
@@ -270,6 +284,25 @@ public static class Fifo
         }
 
         return takes;
+    }
+
+    /// <summary>How much the filtered take could have on the date (stock at the filter's places, lots and expiries).</summary>
+    public static decimal Available(IReadOnlyList<InventoryMovement> movements, DateOnly date, StockFilter filter) =>
+        Open(movements, date, filter, out _).Sum(s => s.Quantity);
+
+    // The slices a take may use, in the order it uses them: first expiry first out, and a lot past its date only when named.
+    private static List<StockSlice> Open(IReadOnlyList<InventoryMovement> movements, DateOnly date, StockFilter filter, out decimal expired)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        var open = Slices(movements).Where(s => s.Quantity > 0m && s.Date <= date && filter.Matches(s)).ToList();
+        expired = 0m;
+        if (filter.Lot is null && filter.Expiries is not null)
+        {
+            expired = open.Where(s => filter.ExpiryOf(s) < date).Sum(s => s.Quantity);
+            open = open.Where(s => !(filter.ExpiryOf(s) < date)).OrderBy(s => filter.ExpiryOf(s) ?? DateOnly.MaxValue).ToList();
+        }
+
+        return open;
     }
 
     /// <summary>
@@ -313,20 +346,56 @@ public static class Costing
     /// FIFO: <see cref="Fifo.Take"/>. Weighted average: quantity still comes out of the oldest layers (so stock and
     /// voids are checked the same way), but the cost is the average of everything on hand on the date, rounded to the
     /// cent once and spread over the layers in proportion; taking everything on hand takes its whole value.
+    /// With <paramref name="shortfallUnitCost"/> (the item may be sold short), what's beyond the stock available becomes
+    /// one shortfall take at that estimated unit cost instead of a refusal.
     /// </summary>
-    public static IReadOnlyList<FifoTake> Take(Sales.Item item, IReadOnlyList<InventoryMovement> movements, decimal quantity, DateOnly date, StockFilter? filter = null)
+    public static IReadOnlyList<FifoTake> Take(
+        Sales.Item item, IReadOnlyList<InventoryMovement> movements, decimal quantity, DateOnly date, StockFilter? filter = null, decimal? shortfallUnitCost = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(movements);
-        var takes = Fifo.Take(movements, quantity, date, item.Name, filter ?? StockFilter.Anywhere);
-        if (item.CostMethod != Sales.InventoryCostMethod.Average || takes.Count == 0)
-            return takes;
+        filter ??= StockFilter.Anywhere;
+        var shortfall = 0m;
+        if (shortfallUnitCost is not null && quantity > 0m)
+        {
+            shortfall = Math.Max(0m, quantity - Math.Max(0m, Fifo.Available(movements, date, filter)));
+            quantity -= shortfall;
+        }
 
-        var asOf = movements.Where(m => m.Date <= date).ToList();
-        var onHand = asOf.Sum(m => m.Quantity);
-        var value = Math.Max(0m, asOf.Sum(m => m.Cost));
-        var total = quantity >= onHand ? value : decimal.Round(value * quantity / onHand, 2, MidpointRounding.AwayFromZero);
-        return Spread(takes, total);
+        var takes = Fifo.Take(movements, quantity, date, item.Name, filter).ToList();
+        if (item.CostMethod == Sales.InventoryCostMethod.Average && takes.Count > 0)
+        {
+            var asOf = movements.Where(m => m.Date <= date).ToList();
+            var onHand = asOf.Sum(m => m.Quantity);
+            var value = Math.Max(0m, asOf.Sum(m => m.Cost));
+            var total = quantity >= onHand ? value : decimal.Round(value * quantity / onHand, 2, MidpointRounding.AwayFromZero);
+            takes = Spread(takes, total);
+        }
+
+        if (shortfall > 0m)
+        {
+            var place = new StockPlace(filter.AnyWarehouse ? null : filter.WarehouseId, null);
+            takes.Add(new FifoTake(Guid.CreateVersion7(), shortfall, decimal.Round(shortfall * shortfallUnitCost!.Value, 2, MidpointRounding.AwayFromZero), place, Shortfall: true));
+        }
+
+        return takes;
+    }
+
+    /// <summary>
+    /// The unit cost to give units sold beyond what's on hand until stock comes in: the item's purchase cost, else what
+    /// its latest receipt cost, else its average cost, else nothing.
+    /// </summary>
+    public static decimal EstimatedUnitCost(Sales.Item item, IEnumerable<InventoryMovement> movements)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(movements);
+        if (item.PurchaseCost > 0m)
+            return item.PurchaseCost;
+        var list = movements.ToList();
+        var latest = list.Where(m => m.IsReceipt && m.Quantity > 0m).OrderByDescending(m => m.Date).ThenByDescending(m => m.CreatedAt).FirstOrDefault();
+        if (latest is not null)
+            return latest.Cost / latest.Quantity;
+        return AverageCost(list, DateOnly.MaxValue) is { } average && average > 0m ? average : 0m;
     }
 
     /// <summary>The average unit cost on hand on the date (null with nothing on hand).</summary>
@@ -338,7 +407,7 @@ public static class Costing
         return onHand > 0m ? asOf.Sum(m => m.Cost) / onHand : null;
     }
 
-    private static List<FifoTake> Spread(IReadOnlyList<FifoTake> takes, decimal total)
+    private static List<FifoTake> Spread(List<FifoTake> takes, decimal total)
     {
         var quantity = takes.Sum(t => t.Quantity);
         var result = new List<FifoTake>(takes.Count);

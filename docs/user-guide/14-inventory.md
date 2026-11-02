@@ -7,7 +7,7 @@ If you sell goods you keep in stock, make them **inventory** items. OpenBook the
 - **Buying** stock on a bill adds it to an asset account ("Inventory Asset"): it's something you own, not an expense yet.
 - **Selling** it moves its cost from the asset account to "Cost of Goods Sold", in the same moment as the sale. So the profit and loss shows each sale's income and its cost together, and the gross margin is right every month.
 - **Cost** is worked out first in, first out (FIFO) by default: a sale uses up the oldest stock first, at what that stock cost. You can choose **weighted average** cost per item instead.
-- Stock can't go below zero. If a sale needs more than you have, OpenBook says so; enter the bill or an adjustment for the missing stock first.
+- Stock doesn't go below zero unless you allow it. If a sale needs more than you have, OpenBook says so; enter the bill or an adjustment for the missing stock first, or allow selling more than is on hand (below).
 
 ## Inventory items
 
@@ -20,8 +20,23 @@ If you sell goods you keep in stock, make them **inventory** items. OpenBook the
 - **Costing**: **FIFO (first in, first out)**, or **Weighted average**, which costs every sale at the average of what's on hand.
 - **Lot or serial numbers**: none, lots, or serial numbers (below).
 - **Barcode**: scanning it into any item picker chooses the item.
+- **Selling more than is on hand**: follow the company's setting, or always or never allow it for this item (below).
 
 Once stock has moved, the type, asset account, costing and lot/serial setting are fixed, so the history stays consistent.
+
+## Selling more than is on hand
+
+If you don't keep exact counts, tick **Settings → Stock → Allow selling more than is on hand**. Each item's **Selling more than is on hand** setting follows the company or makes an exception: **Always allowed** or **Never allowed**. Items with lot or serial numbers are never sold beyond what's on hand, because each unit sold needs its number. Neither are stock transfers and quantity adjustments.
+
+When a sale (or an assembly build) needs more than you have:
+
+- The sale goes through, and **on hand** goes below zero, for example −3.
+- The missing units are costed at the item's **purchase cost** (or, without one, what its latest stock cost, else its average), so the sale still shows its cost of goods sold.
+- The next stock that comes in (a bill, a return on a credit memo, a quantity adjustment or a build) fills the shortfall first. If the real cost differs from the estimate, the difference goes to cost of goods sold on that document's date, and the line says "Sold before it was in stock". On cash basis these corrections count as posted, like the cost lines of sales.
+
+So on hand, the inventory value and the inventory asset account always agree, and cost of goods sold ends up at what the stock really cost.
+
+A sale whose shortfall has since been filled can't be voided directly, because the stock that came in afterwards is tied to it. Void that bill, return or adjustment first, or enter a credit memo for the return instead. Voiding the bill reopens the shortfall.
 
 ## Getting stock in
 

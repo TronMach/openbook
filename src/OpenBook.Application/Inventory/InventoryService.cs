@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using OpenBook.Application.Sales;
 using System.Text.Json;
 using OpenBook.Domain.Auditing;
@@ -38,11 +39,23 @@ public sealed record ExpiringLot(Item Item, string Lot, DateOnly ExpiresOn, deci
 /// Each document plans first (checking everything), stages its entry, then applies the plan, all in one save.
 /// Documents name a warehouse (null = the default one): sales take stock from any bin in it, receipts arrive outside bins.
 /// Lot- and serial-tracked items open one layer per lot or serial; sales take the lots named on the line, else the oldest.
+/// Items that may be sold short (<see cref="Item.CanSellShort"/>) take what's beyond the stock as a shortfall layer at an
+/// estimated cost; whatever comes in next fills it first (<see cref="Receive"/>) and corrects cost of goods sold.
 /// </summary>
-public sealed class InventoryService(IInventoryStore store, ISalesStore sales, IClock clock, ICurrentUser user)
+public sealed class InventoryService(IInventoryStore store, ISalesStore sales, ICompanyStore companies, IClock clock, ICurrentUser user)
 {
     /// <summary>A placeholder source for movements simulated while planning several takes of the same item.</summary>
     private const string Planned = "planned";
+
+    /// <summary>
+    /// Starts the line memo of the cost correction posted when stock fills a shortfall, so cash-basis reports can keep
+    /// those lines of a bill as posted (cost of goods sold is recognized when stock is sold, as for invoices).
+    /// </summary>
+    public const string ShortfallMemo = "Sold before it was in stock: ";
+
+    /// <summary>The estimated unit cost for selling <paramref name="item"/> short, or null when it may not be.</summary>
+    internal async Task<decimal?> ShortfallCostAsync(Item item, IReadOnlyList<InventoryMovement> history, CancellationToken ct) =>
+        item.CanSellShort((await companies.GetCompanyAsync(ct))?.AllowSellingShort ?? false) ? Costing.EstimatedUnitCost(item, history) : null;
 
     public async Task<IReadOnlyList<StockLevel>> StockAsync(DateOnly? asOf = null, CancellationToken ct = default)
     {
@@ -185,7 +198,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                 var shortfall = group.Sum(p => p.Quantity) - available;
                 if (shortfall > 0m)
                 {
-                    var build = await PlanBuildAsync(item, await ComponentsAsync(item, ct), shortfall, date, warehouseId, [], ct);
+                    var build = await PlanBuildAsync(item, await ComponentsAsync(item, ct), shortfall, date, warehouseId, [], ct, fill: false);
                     postings.AddRange(build.Plan.Postings);
                     movements.AddRange(build.Plan.Movements);
                     history.AddRange(build.Outputs);
@@ -206,7 +219,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
 
             var namedParts = named.Select(n => n.Part).ToHashSet();
             var unnamed = group.Where(p => !namedParts.Contains(p)).ToList();
-            var auto = TakeAndSimulate(item, history, unnamed.Sum(p => p.Quantity), date, filter);
+            var auto = TakeAndSimulate(item, history, unnamed.Sum(p => p.Quantity), date, filter, await ShortfallCostAsync(item, history, ct));
             takes.AddRange(auto);
 
             if (item.Tracking != ItemTracking.None)
@@ -247,7 +260,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var item = group.First().Item;
             if (group.Any(p => p.Quantity < 0m))
                 throw new DomainException("inventory.negative_return", $"{item.Name}: a credit memo returns stock, so the quantity must be positive.");
-            var history = await store.ListMovementsAsync(item.Id, ct);
+            var history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
             var unitCost = UnitCostForReturn(item, history);
             var receipts = new List<(decimal Quantity, string? Lot)>();
             foreach (var part in group)
@@ -276,8 +289,9 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                 postings.Add(JournalLineDraft.Cr(item.CostAccountId!.Value, cost, $"Return of {item.Name}", classId));
             }
 
-            foreach (var (quantity, lot, share) in Split(receipts, cost))
-                movements.Add((type, id, at) => InventoryMovement.Receipt(item.Id, date, quantity, share, type, id, at, place, lot));
+            var received = Receive(item, history, Split(receipts, cost).Select(r => PlannedReceipt(item, date, r.Quantity, r.Cost, place, r.Lot)).ToList(), date);
+            postings.AddRange(received.Postings);
+            movements.AddRange(received.Movements);
         }
 
         return new InventoryPlan(postings, movements);
@@ -297,7 +311,9 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
 
         var items = await sales.GetItemsAsync(ids, ct);
         var result = new List<BillLineDraft>(drafts.Count);
+        var postings = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
+        var histories = new Dictionary<Guid, List<InventoryMovement>>();
         var place = new StockPlace(warehouseId, null);
         var serialsOnBill = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var draft in drafts)
@@ -328,11 +344,14 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             if (draft.Quantity is not { } q || q <= 0m || draft.Amount < 0m)
                 continue;
             var receipts = lots.Count > 0 ? lots.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(q, (string?)null)];
-            foreach (var (quantity, lot, share) in Split(receipts, draft.Amount))
-                movements.Add((type, id, at) => InventoryMovement.Receipt(item.Id, date, quantity, share, type, id, at, place, lot));
+            if (!histories.TryGetValue(item.Id, out var history))
+                histories[item.Id] = history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
+            var received = Receive(item, history, Split(receipts, draft.Amount).Select(r => PlannedReceipt(item, date, r.Quantity, r.Cost, place, r.Lot)).ToList(), date);
+            postings.AddRange(received.Postings);
+            movements.AddRange(received.Movements);
         }
 
-        return (result, new InventoryPlan([], movements));
+        return (result, new InventoryPlan(postings, movements));
     }
 
     /// <summary>
@@ -357,6 +376,12 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             if (history.Any(m => m.LayerId == receipt.Id && !ownIds.Contains(m.Id) && m.ReversalOf is null && !undone.Contains(m.Id)))
             {
                 var item = (await sales.GetItemsAsync([receipt.ItemId], ct)).GetValueOrDefault(receipt.ItemId);
+                if (receipt.IsShortfall)
+                {
+                    throw new DomainException("inventory.shortfall_filled",
+                        $"{item?.Name ?? "Some stock"} was sold here before it was on hand, and stock received since has filled that, so it can't be voided. Void that stock's bill, return or adjustment first, or enter a credit memo for the return instead.");
+                }
+
                 throw new DomainException("inventory.layer_used",
                     $"Some of the {item?.Name ?? "stock"} {what} brought in has been sold, used, moved, adjusted or given landed costs since, so it can't be voided. Void those first, or adjust the quantity instead.");
             }
@@ -370,9 +395,10 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     /// first), the assembly in as one layer per output lot at the total. Dr the assembly's asset, Cr the components'.
     /// The receipts are made now (with placeholder sources) so later takes in the same plan can use them.
     /// </summary>
+    /// <param name="fill">False for a build inside a sale (assemble to order): the sale takes its output next.</param>
     internal async Task<BuildPlan> PlanBuildAsync(
         Item assembly, IReadOnlyDictionary<Guid, Item> components, decimal quantity, DateOnly date, Guid? warehouseId,
-        IReadOnlyList<(string Lot, decimal Quantity)> outputLots, CancellationToken ct)
+        IReadOnlyList<(string Lot, decimal Quantity)> outputLots, CancellationToken ct, bool fill = true)
     {
         var lines = new List<(Guid ItemId, decimal Quantity, decimal Cost, string? Lots)>();
         var postings = new List<JournalLineDraft>();
@@ -384,7 +410,8 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             if (component.Tracking == ItemTracking.Serial && needed != decimal.Truncate(needed))
                 throw new DomainException("lot.serial_whole", $"{component.Name} is tracked by serial number, so builds must use whole units of it.");
             var history = (await store.ListMovementsAsync(component.Id, ct)).ToList();
-            var takes = TakeAndSimulate(component, history, needed, date, await ForPickingAsync(component, StockFilter.In(warehouseId), ct));
+            var takes = TakeAndSimulate(component, history, needed, date, await ForPickingAsync(component, StockFilter.In(warehouseId), ct),
+                await ShortfallCostAsync(component, history, ct));
             var cost = takes.Sum(t => t.Cost);
             lines.Add((component.Id, needed, cost, LotText.Format(takes.Where(t => t.Lot is not null).Select(t => (t.Lot!, t.Quantity)), component.Tracking)));
             if (cost != 0m)
@@ -398,9 +425,19 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         postings.Insert(0, JournalLineDraft.Dr(assembly.InventoryAssetAccountId!.Value, total, $"Build {quantity:0.####} {assembly.Name}"));
         var receipts = outputLots.Count > 0 ? outputLots.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(quantity, (string?)null)];
         var outputs = Split(receipts, total)
-            .Select(r => InventoryMovement.Receipt(assembly.Id, date, r.Quantity, r.Cost, Planned, Guid.Empty, DateTimeOffset.UnixEpoch, new StockPlace(warehouseId, null), r.Lot))
+            .Select(r => PlannedReceipt(assembly, date, r.Quantity, r.Cost, new StockPlace(warehouseId, null), r.Lot))
             .ToList();
-        movements.AddRange(outputs.Select(o => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => o.ForSource(type, id, at))));
+        if (fill)
+        {
+            var received = Receive(assembly, (await store.ListMovementsAsync(assembly.Id, ct)).ToList(), outputs, date);
+            postings.AddRange(received.Postings);
+            movements.AddRange(received.Movements);
+        }
+        else
+        {
+            movements.AddRange(outputs.Select(o => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => o.ForSource(type, id, at))));
+        }
+
         return new BuildPlan(new InventoryPlan(postings, movements), lines, outputs);
     }
 
@@ -428,12 +465,85 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             store.Add(make(sourceType, sourceId, at));
     }
 
-    /// <summary>Takes stock and adds the issues to <paramref name="history"/>, so the next take of the same item sees them.</summary>
-    internal static IReadOnlyList<FifoTake> TakeAndSimulate(Item item, List<InventoryMovement> history, decimal quantity, DateOnly date, StockFilter filter)
+    /// <summary>
+    /// Takes stock and adds the issues to <paramref name="history"/>, so the next take of the same item sees them. With
+    /// <paramref name="shortfallUnitCost"/> (<see cref="ShortfallCostAsync"/>) it may take more than is on hand.
+    /// </summary>
+    internal static IReadOnlyList<FifoTake> TakeAndSimulate(
+        Item item, List<InventoryMovement> history, decimal quantity, DateOnly date, StockFilter filter, decimal? shortfallUnitCost = null)
     {
-        var takes = Costing.Take(item, history, quantity, date, filter);
+        var takes = Costing.Take(item, history, quantity, date, filter, shortfallUnitCost);
         history.AddRange(takes.Select(t => InventoryMovement.Issue(t, item.Id, date, Planned, Guid.Empty, DateTimeOffset.UnixEpoch)));
         return takes;
+    }
+
+    /// <summary>A receipt made while planning (a placeholder source, made real by <see cref="InventoryMovement.ForSource"/>), so its layer has an id.</summary>
+    internal static InventoryMovement PlannedReceipt(Item item, DateOnly date, decimal quantity, decimal cost, StockPlace place, string? lot) =>
+        InventoryMovement.Receipt(item.Id, date, quantity, cost, Planned, Guid.Empty, DateTimeOffset.UnixEpoch, place, lot);
+
+    /// <summary>
+    /// Stock coming in: the receipts (made with <see cref="PlannedReceipt"/>) plus, when the item has been sold short,
+    /// the fills of its shortfalls, oldest first and in the same warehouse first. Each fill brings the shortfall back up
+    /// at its estimated cost and takes the same quantity out of the new receipt at what it really cost; the difference
+    /// goes to cost of goods sold (Dr cost, Cr inventory asset, or the other way round) in the receiving document's entry.
+    /// Adds everything to <paramref name="history"/>.
+    /// </summary>
+    internal static InventoryPlan Receive(Item item, List<InventoryMovement> history, IReadOnlyList<InventoryMovement> receipts, DateOnly date)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(receipts);
+        var movements = receipts.Select(r => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => r.ForSource(type, id, at))).ToList();
+        history.AddRange(receipts);
+        var postings = new List<JournalLineDraft>();
+        var places = history.Where(m => m.IsShortfall).ToDictionary(m => m.Id, m => m.Place);
+        var gaps = Fifo.Layers(history).Where(l => places.ContainsKey(l.LayerId) && l.RemainingQuantity < 0m).ToList();
+        if (gaps.Count == 0)
+            return new InventoryPlan(postings, movements);
+
+        var difference = 0m;
+        foreach (var receipt in receipts)
+        {
+            // Oldest first, those in the receipt's own warehouse before the others.
+            foreach (var gap in gaps.OrderBy(g => places[g.LayerId].WarehouseId == receipt.WarehouseId ? 0 : 1))
+            {
+                var layers = Fifo.Layers(history).ToDictionary(l => l.LayerId);
+                var (into, from) = (layers[gap.LayerId], layers[receipt.Id]);
+                if (from.RemainingQuantity <= 0m)
+                    break;
+                if (into.RemainingQuantity >= 0m)
+                    continue;
+                var quantity = Math.Min(-into.RemainingQuantity, from.RemainingQuantity);
+                var estimated = quantity == -into.RemainingQuantity
+                    ? -into.RemainingCost
+                    : decimal.Round(-into.RemainingCost * quantity / -into.RemainingQuantity, 2, MidpointRounding.AwayFromZero);
+                var actual = quantity == from.RemainingQuantity
+                    ? from.RemainingCost
+                    : decimal.Round(from.RemainingCost * quantity / from.RemainingQuantity, 2, MidpointRounding.AwayFromZero);
+                var place = places[gap.LayerId];
+                var take = new FifoTake(receipt.Id, quantity, actual, receipt.Place, receipt.Lot);
+                history.Add(InventoryMovement.Cover(gap.LayerId, item.Id, date, quantity, estimated, place, Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
+                history.Add(InventoryMovement.Issue(take, item.Id, date, Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
+                var layerId = gap.LayerId;
+                movements.Add((type, id, at) => InventoryMovement.Cover(layerId, item.Id, date, quantity, estimated, place, type, id, at));
+                movements.Add((type, id, at) => InventoryMovement.Issue(take, item.Id, date, type, id, at));
+                difference += actual - estimated;
+            }
+        }
+
+        var memo = ShortfallMemo + item.Name;
+        if (difference > 0m)
+        {
+            postings.Add(JournalLineDraft.Dr(item.CostAccountId!.Value, difference, memo));
+            postings.Add(JournalLineDraft.Cr(item.InventoryAssetAccountId!.Value, difference, memo));
+        }
+        else if (difference < 0m)
+        {
+            postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, -difference, memo));
+            postings.Add(JournalLineDraft.Cr(item.CostAccountId!.Value, -difference, memo));
+        }
+
+        return new InventoryPlan(postings, movements);
     }
 
     /// <summary>Lots named for a receipt of a tracked item: required.</summary>

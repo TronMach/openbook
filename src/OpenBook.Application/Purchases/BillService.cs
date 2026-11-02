@@ -98,7 +98,7 @@ public sealed class BillService(
 
         var id = Guid.CreateVersion7();
         var memo = reference is null ? $"Bill · {vendor.DisplayName}" : $"Bill {reference} · {vendor.DisplayName}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Bill.Postings(payables.Id, lines, memo), memo, Bill.Source, id,
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, [.. Bill.Postings(payables.Id, lines, memo), .. stock.Postings], memo, Bill.Source, id,
             LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.Bill, id);
 
@@ -194,7 +194,7 @@ public sealed class BillService(
         }
 
         var memo = reference is null ? $"Bill · {vendor.DisplayName}" : $"Bill {reference} · {vendor.DisplayName}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Bill.Postings(bill.PayableAccountId, lines, memo), memo, Bill.Source, bill.Id,
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, [.. Bill.Postings(bill.PayableAccountId, lines, memo), .. stock.Postings], memo, Bill.Source, bill.Id,
             LocationId: command.LocationId, TagIds: tagIds), ct);
         inventory.Apply(stock, InventorySources.Bill, bill.Id);
 

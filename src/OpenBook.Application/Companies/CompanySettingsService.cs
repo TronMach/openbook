@@ -17,7 +17,8 @@ public sealed record UpdateCompanySettingsCommand(
     ReportBasis DefaultReportBasis,
     Edition? Edition = null,
     string? TimeZoneId = null,
-    ViewMode? DefaultViewMode = null);
+    ViewMode? DefaultViewMode = null,
+    bool? AllowSellingShort = null);
 
 /// <summary>Company details and book settings, edited after setup. Home currency is fixed.</summary>
 public sealed class CompanySettingsService(ICompanyStore store, IClock clock, ICurrentUser user)
@@ -39,6 +40,8 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
             company.SetEdition(edition);
         if (command.DefaultViewMode is { } view)
             company.SetDefaultViewMode(view);
+        if (command.AllowSellingShort is { } sellShort)
+            company.SetAllowSellingShort(sellShort);
         if (command.TimeZoneId is { } zone)
             company.SetTimeZone(zone);
 
@@ -67,5 +70,6 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         Edition = c.Edition.ToString(),
         c.TimeZoneId,
         DefaultViewMode = c.DefaultViewMode.ToString(),
+        c.AllowSellingShort,
     });
 }
