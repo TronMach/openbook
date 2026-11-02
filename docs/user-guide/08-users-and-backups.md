@@ -139,7 +139,7 @@ The company file can be encrypted, so a stolen copy can't be read without the ke
 
 OpenBook comes in two installs of the same program:
 
-- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run) until you choose **Settings → System → Quit OpenBook** or sign out of Windows. It's installed on Windows from `OpenBook-Setup.exe` (for your Windows user, no administrator rights) and started from the Start menu; installing a newer version or uninstalling never touches the company file or its backups.
+- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run), with an OpenBook icon in the system tray by the clock, until you quit it or sign out of Windows. Right-click the tray icon for **Open OpenBook**, **Back up now** and **Quit OpenBook**. Quitting, there or with **Settings → System → Quit OpenBook**, backs up your books first (to the same place as the daily backups; the last five of these are kept), so closing OpenBook always leaves a fresh copy. If that backup doesn't work, the tray asks before quitting anyway. It's installed on Windows from `OpenBook-Setup.exe` (for your Windows user, no administrator rights) and started from the Start menu; installing a newer version or uninstalling never touches the company file or its backups.
 - **OpenBook Server** runs on a server or in Docker, usually with PostgreSQL, for several people on several computers. Whoever runs it decides where the data lives and backs it up.
 
 Whoever installs or looks after OpenBook will find the details in `docs/admin/desktop.md` and `docs/admin/server.md` (HTTPS, keys, `pg_dump` backups, moving a company in).
@@ -150,7 +150,7 @@ Your books are the same either way. Some things only make sense when others can 
 
 When more people need the books, the company moves from OpenBook Desktop to OpenBook Server in one step, usually done by whoever looks after the server:
 
-1. Quit OpenBook Desktop (**Settings → System → Quit OpenBook**), so nothing changes during the move.
+1. Quit OpenBook Desktop (**Quit OpenBook** on its tray icon, or **Settings → System → Quit OpenBook**), so nothing changes during the move.
 2. Create an empty PostgreSQL database for the server.
 3. Run the `move-to-postgres` command with the company file, the new database and both keys folders (the server guide, `docs/admin/server.md`, has the exact command). OpenBook copies the company file, checks it like a restore, copies everything into PostgreSQL and checks again: every journal entry balances, every account has the same balance, and the audit log is complete. If anything differs, nothing is moved.
 4. Start OpenBook Server on the new database and sign in as before: users, passwords, two-factor sign-in, email, bank and payment connections all come along, because stored passwords and keys are re-encrypted for the server.

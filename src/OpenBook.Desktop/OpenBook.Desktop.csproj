@@ -1,12 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The Start menu's OpenBook: starts the server (OpenBook.Web, beside it) without a console window and goes away. -->
+  <!-- The Start menu's OpenBook: starts the server (OpenBook.Web, beside it) without a console window, then stays in the
+       system tray to open it, back it up and quit it (backing up first). -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- So the solution still builds (and restores) on Linux, where this project is never run. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>OpenBook.Desktop</RootNamespace>
     <ApplicationIcon>..\..\packaging\windows\openbook.ico</ApplicationIcon>
-    <Description>Starts OpenBook Desktop.</Description>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>Starts OpenBook Desktop and keeps its tray icon.</Description>
   </PropertyGroup>
 
 </Project>

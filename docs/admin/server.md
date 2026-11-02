@@ -92,7 +92,7 @@ The ledger's safeguards (balanced, immutable entries; the append-only audit log)
 
 A company kept by OpenBook Desktop moves into the server's empty database with the `move-to-postgres` command. It copies the company file (which stays as it was), checks it like a restore, copies everything in one transaction and checks again (every entry balances, every account's balance and the audit log match, the ledger triggers are there) before keeping anything. Stored secrets are re-encrypted with the server's keys, so two-factor sign-in and connections keep working.
 
-1. On the desktop computer, quit OpenBook (**Settings → System → Quit OpenBook**) and copy two things to the server, say into `/srv/openbook/move`:
+1. On the desktop computer, quit OpenBook (**Quit OpenBook** on its tray icon, or **Settings → System → Quit OpenBook**) and copy two things to the server, say into `/srv/openbook/move`:
    - the company file `Documents\OpenBook\openbook.db`;
    - the keys folder `%LOCALAPPDATA%\OpenBook\keys`.
 2. Make sure the server's database is empty: nobody has set up a company there. (If someone did, recreate it with `dropdb` / `createdb` as above.)

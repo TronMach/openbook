@@ -171,6 +171,38 @@ public sealed partial class InstallationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_tray_icon_backs_up_and_quits_through_a_pipe_named_in_the_running_file()
+    {
+        await DesktopAsync();
+        var installation = _app!.Services.GetRequiredService<Installation>();
+        await InScope(sp => sp.GetRequiredService<ScheduledBackupService>().SetUpDefaultAsync(installation.BackupFolder!));
+        using var running = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(installation.RunningFile!));
+        var pipe = running.RootElement.GetProperty("Control").GetString()!;
+        Assert.Equal(DesktopHost.ControlPipe(installation), pipe);
+
+        var answer = await SendAsync(pipe, "backup");
+        Assert.StartsWith("ok " + ScheduledBackupService.QuitPrefix, answer, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(installation.BackupFolder!, answer![3..])));
+        Assert.Equal("unknown", await SendAsync(pipe, "dance"));
+
+        var stopping = new TaskCompletionSource();
+        _app.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>().ApplicationStopping.Register(() => stopping.TrySetResult());
+        Assert.Equal("bye", await SendAsync(pipe, "quit"));
+        await stopping.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    private static async Task<string?> SendAsync(string pipe, string command)
+    {
+        await using var client = new System.IO.Pipes.NamedPipeClientStream(".", pipe, System.IO.Pipes.PipeDirection.InOut,
+            System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
+        await client.ConnectAsync(10_000);
+        using var reader = new StreamReader(client, leaveOpen: true);
+        await using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
+        await writer.WriteLineAsync(command);
+        return await reader.ReadLineAsync();
+    }
+
+    [Fact]
     public async Task Quit_is_only_for_the_desktop()
     {
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

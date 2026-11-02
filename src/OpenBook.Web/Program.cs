@@ -59,6 +59,9 @@ if (!isResetPassword)
 }
 
 builder.Services.AddSingleton(installation);
+builder.Services.AddSingleton<OpenBook.Web.Hosting.DesktopQuit>();
+if (installation.IsDesktop)
+    builder.Services.AddHostedService<OpenBook.Web.Hosting.DesktopControlService>();
 builder.Services.AddSingleton<OpenBook.Web.Diagnostics.JobStatus>();
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
@@ -175,16 +178,19 @@ app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
     var back = form["back"].ToString();
     return Results.Redirect(back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) ? back : "/account/region");
 }).RequireAuthorization();
-// OpenBook Desktop runs in the background; this stops it (Settings > System). A server is stopped by whoever runs it.
-app.MapPost("/settings/system/quit", (OpenBook.Web.Hosting.Installation install, IHostApplicationLifetime lifetime) =>
+// OpenBook Desktop runs in the background; this backs it up and stops it (Settings > System; the tray icon does the
+// same through its pipe). A server is stopped by whoever runs it.
+app.MapPost("/settings/system/quit", async (OpenBook.Web.Hosting.Installation install, OpenBook.Web.Hosting.DesktopQuit quit, CancellationToken ct) =>
 {
     if (!install.IsDesktop)
         return Results.NotFound();
-    lifetime.StopApplication();
-    return Results.Content("""
+    var backup = await quit.BackUpAsync(ct);
+    quit.Stop();
+    var said = System.Net.WebUtility.HtmlEncode(OpenBook.Web.Hosting.DesktopQuit.Describe(backup));
+    return Results.Content($"""
         <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>OpenBook has stopped</title></head>
         <body style="font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 32rem">
-        <h1>OpenBook has stopped</h1><p>You can close this tab. Start OpenBook again from the Start menu.</p></body></html>
+        <h1>OpenBook has stopped</h1><p>{said}</p><p>You can close this tab. Start OpenBook again from the Start menu.</p></body></html>
         """, "text/html");
 }).RequireAuthorization();
 app.MapPurchasingEndpoints();

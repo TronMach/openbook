@@ -6,7 +6,7 @@ OpenBook on one Windows computer, for one business: the same program as [OpenBoo
 
 Run `OpenBook-Setup-<version>.exe`. It installs for the current Windows user only, without administrator rights, into `%LOCALAPPDATA%\Programs\OpenBook`, and adds **OpenBook** to the Start menu. The installer isn't code-signed yet, so Windows SmartScreen may warn before it runs (**More info → Run anyway**).
 
-Starting OpenBook runs it in the background and opens it in the browser at `http://localhost:5180` (another port if that one is taken). Starting it again just opens the browser. Only this computer can reach it. It keeps running until **Settings → System → Quit OpenBook** or until you sign out of Windows.
+Starting OpenBook runs it in the background and opens it in the browser at `http://localhost:5180` (another port if that one is taken). Starting it again just opens the browser. Only this computer can reach it. It keeps running, with an OpenBook icon in the system tray (the notification area by the clock, maybe under its ^ arrow), until you quit it or sign out of Windows. The tray icon's menu has **Open OpenBook** (also a double-click), **Back up now** and **Quit OpenBook**. Quitting there, or with **Settings → System → Quit OpenBook**, first makes a backup to the scheduled backups' destination (named `openbook-scheduled-quit-…`; the last 5 are kept, apart from the daily ones), then stops OpenBook. From the tray, if that backup fails you're asked whether to quit anyway. The tray talks to OpenBook through a named pipe only your Windows user can open; its name is in `running.json`.
 
 Installing a newer version over it keeps everything; it stops a running OpenBook first. Uninstalling (Windows **Settings → Apps**) removes the program only.
 

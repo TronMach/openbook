@@ -55,6 +55,15 @@ public sealed class ScheduledBackupService(
     /// <summary>Backups the schedule makes start with this; only those are ever deleted.</summary>
     public const string NamePrefix = "openbook-scheduled-";
 
+    /// <summary>
+    /// Backups made when OpenBook Desktop is quit (<see cref="RunBeforeQuitAsync"/>). Inside <see cref="NamePrefix"/>, so the
+    /// deleting rule still holds, but rotated on their own: the last <see cref="QuitKeep"/> stay, and quitting often
+    /// never pushes the daily backups out.
+    /// </summary>
+    public const string QuitPrefix = NamePrefix + "quit-";
+
+    public const int QuitKeep = 5;
+
     public async Task<BackupSchedule> GetAsync(CancellationToken ct = default) => await store.GetBackupScheduleAsync(ct) ?? BackupSchedule.Default();
 
     /// <param name="secretKey">Null keeps the stored key; "" removes it.</param>
@@ -104,7 +113,14 @@ public sealed class ScheduledBackupService(
         return await RunAsync(schedule, ct);
     }
 
-    private async Task<BackupRunResult> RunAsync(BackupSchedule schedule, CancellationToken ct)
+    /// <summary>
+    /// A backup to the schedule's destination before OpenBook Desktop stops, so quitting always leaves a fresh copy; null
+    /// when there's no schedule (no company yet, or none set up), so there's nothing to back up to.
+    /// </summary>
+    public async Task<BackupRunResult?> RunBeforeQuitAsync(CancellationToken ct = default) =>
+        await store.GetBackupScheduleAsync(ct) is { } schedule ? await RunAsync(schedule, ct, QuitPrefix, QuitKeep) : null;
+
+    private async Task<BackupRunResult> RunAsync(BackupSchedule schedule, CancellationToken ct, string prefix = NamePrefix, int? keep = null)
     {
         var now = clock.UtcNow;
         schedule.Started(now);
@@ -117,12 +133,14 @@ public sealed class ScheduledBackupService(
                 ?? throw new DomainException("backup.destination_unavailable", "That backup destination isn't available on this server.");
             var secret = schedule.ProtectedSecretKey is { } protectedKey ? secrets.Unprotect(protectedKey) : null;
             file = await backups.CreateAsync(ct);
-            var name = $"{NamePrefix}{now.UtcDateTime.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.openbook.db";
+            var name = $"{prefix}{now.UtcDateTime.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.openbook.db";
             await target.UploadAsync(schedule, secret, file.Path, name, ct);
 
-            // Only the schedule's own backups, newest first by their timestamped names.
-            var existing = (await target.ListAsync(schedule, secret, NamePrefix, ct)).Order(StringComparer.Ordinal).Reverse().ToList();
-            var old = existing.Skip(schedule.Keep).ToList();
+            // Only this kind's own backups (the timestamp follows the prefix), newest first by their names.
+            var existing = (await target.ListAsync(schedule, secret, prefix, ct))
+                .Where(n => n.Length > prefix.Length && char.IsAsciiDigit(n[prefix.Length]))
+                .Order(StringComparer.Ordinal).Reverse().ToList();
+            var old = existing.Skip(keep ?? schedule.Keep).ToList();
             foreach (var stale in old)
                 await target.DeleteAsync(schedule, secret, stale, ct);
 

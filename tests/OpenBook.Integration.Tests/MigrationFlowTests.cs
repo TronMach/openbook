@@ -250,6 +250,36 @@ public sealed class MigrationFlowTests : IAsyncLifetime
         Assert.Null(schedule.LastError);
     }
 
+    [SqliteFact]
+    public async Task Backups_before_quitting_keep_their_own_last_few_beside_the_daily_ones()
+    {
+        var folder = Path.Combine(_db.BackupDirectory, "scheduled");
+        Assert.Null(await _db.InScope(sp => sp.GetRequiredService<ScheduledBackupService>().RunBeforeQuitAsync()));
+        await _db.InScope(sp => sp.GetRequiredService<ScheduledBackupService>().UpdateAsync(
+            new BackupScheduleDetails(true, BackupFrequency.Daily, DayOfWeek.Sunday, 2, BackupDestination.Folder, folder, Keep: 2), null));
+        for (var i = 0; i < 2; i++)
+        {
+            _db.Clock.UtcNow = _db.Clock.UtcNow.AddDays(1);
+            Assert.True((await _db.InScope(sp => sp.GetRequiredService<ScheduledBackupService>().RunDueAsync(TimeZoneInfo.Utc)))!.Succeeded);
+        }
+
+        for (var i = 0; i < ScheduledBackupService.QuitKeep + 2; i++)
+        {
+            _db.Clock.UtcNow = _db.Clock.UtcNow.AddMinutes(1);
+            var result = await _db.InScope(sp => sp.GetRequiredService<ScheduledBackupService>().RunBeforeQuitAsync());
+            Assert.True(result!.Succeeded, result.Error);
+            Assert.StartsWith(ScheduledBackupService.QuitPrefix, result.FileName, StringComparison.Ordinal);
+        }
+
+        // And a daily one afterwards still keeps two daily ones, whatever the quit backups are called.
+        _db.Clock.UtcNow = _db.Clock.UtcNow.AddDays(1);
+        Assert.True((await _db.InScope(sp => sp.GetRequiredService<ScheduledBackupService>().RunDueAsync(TimeZoneInfo.Utc)))!.Succeeded);
+
+        var files = Directory.GetFiles(folder).Select(Path.GetFileName).ToList();
+        Assert.Equal(ScheduledBackupService.QuitKeep, files.Count(f => f!.StartsWith(ScheduledBackupService.QuitPrefix, StringComparison.Ordinal)));
+        Assert.Equal(2, files.Count(f => !f!.StartsWith(ScheduledBackupService.QuitPrefix, StringComparison.Ordinal)));
+    }
+
     [Fact]
     public async Task Scheduled_backups_record_failures_and_keep_the_secret_out_of_the_audit()
     {

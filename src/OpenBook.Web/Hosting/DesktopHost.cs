@@ -13,7 +13,8 @@ namespace OpenBook.Web.Hosting;
 /// </summary>
 public static class DesktopHost
 {
-    private sealed record Running(string Url);
+    /// <summary>What <see cref="Installation.RunningFile"/> holds: the address, and the tray icon's pipe (<see cref="DesktopControlService"/>).</summary>
+    private sealed record Running(string Url, string? Control = null);
 
     /// <summary>Held while this copy runs, so two starts at once don't both open the company file.</summary>
     private static Mutex? _instance;
@@ -21,8 +22,7 @@ public static class DesktopHost
     /// <summary>True when another copy already serves this company: its page was opened and this process should end.</summary>
     public static async Task<bool> HandOverAsync(Installation installation)
     {
-        var name = "OpenBook.Desktop." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(installation.DataFolder!.ToUpperInvariant())))[..16];
-        _instance = new Mutex(initiallyOwned: true, name, out var first);
+        _instance = new Mutex(initiallyOwned: true, "OpenBook.Desktop." + Key(installation), out var first);
         if (first)
             return false;
 
@@ -42,6 +42,13 @@ public static class DesktopHost
         return true;
     }
 
+    /// <summary>The tray icon's pipe for this company folder.</summary>
+    public static string ControlPipe(Installation installation) => "OpenBook.Control." + Key(installation);
+
+    // One per company folder, for the mutex and the pipe.
+    private static string Key(Installation installation) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(installation.DataFolder!.ToUpperInvariant())))[..16];
+
     /// <summary>Listens on localhost only, whatever the URL settings say; on <see cref="Installation.Port"/> unless it's taken.</summary>
     public static void Listen(WebApplicationBuilder builder, Installation installation)
     {
@@ -60,8 +67,8 @@ public static class DesktopHost
                 .Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()?.Addresses;
             var url = bound?.FirstOrDefault() ?? $"http://localhost:{installation.Port}";
             Directory.CreateDirectory(installation.AppFolder!);
-            File.WriteAllText(installation.RunningFile!, JsonSerializer.Serialize(new Running(url)));
-            Console.WriteLine($"OpenBook Desktop is running at {url}. Quit it from Settings > System.");
+            File.WriteAllText(installation.RunningFile!, JsonSerializer.Serialize(new Running(url, ControlPipe(installation))));
+            Console.WriteLine($"OpenBook Desktop is running at {url}. Quit it from the tray icon or Settings > System.");
             Open(installation, url);
         });
         lifetime.ApplicationStopping.Register(() =>
