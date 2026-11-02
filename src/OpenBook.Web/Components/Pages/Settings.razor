@@ -127,7 +127,7 @@
                             EmailDelivery.Folder => L["Saving messages to a folder (nothing is sent)"].Value,
                             _ => L["Off: nothing can be emailed yet"].Value,
                         };
-                    }, attentionWhen: s => s.StartsWith(L["Off"].Value, StringComparison.Ordinal)),
+                    }, attentionWhen: s => s == L["Off: nothing can be emailed yet"].Value),
                     Keywords: "smtp mail send gmail outlook"),
                 new("/settings/online-payments", L["Online card payments"],
                     L["A \"Pay now\" link on invoices so customers pay by card through Stripe; payments are recorded by themselves."],
@@ -159,7 +159,7 @@
                     await Status("/sales/collections/settings", async () =>
                     {
                         var c = await Get<CollectionService>().GetAsync();
-                        return L["Reminders {0} · late fees {1}", c.RemindersEnabled ? L["on"].Value : L["off"].Value, c.LateFeesEnabled ? L["on"].Value : L["off"].Value].Value;
+                        return (c.RemindersEnabled ? L["Reminders are on"].Value : L["Reminders are off"].Value) + " · " + (c.LateFeesEnabled ? L["late fees are on"].Value : L["late fees are off"].Value);
                     }),
                     Keywords: "collections overdue dunning late fee reminder"),
             ]),
@@ -194,13 +194,13 @@
             ]),
             new(L["Accounting"], L["For whoever keeps the books."],
             [
-                new("/accounts", L["Chart of accounts"], L["The accounts every amount is filed under."], Keywords: "accounts chart"),
+                new("/accounts", L["Your chart of accounts"], L["The accounts every amount is filed under."], Keywords: "accounts chart"),
                 new("/segments", L["Classes, locations and tags"],
                     L["Extra ways to slice reports: by department, branch, project or anything you choose."],
                     await Status("/segments", async () =>
                     {
                         var tracking = await Get<SegmentService>().GetTrackingAsync();
-                        return L["Classes {0} · {1} {2}", tracking.Classes ? L["on"].Value : L["off"].Value, tracking.LocationLabel.ToLowerInvariant(), tracking.Locations ? L["on"].Value : L["off"].Value].Value;
+                        return (tracking.Classes ? L["Classes are on"].Value : L["Classes are off"].Value) + " · " + (tracking.Locations ? L["{0}s are on", tracking.LocationLabel].Value : L["{0}s are off", tracking.LocationLabel].Value);
                     }),
                     Keywords: "class location department tag segment"),
                 new("/reports/tax-lines", L["Tax lines"],
