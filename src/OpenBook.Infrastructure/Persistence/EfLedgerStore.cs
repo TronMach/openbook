@@ -69,6 +69,12 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
         await db.BankTransactions.AnyAsync(t => t.AccountId == accountId || t.TransferAccountId == accountId, ct)
         || await db.Reconciliations.AnyAsync(r => r.AccountId == accountId, ct);
 
+    public async Task<IReadOnlyList<EntryHeader>> ListEntryHeadersAsync(CancellationToken ct) =>
+        await db.JournalEntries.IgnoreQueryFilters().AsNoTracking()
+            .Select(e => new EntryHeader(e.Id, e.Number, e.Date, e.Source, e.SourceId, e.Status, e.Kind,
+                EF.Property<bool>(e, OpenBookDbContext.IsSealed)))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<LedgerLine>> GetLinesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
         await (
             from l in db.Set<JournalLine>()

@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Ledger;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Search;
 using OpenBook.Application;
@@ -118,6 +119,7 @@ internal static class ReportsApi
         });
 
         var accountant = api.MapGroup("/accountant");
+        accountant.MapGet("/check", async (BooksCheckService s, CancellationToken ct) => await s.RunAsync(ct));
         accountant.MapGet("/forecast", async (DateOnly? asOf, int? weeks, Guid? scenarioId, ForecastService s, CancellationToken ct) =>
             await s.ForecastAsync(asOf ?? CompanyTime.Today, weeks ?? 13, scenarioId, ct));
         accountant.MapGet("/scenarios", async (ForecastService s, CancellationToken ct) => await s.ListScenariosAsync(ct));

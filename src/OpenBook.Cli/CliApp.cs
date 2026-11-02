@@ -45,6 +45,7 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
           openbook import <source> <FILE> [--dry-run]     move in from another program (iif, qbxml, qbo, gnucash, xero, wave, freshbooks)
           openbook export --out FILE.zip                  everything as CSV files (admin)
           openbook backup --out FILE.openbook.db          a copy of the company file (admin, SQLite servers)
+          openbook check [--json]                         check that the books agree with themselves (accountant)
 
         Any API call
           openbook get <path> [--out FILE]
@@ -53,7 +54,7 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
 
         Options: --url, --key (override the saved settings and OPENBOOK_URL / OPENBOOK_API_KEY),
                  --closing-password (for changes dated in a closed period).
-        Exit code 0 on success, 1 when the server refuses, 2 for a mistake in the command.
+        Exit code 0 on success, 1 when the server refuses, 2 for a mistake in the command, 3 when `check` finds problems.
         """;
 
     public async Task<int> RunAsync(string[] args, CancellationToken ct = default)
@@ -82,6 +83,7 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
                     : await Mistake($"List what? One of: {string.Join(", ", Lists.Keys)}."),
                 "report" => words.Count == 2 ? await ReportAsync(settings, words[1], options, ct) : await Mistake("Which report? Its key, as `openbook list reports` shows."),
                 "import" => words.Count == 3 ? await ImportAsync(settings, words[1], words[2], options, ct) : await Mistake("Usage: openbook import <source> <FILE> [--dry-run]"),
+                "check" => await CheckAsync(settings, options, ct),
                 "export" => await DownloadAsync(settings, options, "/api/export", ct),
                 "backup" => await DownloadAsync(settings, options, "/api/backup", ct),
                 "get" or "post" or "put" or "delete" => words.Count == 2
@@ -151,6 +153,37 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
             columns.Add("id");
         await output.WriteAsync(TextTable.Render(columns, rows.Select(r => columns.Select(c => r.TryGetProperty(c, out var v) ? Text(v) : "").ToList()).ToList()));
         return 0;
+    }
+
+    /// <summary>Runs the books check and prints each check with what it found; exit code 3 when something doesn't agree.</summary>
+    private async Task<int> CheckAsync(CliSettings settings, Dictionary<string, string> options, CancellationToken ct)
+    {
+        using var client = Client(settings, options);
+        using var response = await client.GetAsync("/api/accountant/check", ct);
+        var body = await Checked(response, ct);
+        using var document = JsonDocument.Parse(body);
+        var problems = document.RootElement.GetProperty("problems").GetInt32();
+        if (options.ContainsKey("json"))
+        {
+            await output.WriteLineAsync(Pretty(body));
+            return problems > 0 ? 3 : 0;
+        }
+
+        foreach (var result in document.RootElement.GetProperty("results").EnumerateArray())
+        {
+            var outcome = result.GetProperty("outcome").GetString() switch
+            {
+                "Problem" => "PROBLEM",
+                "Note" => "NOTE   ",
+                _ => "OK     ",
+            };
+            await output.WriteLineAsync($"{outcome} {result.GetProperty("title").GetString()}: {result.GetProperty("summary").GetString()}");
+            foreach (var finding in result.GetProperty("findings").EnumerateArray())
+                await output.WriteLineAsync($"        {finding.GetProperty("text").GetString()}");
+        }
+
+        await output.WriteLineAsync(problems == 0 ? "The books agree." : $"{problems} check{(problems == 1 ? "" : "s")} found problems.");
+        return problems > 0 ? 3 : 0;
     }
 
     private async Task<int> ReportAsync(CliSettings settings, string key, Dictionary<string, string> options, CancellationToken ct)

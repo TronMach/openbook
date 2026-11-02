@@ -65,4 +65,5 @@ Because a report's settings are in its address, you can also bookmark a report o
 
 - **Something is in the wrong account**: open it from the drill-down. Void it and enter it again correctly (documents), or ask your accountant to post a journal entry.
 - **Balances look doubled**: the same purchase was probably entered as both a bill and an expense, or a customer payment as both a payment and a bank deposit. See [Vendors and purchases](05-purchases.md) and [Banking](06-banking.md).
+- **Two reports disagree** (A/R aging and the balance sheet, say): **Accountant tools → Check the books** shows where, with links to the records involved. See [Checking the books](20-budgets-and-analysis.md#checking-the-books).
 - **Opening Balance Equity has a balance**: that's normal after entering opening balances. Your accountant can move it into the right equity accounts.

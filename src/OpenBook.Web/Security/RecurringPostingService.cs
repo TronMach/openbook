@@ -15,7 +15,7 @@ namespace OpenBook.Web.Security;
 /// the actor "system".
 /// </summary>
 internal sealed partial class RecurringPostingService(
-    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<RecurringPostingService> logger) : BackgroundService
+    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, Diagnostics.BooksCheckStatus checks, ILogger<RecurringPostingService> logger) : BackgroundService
 {
     public const string Actor = "system";
     private static readonly TimeSpan Period = TimeSpan.FromHours(1);
@@ -138,6 +138,18 @@ internal sealed partial class RecurringPostingService(
             }
             return true;
         }, ct);
+
+        if (checks.IsDue(DateTimeOffset.UtcNow))
+        {
+            await StepAsync("Books check", async services =>
+            {
+                var report = await services.GetRequiredService<OpenBook.Application.Ledger.BooksCheckService>().RunAsync(ct);
+                checks.Record(report);
+                if (report.Problems > 0)
+                    LogBooksCheckProblems(report.Problems, string.Join(", ", report.Results.Where(r => r.Outcome == OpenBook.Application.Ledger.CheckOutcome.Problem).Select(r => r.Title)));
+                return true;
+            }, ct);
+        }
     }
 
     /// <summary>
@@ -200,4 +212,7 @@ internal sealed partial class RecurringPostingService(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "{What} failed.")]
     private partial void LogFailed(string what, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The books check found {Count} problems: {Checks}. See Accountant tools > Check the books.")]
+    private partial void LogBooksCheckProblems(int count, string checks);
 }

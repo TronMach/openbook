@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<ClosedPeriodOverride>();
         services.AddScoped<PostingEngine>();
         services.AddScoped<TrialBalanceQuery>();
+        services.AddScoped<BooksCheckService>();
         services.AddScoped<CloseBooksService>();
         services.AddScoped<RecurringEntryService>();
         services.AddScoped<OpeningBalanceService>();

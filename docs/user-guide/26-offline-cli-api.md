@@ -64,6 +64,7 @@ Then, for example:
 - `openbook report profit-and-loss --query "preset=LastMonth" --format pdf --out pnl.pdf`: any report, as a table, JSON, CSV, Excel or PDF.
 - `openbook import iif books.iif --dry-run`: preview an import (sources: iif, qbxml, qbo, gnucash, xero, wave, freshbooks) ([chapter 24](24-moving-in.md)).
 - `openbook export --out data.zip` and `openbook backup --out books.openbook.db`.
+- `openbook check` checks that the books agree with themselves (accountant role; see [Checking the books](20-budgets-and-analysis.md#checking-the-books)) and exits with code 3 when something doesn't.
 - `openbook get /sales/invoices`: any API call.
 
 Add `--closing-password` when a change falls in a closed period. The command exits with 0 when it worked, 1 when the server refused or couldn't be reached, and 2 for a mistake in the command.

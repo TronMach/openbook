@@ -32,6 +32,21 @@ public sealed record LedgerLine(
     Guid? ClassId = null,
     Guid? LocationId = null);
 
+/// <summary>An entry without its lines, sealed or not: what the books check compares documents with.</summary>
+public sealed record EntryHeader(
+    Guid Id,
+    long Number,
+    DateOnly Date,
+    string Source,
+    Guid? SourceId,
+    JournalEntryStatus Status,
+    JournalEntryKind Kind,
+    bool IsSealed)
+{
+    /// <summary>Posted and not a reversal: the entry that counts for its document.</summary>
+    public bool IsStanding => Status == JournalEntryStatus.Posted && Kind == JournalEntryKind.Standard;
+}
+
 /// <summary>Filter and page for listing journal entries, newest first.</summary>
 public sealed record JournalEntryFilter(
     DateOnly? From = null, DateOnly? To = null, int Skip = 0, int Take = 50, string? Source = null, Guid? SourceId = null);
@@ -57,6 +72,9 @@ public interface ILedgerStore
     Task<(IReadOnlyList<JournalEntry> Entries, int Total)> ListEntriesAsync(JournalEntryFilter filter, CancellationToken ct);
 
     Task<long> NextEntryNumberAsync(CancellationToken ct);
+
+    /// <summary>Every entry's header, sealed or not, untracked.</summary>
+    Task<IReadOnlyList<EntryHeader>> ListEntryHeadersAsync(CancellationToken ct);
 
     /// <summary>Every sealed ledger line dated within the range (inclusive), oldest first. Reports start here.</summary>
     Task<IReadOnlyList<LedgerLine>> GetLinesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);

@@ -1,0 +1,84 @@
+@page "/accountant/check"
+@inject BooksCheckService Checks
+@inject OpenBook.Web.Diagnostics.BooksCheckStatus Status
+
+<PageTitle>Check the books · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Check the books</h1>
+    <p class="muted">
+        Compares the figures OpenBook keeps beside the ledger with the ledger itself: entries, documents, what's paid on invoices and bills,
+        A/R and A/P aging, undeposited funds, stock value and reconciliations. It reads only and changes nothing. It also runs by itself once a day.
+        <HelpLink Chapter="20-budgets-and-analysis" Section="checking-the-books" />
+    </p>
+
+    @if (_report is { } report)
+    {
+        <p>
+            @if (report.Problems == 0)
+            {
+                <span class="badge ok">The books agree</span>
+            }
+            else
+            {
+                <span class="badge warn">@(report.Problems == 1 ? "1 check found a problem" : $"{report.Problems} checks found problems")</span>
+            }
+            <span class="muted">Checked @report.RanAt.InCompanyTime().ToString("g").</span>
+        </p>
+        <form method="get" action="/accountant/check" class="inline">
+            <input type="hidden" name="run" value="true" />
+            <button type="submit" class="secondary">Check again</button>
+        </form>
+
+        <table class="data" style="margin-top: 1rem">
+            <thead><tr><th>Check</th><th>Result</th></tr></thead>
+            <tbody>
+                @foreach (var result in report.Results)
+                {
+                    <tr>
+                        <td>
+                            <strong>@result.Title</strong>
+                            <div class="muted">@result.Description</div>
+                        </td>
+                        <td>
+                            <span class="badge @(result.Outcome switch { CheckOutcome.Ok => "ok", CheckOutcome.Problem => "warn", _ => "" })">
+                                @(result.Outcome switch { CheckOutcome.Ok => "Agrees", CheckOutcome.Note => "Agrees, with a note", _ => "Problem" })
+                            </span>
+                            @result.Summary
+                            @if (result.Findings.Count > 0)
+                            {
+                                <ul>
+                                    @foreach (var finding in result.Findings)
+                                    {
+                                        var href = finding.EntityType is { } type && finding.EntityId is { } id ? Links.ForAuditEntity(type, id) : null;
+                                        <li>@if (href is not null) { <a href="@href">@finding.Text</a> } else { @finding.Text }</li>
+                                    }
+                                </ul>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="muted">
+            A note means the figures agree once entries made directly to an account are counted, such as a journal entry to accounts receivable,
+            which aging can't list. A problem means figures that should agree don't: open the records listed, and ask for help if the cause isn't clear.
+        </p>
+    }
+</div>
+
+@code {
+    private BooksCheckReport? _report;
+
+    [SupplyParameterFromQuery] private bool Run { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _report = Status.Last;
+        if (Run || _report is null)
+        {
+            _report = await Checks.RunAsync();
+            Status.Record(_report);
+        }
+    }
+}

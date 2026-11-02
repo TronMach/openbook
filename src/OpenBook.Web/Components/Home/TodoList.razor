@@ -97,6 +97,8 @@
                     account.LastReconciledDate is { } done ? L["Last reconciled through {0}", Labels.Date(done)] : L["Never reconciled"], showCount: false);
         }
 
+        if (Get<OpenBook.Web.Diagnostics.BooksCheckStatus>().Last is { Problems: > 0 } check)
+            Add(check.Problems, L["Figures in the books that don't agree"], "/accountant/check", L["Found by the daily check of the books"], urgent: true);
         Add(figures.OpenEstimates, L["Estimates waiting for an answer"], "/sales?show=estimates");
         Add(figures.OrdersToReceive, L["Purchase orders still to receive"], "/purchases/orders");
         if (figures.StockItems > 0)

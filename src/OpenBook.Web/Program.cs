@@ -73,6 +73,7 @@ builder.Services.AddHttpClient(OpenBook.Web.Hosting.UpdateService.HttpClientName
     c.DefaultRequestHeaders.UserAgent.ParseAdd($"OpenBook/{OpenBook.Web.Hosting.UpdateService.CurrentVersion}");
 });
 builder.Services.AddSingleton<OpenBook.Web.Diagnostics.JobStatus>();
+builder.Services.AddSingleton<OpenBook.Web.Diagnostics.BooksCheckStatus>();
 builder.Services.AddSingleton(OpenBook.Web.Help.HelpGuide.ForApp());
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(

@@ -1,0 +1,432 @@
+using OpenBook.Application.Accounts;
+using OpenBook.Application.Banking;
+using OpenBook.Application.Companies;
+using OpenBook.Application.Inventory;
+using OpenBook.Application.Purchases;
+using OpenBook.Application.Sales;
+using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Banking;
+using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Purchases;
+using OpenBook.Domain.Sales;
+
+namespace OpenBook.Application.Ledger;
+
+public enum CheckOutcome
+{
+    /// <summary>Everything agrees.</summary>
+    Ok,
+    /// <summary>Agrees once something people did on purpose is counted (a journal entry to A/R, say); worth knowing.</summary>
+    Note,
+    /// <summary>Figures that should agree don't.</summary>
+    Problem,
+}
+
+/// <summary>One thing found, with the record it's about when there is one (an audit entity type and id).</summary>
+public sealed record CheckFinding(string Text, string? EntityType = null, Guid? EntityId = null);
+
+public sealed record CheckResult(string Key, string Title, string Description, CheckOutcome Outcome, string Summary, IReadOnlyList<CheckFinding> Findings);
+
+public sealed record BooksCheckReport(DateTimeOffset RanAt, IReadOnlyList<CheckResult> Results)
+{
+    public CheckOutcome Outcome => Results.Count == 0 ? CheckOutcome.Ok : Results.Max(r => r.Outcome);
+    public int Problems => Results.Count(r => r.Outcome == CheckOutcome.Problem);
+}
+
+/// <summary>
+/// Checks that the books agree with themselves, like QuickBooks' Verify Data: every entry balances, documents and
+/// their entries agree, what invoices and bills say is paid matches their payments, and the A/R, A/P, undeposited
+/// funds and inventory figures kept beside the ledger match its accounts. Reads only; changes nothing.
+/// </summary>
+public sealed class BooksCheckService(
+    ILedgerStore ledger,
+    ISalesStore sales,
+    IPurchasesStore purchases,
+    IBankingStore banking,
+    AccountService accounts,
+    ReceivablesService receivables,
+    PayablesService payables,
+    DepositService deposits,
+    InventoryService inventory,
+    ICompanyStore companies,
+    IClock clock)
+{
+    /// <summary>Most findings listed per check; the summary still counts them all.</summary>
+    public const int MaxFindings = 50;
+
+    /// <summary>A date after anything anyone will enter, for "everything, whatever its date".</summary>
+    private static readonly DateOnly Always = DateOnly.MaxValue;
+
+    /// <summary>The sources whose entries A/R aging accounts for.</summary>
+    public static readonly IReadOnlySet<string> ReceivableSources = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Invoice.Source, CustomerPayment.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Retainer.ApplicationSource,
+    };
+
+    /// <summary>The sources whose entries put money in, or take it out of, holding accounts such as Undeposited Funds.</summary>
+    public static readonly IReadOnlySet<string> UndepositedSources = new HashSet<string>(StringComparer.Ordinal)
+    {
+        CustomerPayment.Source, SalesReceipt.Source, Retainer.Source, BankDeposit.Source, Domain.Nonprofit.Donation.Source,
+    };
+
+    /// <summary>The sources whose entries A/P aging accounts for.</summary>
+    public static readonly IReadOnlySet<string> PayableSources = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Bill.Source, BillPayment.Source, VendorCredit.Source, VendorRefund.Source,
+    };
+
+    public async Task<BooksCheckReport> RunAsync(CancellationToken ct = default)
+    {
+        var data = await LoadAsync(ct);
+        var results = new List<CheckResult>
+        {
+            EntriesBalance(data),
+            DocumentsHaveTheirEntries(data),
+            InvoicesPaid(data),
+            BillsPaid(data),
+            await ReceivablesTieAsync(data, ct),
+            await PayablesTieAsync(data, ct),
+            await UndepositedTieAsync(data, ct),
+            await InventoryTieAsync(data, ct),
+            await ReconciliationsAsync(data, ct),
+            await StockBelowZeroAsync(ct),
+        };
+        return new BooksCheckReport(clock.UtcNow, results);
+    }
+
+    private async Task<Data> LoadAsync(CancellationToken ct) => new(
+        await accounts.GetChartAsync(ct),
+        await ledger.ListEntryHeadersAsync(ct),
+        await ledger.GetLinesAsync(null, Always, ct),
+        await sales.ListInvoicesAsync(null, ct),
+        await sales.ListPaymentsAsync(null, ct),
+        await sales.ListReceiptsAsync(ct),
+        await sales.ListCreditMemosAsync(null, ct),
+        await sales.ListRefundsAsync(null, ct),
+        await sales.ListWriteOffsAsync(null, ct),
+        await sales.ListRetainersAsync(null, ct),
+        await sales.ListDepositsAsync(ct),
+        await purchases.ListBillsAsync(null, ct),
+        await purchases.ListPaymentsAsync(null, ct),
+        await purchases.ListVendorCreditsAsync(null, ct),
+        await purchases.ListVendorRefundsAsync(null, ct),
+        await banking.ListAllTransactionsAsync(ct));
+
+    private sealed record Data(
+        ChartOfAccounts Chart,
+        IReadOnlyList<EntryHeader> Entries,
+        IReadOnlyList<LedgerLine> Lines,
+        IReadOnlyList<Invoice> Invoices,
+        IReadOnlyList<CustomerPayment> Payments,
+        IReadOnlyList<SalesReceipt> Receipts,
+        IReadOnlyList<CreditMemo> CreditMemos,
+        IReadOnlyList<CustomerRefund> Refunds,
+        IReadOnlyList<BadDebtWriteOff> WriteOffs,
+        IReadOnlyList<Retainer> Retainers,
+        IReadOnlyList<BankDeposit> Deposits,
+        IReadOnlyList<Bill> Bills,
+        IReadOnlyList<BillPayment> BillPayments,
+        IReadOnlyList<VendorCredit> VendorCredits,
+        IReadOnlyList<VendorRefund> VendorRefunds,
+        IReadOnlyList<BankTransaction> BankTransactions)
+    {
+        /// <summary>Lines on the accrual basis (cash-only entries, such as a pledge's cash side, left out).</summary>
+        public IEnumerable<LedgerLine> Accrual => Lines.Where(l => l.Basis.AppliesTo(ReportBasis.Accrual));
+    }
+
+    /// <summary>A document that posts one entry, as the checks see it.</summary>
+    private sealed record Document(string Label, string EntityType, Guid Id, string Source, Guid EntryId, bool Posted);
+
+    private static IEnumerable<Document> Documents(Data d) =>
+    [
+        .. d.Invoices.Select(i => new Document($"Invoice {i.Number}", "invoice", i.Id, Invoice.Source, i.JournalEntryId, i.Status == DocumentStatus.Posted)),
+        .. d.Payments.Select(p => new Document($"Customer payment of {p.Date:MMM d, yyyy}", "payment", p.Id, CustomerPayment.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted)),
+        .. d.Receipts.Select(r => new Document($"Sales receipt {r.Number}", "sales_receipt", r.Id, SalesReceipt.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
+        .. d.CreditMemos.Select(c => new Document($"Credit memo {c.Number}", "credit_memo", c.Id, CreditMemo.Source, c.JournalEntryId, c.Status == DocumentStatus.Posted)),
+        .. d.Refunds.Select(r => new Document($"Customer refund of {r.Date:MMM d, yyyy}", "refund", r.Id, CustomerRefund.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
+        .. d.WriteOffs.Select(w => new Document($"Write-off of {w.Date:MMM d, yyyy}", "write_off", w.Id, BadDebtWriteOff.Source, w.JournalEntryId, w.Status == DocumentStatus.Posted)),
+        .. d.Retainers.Select(r => new Document($"Retainer of {r.Date:MMM d, yyyy}", "retainer", r.Id, Retainer.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
+        .. d.Deposits.Select(x => new Document($"Deposit of {x.Date:MMM d, yyyy}", "deposit", x.Id, BankDeposit.Source, x.JournalEntryId, x.Status == DocumentStatus.Posted)),
+        .. d.Bills.Select(b => new Document(BillLabel(b), "bill", b.Id, Bill.Source, b.JournalEntryId, b.Status == DocumentStatus.Posted)),
+        .. d.BillPayments.Select(p => new Document($"Bill payment of {p.Date:MMM d, yyyy}", "bill_payment", p.Id, BillPayment.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted)),
+        .. d.VendorCredits.Select(c => new Document($"Vendor credit of {c.Date:MMM d, yyyy}", "vendor_credit", c.Id, VendorCredit.Source, c.JournalEntryId, c.Status == DocumentStatus.Posted)),
+        .. d.VendorRefunds.Select(r => new Document($"Vendor refund of {r.Date:MMM d, yyyy}", "vendor_refund", r.Id, VendorRefund.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
+        .. d.BankTransactions.Select(t => new Document($"{Describe(t.Kind)} of {t.Date:MMM d, yyyy}", "bank_transaction", t.Id, BankTransaction.SourceFor(t.Kind), t.JournalEntryId,
+            t.Status == BankTransactionStatus.Posted)),
+    ];
+
+    private static string BillLabel(Bill bill) => bill.Reference is { } number ? $"Bill {number}" : $"Bill of {bill.Date:MMM d, yyyy}";
+
+    private static string Describe(BankTransactionKind kind) => kind switch
+    {
+        BankTransactionKind.Spend => "Expense",
+        BankTransactionKind.Receive => "Bank deposit",
+        _ => "Transfer",
+    };
+
+    private static CheckResult EntriesBalance(Data d)
+    {
+        var findings = new List<CheckFinding>();
+        foreach (var entry in d.Entries.Where(e => !e.IsSealed).OrderBy(e => e.Number))
+            findings.Add(new($"Entry #{entry.Number} ({entry.Date:MMM d, yyyy}) was never sealed, so reports leave it out.", "journal_entry", entry.Id));
+        foreach (var g in d.Lines.GroupBy(l => l.JournalEntryId).Where(g => g.Sum(l => l.Amount) != 0m).OrderBy(g => g.First().EntryNumber))
+            findings.Add(new($"Entry #{g.First().EntryNumber} is out of balance by {g.Sum(l => l.Amount):N2}.", "journal_entry", g.Key));
+        var total = d.Lines.Sum(l => l.Amount);
+        if (total != 0m && findings.Count == 0)
+            findings.Add(new($"Debits and credits differ by {total:N2} across the ledger."));
+
+        return Result("entries-balance", "Every entry balances",
+            "Each journal entry's debits equal its credits, and every saved entry is sealed.",
+            findings, $"{d.Entries.Count:N0} entries checked.");
+    }
+
+    private static CheckResult DocumentsHaveTheirEntries(Data d)
+    {
+        var entries = d.Entries.ToDictionary(e => e.Id);
+        var documents = Documents(d).ToList();
+        var findings = new List<CheckFinding>();
+        foreach (var doc in documents)
+        {
+            if (!entries.TryGetValue(doc.EntryId, out var entry))
+                findings.Add(new($"{doc.Label}: its journal entry is missing.", doc.EntityType, doc.Id));
+            else if (doc.Posted && !entry.IsStanding)
+                findings.Add(new($"{doc.Label} is posted, but its entry #{entry.Number} is voided.", doc.EntityType, doc.Id));
+            else if (!doc.Posted && entry.IsStanding)
+                findings.Add(new($"{doc.Label} is voided, but its entry #{entry.Number} still stands.", doc.EntityType, doc.Id));
+        }
+
+        // Entries that still stand for a document that doesn't (a void or correction that left one behind).
+        var standingFor = documents.Where(x => x.Posted).Select(x => (x.Source, x.Id, x.EntryId)).ToHashSet();
+        var sources = documents.Select(x => x.Source).ToHashSet(StringComparer.Ordinal);
+        foreach (var entry in d.Entries.Where(e => e.IsStanding && e.IsSealed && sources.Contains(e.Source)).OrderBy(e => e.Number))
+        {
+            if (entry.SourceId is { } sourceId && standingFor.Contains((entry.Source, sourceId, entry.Id)))
+                continue;
+            findings.Add(new($"Entry #{entry.Number} ({entry.Date:MMM d, yyyy}) still stands, but no posted document uses it.", "journal_entry", entry.Id));
+        }
+
+        return Result("documents-entries", "Documents and their entries agree",
+            "Each posted document has its journal entry standing, each voided one has it voided, and no entry is left standing for a document that no longer uses it.",
+            findings, $"{documents.Count:N0} documents checked.");
+    }
+
+    private static CheckResult InvoicesPaid(Data d)
+    {
+        var settled = new Dictionary<Guid, decimal>();
+        void Add(Guid invoiceId, decimal amount) => settled[invoiceId] = settled.GetValueOrDefault(invoiceId) + amount;
+        foreach (var p in d.Payments.Where(p => p.Status == DocumentStatus.Posted))
+            foreach (var a in p.Applications)
+                Add(a.InvoiceId, a.Settled);
+        foreach (var c in d.CreditMemos.Where(c => c.Status == DocumentStatus.Posted))
+            foreach (var a in c.Applications)
+                Add(a.InvoiceId, a.Amount);
+        foreach (var w in d.WriteOffs.Where(w => w.Status == DocumentStatus.Posted))
+            Add(w.InvoiceId, w.Amount);
+        foreach (var r in d.Retainers.Where(r => r.Status == DocumentStatus.Posted))
+            foreach (var a in r.Applications.Where(a => !a.IsVoided))
+                Add(a.InvoiceId, a.Amount);
+
+        var findings = new List<CheckFinding>();
+        foreach (var invoice in d.Invoices.OrderBy(i => i.Date))
+        {
+            var applied = settled.GetValueOrDefault(invoice.Id);
+            if (invoice.Status != DocumentStatus.Posted)
+            {
+                if (applied != 0m)
+                    findings.Add(new($"Invoice {invoice.Number} is voided but still has {applied:N2} applied to it.", "invoice", invoice.Id));
+                continue;
+            }
+
+            if (invoice.AmountPaid != applied)
+                findings.Add(new($"Invoice {invoice.Number} shows {invoice.AmountPaid:N2} paid; its payments, credits, retainers and write-offs add up to {applied:N2}.", "invoice", invoice.Id));
+            else if (applied > invoice.Total)
+                findings.Add(new($"Invoice {invoice.Number} has {applied:N2} applied to a total of {invoice.Total:N2}.", "invoice", invoice.Id));
+        }
+
+        return Result("invoices-paid", "Invoices show what's been paid",
+            "What each invoice shows as paid equals the payments, credits, retainers and write-offs applied to it.",
+            findings, $"{d.Invoices.Count:N0} invoices checked.");
+    }
+
+    private static CheckResult BillsPaid(Data d)
+    {
+        var settled = new Dictionary<Guid, decimal>();
+        void Add(Guid billId, decimal amount) => settled[billId] = settled.GetValueOrDefault(billId) + amount;
+        foreach (var p in d.BillPayments.Where(p => p.Status == DocumentStatus.Posted))
+            foreach (var a in p.Applications)
+                Add(a.BillId, a.Amount);
+        foreach (var c in d.VendorCredits.Where(c => c.Status == DocumentStatus.Posted))
+            foreach (var a in c.Applications)
+                Add(a.BillId, a.Amount);
+
+        var findings = new List<CheckFinding>();
+        foreach (var bill in d.Bills.OrderBy(b => b.Date))
+        {
+            var applied = settled.GetValueOrDefault(bill.Id);
+            if (bill.Status != DocumentStatus.Posted)
+            {
+                if (applied != 0m)
+                    findings.Add(new($"{BillLabel(bill)} is voided but still has {applied:N2} applied to it.", "bill", bill.Id));
+                continue;
+            }
+
+            if (bill.AmountPaid != applied)
+                findings.Add(new($"{BillLabel(bill)} shows {bill.AmountPaid:N2} paid; its payments and credits add up to {applied:N2}.", "bill", bill.Id));
+            else if (applied > bill.Total)
+                findings.Add(new($"{BillLabel(bill)} has {applied:N2} applied to a total of {bill.Total:N2}.", "bill", bill.Id));
+        }
+
+        return Result("bills-paid", "Bills show what's been paid",
+            "What each bill shows as paid equals the bill payments and vendor credits applied to it.",
+            findings, $"{d.Bills.Count:N0} bills checked.");
+    }
+
+    private async Task<CheckResult> ReceivablesTieAsync(Data d, CancellationToken ct)
+    {
+        var aging = (await receivables.AgingAsync(Always, ct)).Totals.Total;
+        return TieOut("receivables", "A/R aging matches the books",
+            "Everything customers owe by the documents (A/R aging, all dates) equals the accounts receivable accounts. Journal entries to those accounts are counted separately, since aging can't list them.",
+            d, AccountType.AccountsReceivable, aging, "A/R aging", l => !ReceivableSources.Contains(l.Source));
+    }
+
+    private async Task<CheckResult> PayablesTieAsync(Data d, CancellationToken ct)
+    {
+        // Payables are credit balances; aging counts them as positive.
+        var aging = (await payables.AgingAsync(Always, ct)).Totals.Total;
+        return TieOut("payables", "A/P aging matches the books",
+            "Everything owed to vendors by the documents (A/P aging, all dates) equals the accounts payable accounts. Journal entries to those accounts are counted separately.",
+            d, AccountType.AccountsPayable, -aging, "A/P aging", l => !PayableSources.Contains(l.Source), credit: true);
+    }
+
+    private static CheckResult TieOut(string key, string title, string description, Data d, AccountType type, decimal expected, string what,
+        Func<LedgerLine, bool> other, bool credit = false)
+    {
+        var accountIds = d.Chart.Ordered().Where(x => x.Account.Type == type).Select(x => x.Account.Id).ToHashSet();
+        var lines = d.Accrual.Where(l => accountIds.Contains(l.AccountId)).ToList();
+        var others = lines.Where(other).ToList();
+        return Compare(key, title, description, expected, lines.Sum(l => l.Amount), others, what, "the accounts", credit);
+    }
+
+    /// <summary>
+    /// Compares a figure kept beside the ledger with the ledger. Lines from other sources explain a difference
+    /// (a note); anything else left over is a problem.
+    /// </summary>
+    private static CheckResult Compare(string key, string title, string description, decimal expected, decimal books, IReadOnlyList<LedgerLine> others,
+        string what, string where, bool credit = false)
+    {
+        // Shown as people read them: payables as positive amounts owed.
+        decimal Shown(decimal amount) => credit ? -amount : amount;
+        var otherTotal = others.Sum(l => l.Amount);
+        var unexplained = books - otherTotal - expected;
+        var findings = new List<CheckFinding>();
+        if (unexplained != 0m)
+            findings.Add(new($"{what} is {Shown(expected):N2}; {where} show {Shown(books):N2}" +
+                (otherTotal == 0m ? "." : $", of which {Shown(otherTotal):N2} is from journal entries or other records.") +
+                $" Difference: {Shown(unexplained):N2}."));
+        var noted = others.GroupBy(l => l.JournalEntryId).Where(g => g.Sum(l => l.Amount) != 0m)
+            .OrderBy(g => g.First().EntryNumber)
+            .Select(g => new CheckFinding($"Entry #{g.First().EntryNumber} ({g.First().Date:MMM d, yyyy}) puts {Shown(g.Sum(l => l.Amount)):N2} there directly.", "journal_entry", g.Key))
+            .ToList();
+
+        if (unexplained != 0m)
+            return new CheckResult(key, title, description, CheckOutcome.Problem, $"Off by {Shown(unexplained):N2}.", [.. findings, .. noted.Take(MaxFindings - 1)]);
+        if (noted.Count > 0)
+            return new CheckResult(key, title, description, CheckOutcome.Note,
+                $"Matches, counting {noted.Count:N0} {(noted.Count == 1 ? "entry" : "entries")} made directly to {where} ({Shown(otherTotal):N2}).", noted.Take(MaxFindings).ToList());
+        return new CheckResult(key, title, description, CheckOutcome.Ok, $"Both show {Shown(expected):N2}.", []);
+    }
+
+    private async Task<CheckResult> UndepositedTieAsync(Data d, CancellationToken ct)
+    {
+        // Holding accounts: any account a payment, receipt or retainer was ever recorded to, other than a bank.
+        var waiting = await deposits.UndepositedAsync(ct);
+        var holding = d.Payments.Select(p => p.DepositAccountId)
+            .Concat(d.Receipts.Select(r => r.DepositAccountId))
+            .Concat(d.Retainers.Select(r => r.DepositAccountId))
+            .Concat(waiting.Select(w => w.AccountId))
+            .Where(id => d.Chart.Find(id)?.Type == AccountType.OtherCurrentAsset)
+            .ToHashSet();
+        var lines = d.Accrual.Where(l => holding.Contains(l.AccountId)).ToList();
+        var others = lines.Where(l => !UndepositedSources.Contains(l.Source)).ToList();
+        var names = string.Join(", ", holding.Select(id => d.Chart.Find(id)!.Name).Order(StringComparer.CurrentCultureIgnoreCase));
+        return Compare("undeposited", "Undeposited funds match what's waiting",
+            "The money in holding accounts such as Undeposited Funds equals the payments, receipts, retainers and gifts waiting to be deposited.",
+            waiting.Sum(w => w.Amount), lines.Sum(l => l.Amount), others,
+            $"Waiting to be deposited", holding.Count == 0 ? "the holding accounts" : names);
+    }
+
+    private async Task<CheckResult> InventoryTieAsync(Data d, CancellationToken ct)
+    {
+        var stock = await inventory.StockAsync(null, ct);
+        var assetAccounts = stock.Where(s => s.Item.InventoryAssetAccountId is not null).Select(s => s.Item.InventoryAssetAccountId!.Value).ToHashSet();
+        var lines = d.Accrual.Where(l => assetAccounts.Contains(l.AccountId)).ToList();
+        var others = lines.Where(l => JournalEntry.IsJournalSource(l.Source)).ToList();
+        return Compare("inventory", "Stock value matches the books",
+            "The cost of everything in stock equals the inventory asset accounts.",
+            stock.Sum(s => s.Value), lines.Sum(l => l.Amount), others, "Stock on hand at cost", "the inventory asset accounts");
+    }
+
+    private async Task<CheckResult> ReconciliationsAsync(Data d, CancellationToken ct)
+    {
+        var lines = d.Lines.ToDictionary(l => l.JournalLineId);
+        var entries = d.Entries.ToDictionary(e => e.Id);
+        var findings = new List<CheckFinding>();
+        var checkedCount = 0;
+        foreach (var (account, _) in d.Chart.Ordered().Where(x => x.Account.Type is AccountType.Bank or AccountType.CreditCard))
+        {
+            var reconciled = 0m;
+            var completed = (await banking.ListReconciliationsAsync(account.Id, ct))
+                .Where(r => r.Status == ReconciliationStatus.Completed).OrderBy(r => r.StatementDate).ToList();
+            foreach (var r in completed)
+            {
+                checkedCount++;
+                var label = $"{account.Name} statement of {r.StatementDate:MMM d, yyyy}";
+                var cleared = 0m;
+                foreach (var lineId in r.ClearedLineIds)
+                {
+                    if (!lines.TryGetValue(lineId, out var line))
+                    {
+                        findings.Add(new($"{label}: a cleared line is no longer in the ledger.", "reconciliation", r.Id));
+                        continue;
+                    }
+
+                    if (line.AccountId != account.Id)
+                        findings.Add(new($"{label}: entry #{line.EntryNumber}'s cleared line is on another account.", "reconciliation", r.Id));
+                    else if (!entries[line.JournalEntryId].IsStanding)
+                        findings.Add(new($"{label}: entry #{line.EntryNumber} is cleared but voided.", "reconciliation", r.Id));
+                    cleared += BankingRules.Natural(account, line.Amount);
+                }
+
+                if (r.BeginningBalance != reconciled)
+                    findings.Add(new($"{label} starts from {r.BeginningBalance:N2}, but earlier statements reconciled {reconciled:N2}.", "reconciliation", r.Id));
+                if (r.BeginningBalance + cleared != r.StatementEndingBalance)
+                    findings.Add(new($"{label}: {r.BeginningBalance:N2} plus {cleared:N2} cleared doesn't reach the statement's {r.StatementEndingBalance:N2}.", "reconciliation", r.Id));
+                reconciled += cleared;
+            }
+        }
+
+        return Result("reconciliations", "Reconciliations still add up",
+            "Each finished reconciliation starts where the last one ended, and its cleared transactions still reach the statement's ending balance.",
+            findings, $"{checkedCount:N0} finished reconciliations checked.");
+    }
+
+    private async Task<CheckResult> StockBelowZeroAsync(CancellationToken ct)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var stock = await inventory.StockAsync(null, ct);
+        var findings = stock.Where(s => s.Quantity < 0m && !s.Item.CanSellShort(company.AllowSellingShort))
+            .OrderBy(s => s.Item.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(s => new CheckFinding($"{s.Item.Name} is at {s.Quantity:0.####} on hand, but it isn't allowed below zero.", "item", s.Item.Id))
+            .ToList();
+        return Result("stock-below-zero", "No stock below zero unless allowed",
+            "Items are below zero on hand only when they may be sold short.",
+            findings, $"{stock.Count:N0} items checked.");
+    }
+
+    private static CheckResult Result(string key, string title, string description, List<CheckFinding> findings, string whenOk) =>
+        findings.Count == 0
+            ? new CheckResult(key, title, description, CheckOutcome.Ok, whenOk, [])
+            : new CheckResult(key, title, description, CheckOutcome.Problem,
+                findings.Count == 1 ? "1 thing to look at." : $"{findings.Count:N0} things to look at.", findings.Take(MaxFindings).ToList());
+}
