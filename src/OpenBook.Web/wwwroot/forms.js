@@ -37,6 +37,17 @@
         return id ? document.querySelector(`form[data-preview="${id}"]`) : null;
     }
 
+    // A link that opens in a named frame (the ready-made designs' Preview) brings the frame into view when it's off
+    // screen, as on phones, where the frame sits below the list.
+    document.addEventListener('click', e => {
+        const link = e.target instanceof Element ? e.target.closest('a[target]') : null;
+        if (!link || !link.target || link.target.startsWith('_')) return;
+        const frame = document.querySelector(`iframe[name="${CSS.escape(link.target)}"]`);
+        if (!frame) return;
+        const box = frame.getBoundingClientRect();
+        if (box.top > window.innerHeight || box.bottom < 0) frame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
     document.addEventListener('input', e => { const form = editorFor(e.target); if (form) schedule(form); });
     document.addEventListener('change', e => { const form = editorFor(e.target); if (form) schedule(form); });
 })();

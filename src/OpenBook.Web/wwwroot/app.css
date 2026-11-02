@@ -613,4 +613,5 @@ a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
 .preset-swatch.preset-minimal .bar { height: 0.12rem; background: #9ca3af; }
 .preset-swatch.preset-elegant .bar { height: 0.35rem; background: none; border-top: 1px solid var(--swatch); border-bottom: 1px solid var(--swatch); margin: 0 0.4rem; }
 .preset-swatch.preset-boxed .line { height: 0.45rem; background: none; border: 1px solid #c4c9d0; }
-@media (max-width: 900px) { .preset-gallery { grid-template-columns: 1fr; } }
+.preset-back { display: none; }
+@media (max-width: 900px) { .preset-gallery { grid-template-columns: 1fr; } .preset-back { display: inline; } }
