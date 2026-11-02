@@ -41,10 +41,11 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        return BuildBalanceSheet(asOf, reportBasis, company.FiscalYearStart(asOf), chart, await ledger.LinesAsync(reportBasis, null, asOf, ct));
+        var fiscalStart = company.FiscalYearStart(asOf);
+        return BuildBalanceSheet(asOf, reportBasis, fiscalStart, chart, await ledger.TotalsAsync(reportBasis, fiscalStart, asOf, ct));
     }
 
-    /// <param name="lines">Every line up to <paramref name="asOf"/>.</param>
+    /// <param name="lines">Every line up to <paramref name="asOf"/>; those before <paramref name="fiscalStart"/> may be folded (<see cref="ReportLedger.LinesSinceAsync"/>).</param>
     /// <param name="show">Accounts to list even with no balance, so several columns get the same rows.</param>
     internal static BalanceSheet BuildBalanceSheet(
         DateOnly asOf, ReportBasis basis, DateOnly fiscalStart, ChartOfAccounts chart, IReadOnlyList<LedgerLine> lines, IReadOnlySet<Guid>? show = null)
@@ -91,7 +92,8 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
     {
         var reportBasis = basis ?? (await companies.GetRequiredCompanyAsync(ct)).DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(reportBasis, null, to, filter, ct);
+        // History before the period only gives opening balances, so it comes folded.
+        var lines = await ledger.LinesSinceAsync(reportBasis, from ?? DateOnly.MinValue, to, filter, ct);
         var include = accountId is { } id ? Subtree(chart, id).ToHashSet() : null;
 
         var result = new List<GeneralLedgerAccount>();

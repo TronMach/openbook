@@ -47,6 +47,18 @@ public sealed record EntryHeader(
     public bool IsStanding => Status == JournalEntryStatus.Posted && Kind == JournalEntryKind.Standard;
 }
 
+/// <summary>The newest documents of a kind (newest first), and how many there are in all.</summary>
+public sealed record RecentDocuments<T>(IReadOnlyList<T> Items, int Total);
+
+public static class RecentDocuments
+{
+    /// <summary>How many a list shows before "Show more", and how many more each time.</summary>
+    public const int PageSize = 100;
+
+    /// <summary>A requested count, kept between one page and the most a list will show at once.</summary>
+    public static int Clamp(int? count) => Math.Clamp(count ?? PageSize, PageSize, 5000);
+}
+
 /// <summary>Filter and page for listing journal entries, newest first.</summary>
 public sealed record JournalEntryFilter(
     DateOnly? From = null, DateOnly? To = null, int Skip = 0, int Take = 50, string? Source = null, Guid? SourceId = null);
@@ -72,6 +84,13 @@ public interface ILedgerStore
     Task<(IReadOnlyList<JournalEntry> Entries, int Total)> ListEntriesAsync(JournalEntryFilter filter, CancellationToken ct);
 
     Task<long> NextEntryNumberAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Each account's totals (debit-positive) of the sealed lines whose entry counts on the accrual basis: those dated
+    /// before <paramref name="splitAt"/>, and all those up to <paramref name="toDate"/>. One pass; accounts with
+    /// neither are left out.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, (decimal Before, decimal Through)>> GetAccrualTotalsAsync(DateOnly splitAt, DateOnly toDate, CancellationToken ct);
 
     /// <summary>Every entry's header, sealed or not, untracked.</summary>
     Task<IReadOnlyList<EntryHeader>> ListEntryHeadersAsync(CancellationToken ct);

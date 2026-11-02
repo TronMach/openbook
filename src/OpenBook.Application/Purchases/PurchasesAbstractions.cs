@@ -21,6 +21,31 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct);
 
+    Task<bool> AnyBillsAsync(CancellationToken ct);
+
+    /// <summary>The newest documents of each kind, for lists that show a page at a time.</summary>
+    Task<RecentDocuments<Bill>> ListRecentBillsAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<BillPayment>> ListRecentPaymentsAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<VendorCredit>> ListRecentVendorCreditsAsync(int skip, int take, CancellationToken ct);
+
+    /// <summary>The newest spends from bank and card accounts (expenses), for lists that show a page at a time.</summary>
+    Task<RecentDocuments<BankTransaction>> ListRecentExpensesAsync(int skip, int take, CancellationToken ct);
+
+    /// <summary>These bills (those that exist), untracked, with lines.</summary>
+    Task<IReadOnlyList<Bill>> FindBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Posted bill payments dated in the range (from null = since the beginning), untracked.</summary>
+    Task<IReadOnlyList<BillPayment>> ListPostedPaymentsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>Posted vendor refunds dated in the range (from null = since the beginning), untracked.</summary>
+    Task<IReadOnlyList<VendorRefund>> ListPostedVendorRefundsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>These vendor credits (those that exist), untracked, with lines.</summary>
+    Task<IReadOnlyList<VendorCredit>> FindVendorCreditsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Posted bills with a balance (<see cref="Bill.IsOpen"/>), untracked, newest first.</summary>
+    Task<IReadOnlyList<Bill>> ListOpenBillsAsync(Guid? vendorId, CancellationToken ct);
+
     /// <summary>Tracked, with lines and applications.</summary>
     Task<VendorCredit?> GetVendorCreditAsync(Guid id, CancellationToken ct);
 

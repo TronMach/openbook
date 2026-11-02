@@ -100,6 +100,7 @@ public sealed partial class LocalizationTests : IAsyncLifetime
         Assert.Empty(catalog.GroupBy(k => k, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => string.Join(" / ", g)));
     }
 
-    [GeneratedRegex("""L\["((?:[^"\\]|\\.)*)"\]""")]
+    // The text, then the closing bracket or the formatting arguments (L["Starts in {0}", month]), as tools/extract-strings.py reads it.
+    [GeneratedRegex("""L\["((?:[^"\\]|\\.)*)"\s*[,\]]""")]
     private static partial Regex Key();
 }

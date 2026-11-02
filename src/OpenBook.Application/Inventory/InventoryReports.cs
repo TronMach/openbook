@@ -61,7 +61,7 @@ public sealed class InventoryReports(InventoryService inventory, IInventoryStore
 
         // What the books say, so a difference (a journal entry to an inventory account, say) stands out.
         var assetAccounts = stock.Select(s => s.Item.InventoryAssetAccountId!.Value).ToHashSet();
-        var books = (await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct)).Where(l => assetAccounts.Contains(l.AccountId)).Sum(l => l.Amount);
+        var books = (await ledger.TotalsAsync(ReportBasis.Accrual, asOf, asOf, ct)).Where(l => assetAccounts.Contains(l.AccountId)).Sum(l => l.Amount);
         rows.Add(new ReportTableRow(["Inventory asset accounts in the books", null, null, books, null]));
 
         return new ReportTable(

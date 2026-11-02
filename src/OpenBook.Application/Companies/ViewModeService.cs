@@ -80,39 +80,37 @@ public sealed class HomeWorkflowService(ISalesStore sales, IPurchasesStore purch
 
     public async Task<WorkflowFigures> FiguresAsync(DateOnly today, CancellationToken ct = default)
     {
-        var estimates = await sales.ListEstimatesAsync(null, ct);
-        var invoices = await sales.ListInvoicesAsync(null, ct);
-        var receipts = await sales.ListReceiptsAsync(ct);
-        var payments = await sales.ListPaymentsAsync(null, ct);
-        var made = await sales.ListDepositsAsync(ct);
+        // Counts and open documents only: this runs on every visit to the home page.
+        var counts = await sales.CountDocumentsAsync(ct);
+        var openInvoices = await sales.ListOpenInvoicesAsync(null, ct);
         var waiting = await deposits.UndepositedAsync(ct);
         var orders = await purchases.ListPurchaseOrdersAsync(null, ct);
-        var bills = await purchases.ListBillsAsync(null, ct);
+        var openBills = await purchases.ListOpenBillsAsync(null, ct);
+        var anyBills = openBills.Count > 0 || await purchases.AnyBillsAsync(ct);
         var items = (await sales.ListItemsAsync(ct)).Where(i => i.IsActive).ToList();
 
-        var openInvoices = invoices.Where(i => i.IsOpen).ToList();
         var openOrders = orders.Where(o => o.Status == PurchaseOrderStatus.Open).ToList();
-        var payable = bills.Where(b => b.IsOpen && b.CanBePaid).ToList();
+        var payable = openBills.Where(b => b.CanBePaid).ToList();
 
         return new WorkflowFigures(
-            estimates.Count(e => e.Status == EstimateStatus.Pending),
-            estimates.Count > 0,
+            counts.PendingEstimates,
+            counts.Estimates > 0,
             openInvoices.Count,
             openInvoices.Count(i => i.IsOverdue(today)),
             openInvoices.Sum(i => i.Balance),
-            invoices.Count > 0,
-            receipts.Count > 0,
-            payments.Count > 0,
+            counts.Invoices > 0,
+            counts.Receipts > 0,
+            counts.Payments > 0,
             waiting.Count,
             waiting.Sum(w => w.Amount),
-            made.Count > 0 || waiting.Count > 0,
+            counts.Deposits > 0 || waiting.Count > 0,
             openOrders.Count,
             openOrders.Count(o => o.Lines.Any(l => l.ItemId is not null && o.Received.GetValueOrDefault(l.LineNumber) < l.Quantity)),
             orders.Count > 0,
             payable.Count,
             payable.Count(b => b.DueDate <= today.AddDays(DueSoonDays)),
             payable.Sum(b => b.Balance),
-            bills.Count > 0,
+            anyBills,
             items.Count,
             items.Count(i => i.IsInventory));
     }

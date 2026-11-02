@@ -126,8 +126,19 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
             _ => throw new DomainException("report.compare_invalid", "The balance sheet compares with the previous month or year."),
         };
 
-        var lines = await ledger.LinesAsync(reportBasis, null, asOf, ct);
-        var columnLines = dates.Select(d => lines.Where(l => l.Date <= d).ToList()).ToList();
+        // A balance sheet needs totals only (before each date's fiscal year, and in it): on the accrual basis the
+        // database adds them up per column; on cash, one read serves every column.
+        var columnLines = new List<IReadOnlyList<LedgerLine>>();
+        if (reportBasis == ReportBasis.Accrual)
+        {
+            foreach (var d in dates)
+                columnLines.Add(await ledger.TotalsAsync(reportBasis, company.FiscalYearStart(d), d, ct));
+        }
+        else
+        {
+            var lines = await ledger.LinesSinceAsync(reportBasis, dates.Min(d => company.FiscalYearStart(d)), asOf, ct: ct);
+            columnLines.AddRange(dates.Select(d => lines.Where(l => l.Date <= d).ToList()));
+        }
         var show = Active(columnLines.Select(FinancialReports.Sum).ToList());
         var columns = dates.Select((d, i) => new StatementColumn<BalanceSheet>(
             $"{d:MMM d, yyyy}", FinancialReports.BuildBalanceSheet(d, reportBasis, company.FiscalYearStart(d), chart, columnLines[i], show), null, d)).ToList();
@@ -153,7 +164,7 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
             throw new DomainException("report.range_invalid", "The start date is after the end date.");
         var reportBasis = basis ?? (await companies.GetRequiredCompanyAsync(ct)).DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(reportBasis, null, to, ct);
+        var lines = await ledger.LinesSinceAsync(reportBasis, from, to, ct: ct);
         var period = FinancialReports.Sum(lines.Where(l => l.Date >= from));
 
         var operating = new List<CashFlowLine>();

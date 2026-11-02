@@ -53,7 +53,7 @@ public sealed class BillPaymentService(
 
     /// <summary>Every open bill, oldest due first.</summary>
     public async Task<IReadOnlyList<Bill>> OpenBillsAsync(Guid? vendorId = null, CancellationToken ct = default) =>
-        (await store.ListBillsAsync(vendorId, ct)).Where(b => b.IsOpen).OrderBy(b => b.DueDate).ThenBy(b => b.Date).ToList();
+        (await store.ListOpenBillsAsync(vendorId, ct)).OrderBy(b => b.DueDate).ThenBy(b => b.Date).ToList();
 
     /// <returns>The payments written, one per vendor, in vendor name order.</returns>
     public async Task<IReadOnlyList<BillPayment>> PayAsync(PayBillsCommand command, CancellationToken ct = default)

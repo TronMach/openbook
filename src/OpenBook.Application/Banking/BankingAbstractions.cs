@@ -29,6 +29,12 @@ public interface IBankingStore
     /// <summary>Every sealed ledger line on the account, oldest first (date, entry number, line).</summary>
     Task<IReadOnlyList<AccountLine>> GetAccountLinesAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>
+    /// The account's total of sealed lines and of those cleared in finished reconciliations, both debit-positive,
+    /// added up by the database.
+    /// </summary>
+    Task<(decimal Balance, decimal Reconciled)> GetAccountTotalsAsync(Guid accountId, CancellationToken ct);
+
     /// <summary>For each entry touching the account, the other accounts it posts to.</summary>
     Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCounterpartAccountsAsync(Guid accountId, CancellationToken ct);
 

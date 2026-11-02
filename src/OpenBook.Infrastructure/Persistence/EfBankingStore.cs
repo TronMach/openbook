@@ -18,6 +18,21 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
             .AsNoTracking()
             .ToListAsync(ct);
 
+    public async Task<(decimal Balance, decimal Reconciled)> GetAccountTotalsAsync(Guid accountId, CancellationToken ct)
+    {
+        var lines =
+            from l in db.Set<JournalLine>()
+            join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            where l.AccountId == accountId
+            select l;
+        var reconciled =
+            from l in lines
+            where db.Set<ReconciliationLine>().Any(r => r.JournalLineId == l.Id
+                && db.Reconciliations.Any(c => c.Id == EF.Property<Guid>(r, "ReconciliationId") && c.Status == ReconciliationStatus.Completed))
+            select l;
+        return (await lines.SumAsync(l => (decimal?)l.Amount, ct) ?? 0m, await reconciled.SumAsync(l => (decimal?)l.Amount, ct) ?? 0m);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCounterpartAccountsAsync(Guid accountId, CancellationToken ct)
     {
         var entryIds = db.Set<JournalLine>().Where(l => l.AccountId == accountId).Select(l => EF.Property<Guid>(l, "JournalEntryId"));

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using OpenBook.Application;
 using OpenBook.Application.Purchases;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Infrastructure.Persistence;
@@ -20,6 +22,44 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public async Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct) =>
         (await db.Bills.AsNoTracking().Where(b => vendorId == null || b.VendorId == vendorId).ToListAsync(ct))
+            .OrderByDescending(b => b.Date)
+            .ThenByDescending(b => b.CreatedAt)
+            .ToList();
+
+    public Task<bool> AnyBillsAsync(CancellationToken ct) => db.Bills.AnyAsync(ct);
+
+    public Task<RecentDocuments<Bill>> ListRecentBillsAsync(int skip, int take, CancellationToken ct) =>
+        db.Bills.RecentAsync(b => b.Date, b => b.Id, b => b.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<BillPayment>> ListRecentPaymentsAsync(int skip, int take, CancellationToken ct) =>
+        db.BillPayments.RecentAsync(p => p.Date, p => p.Id, p => p.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<VendorCredit>> ListRecentVendorCreditsAsync(int skip, int take, CancellationToken ct) =>
+        db.VendorCredits.RecentAsync(c => c.Date, c => c.Id, c => c.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<BankTransaction>> ListRecentExpensesAsync(int skip, int take, CancellationToken ct) =>
+        db.BankTransactions.Where(t => t.Kind == BankTransactionKind.Spend).RecentAsync(t => t.Date, t => t.Id, t => t.CreatedAt, skip, take, ct);
+
+    public async Task<IReadOnlyList<Bill>> FindBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        ids.Count == 0 ? [] : await db.Bills.AsNoTracking().Where(b => ids.Contains(b.Id)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<BillPayment>> ListPostedPaymentsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
+        await db.BillPayments.AsNoTracking()
+            .Where(p => p.Status == DocumentStatus.Posted && p.Date <= toDate && (fromDate == null || p.Date >= fromDate))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<VendorRefund>> ListPostedVendorRefundsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
+        await db.VendorRefunds.AsNoTracking()
+            .Where(r => r.Status == DocumentStatus.Posted && r.Date <= toDate && (fromDate == null || r.Date >= fromDate))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<VendorCredit>> FindVendorCreditsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        ids.Count == 0 ? [] : await db.VendorCredits.AsNoTracking().Where(c => ids.Contains(c.Id)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Bill>> ListOpenBillsAsync(Guid? vendorId, CancellationToken ct) =>
+        (await db.Bills.AsNoTracking()
+            .Where(b => b.Status == DocumentStatus.Posted && b.Total > b.AmountPaid && (vendorId == null || b.VendorId == vendorId))
+            .ToListAsync(ct))
             .OrderByDescending(b => b.Date)
             .ThenByDescending(b => b.CreatedAt)
             .ToList();

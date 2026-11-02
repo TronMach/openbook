@@ -135,4 +135,53 @@ public sealed class CliTests : IAsyncLifetime
         foreach (var path in shell.Split(',').Select(p => p.Trim().Trim('\'')))
             Assert.True((await client.GetAsync(path)).StatusCode == HttpStatusCode.OK, path);
     }
+
+    [Fact]
+    public async Task Check_reports_books_that_agree()
+    {
+        var check = await Run("check");
+
+        Assert.Equal(0, check.Code);
+        Assert.Contains("The books agree.", check.Out, StringComparison.Ordinal);
+        Assert.Contains("OK      Every entry balances", check.Out, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Invoice_lists_page_through_the_newest_when_asked()
+    {
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var income = await sp.GetRequiredService<OpenBook.Application.Accounts.AccountService>().CreateAsync(
+                new OpenBook.Application.Accounts.CreateAccountCommand("Sales", OpenBook.Domain.Accounts.AccountType.Income));
+            var item = await sp.GetRequiredService<OpenBook.Application.Sales.ItemService>().CreateAsync(
+                new OpenBook.Domain.Sales.ItemDetails("Work", OpenBook.Domain.Sales.ItemType.Service, income.Id, 10m));
+            var customer = await sp.GetRequiredService<OpenBook.Application.Sales.CustomerService>().CreateAsync(new OpenBook.Domain.Sales.CustomerDetails("Acme"));
+            for (var day = 1; day <= 3; day++)
+                await sp.GetRequiredService<OpenBook.Application.Sales.InvoiceService>().CreateAsync(new OpenBook.Application.Sales.CreateInvoiceCommand(
+                    customer.Id, new DateOnly(2026, 1, day), [new OpenBook.Domain.Sales.SalesLineDraft(item.Id, null, day, 10m)]));
+        }
+
+        using var client = _app.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _key);
+        async Task<(System.Text.Json.JsonElement Body, string? Total)> Get(string path)
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var total = response.Headers.TryGetValues("X-Total-Count", out var values) ? values.Single() : null;
+            return (System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone(), total);
+        }
+
+        var all = await Get("/api/sales/invoices");
+        Assert.Equal(3, all.Body.GetArrayLength());
+        Assert.Null(all.Total);
+
+        var first = await Get("/api/sales/invoices?take=2");
+        Assert.Equal("3", first.Total);
+        Assert.Equal(["2026-01-03", "2026-01-02"], first.Body.EnumerateArray().Select(i => i.GetProperty("date").GetString()));
+
+        var rest = await Get("/api/sales/invoices?skip=2&take=2");
+        Assert.Equal("3", rest.Total);
+        Assert.Equal("2026-01-01", Assert.Single(rest.Body.EnumerateArray()).GetProperty("date").GetString());
+    }
 }

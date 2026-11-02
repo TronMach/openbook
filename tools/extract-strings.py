@@ -11,7 +11,8 @@ from xml.sax.saxutils import escape
 
 ROOT = os.path.join('src', 'OpenBook.Web')
 CATALOG = os.path.join(ROOT, 'Resources', 'Localization', 'SharedResource.resx')
-PATTERN = re.compile(r'L\["((?:[^"\\]|\\.)*)"\]')
+# The text, then the closing bracket or the formatting arguments (L["Starts in {0}", month]).
+PATTERN = re.compile(r'L\["((?:[^"\\]|\\.)*)"\s*[,\]]')
 
 keys = set()
 for path in glob.glob(os.path.join(ROOT, '**', '*.razor'), recursive=True):

@@ -48,12 +48,15 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             foreach (var a in c.Applications.Where(a => a.AppliedOn <= asOf))
                 settled[a.BillId] = settled.GetValueOrDefault(a.BillId) + a.Amount;
 
+        var billsOf = bills.ToLookup(b => b.VendorId);
+        var creditsOf = credits.ToLookup(c => c.VendorId);
+        var refundsOf = refunds.ToLookup(r => r.VendorCreditId);
         var result = new List<VendorAging>();
         foreach (var vendor in vendors.OrderBy(v => v.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
             var buckets = AgingBuckets.Zero;
             var open = new List<OpenBill>();
-            foreach (var bill in bills.Where(b => b.VendorId == vendor.Id && b.Status == DocumentStatus.Posted && b.Date <= asOf).OrderBy(b => b.DueDate))
+            foreach (var bill in billsOf[vendor.Id].Where(b => b.Status == DocumentStatus.Posted && b.Date <= asOf).OrderBy(b => b.DueDate))
             {
                 var balance = bill.Total - settled.GetValueOrDefault(bill.Id);
                 if (balance == 0m)
@@ -64,10 +67,10 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             }
 
             var unused = new List<(VendorCredit, decimal)>();
-            foreach (var credit in credits.Where(c => c.VendorId == vendor.Id && c.Status == DocumentStatus.Posted && c.Date <= asOf).OrderBy(c => c.Date))
+            foreach (var credit in creditsOf[vendor.Id].Where(c => c.Status == DocumentStatus.Posted && c.Date <= asOf).OrderBy(c => c.Date))
             {
                 var left = credit.Total - credit.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
-                    - refunds.Where(r => r.VendorCreditId == credit.Id && r.Status == DocumentStatus.Posted && r.Date <= asOf).Sum(r => r.Amount);
+                    - refundsOf[credit.Id].Where(r => r.Status == DocumentStatus.Posted && r.Date <= asOf).Sum(r => r.Amount);
                 if (left != 0m)
                     unused.Add((credit, left));
             }

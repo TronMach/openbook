@@ -53,18 +53,31 @@ public sealed class KpiService(ReportLedger ledger, AccountService accounts, Rec
         var company = await companies.GetRequiredCompanyAsync(ct);
         var basis = company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(basis, null, asOf, ct);
-        AccountType? TypeOf(Guid id) => chart.Find(id)?.Type;
+        var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
+        var fiscal = DateRanges.For(DatePreset.ThisFiscalYearToDate, asOf, company.FiscalYearStartMonth);
+        var yearStart = fiscal.From ?? monthStart;
 
-        decimal Balance(Func<AccountType, bool> types, DateOnly through) =>
-            lines.Where(l => l.Date <= through && TypeOf(l.AccountId) is { } t && types(t)).Sum(l => l.Amount);
+        // Detail only as far back as the figures look (twelve months, and this year to date a year ago); balances
+        // before that come folded, so the dashboard doesn't read the whole history.
+        var detailFrom = new[] { monthStart.AddMonths(-11), yearStart.AddYears(-1), asOf.AddYears(-1) }.Min();
+        var lines = await ledger.LinesSinceAsync(basis, detailFrom, asOf, ct: ct);
+        var types = chart.All.ToDictionary(a => a.Id, a => a.Type);
+        AccountType? TypeOf(Guid id) => types.TryGetValue(id, out var type) ? type : null;
+
+        // Each figure below is a sum over dates and account types, so add the lines up by day and type once.
+        var daily = lines.Where(l => TypeOf(l.AccountId) is not null)
+            .GroupBy(l => (l.Date, Type: TypeOf(l.AccountId)!.Value))
+            .Select(g => (g.Key.Date, g.Key.Type, Amount: g.Sum(l => l.Amount)))
+            .ToList();
+
+        decimal Balance(Func<AccountType, bool> match, DateOnly through) =>
+            daily.Where(d => d.Date <= through && match(d.Type)).Sum(d => d.Amount);
         static bool IsIncome(AccountType t) => t.ClassOf() == AccountClass.Income;
         static bool IsExpense(AccountType t) => t.ClassOf() == AccountClass.Expense;
         (decimal Income, decimal Expenses) Activity(DateOnly from, DateOnly to)
         {
-            var range = lines.Where(l => l.Date >= from && l.Date <= to).ToList();
-            return (-range.Where(l => TypeOf(l.AccountId) is { } t && IsIncome(t)).Sum(l => l.Amount),
-                range.Where(l => TypeOf(l.AccountId) is { } t && IsExpense(t)).Sum(l => l.Amount));
+            var range = daily.Where(d => d.Date >= from && d.Date <= to).ToList();
+            return (-range.Where(d => IsIncome(d.Type)).Sum(d => d.Amount), range.Where(d => IsExpense(d.Type)).Sum(d => d.Amount));
         }
 
         var cash = Balance(t => t == AccountType.Bank, asOf);
@@ -73,17 +86,14 @@ public sealed class KpiService(ReportLedger ledger, AccountService accounts, Rec
         var otherCurrent = Balance(t => t == AccountType.OtherCurrentAsset, asOf);
         var currentLiabilities = -Balance(t => t is AccountType.AccountsPayable or AccountType.CreditCard or AccountType.OtherCurrentLiability, asOf);
 
-        var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
-        var fiscal = DateRanges.For(DatePreset.ThisFiscalYearToDate, asOf, company.FiscalYearStartMonth);
-        var yearStart = fiscal.From ?? monthStart;
         var month = Activity(monthStart, asOf);
         var year = Activity(yearStart, asOf);
         var prior = Activity(yearStart.AddYears(-1), asOf.AddYears(-1));
 
         var yearLines = lines.Where(l => l.Date >= yearStart && l.Date <= asOf).ToList();
-        var revenue = -yearLines.Where(l => TypeOf(l.AccountId) == AccountType.Income).Sum(l => l.Amount);
-        var cogs = yearLines.Where(l => TypeOf(l.AccountId) == AccountType.CostOfGoodsSold).Sum(l => l.Amount);
-        var lastYearRevenue = -lines.Where(l => l.Date > asOf.AddYears(-1) && TypeOf(l.AccountId) == AccountType.Income).Sum(l => l.Amount);
+        var revenue = -daily.Where(d => d.Date >= yearStart && d.Type == AccountType.Income).Sum(d => d.Amount);
+        var cogs = daily.Where(d => d.Date >= yearStart && d.Type == AccountType.CostOfGoodsSold).Sum(d => d.Amount);
+        var lastYearRevenue = -daily.Where(d => d.Date > asOf.AddYears(-1) && d.Type == AccountType.Income).Sum(d => d.Amount);
 
         var months = new List<MonthFigures>();
         for (var i = 11; i >= 0; i--)

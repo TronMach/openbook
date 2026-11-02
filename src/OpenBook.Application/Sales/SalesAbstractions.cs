@@ -7,6 +7,10 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
 
+public sealed record UndepositedDocuments(IReadOnlyList<CustomerPayment> Payments, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<Retainer> Retainers);
+
+public sealed record SalesDocumentCounts(int Estimates, int PendingEstimates, int Invoices, int Receipts, int Payments, int Deposits);
+
 public interface ISalesStore
 {
     Task<IReadOnlyList<Customer>> ListCustomersAsync(CancellationToken ct);
@@ -23,6 +27,29 @@ public interface ISalesStore
 
     /// <summary>Untracked, with lines, newest first.</summary>
     Task<IReadOnlyList<Invoice>> ListInvoicesAsync(Guid? customerId, CancellationToken ct);
+
+    /// <summary>The newest documents of each kind, for lists that show a page at a time.</summary>
+    Task<RecentDocuments<Invoice>> ListRecentInvoicesAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<CustomerPayment>> ListRecentPaymentsAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<SalesReceipt>> ListRecentReceiptsAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<Estimate>> ListRecentEstimatesAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<CreditMemo>> ListRecentCreditMemosAsync(int skip, int take, CancellationToken ct);
+    Task<RecentDocuments<CustomerRefund>> ListRecentRefundsAsync(int skip, int take, CancellationToken ct);
+
+    /// <summary>These invoices (those that exist), untracked, with lines.</summary>
+    Task<IReadOnlyList<Invoice>> FindInvoicesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Posted payments dated in the range (from null = since the beginning), untracked.</summary>
+    Task<IReadOnlyList<CustomerPayment>> ListPostedPaymentsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>Posted customer refunds dated in the range (from null = since the beginning), untracked.</summary>
+    Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>These credit memos (those that exist), untracked, with lines.</summary>
+    Task<IReadOnlyList<CreditMemo>> FindCreditMemosAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>Posted invoices with a balance (<see cref="Invoice.IsOpen"/>), untracked, with lines, newest first.</summary>
+    Task<IReadOnlyList<Invoice>> ListOpenInvoicesAsync(Guid? customerId, CancellationToken ct);
 
     Task<IReadOnlyList<string>> ListInvoiceNumbersAsync(CancellationToken ct);
 
@@ -43,6 +70,15 @@ public interface ISalesStore
     Task<IReadOnlyList<SalesReceipt>> GetReceiptsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 
     Task<IReadOnlyList<SalesReceipt>> ListReceiptsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Posted payments, receipts and retainers not in a bank deposit, untracked, whatever account they went to
+    /// (the caller picks the holding accounts).
+    /// </summary>
+    Task<UndepositedDocuments> ListUndepositedAsync(CancellationToken ct);
+
+    /// <summary>How many of each kind of sales document there are, for pages that only need to know whether any exist.</summary>
+    Task<SalesDocumentCounts> CountDocumentsAsync(CancellationToken ct);
     Task<IReadOnlyList<string>> ListReceiptNumbersAsync(CancellationToken ct);
 
     /// <summary>Tracked, with lines.</summary>

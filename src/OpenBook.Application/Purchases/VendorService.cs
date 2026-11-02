@@ -16,7 +16,7 @@ public sealed class VendorService(IPurchasesStore store, AccountService accounts
     public async Task<IReadOnlyList<VendorSummary>> ListAsync(DateOnly today, bool includeInactive = false, CancellationToken ct = default)
     {
         var vendors = await store.ListVendorsAsync(ct);
-        var open = (await store.ListBillsAsync(null, ct)).Where(b => b.IsOpen).ToLookup(b => b.VendorId);
+        var open = (await store.ListOpenBillsAsync(null, ct)).ToLookup(b => b.VendorId);
         return vendors
             .Where(v => includeInactive || v.IsActive)
             .OrderBy(v => v.DisplayName, StringComparer.CurrentCultureIgnoreCase)

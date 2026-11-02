@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using OpenBook.Application;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Auditing;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Infrastructure.Persistence;
@@ -24,6 +26,48 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     // SQLite can't ORDER BY DateTimeOffset, so the newest-first ordering happens in memory.
     public async Task<IReadOnlyList<Invoice>> ListInvoicesAsync(Guid? customerId, CancellationToken ct) =>
         (await db.Invoices.AsNoTracking().Where(i => customerId == null || i.CustomerId == customerId).ToListAsync(ct))
+            .OrderByDescending(i => i.Date)
+            .ThenByDescending(i => i.CreatedAt)
+            .ToList();
+
+    public Task<RecentDocuments<Invoice>> ListRecentInvoicesAsync(int skip, int take, CancellationToken ct) =>
+        db.Invoices.RecentAsync(i => i.Date, i => i.Id, i => i.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<CustomerPayment>> ListRecentPaymentsAsync(int skip, int take, CancellationToken ct) =>
+        db.CustomerPayments.RecentAsync(p => p.Date, p => p.Id, p => p.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<SalesReceipt>> ListRecentReceiptsAsync(int skip, int take, CancellationToken ct) =>
+        db.SalesReceipts.RecentAsync(r => r.Date, r => r.Id, r => r.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<Estimate>> ListRecentEstimatesAsync(int skip, int take, CancellationToken ct) =>
+        db.Estimates.RecentAsync(e => e.Date, e => e.Id, e => e.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<CreditMemo>> ListRecentCreditMemosAsync(int skip, int take, CancellationToken ct) =>
+        db.CreditMemos.RecentAsync(c => c.Date, c => c.Id, c => c.CreatedAt, skip, take, ct);
+
+    public Task<RecentDocuments<CustomerRefund>> ListRecentRefundsAsync(int skip, int take, CancellationToken ct) =>
+        db.CustomerRefunds.RecentAsync(r => r.Date, r => r.Id, r => r.CreatedAt, skip, take, ct);
+
+    public async Task<IReadOnlyList<Invoice>> FindInvoicesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        ids.Count == 0 ? [] : await db.Invoices.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<CustomerPayment>> ListPostedPaymentsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
+        await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Status == DocumentStatus.Posted && p.Date <= toDate && (fromDate == null || p.Date >= fromDate))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
+        await db.CustomerRefunds.AsNoTracking()
+            .Where(r => r.Status == DocumentStatus.Posted && r.Date <= toDate && (fromDate == null || r.Date >= fromDate))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<CreditMemo>> FindCreditMemosAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        ids.Count == 0 ? [] : await db.CreditMemos.AsNoTracking().Where(c => ids.Contains(c.Id)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Invoice>> ListOpenInvoicesAsync(Guid? customerId, CancellationToken ct) =>
+        (await db.Invoices.AsNoTracking()
+            .Where(i => i.Status == DocumentStatus.Posted && i.Total > i.AmountPaid && (customerId == null || i.CustomerId == customerId))
+            .ToListAsync(ct))
             .OrderByDescending(i => i.Date)
             .ThenByDescending(i => i.CreatedAt)
             .ToList();
@@ -52,6 +96,19 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
 
     public async Task<IReadOnlyList<SalesReceipt>> GetReceiptsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         ids.Count == 0 ? [] : await db.SalesReceipts.Where(r => ids.Contains(r.Id)).ToListAsync(ct);
+
+    public async Task<UndepositedDocuments> ListUndepositedAsync(CancellationToken ct) => new(
+        await db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.DepositId == null).ToListAsync(ct),
+        await db.SalesReceipts.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null).ToListAsync(ct),
+        await db.Retainers.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null).ToListAsync(ct));
+
+    public async Task<SalesDocumentCounts> CountDocumentsAsync(CancellationToken ct) => new(
+        await db.Estimates.CountAsync(ct),
+        await db.Estimates.CountAsync(e => e.Status == EstimateStatus.Pending, ct),
+        await db.Invoices.CountAsync(ct),
+        await db.SalesReceipts.CountAsync(ct),
+        await db.CustomerPayments.CountAsync(ct),
+        await db.BankDeposits.CountAsync(ct));
 
     public async Task<IReadOnlyList<SalesReceipt>> ListReceiptsAsync(CancellationToken ct) =>
         (await db.SalesReceipts.AsNoTracking().ToListAsync(ct))

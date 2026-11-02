@@ -202,8 +202,11 @@ internal static class PurchasesApi
         purchases.MapGet("/ach/files/{id:guid}", async (Guid id, AchService s, CancellationToken ct) =>
             await s.GetBatchAsync(id, ct) is { } batch ? Results.Text(batch.Content, "text/plain") : Results.NotFound());
 
-        purchases.MapGet("/bills", async (Guid? vendorId, BillService s, CancellationToken ct) =>
-            (await s.ListAsync(vendorId, ct)).Select(BillResponse.From));
+        // ?skip=&take= pages through the newest (total in X-Total-Count); without them, everything.
+        purchases.MapGet("/bills", async (Guid? vendorId, int? skip, int? take, BillService s, IPurchasesStore store, HttpResponse response, CancellationToken ct) =>
+            !ApiPaging.Requested(skip, take) ? (await s.ListAsync(vendorId, ct)).Select(BillResponse.From)
+            : vendorId is not null ? ApiPaging.Page(response, await s.ListAsync(vendorId, ct), skip, take, BillResponse.From)
+            : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentBillsAsync(from, count, ct), BillResponse.From));
         purchases.MapGet("/bills/{id:guid}", async (Guid id, BillService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } b ? Results.Ok(BillResponse.From(b)) : Results.NotFound());
         purchases.MapPost("/bills", async (CreateBillCommand r, BillService s, CancellationToken ct) =>
@@ -225,8 +228,10 @@ internal static class PurchasesApi
         purchases.MapPost("/bills/{id:guid}/void", async (Guid id, VoidRequest r, BillService s, CancellationToken ct) =>
             BillResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
-        purchases.MapGet("/payments", async (Guid? vendorId, BillPaymentService s, CancellationToken ct) =>
-            (await s.ListAsync(vendorId, ct)).Select(BillPaymentResponse.From));
+        purchases.MapGet("/payments", async (Guid? vendorId, int? skip, int? take, BillPaymentService s, IPurchasesStore store, HttpResponse response, CancellationToken ct) =>
+            !ApiPaging.Requested(skip, take) ? (await s.ListAsync(vendorId, ct)).Select(BillPaymentResponse.From)
+            : vendorId is not null ? ApiPaging.Page(response, await s.ListAsync(vendorId, ct), skip, take, BillPaymentResponse.From)
+            : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentPaymentsAsync(from, count, ct), BillPaymentResponse.From));
         purchases.MapGet("/payments/{id:guid}", async (Guid id, BillPaymentService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } p ? Results.Ok(BillPaymentResponse.From(p)) : Results.NotFound());
         purchases.MapPost("/pay-bills", async (PayBillsCommand r, BillPaymentService s, CancellationToken ct) =>

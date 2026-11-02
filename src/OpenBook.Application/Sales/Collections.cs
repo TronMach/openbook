@@ -40,8 +40,8 @@ public sealed class WriteOffService(ISalesStore store, AccountService accounts, 
     public async Task<IReadOnlyList<WriteOffCandidate>> CandidatesAsync(DateOnly asOf, int minDaysPastDue, CancellationToken ct = default)
     {
         var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
-        return (await store.ListInvoicesAsync(null, ct))
-            .Where(i => i.IsOpen && i.Date <= asOf && asOf.DayNumber - i.DueDate.DayNumber >= minDaysPastDue)
+        return (await store.ListOpenInvoicesAsync(null, ct))
+            .Where(i => i.Date <= asOf && asOf.DayNumber - i.DueDate.DayNumber >= minDaysPastDue)
             .OrderBy(i => i.DueDate).ThenBy(i => i.Number, StringComparer.Ordinal)
             .Select(i => new WriteOffCandidate(i, customers[i.CustomerId], Math.Max(0, asOf.DayNumber - i.DueDate.DayNumber)))
             .ToList();
@@ -323,7 +323,7 @@ public sealed class ReminderService(ISalesStore store, ICompanyStore companies, 
         var sent = (await store.ListRemindersAsync(ct)).GroupBy(r => r.InvoiceId).ToDictionary(g => g.Key, g => g.Max(r => r.Step));
         var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var due = new List<ReminderDue>();
-        foreach (var invoice in (await store.ListInvoicesAsync(null, ct)).Where(i => i.IsOpen).OrderBy(i => i.DueDate).ThenBy(i => i.Number, StringComparer.Ordinal))
+        foreach (var invoice in (await store.ListOpenInvoicesAsync(null, ct)).OrderBy(i => i.DueDate).ThenBy(i => i.Number, StringComparer.Ordinal))
         {
             // A sub-customer billed with its parent is chased through the parent.
             var customer = customers[CustomerTree.BillTo(invoice.CustomerId, customers)];

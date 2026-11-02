@@ -81,12 +81,12 @@
         var figures = await Get<HomeWorkflowService>().FiguresAsync(today);
         var banking = await Get<BankingService>().ListAccountsAsync();
         var feed = Get<BankFeedService>();
-        var bills = await Get<IPurchasesStore>().ListBillsAsync(null, default);
+        var bills = await Get<IPurchasesStore>().ListOpenBillsAsync(null, default);
 
         Add(figures.OverdueInvoices, L["Overdue invoices"], "/sales/collections", L["Remind the customers, or record payments that came in"], urgent: true);
         Add(figures.PaymentsToDeposit, L["Payments to deposit"], "/banking/deposits/new", L["{0} waiting to go into the bank", Labels.Amount(figures.ToDeposit)]);
-        Add(figures.BillsDueSoon, L["Bills due within a week"], "/purchases/pay-bills", L["Including any overdue"], urgent: bills.Any(b => b.IsOpen && b.CanBePaid && b.IsOverdue(today)));
-        Add(bills.Count(b => b.IsOpen && b.Approval == OpenBook.Domain.Purchases.BillApproval.Pending), L["Bills waiting for approval"], "/purchases/approvals");
+        Add(figures.BillsDueSoon, L["Bills due within a week"], "/purchases/pay-bills", L["Including any overdue"], urgent: bills.Any(b => b.CanBePaid && b.IsOverdue(today)));
+        Add(bills.Count(b => b.Approval == OpenBook.Domain.Purchases.BillApproval.Pending), L["Bills waiting for approval"], "/purchases/approvals");
         foreach (var account in banking)
         {
             Add(await feed.PendingCountAsync(account.Account.Id), L["Bank lines to review in {0}", account.FullName], $"/banking/{account.Account.Id}/feed");

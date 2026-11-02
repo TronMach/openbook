@@ -65,10 +65,11 @@ public sealed class ReceivablesService(ISalesStore store)
     public async Task<AgingReport> AgingAsync(DateOnly asOf, CancellationToken ct = default)
     {
         var data = await LoadAsync(ct);
+        var settled = Settled(data, asOf);
         var result = new List<CustomerAging>();
         foreach (var (customer, _) in CustomerTree.Ordered(data.Customers))
         {
-            var aging = AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf);
+            var aging = AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf, settled);
             if (aging.Invoices.Count > 0 || aging.Credits.Count > 0)
                 result.Add(aging);
         }
@@ -80,7 +81,7 @@ public sealed class ReceivablesService(ISalesStore store)
     {
         var data = await LoadAsync(ct);
         var customer = data.Customers.SingleOrDefault(c => c.Id == customerId) ?? throw new EntityNotFoundException("customer", customerId);
-        return AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf);
+        return AgingFor(customer, new HashSet<Guid> { customer.Id }, data, asOf, Settled(data, asOf));
     }
 
     /// <summary>
@@ -134,13 +135,13 @@ public sealed class ReceivablesService(ISalesStore store)
             lines.Add(new StatementLine(a.Date, a.Kind, a.Id, a.Reference, a.Description, a.Amount, balance));
         }
 
-        return new CustomerStatement(customer, from, to, opening, lines, balance, AgingFor(customer, billed, data, to).Buckets);
+        return new CustomerStatement(customer, from, to, opening, lines, balance, AgingFor(customer, billed, data, to, Settled(data, to)).Buckets);
     }
 
     /// <param name="customerIds">Whose invoices and credits count: the customer, plus sub-customers billed to it on a statement.</param>
-    private static CustomerAging AgingFor(Customer customer, IReadOnlySet<Guid> customerIds, Ledger data, DateOnly asOf)
+    /// <summary>Settlements by invoice up to the as-of date, from anyone (a parent can pay a sub-customer's invoice).</summary>
+    private static Dictionary<Guid, decimal> Settled(Ledger data, DateOnly asOf)
     {
-        // Settlements by invoice up to the as-of date, from anyone (a parent can pay a sub-customer's invoice).
         var settled = new Dictionary<Guid, decimal>();
         foreach (var p in data.Payments.Where(p => p.Status == DocumentStatus.Posted))
             foreach (var a in p.Applications.Where(a => a.AppliedOn <= asOf))
@@ -153,10 +154,15 @@ public sealed class ReceivablesService(ISalesStore store)
         foreach (var r in data.Retainers.Where(r => r.Status == DocumentStatus.Posted))
             foreach (var a in r.Applications.Where(a => !a.IsVoided && a.AppliedOn <= asOf))
                 settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Amount;
+        return settled;
+    }
 
+    /// <param name="settled">From <see cref="Settled"/> for the same date, worked out once for every customer.</param>
+    private static CustomerAging AgingFor(Customer customer, IReadOnlySet<Guid> customerIds, Ledger data, DateOnly asOf, Dictionary<Guid, decimal> settled)
+    {
         var buckets = AgingBuckets.Zero;
         var invoices = new List<OpenInvoice>();
-        foreach (var invoice in data.Invoices.Where(i => customerIds.Contains(i.CustomerId) && i.Status == DocumentStatus.Posted && i.Date <= asOf)
+        foreach (var invoice in customerIds.SelectMany(id => data.InvoicesOf[id]).Where(i => i.Status == DocumentStatus.Posted && i.Date <= asOf)
                      .OrderBy(i => i.DueDate).ThenBy(i => i.Number, StringComparer.Ordinal))
         {
             var balance = invoice.Total - settled.GetValueOrDefault(invoice.Id);
@@ -167,9 +173,9 @@ public sealed class ReceivablesService(ISalesStore store)
             buckets = buckets.Add(daysPastDue, balance);
         }
 
-        var refunds = data.Refunds.Where(r => customerIds.Contains(r.CustomerId) && r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
+        var refunds = customerIds.SelectMany(id => data.RefundsOf[id]).Where(r => r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
         var credits = new List<OpenCredit>();
-        foreach (var c in data.CreditMemos.Where(c => customerIds.Contains(c.CustomerId) && c.Status == DocumentStatus.Posted && c.Date <= asOf))
+        foreach (var c in customerIds.SelectMany(id => data.CreditMemosOf[id]).Where(c => c.Status == DocumentStatus.Posted && c.Date <= asOf))
         {
             var left = c.Total - c.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
                 - refunds.Where(r => r.CreditMemoId == c.Id).Sum(r => r.Amount);
@@ -177,7 +183,7 @@ public sealed class ReceivablesService(ISalesStore store)
                 credits.Add(new OpenCredit(CreditKind.CreditMemo, c.Id, $"Credit memo {c.Number}", c.Date, left));
         }
 
-        foreach (var p in data.Payments.Where(p => customerIds.Contains(p.CustomerId) && p.Status == DocumentStatus.Posted && p.Date <= asOf))
+        foreach (var p in customerIds.SelectMany(id => data.PaymentsOf[id]).Where(p => p.Status == DocumentStatus.Posted && p.Date <= asOf))
         {
             var left = p.Amount - p.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
                 - refunds.Where(r => r.CustomerPaymentId == p.Id).Sum(r => r.Amount);
@@ -206,5 +212,11 @@ public sealed class ReceivablesService(ISalesStore store)
         IReadOnlyList<CreditMemo> CreditMemos,
         IReadOnlyList<CustomerRefund> Refunds,
         IReadOnlyList<BadDebtWriteOff> WriteOffs,
-        IReadOnlyList<Retainer> Retainers);
+        IReadOnlyList<Retainer> Retainers)
+    {
+        public ILookup<Guid, Invoice> InvoicesOf { get; } = Invoices.ToLookup(i => i.CustomerId);
+        public ILookup<Guid, CustomerPayment> PaymentsOf { get; } = Payments.ToLookup(p => p.CustomerId);
+        public ILookup<Guid, CreditMemo> CreditMemosOf { get; } = CreditMemos.ToLookup(c => c.CustomerId);
+        public ILookup<Guid, CustomerRefund> RefundsOf { get; } = Refunds.ToLookup(r => r.CustomerId);
+    }
 }

@@ -69,6 +69,17 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
         await db.BankTransactions.AnyAsync(t => t.AccountId == accountId || t.TransferAccountId == accountId, ct)
         || await db.Reconciliations.AnyAsync(r => r.AccountId == accountId, ct);
 
+    public async Task<IReadOnlyDictionary<Guid, (decimal Before, decimal Through)>> GetAccrualTotalsAsync(DateOnly splitAt, DateOnly toDate, CancellationToken ct) =>
+        (await (
+            from l in db.Set<JournalLine>()
+            join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            where e.Date <= toDate && e.Basis != EntryBasis.CashOnly
+            group new { l.AccountId, l.Amount, e.Date } by l.AccountId into g
+            select new { AccountId = g.Key, Before = g.Sum(x => x.Date < splitAt ? x.Amount : 0m), Through = g.Sum(x => x.Amount) })
+            .ToListAsync(ct))
+            .Where(t => t.Before != 0m || t.Through != 0m)
+            .ToDictionary(t => t.AccountId, t => (t.Before, t.Through));
+
     public async Task<IReadOnlyList<EntryHeader>> ListEntryHeadersAsync(CancellationToken ct) =>
         await db.JournalEntries.IgnoreQueryFilters().AsNoTracking()
             .Select(e => new EntryHeader(e.Id, e.Number, e.Date, e.Source, e.SourceId, e.Status, e.Kind,

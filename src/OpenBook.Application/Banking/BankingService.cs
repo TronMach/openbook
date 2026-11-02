@@ -91,16 +91,16 @@ public sealed class BankingService(
         var result = new List<BankAccountSummary>();
         foreach (var (account, _) in chart.Ordered(includeInactive: false).Where(x => BankTransaction.IsBankingAccount(x.Account.Type)))
         {
-            var lines = await bank.GetAccountLinesAsync(account.Id, ct);
+            // Totals from the database: this runs on every banking page and the home page.
+            var (balance, reconciled) = await bank.GetAccountTotalsAsync(account.Id, ct);
             var reconciliations = await bank.ListReconciliationsAsync(account.Id, ct);
             var completed = reconciliations.Where(r => r.Status == ReconciliationStatus.Completed).ToList();
-            var reconciled = completed.SelectMany(r => r.ClearedLineIds).ToHashSet();
 
             result.Add(new BankAccountSummary(
                 account,
                 chart.FullName(account.Id),
-                lines.Sum(l => BankingRules.Natural(account, l.Amount)),
-                lines.Where(l => reconciled.Contains(l.JournalLineId)).Sum(l => BankingRules.Natural(account, l.Amount)),
+                BankingRules.Natural(account, balance),
+                BankingRules.Natural(account, reconciled),
                 completed.Count == 0 ? null : completed.Max(r => r.StatementDate),
                 reconciliations.FirstOrDefault(r => r.Status == ReconciliationStatus.InProgress)?.Id));
         }

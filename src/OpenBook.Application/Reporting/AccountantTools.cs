@@ -95,7 +95,7 @@ public sealed class ForecastService(
         weeks = Math.Clamp(weeks, 1, MaxWeeks);
         var scenario = scenarioId is { } id ? await store.GetScenarioAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id) : null;
         var chart = await accounts.GetChartAsync(ct);
-        var opening = (await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct))
+        var opening = (await ledger.TotalsAsync(ReportBasis.Accrual, asOf, asOf, ct))
             .Where(l => chart.Find(l.AccountId)?.Type == AccountType.Bank).Sum(l => l.Amount);
         var end = asOf.AddDays(7 * weeks);
         int WeekOf(DateOnly date) => date <= asOf ? 0 : Math.Min(weeks - 1, (date.DayNumber - asOf.DayNumber - 1) / 7);
@@ -230,7 +230,8 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
         var chart = await accounts.GetChartAsync(ct);
         var fiscal = DateRanges.For(DatePreset.ThisFiscalYearToDate, asOf, company.FiscalYearStartMonth);
         var adjusting = (await ListAsync(fiscal.From, asOf, ct)).Select(e => e.Id).ToHashSet();
-        return (await ledger.LinesAsync(basis, null, asOf, ct))
+        // Adjusting entries are this fiscal year's, so history before it comes folded.
+        return (await ledger.LinesSinceAsync(basis, fiscal.From ?? asOf, asOf, ct: ct))
             .GroupBy(l => l.AccountId)
             .Select(g =>
             {

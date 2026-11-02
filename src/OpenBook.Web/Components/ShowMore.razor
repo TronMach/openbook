@@ -1,0 +1,20 @@
+@* Under a list that shows the newest documents a page at a time: how many are shown, and a link that shows more. *@
+@if (Total > Shown)
+{
+    <p class="muted show-more">
+        @L["Showing the newest {0} of {1}.", Shown.ToString("N0"), Total.ToString("N0")]
+        <a href="@($"{Href}{(Href.Contains('?') ? "&" : "?")}count={Shown + RecentDocuments.PageSize}")">@L["Show {0} more", Math.Min(RecentDocuments.PageSize, Total - Shown)]</a>
+    </p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public int Shown { get; set; }
+
+    [Parameter, EditorRequired]
+    public int Total { get; set; }
+
+    /// <summary>The list's address without <c>count</c>, such as "/sales?show=payments".</summary>
+    [Parameter, EditorRequired]
+    public string Href { get; set; } = "";
+}

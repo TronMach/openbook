@@ -119,7 +119,7 @@ To correct a sales receipt, use **Change** at the top of its page: the customer 
 
 ## Where it shows up
 
-- The **Sales** page lists recent invoices, payments, receipts and refunds; filter by kind with the links above the list.
+- The **Sales** page lists recent invoices, payments, receipts and refunds; filter by kind with the links above the list. **Unpaid invoices** shows every unpaid one; the other lists show the newest 100, with **Show 100 more** below. For one customer's history, use the **Customer Center**.
 - **Reports → A/R aging** shows who owes what and how overdue it is.
 - The customer's page and **statement** show their account at any date.
 - The **profit and loss** report shows the income.

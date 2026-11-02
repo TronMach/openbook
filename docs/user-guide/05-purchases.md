@@ -97,7 +97,7 @@ To correct a vendor credit, use **Change** at the top of its page: the credit nu
 
 ## Where it shows up
 
-- The **Purchases** page lists recent bills, payments, expenses and vendor credits.
+- The **Purchases** page lists recent bills, payments, expenses and vendor credits. **Unpaid bills** shows every unpaid one; the other lists show the newest 100, with **Show 100 more** below.
 - **Reports → A/P aging** shows what you owe and how overdue it is; **Unpaid bills** lists each one.
 - **Reports → 1099 summary** totals what each tracked vendor was paid in a year (bill payments and expenses, not card payments, which the card company reports).
 - The **profit and loss** shows the costs under each category.

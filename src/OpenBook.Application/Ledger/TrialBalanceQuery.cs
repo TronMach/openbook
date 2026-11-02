@@ -24,7 +24,7 @@ public sealed class TrialBalanceQuery(ReportLedger ledger, AccountService accoun
         var reportBasis = basis ?? company.DefaultReportBasis;
         var currency = company.HomeCurrency;
 
-        var balances = (await ledger.LinesAsync(reportBasis, null, asOf, ct))
+        var balances = (await ledger.TotalsAsync(reportBasis, asOf, asOf, ct))
             .GroupBy(l => l.AccountId)
             .ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
         var chart = await accounts.GetChartAsync(ct);

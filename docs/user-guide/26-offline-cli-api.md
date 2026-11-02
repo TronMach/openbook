@@ -37,6 +37,8 @@ A key acts as you, with your role, and never does more than your role allows. A 
 
 Programs send the key as `Authorization: Bearer obk_…`. The **REST API** link on the Settings page opens the OpenAPI description of every endpoint, for developers.
 
+Lists of invoices, payments, sales receipts, bills and bill payments return everything by default. Add `?take=100` (and `&skip=100` for the next page) to get the newest a page at a time, at most 500 per page; the `X-Total-Count` header says how many there are in all.
+
 ## Webhooks
 
 Administrators can have OpenBook tell another system whenever something changes, for example to update a CRM when an invoice is paid. **Settings → Webhooks → Add webhook**: the **address** to call and the **events**, comma-separated (`*` for everything, or patterns like `invoice.*`, `*.voided`, `payment.created`). Each call is signed with a secret so the receiver can check it came from OpenBook. Failed calls are retried for several hours; the delivery log shows each attempt, with **Send again** and **Send a test event**.

@@ -1,11 +1,6 @@
 @page "/sales"
-@inject InvoiceService Invoices
+@inject ISalesStore Store
 @inject OpenBook.Application.Companies.ICompanyStore Companies
-@inject PaymentService Payments
-@inject SalesReceiptService Receipts
-@inject CustomerService CustomerService
-@inject EstimateService Estimates
-@inject CreditService Credits
 
 <PageTitle>Sales · OpenBook</PageTitle>
 
@@ -43,9 +38,9 @@
     </div>
 
     <div class="summary-bar">
-        <div><span class="label">Unpaid invoices</span><span class="value">@Labels.Amount(_invoices.Sum(i => i.Balance))</span></div>
+        <div><span class="label">Unpaid invoices</span><span class="value">@Labels.Amount(_open.Sum(i => i.Balance))</span></div>
         <div><span class="label">Overdue</span><span class="value @(Overdue > 0m ? "off" : null)">@Labels.Amount(Overdue)</span></div>
-        <div><span class="label">Paid in the last 30 days</span><span class="value">@Labels.Amount(_payments.Where(p => p.Status == DocumentStatus.Posted && p.Date > _today.AddDays(-30)).Sum(p => p.Amount))</span></div>
+        <div><span class="label">Paid in the last 30 days</span><span class="value">@Labels.Amount(_paidLately)</span></div>
     </div>
 
     <nav class="toolbar" aria-label="Show">
@@ -80,6 +75,7 @@
                         }
                     </tbody>
                 </table>
+                <ShowMore Shown="_estimates.Count" Total="_total" Href="/sales?show=estimates" />
             }
             break;
         case "credits":
@@ -103,6 +99,7 @@
                     }
                 </tbody>
             </table>
+            <ShowMore Shown="_creditMemos.Count" Total="_total" Href="/sales?show=credits" />
             @if (_refunds.Count > 0)
             {
                 <h2>Refunds</h2>
@@ -121,6 +118,7 @@
                         }
                     </tbody>
                 </table>
+                <ShowMore Shown="_refunds.Count" Total="_refundTotal" Href="/sales?show=credits" />
             }
             break;
         case "payments":
@@ -141,6 +139,7 @@
                     }
                 </tbody>
             </table>
+            <ShowMore Shown="_payments.Count" Total="_total" Href="/sales?show=payments" />
             break;
         case "receipts":
             <table class="data">
@@ -158,9 +157,10 @@
                     }
                 </tbody>
             </table>
+            <ShowMore Shown="_receipts.Count" Total="_total" Href="/sales?show=receipts" />
             break;
         default:
-            var shown = Show == "all-invoices" ? _invoices : _invoices.Where(i => i.IsOpen).ToList();
+            var shown = Show == "all-invoices" ? _invoices : _open;
             @if (shown.Count == 0)
             {
                 <div class="card"><p>@(Show == "all-invoices" ? "No invoices yet." : "Nothing unpaid.") <ActionLink Href="/sales/invoices/new">Create an invoice</ActionLink>.</p></div>
@@ -185,6 +185,10 @@
                         }
                     </tbody>
                 </table>
+                @if (Show == "all-invoices")
+                {
+                    <ShowMore Shown="_invoices.Count" Total="_total" Href="/sales?show=all-invoices" />
+                }
             }
             break;
     }
@@ -197,6 +201,10 @@
         [("open", "Unpaid invoices"), ("all-invoices", "All invoices"), ("estimates", "Estimates"), ("payments", "Payments"), ("credits", "Credits and refunds"), ("receipts", "Sales receipts")];
 
     private readonly DateOnly _today = CompanyTime.Today;
+    private IReadOnlyList<Invoice> _open = [];
+    private decimal _paidLately;
+    private int _total;
+    private int _refundTotal;
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<SalesReceipt> _receipts = [];
@@ -208,20 +216,47 @@
     [SupplyParameterFromQuery]
     private string? Show { get; set; }
 
-    private decimal Overdue => _invoices.Where(i => i.IsOverdue(_today)).Sum(i => i.Balance);
+    /// <summary>How many of the newest documents a tab shows ("Show more" adds a page).</summary>
+    [SupplyParameterFromQuery]
+    private int? Count { get; set; }
+
+    private decimal Overdue => _open.Where(i => i.IsOverdue(_today)).Sum(i => i.Balance);
 
     protected override async Task OnInitializedAsync()
     {
         _terms = await Editions.TermsAsync(Companies);
         Show ??= "open";
-        _invoices = await Invoices.ListAsync();
-        _payments = await Payments.ListAsync();
-        _receipts = await Receipts.ListAsync();
-        _estimates = await Estimates.ListAsync();
-        _creditMemos = await Credits.ListCreditMemosAsync();
-        _refunds = await Credits.ListRefundsAsync();
-        _customers = (await CustomerService.ListAsync(_today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.Customer.DisplayName);
+        var ct = HttpContext?.RequestAborted ?? default;
+        var take = RecentDocuments.Clamp(Count);
+
+        // Only what the summary and the chosen tab show: whole histories would make this page slower every year.
+        _open = await Store.ListOpenInvoicesAsync(null, ct);
+        _paidLately = (await Store.ListPostedPaymentsAsync(_today.AddDays(-29), DateOnly.MaxValue, ct)).Sum(p => p.Amount);
+        switch (Show)
+        {
+            case "all-invoices":
+                (_invoices, _total) = await Store.ListRecentInvoicesAsync(0, take, ct);
+                break;
+            case "estimates":
+                (_estimates, _total) = await Store.ListRecentEstimatesAsync(0, take, ct);
+                break;
+            case "payments":
+                (_payments, _total) = await Store.ListRecentPaymentsAsync(0, take, ct);
+                break;
+            case "credits":
+                (_creditMemos, _total) = await Store.ListRecentCreditMemosAsync(0, take, ct);
+                (_refunds, _refundTotal) = await Store.ListRecentRefundsAsync(0, take, ct);
+                break;
+            case "receipts":
+                (_receipts, _total) = await Store.ListRecentReceiptsAsync(0, take, ct);
+                break;
+        }
+
+        _customers = (await Store.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
     }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
 
     private string Customer(Guid id) => _customers.GetValueOrDefault(id, "(unknown)");
 }

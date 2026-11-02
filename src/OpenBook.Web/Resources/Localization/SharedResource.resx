@@ -20,6 +20,12 @@
   <data name=" · single sign-on on" xml:space="preserve">
     <value> · single sign-on on</value>
   </data>
+  <data name=" · {0} designs" xml:space="preserve">
+    <value> · {0} designs</value>
+  </data>
+  <data name=" · {0} invitations waiting" xml:space="preserve">
+    <value> · {0} invitations waiting</value>
+  </data>
   <data name="(done)" xml:space="preserve">
     <value>(done)</value>
   </data>
@@ -245,6 +251,9 @@
   <data name="Assembly build" xml:space="preserve">
     <value>Assembly build</value>
   </data>
+  <data name="At least {0} characters." xml:space="preserve">
+    <value>At least {0} characters.</value>
+  </data>
   <data name="Audit log" xml:space="preserve">
     <value>Audit log</value>
   </data>
@@ -299,6 +308,9 @@
   <data name="Bank connections" xml:space="preserve">
     <value>Bank connections</value>
   </data>
+  <data name="Bank lines to review in {0}" xml:space="preserve">
+    <value>Bank lines to review in {0}</value>
+  </data>
   <data name="Bank rules" xml:space="preserve">
     <value>Bank rules</value>
   </data>
@@ -343,6 +355,9 @@
   </data>
   <data name="Bills due within a week" xml:space="preserve">
     <value>Bills due within a week</value>
+  </data>
+  <data name="Bills of {0} or more need approval" xml:space="preserve">
+    <value>Bills of {0} or more need approval</value>
   </data>
   <data name="Bills to pay" xml:space="preserve">
     <value>Bills to pay</value>
@@ -404,11 +419,17 @@
   <data name="Change a rate" xml:space="preserve">
     <value>Change a rate</value>
   </data>
+  <data name="Change invoice {0}" xml:space="preserve">
+    <value>Change invoice {0}</value>
+  </data>
   <data name="Change password" xml:space="preserve">
     <value>Change password</value>
   </data>
   <data name="Change your password and see where you're signed in." xml:space="preserve">
     <value>Change your password and see where you're signed in.</value>
+  </data>
+  <data name="Changed {0} by {1}: {2}" xml:space="preserve">
+    <value>Changed {0} by {1}: {2}</value>
   </data>
   <data name="Changes" xml:space="preserve">
     <value>Changes</value>
@@ -478,6 +499,9 @@
   </data>
   <data name="Closed" xml:space="preserve">
     <value>Closed</value>
+  </data>
+  <data name="Closed through {0}{1}" xml:space="preserve">
+    <value>Closed through {0}{1}</value>
   </data>
   <data name="Closing date" xml:space="preserve">
     <value>Closing date</value>
@@ -743,11 +767,17 @@
   <data name="Every change, who made it and when." xml:space="preserve">
     <value>Every change, who made it and when.</value>
   </data>
+  <data name="Every day at {0:00}:00" xml:space="preserve">
+    <value>Every day at {0:00}:00</value>
+  </data>
   <data name="Every other session is signed out. This browser stays signed in." xml:space="preserve">
     <value>Every other session is signed out. This browser stays signed in.</value>
   </data>
   <data name="Every report" xml:space="preserve">
     <value>Every report</value>
+  </data>
+  <data name="Every {0} at {1:00}:00" xml:space="preserve">
+    <value>Every {0} at {1:00}:00</value>
   </data>
   <data name="Everyone" xml:space="preserve">
     <value>Everyone</value>
@@ -974,6 +1004,9 @@
   <data name="Join the books" xml:space="preserve">
     <value>Join the books</value>
   </data>
+  <data name="Join {0}" xml:space="preserve">
+    <value>Join {0}</value>
+  </data>
   <data name="Journal" xml:space="preserve">
     <value>Journal</value>
   </data>
@@ -1015,6 +1048,9 @@
   </data>
   <data name="Last active" xml:space="preserve">
     <value>Last active</value>
+  </data>
+  <data name="Last reconciled through {0}" xml:space="preserve">
+    <value>Last reconciled through {0}</value>
   </data>
   <data name="Last sent" xml:space="preserve">
     <value>Last sent</value>
@@ -1289,6 +1325,9 @@
   <data name="Not set up" xml:space="preserve">
     <value>Not set up</value>
   </data>
+  <data name="Not set up yet, but required: {0}." xml:space="preserve">
+    <value>Not set up yet, but required: {0}.</value>
+  </data>
   <data name="Not set up: no sales tax is charged" xml:space="preserve">
     <value>Not set up: no sales tax is charged</value>
   </data>
@@ -1297,6 +1336,9 @@
   </data>
   <data name="Nothing here yet." xml:space="preserve">
     <value>Nothing here yet.</value>
+  </data>
+  <data name="Nothing in the guide mentions {0}. Try fewer or different words." xml:space="preserve">
+    <value>Nothing in the guide mentions {0}. Try fewer or different words.</value>
   </data>
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
@@ -1679,6 +1721,9 @@
   <data name="Reconcile a bank account" xml:space="preserve">
     <value>Reconcile a bank account</value>
   </data>
+  <data name="Reconcile {0}" xml:space="preserve">
+    <value>Reconcile {0}</value>
+  </data>
   <data name="Record a Gift" xml:space="preserve">
     <value>Record a Gift</value>
   </data>
@@ -1690,6 +1735,9 @@
   </data>
   <data name="Record what vendors bill you" xml:space="preserve">
     <value>Record what vendors bill you</value>
+  </data>
+  <data name="Recovery codes left: {0}." xml:space="preserve">
+    <value>Recovery codes left: {0}.</value>
   </data>
   <data name="Recurring bills" xml:space="preserve">
     <value>Recurring bills</value>
@@ -1895,6 +1943,9 @@
   <data name="See them" xml:space="preserve">
     <value>See them</value>
   </data>
+  <data name="Sending through {0}, from {1}" xml:space="preserve">
+    <value>Sending through {0}, from {1}</value>
+  </data>
   <data name="Service" xml:space="preserve">
     <value>Service</value>
   </data>
@@ -1934,11 +1985,20 @@
   <data name="Show the menu as drop-downs" xml:space="preserve">
     <value>Show the menu as drop-downs</value>
   </data>
+  <data name="Show {0} more" xml:space="preserve">
+    <value>Show {0} more</value>
+  </data>
+  <data name="Showing the newest {0} of {1}." xml:space="preserve">
+    <value>Showing the newest {0} of {1}.</value>
+  </data>
   <data name="Shows a number beside each account (like 1000 Checking) and sorts the chart by it. Leave it off if you go by names." xml:space="preserve">
     <value>Shows a number beside each account (like 1000 Checking) and sorts the chart by it. Leave it off if you go by names.</value>
   </data>
   <data name="Sign in" xml:space="preserve">
     <value>Sign in</value>
+  </data>
+  <data name="Sign in with your {0} account to accept, using the email this invitation was sent to." xml:space="preserve">
+    <value>Sign in with your {0} account to accept, using the email this invitation was sent to.</value>
   </data>
   <data name="Sign out" xml:space="preserve">
     <value>Sign out</value>
@@ -1955,11 +2015,17 @@
   <data name="Signed in" xml:space="preserve">
     <value>Signed in</value>
   </data>
+  <data name="Signed in as {0} ({1})" xml:space="preserve">
+    <value>Signed in as {0} ({1})</value>
+  </data>
   <data name="Simple view" xml:space="preserve">
     <value>Simple view</value>
   </data>
   <data name="Since" xml:space="preserve">
     <value>Since</value>
+  </data>
+  <data name="since {0}." xml:space="preserve">
+    <value>since {0}.</value>
   </data>
   <data name="Single sign-on" xml:space="preserve">
     <value>Single sign-on</value>
@@ -1999,6 +2065,9 @@
   </data>
   <data name="Starts" xml:space="preserve">
     <value>Starts</value>
+  </data>
+  <data name="Starts in {0}; current year began {1}" xml:space="preserve">
+    <value>Starts in {0}; current year began {1}</value>
   </data>
   <data name="State" xml:space="preserve">
     <value>State</value>
@@ -2096,6 +2165,9 @@
   <data name="The places you keep stock, and the bins inside them." xml:space="preserve">
     <value>The places you keep stock, and the bins inside them.</value>
   </data>
+  <data name="The server's ({0})" xml:space="preserve">
+    <value>The server's ({0})</value>
+  </data>
   <data name="The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept." xml:space="preserve">
     <value>The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept.</value>
   </data>
@@ -2191,6 +2263,9 @@
   </data>
   <data name="Two-factor optional" xml:space="preserve">
     <value>Two-factor optional</value>
+  </data>
+  <data name="Two-factor required for {0} and up" xml:space="preserve">
+    <value>Two-factor required for {0} and up</value>
   </data>
   <data name="Two-factor sign-in" xml:space="preserve">
     <value>Two-factor sign-in</value>
@@ -2399,6 +2474,15 @@
   <data name="You saved" xml:space="preserve">
     <value>You saved</value>
   </data>
+  <data name="You signed in with a recovery code, which can't be used again. Recovery codes left: {0}." xml:space="preserve">
+    <value>You signed in with a recovery code, which can't be used again. Recovery codes left: {0}.</value>
+  </data>
+  <data name="Your access ends on {0}." xml:space="preserve">
+    <value>Your access ends on {0}.</value>
+  </data>
+  <data name="Your account is linked: you can sign in with &quot;{0}&quot;." xml:space="preserve">
+    <value>Your account is linked: you can sign in with "{0}".</value>
+  </data>
   <data name="Your account number" xml:space="preserve">
     <value>Your account number</value>
   </data>
@@ -2438,11 +2522,53 @@
   <data name="{0} add-ins" xml:space="preserve">
     <value>{0} add-ins</value>
   </data>
+  <data name="{0} agencies · {1} tax codes" xml:space="preserve">
+    <value>{0} agencies · {1} tax codes</value>
+  </data>
   <data name="{0} connections" xml:space="preserve">
     <value>{0} connections</value>
   </data>
+  <data name="{0} due within a week" xml:space="preserve">
+    <value>{0} due within a week</value>
+  </data>
   <data name="{0} fields" xml:space="preserve">
     <value>{0} fields</value>
+  </data>
+  <data name="{0} invited {1} to these books as {2}. Choose a username and password to sign in with." xml:space="preserve">
+    <value>{0} invited {1} to these books as {2}. Choose a username and password to sign in with.</value>
+  </data>
+  <data name="{0} invoices to collect" xml:space="preserve">
+    <value>{0} invoices to collect</value>
+  </data>
+  <data name="{0} is already paid, credited or written off, so the total can't go below that." xml:space="preserve">
+    <value>{0} is already paid, credited or written off, so the total can't go below that.</value>
+  </data>
+  <data name="{0} items" xml:space="preserve">
+    <value>{0} items</value>
+  </data>
+  <data name="{0} items · {1} kept in stock" xml:space="preserve">
+    <value>{0} items · {1} kept in stock</value>
+  </data>
+  <data name="{0} of {1} done" xml:space="preserve">
+    <value>{0} of {1} done</value>
+  </data>
+  <data name="{0} open" xml:space="preserve">
+    <value>{0} open</value>
+  </data>
+  <data name="{0} open · {1} owed to you" xml:space="preserve">
+    <value>{0} open · {1} owed to you</value>
+  </data>
+  <data name="{0} orders to receive" xml:space="preserve">
+    <value>{0} orders to receive</value>
+  </data>
+  <data name="{0} overdue · {1} owed to you" xml:space="preserve">
+    <value>{0} overdue · {1} owed to you</value>
+  </data>
+  <data name="{0} people can sign in" xml:space="preserve">
+    <value>{0} people can sign in</value>
+  </data>
+  <data name="{0} price levels · {1} rules" xml:space="preserve">
+    <value>{0} price levels · {1} rules</value>
   </data>
   <data name="{0} rules" xml:space="preserve">
     <value>{0} rules</value>
@@ -2450,10 +2576,34 @@
   <data name="{0} sets" xml:space="preserve">
     <value>{0} sets</value>
   </data>
+  <data name="{0} to deposit · {1}" xml:space="preserve">
+    <value>{0} to deposit · {1}</value>
+  </data>
+  <data name="{0} unpaid · {1} you owe" xml:space="preserve">
+    <value>{0} unpaid · {1} you owe</value>
+  </data>
+  <data name="{0} waiting to go into the bank" xml:space="preserve">
+    <value>{0} waiting to go into the bank</value>
+  </data>
   <data name="{0} warehouses" xml:space="preserve">
     <value>{0} warehouses</value>
   </data>
   <data name="{0} webhooks" xml:space="preserve">
     <value>{0} webhooks</value>
+  </data>
+  <data name="{0} · last {1}" xml:space="preserve">
+    <value>{0} · last {1}</value>
+  </data>
+  <data name="{0} · used unless a customer or document has another" xml:space="preserve">
+    <value>{0} · used unless a customer or document has another</value>
+  </data>
+  <data name="{0} · year starts in {1} · {2} menu" xml:space="preserve">
+    <value>{0} · year starts in {1} · {2} menu</value>
+  </data>
+  <data name="{0}s are off" xml:space="preserve">
+    <value>{0}s are off</value>
+  </data>
+  <data name="{0}s are on" xml:space="preserve">
+    <value>{0}s are on</value>
   </data>
 </root>

@@ -20,7 +20,7 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
     {
         var customers = await store.ListCustomersAsync(ct);
         var names = CustomerTree.FullNames(customers);
-        var open = (await store.ListInvoicesAsync(null, ct)).Where(i => i.IsOpen).ToLookup(i => i.CustomerId);
+        var open = (await store.ListOpenInvoicesAsync(null, ct)).ToLookup(i => i.CustomerId);
         return CustomerTree.Ordered(customers.Where(c => includeInactive || c.IsActive))
             .Select(x => new CustomerSummary(
                 x.Customer,

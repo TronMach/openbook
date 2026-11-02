@@ -53,6 +53,68 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         }.Where(s => s is not null));
     }
 
+    /// <summary>Source of the lines <see cref="LinesSinceAsync"/> folds history into.</summary>
+    public const string BroughtForwardSource = "ledger.brought_forward";
+
+    /// <summary>
+    /// The lines up to <paramref name="to"/>, with everything dated before <paramref name="detailFrom"/> folded into one
+    /// line per account (and class and location), dated the day before. Sums by account, and anything dated from
+    /// <paramref name="detailFrom"/> on, are exactly what <see cref="LinesAsync(ReportBasis, DateOnly?, DateOnly, SegmentFilter?, CancellationToken)"/>
+    /// gives; for balance sheets, trial balances and opening balances, which would otherwise read the whole history.
+    /// On the accrual basis without a filter the history is added up by the database.
+    /// </summary>
+    public async Task<IReadOnlyList<LedgerLine>> LinesSinceAsync(ReportBasis basis, DateOnly detailFrom, DateOnly to, SegmentFilter? filter = null, CancellationToken ct = default)
+    {
+        if (detailFrom == DateOnly.MinValue)
+            return await LinesAsync(basis, null, to, filter, ct);
+
+        var broughtForward = detailFrom.AddDays(-1);
+        if (basis == ReportBasis.Accrual && (filter is null || filter.IsEmpty))
+        {
+            var totals = await ledger.GetAccrualTotalsAsync(detailFrom, broughtForward, ct);
+            var detail = detailFrom > to ? [] : await LinesAsync(basis, detailFrom, to, ct);
+            return [.. totals.Where(t => t.Value.Before != 0m).Select(t => BroughtForward(broughtForward, t.Key, t.Value.Before, null, null)), .. detail];
+        }
+
+        var lines = await LinesAsync(basis, null, to, filter, ct);
+        var folded = lines.Where(l => l.Date < detailFrom)
+            .GroupBy(l => (l.AccountId, l.ClassId, l.LocationId))
+            .Select(g => BroughtForward(broughtForward, g.Key.AccountId, g.Sum(l => l.Amount), g.Key.ClassId, g.Key.LocationId))
+            .Where(l => l.Amount != 0m);
+        return [.. folded, .. lines.Where(l => l.Date >= detailFrom)];
+    }
+
+    /// <summary>
+    /// Totals only: each account's lines before <paramref name="splitAt"/> folded into one line dated the day before,
+    /// and those from it to <paramref name="to"/> into one dated <paramref name="to"/>. For the balance sheet (prior
+    /// years against this year) and the trial balance, which need no detail. On the accrual basis the database adds them up.
+    /// </summary>
+    public async Task<IReadOnlyList<LedgerLine>> TotalsAsync(ReportBasis basis, DateOnly splitAt, DateOnly to, CancellationToken ct = default)
+    {
+        if (basis == ReportBasis.Accrual && splitAt > DateOnly.MinValue && splitAt <= to)
+        {
+            var totals = await ledger.GetAccrualTotalsAsync(splitAt, to, ct);
+            return
+            [
+                .. totals.Where(t => t.Value.Before != 0m).Select(t => BroughtForward(splitAt.AddDays(-1), t.Key, t.Value.Before, null, null)),
+                // An account brought to zero in the period still needs its period line, or the history would stand alone.
+                .. totals.Where(t => t.Value.Through != t.Value.Before)
+                    .Select(t => BroughtForward(to, t.Key, t.Value.Through - t.Value.Before, null, null)),
+            ];
+        }
+
+        var lines = await LinesSinceAsync(basis, splitAt, to, ct: ct);
+        var history = lines.Where(l => l.Source == BroughtForwardSource);
+        var period = lines.Where(l => l.Source != BroughtForwardSource)
+            .GroupBy(l => (l.AccountId, l.ClassId, l.LocationId))
+            .Select(g => BroughtForward(to, g.Key.AccountId, g.Sum(l => l.Amount), g.Key.ClassId, g.Key.LocationId))
+            .Where(l => l.Amount != 0m);
+        return [.. history, .. period];
+    }
+
+    private static LedgerLine BroughtForward(DateOnly date, Guid accountId, decimal amount, Guid? classId, Guid? locationId) =>
+        new(Guid.Empty, Guid.Empty, 0, date, accountId, amount, null, "Brought forward", BroughtForwardSource, null, EntryBasis.Both, classId, locationId);
+
     /// <param name="from">Null for "since the beginning".</param>
     public async Task<IReadOnlyList<LedgerLine>> LinesAsync(ReportBasis basis, DateOnly? from, DateOnly to, SegmentFilter? filter, CancellationToken ct = default)
     {
@@ -93,10 +155,13 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         var byEntry = lines.ToLookup(l => l.JournalEntryId);
         bool InRange(DateOnly d) => d <= to && (from is null || d >= from);
 
-        var customerPayments = (await sales.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InRange(p.Date)).ToList();
+        // Only the payments dated in the range, and the documents they pay.
+        var customerPayments = await sales.ListPostedPaymentsAsync(from, to, ct);
         if (customerPayments.Count > 0)
         {
-            var invoices = (await sales.ListInvoicesAsync(null, ct)).ToDictionary(i => i.Id);
+            var invoices = (from is null
+                ? await sales.ListInvoicesAsync(null, ct)
+                : await sales.FindInvoicesAsync(customerPayments.SelectMany(p => p.Applications.Select(a => a.InvoiceId)).ToHashSet(), ct)).ToDictionary(i => i.Id);
             foreach (var payment in customerPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
@@ -126,7 +191,9 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             .SelectMany(r => r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)).Select(a => (Retainer: r, Application: a))).ToList();
         if (applications.Count > 0)
         {
-            var invoices = (await sales.ListInvoicesAsync(null, ct)).ToDictionary(i => i.Id);
+            var invoices = (from is null
+                ? await sales.ListInvoicesAsync(null, ct)
+                : await sales.FindInvoicesAsync(applications.Select(a => a.Application.InvoiceId).ToHashSet(), ct)).ToDictionary(i => i.Id);
             foreach (var (retainer, application) in applications)
             {
                 var number = entryNumbers.GetValueOrDefault(application.JournalEntryId);
@@ -140,10 +207,12 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             }
         }
 
-        var refunds = (await sales.ListRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date)).ToList();
+        var refunds = await sales.ListPostedRefundsAsync(from, to, ct);
         if (refunds.Count > 0)
         {
-            var credits = (await sales.ListCreditMemosAsync(null, ct)).ToDictionary(c => c.Id);
+            var credits = (from is null
+                ? await sales.ListCreditMemosAsync(null, ct)
+                : await sales.FindCreditMemosAsync(refunds.Where(r => r.CreditMemoId is not null).Select(r => r.CreditMemoId!.Value).ToHashSet(), ct)).ToDictionary(c => c.Id);
             foreach (var refund in refunds)
             {
                 if (refund.CreditMemoId is not { } creditId)
@@ -162,10 +231,12 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             }
         }
 
-        var billPayments = (await purchases.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InRange(p.Date)).ToList();
+        var billPayments = await purchases.ListPostedPaymentsAsync(from, to, ct);
         if (billPayments.Count > 0)
         {
-            var bills = (await purchases.ListBillsAsync(null, ct)).ToDictionary(b => b.Id);
+            var bills = (from is null
+                ? await purchases.ListBillsAsync(null, ct)
+                : await purchases.FindBillsAsync(billPayments.SelectMany(p => p.Applications.Select(a => a.BillId)).ToHashSet(), ct)).ToDictionary(b => b.Id);
             foreach (var payment in billPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
@@ -182,10 +253,12 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         }
 
         // A vendor refund of a credit reduces expense on the refund date, split like the credit's lines.
-        var vendorRefunds = (await purchases.ListVendorRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date)).ToList();
+        var vendorRefunds = await purchases.ListPostedVendorRefundsAsync(from, to, ct);
         if (vendorRefunds.Count > 0)
         {
-            var vendorCredits = (await purchases.ListVendorCreditsAsync(null, ct)).ToDictionary(c => c.Id);
+            var vendorCredits = (from is null
+                ? await purchases.ListVendorCreditsAsync(null, ct)
+                : await purchases.FindVendorCreditsAsync(vendorRefunds.Select(r => r.VendorCreditId).ToHashSet(), ct)).ToDictionary(c => c.Id);
             foreach (var refund in vendorRefunds)
             {
                 var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);

@@ -184,8 +184,11 @@ internal static class SalesApi
 
         var sales = api.MapGroup("/sales");
 
-        sales.MapGet("/invoices", async (Guid? customerId, InvoiceService s, CancellationToken ct) =>
-            (await s.ListAsync(customerId, ct)).Select(InvoiceResponse.From));
+        // ?skip=&take= pages through the newest (total in X-Total-Count); without them, everything.
+        sales.MapGet("/invoices", async (Guid? customerId, int? skip, int? take, InvoiceService s, ISalesStore store, HttpResponse response, CancellationToken ct) =>
+            !ApiPaging.Requested(skip, take) ? (await s.ListAsync(customerId, ct)).Select(InvoiceResponse.From)
+            : customerId is not null ? ApiPaging.Page(response, await s.ListAsync(customerId, ct), skip, take, InvoiceResponse.From)
+            : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentInvoicesAsync(from, count, ct), InvoiceResponse.From));
         sales.MapGet("/invoices/next-number", async (InvoiceService s, CancellationToken ct) => new { Number = await s.SuggestNumberAsync(ct) });
         sales.MapGet("/invoices/{id:guid}", async (Guid id, InvoiceService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } i ? Results.Ok(InvoiceResponse.From(i)) : Results.NotFound());
@@ -200,8 +203,10 @@ internal static class SalesApi
         sales.MapPost("/invoices/{id:guid}/void", async (Guid id, VoidRequest r, InvoiceService s, CancellationToken ct) =>
             InvoiceResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
-        sales.MapGet("/payments", async (Guid? customerId, PaymentService s, CancellationToken ct) =>
-            (await s.ListAsync(customerId, ct)).Select(PaymentResponse.From));
+        sales.MapGet("/payments", async (Guid? customerId, int? skip, int? take, PaymentService s, ISalesStore store, HttpResponse response, CancellationToken ct) =>
+            !ApiPaging.Requested(skip, take) ? (await s.ListAsync(customerId, ct)).Select(PaymentResponse.From)
+            : customerId is not null ? ApiPaging.Page(response, await s.ListAsync(customerId, ct), skip, take, PaymentResponse.From)
+            : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentPaymentsAsync(from, count, ct), PaymentResponse.From));
         sales.MapGet("/payments/{id:guid}", async (Guid id, PaymentService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } p ? Results.Ok(PaymentResponse.From(p)) : Results.NotFound());
         sales.MapPost("/payments", async (ReceivePaymentCommand r, PaymentService s, CancellationToken ct) =>
@@ -215,8 +220,9 @@ internal static class SalesApi
         sales.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, PaymentService s, CancellationToken ct) =>
             PaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
-        sales.MapGet("/receipts", async (SalesReceiptService s, CancellationToken ct) =>
-            (await s.ListAsync(ct)).Select(SalesReceiptResponse.From));
+        sales.MapGet("/receipts", async (int? skip, int? take, SalesReceiptService s, ISalesStore store, HttpResponse response, CancellationToken ct) =>
+            !ApiPaging.Requested(skip, take) ? (await s.ListAsync(ct)).Select(SalesReceiptResponse.From)
+            : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentReceiptsAsync(from, count, ct), SalesReceiptResponse.From));
         sales.MapGet("/receipts/{id:guid}", async (Guid id, SalesReceiptService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } r ? Results.Ok(SalesReceiptResponse.From(r)) : Results.NotFound());
         sales.MapPost("/receipts", async (CreateSalesReceiptCommand r, SalesReceiptService s, CancellationToken ct) =>
