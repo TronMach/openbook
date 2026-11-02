@@ -2,6 +2,8 @@
 
 Open-source QuickBooks alternative in .NET 10. Plan and milestones: `ROADMAP.md`.
 
+Licence: AGPL-3.0-or-later (`LICENSE`; decided 2026-11-01, when the repository went public). Dependencies must be compatible: MIT, BSD, Apache-2.0 or similar permissive licences (bundled fonts are OFL); never add a proprietary or GPL-incompatible package.
+
 ## Commands
 
 - Build: `dotnet build`
