@@ -9,7 +9,9 @@ namespace OpenBook.Infrastructure.Persistence;
 internal sealed class EfJobLeases(IServiceScopeFactory scopes, IClock clock) : IJobLeases
 {
     /// <summary>This process: machine, process id and a random part, so a restarted process is a new holder.</summary>
-    internal static readonly string Holder = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}"[..Math.Min(JobLease.MaxHolderLength, 120)];
+    internal static readonly string Holder = Cut($"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}", JobLease.MaxHolderLength);
+
+    private static string Cut(string text, int max) => text.Length <= max ? text : text[^max..];
 
     public async Task<bool> TryAcquireAsync(string job, TimeSpan ttl, CancellationToken ct)
     {
