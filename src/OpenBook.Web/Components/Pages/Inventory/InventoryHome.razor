@@ -14,15 +14,25 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Inventory</h1>
-        <ActionLink Class="button secondary" Href="/reports/inventory-valuation">Valuation</ActionLink>
-        <ActionLink Class="button secondary" Href="/reports/inventory-stock">Stock status</ActionLink>
-        <ActionLink Class="button secondary" Href="/items/new">New item</ActionLink>
-        <ActionLink Class="button secondary" Href="/inventory/warehouses">Warehouses</ActionLink>
-        <ActionLink Class="button secondary" Href="/inventory/labels">Labels</ActionLink>
-        <ActionLink Class="button secondary" Href="/inventory/transfers/new">Transfer</ActionLink>
-        <ActionLink Class="button secondary" Href="/inventory/landed-costs/new">Landed cost</ActionLink>
-        <ActionLink Class="button secondary" Href="/inventory/builds/new">Build assemblies</ActionLink>
         <ActionLink Class="button" Href="/inventory/adjustments/new">Adjust quantities</ActionLink>
+    </div>
+    <div class="hub-actions">
+        <div class="hub-group"><span class="hub-label">Create</span>
+            <ActionLink Class="button secondary" Href="/items/new">New item</ActionLink>
+            <ActionLink Class="button secondary" Href="/inventory/transfers/new">Transfer stock</ActionLink>
+            <ActionLink Class="button secondary" Href="/inventory/builds/new">Build assemblies</ActionLink>
+            <ActionLink Class="button secondary" Href="/inventory/landed-costs/new">Landed cost</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Reports</span>
+            <ActionLink Class="button secondary" Href="/reports/inventory-valuation">Valuation</ActionLink>
+            <ActionLink Class="button secondary" Href="/reports/inventory-stock">Stock status</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Tools</span>
+            <ActionLink Class="button secondary" Href="/inventory/labels">Labels</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Set up</span>
+            <ActionLink Class="button secondary" Href="/inventory/warehouses">Warehouses and bins</ActionLink>
+        </div>
     </div>
     <p class="muted">
         Inventory products and assemblies are counted and costed first in, first out (or at weighted average, per item): bills add stock

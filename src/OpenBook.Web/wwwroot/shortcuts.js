@@ -29,8 +29,9 @@
         applyTheme();
     });
 
-    // Drop-down menus (<details class="menu">: the simple view's menu bar, a center's "New transaction"): one open at
-    // a time, closed by a click elsewhere or Esc; in the menu bar, while one is open, pointing at another opens it.
+    // Drop-down menus (<details class="menu">: the simple view's menu bar, the full view's drop-downs, the account menu,
+    // a center's "New transaction"): one open at a time, closed by a click elsewhere or Esc; in a menu bar, while one is
+    // open, pointing at another opens it.
     const openMenus = () => [...document.querySelectorAll('details.menu[open]')];
     document.addEventListener('click', e => {
         const inside = e.target instanceof Element ? e.target.closest('details.menu') : null;
@@ -42,7 +43,7 @@
         for (const other of openMenus()) if (other !== menu) other.open = false;
     }, true);
     document.addEventListener('mouseover', e => {
-        const summary = e.target instanceof Element ? e.target.closest('.menubar details.menu > summary') : null;
+        const summary = e.target instanceof Element ? e.target.closest('.menubar details.menu > summary, .full-menu details.menu > summary') : null;
         if (!summary || openMenus().length === 0) return;
         summary.parentElement.open = true;
     });

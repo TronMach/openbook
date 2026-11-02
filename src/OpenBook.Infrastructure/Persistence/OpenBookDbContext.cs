@@ -2173,6 +2173,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasKey(p => p.Username);
             b.Property(p => p.Username).HasMaxLength(100);
             b.Property(p => p.Mode).HasConversion<string>().HasMaxLength(20);
+            b.Property(p => p.Menu).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<CollectionSettings>(b =>

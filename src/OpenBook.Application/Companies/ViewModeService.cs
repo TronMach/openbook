@@ -7,7 +7,7 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Companies;
 
 /// <summary>What the screens need to know about the person's view: theirs, else the company's default.</summary>
-public sealed record ViewState(ViewMode Mode, Edition Edition, bool OwnChoice);
+public sealed record ViewState(ViewMode Mode, Edition Edition, bool OwnChoice, MenuStyle Menu = MenuStyle.Bar);
 
 /// <summary>Which view a person sees, and switching it. A preference only: nothing is audited and no rule depends on it.</summary>
 public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
@@ -18,7 +18,7 @@ public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
         if (company is null)
             return new ViewState(ViewMode.Full, Edition.General, false);
         var own = await store.GetViewPreferenceAsync(user.Actor, ct);
-        return new ViewState(own?.Mode ?? company.DefaultViewMode, company.Edition, own is not null);
+        return new ViewState(own?.Mode ?? company.DefaultViewMode, company.Edition, own?.Mode is not null, own?.Menu ?? MenuStyle.Bar);
     }
 
     /// <summary>Remembers the current person's view.</summary>
@@ -29,6 +29,20 @@ public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
             store.Add(ViewPreference.Create(user.Actor, mode));
         else
             own.Set(mode);
+        await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Remembers how the current person wants the full view's menu drawn.</summary>
+    public async Task SetMenuAsync(MenuStyle menu, CancellationToken ct = default)
+    {
+        var own = await store.GetViewPreferenceAsync(user.Actor, ct);
+        if (own is null)
+        {
+            own = ViewPreference.Create(user.Actor);
+            store.Add(own);
+        }
+
+        own.Set(menu);
         await store.SaveChangesAsync(ct);
     }
 }

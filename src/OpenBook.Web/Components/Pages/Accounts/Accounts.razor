@@ -8,14 +8,23 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Chart of accounts</h1>
-        <a class="button secondary" href="@(ShowInactive ? "/accounts" : "/accounts?showInactive=true")">
+        <ActionLink Class="button" Href="/accounts/new">New account</ActionLink>
+    </div>
+    <div class="hub-actions">
+        <div class="hub-group"><span class="hub-label">Lists</span>
+            <ActionLink Class="button secondary" Href="/segments">Classes and locations</ActionLink>
+            <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
+            <ActionLink Class="button secondary" Href="/loans">Loans</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Tools</span>
+            <ActionLink Class="button secondary" Href="/journal">Journal</ActionLink>
+            <ActionLink Class="button secondary" Href="/settings/close-books">Close the books</ActionLink>
+            <ActionLink Class="button secondary" Href="/accountant">Accountant tools</ActionLink>
+            <ActionLink Class="button secondary" Href="/accounts/import">Import CSV</ActionLink>
+            <a class="button secondary" href="@(ShowInactive ? "/accounts" : "/accounts?showInactive=true")">
             @(ShowInactive ? "Hide inactive" : "Show inactive")
         </a>
-        <ActionLink Class="button secondary" Href="/segments">Classes and locations</ActionLink>
-        <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
-        <ActionLink Class="button secondary" Href="/loans">Loans</ActionLink>
-        <ActionLink Class="button secondary" Href="/accounts/import">Import CSV</ActionLink>
-        <ActionLink Class="button" Href="/accounts/new">New account</ActionLink>
+        </div>
     </div>
 
     @if (_error is not null)

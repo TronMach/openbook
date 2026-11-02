@@ -7,10 +7,20 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Projects</h1>
-        <ActionLink Class="button secondary" Href="/time">Time</ActionLink>
-        <ActionLink Class="button secondary" Href="/mileage">Mileage</ActionLink>
-        <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
-        <ActionLink Class="button secondary" Href="/reports/project-profitability">Profitability report</ActionLink>
+    </div>
+    <div class="hub-actions">
+        <div class="hub-group"><span class="hub-label">Lists</span>
+            <ActionLink Class="button secondary" Href="/time">Time</ActionLink>
+            <ActionLink Class="button secondary" Href="/mileage">Mileage</ActionLink>
+            <ActionLink Class="button secondary" Href="/time/people">People</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Reports</span>
+            <ActionLink Class="button secondary" Href="/reports/project-profitability">Profitability</ActionLink>
+            <ActionLink Class="button secondary" Href="/reports/unbilled-work">Unbilled work</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Set up</span>
+            <ActionLink Class="button secondary" Href="/time/rates">Rate card</ActionLink>
+        </div>
     </div>
     <p class="muted">
         A project is a job for a customer, kept as its own sub-customer (billed with the customer unless you change it), so its invoices and

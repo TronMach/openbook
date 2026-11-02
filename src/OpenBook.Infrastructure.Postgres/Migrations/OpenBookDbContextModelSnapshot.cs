@@ -1844,8 +1844,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<string>("Mode")
+                    b.Property<string>("Menu")
                         .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Mode")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 

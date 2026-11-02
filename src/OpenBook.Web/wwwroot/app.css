@@ -707,3 +707,25 @@ details.setup-steps summary { cursor: pointer; font-weight: 600; color: var(--ac
 details.setup-steps ol { margin: 0.6rem 0 0; padding-left: 1.4rem; display: grid; gap: 0.45rem; }
 details.setup-steps li.done { color: var(--muted); }
 details.setup-steps li.done::marker { content: "✓  "; color: var(--accent); }
+
+/* Top bar: the full view's optional drop-down menu (FullMenu) and the person's own menu. */
+.topbar { position: relative; z-index: 30; }
+.full-menu { display: flex; flex-wrap: wrap; gap: 0.15rem; align-items: center; }
+.full-menu .menu > summary { color: var(--muted); padding: 0.2rem 0.5rem; border-radius: 4px; user-select: none; }
+.full-menu .menu > summary:hover, .full-menu .menu[open] > summary { background: var(--bg); color: var(--text); }
+.full-menu .full-menu-link { padding: 0.2rem 0.5rem; }
+.topbar .menu-list a { color: var(--text); }
+.menu-list hr { border: 0; border-top: 1px solid var(--border); margin: 0.3rem 0; }
+.menu-list form { margin: 0; }
+.menu-list button.link { display: block; width: 100%; text-align: left; padding: 0.35rem 1rem; color: var(--text); white-space: nowrap; }
+.menu-list button.link:hover, .menu-list button.link:focus { background: var(--bg); }
+.menu-note { display: block; padding: 0.35rem 1rem; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.user-menu > summary { color: var(--muted); }
+.user-menu .menu-list { left: auto; right: 0; }
+.full-menu .menu-list { max-height: calc(100vh - 5rem); overflow-y: auto; }
+
+/* Area pages: their links in labelled groups under the title, instead of one row of buttons. */
+.hub-actions { display: flex; flex-wrap: wrap; gap: 0.5rem 1.75rem; margin: -0.25rem 0 1.25rem; }
+.hub-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.hub-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-right: 0.15rem; }
+.hub-actions .button { padding: 0.25rem 0.65rem; font-size: 0.9rem; font-weight: 500; }

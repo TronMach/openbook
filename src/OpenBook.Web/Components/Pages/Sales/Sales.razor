@@ -12,24 +12,34 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Sales</h1>
-        <ActionLink Class="button secondary" Href="/customers">@_terms.Customers</ActionLink>
-        <ActionLink Class="button secondary" Href="/items">Products and services</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/recurring">Recurring</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/collections">Collections</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/scheduled-emails">Scheduled emails</ActionLink>
-        <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
-        <ActionLink Class="button secondary" Href="/print">Print</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/orders">Sales orders</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/retainers">Retainers</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/billable">Billable expenses</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/channels">Sales channels</ActionLink>
-        <ActionLink Class="button secondary" Href="/pricing">Pricing</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales-tax">Sales tax</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/estimates/new">New estimate</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/credit-memos/new">Credit memo</ActionLink>
-        <ActionLink Class="button secondary" Href="/sales/receipts/new">Sales receipt</ActionLink>
         <ActionLink Class="button secondary" Href="/sales/payments/new">Receive payment</ActionLink>
         <ActionLink Class="button" Href="/sales/invoices/new">New invoice</ActionLink>
+    </div>
+    <div class="hub-actions">
+        <div class="hub-group"><span class="hub-label">Create</span>
+            <ActionLink Class="button secondary" Href="/sales/estimates/new">Estimate</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/receipts/new">Sales receipt</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/credit-memos/new">Credit memo</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Lists</span>
+            <ActionLink Class="button secondary" Href="/customers">@_terms.Customers</ActionLink>
+            <ActionLink Class="button secondary" Href="/items">Products and services</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/orders">Sales orders</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/retainers">Retainers</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/recurring">Recurring invoices</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/billable">Billable expenses</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/scheduled-emails">Scheduled emails</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Tools</span>
+            <ActionLink Class="button secondary" Href="/sales/collections">Collections</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales/channels">Sales channels</ActionLink>
+            <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
+            <ActionLink Class="button secondary" Href="/print">Print</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Set up</span>
+            <ActionLink Class="button secondary" Href="/pricing">Pricing</ActionLink>
+            <ActionLink Class="button secondary" Href="/sales-tax">Sales tax</ActionLink>
+        </div>
     </div>
 
     <div class="summary-bar">

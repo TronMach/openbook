@@ -11,17 +11,26 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Purchases</h1>
-        <ActionLink Class="button secondary" Href="/purchases/orders">Purchase orders</ActionLink>
-        <ActionLink Class="button secondary" Href="/purchases/receipts">Receipts</ActionLink>
-        <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
-        <ActionLink Class="button secondary" Href="/print">Print</ActionLink>
-        <ActionLink Class="button secondary" Href="/purchases/approvals">Approvals</ActionLink>
-        <ActionLink Class="button secondary" Href="/purchases/ach">ACH payments</ActionLink>
-        <ActionLink Class="button secondary" Href="/vendors">Vendors</ActionLink>
-        <ActionLink Class="button secondary" Href="/purchases/recurring">Recurring</ActionLink>
-        <ActionLink Class="button secondary" Href="/purchases/vendor-credits/new">Vendor credit</ActionLink>
         <ActionLink Class="button secondary" Href="/purchases/pay-bills">Pay bills</ActionLink>
         <ActionLink Class="button" Href="/purchases/bills/new">New bill</ActionLink>
+    </div>
+    <div class="hub-actions">
+        <div class="hub-group"><span class="hub-label">Create</span>
+            <ActionLink Class="button secondary" Href="/purchases/vendor-credits/new">Vendor credit</ActionLink>
+            <ActionLink Class="button secondary" Href="/purchases/orders/new">Purchase order</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Lists</span>
+            <ActionLink Class="button secondary" Href="/vendors">Vendors</ActionLink>
+            <ActionLink Class="button secondary" Href="/purchases/orders">Purchase orders</ActionLink>
+            <ActionLink Class="button secondary" Href="/purchases/recurring">Recurring bills</ActionLink>
+            <ActionLink Class="button secondary" Href="/purchases/receipts">Receipts</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Tools</span>
+            <ActionLink Class="button secondary" Href="/purchases/approvals">Bill approvals</ActionLink>
+            <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
+            <ActionLink Class="button secondary" Href="/print">Print</ActionLink>
+            <ActionLink Class="button secondary" Href="/purchases/ach">ACH payments</ActionLink>
+        </div>
     </div>
 
     <div class="summary-bar">

@@ -1,0 +1,189 @@
+@using System.Security.Claims
+@using OpenBook.Domain.Companies
+
+@* The full view's main menu drawn as drop-downs (a person's choice; the bar of area links is the default): one menu per
+   area in the edition's order, each listing that area's pages, so pages two clicks deep on the bar are one click
+   here. Links the person can't reach are left out, like the bar; a menu with nothing reachable isn't shown. Every
+   label is written out so the string catalog finds it. *@
+<nav class="full-menu" aria-label="@L["Menu"]">
+    @foreach (var href in Editions.Menu(Edition))
+    {
+        @Group(href)
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public ClaimsPrincipal User { get; set; } = default!;
+
+    [Parameter]
+    public Edition Edition { get; set; }
+
+    // Each area of the bar becomes a menu; the bar's separate entries that belong to another menu draw nothing.
+    private RenderFragment? Group(string href) => href switch
+    {
+        "/" => Link("/", L["Home"]),
+        "/customers" when Editions.Menu(Edition).Contains("/sales") => null,
+        "/customers" or "/sales" => Menu(Edition switch
+            {
+                Edition.Nonprofit => L["Donors and sales"],
+                Edition.ProfessionalServices => L["Clients and sales"],
+                _ => L["Customers and sales"],
+            },
+            ("/customers", Edition switch
+            {
+                Edition.Nonprofit => L["Donors"],
+                Edition.ProfessionalServices => L["Clients"],
+                _ => L["Customers"],
+            }),
+            ("/items", L["Products and services"]),
+            ("/sales", L["Sales overview"]),
+            null,
+            ("/sales/invoices/new", L["New invoice"]),
+            ("/sales/payments/new", L["Receive a payment"]),
+            ("/sales/receipts/new", L["New sales receipt"]),
+            ("/sales/estimates/new", L["New estimate"]),
+            ("/sales/credit-memos/new", L["New credit memo"]),
+            null,
+            ("/sales/orders", L["Sales orders"]),
+            ("/sales/retainers", L["Retainers"]),
+            ("/sales/recurring", L["Recurring invoices"]),
+            ("/sales/billable", L["Billable expenses"]),
+            ("/sales/collections", L["Collections"]),
+            ("/sales/scheduled-emails", L["Scheduled emails"]),
+            ("/sales/channels", L["Sales channels and payouts"]),
+            ("/print", L["Print documents"]),
+            null,
+            ("/pricing", L["Pricing"]),
+            ("/sales-tax", L["Sales tax"])),
+        "/purchases" => Menu(L["Vendors and purchases"],
+            ("/vendors", L["Vendors"]),
+            ("/purchases", L["Purchases overview"]),
+            null,
+            ("/purchases/bills/new", L["Enter a bill"]),
+            ("/purchases/pay-bills", L["Pay bills"]),
+            ("/purchases/vendor-credits/new", L["New vendor credit"]),
+            ("/banking/write-checks", L["Write a check or expense"]),
+            null,
+            ("/purchases/orders", L["Purchase orders"]),
+            ("/purchases/recurring", L["Recurring bills"]),
+            ("/purchases/approvals", L["Bill approvals"]),
+            ("/purchases/receipts", L["Receipts"]),
+            ("/documents", L["Document inbox"]),
+            ("/purchases/ach", L["ACH payments"])),
+        "/banking" => Menu(L["Banking"],
+            ("/banking", L["Accounts and registers"]),
+            null,
+            ("/banking/write-checks", L["Write a check or expense"]),
+            ("/banking/deposits/new", L["Make a deposit"]),
+            ("/banking/transfer", L["Transfer money"]),
+            null,
+            ("/banking/rules", L["Bank rules"]),
+            ("/banking/connections", L["Bank connections"]),
+            ("/banking/checks", L["Print checks"]),
+            ("/banking/positive-pay", L["Positive pay"]),
+            ("/banking/petty-cash", L["Petty cash"])),
+        "/inventory" => Menu(L["Inventory"],
+            ("/inventory", L["Stock on hand"]),
+            ("/items", L["Products and services"]),
+            null,
+            ("/inventory/adjustments/new", L["Adjust quantities"]),
+            ("/inventory/transfers/new", L["Transfer stock"]),
+            ("/inventory/builds/new", L["Build assemblies"]),
+            ("/inventory/landed-costs/new", L["Add landed costs"]),
+            null,
+            ("/inventory/warehouses", L["Warehouses and bins"]),
+            ("/inventory/labels", L["Print labels"])),
+        "/time" when Editions.Menu(Edition).Contains("/projects") => null,
+        "/projects" or "/time" => Menu(L["Projects and time"],
+            ("/projects", L["Projects"]),
+            ("/time", L["Time"]),
+            ("/time/week", L["Week timesheet"]),
+            ("/mileage", L["Mileage"]),
+            null,
+            ("/time/people", L["People"]),
+            ("/time/rates", L["Rate card"])),
+        "/nonprofit" => Menu(L["Nonprofit"],
+            ("/nonprofit", L["Donor restrictions"]),
+            ("/nonprofit/gifts", L["Gifts"]),
+            ("/nonprofit/gifts/new", L["Record a gift"]),
+            ("/nonprofit/pledges", L["Pledges"]),
+            ("/nonprofit/recurring", L["Recurring gifts"]),
+            ("/nonprofit/grants", L["Grants"]),
+            ("/nonprofit/thanks", L["Thank donors"])),
+        "/journal" when Editions.Menu(Edition).Contains("/accounts") => null,
+        "/accounts" or "/journal" => Menu(L["Accounting"],
+            ("/accounts", L["Chart of accounts"]),
+            ("/journal", L["Journal"]),
+            ("/journal/new", L["New journal entry"]),
+            ("/journal/recurring", L["Recurring entries"]),
+            null,
+            ("/segments", L["Classes, locations and tags"]),
+            ("/assets", L["Fixed assets"]),
+            ("/loans", L["Loans"]),
+            null,
+            ("/settings/close-books", L["Close the books"]),
+            ("/accountant", L["Accountant tools"]),
+            ("/audit", L["Audit log"])),
+        "/dashboard" when Editions.Menu(Edition).Contains("/reports") => null,
+        "/reports" or "/dashboard" => Menu(L["Reports"],
+            ("/reports", L["All reports"]),
+            ("/dashboard", L["Dashboard"]),
+            null,
+            ("/reports/profit-and-loss", L["Profit and loss"]),
+            ("/reports/balance-sheet", L["Balance sheet"]),
+            ("/reports/ar-aging", L["Who owes you (A/R aging)"]),
+            ("/reports/ap-aging", L["What you owe (A/P aging)"]),
+            null,
+            ("/reports/builder", L["Custom report"]),
+            ("/reports/budgets", L["Budgets"]),
+            ("/reports/schedules", L["Scheduled reports"]),
+            ("/reports/cash-forecast", L["Cash forecast"])),
+        _ => null,
+    };
+
+    private RenderFragment Link(string href, string label) =>
+        @<NavLink href="@href" class="full-menu-link" Match="NavLinkMatch.All">@label</NavLink>;
+
+    // A drop-down of links; a null between links draws a divider. Left out when the person can reach none.
+    private RenderFragment? Menu(string title, params (string Href, string Label)?[] links)
+    {
+        // Reachable links, with a divider only between two of them.
+        var shown = new List<(string Href, string Label)?>();
+        var divide = false;
+        foreach (var link in links)
+        {
+            if (link is null)
+            {
+                divide = shown.Count > 0;
+                continue;
+            }
+
+            if (!User.CanReach(link.Value.Href))
+                continue;
+            if (divide)
+                shown.Add(null);
+            shown.Add(link);
+            divide = false;
+        }
+
+        if (shown.Count == 0)
+            return null;
+        return @<details class="menu">
+            <summary>@title</summary>
+            <div class="menu-list">
+                @foreach (var link in shown)
+                {
+                    if (link is { } l)
+                    {
+                        <a href="@l.Href">@l.Label</a>
+                    }
+                    else
+                    {
+                        <hr />
+                    }
+                }
+            </div>
+        </details>;
+    }
+}

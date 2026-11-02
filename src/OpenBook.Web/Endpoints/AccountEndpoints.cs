@@ -51,6 +51,15 @@ public static class AccountEndpoints
             return Results.Redirect(WebSecurity.SafeReturnUrl(form["returnUrl"]));
         }).RequireAuthorization();
 
+        // The full view's menu as a bar of areas or as drop-downs: the signed-in person's own choice.
+        app.MapPost("/account/menu", async (IFormCollection form, ViewModeService views, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<MenuStyle>(form["menu"], ignoreCase: true, out var menu) || !Enum.IsDefined(menu))
+                return Results.BadRequest();
+            await views.SetMenuAsync(menu, ct);
+            return Results.Redirect(WebSecurity.SafeReturnUrl(form["returnUrl"]));
+        }).RequireAuthorization();
+
         app.MapGet("/backup/download",async (IBackupService backups, CancellationToken ct) =>
         {
             BackupFile file;

@@ -9,39 +9,75 @@
             <a class="brand" href="/">OpenBook</a>
             <nav>
                 @* The simple view's menus are in the bar below; here the nav only keeps the space. *@
+                @if (!_simple && _menu == MenuStyle.DropDowns)
+                {
+                    <FullMenu User="context.User" Edition="_edition" />
+                }
+                else if (!_simple)
+                {
+                    @foreach (var href in Editions.Menu(_edition).Where(context.User.CanReach))
+                    {
+                        @MenuLink(href)
+                    }
+                }
                 @if (!_simple)
                 {
-                @foreach (var href in Editions.Menu(_edition).Where(context.User.CanReach))
-                {
-                    @MenuLink(href)
-                }
-                @if (context.User.CanReach("/settings"))
-                {
                     <NavLink href="/settings">@L["Settings"]</NavLink>
-                }
-                @if (context.User.CanReach("/backup"))
-                {
-                    <NavLink href="/backup">@L["Backup"]</NavLink>
-                }
-                <form method="post" action="/account/view" class="view-switch">
-                    <AntiforgeryToken />
-                    <input type="hidden" name="view" value="Simple" />
-                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
-                    <button type="submit" class="link" title="@L["A shorter menu and a home page that shows each step of the work"]">@L["Simple view"]</button>
-                </form>
                 }
             </nav>
             <form class="search" method="get" action="/search" data-enhance="false" role="search">
                 <input name="q" type="search" placeholder="@L["Search…"]" aria-label="@L["Search"]" />
             </form>
             <a class="help-topic" href="/help/@OpenBook.Web.Help.HelpTopics.For(ReturnUrl)" title="@L["The user guide's chapter about this page"]">@L["Help"]</a>
-            <a class="muted" href="/account/password" title="@L["Change password"] · @AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)">@context.User.Identity?.Name</a>
-            <a class="muted" href="/account/region" title="@L["Language and region"]">@System.Globalization.CultureInfo.CurrentCulture.Name</a>
-            <button type="button" id="theme-toggle" class="link theme-toggle" aria-label="Theme">Theme: auto</button>
-            <form method="post" action="/logout">
-                <AntiforgeryToken />
-                <button type="submit" class="link">@L["Sign out"]</button>
-            </form>
+            <details class="menu user-menu">
+                <summary title="@L["Your account, how OpenBook looks for you, and signing out"]">@context.User.Identity?.Name ▾</summary>
+                <div class="menu-list">
+                    <span class="menu-note">@L["Signed in as {0} ({1})", context.User.Identity?.Name ?? "", AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)]</span>
+                    <a href="/account/password">@L["Password and sessions"]</a>
+                    <a href="/account/two-factor">@L["Two-factor sign-in"]</a>
+                    @if (context.User.CanReach("/capture"))
+                    {
+                        <a href="/capture">@L["Offline capture on your phone"]</a>
+                    }
+                    <a href="/account/region">@L["Language and region"] <span class="muted">(@System.Globalization.CultureInfo.CurrentCulture.Name)</span></a>
+                    <hr />
+                    <button type="button" id="theme-toggle" class="link theme-toggle" aria-label="@L["Theme"]">Theme: auto</button>
+                    <form method="post" action="/account/view">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="view" value="@(_simple ? "Full" : "Simple")" />
+                        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                        @if (_simple)
+                        {
+                            <button type="submit" class="link" title="@L["Every area of OpenBook in the menu"]">@L["Switch to full view"]</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="link" title="@L["A shorter menu and a home page that shows each step of the work"]">@L["Switch to simple view"]</button>
+                        }
+                    </form>
+                    @if (!_simple)
+                    {
+                        <form method="post" action="/account/menu">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="menu" value="@(_menu == MenuStyle.DropDowns ? "Bar" : "DropDowns")" />
+                            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                            @if (_menu == MenuStyle.DropDowns)
+                            {
+                                <button type="submit" class="link" title="@L["One link per area across the top"]">@L["Show the menu as a bar"]</button>
+                            }
+                            else
+                            {
+                                <button type="submit" class="link" title="@L["A drop-down per area listing its pages, so most pages are one click away"]">@L["Show the menu as drop-downs"]</button>
+                            }
+                        </form>
+                    }
+                    <hr />
+                    <form method="post" action="/logout">
+                        <AntiforgeryToken />
+                        <button type="submit" class="link">@L["Sign out"]</button>
+                    </form>
+                </div>
+            </details>
         </header>
         @if (_simple)
         {
@@ -77,6 +113,7 @@ else
 @code {
     private Edition _edition;
     private bool _simple;
+    private MenuStyle _menu;
 
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
@@ -91,6 +128,7 @@ else
         var view = await Views.CurrentAsync(HttpContext.RequestAborted);
         _edition = view.Edition;
         _simple = view.Mode == ViewMode.Simple;
+        _menu = view.Menu;
     }
 
     // Each label is written out so the string catalog finds it.

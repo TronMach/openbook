@@ -8,19 +8,25 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Banking</h1>
-        @if (_undeposited > 0)
-        {
-            <ActionLink Class="button" Href="/banking/deposits/new">Make deposit (@_undeposited waiting)</ActionLink>
-        }
-        <ActionLink Class="button secondary" Href="/banking/rules">Bank rules</ActionLink>
-        <ActionLink Class="button secondary" Href="/banking/checks">Print checks</ActionLink>
-        <ActionLink Class="button secondary" Href="/banking/positive-pay">Positive pay</ActionLink>
-        <ActionLink Class="button secondary" Href="/banking/petty-cash">Petty cash</ActionLink>
-        <ActionLink Class="button secondary" Href="/banking/connections">Bank connections</ActionLink>
         @if (_accounts.Count >= 2)
         {
             <ActionLink Class="button secondary" Href="/banking/transfer">Transfer</ActionLink>
         }
+        @if (_undeposited > 0)
+        {
+            <ActionLink Class="button" Href="/banking/deposits/new">Make deposit (@_undeposited waiting)</ActionLink>
+        }
+    </div>
+    <div class="hub-actions">
+        <div class="hub-group"><span class="hub-label">Tools</span>
+            <ActionLink Class="button secondary" Href="/banking/checks">Print checks</ActionLink>
+            <ActionLink Class="button secondary" Href="/banking/positive-pay">Positive pay</ActionLink>
+            <ActionLink Class="button secondary" Href="/banking/petty-cash">Petty cash</ActionLink>
+        </div>
+        <div class="hub-group"><span class="hub-label">Set up</span>
+            <ActionLink Class="button secondary" Href="/banking/rules">Bank rules</ActionLink>
+            <ActionLink Class="button secondary" Href="/banking/connections">Bank connections</ActionLink>
+        </div>
     </div>
 
     @if (_accounts.Count == 0)
