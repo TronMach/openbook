@@ -11,7 +11,7 @@ Every page has the same bar across the top:
 
 ### The menu as a bar or as drop-downs
 
-The menu starts as a bar of areas: select one to go to its main page. If you'd rather reach pages directly, select your username, then **Show the menu as drop-downs**: each area becomes a drop-down listing its pages (for example **Customers and sales** lists customers, products and services, new invoice, receive a payment, sales orders, collections, pricing, sales tax and the rest), so most pages are one click away. Open a drop-down by selecting it; while one is open, pointing at another opens that one; Esc or a click elsewhere closes it. **Show the menu as a bar** goes back. The choice is yours alone and is remembered wherever you sign in.
+The menu starts as a bar of areas: select one to go to its main page. If you'd rather reach pages directly, select your username, then **Show the menu as drop-downs**: each area becomes a drop-down listing its pages (for example **Sales** (**Clients** or **Donors** in those editions) lists customers, products and services, new invoice, receive a payment, sales orders, collections, pricing, sales tax and the rest), so most pages are one click away. Open a drop-down by selecting it; while one is open, pointing at another opens that one; Esc or a click elsewhere closes it. **Show the menu as a bar** goes back. The choice is yours alone and is remembered wherever you sign in.
 
 ### Area pages
 

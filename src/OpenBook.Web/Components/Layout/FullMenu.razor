@@ -26,9 +26,9 @@
         "/customers" when Editions.Menu(Edition).Contains("/sales") => null,
         "/customers" or "/sales" => Menu(Edition switch
             {
-                Edition.Nonprofit => L["Donors and sales"],
-                Edition.ProfessionalServices => L["Clients and sales"],
-                _ => L["Customers and sales"],
+                Edition.Nonprofit => L["Donors"],
+                Edition.ProfessionalServices => L["Clients"],
+                _ => L["Sales"],
             },
             ("/customers", Edition switch
             {
@@ -56,7 +56,7 @@
             null,
             ("/pricing", L["Pricing"]),
             ("/sales-tax", L["Sales tax"])),
-        "/purchases" => Menu(L["Vendors and purchases"],
+        "/purchases" => Menu(L["Purchases"],
             ("/vendors", L["Vendors"]),
             ("/purchases", L["Purchases overview"]),
             null,
@@ -95,7 +95,7 @@
             ("/inventory/warehouses", L["Warehouses and bins"]),
             ("/inventory/labels", L["Print labels"])),
         "/time" when Editions.Menu(Edition).Contains("/projects") => null,
-        "/projects" or "/time" => Menu(L["Projects and time"],
+        "/projects" or "/time" => Menu(L["Projects"],
             ("/projects", L["Projects"]),
             ("/time", L["Time"]),
             ("/time/week", L["Week timesheet"]),

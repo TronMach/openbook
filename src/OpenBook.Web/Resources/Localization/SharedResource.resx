@@ -473,9 +473,6 @@
   <data name="Clients" xml:space="preserve">
     <value>Clients</value>
   </data>
-  <data name="Clients and sales" xml:space="preserve">
-    <value>Clients and sales</value>
-  </data>
   <data name="Close the books" xml:space="preserve">
     <value>Close the books</value>
   </data>
@@ -590,9 +587,6 @@
   <data name="Customers" xml:space="preserve">
     <value>Customers</value>
   </data>
-  <data name="Customers and sales" xml:space="preserve">
-    <value>Customers and sales</value>
-  </data>
   <data name="Customers owe" xml:space="preserve">
     <value>Customers owe</value>
   </data>
@@ -655,9 +649,6 @@
   </data>
   <data name="Donors" xml:space="preserve">
     <value>Donors</value>
-  </data>
-  <data name="Donors and sales" xml:space="preserve">
-    <value>Donors and sales</value>
   </data>
   <data name="Due" xml:space="preserve">
     <value>Due</value>
@@ -1589,9 +1580,6 @@
   <data name="Projects" xml:space="preserve">
     <value>Projects</value>
   </data>
-  <data name="Projects and time" xml:space="preserve">
-    <value>Projects and time</value>
-  </data>
   <data name="Provider" xml:space="preserve">
     <value>Provider</value>
   </data>
@@ -2263,9 +2251,6 @@
   </data>
   <data name="Vendors" xml:space="preserve">
     <value>Vendors</value>
-  </data>
-  <data name="Vendors and purchases" xml:space="preserve">
-    <value>Vendors and purchases</value>
   </data>
   <data name="Version, database, background jobs and recent errors." xml:space="preserve">
     <value>Version, database, background jobs and recent errors.</value>

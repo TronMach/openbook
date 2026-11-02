@@ -19,7 +19,7 @@
         <p>
             That needs the <strong>@(Enum.TryParse<UserRole>(Needed, out var role) ? AccessMiddleware.Describe(role) : "admin")</strong> role or higher,
             and you're signed in as <strong>@AccessMiddleware.Describe(AccessRules.RoleOf(_user) ?? UserRole.ViewOnly)</strong>.
-            An admin can change your role (Settings → Users); you'll be asked to sign in again, and then it works for you.
+            An admin can change your role (Settings → Users and invitations); you'll be asked to sign in again, and then it works for you.
         </p>
     }
     @if (_admins.Count > 0)

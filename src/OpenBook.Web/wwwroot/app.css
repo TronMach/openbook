@@ -754,6 +754,8 @@ details.company-facts[open] > summary { margin-bottom: 0.75rem; }
     code, .copy-link { overflow-wrap: anywhere; }
     .topbar { gap: 0.6rem 1rem; padding: 0.6rem 1rem; }
     .topbar .search { flex: 1 1 10rem; }
+    /* The menu gets a row of its own under the brand, search and account menu, wrapping across it. */
+    .topbar nav { order: 10; flex-basis: 100%; gap: 0.35rem 0.9rem; }
     .full-menu .menu-list, .topbar .menu-list { max-width: calc(100vw - 2rem); }
 }
 .skip-link { position: absolute; left: 0.5rem; top: -3rem; z-index: 100; background: var(--surface); padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 6px; }
