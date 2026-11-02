@@ -545,6 +545,9 @@
   <data name="Copies of your company file: download one now, schedule them, or restore one." xml:space="preserve">
     <value>Copies of your company file: download one now, schedule them, or restore one.</value>
   </data>
+  <data name="Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
   <data name="Cost" xml:space="preserve">
     <value>Cost</value>
   </data>

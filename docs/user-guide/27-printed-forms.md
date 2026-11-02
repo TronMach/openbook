@@ -68,5 +68,5 @@ Every printable document has **Print**, which opens the PDF straight in the brow
 
 - **Waiting to be printed** lists the queue. Tick what to print and **Print the ticked documents**; they're marked printed. **Take out** removes one without printing.
 - **Choose documents** prints by kind and dates instead: pick the kind, **from** and **to**, **Show**, tick and print.
-- **Statements**: tick customers, set **Activity from** and **to**, and **Print statements**.
+- **Statements**: tick customers, set **Activity from** and **to**, and **Print statements**, or **Email statements** to send each customer theirs with the usual message (email must be set up in **Settings → Email**). Customers without an email address are marked in the list and skipped; the page says how many were sent.
 - **Printed recently** lists what came out in the last 30 days; **Put back in the queue** if a batch didn't come out right.

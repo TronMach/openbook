@@ -121,7 +121,7 @@ public static class AccessRules
     /// <summary>Path segments of pages that exist to change something (forms, imports, interactive editors).</summary>
     private static readonly HashSet<string> WritePageSegments = new(StringComparer.OrdinalIgnoreCase)
     {
-        "new", "edit", "import", "apply", "pay", "pay-bills", "transfer", "reconcile", "feed", "record", "opening-balances", "email",
+        "new", "edit", "import", "apply", "pay", "pay-bills", "transfer", "reconcile", "feed", "record", "opening-balances", "email", "batch",
     };
 
     public static UserRole Required(PathString path, string method)

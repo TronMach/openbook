@@ -1,0 +1,185 @@
+@page "/sales/invoices/batch"
+@rendermode InteractiveServer
+@inject Operations Ops
+
+<PageTitle>Batch invoicing · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Batch invoicing</h1>
+        <ActionLink Class="button secondary" Href="/sales">Back to sales</ActionLink>
+        <HelpLink Chapter="04-sales" Section="batch-invoicing" />
+    </div>
+    <p class="muted">
+        The same invoice for several customers at once, such as a monthly fee. Lines with an automatic price are priced for each
+        customer; due dates and sales tax follow each customer's terms and tax code. Preview first: either every invoice is made, or none.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_made is { } made)
+    {
+        <div class="alert notice" role="status">Made @made.Count @(made.Count == 1 ? "invoice" : "invoices") totalling @Labels.Amount(made.Sum(m => m.Total)).</div>
+        <BatchTable Rows="made" Links="true" />
+        <p>
+            <a class="button secondary" href="/print">Print them</a>
+            <a class="button secondary" href="/sales">Back to sales</a>
+            <button type="button" class="secondary" @onclick="StartOver">Make another batch</button>
+        </p>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="date">Invoice date</label>
+                    <input id="date" type="date" @bind="_date" @bind:after="Changed" />
+                </div>
+                <div class="field">
+                    <label for="memo">Message on the invoices <span class="muted">(optional)</span></label>
+                    <input id="memo" @bind="_memo" @bind:after="Changed" maxlength="1000" />
+                </div>
+            </div>
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="Changed" CustomerId="null" Date="_date" />
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Customers (@_chosen.Count chosen)</h2>
+            <div class="row">
+                <div class="field">
+                    <label for="filter">Find</label>
+                    <input id="filter" @bind="_filter" @bind:event="oninput" placeholder="Part of a name" />
+                </div>
+            </div>
+            <p>
+                <button type="button" class="secondary" @onclick="ChooseShown">Choose all shown</button>
+                <button type="button" class="secondary" @onclick="ClearChosen">Clear</button>
+            </p>
+            <div class="table-wrap" style="max-height: 24rem; overflow-y: auto">
+                <table class="data">
+                    <tbody>
+                        @foreach (var customer in Shown)
+                        {
+                            <tr @key="customer.Id">
+                                <td>
+                                    <label class="check">
+                                        <input type="checkbox" checked="@_chosen.Contains(customer.Id)" @onchange="e => Toggle(customer.Id, e)" />
+                                        @customer.DisplayName
+                                    </label>
+                                </td>
+                                <td class="muted">@customer.Terms.Label</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (_preview is { } preview)
+        {
+            <h2>Preview</h2>
+            <BatchTable Rows="preview" Links="false" />
+        }
+
+        <div class="actions">
+            <button type="button" class="secondary" @onclick="PreviewAsync" disabled="@(!CanRun || _busy)">Preview</button>
+            <button type="button" @onclick="CreateAsync" disabled="@(!CanRun || _preview is null || _busy)">
+                Make @(_preview?.Count ?? _chosen.Count) @((_preview?.Count ?? _chosen.Count) == 1 ? "invoice" : "invoices")
+            </button>
+            @if (_preview is null && CanRun)
+            {
+                <span class="muted">Preview to check each customer's total before making them.</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Customer> _customers = [];
+    private IReadOnlyList<Item> _items = [];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private List<SalesLineModel> _lines = [new()];
+    private readonly HashSet<Guid> _chosen = [];
+    private DateOnly _date = CompanyTime.Today;
+    private string? _memo;
+    private string? _filter;
+    private IReadOnlyList<BatchInvoiceLine>? _preview;
+    private IReadOnlyList<BatchInvoiceLine>? _made;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+
+    private IEnumerable<Customer> Shown => _customers.Where(c => string.IsNullOrWhiteSpace(_filter)
+        || c.DisplayName.Contains(_filter.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    private bool CanRun => _chosen.Count > 0 && SalesLineModel.Total(_lines) > 0m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+        (_customers, _items) = await Ops.RunAsync(async sp => (
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            await sp.GetRequiredService<ItemService>().ListAsync()));
+        _loaded = true;
+    }
+
+    /// <summary>Anything changed makes the preview stale.</summary>
+    private void Changed() => _preview = null;
+
+    private void Toggle(Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            _chosen.Add(id);
+        else
+            _chosen.Remove(id);
+        Changed();
+    }
+
+    private void ChooseShown()
+    {
+        _chosen.UnionWith(Shown.Select(c => c.Id));
+        Changed();
+    }
+
+    private void ClearChosen()
+    {
+        _chosen.Clear();
+        Changed();
+    }
+
+    private void StartOver()
+    {
+        _made = null;
+        _preview = null;
+        _chosen.Clear();
+        _lines = [new()];
+    }
+
+    private BatchInvoiceCommand Command() => new([.. _chosen], _date, SalesLineModel.Drafts(_lines), _memo);
+
+    private Task PreviewAsync() => RunAsync(async () => _preview = await Ops.RunAsync<BatchInvoiceService, IReadOnlyList<BatchInvoiceLine>>(s => s.PreviewAsync(Command())));
+
+    private Task CreateAsync() => RunAsync(async () => _made = await Ops.RunAsync<BatchInvoiceService, IReadOnlyList<BatchInvoiceLine>>(s => s.CreateAsync(Command())));
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await work();
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _preview = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

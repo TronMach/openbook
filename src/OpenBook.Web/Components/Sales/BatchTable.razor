@@ -1,0 +1,36 @@
+@* A batch of invoices, previewed or made: one row per customer and the totals. *@
+<div class="table-wrap">
+    <table class="data">
+        <thead><tr><th>Customer</th><th>No.</th><th>Due</th><th class="num">Subtotal</th><th class="num">Tax</th><th class="num">Total</th></tr></thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr>
+                    <td>@row.Customer</td>
+                    <td>@if (Links) { <a href="/sales/invoices/@row.InvoiceId">@row.Number</a> } else { @row.Number }</td>
+                    <td>@Labels.Date(row.DueDate)</td>
+                    <td class="num">@Labels.Amount(row.Subtotal)</td>
+                    <td class="num">@Labels.AmountOrBlank(row.Tax)</td>
+                    <td class="num">@Labels.Amount(row.Total)</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3">@Rows.Count @(Rows.Count == 1 ? "invoice" : "invoices")</td>
+                <td class="num">@Labels.Amount(Rows.Sum(r => r.Subtotal))</td>
+                <td class="num">@Labels.AmountOrBlank(Rows.Sum(r => r.Tax))</td>
+                <td class="num">@Labels.Amount(Rows.Sum(r => r.Total))</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<BatchInvoiceLine> Rows { get; set; } = [];
+
+    /// <summary>Numbers link to the invoices (once they're made).</summary>
+    [Parameter]
+    public bool Links { get; set; }
+}

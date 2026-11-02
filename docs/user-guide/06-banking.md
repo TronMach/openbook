@@ -26,6 +26,8 @@ To correct a check, payment, card charge, deposit or card credit, open it (from 
 - A **transfer** has its own Change page: the from and to accounts, amount, date and memo. If a bank feed line stands for it, the amount and accounts stay.
 - The over/short of a petty cash count can't be changed: void the count's transaction and count again.
 
+**Copy** on a check, expense or deposit from the bank starts a new one in the same account with the same payee, vendor, lines and memo, dated today (a check gets the next check number). It's handy for regular payments that aren't worth a recurring template.
+
 ## Importing your bank statement
 
 Download transactions from your bank's website and import them, instead of typing each one.

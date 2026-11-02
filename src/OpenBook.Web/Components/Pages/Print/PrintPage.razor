@@ -20,6 +20,16 @@
     {
         <div class="alert error" role="alert">@PrintError</div>
     }
+    @if (Emailed is { } emailed)
+    {
+        <div class="alert notice" role="status">
+            Emailed @emailed @(emailed == 1 ? "statement" : "statements").
+            @if (NoEmail > 0)
+            {
+                <span>@NoEmail without an email address weren't sent (marked below): add one on the customer, or print theirs.</span>
+            }
+        </div>
+    }
 
     <section class="card">
         <h2>Waiting to be printed (@_queue.Count)</h2>
@@ -138,12 +148,14 @@
                         <li>
                             <label class="check">
                                 <input type="checkbox" name="customer" value="@c.Customer.Id" checked />
-                                <span>@c.Customer.DisplayName <span class="muted">@Labels.Amount(c.Balance)</span></span>
+                                <span>@c.Customer.DisplayName <span class="muted">@Labels.Amount(c.Balance)@(c.Customer.Email is null ? " · no email address" : "")</span></span>
                             </label>
                         </li>
                     }
                 </ul>
                 <button type="submit">Print statements</button>
+                <button type="submit" class="secondary" formaction="/print/statements/email" formtarget="_self">Email statements</button>
+                <span class="muted">Emailing sends each customer with an email address their own statement; the others are listed afterwards.</span>
             </PostForm>
         }
     </section>
@@ -190,6 +202,10 @@
     private DateOnly _to;
 
     [SupplyParameterFromQuery] private string? PrintError { get; set; }
+
+    /// <summary>After emailing statements: how many went, and who has no email address.</summary>
+    [SupplyParameterFromQuery] private int? Emailed { get; set; }
+    [SupplyParameterFromQuery] private int? NoEmail { get; set; }
     [SupplyParameterFromQuery(Name = "kind")] private string? KindText { get; set; }
     [SupplyParameterFromQuery(Name = "from")] private DateOnly? From { get; set; }
     [SupplyParameterFromQuery(Name = "to")] private DateOnly? To { get; set; }

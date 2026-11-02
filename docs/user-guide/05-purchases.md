@@ -48,6 +48,8 @@ To correct a bill, use **Change** at the top of its page: the bill number, dates
 - If the bill is over the approval limit after the change, it waits for approval again, even if it was approved before, and the person who changed it can't approve it (unless self-approval is on).
 - A bill entered from a purchase order is changed by order line instead (see [Purchase orders](15-purchase-orders.md)).
 
+**Copy** at the top of a bill starts a new bill for the same vendor with the same lines, dated today (enter the vendor's new bill number). Purchase orders have **Copy** too; a bill entered from a purchase order doesn't (enter the next one from the order).
+
 A bill can be voided (with a reason) from its page until a payment is made against it.
 
 Bills that arrive regularly with the same amounts, such as rent, can be entered automatically: see **Purchases → Recurring**.

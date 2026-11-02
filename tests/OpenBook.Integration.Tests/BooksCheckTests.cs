@@ -133,7 +133,7 @@ public sealed class BooksCheckTests : IAsyncLifetime
         for (var step = 1; step <= 80; step++)
         {
             var date = Start.AddDays(random.Next(0, 28));
-            var operation = random.Next(0, 17);
+            var operation = random.Next(0, 19);
             try
             {
                 done.Add(await StepAsync(operation, date, random));
@@ -300,6 +300,33 @@ public sealed class BooksCheckTests : IAsyncLifetime
                 await In<PaymentService, CustomerPayment>(s => s.ChangeAsync(payment.Id, new ChangePaymentCommand(payment.Date,
                     payment.Applications.Select(a => new ApplyToInvoice(a.InvoiceId, a.Amount, a.Discount)).ToList(), "Test", Amount: payment.Amount + 10m)));
                 return "change payment";
+            }
+            case 17:
+            {
+                // Change a deposit: take its last item out, or put a waiting one in.
+                var deposits = (await In<ISalesStore, IReadOnlyList<BankDeposit>>(s => s.ListDepositsAsync(default))).Where(d => d.Status == DocumentStatus.Posted).ToList();
+                if (deposits.Count == 0)
+                    return "no deposit to change";
+                var deposit = Pick(deposits);
+                var waiting = await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync());
+                var items = deposit.Lines.Select(l => (l.Kind, l.SourceId)).ToList();
+                if (items.Count > 1 && random.Next(2) == 0)
+                    items.RemoveAt(items.Count - 1);
+                else if (waiting.Count > 0)
+                    items.Add((waiting[0].Kind, waiting[0].Id));
+                var on = waiting.Count > 0 && waiting[0].Date > deposit.Date ? waiting[0].Date : deposit.Date;
+                await In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id, new MakeDepositCommand(_checking.Id, on, items), "Test"));
+                return "change deposit";
+            }
+            case 18:
+            {
+                // A hand-entered entry, sometimes changed straight away.
+                var entry = await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(date,
+                    [JournalLineDraft.Dr(_supplies.Id, 25m), JournalLineDraft.Cr(_checking.Id, 25m)], "Petty cash")));
+                if (random.Next(2) == 0)
+                    await In<PostingEngine, JournalEntry>(s => s.ChangeAsync(entry.Id, new PostJournalEntryCommand(date,
+                        [JournalLineDraft.Dr(_supplies.Id, 30m), JournalLineDraft.Cr(_checking.Id, 30m)], "Petty cash"), "Test"));
+                return "journal entry";
             }
             default:
                 return "nothing to do";

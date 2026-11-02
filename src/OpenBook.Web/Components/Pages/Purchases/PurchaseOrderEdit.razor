@@ -132,6 +132,9 @@
 
     [SupplyParameterFromQuery(Name = "vendor")] private Guid? PresetVendor { get; set; }
 
+    /// <summary>An item to start the first line with ("New transaction" in the Item Center).</summary>
+    [SupplyParameterFromQuery(Name = "item")] private Guid? PresetItem { get; set; }
+
     /// <summary>A purchase order to start a new one from ("Copy" on its page).</summary>
     [SupplyParameterFromQuery(Name = "copy")] private Guid? Copy { get; set; }
 
@@ -164,6 +167,10 @@
             _warehouseId = order.WarehouseId;
             _locationId = order.LocationId;
             _lines = Lines(order);
+        }
+        else if (Id is null && _items.FirstOrDefault(i => i.Id == PresetItem) is { } presetItem)
+        {
+            _lines = [new LineModel { ItemId = presetItem.Id, Description = presetItem.Description ?? presetItem.Name, Quantity = 1m, UnitCost = presetItem.PurchaseCost }];
         }
 
         if (Id is not null)

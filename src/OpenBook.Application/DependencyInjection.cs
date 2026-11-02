@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<ReminderService>();
         services.AddScoped<ScheduledEmailService>();
         services.AddScoped<DepositService>();
+        services.AddScoped<BatchInvoiceService>();
         services.AddScoped<RecurringInvoiceService>();
         services.AddScoped<ReceivablesService>();
         services.AddScoped<FormService>();

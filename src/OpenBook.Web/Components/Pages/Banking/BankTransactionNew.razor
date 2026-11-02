@@ -43,12 +43,14 @@
                     <label for="reference">@(IsCheck ? "Check number" : "Reference") <span class="muted">(optional)</span></label>
                     <input id="reference" @bind="_reference" maxlength="30" />
                 </div>
-                <LocationField Options="_segments" @bind-Value="_locationId" />
                 <div class="field">
                     <label for="memo">Memo <span class="muted">(optional)</span></label>
                     <input id="memo" @bind="_memo" maxlength="1000" />
                 </div>
             </div>
+            <MoreOptions HasContent="@(_segments.Locations.Count > 0)" Open="@(_locationId is not null)">
+                <LocationField Options="_segments" @bind-Value="_locationId" />
+            </MoreOptions>
 
             <div class="table-wrap">
                 <table class="data entry">

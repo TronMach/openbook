@@ -134,6 +134,8 @@ public sealed record DepositItemRequest(DepositedKind Kind, Guid Id);
 
 public sealed record MakeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string? Memo = null);
 
+public sealed record EmailStatementsRequest(IReadOnlyList<Guid> CustomerIds, DateOnly? From = null, DateOnly? To = null);
+
 public sealed record ChangeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string Reason, string? Memo = null);
 
 public sealed record ApplyCreditRequest(Guid CustomerId, DateOnly Date, IReadOnlyList<ApplyCredit> Applications);
@@ -425,6 +427,14 @@ internal static class ReceivablesApi
             var message = new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body);
             await s.SendStatementAsync(id, from ?? end.AddMonths(-1).AddDays(1), end, message, ct);
             return Results.Ok(new { message.To, message.Subject });
+        });
+
+        // Each customer's statement for the period, by email with the usual message; those without an address are listed.
+        sales.MapPost("/statements/email", async (EmailStatementsRequest r, EmailService s, CancellationToken ct) =>
+        {
+            var end = r.To ?? Today();
+            var run = await s.SendStatementsAsync(r.CustomerIds ?? [], r.From ?? end.AddMonths(-1).AddDays(1), end, ct);
+            return new { run.Sent, run.NoEmail, Failed = run.Failed.Select(f => new { f.Customer, f.Reason }) };
         });
 
         api.MapGet("/settings/email", async (EmailService s, CancellationToken ct) => EmailSettingsResponse.From(await s.GetSettingsAsync(ct)));

@@ -166,12 +166,12 @@
 
     private IEnumerable<(string Href, string Label)> NewLinks(Item item)
     {
-        yield return ("/sales/invoices/new", L["Create Invoices"]);
-        yield return ("/sales/receipts/new", L["Enter Sales Receipts"]);
-        yield return ("/sales/estimates/new", L["Create Estimates"]);
+        yield return ($"/sales/invoices/new?item={item.Id}", L["Create Invoices"]);
+        yield return ($"/sales/receipts/new?item={item.Id}", L["Enter Sales Receipts"]);
+        yield return ($"/sales/estimates/new?item={item.Id}", L["Create Estimates"]);
         if (item.IsInventory)
         {
-            yield return ("/purchases/orders/new", L["Create Purchase Orders"]);
+            yield return ($"/purchases/orders/new?item={item.Id}", L["Create Purchase Orders"]);
             yield return ("/inventory/adjustments/new", L["Adjust Quantity on Hand"]);
         }
         if (item.IsAssembly)

@@ -72,7 +72,22 @@ How the PDF looks (layout, logo, font, footer, and which customers or documents 
 - Lines billed from a sales order or estimate, and billable expenses, time and mileage, stay as they are (void the invoice to bill them again).
 - Changing an invoice dated in a closed period needs the closing date password. So does changing which income an invoice paid in a closed period counts as, because cash-basis reports spread payments over the invoice's lines.
 
+### Copying an invoice
+
+**Copy** at the top of an invoice starts a new one with the same customer, lines, prices, tax, location and message, dated today with the next number. Change anything before saving. Billable expenses, time and mileage aren't copied (each is billed once), nor are lots of stock (they're picked again). Estimates, sales receipts and sales orders have **Copy** too.
+
 To cancel an invoice instead, **Void this invoice** at the bottom of its page (give a reason). Voiding records an opposite entry on the same date, so your reports come out as if the invoice had never been entered, while the record of both stays. An invoice that has a payment or credit applied can't be voided until that payment is voided or the credit unapplied. To reduce what a customer owes without changing the invoice, issue a **credit memo**.
+
+## Batch invoicing
+
+**Sales → Batch of invoices** makes the same invoice for several customers at once, such as a monthly fee or membership dues:
+
+1. Choose the **invoice date**, an optional **message** and the lines. Leave a line's price on automatic to price it for each customer (their price level and any price rules); type a price to charge everyone the same.
+2. Tick the **customers** (**Find** narrows the list; **Choose all shown** ticks them all).
+3. **Preview** shows each customer's invoice: number, due date (from their terms), tax (from their tax code) and total.
+4. **Make … invoices** makes them all. If any one can't be made (an inactive item, a closed period), none are, and the message says which customer.
+
+Afterwards each invoice links to its page; **Print them** opens **Sales → Print**, where you can choose them by date.
 
 ## Receiving payments
 
@@ -104,6 +119,8 @@ If you received payments into Undeposited Funds, record the trip to the bank: **
 3. **Save deposit**.
 
 This way your bank account in OpenBook shows one deposit for the whole amount, just as your bank statement does, which makes reconciling easy.
+
+To correct a deposit (a payment left out, or one that didn't go in after all), open it and use **Change**: tick or untick payments, change the date, account or memo, say **Why is it changing?** and **Save change**. Payments you untick go back to waiting. The deposit keeps its page, files and notes, and each change is listed under **Changes**. A reconciled deposit can't be changed, and one matched to a line from your bank feed keeps its account and total.
 
 ## Sales receipts
 

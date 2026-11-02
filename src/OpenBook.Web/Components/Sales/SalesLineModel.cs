@@ -105,6 +105,17 @@ public sealed class SalesLineModel
         return copies.Count == 0 ? [new()] : copies;
     }
 
+    /// <summary>A line for one of the item, as picking it in the editor makes (automatic price); for forms opened with ?item=.</summary>
+    public static SalesLineModel ForItem(Item item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return new SalesLineModel
+        {
+            ItemId = item.Id, Description = item.Description ?? item.Name, Rate = item.Rate, Quantity = 1m, Taxable = item.Taxable,
+            AutoPrice = true, ListRate = item.Rate,
+        };
+    }
+
     public static SalesLineModel From(SalesLineDraft draft)
     {
         ArgumentNullException.ThrowIfNull(draft);

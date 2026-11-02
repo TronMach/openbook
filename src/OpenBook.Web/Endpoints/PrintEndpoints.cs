@@ -29,6 +29,26 @@ public static class PrintEndpoints
         app.MapPost("/print/put-back", async (IFormCollection form, PrintService print, CancellationToken ct) =>
             await Back(form, async () => await print.PutBackAsync(Id(form["item"]), ct))).RequireAuthorization();
 
+        // Fields: customer (each), from, to. Emails each their statement, then back to /print saying how it went.
+        app.MapPost("/print/statements/email", async (IFormCollection form, EmailService email, CancellationToken ct) =>
+        {
+            try
+            {
+                var customers = form["customer"].OfType<string>().Select(c => Id(c)).ToList();
+                if (customers.Count == 0)
+                    throw new DomainException("print.no_customers", "Tick the customers whose statements to send.");
+                var run = await email.SendStatementsAsync(customers, Date(form["from"], "start"), Date(form["to"], "end"), ct);
+                // Counts only: the page's list marks who has no email address, and names don't belong in an address bar.
+                var query = $"emailed={run.Sent.Count}&noEmail={run.NoEmail.Count}"
+                    + (run.Failed.Count == 0 ? "" : $"&printError={Uri.EscapeDataString($"{run.Failed.Count} couldn't be sent: {run.Failed[0].Reason}")}");
+                return Results.Redirect($"/print?{query}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/print?printError={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         // Fields: doc (each "Document:id", in print order), customer (each customer whose statement to print), from, to.
         // Answers with the PDF to show or print; refusals as a short page.
         app.MapPost("/print/pdf", async (IFormCollection form, PrintService print, CancellationToken ct) =>

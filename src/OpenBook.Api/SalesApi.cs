@@ -189,6 +189,9 @@ internal static class SalesApi
             !ApiPaging.Requested(skip, take) ? (await s.ListAsync(customerId, ct)).Select(InvoiceResponse.From)
             : customerId is not null ? ApiPaging.Page(response, await s.ListAsync(customerId, ct), skip, take, InvoiceResponse.From)
             : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentInvoicesAsync(from, count, ct), InvoiceResponse.From));
+        // The same invoice for several customers, all or none; ?preview=true shows each without making any.
+        sales.MapPost("/invoices/batch", async (BatchInvoiceCommand r, bool? preview, BatchInvoiceService s, CancellationToken ct) =>
+            preview == true ? await s.PreviewAsync(r, ct) : await s.CreateAsync(r, ct));
         sales.MapGet("/invoices/next-number", async (InvoiceService s, CancellationToken ct) => new { Number = await s.SuggestNumberAsync(ct) });
         sales.MapGet("/invoices/{id:guid}", async (Guid id, InvoiceService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } i ? Results.Ok(InvoiceResponse.From(i)) : Results.NotFound());

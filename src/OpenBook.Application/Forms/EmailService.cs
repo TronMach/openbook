@@ -22,6 +22,9 @@ public sealed record EmailSettingsCommand(
 /// <summary>A suggested message for a form; the user can edit it before sending.</summary>
 public sealed record EmailDraft(string To, string Subject, string Body);
 
+/// <summary>What happened when statements were emailed to several customers.</summary>
+public sealed record StatementEmailRun(IReadOnlyList<string> Sent, IReadOnlyList<string> NoEmail, IReadOnlyList<(string Customer, string Reason)> Failed);
+
 /// <summary>Email settings, and sending forms to customers as PDF attachments.</summary>
 public sealed class EmailService(
     ICompanyStore companies,
@@ -150,6 +153,46 @@ public sealed class EmailService(
         await SendAsync(Message(message, rendered), ct);
         sales.Add(Sent("customer", customerId, message.To, rendered.Title));
         await sales.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Emails each customer their statement for the period with the usual message, in name order, each send recorded
+    /// on its own. Customers without an email address are skipped and listed; a failed send is listed and the rest go
+    /// on. Stops before sending anything when email isn't set up.
+    /// </summary>
+    public async Task<StatementEmailRun> SendStatementsAsync(IReadOnlyCollection<Guid> customerIds, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(customerIds);
+        if (from > to)
+            throw new DomainException("statement.dates_invalid", "The statement's end date is before its start date.");
+        if (!(await GetSettingsAsync(ct)).IsConfigured)
+            throw new DomainException("email.not_configured", "Set up email in Settings before sending.");
+
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var sent = new List<string>();
+        var noEmail = new List<string>();
+        var failed = new List<(string, string)>();
+        foreach (var customer in customerIds.Distinct().Select(id => customers.GetValueOrDefault(id) ?? throw new EntityNotFoundException("customer", id))
+                     .OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(customer.Email))
+            {
+                noEmail.Add(customer.DisplayName);
+                continue;
+            }
+
+            try
+            {
+                await SendStatementAsync(customer.Id, from, to, await DraftStatementAsync(customer.Id, to, ct), ct);
+                sent.Add(customer.DisplayName);
+            }
+            catch (DomainException ex)
+            {
+                failed.Add((customer.DisplayName, ex.Message));
+            }
+        }
+
+        return new StatementEmailRun(sent, noEmail, failed);
     }
 
     private static EmailMessage Message(EmailDraft draft, RenderedForm rendered)

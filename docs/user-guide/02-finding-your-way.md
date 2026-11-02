@@ -95,6 +95,8 @@ Most pages for a single record (a customer, an invoice, a bill) share the same p
 - **Notes**: short free-text notes, each with who wrote it and when.
 - **History** (for accountants and administrators): every change to the record, who made it and what changed.
 
+Documents you enter often have **Copy** at the top (invoices, estimates, sales receipts, sales orders, bills, purchase orders, checks and expenses, journal entries): it opens a new one filled in from this one, dated today.
+
 ## Installing it as an app
 
 In browsers that support it (Chrome, Edge, Safari on iOS), you can install OpenBook from the address bar or the share menu. It then opens in its own window with its own icon. It still needs to reach the OpenBook server to show your books.

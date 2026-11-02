@@ -150,6 +150,10 @@
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
 
+    /// <summary>An item to start the first line with ("New transaction" in the Item Center).</summary>
+    [SupplyParameterFromQuery(Name = "item")]
+    private Guid? PresetItem { get; set; }
+
     /// <summary>An invoice to start from ("Copy" on its page).</summary>
     [SupplyParameterFromQuery(Name = "copy")]
     private Guid? Copy { get; set; }
@@ -214,6 +218,8 @@
         }
         else if (PresetCustomer is { } preset)
             await SetCustomerAsync(preset);
+        if (Copy is null && _items.FirstOrDefault(i => i.Id == PresetItem && i.IsActive) is { } presetItem)
+            _lines = [SalesLineModel.ForItem(presetItem)];
         _loaded = true;
     }
 
