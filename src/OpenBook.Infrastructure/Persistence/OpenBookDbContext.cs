@@ -1871,11 +1871,21 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(d => d.LogoContentType).HasMaxLength(20);
             b.Property(d => d.LogoPosition).HasConversion<string>().HasMaxLength(10);
             b.Property(d => d.LogoSize).HasConversion<string>().HasMaxLength(10);
-            b.Property(d => d.DescriptionLabel).HasMaxLength(FormColumnLabels.MaxLength);
-            b.Property(d => d.QuantityLabel).HasMaxLength(FormColumnLabels.MaxLength);
-            b.Property(d => d.RateLabel).HasMaxLength(FormColumnLabels.MaxLength);
-            b.Property(d => d.AmountLabel).HasMaxLength(FormColumnLabels.MaxLength);
+            b.Property(d => d.Margins).HasConversion<string>().HasMaxLength(10);
+            b.Property(d => d.TextSize).HasConversion<string>().HasMaxLength(10);
             b.Ignore(d => d.ColumnLabels);
+            b.Ignore(d => d.ShowShipTo);
+            b.Ignore(d => d.ShowTerms);
+            b.Ignore(d => d.ShowQuantityAndRate);
+            b.OwnsMany(d => d.Columns, c =>
+            {
+                c.ToTable("FormDesignColumns");
+                c.WithOwner().HasForeignKey("FormDesignId");
+                c.HasKey("FormDesignId", nameof(FormColumn.Key));
+                c.Property(x => x.Key).HasMaxLength(FormColumns.MaxKeyLength);
+                c.Property(x => x.Label).HasMaxLength(FormColumns.MaxLabelLength);
+            });
+            b.Navigation(d => d.Columns).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.OwnsMany(d => d.Texts, t =>
             {
                 t.ToTable("FormDesignTexts");

@@ -8,13 +8,23 @@ namespace OpenBook.Web.Endpoints;
 /// <summary>Form designs (Settings → Invoice style): create, save, logo, default, documents, switch off, preview; a customer's design.</summary>
 public static class FormDesignEndpoints
 {
+    /// <summary>"Start from" values naming a ready-made design.</summary>
+    public const string PresetPrefix = "preset:";
+
     public static IEndpointRouteBuilder MapFormDesignEndpoints(this IEndpointRouteBuilder app)
     {
-        // Fields: name, copyFrom (a design whose settings and logo to start from).
+        // Fields: name (optional with a ready-made design), copyFrom (a design whose settings and logo to start from, or
+        // "preset:{key}" for a ready-made design).
         app.MapPost("/settings/forms/new", async (IFormCollection form, FormDesignService designs, CancellationToken ct) =>
         {
             try
             {
+                if (form["copyFrom"].ToString() is var copy && copy.StartsWith(PresetPrefix, StringComparison.Ordinal))
+                {
+                    var made = await designs.CreateFromPresetAsync(copy[PresetPrefix.Length..], form["name"].ToString(), ct);
+                    return Results.Redirect($"/settings/forms/{made.Id}?done=created");
+                }
+
                 var from = Guid.TryParse(form["copyFrom"], out var id) ? await designs.GetAsync(id, ct) : null;
                 var details = (from?.ToDetails() ?? new FormDesignDetails("")) with { Name = form["name"].ToString() };
                 var design = await designs.CreateAsync(details, from?.Id, ct);
@@ -28,7 +38,7 @@ public static class FormDesignEndpoints
 
         // Fields: see Details.
         app.MapPost("/settings/forms/{id:guid}", async (Guid id, IFormCollection form, FormDesignService designs, CancellationToken ct) =>
-            await Back(id, async () => await designs.UpdateAsync(id, Details(k => form[k]), ct))).RequireAuthorization();
+            await Back(id, async () => await designs.UpdateAsync(id, Details(form), ct))).RequireAuthorization();
 
         // Field: logo (a PNG or JPEG file).
         app.MapPost("/settings/forms/{id:guid}/logo", async (Guid id, IFormFile? logo, FormDesignService designs, CancellationToken ct) =>
@@ -57,16 +67,18 @@ public static class FormDesignEndpoints
         app.MapPost("/settings/forms/{id:guid}/active", async (Guid id, IFormCollection form, FormDesignService designs, CancellationToken ct) =>
             await Back(id, async () => await designs.SetActiveAsync(id, form["active"] == "true", ct))).RequireAuthorization();
 
-        // A saved design on a sample document: design, document.
-        app.MapGet("/settings/forms/preview", async (Guid design, string? document, FormDesignService designs, CancellationToken ct) =>
+        // A saved design (design) or a ready-made one (preset, its key) on a sample document (document).
+        app.MapGet("/settings/forms/preview", async (Guid? design, string? preset, string? document, FormDesignService designs, CancellationToken ct) =>
         {
-            var saved = await designs.GetAsync(design, ct);
+            if (FormDesignPresets.Find(preset) is { } ready)
+                return await Preview(() => designs.PreviewAsync(ready.Details, Document(document), ct: ct));
+            var saved = design is { } id ? await designs.GetAsync(id, ct) : null;
             return saved is null ? Results.NotFound() : await Preview(() => designs.PreviewAsync(saved.ToDetails(), Document(document), saved.Id, ct));
         }).RequireAuthorization();
 
         // The editor's unsaved settings on a sample document: the editor's fields plus document and logoFrom (a design whose logo to show).
         app.MapPost("/settings/forms/preview", async (IFormCollection form, FormDesignService designs, CancellationToken ct) =>
-            await Preview(() => designs.PreviewAsync(Details(k => form[k]) with { Name = "Preview" }, Document(form["document"]),
+            await Preview(() => designs.PreviewAsync(Details(form) with { Name = "Preview" }, Document(form["document"]),
                 Guid.TryParse(form["logoFrom"], out var logoFrom) ? logoFrom : null, ct))).RequireAuthorization();
 
         // Field: family (as Google Fonts names it).
@@ -108,28 +120,39 @@ public static class FormDesignEndpoints
     }
 
     /// <summary>
-    /// The editor's fields: name, template, accentColor, footer, fontKey, paperSize, logoPosition, logoSize,
-    /// showShipTo / showTerms / showQuantityAndRate ("true" when ticked), labelDescription / labelQuantity / labelRate /
-    /// labelAmount, and title:{document} / message:{document}.
+    /// The editor's fields: name, template, accentColor, footer, fontKey, paperSize, logoPosition, logoSize, margins,
+    /// textSize, landscape / autoFieldColumns ("true" when ticked), show (each part ticked), the column table (columnKey for
+    /// every row in the table's order, and per key col:{key} = "true" when it prints, order:{key}, label:{key},
+    /// width:{key}), and title:{document} / message:{document}.
     /// </summary>
-    private static FormDesignDetails Details(Func<string, StringValues> field)
+    private static FormDesignDetails Details(IFormCollection form)
     {
-        T Pick<T>(string name, T fallback) where T : struct, Enum => Enum.TryParse<T>(field(name), out var value) && Enum.IsDefined(value) ? value : fallback;
+        T Pick<T>(string name, T fallback) where T : struct, Enum => Enum.TryParse<T>(form[name], out var value) && Enum.IsDefined(value) ? value : fallback;
+        int? Number(string name) => int.TryParse(form[name], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
         var texts = FormDesign.Each(FormDesign.AllDocuments).ToDictionary(
-            d => d, d => ((string?)field($"title:{d}").ToString(), (string?)field($"message:{d}").ToString()));
+            d => d, d => ((string?)form[$"title:{d}"].ToString(), (string?)form[$"message:{d}"].ToString()));
+        // Ticked columns by their order number; rows without one keep their place in the table.
+        var columns = form["columnKey"].OfType<string>()
+            .Select((key, index) => (Key: key, Index: index))
+            .Where(c => form[$"col:{c.Key}"] == "true")
+            .OrderBy(c => Number($"order:{c.Key}") ?? int.MaxValue).ThenBy(c => c.Index)
+            .Select(c => new FormColumnDraft(c.Key, form[$"label:{c.Key}"].ToString(), Number($"width:{c.Key}")))
+            .ToList();
         return new FormDesignDetails(
-            field("name").ToString(),
+            form["name"].ToString(),
             Pick("template", FormTemplate.Classic),
-            field("accentColor"),
-            field("footer"),
-            field("fontKey"),
+            form["accentColor"],
+            form["footer"],
+            form["fontKey"],
             Pick("paperSize", FormPaperSize.Letter),
             Pick("logoPosition", FormLogoPosition.Left),
             Pick("logoSize", FormLogoSize.Medium),
-            field("showShipTo") == "true",
-            field("showTerms") == "true",
-            field("showQuantityAndRate") == "true",
-            new FormColumnLabels(field("labelDescription"), field("labelQuantity"), field("labelRate"), field("labelAmount")),
+            form["show"].OfType<string>().Aggregate(FormParts.None, (all, p) => Enum.TryParse<FormParts>(p, out var part) ? all | part : all),
+            columns,
+            form["autoFieldColumns"] == "true",
+            form["landscape"] == "true",
+            Pick("margins", FormMargins.Normal),
+            Pick("textSize", FormTextSize.Medium),
             texts);
     }
 

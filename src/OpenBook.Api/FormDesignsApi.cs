@@ -9,17 +9,29 @@ namespace OpenBook.Api;
 
 public sealed record FormDesignTextResponse(FormDocuments Document, string? Title, string? Message);
 
+/// <param name="Key">A built-in column (number, item, description, sku, lots, class, taxable, quantity, rate, amount) or "field:{item custom field id}".</param>
+/// <param name="Label">The heading; null = the usual one (a custom field's name).</param>
+/// <param name="Width">A relative weight, 1–100; null = the column's usual width.</param>
+public sealed record FormColumnRequest(string Key, string? Label = null, int? Width = null);
+
+/// <param name="Show">What prints besides the lines (FormParts names).</param>
+/// <param name="ShowShipTo">Kept for older clients: the same as ShipTo in <paramref name="Show"/>.</param>
+/// <param name="ShowQuantityAndRate">Kept for older clients: whether <paramref name="Columns"/> has quantity and rate.</param>
 public sealed record FormDesignResponse(
     Guid Id, string Name, bool IsDefault, bool IsActive, IReadOnlyList<FormDocuments> DefaultFor, FormTemplate Template, string AccentColor, string? Footer,
-    string? FontKey, FormPaperSize PaperSize, bool HasLogo, FormLogoPosition LogoPosition, FormLogoSize LogoSize, bool ShowShipTo, bool ShowTerms,
-    bool ShowQuantityAndRate, FormColumnLabels ColumnLabels, IReadOnlyList<FormDesignTextResponse> Texts)
+    string? FontKey, FormPaperSize PaperSize, bool HasLogo, FormLogoPosition LogoPosition, FormLogoSize LogoSize, IReadOnlyList<FormParts> Show,
+    IReadOnlyList<FormColumnRequest> Columns, bool AutoFieldColumns, bool Landscape, FormMargins Margins, FormTextSize TextSize,
+    bool ShowShipTo, bool ShowTerms, bool ShowQuantityAndRate, FormColumnLabels ColumnLabels, IReadOnlyList<FormDesignTextResponse> Texts)
 {
     public static FormDesignResponse From(FormDesign d) => new(
         d.Id, d.Name, d.IsDefault, d.IsActive, [.. FormDesign.Each(d.DefaultFor)], d.Template, d.AccentColor, d.Footer, d.FontKey, d.PaperSize,
-        d.Logo is not null, d.LogoPosition, d.LogoSize, d.ShowShipTo, d.ShowTerms, d.ShowQuantityAndRate, d.ColumnLabels,
+        d.Logo is not null, d.LogoPosition, d.LogoSize, [.. FormDesign.EachPart(d.Show)], [.. d.Columns.Select(c => new FormColumnRequest(c.Key, c.Label, c.Width))],
+        d.AutoFieldColumns, d.Landscape, d.Margins, d.TextSize, d.ShowShipTo, d.ShowTerms, d.ShowQuantityAndRate, d.ColumnLabels,
         [.. d.Texts.Select(t => new FormDesignTextResponse(t.Document, t.Title, t.Message))]);
 }
 
+/// <param name="Show">What prints besides the lines (FormParts names); null = the usual parts, with <paramref name="ShowShipTo"/> and <paramref name="ShowTerms"/>.</param>
+/// <param name="Columns">The line table's columns in order; null = description, (quantity, rate,) amount from <paramref name="ShowQuantityAndRate"/> and <paramref name="ColumnLabels"/>.</param>
 public sealed record FormDesignRequest(
     string Name,
     FormTemplate Template = FormTemplate.Classic,
@@ -29,16 +41,36 @@ public sealed record FormDesignRequest(
     FormPaperSize PaperSize = FormPaperSize.Letter,
     FormLogoPosition LogoPosition = FormLogoPosition.Left,
     FormLogoSize LogoSize = FormLogoSize.Medium,
+    IReadOnlyList<FormParts>? Show = null,
+    IReadOnlyList<FormColumnRequest>? Columns = null,
+    bool AutoFieldColumns = true,
+    bool Landscape = false,
+    FormMargins Margins = FormMargins.Normal,
+    FormTextSize TextSize = FormTextSize.Medium,
     bool ShowShipTo = true,
     bool ShowTerms = true,
     bool ShowQuantityAndRate = true,
     FormColumnLabels? ColumnLabels = null,
     IReadOnlyList<FormDesignTextResponse>? Texts = null)
 {
-    public FormDesignDetails Details() => new(
-        Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, ShowShipTo, ShowTerms, ShowQuantityAndRate, ColumnLabels,
-        (Texts ?? []).ToDictionary(t => t.Document, t => (t.Title, t.Message)));
+    public FormDesignDetails Details()
+    {
+        var show = Show is { } parts
+            ? parts.Aggregate(FormParts.None, (all, p) => all | p)
+            : FormParts.Default & ~(ShowShipTo ? FormParts.None : FormParts.ShipTo) & ~(ShowTerms ? FormParts.None : FormParts.Terms);
+        var columns = Columns is { } chosen
+            ? chosen.Select(c => new FormColumnDraft(c.Key, c.Label, c.Width)).ToList()
+            : FormColumns.FromLegacy(ShowQuantityAndRate, ColumnLabels);
+        return new FormDesignDetails(
+            Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, show, columns, AutoFieldColumns, Landscape, Margins, TextSize,
+            (Texts ?? []).ToDictionary(t => t.Document, t => (t.Title, t.Message)));
+    }
 }
+
+public sealed record FormDesignPresetResponse(string Key, string Name, string Description, FormTemplate Template, string? AccentColor, string? FontKey);
+
+/// <param name="Name">The new design's name; null = the ready-made name (numbered when taken).</param>
+public sealed record FormDesignFromPresetRequest(string? Name = null);
 
 public sealed record FormDesignDocumentsRequest(IReadOnlyList<FormDocuments> Documents);
 
@@ -74,6 +106,17 @@ internal static class FormDesignsApi
         designs.MapPost("/", async (FormDesignRequest r, FormDesignService s, CancellationToken ct) =>
         {
             var d = await s.CreateAsync(r.Details(), ct: ct);
+            return Results.Created($"/api/settings/form-designs/{d.Id}", FormDesignResponse.From(d));
+        });
+        designs.MapGet("/presets", () => FormDesignPresets.All.Select(p =>
+            new FormDesignPresetResponse(p.Key, p.Details.Name, p.Description, p.Details.Template, p.Details.AccentColor, p.Details.FontKey)));
+        designs.MapGet("/presets/{key}/preview", async (string key, FormDocuments? document, FormDesignService s, CancellationToken ct) =>
+            FormDesignPresets.Find(key) is { } preset
+                ? Results.File(await s.PreviewAsync(preset.Details, document ?? FormDocuments.Invoice, ct: ct), "application/pdf")
+                : Results.NotFound());
+        designs.MapPost("/presets/{key}", async (string key, FormDesignFromPresetRequest? r, FormDesignService s, CancellationToken ct) =>
+        {
+            var d = await s.CreateFromPresetAsync(key, r?.Name, ct);
             return Results.Created($"/api/settings/form-designs/{d.Id}", FormDesignResponse.From(d));
         });
         designs.MapPut("/{id:guid}", async (Guid id, FormDesignRequest r, FormDesignService s, CancellationToken ct) =>

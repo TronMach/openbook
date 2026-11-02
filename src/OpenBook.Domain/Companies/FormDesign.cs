@@ -62,9 +62,11 @@ public sealed class FormDesignText
     };
 }
 
+/// <param name="Show">What prints besides the lines (<see cref="FormParts.Default"/> for a new design).</param>
+/// <param name="Columns">The line table's columns in order; null = description, quantity, rate and amount.</param>
+/// <param name="AutoFieldColumns">Item custom fields set to print as a column get one even when they aren't in <paramref name="Columns"/>.</param>
 /// <param name="Texts">Per document: its title and message; documents left out (or with both empty) print as usual.</param>
 /// <param name="FontKey">The font family's key (<c>null</c> = the built-in sans-serif).</param>
-/// <param name="ColumnLabels">Headings for the description, quantity, rate and amount columns; empty ones keep the usual words.</param>
 public sealed record FormDesignDetails(
     string Name,
     FormTemplate Template = FormTemplate.Classic,
@@ -74,20 +76,58 @@ public sealed record FormDesignDetails(
     FormPaperSize PaperSize = FormPaperSize.Letter,
     FormLogoPosition LogoPosition = FormLogoPosition.Left,
     FormLogoSize LogoSize = FormLogoSize.Medium,
-    bool ShowShipTo = true,
-    bool ShowTerms = true,
-    bool ShowQuantityAndRate = true,
-    FormColumnLabels? ColumnLabels = null,
+    FormParts Show = FormParts.Default,
+    IReadOnlyList<FormColumnDraft>? Columns = null,
+    bool AutoFieldColumns = true,
+    bool Landscape = false,
+    FormMargins Margins = FormMargins.Normal,
+    FormTextSize TextSize = FormTextSize.Medium,
     IReadOnlyDictionary<FormDocuments, (string? Title, string? Message)>? Texts = null);
 
+/// <summary>The four headings designs had before columns could be chosen (the API still takes them).</summary>
 public sealed record FormColumnLabels(string? Description = null, string? Quantity = null, string? Rate = null, string? Amount = null)
 {
     public const int MaxLength = 20;
 }
 
+/// <summary>One column of a design's line table (<see cref="FormColumns"/> lists the keys).</summary>
+public sealed class FormColumn
+{
+    private FormColumn() => Key = string.Empty;
+
+    public string Key { get; private set; }
+
+    /// <summary>The heading; null = the usual one (a custom field's name).</summary>
+    public string? Label { get; private set; }
+
+    /// <summary>A relative weight, 1–100.</summary>
+    public int Width { get; private set; }
+
+    public int Position { get; private set; }
+
+    internal static FormColumn Create(FormColumnDraft draft, int position)
+    {
+        var key = draft.Key?.Trim().ToLowerInvariant() ?? "";
+        if (!FormColumns.IsKnown(key))
+            throw new DomainException("formdesign.column_unknown", $"There's no column called \"{draft.Key}\".");
+        var width = draft.Width ?? FormColumns.DefaultWidth(key);
+        if (width is < 1 or > FormColumns.MaxWidth)
+            throw new DomainException("formdesign.column_width", $"Column widths go from 1 to {FormColumns.MaxWidth}.");
+        return new FormColumn
+        {
+            Key = key,
+            Label = Text.Optional(draft.Label, FormColumns.MaxLabelLength, "formdesign.column_too_long", "Column headings"),
+            Width = width,
+            Position = position,
+        };
+    }
+
+    public FormColumnDraft ToDraft() => new(Key, Label, Width);
+}
+
 /// <summary>
-/// A saved look for printed documents: template, color, font, logo, paper, what's shown, column headings, and each
-/// document's title and message. One design is the default; a design can be the default for some documents
+/// A saved look for printed documents: template, color, font, logo, paper and layout, what's shown, the line table's
+/// columns (built-in ones and item custom fields), and each document's title and message. One design is the default; a design can be the default for some documents
 /// (<see cref="DefaultFor"/>), and a customer can have their own (<c>Customer.FormDesignId</c>). Designs are switched
 /// off, never deleted, except that the default can't be.
 /// </summary>
@@ -101,6 +141,7 @@ public sealed class FormDesign
         | FormDocuments.SalesReceipt | FormDocuments.Statement | FormDocuments.PurchaseOrder;
 
     private readonly List<FormDesignText> _texts = [];
+    private readonly List<FormColumn> _columns = [];
 
     private FormDesign()
     {
@@ -128,17 +169,24 @@ public sealed class FormDesign
 
     public FormLogoPosition LogoPosition { get; private set; }
     public FormLogoSize LogoSize { get; private set; }
-    public bool ShowShipTo { get; private set; }
-    public bool ShowTerms { get; private set; }
-    public bool ShowQuantityAndRate { get; private set; }
-    public string? DescriptionLabel { get; private set; }
-    public string? QuantityLabel { get; private set; }
-    public string? RateLabel { get; private set; }
-    public string? AmountLabel { get; private set; }
+    public FormParts Show { get; private set; }
+    public bool AutoFieldColumns { get; private set; }
+    public bool Landscape { get; private set; }
+    public FormMargins Margins { get; private set; }
+    public FormTextSize TextSize { get; private set; }
     public IReadOnlyList<FormDesignText> Texts => _texts;
+
+    /// <summary>In print order.</summary>
+    public IReadOnlyList<FormColumn> Columns => [.. _columns.OrderBy(c => c.Position)];
+
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public FormColumnLabels ColumnLabels => new(DescriptionLabel, QuantityLabel, RateLabel, AmountLabel);
+    public bool ShowShipTo => Show.HasFlag(FormParts.ShipTo);
+    public bool ShowTerms => Show.HasFlag(FormParts.Terms);
+    public bool ShowQuantityAndRate => _columns.Any(c => c.Key == FormColumns.Quantity);
+
+    /// <summary>The headings of the four columns designs used to have (for the API's older fields).</summary>
+    public FormColumnLabels ColumnLabels => new(LabelOf(FormColumns.Description), LabelOf(FormColumns.Quantity), LabelOf(FormColumns.Rate), LabelOf(FormColumns.Amount));
 
     public static string Label(FormDocuments document) => document switch
     {
@@ -147,6 +195,10 @@ public sealed class FormDesign
         FormDocuments.PurchaseOrder => "Purchase orders",
         _ => document + "s",
     };
+
+    /// <summary>The single parts in a set, in the order the editor lists them.</summary>
+    public static IEnumerable<FormParts> EachPart(FormParts parts) =>
+        Enum.GetValues<FormParts>().Where(p => p is not (FormParts.None or FormParts.Default or FormParts.All) && parts.HasFlag(p));
 
     /// <summary>The single documents in a set, in menu order.</summary>
     public static IEnumerable<FormDocuments> Each(FormDocuments documents) =>
@@ -180,7 +232,9 @@ public sealed class FormDesign
         var color = string.IsNullOrWhiteSpace(details.AccentColor) ? Company.DefaultAccentColor : details.AccentColor.Trim().ToLowerInvariant();
         if (color.Length != 7 || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
             throw new DomainException("company.color_invalid", "Enter the accent color as #rrggbb.");
-        var labels = details.ColumnLabels ?? new FormColumnLabels();
+        if (!Enum.IsDefined(details.Margins) || !Enum.IsDefined(details.TextSize))
+            throw new DomainException("formdesign.option_invalid", "Choose the margins and text size from the lists.");
+        var columns = BuildColumns(details.Columns ?? FormColumns.Standard);
         var texts = new List<FormDesignText>();
         foreach (var (document, (title, message)) in details.Texts ?? new Dictionary<FormDocuments, (string?, string?)>())
         {
@@ -199,21 +253,21 @@ public sealed class FormDesign
         PaperSize = details.PaperSize;
         LogoPosition = details.LogoPosition;
         LogoSize = details.LogoSize;
-        ShowShipTo = details.ShowShipTo;
-        ShowTerms = details.ShowTerms;
-        ShowQuantityAndRate = details.ShowQuantityAndRate;
-        DescriptionLabel = Column(labels.Description);
-        QuantityLabel = Column(labels.Quantity);
-        RateLabel = Column(labels.Rate);
-        AmountLabel = Column(labels.Amount);
+        Show = details.Show & FormParts.All;
+        AutoFieldColumns = details.AutoFieldColumns;
+        Landscape = details.Landscape;
+        Margins = details.Margins;
+        TextSize = details.TextSize;
+        _columns.Clear();
+        _columns.AddRange(columns);
         _texts.Clear();
         _texts.AddRange(texts.OrderBy(t => t.Document));
     }
 
     /// <summary>The design's settings, to change a few and save them back.</summary>
     public FormDesignDetails ToDetails() => new(
-        Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, ShowShipTo, ShowTerms, ShowQuantityAndRate, ColumnLabels,
-        _texts.ToDictionary(t => t.Document, t => (t.Title, t.Message)));
+        Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, Show, [.. _columns.Select(c => c.ToDraft())], AutoFieldColumns,
+        Landscape, Margins, TextSize, _texts.ToDictionary(t => t.Document, t => (t.Title, t.Message)));
 
     /// <summary>The design's title for a document, else <paramref name="usual"/>.</summary>
     public string TitleFor(FormDocuments document, string usual) => _texts.FirstOrDefault(t => t.Document == document)?.Title ?? usual;
@@ -256,8 +310,19 @@ public sealed class FormDesign
         : content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF ? "image/jpeg"
         : null;
 
-    private static string? Column(string? label) =>
-        Text.Optional(label, FormColumnLabels.MaxLength, "formdesign.column_too_long", "Column headings");
+    private string? LabelOf(string key) => _columns.FirstOrDefault(c => c.Key == key)?.Label;
+
+    private static List<FormColumn> BuildColumns(IReadOnlyList<FormColumnDraft> drafts)
+    {
+        if (drafts.Count == 0)
+            throw new DomainException("formdesign.columns_required", "Choose at least one column for the lines.");
+        if (drafts.Count > FormColumns.MaxColumns)
+            throw new DomainException("formdesign.too_many_columns", $"A design can print at most {FormColumns.MaxColumns} columns.");
+        var columns = drafts.Select((d, i) => FormColumn.Create(d, i + 1)).ToList();
+        if (columns.Select(c => c.Key).Distinct().Count() != columns.Count)
+            throw new DomainException("formdesign.column_twice", "Each column can be chosen once.");
+        return columns;
+    }
 }
 
 /// <summary>Chooses the design a document prints with.</summary>

@@ -4,18 +4,34 @@ Invoices, estimates, credit memos, sales receipts, statements and purchase order
 
 ## Designs
 
-**Settings → Invoice and form designs** (`/settings/forms`) lists the designs with what each is used for, its template, font, paper and whether it has a logo. It needs the accountant role.
+**Settings → Invoice and form designs** (`/settings/forms`) lists the designs with what each is used for, its template, font, paper, how many columns it prints and whether it has a logo. It needs the accountant role.
 
-Setup makes one design, "Standard", which is the **default**: everything prints with it unless another design is chosen. To add one, fill in **New design**: a **Name**, and **Start from** either **A blank design** or a copy of an existing one, then **Create**.
+Setup makes one design, "Standard", which is the **default**: everything prints with it unless another design is chosen. To add one, fill in **New design**: a **Name**, and **Start from** either **A blank design**, a copy of one of your designs, or one of the ready-made designs, then **Create**.
+
+### Ready-made designs
+
+The **Ready-made designs** card has designs to start from:
+
+- **Service invoice**: hours and rates under a colored band, no shipping address.
+- **Product invoice**: item, description and SKU in a boxed grid, bill-to and ship-to side by side.
+- **Professional**: a centered serif heading and one amount per line (estimates are titled "Proposal").
+- **Bold**: an accent bar, a large title and a colored total, with lines to sign on estimates.
+- **Minimal**: black and white with hairlines and wide margins.
+- **Detailed**: small type and narrow margins for long invoices, with line numbers, item, lot and class.
+- **Wide**: landscape pages with room for many columns.
+- **Packing slip**: what was shipped, without prices or totals (see **Print with…** below).
+
+**Preview** (or **as an estimate**) shows one beside the list with your company's details. **Use this design** adds it as a design of your own, which you can change like any other; nothing else changes until you make it the default or choose it for documents or customers. Adding the same one twice numbers the name ("Bold 2").
 
 Each design has, on its page:
 
-- **Template**: **Classic**, **Modern (colored band)** or **Compact (smaller type)**, and an **Accent color**.
+- **Template**: **Classic (accent rule)**, **Modern (colored band)**, **Compact (smaller type)**, **Bold (accent bar, filled rows)**, **Minimal (hairlines)**, **Boxed (boxes and grid)** or **Elegant (centered, double rules)**, and an **Accent color**.
 - **Font**: the built-in OpenBook Sans or any font added under **Fonts** (below).
-- **Paper**: **US Letter** or **A4**.
-- **Logo**: upload a PNG or JPEG of up to 1 MB, choose where it goes (**Above the company name**, **Above the title, on the right** or **Centered at the top**) and the **Logo size** (Small, Medium, Large). **Remove the logo** takes it off.
-- **What's shown**: **The customer's shipping address, beside the bill-to address**; **Due date and terms**; **Quantity and rate columns** (off: only the amount).
-- **Column headings**: your own words for Description, Quantity, Rate and Amount (blank keeps the usual word).
+- **Paper**: **US Letter** or **A4**; **Margins** (Normal, **Narrow (more room for lines)**, Wide); **Text size** (Small, Medium, Large); and **Landscape pages** for many columns.
+- **Logo**: upload a PNG or JPEG of up to 1 MB, choose where it goes (**Above the company name**, **Above the title, on the right** or **Centered at the top**) and the **Logo size** (Small, Medium, Large). **Remove the logo** takes it off. The Elegant template always centers it.
+- **Columns**: the line table, one row per column you can print. Tick **Print** for each column you want, number them in **Order** from left to right, type a **Heading** of your own (blank keeps the usual word, for example "Hours" instead of "Qty") and set its **Width**: widths are shares of the page, so a column of 20 is twice as wide as one of 10. Up to 10 columns. Besides **Description**, **Qty**, **Rate** and **Amount** there are **#** (line numbers), **Item** (the product or service's name), **SKU** (the item's barcode), **Lot / serial**, **Class** and **Tax** (whether each line is taxed). Every item custom field is listed too, so you can print pack size, color or warranty as a column. Columns marked "when used" are left out of a document where every line is blank, so one design suits documents with and without them. Lot and serial numbers follow the description unless the design has a **Lot / serial** column.
+- **Add a column after the description for item custom fields set to print as a column**: item fields you haven't placed in the table still get a column of their own when the field says to print as a column; untick it and they print under the description instead.
+- **What's shown**: your company's address, phone number and email address; the customer's (or vendor's) email and phone; the customer's shipping address beside the bill-to address; due date and terms; **Totals** (untick for a packing slip); the "You saved" row; "Accepted by" and date lines to sign on estimates; shading every other line; and page numbers. Your own fields on customers and documents (PO number, ship via, sales rep…) print under the title when they're set to print on forms (**Settings → Custom fields**).
 - **Footer**: printed at the bottom of every page, for example bank details or "Make checks payable to…".
 - **Titles and messages**: a title and a message per kind of document, for example "Tax invoice" with a thank-you note. Blank keeps the usual title and adds no message.
 
@@ -28,6 +44,10 @@ The preview beside the form updates as you change things, so you can see the res
 3. Otherwise the default design (**Make it the default** on any design's page).
 
 A design you no longer want can be switched off (**Switch it off**); documents and customers that used it print with the default. The default design can't be switched off. Designs are never deleted.
+
+### Print with another design
+
+When you have more than one design, invoices, estimates, credit memos, sales receipts and purchase orders have **Print with…** beside **Print**: pick a design and that one copy prints with it, for example a packing slip to go in the box with an invoice. The document's usual design doesn't change.
 
 ## Fonts
 

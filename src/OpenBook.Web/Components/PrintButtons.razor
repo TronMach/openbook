@@ -1,10 +1,23 @@
 @using OpenBook.Application.Forms
 @using OpenBook.Domain.Companies
 @inject PrintService Print
+@inject FormDesignService Designs
 @inject NavigationManager Navigation
-@* Print (straight to the print dialog) and "print later" for a document's toolbar. *@
+@* Print (straight to the print dialog), print with another design (a packing slip, say), and "print later" for a document's toolbar. *@
 
 <button type="button" class="button secondary" data-print="@PdfUrl">Print</button>
+@if (_designs.Count > 1)
+{
+    <details class="menu center-new">
+        <summary class="button secondary" title="Print this document with another design">Print with…</summary>
+        <div class="menu-list">
+            @foreach (var design in _designs)
+            {
+                <a href="@WithDesign(design.Id)" data-print="@WithDesign(design.Id)">@design.Name</a>
+            }
+        </div>
+    </details>
+}
 @if (_canWrite)
 {
     <form method="post" action="@(_waiting ? "/print/queue/remove" : "/print/queue")" class="inline-form" data-enhance="false">
@@ -22,6 +35,7 @@
     private bool _waiting;
     private bool _canWrite;
     private string _returnUrl = "/";
+    private IReadOnlyList<FormDesign> _designs = [];
 
     [Parameter, EditorRequired]
     public FormDocuments Document { get; set; }
@@ -39,5 +53,8 @@
         _returnUrl = new Uri(Navigation.Uri).PathAndQuery.Split("printError=")[0].TrimEnd('&', '?');
         _canWrite = AuthState is not null && (await AuthState).User.CanPost("/print/queue");
         _waiting = await Print.IsWaitingAsync(Document, Id);
+        _designs = [.. (await Designs.ListAsync()).Where(d => d.IsActive)];
     }
+
+    private string WithDesign(Guid design) => $"{PdfUrl}{(PdfUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?')}design={design}";
 }

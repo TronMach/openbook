@@ -1403,19 +1403,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("AmountLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT");
+                    b.Property<bool>("AutoFieldColumns")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("DefaultFor")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("DescriptionLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("FontKey")
                         .HasMaxLength(80)
@@ -1429,6 +1424,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Landscape")
                         .HasColumnType("INTEGER");
 
                     b.Property<byte[]>("Logo")
@@ -1448,6 +1446,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Margins")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -1458,26 +1461,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("QuantityLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RateLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("ShowQuantityAndRate")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("ShowShipTo")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("ShowTerms")
+                    b.Property<int>("Show")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Template")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TextSize")
+                        .IsRequired()
+                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -6619,6 +6613,33 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Companies.FormDesign", b =>
                 {
+                    b.OwnsMany("OpenBook.Domain.Companies.FormColumn", "Columns", b1 =>
+                        {
+                            b1.Property<Guid>("FormDesignId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Key")
+                                .HasMaxLength(50)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Label")
+                                .HasMaxLength(30)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("Width")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("FormDesignId", "Key");
+
+                            b1.ToTable("FormDesignColumns", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("FormDesignId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Companies.FormDesignText", "Texts", b1 =>
                         {
                             b1.Property<Guid>("FormDesignId")
@@ -6643,6 +6664,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("FormDesignId");
                         });
+
+                    b.Navigation("Columns");
 
                     b.Navigation("Texts");
                 });

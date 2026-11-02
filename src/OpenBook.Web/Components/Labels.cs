@@ -93,7 +93,11 @@ public static class Labels
     {
         OpenBook.Domain.Companies.FormTemplate.Modern => "Modern (colored band)",
         OpenBook.Domain.Companies.FormTemplate.Compact => "Compact (smaller type)",
-        _ => "Classic",
+        OpenBook.Domain.Companies.FormTemplate.Bold => "Bold (accent bar, filled rows)",
+        OpenBook.Domain.Companies.FormTemplate.Minimal => "Minimal (hairlines)",
+        OpenBook.Domain.Companies.FormTemplate.Boxed => "Boxed (boxes and grid)",
+        OpenBook.Domain.Companies.FormTemplate.Elegant => "Elegant (centered, double rules)",
+        _ => "Classic (accent rule)",
     };
 
     public static string For(OpenBook.Domain.Purchases.Form1099Box box) => box switch

@@ -12,9 +12,10 @@ using PdfSharp.Pdf.IO;
 namespace OpenBook.Infrastructure.Forms;
 
 /// <summary>
-/// Invoices, estimates, credit memos, receipts and statements as PDF, with MigraDoc (PDFsharp 6.2, MIT), in
-/// one of three looks: Classic (accent rule under the heading), Modern (accent band across the top) and
-/// Compact (smaller type, for long invoices).
+/// Invoices, estimates, credit memos, receipts and statements as PDF, with MigraDoc (PDFsharp 6.2, MIT), in one of the
+/// <see cref="FormTemplate"/> looks: Classic (accent rule under the heading), Modern (accent band across the top),
+/// Compact (smaller type), Bold (accent bar, filled heading and total rows), Minimal (hairlines), Boxed (boxes and a
+/// full grid) and Elegant (centered heading between double rules). The line table prints the design's columns.
 /// </summary>
 internal sealed class MigraDocFormRenderer : IFormRenderer
 {
@@ -22,6 +23,9 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
     private const double CompactMargin = 36;
     private static readonly Color Grey = new(0x6b, 0x72, 0x80);
     private static readonly Color Rule = new(0xd9, 0xdd, 0xe3);
+    private static readonly Color Grid = new(0xb8, 0xbe, 0xc7);
+    private static readonly Color Ink = new(0x1d, 0x24, 0x30);
+    private static readonly Color Stripe = new(0xf3, 0xf4, 0xf6);
 
     static MigraDocFormRenderer()
     {
@@ -37,46 +41,13 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
 
         Header(section, look, form.Company, $"{form.Title.ToUpperInvariant()} {form.Number}", form.Facts);
         Parties(section, look, form.Customer, form.PartyLabel, form.ShipTo);
-
-        // Custom field columns sit between the description and the quantity, taking their room from the description.
-        var extra = form.ExtraColumns ?? [];
-        var labels = form.Style.ColumnLabels ?? new FormColumnLabels();
-        var counts = form.Style.ShowQuantityAndRate;
-        var table = Table(section, look, [Math.Max((counts ? 5 : 7.4) - (1.2 * extra.Count), 2), .. extra.Select(_ => 1.2), .. counts ? new[] { 1, 1.4 } : [], 1.4]);
-        Heading(table, look,
-        [
-            (labels.Description ?? "Description", false), .. extra.Select(c => (c, false)),
-            .. counts ? new[] { (labels.Quantity ?? "Qty", true), (labels.Rate ?? "Rate", true) } : [],
-            (labels.Amount ?? "Amount", true),
-        ]);
-        foreach (var line in form.Lines)
-        {
-            var row = Body(table, 1 + extra.Count,
-            [
-                line.Description ?? "",
-                .. extra.Select((_, i) => line.Extra is { } values && i < values.Count ? values[i] : ""),
-                .. counts
-                    ? new[]
-                    {
-                        line.Quantity is { } q ? q.ToString("0.####", CultureInfo.CurrentCulture) : "",
-                        line.Rate is { } r ? r.ToString("#,0.00##", CultureInfo.CurrentCulture) : "",
-                    }
-                    : [],
-                line.Amount is { } a ? Amount(a) : "",
-            ]);
-            if (line.Style != FormLineStyle.Normal)
-                row.Format.Font.Bold = true;
-            if (!string.IsNullOrEmpty(line.Details))
-            {
-                var details = row.Cells[0].AddParagraph(line.Details);
-                details.Format.Font.Size = look.Small;
-                details.Format.Font.Color = Grey;
-            }
-        }
-
-        Totals(section, look, form);
+        Lines(section, look, form);
+        if (form.Totals.Count > 0)
+            Totals(section, look, form);
         if (!string.IsNullOrWhiteSpace(form.Message))
             section.AddParagraph(form.Message).Format.SpaceBefore = 14;
+        if (form.Acceptance)
+            Acceptance(section, look);
 
         return Pdf(document);
     }
@@ -92,15 +63,18 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         BillTo(section, look, form.Customer);
 
         var activity = Table(section, look, [1.2, 3, 1.2, 1.2, 1.2]);
-        Heading(activity, look, ("Date", false), ("Activity", false), ("Reference", false), ("Amount", true), ("Balance", true));
-        Body(activity, 3, D(form.From), "Balance forward", "", "", Amount(form.OpeningBalance));
+        ColumnAlign[] aligns = [ColumnAlign.Left, ColumnAlign.Left, ColumnAlign.Left, ColumnAlign.Right, ColumnAlign.Right];
+        Heading(activity, look, [("Date", aligns[0]), ("Activity", aligns[1]), ("Reference", aligns[2]), ("Amount", aligns[3]), ("Balance", aligns[4])]);
+        var stripe = 0;
+        Body(activity, look, aligns, stripe++, D(form.From), "Balance forward", "", "", Amount(form.OpeningBalance));
         foreach (var line in form.Lines)
-            Body(activity, 3, D(line.Date), line.Activity, line.Reference, Amount(line.Amount), Amount(line.Balance));
+            Body(activity, look, aligns, stripe++, D(line.Date), line.Activity, line.Reference, Amount(line.Amount), Amount(line.Balance));
 
         section.AddParagraph().Format.SpaceAfter = 6;
         var aging = Table(section, look, [.. Enumerable.Repeat(1.0, form.Aging.Count + 1)]);
-        Heading(aging, look, [.. form.Aging.Select(a => (a.Label, true)), ("Amount due", true)]);
-        var row = Body(aging, 0, [.. form.Aging.Select(a => Amount(a.Amount)), Money(form.ClosingBalance, form.Currency)]);
+        var right = Enumerable.Repeat(ColumnAlign.Right, form.Aging.Count + 1).ToArray();
+        Heading(aging, look, [.. form.Aging.Select(a => (a.Label, ColumnAlign.Right)), ("Amount due", ColumnAlign.Right)]);
+        var row = Body(aging, look, right, 0, [.. form.Aging.Select(a => Amount(a.Amount)), Money(form.ClosingBalance, form.Currency)]);
         row.Cells[form.Aging.Count].Format.Font.Bold = true;
         if (!string.IsNullOrWhiteSpace(form.Message))
             section.AddParagraph(form.Message).Format.SpaceBefore = 14;
@@ -115,6 +89,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             throw new ArgumentException("No letters to render.", nameof(letters));
         var look = Look.For(letters[0].Style);
         var (document, section) = NewDocument(look, letters[0].Style.Footer, perSection: true);
+        ColumnAlign[] aligns = [ColumnAlign.Left, ColumnAlign.Left, ColumnAlign.Right];
         for (var i = 0; i < letters.Count; i++)
         {
             var letter = letters[i];
@@ -126,11 +101,12 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             section.AddParagraph(letter.Intro).Format.SpaceAfter = 10;
 
             var gifts = Table(section, look, [1.2, 4.6, 1.4]);
-            Heading(gifts, look, ("Date", false), ("Gift", false), ("Amount", true));
+            Heading(gifts, look, [("Date", aligns[0]), ("Gift", aligns[1]), ("Amount", aligns[2])]);
+            var stripe = 0;
             foreach (var gift in letter.Gifts)
-                Body(gifts, 2, D(gift.Date), gift.Description, gift.Amount == 0m ? "" : Amount(gift.Amount));
+                Body(gifts, look, aligns, stripe++, D(gift.Date), gift.Description, gift.Amount == 0m ? "" : Amount(gift.Amount));
             if (letter.Gifts.Count > 1)
-                Body(gifts, 2, "", "Total", Money(letter.Gifts.Sum(g => g.Amount), letter.Currency)).Format.Font.Bold = true;
+                Body(gifts, look, aligns, 0, "", "Total", Money(letter.Gifts.Sum(g => g.Amount), letter.Currency)).Format.Font.Bold = true;
 
             foreach (var paragraph in letter.Paragraphs)
                 section.AddParagraph(paragraph).Format.SpaceBefore = 10;
@@ -257,7 +233,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = look.Style.Font is { } font ? FormFontRegistry.Register(font) : SystemFontResolver.FamilyName;
         normal.Font.Size = look.Body;
-        normal.Font.Color = new Color(0x1d, 0x24, 0x30);
+        normal.Font.Color = Ink;
         return (document, AddSection(document, look, footer, perSection));
     }
 
@@ -266,13 +242,14 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var section = document.AddSection();
         section.PageSetup = document.DefaultPageSetup.Clone();
         // Setting PageFormat on a cloned setup doesn't change its size, so set the size explicitly.
-        (section.PageSetup.PageWidth, section.PageSetup.PageHeight) = look.Style.PaperSize == FormPaperSize.A4
+        var (width, height) = look.Style.PaperSize == FormPaperSize.A4
             ? (Unit.FromMillimeter(210), Unit.FromMillimeter(297))
             : (Unit.FromInch(8.5), Unit.FromInch(11));
-        var margin = Unit.FromPoint(look.Template == FormTemplate.Compact ? CompactMargin : PageMargin);
+        (section.PageSetup.PageWidth, section.PageSetup.PageHeight) = look.Style.Landscape ? (height, width) : (width, height);
+        var margin = Unit.FromPoint(look.Margin);
         (section.PageSetup.TopMargin, section.PageSetup.BottomMargin, section.PageSetup.LeftMargin, section.PageSetup.RightMargin) =
             (margin, margin + Unit.FromPoint(12), margin, margin);
-        section.PageSetup.FooterDistance = Unit.FromPoint(24);
+        section.PageSetup.FooterDistance = Unit.FromPoint(Math.Min(24, look.Margin - 4));
 
         var foot = section.Footers.Primary;
         if (!string.IsNullOrWhiteSpace(footer))
@@ -283,33 +260,49 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             text.Format.Font.Color = Grey;
         }
 
-        var pages = foot.AddParagraph();
-        pages.Format.Alignment = ParagraphAlignment.Center;
-        pages.Format.Font.Size = look.Small - 1;
-        pages.Format.Font.Color = Grey;
-        pages.AddText("Page ");
-        pages.AddPageField();
-        pages.AddText(" of ");
-        if (perSection)
+        if (look.Style.Show.HasFlag(FormParts.PageNumbers))
         {
-            section.PageSetup.StartingNumber = 1;
-            pages.AddSectionPagesField();
+            var pages = foot.AddParagraph();
+            pages.Format.Alignment = ParagraphAlignment.Center;
+            pages.Format.Font.Size = look.Small - 1;
+            pages.Format.Font.Color = Grey;
+            pages.AddText("Page ");
+            pages.AddPageField();
+            pages.AddText(" of ");
+            if (perSection)
+            {
+                section.PageSetup.StartingNumber = 1;
+                pages.AddSectionPagesField();
+            }
+            else
+                pages.AddNumPagesField();
         }
-        else
-            pages.AddNumPagesField();
+
         return section;
     }
 
     /// <summary>
-    /// Company on the left; title and facts on the right; an accent band (Modern) or rule (others). The logo goes
-    /// above the company name, above the title, or centered above both.
+    /// Company on the left; title and facts on the right; then the look's rule, band, bar or boxes. The logo goes above
+    /// the company name, above the title, or centered above both. Elegant centers everything instead.
     /// </summary>
     private static void Header(Section section, Look look, FormParty company, string title, IReadOnlyList<(string Label, string Value)> facts)
     {
+        if (look.Template == FormTemplate.Elegant)
+        {
+            ElegantHeader(section, look, company, title, facts);
+            return;
+        }
+
         var modern = look.Template == FormTemplate.Modern;
-        var ink = modern ? Colors.White : look.Accent;
+        var boxed = look.Template == FormTemplate.Boxed;
         var width = ContentWidth(section);
         var logo = look.Style.Logo;
+        if (look.Template == FormTemplate.Bold)
+        {
+            Bar(section, width, look.Accent, 7);
+            section.AddParagraph().Format.SpaceAfter = 6;
+        }
+
         if (logo is { Position: FormLogoPosition.Center })
         {
             var centered = section.AddParagraph();
@@ -353,8 +346,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         {
             var p = left.AddParagraph(line);
             p.Format.Font.Size = look.Small;
-            if (modern)
-                p.Format.Font.Color = Colors.White;
+            p.Format.Font.Color = modern ? Colors.White : look.Template == FormTemplate.Minimal ? Grey : Ink;
         }
 
         var right = row.Cells[1];
@@ -367,26 +359,153 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         }
 
         var heading = right.AddParagraph(title.Trim());
-        heading.Format.Font.Size = look.Body + 8;
-        heading.Format.Font.Bold = true;
-        heading.Format.Font.Color = ink;
-        foreach (var (label, value) in facts)
+        heading.Format.Font.Size = look.Template switch
         {
-            var p = right.AddParagraph();
-            p.Format.Font.Size = look.Small;
-            if (modern)
-                p.Format.Font.Color = Colors.White;
-            p.AddText($"{label}: ");
-            p.AddFormattedText(value, TextFormat.Bold);
+            FormTemplate.Bold => look.Body + 16,
+            FormTemplate.Minimal => look.Body + 10,
+            _ => look.Body + 8,
+        };
+        heading.Format.Font.Bold = look.Template != FormTemplate.Minimal;
+        heading.Format.Font.Color = modern ? Colors.White : look.Template == FormTemplate.Minimal ? Ink : look.Accent;
+        if (!boxed)
+        {
+            foreach (var (label, value) in facts)
+            {
+                var p = right.AddParagraph();
+                p.Format.Font.Size = look.Small;
+                p.Format.Font.Color = modern ? Colors.White : look.Template == FormTemplate.Minimal ? Grey : Ink;
+                p.AddText($"{label}: ");
+                p.AddFormattedText(value, TextFormat.Bold);
+            }
         }
 
-        if (!modern)
+        switch (look.Template)
         {
-            var rule = section.AddParagraph();
-            rule.Format.SpaceBefore = 10;
-            rule.Format.Borders.Bottom.Width = 2;
-            rule.Format.Borders.Bottom.Color = look.Accent;
+            case FormTemplate.Classic or FormTemplate.Compact:
+                var rule = section.AddParagraph();
+                rule.Format.SpaceBefore = 10;
+                rule.Format.Borders.Bottom.Width = 2;
+                rule.Format.Borders.Bottom.Color = look.Accent;
+                break;
+            case FormTemplate.Minimal:
+                var hairline = section.AddParagraph();
+                hairline.Format.SpaceBefore = 14;
+                hairline.Format.Borders.Bottom.Width = 0.5;
+                hairline.Format.Borders.Bottom.Color = Rule;
+                break;
+            case FormTemplate.Boxed when facts.Count > 0:
+                FactBoxes(section, look, facts, width);
+                break;
         }
+    }
+
+    /// <summary>Boxed: the facts in a small grid under the title, labels on a tinted row.</summary>
+    private static void FactBoxes(Section section, Look look, IReadOnlyList<(string Label, string Value)> facts, Unit width)
+    {
+        section.AddParagraph().Format.SpaceAfter = 4;
+        var shown = facts.Take(5).ToList();
+        var each = Unit.FromPoint(Math.Min(96, width.Point * 0.6 / shown.Count));
+        var table = section.AddTable();
+        foreach (var _ in shown)
+            table.AddColumn(each);
+        table.Rows.LeftIndent = width - (each * shown.Count);
+        GridBorders(table);
+        (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (Unit.FromPoint(3), Unit.FromPoint(3), Unit.FromPoint(4), Unit.FromPoint(4));
+        var labels = table.AddRow();
+        labels.Shading.Color = look.Tint;
+        var values = table.AddRow();
+        for (var i = 0; i < shown.Count; i++)
+        {
+            var label = labels.Cells[i].AddParagraph(shown[i].Label);
+            label.Format.Font.Size = look.Small;
+            label.Format.Font.Bold = true;
+            label.Format.Alignment = ParagraphAlignment.Center;
+            values.Cells[i].AddParagraph(shown[i].Value).Format.Alignment = ParagraphAlignment.Center;
+        }
+
+        // Facts beyond five (custom fields) follow as a line of text.
+        if (facts.Count > shown.Count)
+        {
+            var more = section.AddParagraph(string.Join("   ·   ", facts.Skip(shown.Count).Select(f => $"{f.Label}: {f.Value}")));
+            more.Format.Alignment = ParagraphAlignment.Right;
+            more.Format.Font.Size = look.Small;
+            more.Format.SpaceBefore = 4;
+        }
+    }
+
+    /// <summary>Elegant: logo, company and its contact line centered, a double rule, then the title and facts centered.</summary>
+    private static void ElegantHeader(Section section, Look look, FormParty company, string title, IReadOnlyList<(string Label, string Value)> facts)
+    {
+        var width = ContentWidth(section);
+        if (look.Style.Logo is { } logo)
+        {
+            var place = Centered(section.AddParagraph());
+            place.Format.SpaceAfter = 8;
+            AddLogo(place, logo, width * 0.5);
+        }
+
+        var name = Centered(section.AddParagraph(company.Name));
+        name.Format.Font.Size = look.Body + 7;
+        name.Format.Font.Bold = true;
+        var contact = PartyLines(company).ToList();
+        if (contact.Count > 0)
+        {
+            var line = Centered(section.AddParagraph(string.Join("   ·   ", contact)));
+            line.Format.Font.Size = look.Small;
+            line.Format.Font.Color = Grey;
+        }
+
+        section.AddParagraph().Format.SpaceAfter = 8;
+        DoubleRule(section, width, look.Accent);
+
+        var heading = Centered(section.AddParagraph(title.Trim()));
+        heading.Format.SpaceBefore = 10;
+        heading.Format.Font.Size = look.Body + 8;
+        heading.Format.Font.Bold = true;
+        heading.Format.Font.Color = look.Accent;
+        if (facts.Count > 0)
+        {
+            var p = Centered(section.AddParagraph());
+            p.Format.Font.Size = look.Small;
+            p.Format.SpaceBefore = 3;
+            for (var i = 0; i < facts.Count; i++)
+            {
+                if (i > 0)
+                    p.AddText("     ·     ");
+                p.AddText($"{facts[i].Label}: ");
+                p.AddFormattedText(facts[i].Value, TextFormat.Bold);
+            }
+        }
+    }
+
+    private static Paragraph Centered(Paragraph paragraph)
+    {
+        paragraph.Format.Alignment = ParagraphAlignment.Center;
+        return paragraph;
+    }
+
+    /// <summary>A solid bar across the content width.</summary>
+    private static void Bar(Section section, Unit width, Color color, double height)
+    {
+        var bar = section.AddTable();
+        bar.AddColumn(width);
+        bar.Rows.LeftIndent = 0;
+        var row = bar.AddRow();
+        row.Height = Unit.FromPoint(height);
+        row.HeightRule = RowHeightRule.Exactly;
+        row.Shading.Color = color;
+    }
+
+    /// <summary>Two thin lines close together.</summary>
+    private static void DoubleRule(Section section, Unit width, Color color)
+    {
+        var rule = section.AddTable();
+        rule.AddColumn(width);
+        rule.Rows.LeftIndent = 0;
+        var row = rule.AddRow();
+        row.Height = Unit.FromPoint(2.5);
+        row.HeightRule = RowHeightRule.Exactly;
+        (row.Borders.Top.Width, row.Borders.Top.Color, row.Borders.Bottom.Width, row.Borders.Bottom.Color) = (0.75, color, 0.75, color);
     }
 
     /// <summary>Bill-to alone, or bill-to and ship-to side by side.</summary>
@@ -399,26 +518,168 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         }
 
         section.AddParagraph().Format.SpaceBefore = 8;
-        var table = section.AddTable();
         var width = ContentWidth(section);
-        table.AddColumn(width * 0.5);
-        table.AddColumn(width * 0.5);
-        (table.LeftPadding, table.RightPadding) = (0, 0);
-        var row = table.AddRow();
-        foreach (var (cell, label, party) in new[] { (row.Cells[0], heading, customer), (row.Cells[1], "SHIP TO", shipTo) })
+        var table = section.AddTable();
+        var boxed = look.Template == FormTemplate.Boxed;
+        table.AddColumn(boxed ? width * 0.48 : width * 0.5);
+        if (boxed)
+            table.AddColumn(width * 0.04);
+        table.AddColumn(boxed ? width * 0.48 : width * 0.5);
+        if (boxed)
+            BoxPadding(table);
+        else
+            (table.LeftPadding, table.RightPadding) = (0, 0);
+
+        if (boxed)
         {
-            var title = cell.AddParagraph(label);
-            title.Format.Font.Size = look.Small;
-            title.Format.Font.Bold = true;
-            title.Format.Font.Color = look.Accent;
-            foreach (var line in party.Name.Split('\n'))
-                cell.AddParagraph(line).Format.Font.Bold = true;
-            foreach (var line in PartyLines(party))
-                cell.AddParagraph(line).Format.Font.Size = look.Small;
+            var titles = table.AddRow();
+            var body = table.AddRow();
+            foreach (var (column, label, party) in new[] { (0, heading, customer), (2, "SHIP TO", shipTo) })
+            {
+                Box(titles.Cells[column], body.Cells[column], look);
+                PartyHeading(titles.Cells[column].AddParagraph(label), look);
+                PartyBody(body.Cells[column], look, party);
+            }
+        }
+        else
+        {
+            var row = table.AddRow();
+            foreach (var (cell, label, party) in new[] { (row.Cells[0], heading, customer), (row.Cells[1], "SHIP TO", shipTo) })
+            {
+                PartyHeading(cell.AddParagraph(label), look);
+                PartyBody(cell, look, party);
+            }
         }
 
         section.AddParagraph().Format.SpaceAfter = 8;
     }
+
+    private static void BillTo(Section section, Look look, FormParty customer, string heading = "BILL TO")
+    {
+        if (look.Template == FormTemplate.Boxed)
+        {
+            section.AddParagraph().Format.SpaceBefore = 8;
+            var table = section.AddTable();
+            table.AddColumn(ContentWidth(section) * 0.48);
+            BoxPadding(table);
+            var title = table.AddRow();
+            var body = table.AddRow();
+            Box(title.Cells[0], body.Cells[0], look);
+            PartyHeading(title.Cells[0].AddParagraph(heading), look);
+            PartyBody(body.Cells[0], look, customer);
+            section.AddParagraph().Format.SpaceAfter = 8;
+            return;
+        }
+
+        var label = section.AddParagraph(heading);
+        label.Format.SpaceBefore = 16;
+        PartyHeading(label, look);
+        foreach (var line in customer.Name.Split('\n'))
+            section.AddParagraph(line).Format.Font.Bold = true;
+        foreach (var line in PartyLines(customer))
+            section.AddParagraph(line).Format.Font.Size = look.Small;
+        section.AddParagraph().Format.SpaceAfter = 8;
+    }
+
+    private static void PartyHeading(Paragraph label, Look look)
+    {
+        label.Format.Font.Size = look.Small;
+        label.Format.Font.Bold = true;
+        label.Format.Font.Color = look.Template switch
+        {
+            FormTemplate.Minimal => Grey,
+            FormTemplate.Boxed => Ink,
+            _ => look.Accent,
+        };
+    }
+
+    private static void PartyBody(Cell cell, Look look, FormParty party)
+    {
+        foreach (var line in party.Name.Split('\n'))
+            cell.AddParagraph(line).Format.Font.Bold = true;
+        foreach (var line in PartyLines(party))
+            cell.AddParagraph(line).Format.Font.Size = look.Small;
+    }
+
+    /// <summary>Boxed: a tinted title cell over a bordered body cell.</summary>
+    private static void Box(Cell title, Cell body, Look look)
+    {
+        title.Shading.Color = look.Tint;
+        foreach (var cell in new[] { title, body })
+        {
+            (cell.Borders.Left.Width, cell.Borders.Right.Width, cell.Borders.Top.Width, cell.Borders.Bottom.Width) = (0.5, 0.5, 0.5, 0.5);
+            (cell.Borders.Left.Color, cell.Borders.Right.Color, cell.Borders.Top.Color, cell.Borders.Bottom.Color) = (Grid, Grid, Grid, Grid);
+        }
+    }
+
+    private static void BoxPadding(Table table)
+    {
+        (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (Unit.FromPoint(3), Unit.FromPoint(3), Unit.FromPoint(6), Unit.FromPoint(6));
+        table.Rows.LeftIndent = 0;
+    }
+
+    private static void GridBorders(Table table)
+    {
+        table.Borders.Width = 0.5;
+        table.Borders.Color = Grid;
+    }
+
+    /// <summary>
+    /// The line table with the design's columns: optional ones only when some line has a value, custom field columns only
+    /// once their heading is known. Notes, group headings and details go in the description column (else the item column,
+    /// else the first); lot numbers follow the description when there's no column for them.
+    /// </summary>
+    private static void Lines(Section section, Look look, SalesForm form)
+    {
+        var columns = form.Style.TableColumns
+            .Where(c => c.Label is not null && (!c.Optional || form.Lines.Any(l => l.Cell(c.Key) is not null)))
+            .ToList();
+        if (columns.Count == 0)
+            columns = [FormTableColumn.For(FormColumns.Description)];
+        var lots = columns.Any(c => c.Key == FormColumns.Lots);
+        var text = columns.Any(c => c.Key == FormColumns.Description) ? FormColumns.Description
+            : columns.Any(c => c.Key == FormColumns.Item) ? FormColumns.Item
+            : columns[0].Key;
+        var textIndex = columns.FindIndex(c => c.Key == text);
+        var aligns = columns.Select(c => c.Align).ToArray();
+
+        var table = Table(section, look, [.. columns.Select(c => (double)c.Width)]);
+        Heading(table, look, [.. columns.Select(c => (c.Label!, c.Align))]);
+        var number = 0;
+        var stripe = 0;
+        foreach (var line in form.Lines)
+        {
+            int? n = line.Style == FormLineStyle.Normal && line.Quantity is not null ? ++number : null;
+            var cells = columns.Select(c => c.Key == text ? TextOf(line, text, lots) : Value(line, c.Key, n)).ToArray();
+            var row = Body(table, look, aligns, line.Style == FormLineStyle.Normal ? stripe++ : 0, cells);
+            if (line.Style != FormLineStyle.Normal)
+                row.Format.Font.Bold = true;
+            if (!string.IsNullOrEmpty(line.Details))
+            {
+                var details = row.Cells[textIndex].AddParagraph(line.Details);
+                details.Format.Font.Size = look.Small;
+                details.Format.Font.Color = Grey;
+            }
+        }
+    }
+
+    private static string TextOf(FormLine line, string key, bool lotsColumn)
+    {
+        var text = key == FormColumns.Item ? line.Cell(FormColumns.Item) ?? line.Description ?? ""
+            : key == FormColumns.Description ? line.Description ?? ""
+            : line.Cell(key) ?? line.Description ?? "";
+        return !lotsColumn && line.Cell(FormColumns.Lots) is { } lots ? $"{text} · {lots}" : text;
+    }
+
+    private static string Value(FormLine line, string key, int? number) => key switch
+    {
+        FormColumns.Description => line.Description ?? "",
+        FormColumns.Number => number?.ToString(CultureInfo.CurrentCulture) ?? "",
+        FormColumns.Quantity => line.Quantity is { } q ? q.ToString("0.####", CultureInfo.CurrentCulture) : "",
+        FormColumns.Rate => line.Rate is { } r ? r.ToString("#,0.00##", CultureInfo.CurrentCulture) : "",
+        FormColumns.Amount => line.Amount is { } a ? Amount(a) : "",
+        _ => line.Cell(key) ?? "",
+    };
 
     /// <summary>The logo at its size's height, narrowed to fit <paramref name="maxWidth"/>, keeping its shape.</summary>
     private static void AddLogo(Paragraph paragraph, FormLogo logo, Unit maxWidth)
@@ -450,20 +711,6 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         return null;
     }
 
-    private static void BillTo(Section section, Look look, FormParty customer, string heading = "BILL TO")
-    {
-        var label = section.AddParagraph(heading);
-        label.Format.SpaceBefore = 16;
-        label.Format.Font.Size = look.Small;
-        label.Format.Font.Bold = true;
-        label.Format.Font.Color = look.Accent;
-        foreach (var line in customer.Name.Split('\n'))
-            section.AddParagraph(line).Format.Font.Bold = true;
-        foreach (var line in PartyLines(customer))
-            section.AddParagraph(line).Format.Font.Size = look.Small;
-        section.AddParagraph().Format.SpaceAfter = 8;
-    }
-
     /// <summary>A full-width table with columns in the given proportions.</summary>
     private static Table Table(Section section, Look look, double[] weights)
     {
@@ -472,66 +719,144 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var total = weights.Sum();
         foreach (var weight in weights)
             table.AddColumn(width * (weight / total));
-        var padding = Unit.FromPoint(look.Template == FormTemplate.Compact ? 2 : 4);
-        (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (padding, padding, Unit.FromPoint(2), Unit.FromPoint(2));
+        var padding = Unit.FromPoint(look.Template == FormTemplate.Compact ? 2 : look.Template == FormTemplate.Minimal ? 5 : 4);
+        var side = Unit.FromPoint(look.Template is FormTemplate.Boxed or FormTemplate.Bold ? 4 : 2);
+        (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (padding, padding, side, side);
+        if (look.Template == FormTemplate.Boxed)
+            GridBorders(table);
+        if (look.Template is FormTemplate.Boxed or FormTemplate.Bold)
+            table.Rows.LeftIndent = 0;
         return table;
     }
 
-    private static void Heading(Table table, Look look, params (string Text, bool Right)[] cells)
+    private static void Heading(Table table, Look look, (string Text, ColumnAlign Align)[] cells)
     {
         var row = table.AddRow();
         row.HeadingFormat = true;
-        row.Borders.Bottom.Width = 1;
-        row.Borders.Bottom.Color = look.Accent;
+        var color = look.Accent;
+        switch (look.Template)
+        {
+            case FormTemplate.Bold:
+                row.Shading.Color = look.Accent;
+                color = Colors.White;
+                break;
+            case FormTemplate.Boxed:
+                row.Shading.Color = look.Tint;
+                color = Ink;
+                break;
+            case FormTemplate.Minimal:
+                (row.Borders.Bottom.Width, row.Borders.Bottom.Color) = (0.5, Grey);
+                color = Grey;
+                break;
+            case FormTemplate.Elegant:
+                (row.Borders.Top.Width, row.Borders.Top.Color, row.Borders.Bottom.Width, row.Borders.Bottom.Color) = (0.75, look.Accent, 0.75, look.Accent);
+                break;
+            default:
+                (row.Borders.Bottom.Width, row.Borders.Bottom.Color) = (1, look.Accent);
+                break;
+        }
+
         for (var i = 0; i < cells.Length; i++)
         {
-            var p = row.Cells[i].AddParagraph(cells[i].Text);
+            var p = row.Cells[i].AddParagraph(look.Template == FormTemplate.Minimal ? cells[i].Text.ToUpperInvariant() : cells[i].Text);
             p.Format.Font.Size = look.Small;
             p.Format.Font.Bold = true;
-            p.Format.Font.Color = look.Accent;
-            if (cells[i].Right)
-                p.Format.Alignment = ParagraphAlignment.Right;
+            p.Format.Font.Color = color;
+            p.Format.Alignment = Align(cells[i].Align);
         }
     }
 
-    /// <summary>A body row; columns from <paramref name="rightFrom"/> on hold amounts and are right-aligned.</summary>
-    private static Row Body(Table table, int rightFrom, params string[] cells)
+    /// <summary>A body row; <paramref name="index"/> picks the shaded ones when the design stripes its rows.</summary>
+    private static Row Body(Table table, Look look, ColumnAlign[] aligns, int index, params string[] cells)
     {
         var row = table.AddRow();
-        row.Borders.Bottom.Width = 0.5;
-        row.Borders.Bottom.Color = Rule;
+        if (look.Template != FormTemplate.Boxed)
+            (row.Borders.Bottom.Width, row.Borders.Bottom.Color) = (look.Template == FormTemplate.Minimal ? 0.25 : 0.5, Rule);
+        if (look.Style.Show.HasFlag(FormParts.StripedRows) && index % 2 == 1)
+            row.Shading.Color = Stripe;
         for (var i = 0; i < cells.Length; i++)
-        {
-            var p = row.Cells[i].AddParagraph(cells[i]);
-            if (i >= rightFrom)
-                p.Format.Alignment = ParagraphAlignment.Right;
-        }
-
+            row.Cells[i].AddParagraph(cells[i]).Format.Alignment = Align(aligns[i]);
         return row;
     }
+
+    private static ParagraphAlignment Align(ColumnAlign align) => align switch
+    {
+        ColumnAlign.Right => ParagraphAlignment.Right,
+        ColumnAlign.Center => ParagraphAlignment.Center,
+        _ => ParagraphAlignment.Left,
+    };
 
     private static void Totals(Section section, Look look, SalesForm form)
     {
         section.AddParagraph().Format.SpaceAfter = 6;
         var width = ContentWidth(section);
         var table = section.AddTable();
+        table.AddColumn(Unit.FromPoint(130));
         table.AddColumn(Unit.FromPoint(120));
-        table.AddColumn(Unit.FromPoint(120));
-        table.Rows.LeftIndent = width - Unit.FromPoint(240);
-        (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (Unit.FromPoint(2), Unit.FromPoint(2), 0, 0);
+        table.Rows.LeftIndent = width - Unit.FromPoint(250);
+        var filled = look.Template is FormTemplate.Bold or FormTemplate.Boxed;
+        var side = Unit.FromPoint(filled ? 6 : 0);
+        (table.TopPadding, table.BottomPadding, table.LeftPadding, table.RightPadding) = (Unit.FromPoint(filled ? 3 : 2), Unit.FromPoint(filled ? 3 : 2), side, side);
+        if (look.Template == FormTemplate.Boxed)
+            GridBorders(table);
         foreach (var total in form.Totals)
         {
             var row = table.AddRow();
             var label = row.Cells[0].AddParagraph(total.Label);
             var value = row.Cells[1].AddParagraph(total.Emphasis ? Money(total.Amount, form.Currency) : Amount(total.Amount));
             value.Format.Alignment = ParagraphAlignment.Right;
-            if (total.Emphasis)
+            if (!total.Emphasis)
+                continue;
+
+            row.VerticalAlignment = VerticalAlignment.Center;
+            label.Format.Font.Bold = true;
+            value.Format.Font.Bold = true;
+            value.Format.Font.Size = look.Body + 2;
+            switch (look.Template)
             {
-                label.Format.Font.Bold = true;
-                label.Format.Font.Color = look.Accent;
-                value.Format.Font.Bold = true;
-                value.Format.Font.Size = look.Body + 2;
+                case FormTemplate.Bold:
+                    row.Shading.Color = look.Accent;
+                    label.Format.Font.Color = Colors.White;
+                    value.Format.Font.Color = Colors.White;
+                    break;
+                case FormTemplate.Boxed:
+                    row.Shading.Color = look.Tint;
+                    break;
+                case FormTemplate.Minimal:
+                    (row.Borders.Top.Width, row.Borders.Top.Color) = (0.5, Ink);
+                    value.Format.Font.Color = look.Accent;
+                    break;
+                case FormTemplate.Elegant:
+                    (row.Borders.Top.Width, row.Borders.Top.Color, row.Borders.Bottom.Width, row.Borders.Bottom.Color) = (0.75, look.Accent, 0.75, look.Accent);
+                    label.Format.Font.Color = look.Accent;
+                    break;
+                default:
+                    label.Format.Font.Color = look.Accent;
+                    break;
             }
+        }
+    }
+
+    /// <summary>Lines for the customer to sign and date an estimate.</summary>
+    private static void Acceptance(Section section, Look look)
+    {
+        section.AddParagraph().Format.SpaceAfter = 30;
+        var width = ContentWidth(section);
+        var table = section.AddTable();
+        table.AddColumn(width * 0.55);
+        table.AddColumn(width * 0.08);
+        table.AddColumn(width * 0.37);
+        (table.LeftPadding, table.RightPadding) = (0, 0);
+        table.KeepTogether = true;
+        var line = table.AddRow();
+        line.Height = Unit.FromPoint(24);
+        var labels = table.AddRow();
+        foreach (var (column, text) in new[] { (0, "Accepted by"), (2, "Date") })
+        {
+            (line.Cells[column].Borders.Bottom.Width, line.Cells[column].Borders.Bottom.Color) = (0.75, Ink);
+            var p = labels.Cells[column].AddParagraph(text);
+            p.Format.Font.Size = look.Small;
+            p.Format.Font.Color = Grey;
         }
     }
 
@@ -581,18 +906,28 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
 
     private static string D(DateOnly date) => date.ToString("d", CultureInfo.CurrentCulture);
 
-    private sealed record Look(FormTemplate Template, Color Accent, double Body, double Small, FormStyle Style)
+    /// <param name="Tint">The accent mixed into white, for boxed headings.</param>
+    /// <param name="Margin">Page margin in points.</param>
+    private sealed record Look(FormTemplate Template, Color Accent, Color Tint, double Body, double Small, double Margin, FormStyle Style)
     {
         public static Look For(FormStyle style)
         {
             var hex = style.AccentColor.TrimStart('#');
-            var accent = new Color(
+            var (r, g, b) = (
                 byte.Parse(hex[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
                 byte.Parse(hex[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
                 byte.Parse(hex[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
-            return style.Template == FormTemplate.Compact
-                ? new Look(style.Template, accent, 8.5, 7.5, style)
-                : new Look(style.Template, accent, 10, 8.5, style);
+            static byte Mix(byte c) => (byte)Math.Round(255 - ((255 - c) * 0.14));
+            var compact = style.Template == FormTemplate.Compact;
+            var size = style.TextSize switch { FormTextSize.Small => -1, FormTextSize.Large => 1.5, _ => 0 };
+            var margin = style.Margins switch
+            {
+                FormMargins.Narrow => 28,
+                FormMargins.Wide => 66,
+                _ => compact ? CompactMargin : PageMargin,
+            };
+            return new Look(style.Template, new Color(r, g, b), new Color(Mix(r), Mix(g), Mix(b)),
+                (compact ? 8.5 : 10) + size, (compact ? 7.5 : 8.5) + size, margin, style);
         }
     }
 }

@@ -5,6 +5,7 @@ using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
+using OpenBook.Domain.Segments;
 
 namespace OpenBook.Application.Forms;
 
@@ -20,20 +21,31 @@ public enum FormKind
 public sealed record RenderedForm(string FileName, byte[] Pdf, Guid CustomerId, string Title);
 
 /// <summary>Builds printable invoices, estimates, credit memos, sales receipts and statements, and renders them to PDF.</summary>
-public sealed class FormService(ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer, CustomFields.CustomFieldService customFields, FormDesignService designs)
+public sealed class FormService(
+    ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer, CustomFields.CustomFieldService customFields,
+    FormDesignService designs, Segments.SegmentService segments)
 {
-    public async Task<RenderedForm> RenderAsync(FormKind kind, Guid id, CancellationToken ct = default)
+    /// <summary>The label of the totals row <see cref="FormParts.Savings"/> shows or hides.</summary>
+    public const string SavingsLabel = "You saved";
+
+    public Task<RenderedForm> RenderAsync(FormKind kind, Guid id, CancellationToken ct = default) => RenderAsync(kind, id, null, ct);
+
+    /// <param name="designId">Print with this design rather than the usual one (a packing slip, say); null = the usual one.</param>
+    public async Task<RenderedForm> RenderAsync(FormKind kind, Guid id, Guid? designId, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var form = await BuildAsync(company, kind, id, ct);
+        var form = await BuildAsync(company, kind, id, designId, ct);
         return new RenderedForm(FileName(company, form.Form.Title, form.Form.Number), renderer.Render(form.Form), form.CustomerId, $"{form.Form.Title} {form.Form.Number}");
     }
 
-    /// <summary>The form's content, as <see cref="RenderAsync"/> prints it.</summary>
+    /// <summary>The form's content, as <see cref="RenderAsync(FormKind, Guid, Guid?, CancellationToken)"/> prints it.</summary>
     public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, CancellationToken ct = default) =>
-        (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, ct)).Form;
+        (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, null, ct)).Form;
 
-    private async Task<(SalesForm Form, Guid CustomerId)> BuildAsync(Company company, FormKind kind, Guid id, CancellationToken ct)
+    public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, Guid? designId, CancellationToken ct = default) =>
+        (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, designId, ct)).Form;
+
+    private async Task<(SalesForm Form, Guid CustomerId)> BuildAsync(Company company, FormKind kind, Guid id, Guid? designId, CancellationToken ct)
     {
         var (form, customerId) = kind switch
         {
@@ -43,7 +55,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             _ => await ReceiptAsync(company, id, ct),
         };
         var document = Document(kind);
-        var design = await designs.ForAsync(document, customerId == Guid.Empty ? null : customerId, ct);
+        var design = await designs.ChosenAsync(document, customerId == Guid.Empty ? null : customerId, designId, ct);
         return (await customFields.DecorateAsync(await designs.ApplyAsync(form, design, document, ct), id, ct), customerId);
     }
 
@@ -94,7 +106,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         totals.Add(new FormTotal("Balance due", invoice.Balance, Emphasis: true));
         AddSavings(totals, invoice.Lines);
         var title = invoice.Status == DocumentStatus.Voided ? "Invoice (void)" : "Invoice";
-        return (Form(company, customer, title, invoice.Number, facts, invoice.Lines, totals, invoice.Memo), customer.Id);
+        return (Form(company, customer, title, invoice.Number, facts, await LinesAsync(invoice.Lines, invoice.TaxCodeId, ct), totals, invoice.Memo), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> EstimateAsync(Company company, Guid id, CancellationToken ct)
@@ -106,7 +118,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
             facts.Add(("Valid until", D(expires)));
         List<FormTotal> totals = [.. TaxTotals(estimate.Lines, estimate.TaxCodeId, estimate.TaxExemption), new FormTotal("Total", estimate.Total, Emphasis: true)];
         AddSavings(totals, estimate.Lines);
-        return (Form(company, customer, "Estimate", estimate.Number, facts, estimate.Lines, totals, estimate.Memo), customer.Id);
+        return (Form(company, customer, "Estimate", estimate.Number, facts, await LinesAsync(estimate.Lines, estimate.TaxCodeId, ct), totals, estimate.Memo), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> CreditMemoAsync(Company company, Guid id, CancellationToken ct)
@@ -118,7 +130,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         if (credit.Total != credit.Balance)
             totals.Add(new FormTotal("Used", credit.Balance - credit.Total));
         totals.Add(new FormTotal("Credit remaining", credit.Balance, Emphasis: true));
-        return (Form(company, customer, "Credit memo", credit.Number, [("Date", D(credit.Date))], credit.Lines, totals, credit.Memo), customer.Id);
+        return (Form(company, customer, "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> ReceiptAsync(Company company, Guid id, CancellationToken ct)
@@ -131,15 +143,15 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         var party = customer is null ? new FormParty("Cash sale") : CustomerParty(customer);
         List<FormTotal> totals = [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)];
         AddSavings(totals, receipt.Lines);
-        var form = new SalesForm("Sales receipt", receipt.Number, CompanyParty(company), party, facts, Lines(receipt.Lines),
+        var form = new SalesForm("Sales receipt", receipt.Number, CompanyParty(company), party, facts, await LinesAsync(receipt.Lines, receipt.TaxCodeId, ct),
             totals, receipt.Memo, company.HomeCurrency.Code, Unstyled, ShipTo: customer is null ? null : ShipToParty(customer));
         return (form, customer?.Id ?? Guid.Empty);
     }
 
     private static SalesForm Form(
         Company company, Customer customer, string title, string number, IReadOnlyList<(string, string)> facts,
-        IEnumerable<SalesLine> lines, IReadOnlyList<FormTotal> totals, string? message) =>
-        new(title, number, CompanyParty(company), CustomerParty(customer), facts, Lines(lines), totals, message, company.HomeCurrency.Code, Unstyled,
+        IReadOnlyList<FormLine> lines, IReadOnlyList<FormTotal> totals, string? message) =>
+        new(title, number, CompanyParty(company), CustomerParty(customer), facts, lines, totals, message, company.HomeCurrency.Code, Unstyled,
             ShipTo: ShipToParty(customer));
 
     /// <summary>
@@ -153,7 +165,7 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
     private static void AddSavings(List<FormTotal> totals, IEnumerable<SalesLine> lines)
     {
         if (Savings(lines) is var saved and > 0m)
-            totals.Add(new FormTotal("You saved", saved));
+            totals.Add(new FormTotal(SavingsLabel, saved));
     }
 
     /// <summary>Subtotal and one row per tax line, ahead of the total; nothing for an untaxed document.</summary>
@@ -169,17 +181,50 @@ public sealed class FormService(ICompanyStore companies, ISalesStore store, Rece
         return totals;
     }
 
-    private static List<FormLine> Lines(IEnumerable<SalesLine> lines) => SalesLineGroups.Arrange(lines)
-        .Select(shown => shown.Line is not { } l
-            ? new FormLine(shown.Heading, null, null, shown.Subtotal, shown.Subtotal is null ? FormLineStyle.Heading : FormLineStyle.Subtotal)
-            : l.Kind switch
-            {
-                SalesLineKind.Note => new FormLine(l.Description, null, null, null, LineNumber: l.LineNumber),
-                SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber),
-                // Lot and serial numbers follow the description, so a customer's copy shows what was shipped.
-                _ => new FormLine(l.Lots is { } lots ? $"{l.Description} · {lots}" : l.Description, l.Quantity, l.Rate, l.Amount, LineNumber: l.LineNumber),
-            })
-        .ToList();
+    /// <summary>
+    /// The printed lines, with what the design's columns may show: item name and SKU, lot and serial numbers (printed after
+    /// the description unless the design has a column for them, so a customer's copy shows what was shipped), class, and
+    /// whether each line is taxed (only on documents that charge tax).
+    /// </summary>
+    private async Task<List<FormLine>> LinesAsync(IReadOnlyList<SalesLine> lines, Guid? taxCodeId, CancellationToken ct)
+    {
+        var itemIds = lines.Select(l => l.ItemId).OfType<Guid>().Distinct().ToList();
+        var items = itemIds.Count == 0 ? new Dictionary<Guid, Item>() : await store.GetItemsAsync(itemIds, ct);
+        var classes = lines.Any(l => l.ClassId is not null)
+            ? (await segments.ListAsync(SegmentKind.Class, ct: ct)).ToDictionary(c => c.Segment.Id, c => c.FullName)
+            : [];
+        string? ClassOf(SalesLine l) => l.ClassId is { } id ? classes.GetValueOrDefault(id) : null;
+
+        return SalesLineGroups.Arrange(lines)
+            .Select(shown => shown.Line is not { } l
+                ? new FormLine(shown.Heading, null, null, shown.Subtotal, shown.Subtotal is null ? FormLineStyle.Heading : FormLineStyle.Subtotal)
+                : l.Kind switch
+                {
+                    SalesLineKind.Note => new FormLine(l.Description, null, null, null, LineNumber: l.LineNumber),
+                    SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber,
+                        Cells: Cells(null, null, ClassOf(l), null)),
+                    _ => new FormLine(l.Description, l.Quantity, l.Rate, l.Amount, LineNumber: l.LineNumber,
+                        Cells: Cells(l.ItemId is { } item ? items.GetValueOrDefault(item) : null, l.Lots, ClassOf(l), taxCodeId is null ? null : l.Taxable)),
+                })
+            .ToList();
+    }
+
+    /// <summary>The built-in column values of a line (blank ones left out).</summary>
+    internal static Dictionary<string, string> Cells(Item? item, string? lots, string? className, bool? taxable)
+    {
+        var cells = new Dictionary<string, string>();
+        if (item is not null)
+            cells[FormColumns.Item] = item.Name;
+        if (item?.Barcode is { } barcode)
+            cells[FormColumns.Sku] = barcode;
+        if (!string.IsNullOrWhiteSpace(lots))
+            cells[FormColumns.Lots] = lots;
+        if (className is not null)
+            cells[FormColumns.Class] = className;
+        if (taxable is { } taxed)
+            cells[FormColumns.Taxable] = taxed ? "Yes" : "No";
+        return cells;
+    }
 
     private async Task<Customer> RequiredCustomerAsync(Guid id, CancellationToken ct) =>
         await store.GetCustomerAsync(id, ct) ?? throw new EntityNotFoundException("customer", id);

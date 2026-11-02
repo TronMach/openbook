@@ -53,8 +53,8 @@ public static class PurchasingEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapGet("/purchases/orders/{id:guid}/pdf", async (Guid id, PurchaseOrderForms forms, CancellationToken ct) =>
-            Results.File((await forms.RenderAsync(id, ct)).Pdf, "application/pdf")).RequireAuthorization();
+        app.MapGet("/purchases/orders/{id:guid}/pdf", async (Guid id, Guid? design, PurchaseOrderForms forms, CancellationToken ct) =>
+            Results.File((await forms.RenderAsync(id, design, ct)).Pdf, "application/pdf")).RequireAuthorization();
 
         app.MapPost("/purchases/orders/{id:guid}/email", async (Guid id, IFormCollection form, PurchaseOrderForms forms, CancellationToken ct) =>
         {

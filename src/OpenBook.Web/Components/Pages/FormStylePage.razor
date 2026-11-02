@@ -1,5 +1,6 @@
 @page "/settings/forms"
 @using OpenBook.Domain.Companies
+@using OpenBook.Web.Endpoints
 @inject FormDesignService Designs
 @inject FormFontService Fonts
 
@@ -25,7 +26,7 @@
     <div class="card">
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Design</th><th>Used for</th><th>Template</th><th>Font</th><th>Paper</th><th>Logo</th><th>Status</th></tr></thead>
+                <thead><tr><th>Design</th><th>Used for</th><th>Template</th><th>Font</th><th>Paper</th><th>Columns</th><th>Logo</th><th>Status</th></tr></thead>
                 <tbody>
                     @foreach (var design in _designs)
                     {
@@ -40,7 +41,8 @@
                             <td>@UsedFor(design)</td>
                             <td class="muted">@Labels.For(design.Template)</td>
                             <td class="muted">@(_fonts.FirstOrDefault(f => f.Key == design.FontKey)?.Family ?? FormFontService.BuiltInName)</td>
-                            <td class="muted">@design.PaperSize</td>
+                            <td class="muted">@design.PaperSize@(design.Landscape ? ", landscape" : "")</td>
+                            <td class="muted">@design.Columns.Count</td>
                             <td class="muted">@(design.Logo is null ? "" : "Yes")</td>
                             <td class="muted">@(design.IsActive ? "" : "Switched off")</td>
                         </tr>
@@ -49,6 +51,45 @@
             </table>
         </div>
     </div>
+
+    <section class="card" id="ready-made">
+        <h2>Ready-made designs</h2>
+        <p class="muted">
+            Start from one of these and change anything: colors, font, logo, columns, what's shown. Each becomes a design of your own;
+            nothing changes until you make it the default or choose it for some documents or customers.
+        </p>
+        <div class="preset-gallery">
+            <ul class="preset-list">
+                @foreach (var preset in FormDesignPresets.All)
+                {
+                    var details = preset.Details;
+                    <li class="preset">
+                        <div class="preset-swatch preset-@details.Template.ToString().ToLowerInvariant()" style="--swatch: @(details.AccentColor ?? Company.DefaultAccentColor)" aria-hidden="true">
+                            <span class="bar"></span><span class="line"></span><span class="line short"></span><span class="line"></span>
+                        </div>
+                        <div class="preset-text">
+                            <strong>@details.Name</strong>
+                            <span class="muted">@preset.Description</span>
+                            <span class="hint">@Labels.For(details.Template) · @(_fonts.FirstOrDefault(f => f.Key == details.FontKey)?.Family ?? FormFontService.BuiltInName)@(details.Landscape ? " · landscape" : "")</span>
+                            <span class="inline-actions">
+                                <a href="/settings/forms/preview?preset=@preset.Key&document=@FormDocuments.Invoice" target="preset-preview">Preview</a>
+                                <a href="/settings/forms/preview?preset=@preset.Key&document=@FormDocuments.Estimate" target="preset-preview">as an estimate</a>
+                                <form method="post" action="/settings/forms/new" class="inline-form" data-enhance="false">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="copyFrom" value="@(FormDesignEndpoints.PresetPrefix + preset.Key)" />
+                                    <button type="submit" class="secondary">Use this design</button>
+                                </form>
+                            </span>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <div class="design-preview">
+                <iframe name="preset-preview" title="Preview of a ready-made design" src="/settings/forms/preview?preset=@FormDesignPresets.All[0].Key&document=@FormDocuments.Invoice"></iframe>
+                <p class="muted">A sample document with your company's details.</p>
+            </div>
+        </div>
+    </section>
 
     <section class="card" id="fonts">
         <h2>Fonts</h2>
@@ -132,10 +173,18 @@
                     <label for="copyFrom">Start from</label>
                     <select id="copyFrom" name="copyFrom">
                         <option value="">A blank design</option>
-                        @foreach (var design in _designs)
-                        {
-                            <option value="@design.Id" selected="@design.IsDefault">A copy of @design.Name</option>
-                        }
+                        <optgroup label="Your designs">
+                            @foreach (var design in _designs)
+                            {
+                                <option value="@design.Id" selected="@design.IsDefault">A copy of @design.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Ready-made">
+                            @foreach (var preset in FormDesignPresets.All)
+                            {
+                                <option value="@(FormDesignEndpoints.PresetPrefix + preset.Key)">@preset.Details.Name</option>
+                            }
+                        </optgroup>
                     </select>
                 </div>
             </div>

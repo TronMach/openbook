@@ -1,9 +1,11 @@
 using System.Text.Json;
 using OpenBook.Application.Companies;
+using OpenBook.Application.CustomFields;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
+using OpenBook.Domain.CustomFields;
 
 namespace OpenBook.Application.Forms;
 
@@ -21,10 +23,12 @@ public interface IFormDesignStore
 
 /// <summary>
 /// Saved form designs: which one a document prints with (<see cref="FormDesigns.Pick"/>), applying it to a form
-/// (title, message, ship-to, terms, look), and previews from sample data while a design is edited.
+/// (title, message, what's shown, look), ready-made designs (<see cref="FormDesignPresets"/>), and previews from sample
+/// data while a design is edited.
 /// </summary>
 public sealed class FormDesignService(
-    IFormDesignStore store, ISalesStore sales, ICompanyStore companies, IFormRenderer renderer, FormFontService fonts, IClock clock, ICurrentUser user)
+    IFormDesignStore store, ISalesStore sales, ICompanyStore companies, IFormRenderer renderer, FormFontService fonts, ICustomFieldStore fields,
+    IClock clock, ICurrentUser user)
 {
     public const string EntityType = "form_style";
     public const string DefaultName = "Standard";
@@ -40,6 +44,7 @@ public sealed class FormDesignService(
     {
         var designs = await store.ListAsync(ct);
         await EnsureFontAsync(details, ct);
+        await EnsureFieldsAsync(details, ct);
         var design = FormDesign.Create(details, clock.UtcNow, isDefault: designs.Count == 0);
         EnsureUnique(designs, design.Name, design.Id);
         if (copyLogoFrom is { } from && designs.FirstOrDefault(d => d.Id == from)?.Logo is { } logo)
@@ -50,9 +55,25 @@ public sealed class FormDesignService(
         return design;
     }
 
+    /// <summary>
+    /// A new design from a ready-made one, named <paramref name="name"/> (else the ready-made name, with a number when
+    /// a design already has it).
+    /// </summary>
+    public async Task<FormDesign> CreateFromPresetAsync(string key, string? name = null, CancellationToken ct = default)
+    {
+        var preset = FormDesignPresets.Find(key) ?? throw new DomainException("formdesign.preset_unknown", "There's no such ready-made design.");
+        var taken = (await store.ListAsync(ct)).Select(d => d.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var chosen = string.IsNullOrWhiteSpace(name) ? preset.Details.Name : name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            for (var n = 2; taken.Contains(chosen); n++)
+                chosen = $"{preset.Details.Name} {n}";
+        return await CreateAsync(preset.Details with { Name = chosen }, ct: ct);
+    }
+
     public async Task<FormDesign> UpdateAsync(Guid id, FormDesignDetails details, CancellationToken ct = default)
     {
         await EnsureFontAsync(details, ct);
+        await EnsureFieldsAsync(details, ct);
         return await ChangeAsync(id, (design, designs) =>
         {
             design.Update(details);
@@ -152,6 +173,18 @@ public sealed class FormDesignService(
         return FormDesigns.Pick(designs, document, chosen);
     }
 
+    /// <summary>
+    /// <paramref name="designId"/> when one is given (an active design: printing a packing slip, say), else the design the
+    /// document usually prints with (<see cref="ForAsync"/>).
+    /// </summary>
+    public async Task<FormDesign> ChosenAsync(FormDocuments document, Guid? customerId, Guid? designId, CancellationToken ct = default)
+    {
+        if (designId is not { } id || id == Guid.Empty)
+            return await ForAsync(document, customerId, ct);
+        var design = await GetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        return design.IsActive ? design : throw new DomainException("formdesign.inactive", $"{design.Name} is switched off.");
+    }
+
     /// <summary>The default design's look, for forms that aren't one of <see cref="FormDocuments"/> (donor letters).</summary>
     public async Task<FormStyle> DefaultStyleAsync(CancellationToken ct = default) =>
         await StyleAsync((await store.ListAsync(ct)).FirstOrDefault(d => d.IsDefault) ?? Standard(), ct);
@@ -168,8 +201,9 @@ public sealed class FormDesignService(
         Apply(form, design, await StyleAsync(design, ct));
 
     /// <summary>
-    /// A form with a design applied: its title (keeping a "(void)" after it), its message after the memo, ship-to and
-    /// terms shown or not, and its look.
+    /// A form with a design applied: its title (keeping a "(void)" after it), its message after the memo, what's shown
+    /// (company and customer contact details, ship-to, terms, totals, the "You saved" row, acceptance lines on estimates),
+    /// and its look.
     /// </summary>
     public static SalesForm Apply(SalesForm form, FormDesign design, FormDocuments document, FormStyle style)
     {
@@ -179,12 +213,19 @@ public sealed class FormDesignService(
         var title = design.TitleFor(document, usual) is var own && own != usual && form.Title.StartsWith(usual, StringComparison.Ordinal)
             ? own + form.Title[usual.Length..]
             : form.Title;
+        var show = design.Show;
         return form with
         {
             Title = title,
+            Company = CompanyShown(form.Company, show),
+            Customer = CustomerShown(form.Customer, show),
             Facts = design.ShowTerms ? form.Facts : [.. form.Facts.Where(f => f.Label is not ("Terms" or "Due date"))],
+            Totals = !show.HasFlag(FormParts.Totals) ? []
+                : show.HasFlag(FormParts.Savings) ? form.Totals
+                : [.. form.Totals.Where(t => t.Label != FormService.SavingsLabel)],
             Message = Join(form.Message, design.MessageFor(document)),
             ShipTo = design.ShowShipTo ? form.ShipTo : null,
+            Acceptance = document == FormDocuments.Estimate && show.HasFlag(FormParts.Acceptance),
             Style = style,
         };
     }
@@ -196,10 +237,22 @@ public sealed class FormDesignService(
         return form with
         {
             Title = design.TitleFor(FormDocuments.Statement, form.Title),
+            Company = CompanyShown(form.Company, design.Show),
+            Customer = CustomerShown(form.Customer, design.Show),
             Message = Join(form.Message, design.MessageFor(FormDocuments.Statement)),
             Style = style,
         };
     }
+
+    private static FormParty CompanyShown(FormParty company, FormParts show) => company with
+    {
+        Address = show.HasFlag(FormParts.CompanyAddress) ? company.Address : null,
+        Phone = show.HasFlag(FormParts.CompanyPhone) ? company.Phone : null,
+        Email = show.HasFlag(FormParts.CompanyEmail) ? company.Email : null,
+    };
+
+    private static FormParty CustomerShown(FormParty customer, FormParts show) =>
+        show.HasFlag(FormParts.CustomerContact) ? customer : customer with { Email = null, Phone = null };
 
     public static string UsualTitle(FormDocuments document) => document switch
     {
@@ -215,10 +268,12 @@ public sealed class FormDesignService(
     /// </summary>
     public async Task<byte[]> PreviewAsync(FormDesignDetails details, FormDocuments document, Guid? logoFrom = null, CancellationToken ct = default)
     {
+        await EnsureFieldsAsync(details, ct);
         var design = FormDesign.Create(details, clock.UtcNow);
         if (logoFrom is { } id && (await GetAsync(id, ct))?.Logo is { } logo)
             design.SetLogo(logo);
         var company = await companies.GetRequiredCompanyAsync(ct);
+        var placed = await PlacedFieldsAsync(details, ct);
         var from = FormService.CompanyParty(company);
         var customer = new FormParty("Sample Customer Ltd", "100 Main Street\nSpringfield, IL 62701", "accounts@example.com", "(555) 010-0100");
         var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
@@ -240,16 +295,52 @@ public sealed class FormDesignService(
             UsualTitle(document), "1001", from, document == FormDocuments.PurchaseOrder ? new FormParty("Sample Supplier Co", "20 Industrial Way\nRiverside, CA 92501") : customer,
             facts,
             [
-                new FormLine("Consulting services", 6m, 95m, 570m, LineNumber: 1),
-                new FormLine("Widget, blue", 12m, 4.5m, 54m, LineNumber: 2, Details: "Pack size: Case of 12"),
-                new FormLine("Delivery", 1m, 25m, 25m, LineNumber: 3),
+                new FormLine("Consulting services", 6m, 95m, 570m, LineNumber: 1,
+                    Cells: Sample(new() { [FormColumns.Item] = "Consulting", [FormColumns.Class] = "Services", [FormColumns.Taxable] = "No" })),
+                new FormLine("Widget, blue", 12m, 4.5m, 54m, LineNumber: 2, Details: "Pack size: Case of 12",
+                    Cells: Sample(new() { [FormColumns.Item] = "Widget", [FormColumns.Sku] = "WID-BLU-12", [FormColumns.Lots] = "LOT-2410 x 12", [FormColumns.Class] = "Products", [FormColumns.Taxable] = "Yes" })),
+                new FormLine("Delivery", 1m, 25m, 25m, LineNumber: 3,
+                    Cells: Sample(new() { [FormColumns.Item] = "Delivery", [FormColumns.Class] = "Services", [FormColumns.Taxable] = "Yes" })),
             ],
             [new FormTotal("Subtotal", 649m), new FormTotal("Sales tax", 51.92m), new FormTotal("Total", 700.92m, Emphasis: true)],
             null, company.HomeCurrency.Code, FormStyle.From(design),
             PartyLabel: document == FormDocuments.PurchaseOrder ? "VENDOR" : "BILL TO",
             ShipTo: document == FormDocuments.PurchaseOrder ? null : new FormParty("Sample Customer Ltd", "Dock 4, 250 Commerce Drive\nSpringfield, IL 62702"));
-        return renderer.Render(await ApplyAsync(form, design, document, ct));
+        var applied = await ApplyAsync(form, design, document, ct);
+        return renderer.Render(applied with { Style = applied.Style with { Columns = [.. applied.Style.TableColumns.Select(c => FieldColumn(c, placed))] } });
+
+        Dictionary<string, string> Sample(Dictionary<string, string> cells)
+        {
+            foreach (var field in placed.Values)
+                cells[FormColumns.Field(field.Id)] = SampleValue(field, today);
+            return cells;
+        }
     }
+
+    /// <summary>A custom field column with the field's name as its heading (unless the design gives one) and numbers on the right.</summary>
+    public static FormTableColumn FieldColumn(FormTableColumn column, IReadOnlyDictionary<Guid, CustomField> fields)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentNullException.ThrowIfNull(fields);
+        if (FormColumns.FieldId(column.Key) is not { } id || !fields.TryGetValue(id, out var field))
+            return column;
+        return column with
+        {
+            Label = column.Label ?? field.Name,
+            Align = field.Type is CustomFieldType.WholeNumber or CustomFieldType.DecimalNumber or CustomFieldType.Money ? ColumnAlign.Right : ColumnAlign.Left,
+        };
+    }
+
+    private static string SampleValue(CustomField field, DateOnly today) => field.Type switch
+    {
+        CustomFieldType.WholeNumber => "12",
+        CustomFieldType.DecimalNumber => "2.5",
+        CustomFieldType.Money => 4.5m.ToString("N2", System.Globalization.CultureInfo.CurrentCulture),
+        CustomFieldType.Date => today.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+        CustomFieldType.YesNo => "Yes",
+        CustomFieldType.PickList when field.OptionList is [var first, ..] => first,
+        _ => "Sample",
+    };
 
     internal static FormDesign Standard() => FormDesign.Create(new FormDesignDetails(DefaultName), DateTimeOffset.UnixEpoch, isDefault: true);
 
@@ -273,6 +364,25 @@ public sealed class FormDesignService(
     {
         if (!await fonts.ExistsAsync(details.FontKey, ct))
             throw new DomainException("font.unknown", "That font isn't available: choose one from the list, or add it first.");
+    }
+
+    /// <summary>Custom field columns must name item fields (only those have values on each line).</summary>
+    private async Task EnsureFieldsAsync(FormDesignDetails details, CancellationToken ct)
+    {
+        var wanted = (details.Columns ?? []).Select(c => FormColumns.FieldId(c.Key)).OfType<Guid>().ToList();
+        if (wanted.Count == 0)
+            return;
+        var items = (await fields.ListFieldsAsync(ct)).Where(f => f.Target == CustomFieldTarget.Item).Select(f => f.Id).ToHashSet();
+        if (wanted.Any(id => !items.Contains(id)))
+            throw new DomainException("formdesign.field_unknown", "Columns can show item custom fields only; that field isn't one.");
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, CustomField>> PlacedFieldsAsync(FormDesignDetails details, CancellationToken ct)
+    {
+        var wanted = (details.Columns ?? []).Select(c => FormColumns.FieldId(c.Key)).OfType<Guid>().ToHashSet();
+        return wanted.Count == 0
+            ? new Dictionary<Guid, CustomField>()
+            : (await fields.ListFieldsAsync(ct)).Where(f => wanted.Contains(f.Id)).ToDictionary(f => f.Id);
     }
 
     private static void EnsureUnique(IEnumerable<FormDesign> designs, string name, Guid id)
@@ -302,10 +412,12 @@ public sealed class FormDesignService(
         Logo = d.Logo is { } logo ? $"{d.LogoContentType}, {logo.Length:N0} bytes, {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo))[..12]}" : null,
         LogoPosition = d.LogoPosition.ToString(),
         LogoSize = d.LogoSize.ToString(),
-        d.ShowShipTo,
-        d.ShowTerms,
-        d.ShowQuantityAndRate,
-        Columns = new[] { d.DescriptionLabel, d.QuantityLabel, d.RateLabel, d.AmountLabel },
+        Show = d.Show.ToString(),
+        Columns = d.Columns.Select(c => c.Label is null ? $"{c.Key} ({c.Width})" : $"{c.Key} \"{c.Label}\" ({c.Width})"),
+        d.AutoFieldColumns,
+        d.Landscape,
+        Margins = d.Margins.ToString(),
+        TextSize = d.TextSize.ToString(),
         Texts = d.Texts.Select(t => new { Document = t.Document.ToString(), t.Title, t.Message }),
     });
 }

@@ -3,6 +3,7 @@ using OpenBook.Application.Attachments;
 using OpenBook.Application.Forms;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.CustomFields;
 
 namespace OpenBook.Application.CustomFields;
@@ -228,38 +229,50 @@ public sealed class CustomFieldService(ICustomFieldStore store, IAttachmentStore
     }
 
     /// <summary>
-    /// Adds the document's printed custom fields to its form: record-level values as facts under the title, item
-    /// values under each line's description or in their own columns.
+    /// Adds the document's custom fields to its form (after its design is applied): printed record-level values as facts
+    /// under the title; item values in the design's columns for them (printed even when the field isn't marked to print),
+    /// else, for printed fields, in a column of their own after the description (fields set to print as a column, when the
+    /// design adds those) or under the description.
     /// </summary>
     public async Task<SalesForm> DecorateAsync(SalesForm form, Guid documentId, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(form);
-        var fields = (await store.ListFieldsAsync(ct)).Where(f => f.PrintOnForms).ToDictionary(f => f.Id);
+        var all = (await store.ListFieldsAsync(ct)).ToDictionary(f => f.Id);
+        var style = form.Style;
+        var placed = style.TableColumns.Select(c => FormColumns.FieldId(c.Key)).OfType<Guid>().Where(all.ContainsKey).ToHashSet();
+        var fields = all.Values.Where(f => f.PrintOnForms || placed.Contains(f.Id)).ToDictionary(f => f.Id);
         var values = (await store.ListValuesAsync([documentId], ct)).Where(v => fields.ContainsKey(v.FieldId)).ToList();
+        var columns = style.TableColumns.Select(c => FormDesignService.FieldColumn(c, all)).ToList();
         if (values.Count == 0)
-            return form;
+            return form with { Style = style with { Columns = columns } };
 
-        var facts = Ordered(values.Where(v => v.LineNumber == 0).Select(v => fields[v.FieldId]))
+        var facts = Ordered(values.Where(v => v.LineNumber == 0).Select(v => fields[v.FieldId]).Where(f => f.PrintOnForms))
             .Select(f => (f.Name, f.Display(values.First(v => v.LineNumber == 0 && v.FieldId == f.Id).Value)));
         var lines = values.Where(v => v.LineNumber > 0).GroupBy(v => v.LineNumber)
             .ToDictionary(g => g.Key, g => g.ToDictionary(v => v.FieldId, v => fields[v.FieldId].Display(v.Value)));
-        var columns = Ordered(lines.Values.SelectMany(l => l.Keys).Distinct().Select(id => fields[id]).Where(f => f.Placement == CustomFieldPlacement.Column)).ToList();
-        var under = Ordered(lines.Values.SelectMany(l => l.Keys).Distinct().Select(id => fields[id]).Where(f => f.Placement == CustomFieldPlacement.UnderDescription)).ToList();
+        var onLines = lines.Values.SelectMany(l => l.Keys).Distinct().Select(id => fields[id]).Where(f => !placed.Contains(f.Id) && f.PrintOnForms).ToList();
+        var auto = style.AutoFieldColumns ? Ordered(onLines.Where(f => f.Placement == CustomFieldPlacement.Column)).ToList() : [];
+        var under = Ordered(onLines.Where(f => !auto.Contains(f))).ToList();
+
+        // Columns the design doesn't place go after the description (or the item, else first), as they always have.
+        var at = columns.FindIndex(c => c.Key == FormColumns.Description) is var d and >= 0 ? d + 1
+            : columns.FindIndex(c => c.Key == FormColumns.Item) is var i and >= 0 ? i + 1 : 0;
+        columns.InsertRange(at, auto.Select(f => FormDesignService.FieldColumn(FormTableColumn.For(FormColumns.Field(f.Id)), all)));
 
         return form with
         {
             Facts = [.. form.Facts, .. facts],
             Lines = form.Lines.Select(line =>
             {
-                var own = line.LineNumber is { } n ? lines.GetValueOrDefault(n) : null;
-                var details = own is null ? null : string.Join(" · ", under.Where(f => own.ContainsKey(f.Id)).Select(f => $"{f.Name}: {own[f.Id]}"));
-                return line with
-                {
-                    Details = string.IsNullOrEmpty(details) ? line.Details : details,
-                    Extra = columns.Count == 0 ? line.Extra : columns.Select(f => own?.GetValueOrDefault(f.Id) ?? "").ToList(),
-                };
+                if (line.LineNumber is not { } n || !lines.TryGetValue(n, out var own))
+                    return line;
+                var details = string.Join(" · ", under.Where(f => own.ContainsKey(f.Id)).Select(f => $"{f.Name}: {own[f.Id]}"));
+                var cells = new Dictionary<string, string>(line.Cells ?? new Dictionary<string, string>());
+                foreach (var (id, value) in own)
+                    cells[FormColumns.Field(id)] = value;
+                return line with { Details = string.IsNullOrEmpty(details) ? line.Details : details, Cells = cells };
             }).ToList(),
-            ExtraColumns = columns.Count == 0 ? form.ExtraColumns : columns.Select(f => f.Name).ToList(),
+            Style = style with { Columns = columns },
         };
     }
 

@@ -35,6 +35,18 @@ public enum FormTemplate
     Classic,
     Modern,
     Compact,
+
+    /// <summary>A thick accent bar, a large title, filled heading and total rows.</summary>
+    Bold,
+
+    /// <summary>Hairlines and white space; the accent only on the total.</summary>
+    Minimal,
+
+    /// <summary>Boxes around the facts and parties, and a full grid on the lines.</summary>
+    Boxed,
+
+    /// <summary>A centered heading between double rules.</summary>
+    Elegant,
 }
 
 public sealed class Company

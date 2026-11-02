@@ -1410,19 +1410,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("character varying(7)");
 
-                    b.Property<string>("AmountLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                    b.Property<bool>("AutoFieldColumns")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("DefaultFor")
                         .HasColumnType("integer");
-
-                    b.Property<string>("DescriptionLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("FontKey")
                         .HasMaxLength(80)
@@ -1436,6 +1431,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Landscape")
                         .HasColumnType("boolean");
 
                     b.Property<byte[]>("Logo")
@@ -1455,6 +1453,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<string>("Margins")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -1465,27 +1468,18 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
-                    b.Property<string>("QuantityLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("RateLabel")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<bool>("ShowQuantityAndRate")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("ShowShipTo")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("ShowTerms")
-                        .HasColumnType("boolean");
+                    b.Property<int>("Show")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Template")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TextSize")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.HasKey("Id");
 
@@ -6634,6 +6628,33 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
             modelBuilder.Entity("OpenBook.Domain.Companies.FormDesign", b =>
                 {
+                    b.OwnsMany("OpenBook.Domain.Companies.FormColumn", "Columns", b1 =>
+                        {
+                            b1.Property<Guid>("FormDesignId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Key")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)");
+
+                            b1.Property<string>("Label")
+                                .HasMaxLength(30)
+                                .HasColumnType("character varying(30)");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("integer");
+
+                            b1.Property<int>("Width")
+                                .HasColumnType("integer");
+
+                            b1.HasKey("FormDesignId", "Key");
+
+                            b1.ToTable("FormDesignColumns", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("FormDesignId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Companies.FormDesignText", "Texts", b1 =>
                         {
                             b1.Property<Guid>("FormDesignId")
@@ -6658,6 +6679,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("FormDesignId");
                         });
+
+                    b.Navigation("Columns");
 
                     b.Navigation("Texts");
                 });

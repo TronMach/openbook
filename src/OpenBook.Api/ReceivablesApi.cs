@@ -375,9 +375,10 @@ internal static class ReceivablesApi
         });
 
         // PDFs and email.
-        sales.MapGet("/{kind}/{id:guid}/pdf", async (string kind, Guid id, HttpContext http, FormService s, CancellationToken ct) =>
+        // design: print with another (active) design, e.g. a packing slip.
+        sales.MapGet("/{kind}/{id:guid}/pdf", async (string kind, Guid id, Guid? design, HttpContext http, FormService s, CancellationToken ct) =>
         {
-            var form = await s.RenderAsync(ParseKind(kind), id, ct);
+            var form = await s.RenderAsync(ParseKind(kind), id, design, ct);
             return Pdf(http, form);
         });
         sales.MapPost("/{kind}/{id:guid}/email", async (string kind, Guid id, EmailFormRequest r, EmailService s, CancellationToken ct) =>

@@ -8,6 +8,7 @@ using OpenBook.Application.Search;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.CustomFields;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
@@ -135,10 +136,34 @@ public sealed class CustomFieldTests : IAsyncLifetime
         var form = await In<FormService, SalesForm>(s => s.BuildAsync(FormKind.Invoice, invoice.Id));
         Assert.Contains(("Sales rep", "Dana"), form.Facts);
         Assert.Contains(("Tracking number", "1Z999"), form.Facts);
-        Assert.Equal(["Unit"], form.ExtraColumns);
+        // Unit prints as a column of its own after the description (the design doesn't place it); pack size under the description.
+        var unit = FormColumns.Field(f["item.unit"].Id);
+        var packSize = FormColumns.Field(f["item.pack_size"].Id);
+        Assert.Equal([FormColumns.Description, unit, FormColumns.Quantity, FormColumns.Rate, FormColumns.Amount], form.Style.TableColumns.Select(c => c.Key));
+        Assert.Equal("Unit", form.Style.TableColumns[1].Label);
         var widgetLine = form.Lines.Single(l => l.LineNumber == 1);
-        Assert.Equal(("Pack size: Case of 12", "Case"), (widgetLine.Details, Assert.Single(widgetLine.Extra!)));
-        Assert.Equal("", Assert.Single(form.Lines.Single(l => l.LineNumber == 2).Extra!));
+        Assert.Equal(("Pack size: Case of 12", "Case"), (widgetLine.Details, widgetLine.Cell(unit)));
+        Assert.Null(form.Lines.Single(l => l.LineNumber == 2).Cell(unit));
+
+        // A design that places pack size as a column, renamed, and adds no others: unit goes under the description instead.
+        var designs = await In<FormDesignService, IReadOnlyList<FormDesign>>(s => s.ListAsync());
+        var standard = designs.Single(d => d.IsDefault);
+        await In<FormDesignService, FormDesign>(s => s.UpdateAsync(standard.Id, standard.ToDetails() with
+        {
+            Columns = [new(FormColumns.Item), new(packSize, "Pack"), new(FormColumns.Quantity), new(FormColumns.Amount)],
+            AutoFieldColumns = false,
+        }));
+        form = await In<FormService, SalesForm>(s => s.BuildAsync(FormKind.Invoice, invoice.Id));
+        Assert.Equal([FormColumns.Item, packSize, FormColumns.Quantity, FormColumns.Amount], form.Style.TableColumns.Select(c => c.Key));
+        Assert.Equal("Pack", form.Style.TableColumns[1].Label);
+        widgetLine = form.Lines.Single(l => l.LineNumber == 1);
+        Assert.Equal(("Unit: Case", "Case of 12", "Widget"), (widgetLine.Details, widgetLine.Cell(packSize), widgetLine.Cell(FormColumns.Item)));
+        Assert.NotEmpty((await In<FormService, RenderedForm>(s => s.RenderAsync(FormKind.Invoice, invoice.Id))).Pdf);
+
+        // Columns show item fields only.
+        Assert.Equal("formdesign.field_unknown", (await Assert.ThrowsAsync<DomainException>(() => In<FormDesignService, FormDesign>(s => s.UpdateAsync(standard.Id,
+            standard.ToDetails() with { Columns = [new(FormColumns.Description), new(FormColumns.Field(f["customer.sales_rep"].Id))] })))).Code);
+        await In<FormDesignService, FormDesign>(s => s.UpdateAsync(standard.Id, standard.ToDetails() with { Columns = null, AutoFieldColumns = true }));
 
         // Not printed: kept on the screen only.
         await Fields(s => s.UpdateAsync(f["document.tracking"].Id, new CustomFieldDetails("Tracking number", CustomFieldType.Text,
