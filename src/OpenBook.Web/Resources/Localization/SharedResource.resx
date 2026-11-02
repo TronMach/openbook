@@ -779,6 +779,9 @@
   <data name="Fetch payouts now" xml:space="preserve">
     <value>Fetch payouts now</value>
   </data>
+  <data name="Figures in the books that don't agree" xml:space="preserve">
+    <value>Figures in the books that don't agree</value>
+  </data>
   <data name="Find a setting" xml:space="preserve">
     <value>Find a setting</value>
   </data>
@@ -835,6 +838,9 @@
   </data>
   <data name="Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one." xml:space="preserve">
     <value>Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one.</value>
+  </data>
+  <data name="Found by the daily check of the books" xml:space="preserve">
+    <value>Found by the daily check of the books</value>
   </data>
   <data name="From" xml:space="preserve">
     <value>From</value>
