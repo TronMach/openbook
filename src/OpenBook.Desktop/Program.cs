@@ -30,7 +30,10 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
 
-        // The same setting the server reads (--OpenBook:Desktop:AppFolder=… or with the value after it).
+        // The same setting the server reads: OpenBook__Desktop__AppFolder in the environment (an update starting this copy
+        // again passes it on), or --OpenBook:Desktop:AppFolder=… (or with the value after it).
+        if (Environment.GetEnvironmentVariable("OpenBook__Desktop__AppFolder") is { Length: > 0 } fromEnvironment)
+            AppFolder = Path.GetFullPath(fromEnvironment);
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i].StartsWith(AppFolderSetting + "=", StringComparison.OrdinalIgnoreCase))

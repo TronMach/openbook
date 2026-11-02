@@ -10,6 +10,14 @@ Starting OpenBook runs it in the background and opens it in the browser at `http
 
 Installing a newer version over it keeps everything; it stops a running OpenBook first. Uninstalling (Windows **Settings → Apps**) removes the program only.
 
+## Updates
+
+An installed OpenBook Desktop checks GitHub for a newer release a minute after starting and then once a day, sending nothing but its version. It downloads a newer installer into `%LOCALAPPDATA%\OpenBook\updates`. It only keeps it when the release key signed the release and the file's size and SHA-256 match. Then **Install OpenBook x.y.z** appears in the tray menu (with a notice) and on **Settings → System → Updates**.
+
+Installing backs up the books first, as Quit does; if that backup fails, you're asked whether to go on anyway. Then the installer runs silently (its `install.log` is beside the download), and OpenBook starts again with the same folders and port.
+
+**Settings → System → Updates** also has **Check now**, and turns the daily check off or on; the choice is kept in `%LOCALAPPDATA%\OpenBook\updates.json`. `OpenBook:Updates:Check` and `OpenBook:Updates:Feed` do the same in configuration. Publishing releases is described in [releasing.md](releasing.md).
+
 ## Where things are
 
 | What | Where |

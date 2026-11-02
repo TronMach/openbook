@@ -13,6 +13,7 @@
 @inject OpenBook.Infrastructure.Net.OutboundPolicy Outbound
 @inject IConfiguration Configuration
 @inject IServiceProvider Services
+@inject OpenBook.Web.Hosting.UpdateService Updates
 
 <PageTitle>System · OpenBook</PageTitle>
 
@@ -76,6 +77,81 @@
     </div>
     }
 
+    <div class="card" id="updates">
+        <h2>Updates</h2>
+        @{ var update = Updates.Status; }
+        @if (InstallError is not null)
+        {
+            <div class="alert error" role="alert">@InstallError</div>
+        }
+        <dl class="facts">
+            <dt>This version</dt><dd>@update.Current</dd>
+            <dt>Last checked</dt><dd>@(update.LastChecked is { } checkedAt ? checkedAt.InCompanyTime().ToString("g") : "not since OpenBook started")</dd>
+            <dt>Latest</dt>
+            <dd>
+                @if (update.Error is not null)
+                {
+                    <span class="out-of-balance">@update.Error</span>
+                }
+                else if (update.Available is { } available)
+                {
+                    <span>Version @available.Version is available.</span>
+                    @if (available.NotesUrl is { } notes)
+                    {
+                        <a href="@notes" target="_blank" rel="noopener">What's new</a>
+                    }
+                }
+                else if (update.LastChecked is not null)
+                {
+                    <span>This is the latest version.</span>
+                }
+                else
+                {
+                    <span class="muted">Not checked yet.</span>
+                }
+            </dd>
+        </dl>
+        @if (update.Note is not null)
+        {
+            <p class="muted">@update.Note</p>
+        }
+        @if (!Install.IsDesktop && update.Available is not null)
+        {
+            <pre>docker compose pull
+docker compose up -d</pre>
+        }
+        @if (Install.IsDesktop && update.Ready is not null && update.Available is { } ready)
+        {
+            <form method="post" action="/settings/system/updates/install" data-enhance="false">
+                <AntiforgeryToken />
+                <p>Installing backs up your books first, then OpenBook closes, updates and starts again by itself in a minute or two.</p>
+                @if (InstallError is not null)
+                {
+                    <label class="check"><input type="checkbox" name="anyway" value="true" /> <span>Install even though the backup didn't work</span></label>
+                }
+                <button type="submit">Install version @ready.Version now</button>
+            </form>
+        }
+        <div class="actions">
+            <form method="post" action="/settings/system/updates/check" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Check now</button>
+            </form>
+            @if (Install.IsDesktop)
+            {
+                <form method="post" action="/settings/system/updates/auto" data-enhance="false" class="inline">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="check" value="@(update.Enabled ? "false" : "true")" />
+                    <button type="submit" class="link">@(update.Enabled ? "Stop checking automatically" : "Check automatically every day")</button>
+                </form>
+            }
+        </div>
+        <p class="muted">
+            @(update.Enabled ? "OpenBook checks once a day and sends nothing but its version." : "Automatic checks are off.")
+            Releases are checked against OpenBook's release key before anything is downloaded or installed.
+        </p>
+    </div>
+
     <h2>Background jobs</h2>
     @if (Jobs.Runs.Count == 0)
     {
@@ -130,12 +206,14 @@
 </div>
 
 @code {
+    // Why the last install didn't start (the backup failed, say), from the install endpoint.
+    [SupplyParameterFromQuery]
+    private string? InstallError { get; set; }
+
     private static readonly DateTimeOffset Started = new(System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime(), TimeSpan.Zero);
     private FileLoggerProvider? _log;
 
-    private static string Version =>
-        typeof(SystemPage).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
-        ?? typeof(SystemPage).Assembly.GetName().Version?.ToString() ?? "unknown";
+    private static string Version => OpenBook.Web.Hosting.UpdateService.CurrentVersion;
 
     private static string Uptime
     {

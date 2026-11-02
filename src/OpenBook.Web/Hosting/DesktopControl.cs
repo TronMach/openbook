@@ -41,9 +41,13 @@ public sealed class DesktopQuit(IServiceScopeFactory scopes, SetupState setup, I
 /// The tray icon's line to the server it belongs to: a named pipe only the Windows user running OpenBook can open
 /// (<see cref="PipeOptions.CurrentUserOnly"/>), named in <see cref="Installation.RunningFile"/>. One command per
 /// connection, a line each way: <c>backup</c> answers <c>ok {file}</c>, <c>none</c> or <c>failed {reason}</c>;
-/// <c>quit</c> answers <c>bye</c> and stops the server (the tray backs up first).
+/// <c>quit</c> answers <c>bye</c> and stops the server (the tray backs up first); <c>update</c> answers
+/// <c>ready {version}</c> (downloaded and checked), <c>available {version}</c> or <c>none</c>; <c>install</c> (or
+/// <c>install-anyway</c>, past a failed backup) backs up, starts the installer and stops, answering <c>installing</c> or
+/// <c>failed {reason}</c>.
 /// </summary>
-internal sealed partial class DesktopControlService(Installation installation, DesktopQuit quit, ILogger<DesktopControlService> logger) : BackgroundService
+internal sealed partial class DesktopControlService(
+    Installation installation, DesktopQuit quit, UpdateService updates, ILogger<DesktopControlService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -89,6 +93,18 @@ internal sealed partial class DesktopControlService(Installation installation, D
                 LogQuit();
                 await writer.WriteLineAsync("bye");
                 quit.Stop();
+                break;
+            case "update":
+                await writer.WriteLineAsync(updates.Status switch
+                {
+                    { Ready: not null, Available: { } ready } => $"ready {ready.Version}",
+                    { Available: { } available } => $"available {available.Version}",
+                    _ => "none",
+                });
+                break;
+            case "install" or "install-anyway":
+                var refusal = await updates.InstallAsync(command == "install-anyway", ct);
+                await writer.WriteLineAsync(refusal is null ? "installing" : $"failed {OneLine(refusal)}");
                 break;
             default:
                 await writer.WriteLineAsync("unknown");

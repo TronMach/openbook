@@ -62,6 +62,16 @@ builder.Services.AddSingleton(installation);
 builder.Services.AddSingleton<OpenBook.Web.Hosting.DesktopQuit>();
 if (installation.IsDesktop)
     builder.Services.AddHostedService<OpenBook.Web.Hosting.DesktopControlService>();
+builder.Services.AddSingleton<OpenBook.Web.Hosting.IInstallerLauncher, OpenBook.Web.Hosting.ProcessInstallerLauncher>();
+builder.Services.AddSingleton(OpenBook.Web.Hosting.UpdateTrust.BuiltIn);
+builder.Services.AddSingleton<OpenBook.Web.Hosting.UpdateService>();
+builder.Services.AddHostedService<OpenBook.Web.Hosting.UpdateCheckService>();
+builder.Services.AddHttpClient(OpenBook.Web.Hosting.UpdateService.HttpClientName, c =>
+{
+    // An installer is large; the feed is small and answers quickly.
+    c.Timeout = TimeSpan.FromMinutes(15);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd($"OpenBook/{OpenBook.Web.Hosting.UpdateService.CurrentVersion}");
+});
 builder.Services.AddSingleton<OpenBook.Web.Diagnostics.JobStatus>();
 // Images are read only when Tesseract is installed and its path given; PDFs and text are read either way.
 builder.Services.AddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(
@@ -191,6 +201,33 @@ app.MapPost("/settings/system/quit", async (OpenBook.Web.Hosting.Installation in
         <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>OpenBook has stopped</title></head>
         <body style="font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 32rem">
         <h1>OpenBook has stopped</h1><p>{said}</p><p>You can close this tab. Start OpenBook again from the Start menu.</p></body></html>
+        """, "text/html");
+}).RequireAuthorization();
+// Updates (Settings > System, admins): check now, switch automatic checks, and on the desktop install what's downloaded.
+app.MapPost("/settings/system/updates/check", async (IFormCollection form, OpenBook.Web.Hosting.UpdateService updates, CancellationToken ct) =>
+{
+    var status = await updates.CheckAsync(ct);
+    return Results.Redirect(status.Error is null ? "/settings/system?updates=checked#updates" : "/settings/system?updates=failed#updates");
+}).RequireAuthorization();
+app.MapPost("/settings/system/updates/auto", (IFormCollection form, OpenBook.Web.Hosting.Installation install, OpenBook.Web.Hosting.UpdateService updates) =>
+{
+    if (!install.IsDesktop)
+        return Results.NotFound();
+    updates.SetEnabled(form["check"] == "true");
+    return Results.Redirect("/settings/system#updates");
+}).RequireAuthorization();
+app.MapPost("/settings/system/updates/install", async (IFormCollection form, OpenBook.Web.Hosting.Installation install, OpenBook.Web.Hosting.UpdateService updates, CancellationToken ct) =>
+{
+    if (!install.IsDesktop)
+        return Results.NotFound();
+    var version = updates.Status.Available?.Version;
+    if (await updates.InstallAsync(form["anyway"] == "true", ct) is { } refusal)
+        return Results.Redirect($"/settings/system?installError={Uri.EscapeDataString(refusal)}#updates");
+    return Results.Content($"""
+        <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Updating OpenBook</title></head>
+        <body style="font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 32rem">
+        <h1>Updating OpenBook</h1><p>Your books were backed up, and OpenBook {System.Net.WebUtility.HtmlEncode(version ?? "")} is being installed. It starts
+        again by itself in a minute or two and opens a new tab; you can close this one.</p></body></html>
         """, "text/html");
 }).RequireAuthorization();
 app.MapPurchasingEndpoints();

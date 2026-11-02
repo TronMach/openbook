@@ -19,7 +19,10 @@ internal sealed class TrayIcon : ApplicationContext
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _open;
     private readonly ToolStripMenuItem _backup;
+    private readonly ToolStripMenuItem _update;
     private readonly ToolStripMenuItem _quit;
+    private readonly System.Windows.Forms.Timer _updates;
+    private string? _announced;
     private readonly System.Windows.Forms.Timer _watch;
     private bool _busy;
 
@@ -34,8 +37,10 @@ internal sealed class TrayIcon : ApplicationContext
         _open = new ToolStripMenuItem("Open OpenBook", null, (_, _) => Open()) { Font = new Font(SystemFonts.MenuFont ?? Control.DefaultFont, FontStyle.Bold) };
         _backup = new ToolStripMenuItem("Back up now", null, async (_, _) => await BackUpNowAsync());
         _quit = new ToolStripMenuItem("Quit OpenBook", null, async (_, _) => await QuitAsync());
+        _update = new ToolStripMenuItem("Install update", null, async (_, _) => await InstallAsync()) { Visible = false };
         var menu = new ContextMenuStrip();
-        menu.Items.AddRange([_open, _backup, new ToolStripSeparator(), _quit]);
+        menu.Items.AddRange([_open, _backup, _update, new ToolStripSeparator(), _quit]);
+        menu.Opening += async (_, _) => await ShowUpdateAsync(announce: false);
 
         _icon = new NotifyIcon
         {
@@ -56,6 +61,63 @@ internal sealed class TrayIcon : ApplicationContext
 
         if (announce)
             _icon.ShowBalloonTip(5000, "OpenBook is running", "It keeps running after you close the browser. Use this icon to open it again or to quit.", ToolTipIcon.Info);
+
+        // The server checks for updates itself; this asks it now and then whether one is ready to install.
+        _updates = new System.Windows.Forms.Timer { Interval = (int)TimeSpan.FromMinutes(30).TotalMilliseconds };
+        _updates.Tick += async (_, _) => await ShowUpdateAsync(announce: true);
+        _updates.Start();
+    }
+
+    // Shows "Install update {version}" when the server has one downloaded and checked; says so once per version.
+    private async Task ShowUpdateAsync(bool announce)
+    {
+        if (_busy)
+            return;
+        var answer = await SendAsync("update", TimeSpan.FromSeconds(5));
+        var version = answer?.StartsWith("ready ", StringComparison.Ordinal) == true ? answer[6..] : null;
+        _update.Visible = version is not null;
+        _update.Text = $"Install OpenBook {version}";
+        if (announce && version is not null && version != _announced)
+        {
+            _announced = version;
+            _icon.ShowBalloonTip(8000, $"OpenBook {version} is ready", "Right-click the OpenBook icon and choose Install. Your books are backed up first.", ToolTipIcon.Info);
+        }
+    }
+
+    private async Task InstallAsync()
+    {
+        var question = $"{_update.Text} now?" + Environment.NewLine + Environment.NewLine
+            + "OpenBook backs up your books, closes, installs the update and starts again by itself in a minute or two.";
+        if (MessageBox.Show(question, "OpenBook", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+            return;
+        if (!Busy(true, "OpenBook: installing the update…"))
+            return;
+        try
+        {
+            var answer = await SendAsync("install", BackupLimit);
+            if (answer?.StartsWith("failed ", StringComparison.Ordinal) == true)
+            {
+                if (MessageBox.Show(answer[7..] + Environment.NewLine + Environment.NewLine + "Install the update anyway?",
+                        "OpenBook", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+                answer = await SendAsync("install-anyway", BackupLimit);
+            }
+
+            if (answer != "installing")
+            {
+                MessageBox.Show(answer is null ? "OpenBook isn't answering. Start it again from the Start menu." : answer, "OpenBook", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // The installer closes this icon too, and starts a new one with the new version.
+            for (var i = 0; i < 60 && File.Exists(Program.RunningFile) && _server is not { HasExited: true }; i++)
+                await Task.Delay(500);
+            Done();
+        }
+        finally
+        {
+            Busy(false);
+        }
     }
 
     private void Open()
@@ -151,7 +213,7 @@ internal sealed class TrayIcon : ApplicationContext
         if (busy && _busy)
             return false;
         _busy = busy;
-        _backup.Enabled = _quit.Enabled = !busy;
+        _backup.Enabled = _quit.Enabled = _update.Enabled = !busy;
         _icon.Text = status ?? "OpenBook";
         return true;
     }
@@ -159,6 +221,7 @@ internal sealed class TrayIcon : ApplicationContext
     private void Done()
     {
         _watch.Stop();
+        _updates.Stop();
         _icon.Visible = false;
         ExitThread();
     }
@@ -168,6 +231,8 @@ internal sealed class TrayIcon : ApplicationContext
         if (disposing)
         {
             _watch.Dispose();
+            _updates.Dispose();
+            _update.Dispose();
             _icon.Dispose();
             _open.Dispose();
             _backup.Dispose();

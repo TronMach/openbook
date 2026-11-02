@@ -8,6 +8,7 @@
     <Project Path="src/OpenBook.Infrastructure.Postgres/OpenBook.Infrastructure.Postgres.csproj" />
     <Project Path="src/OpenBook.Infrastructure/OpenBook.Infrastructure.csproj" />
     <Project Path="src/OpenBook.QuickBooksExport/OpenBook.QuickBooksExport.csproj" />
+    <Project Path="src/OpenBook.ReleaseTool/OpenBook.ReleaseTool.csproj" />
     <Project Path="src/OpenBook.Web/OpenBook.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">

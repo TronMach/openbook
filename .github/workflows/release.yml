@@ -1,0 +1,68 @@
+# Publishes an OpenBook Desktop release: tests, builds the Windows installer, signs latest.json with the release key and
+# puts both on the GitHub release, where installed copies look for updates. Run it by pushing a tag like v1.2.0, or by
+# hand with a version. Needs the OPENBOOK_UPDATE_KEY secret (the private release key, PEM). See docs/admin/releasing.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (x.y.z)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.version }}' } else { '${{ github.ref_name }}'.TrimStart('v') }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Versions look like 1.2.0, not '$version'." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        shell: pwsh
+        run: ./tools/run-tests.ps1
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Package
+        shell: pwsh
+        run: ./tools/package-desktop.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Sign the update manifest
+        shell: pwsh
+        env:
+          OPENBOOK_UPDATE_KEY: ${{ secrets.OPENBOOK_UPDATE_KEY }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $repo = 'https://github.com/${{ github.repository }}'
+          dotnet run --project src/OpenBook.ReleaseTool -c Release -- manifest `
+            --installer "artifacts/desktop/OpenBook-Setup-$version.exe" --version $version `
+            --url "$repo/releases/download/v$version/OpenBook-Setup-$version.exe" --notes "$repo/releases/tag/v$version" `
+            --out artifacts/desktop/latest.json
+          if ($LASTEXITCODE -ne 0) { throw 'Signing the manifest failed.' }
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          gh release create "v$version" "artifacts/desktop/OpenBook-Setup-$version.exe" artifacts/desktop/latest.json `
+            --title "OpenBook $version" --generate-notes --target '${{ github.sha }}'
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the release failed.' }

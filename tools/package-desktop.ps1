@@ -15,7 +15,9 @@
 param(
     [string]$Version = '1.0.0',
     [string]$Out = 'artifacts/desktop',
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    # Only for trying updates: an installer with its own identity, so it never touches a real install.
+    [string]$TestAppId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +50,8 @@ $iscc = @(
 if (-not $iscc) { $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
 if (-not $iscc) { Write-Warning "Inno Setup (ISCC.exe) not found: published to $publish without an installer."; return }
 
-& $iscc /Q "/DAppVersion=$Version" "/DSourceDir=$publish" "/O$out" (Join-Path $root 'packaging\windows\OpenBook.iss')
+$defines = @("/DAppVersion=$Version", "/DSourceDir=$publish", "/O$out")
+if ($TestAppId) { $defines += "/DAppIdGuid=$TestAppId", '/DTestBuild=1' }
+& $iscc /Q @defines (Join-Path $root 'packaging\windows\OpenBook.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
 Write-Host "Installer: $(Join-Path $out "OpenBook-Setup-$Version.exe")"

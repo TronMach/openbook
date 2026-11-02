@@ -88,6 +88,20 @@ If the keys were lost too, put the saved keys back into the `app-data` volume (`
 
 The ledger's safeguards (balanced, immutable entries; the append-only audit log) are database triggers, and `pg_dump` / `pg_restore` carry them along. OpenBook's restore checks don't run on a `pg_restore`, so restore only your own dumps.
 
+## Updates
+
+A server doesn't check for new versions unless `OpenBook:Updates:Check` is `true` (for example `OpenBook__Updates__Check: "true"` in the compose file). It then shows what's available on **Settings → System → Updates**, and never installs anything itself. Back up the database (above), then update it yourself:
+
+```bash
+docker compose pull
+```
+
+```bash
+docker compose up -d
+```
+
+The database is migrated when the new version starts.
+
 ## Moving a desktop company in
 
 A company kept by OpenBook Desktop moves into the server's empty database with the `move-to-postgres` command. It copies the company file (which stays as it was), checks it like a restore, copies everything in one transaction and checks again (every entry balances, every account's balance and the audit log match, the ledger triggers are there) before keeping anything. Stored secrets are re-encrypted with the server's keys, so two-factor sign-in and connections keep working.

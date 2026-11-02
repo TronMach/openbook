@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Release chores, never shipped: makes the update signing key and the signed latest.json for an installer. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OpenBook.ReleaseTool</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenBook.Application\OpenBook.Application.csproj" />
+  </ItemGroup>
+
+</Project>
