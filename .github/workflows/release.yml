@@ -1,6 +1,7 @@
 # Publishes an OpenBook Desktop release: tests, builds the Windows installer, signs latest.json with the release key and
 # puts both on the GitHub release, where installed copies look for updates. Run it by pushing a tag like v1.2.0, or by
-# hand with a version. Needs the OPENBOOK_UPDATE_KEY secret (the private release key, PEM). See docs/admin/releasing.md.
+# hand with a version (and "publish" unticked to only build and sign, as a trial). Needs the OPENBOOK_UPDATE_KEY secret
+# (the private release key, PEM). See docs/admin/releasing.md.
 name: Release
 
 on:
@@ -11,6 +12,10 @@ on:
       version:
         description: 'Version to release (x.y.z)'
         required: true
+      publish:
+        description: 'Publish the release (untick to only build, sign and keep the files on the run)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -19,9 +24,9 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -57,7 +62,18 @@ jobs:
             --out artifacts/desktop/latest.json
           if ($LASTEXITCODE -ne 0) { throw 'Signing the manifest failed.' }
 
+      - name: Keep the files of a trial run
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        uses: actions/upload-artifact@v7
+        with:
+          name: openbook-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/desktop/OpenBook-Setup-${{ steps.version.outputs.version }}.exe
+            artifacts/desktop/latest.json
+          retention-days: 7
+
       - name: Publish the release
+        if: github.event_name == 'push' || inputs.publish
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

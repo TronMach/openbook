@@ -32,7 +32,7 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-3. The **Release** workflow (`.github/workflows/release.yml`) runs the tests, builds the installer with that version, signs `latest.json` and creates the GitHub release with both files and generated notes. You can also run it by hand from the Actions tab with a version.
+3. The **Release** workflow (`.github/workflows/release.yml`) runs the tests, builds the installer with that version, signs `latest.json` and creates the GitHub release with both files and generated notes. You can also run it by hand from the Actions tab with a version; untick **publish** for a trial run, which builds and signs everything and keeps the installer and `latest.json` on the run for a week instead of creating a release.
 
 Versions are three numbers, `major.minor.patch`. Installed copies offer a release only when its version is higher than theirs.
 
