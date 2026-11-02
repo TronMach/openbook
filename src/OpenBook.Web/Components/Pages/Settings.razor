@@ -1,275 +1,326 @@
 @page "/settings"
-@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
 @using OpenBook.Domain.Companies
-@inject CompanySettingsService SettingsService
+@using OpenBook.Application.Banking
+@using OpenBook.Application.CustomFields
+@using OpenBook.Application.Documents
+@using OpenBook.Application.Inventory
+@using OpenBook.Application.Plugins
+@using OpenBook.Application.Segments
+@using OpenBook.Application.Webhooks
+@using OpenBook.Infrastructure
+@using OpenBook.Infrastructure.Persistence
+@inject IServiceProvider Services
+@inject OpenBookStorage Storage
 
 <PageTitle>@L["Settings"] · OpenBook</PageTitle>
 
-<div class="card">
-    <h1>@L["Company settings"]</h1>
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Settings"]</h1>
+        <HelpLink Chapter="02-finding-your-way" />
+    </div>
+    <p class="muted">
+        @L["Everything you can set up, grouped by what it's for. Each line says what the setting does and how it's set now. Greyed-out ones need more access: the line says whom to ask."]
+    </p>
+    <div class="field settings-filter">
+        <label for="settings-filter" class="visually-hidden">@L["Find a setting"]</label>
+        <input id="settings-filter" type="search" placeholder="@L["Find a setting (for example: email, tax, backup)"]" data-filter="#settings-sections" autocomplete="off" />
+    </div>
 
-    @if (_saved)
-    {
-        <div class="alert notice" role="status">@L["Settings saved."]</div>
-    }
-    @if (_error is not null)
-    {
-        <div class="alert error" role="alert">@_error</div>
-    }
-
-    <EditForm Model="Input" FormName="settings" OnValidSubmit="SaveAsync" method="post">
-        <DataAnnotationsValidator />
-
-        <fieldset>
-            <legend>@L["Company"]</legend>
-            <div class="row">
-                <div class="field">
-                    <label for="name">@L["Company name"]</label>
-                    <InputText id="name" @bind-Value="Input.Name" />
-                    <ValidationMessage For="() => Input.Name" />
-                </div>
-                <div class="field">
-                    <label for="legal-name">@L["Legal name"] <span class="muted">@L["(optional)"]</span></label>
-                    <InputText id="legal-name" @bind-Value="Input.LegalName" />
-                </div>
-            </div>
-            <div class="row">
-                <div class="field">
-                    <label for="business-type">@L["Business type"]</label>
-                    <InputSelect id="business-type" @bind-Value="Input.BusinessType">
-                        @foreach (var type in Enum.GetValues<BusinessType>())
-                        {
-                            <option value="@type">@Labels.For(type)</option>
-                        }
-                    </InputSelect>
-                </div>
-                <div class="field">
-                    <label for="email">@L["Email"] <span class="muted">@L["(optional)"]</span></label>
-                    <InputText id="email" type="email" @bind-Value="Input.Email" />
-                    <ValidationMessage For="() => Input.Email" />
-                </div>
-            </div>
-            <div class="row">
-                <div class="field">
-                    <label for="phone">@L["Phone"] <span class="muted">@L["(optional)"]</span></label>
-                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
-                </div>
-            </div>
-            <div class="field">
-                <label for="address">@L["Address"] <span class="muted">@L["(optional)"]</span></label>
-                <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
-            </div>
-        </fieldset>
-
-        <fieldset>
-            <legend>@L["Edition"]</legend>
-            <div class="field">
-                <label for="edition">@L["What kind of business is this?"]</label>
-                <InputSelect id="edition" @bind-Value="Input.Edition">
-                    @foreach (var edition in Enum.GetValues<Edition>())
+    <div id="settings-sections" class="settings-grid">
+        @foreach (var section in _sections)
+        {
+            <section class="card settings-section" data-filter-group>
+                <h2>@section.Title</h2>
+                @if (section.About is not null)
+                {
+                    <p class="muted settings-about">@section.About</p>
+                }
+                <ul class="settings-list">
+                    @foreach (var entry in section.Entries)
                     {
-                        <option value="@edition">@Editions.Label(edition)</option>
+                        <li data-filter-item data-keywords="@entry.Keywords">
+                            <ActionLink Href="@entry.Href" Class="settings-title">@entry.Title</ActionLink>
+                            <span class="settings-what">@entry.About</span>
+                            @if (entry.Status is { } status)
+                            {
+                                <span class="settings-status @(status.Attention ? "attention" : null)">@status.Text</span>
+                            }
+                        </li>
                     }
-                </InputSelect>
-                <span class="hint">@Editions.Description(Input.Edition) @L["It only changes the menu, the home page and which reports come first; everything stays available."]</span>
-            </div>
-            @if (Editions.Menu(Edition.General).Except(Editions.Menu(Input.Edition)).ToList() is { Count: > 0 } left)
-            {
-                <p class="muted">
-                    @L["Not in the menu for this edition:"]
-                    @foreach (var href in left)
-                    {
-                        <a href="@href" style="margin-right: 0.5rem">@href.TrimStart('/')</a>
-                    }
-                </p>
-            }
-        </fieldset>
-
-        <fieldset>
-            <legend>@L["View"]</legend>
-            <div class="field">
-                <label for="default-view">@L["View for people who haven't chosen one"]</label>
-                <InputSelect id="default-view" @bind-Value="Input.DefaultViewMode">
-                    <option value="@ViewMode.Simple">@L["Simple view"]</option>
-                    <option value="@ViewMode.Full">@L["Full view"]</option>
-                </InputSelect>
-                <span class="hint">@L["The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept."]</span>
-            </div>
-        </fieldset>
-
-        <fieldset>
-            <legend>@L["Stock"]</legend>
-            <label class="check">
-                <InputCheckbox @bind-Value="Input.AllowSellingShort" />
-                <span>@L["Allow selling more than is on hand"]</span>
-            </label>
-            <span class="hint">@L["For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do."]</span>
-        </fieldset>
-
-        <fieldset>
-            <legend>@L["Books"]</legend>
-            <div class="row">
-                <div class="field">
-                    <label for="fiscal-month">@L["Fiscal year starts in"]</label>
-                    <InputSelect id="fiscal-month" @bind-Value="Input.FiscalYearStartMonth">
-                        @for (var month = 1; month <= 12; month++)
-                        {
-                            <option value="@month">@Labels.Month(month)</option>
-                        }
-                    </InputSelect>
-                    <span class="hint">@L["Sets the reporting year. Changing it doesn't alter any transactions."]</span>
-                </div>
-                <div class="field">
-                    <label for="basis">@L["Reports open on"]</label>
-                    <InputSelect id="basis" @bind-Value="Input.DefaultReportBasis">
-                        @foreach (var basis in Enum.GetValues<ReportBasis>())
-                        {
-                            <option value="@basis">@Labels.For(basis)</option>
-                        }
-                    </InputSelect>
-                    <span class="hint">@L["Each report can still switch basis."]</span>
-                </div>
-            </div>
-            <div class="field">
-                <label for="time-zone">@L["Time zone"]</label>
-                <InputSelect id="time-zone" @bind-Value="Input.TimeZoneId" data-search>
-                    <option value="">@L["The server's ({0})", TimeZoneInfo.Local.DisplayName]</option>
-                    @foreach (var (id, name) in TimeZones)
-                    {
-                        <option value="@id">@name</option>
-                    }
-                </InputSelect>
-                <span class="hint">@L["Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run."]</span>
-            </div>
-            <label class="check">
-                <InputCheckbox @bind-Value="Input.UseAccountNumbers" />
-                <span>@L["Use account numbers"]</span>
-            </label>
-            <dl class="facts">
-                <dt>@L["Home currency"]</dt>
-                <dd>@_currency <span class="muted">@L["(set at setup; can't be changed)"]</span></dd>
-            </dl>
-        </fieldset>
-
-        <button type="submit">@L["Save settings"]</button>
-    </EditForm>
-</div>
-
-<div class="card" style="margin-top: 1.5rem">
-    <h2>@L["Books"]</h2>
-    <ul class="links">
-        <li><a href="/settings/close-books">@L["Close the books"]</a> <span class="muted">@L["closing date, closing password and year-end close"]</span></li>
-        <li><a href="/journal/opening-balances">@L["Opening balances"]</a> <span class="muted">@L["starting balances when moving to OpenBook"]</span></li>
-        <li><a href="/journal/recurring">@L["Recurring entries"]</a> <span class="muted">@L["journal entries that post on a schedule"]</span></li>
-        <li><a href="/audit">@L["Audit log"]</a> <span class="muted">@L["every change, who made it and when"]</span></li>
-        <li><a href="/journal/import">@L["Import transactions"]</a> <span class="muted">@L["journal entries or opening balances from a CSV file"]</span></li>
-        <li><a href="/import/migrate">@L["Move in from another program"]</a> <span class="muted">@L["QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks"]</span></li>
-        <li><a href="/settings/custom-fields">@L["Custom fields"]</a> <span class="muted">@L["extra fields for products, customers, vendors and documents, like pack size, printed on invoices and orders"]</span></li>
-        <li><a href="/settings/forms">@L["Invoice and form designs"]</a> <span class="muted">@L["designs with logos and fonts for invoices, statements and other printed forms"]</span></li>
-        <li><a href="/settings/email">@L["Email"]</a> <span class="muted">@L["how invoices and statements are sent"]</span></li>
-        <li><a href="/settings/online-payments">@L["Online payments"]</a> <span class="muted">@L["card payments for invoices through Stripe (admins)"]</span></li>
-        <li><a href="/settings/document-reading">@L["Document reading"]</a> <span class="muted">@L["how the document inbox reads scans and PDFs, and whether Claude may read them (admins)"]</span></li>
-    </ul>
-</div>
-
-<div class="card" style="margin-top: 1.5rem">
-    <h2>@L["People and connections"]</h2>
-    <ul class="links">
-        <li><a href="/settings/users">@L["Users"]</a> <span class="muted">@L["who can sign in, and their roles (admins)"]</span></li>
-        <li><a href="/settings/sign-in">@L["Sign-in and two-factor"]</a> <span class="muted">@L["who must use two-factor sign-in (admins)"]</span></li>
-        <li><a href="/account/two-factor">@L["Two-factor sign-in"]</a> <span class="muted">@L["an authenticator app code as well as your password"]</span></li>
-        <li><a href="/settings/api-keys">API keys</a> <span class="muted">your keys for the <a href="/api/openapi/v1.json">REST API</a></span></li>
-        <li><a href="/settings/webhooks">@L["Webhooks"]</a> <span class="muted">@L["tell other systems about changes as they happen (admins)"]</span></li>
-        <li><a href="/settings/plugins">@L["Add-ins"]</a> <span class="muted">@L["reports and import formats added to OpenBook (admins)"]</span></li>
-        <li><a href="/settings/system">@L["System"]</a> <span class="muted">@L["version, database, background jobs and recent errors (admins)"]</span></li>
-    </ul>
+                </ul>
+            </section>
+        }
+    </div>
+    <p class="muted" data-filter-empty hidden>@L["No setting matches that. Try another word, or search the whole program with the box at the top."]</p>
 </div>
 
 @code {
-    private string? _currency;
-    private bool _saved;
-    private string? _error;
+    private List<Section> _sections = [];
+    private ClaimsPrincipal _user = new();
 
-    [SupplyParameterFromForm]
-    private SettingsModel Input { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private sealed record Section(string Title, string? About, List<Entry> Entries);
+
+    /// <summary>A setting: where it is, what it's for, and (for those the person can open) how it's set now.</summary>
+    private sealed record Entry(string Href, string Title, string About, StatusLine? Status = null, string? Keywords = null);
+
+    /// <summary>How a setting is set now; Attention when it's something people usually want to fix.</summary>
+    private sealed record StatusLine(string Text, bool Attention = false);
 
     protected override async Task OnInitializedAsync()
     {
-        var company = await SettingsService.GetAsync();
-        _currency = company.HomeCurrency.Code;
-        Input ??= new SettingsModel
+        if (AuthState is not null)
+            _user = (await AuthState).User;
+        var company = await Get<CompanySettingsService>().GetAsync();
+        var nonprofit = company.Edition == Edition.Nonprofit;
+        var services = company.Edition == Edition.ProfessionalServices;
+
+        _sections =
+        [
+            new(L["Company"], L["Who you are and how your books are kept."],
+            [
+                new("/settings/company", L["Company details"],
+                    L["Name, address and contact details printed on forms; legal structure; fiscal year; time zone; report basis; account numbers; the menu and view people start with; selling more stock than is on hand."],
+                    await Status("/settings/company", () => Task.FromResult<string?>(L["{0} · year starts in {1} · {2} menu", company.Name, Labels.Month(company.FiscalYearStartMonth), Editions.Label(company.Edition)].Value)),
+                    Keywords: "name address phone email fiscal year time zone accrual cash basis account numbers edition menu view simple full stock selling short legal structure business type"),
+                new("/settings/close-books", L["Closing date"],
+                    L["Locks the books up to a date so nobody changes a period you've finished, with an optional password; also the year-end close."],
+                    await Status("/settings/close-books", async () =>
+                    {
+                        var closing = await Get<CloseBooksService>().GetAsync();
+                        return closing.ClosingDate is { } date
+                            ? L["Closed through {0}{1}", Labels.Date(date), closing.HasPassword ? L[" (with a password)"].Value : ""].Value
+                            : L["Not closed: every date is open"].Value;
+                    }),
+                    Keywords: "lock period year end password close"),
+                new("/settings/custom-fields", L["Custom fields"],
+                    L["Extra boxes for products, customers, vendors and documents (like a pack size or sales rep), which can print on invoices and orders."],
+                    await Status("/settings/custom-fields", async () => Count((await Get<CustomFieldService>().ListAsync(activeOnly: true)).Count, L["No custom fields"], L["1 field"], L["{0} fields"])),
+                    Keywords: "extra fields"),
+                new("/account/region", L["Your language and region"],
+                    L["How dates and numbers look for you, and the language of the screens that are translated."],
+                    new StatusLine(System.Globalization.CultureInfo.CurrentCulture.DisplayName),
+                    Keywords: "language locale date format"),
+            ]),
+            new(L["Sales and getting paid"], L["How invoices look, how they're sent and paid, and what you charge."],
+            [
+                new("/settings/forms", L["Invoice and form designs"],
+                    L["The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording."],
+                    await Status("/settings/forms", async () =>
+                    {
+                        var designs = (await Get<FormDesignService>().ListAsync()).Where(d => d.IsActive).ToList();
+                        return L["{0} · used unless a customer or document has another", designs.FirstOrDefault(d => d.IsDefault)?.Name ?? L["Standard"]].Value
+                            + (designs.Count > 1 ? L[" · {0} designs", designs.Count].Value : "");
+                    }),
+                    Keywords: "logo template layout print pdf font columns"),
+                new("/settings/email", L["Email"],
+                    L["How OpenBook sends invoices, statements, reminders and invitations: through your email provider's server, or saved to a folder while you try things out."],
+                    await Status("/settings/email", async () =>
+                    {
+                        var email = await Get<EmailService>().GetSettingsAsync();
+                        return email.Delivery switch
+                        {
+                            EmailDelivery.Smtp => L["Sending through {0}, from {1}", email.Host ?? "", email.FromAddress ?? ""].Value,
+                            EmailDelivery.Folder => L["Saving messages to a folder (nothing is sent)"].Value,
+                            _ => L["Off: nothing can be emailed yet"].Value,
+                        };
+                    }, attentionWhen: s => s.StartsWith(L["Off"].Value, StringComparison.Ordinal)),
+                    Keywords: "smtp mail send gmail outlook"),
+                new("/settings/online-payments", L["Online card payments"],
+                    L["A \"Pay now\" link on invoices so customers pay by card through Stripe; payments are recorded by themselves."],
+                    await Status("/settings/online-payments", async () => (await Get<OnlinePaymentService>().GetSettingsAsync()).IsReady
+                        ? L["On: invoices can be paid online"].Value : L["Not set up"].Value),
+                    Keywords: "stripe card pay online"),
+                new("/sales-tax", L["Sales tax"],
+                    L["The agencies you pay, the rates they charge and the tax codes customers and invoices use."],
+                    await Status("/sales-tax", async () =>
+                    {
+                        var tax = Get<SalesTaxService>();
+                        var agencies = (await tax.ListAgenciesAsync()).Count(a => a.IsActive);
+                        var codes = (await tax.ListCodesAsync()).Count(c => c.IsActive);
+                        return agencies == 0 ? L["Not set up: no sales tax is charged"].Value : L["{0} agencies · {1} tax codes", agencies, codes].Value;
+                    }),
+                    Keywords: "tax vat rates agency codes"),
+                new("/pricing", L["Price levels and rules"],
+                    L["Customer price levels, quantity breaks, promotions and how prices round."],
+                    await Status("/pricing", async () =>
+                    {
+                        var pricing = Get<PricingService>();
+                        var levels = (await pricing.ListLevelsAsync(includeInactive: false)).Count;
+                        var rules = (await pricing.ListRulesAsync()).Count(r => r.IsActive);
+                        return levels + rules == 0 ? L["Everyone pays the item's price"].Value : L["{0} price levels · {1} rules", levels, rules].Value;
+                    }),
+                    Keywords: "discount price list promotion rounding"),
+                new("/sales/collections/settings", L["Late fees and reminders"],
+                    L["Reminder emails before and after invoices fall due, and late fees on overdue balances."],
+                    await Status("/sales/collections/settings", async () =>
+                    {
+                        var c = await Get<CollectionService>().GetAsync();
+                        return L["Reminders {0} · late fees {1}", c.RemindersEnabled ? L["on"].Value : L["off"].Value, c.LateFeesEnabled ? L["on"].Value : L["off"].Value].Value;
+                    }),
+                    Keywords: "collections overdue dunning late fee reminder"),
+            ]),
+            new(L["Purchases and stock"], null,
+            [
+                new("/purchases/approvals/settings", L["Bill approvals and matching"],
+                    L["Which bills wait for someone's approval before they can be paid, and how closely bills must match purchase orders."],
+                    await Status("/purchases/approvals/settings", async () => (await Get<BillApprovalService>().GetSettingsAsync()).ApprovalThreshold is { } threshold
+                        ? L["Bills of {0} or more need approval", Labels.Amount(threshold)].Value : L["No approval needed"].Value),
+                    Keywords: "approve hold three way match purchase order receipt tolerance"),
+                new("/purchases/ach", L["ACH payments"],
+                    L["Your bank's details for paying vendors by direct deposit with a NACHA file."],
+                    Keywords: "nacha direct deposit bank file"),
+                new("/inventory/warehouses", L["Warehouses and bins"],
+                    L["The places you keep stock, and the bins inside them."],
+                    await Status("/inventory/warehouses", async () => Count((await Get<WarehouseService>().ListAsync()).Count, L["One place (Main)"], L["One place (Main)"], L["{0} warehouses"])),
+                    Keywords: "location stock inventory"),
+            ]),
+            new(L["Banking"], null,
+            [
+                new("/banking/rules", L["Bank rules"],
+                    L["Categorize bank lines by themselves: when a payee or memo contains some text, pick the category and vendor."],
+                    await Status("/banking/rules", async () => Count((await Get<BankRuleService>().ListAsync()).Count(r => r.IsActive), L["No rules yet"], L["1 rule"], L["{0} rules"])),
+                    Keywords: "categorize automatic feed"),
+                new("/banking/connections", L["Bank connections"],
+                    L["Bring bank and card transactions in automatically (through SimpleFIN) instead of importing statement files."],
+                    await Status("/banking/connections", async () => Count((await Get<BankConnectionService>().ListAsync()).Count, L["None: statements are imported by hand"], L["1 connection"], L["{0} connections"])),
+                    Keywords: "simplefin feed sync"),
+                new("/banking/positive-pay", L["Positive pay"],
+                    L["The check file some banks want before they'll cash your checks."],
+                    Keywords: "checks fraud"),
+            ]),
+            new(L["Accounting"], L["For whoever keeps the books."],
+            [
+                new("/accounts", L["Chart of accounts"], L["The accounts every amount is filed under."], Keywords: "accounts chart"),
+                new("/segments", L["Classes, locations and tags"],
+                    L["Extra ways to slice reports: by department, branch, project or anything you choose."],
+                    await Status("/segments", async () =>
+                    {
+                        var tracking = await Get<SegmentService>().GetTrackingAsync();
+                        return L["Classes {0} · {1} {2}", tracking.Classes ? L["on"].Value : L["off"].Value, tracking.LocationLabel.ToLowerInvariant(), tracking.Locations ? L["on"].Value : L["off"].Value].Value;
+                    }),
+                    Keywords: "class location department tag segment"),
+                new("/reports/tax-lines", L["Tax lines"],
+                    L["Which line of your tax form each income and expense account goes on, for the tax summary."],
+                    Keywords: "schedule c 1120 1065 990 tax form"),
+                new("/journal/opening-balances", L["Opening balances"], L["Starting balances when you move your books to OpenBook."], Keywords: "start move in"),
+                new("/journal/recurring", L["Recurring journal entries"], L["Entries that post on a schedule, like monthly rent or depreciation."], Keywords: "schedule automatic"),
+                new("/reports/budgets", L["Budgets"], L["Monthly amounts to compare the profit and loss against."], Keywords: "budget plan"),
+            ]),
+            new(L["People and security"], null,
+            [
+                new("/settings/users", L["Users and invitations"],
+                    L["Who can sign in and what each person may do; invite someone by email."],
+                    await Status("/settings/users", async () =>
+                    {
+                        var users = (await Get<UserService>().ListAsync()).Count(u => u.IsActive);
+                        var invites = (await Get<InviteService>().ListAsync()).Count(i => i.Status == InviteStatus.Pending);
+                        return L["{0} people can sign in", users].Value + (invites > 0 ? L[" · {0} invitations waiting", invites].Value : "");
+                    }),
+                    Keywords: "users roles invite people access"),
+                new("/settings/permission-sets", L["Permission sets"],
+                    L["Access by area for people who need some parts but not others (for example sales, but not banking)."],
+                    await Status("/settings/permission-sets", async () => Count((await Get<PermissionSetService>().ListAsync()).Count(s => s.IsActive), L["None: everyone has one of the four roles"], L["1 set"], L["{0} sets"])),
+                    Keywords: "roles areas access"),
+                new("/settings/sign-in", L["Sign-in and two-factor"],
+                    L["Who must use an authenticator code when signing in, and single sign-on with Microsoft, Google or another provider."],
+                    await Status("/settings/sign-in", async () =>
+                    {
+                        var signIn = await Get<TwoFactorService>().SettingsAsync();
+                        var twoFactor = signIn.TwoFactorRequiredFrom is { } from
+                            ? L["Two-factor required for {0} and up", AccessMiddleware.Describe(from)].Value
+                            : L["Two-factor optional"].Value;
+                        return twoFactor + (signIn.SsoEnabled ? L[" · single sign-on on"].Value : "");
+                    }),
+                    Keywords: "2fa mfa authenticator sso microsoft google security"),
+                new("/account/password", L["Your password and sessions"], L["Change your password and see where you're signed in."], Keywords: "password sessions sign out"),
+                new("/account/two-factor", L["Your two-factor sign-in"], L["Ask for a code from an authenticator app as well as your password."], Keywords: "2fa authenticator"),
+            ]),
+            new(L["Your data"], null,
+            [
+                new("/backup", L["Backups"],
+                    L["Copies of your company file: download one now, schedule them, or restore one."],
+                    await Status("/backup", BackupStatus, attentionWhen: s => s.StartsWith(L["No automatic"].Value, StringComparison.Ordinal)),
+                    Keywords: "backup restore copy schedule export"),
+                new("/import/migrate", L["Move in from another program"], L["QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks."], Keywords: "import quickbooks migrate"),
+                new("/journal/import", L["Import transactions"], L["Journal entries or opening balances from a spreadsheet (CSV)."], Keywords: "csv import"),
+                new("/audit", L["Audit log"], L["Every change, who made it and when."], Keywords: "history changes who"),
+            ]),
+            new(L["Connections"], L["For linking OpenBook to other programs."],
+            [
+                new("/settings/document-reading", L["Document reading"],
+                    L["How the document inbox reads scanned bills and orders: on this server, or by Claude for better results."],
+                    await Status("/settings/document-reading", async () => (await Get<DocumentCaptureService>().GetSettingsAsync()).IsReady
+                        ? L["Claude reads documents"].Value : L["Read on this server"].Value),
+                    Keywords: "claude ocr scan inbox ai"),
+                new("/settings/api-keys", L["API keys"], L["Keys that let other programs use OpenBook as you."],
+                    await Status("/settings/api-keys", async () =>
+                    {
+                        var me = (await Get<UserService>().ListAsync()).FirstOrDefault(u => u.Username == _user.Identity?.Name);
+                        return me is null ? null : Count((await Get<ApiKeyService>().ListAsync(me.Id)).Count(k => k.RevokedAt is null), L["You have no keys"], L["You have 1 key"], L["You have {0} keys"]);
+                    }),
+                    Keywords: "api rest integration key"),
+                new("/settings/webhooks", L["Webhooks"], L["Tell other systems about changes as they happen."],
+                    await Status("/settings/webhooks", async () => Count((await Get<WebhookService>().ListAsync()).Count, L["None"], L["1 webhook"], L["{0} webhooks"])),
+                    Keywords: "integration notify"),
+                new("/settings/plugins", L["Add-ins"], L["Reports and import formats added to OpenBook."],
+                    await Status("/settings/plugins", () => Task.FromResult<string?>(Count(Get<PluginRegistry>().Plugins.Count, L["None installed"], L["1 add-in"], L["{0} add-ins"]))),
+                    Keywords: "plugins extensions"),
+                new("/settings/system", L["System"], L["Version, database, background jobs and recent errors."], Keywords: "version logs errors jobs"),
+            ]),
+        ];
+
+        // Settings for the other kinds of business: first for theirs, folded last for everyone else.
+        var nonprofitEntries = new List<Entry>
         {
-            Name = company.Name,
-            LegalName = company.LegalName,
-            BusinessType = company.BusinessType,
-            Email = company.Email,
-            Phone = company.Phone,
-            Address = company.Address,
-            FiscalYearStartMonth = company.FiscalYearStartMonth,
-            UseAccountNumbers = company.UseAccountNumbers,
-            DefaultReportBasis = company.DefaultReportBasis,
-            Edition = company.Edition,
-            TimeZoneId = company.TimeZoneId,
-            DefaultViewMode = company.DefaultViewMode,
-            AllowSellingShort = company.AllowSellingShort,
+            new("/nonprofit/settings", L["Donor letters"], L["Your EIN and who signs acknowledgment letters and year-end giving statements."], Keywords: "nonprofit donor letter ein"),
         };
-    }
-
-    private async Task SaveAsync()
-    {
-        try
+        var servicesEntries = new List<Entry>
         {
-            await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
-                Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort));
-            _saved = true;
-        }
-        catch (DomainException ex)
-        {
-            _error = ex.Message;
-        }
+            new("/time/rates", L["Rate card"], L["Hourly rates by client, person, role or service."], Keywords: "billing rates hourly"),
+            new("/time/people", L["People who track time"], L["Who enters time, their cost and bill rates, roles and weekly hours."], Keywords: "workers employees"),
+            new("/mileage", L["Mileage rates"], L["The per-mile rate for each year (the IRS business rates are filled in)."], Keywords: "irs mileage"),
+        };
+        if (nonprofit)
+            _sections.Insert(1, new(L["Nonprofit"], null, nonprofitEntries));
+        if (services)
+            _sections.Insert(1, new(L["Time and billing"], null, servicesEntries));
+        var others = (nonprofit ? [] : nonprofitEntries).Concat(services ? [] : servicesEntries).ToList();
+        _sections.Add(new(L["For other kinds of business"], L["Settings for areas your menu doesn't lead with."], others));
     }
 
-    private sealed class SettingsModel
+    private T Get<T>() where T : notnull => Services.GetRequiredService<T>();
+
+    /// <summary>The status line, worked out only for settings the person can open (so it never shows more than they may see).</summary>
+    private async Task<StatusLine?> Status(string href, Func<Task<string?>> status, Func<string, bool>? attentionWhen = null)
     {
-        [Required(ErrorMessage = "Enter your company's name.")]
-        [StringLength(200)]
-        public string Name { get; set; } = string.Empty;
-
-        [StringLength(200)]
-        public string? LegalName { get; set; }
-
-        public BusinessType BusinessType { get; set; }
-
-        // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
-        [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
-        public string? Email { get; set; }
-
-        [StringLength(50)]
-        public string? Phone { get; set; }
-
-        [StringLength(1000)]
-        public string? Address { get; set; }
-
-        [Range(1, 12)]
-        public int FiscalYearStartMonth { get; set; } = 1;
-
-        public bool UseAccountNumbers { get; set; }
-
-        public ReportBasis DefaultReportBasis { get; set; }
-
-        public Edition Edition { get; set; }
-
-        /// <summary>IANA id; empty for the server's.</summary>
-        public string? TimeZoneId { get; set; }
-
-        public ViewMode DefaultViewMode { get; set; }
-
-        public bool AllowSellingShort { get; set; }
+        if (!_user.CanReach(href))
+            return new(AccessRules.NeedsText(_user, href, HttpMethods.Get));
+        return await status() is { } text ? new(text, attentionWhen?.Invoke(text) == true) : null;
     }
 
-    /// <summary>The server's time zones by IANA id (as the company stores them), in offset order.</summary>
-    private static IEnumerable<(string Id, string Name)> TimeZones => TimeZoneInfo.GetSystemTimeZones()
-        .Select(z => (Id: z.HasIanaId ? z.Id : TimeZoneInfo.TryConvertWindowsIdToIanaId(z.Id, out var iana) ? iana : z.Id, z.DisplayName))
-        .DistinctBy(z => z.Id);
+    private string Count(int n, string none, string one, string many) => n switch
+    {
+        0 => none,
+        1 => one,
+        _ => string.Format(System.Globalization.CultureInfo.CurrentCulture, many, n),
+    };
+
+    private async Task<string?> BackupStatus()
+    {
+        if (Storage.Provider == DatabaseProvider.Postgres)
+            return L["Backed up with PostgreSQL's own tools (pg_dump)"];
+        var schedule = await Get<ScheduledBackupService>().GetAsync();
+        if (!schedule.Enabled)
+            return L["No automatic backups"];
+        var when = schedule.Frequency == BackupFrequency.Daily
+            ? L["Every day at {0:00}:00", schedule.Hour].Value
+            : L["Every {0} at {1:00}:00", schedule.Weekday, schedule.Hour].Value;
+        return schedule.LastSuccessAt is { } last
+            ? L["{0} · last {1}", when, Labels.Date(DateOnly.FromDateTime(last.InCompanyTime().DateTime))].Value
+            : when;
+    }
 }

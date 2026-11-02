@@ -133,7 +133,7 @@ public static class Links
         "backup_schedule" => "/backup",
         "email_settings" => "/settings/email",
         "form_style" => $"/settings/forms/{id}",
-        "company" => "/settings",
+        "company" => "/settings/company",
         "closing_date" => "/settings/close-books",
         "sign_in_settings" => "/settings/sign-in",
         "user" => $"/settings/users/{id}",

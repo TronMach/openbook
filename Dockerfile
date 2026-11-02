@@ -16,6 +16,8 @@ COPY src/OpenBook.Api/OpenBook.Api.csproj src/OpenBook.Api/
 COPY src/OpenBook.Web/OpenBook.Web.csproj src/OpenBook.Web/
 RUN dotnet restore src/OpenBook.Web/OpenBook.Web.csproj
 COPY src/ src/
+# The user guide, which the app shows at /help.
+COPY docs/user-guide/ docs/user-guide/
 RUN dotnet publish src/OpenBook.Web/OpenBook.Web.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

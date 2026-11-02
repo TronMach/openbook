@@ -94,17 +94,18 @@
                     <InputText id="legal-name" @bind-Value="Input.LegalName" />
                 </div>
                 <div class="field">
-                    <label for="business-type">Business type</label>
+                    <label for="business-type">Legal structure</label>
                     <InputSelect id="business-type" @bind-Value="Input.BusinessType">
                         @foreach (var type in Enum.GetValues<BusinessType>())
                         {
                             <option value="@type">@Labels.For(type)</option>
                         }
                     </InputSelect>
+                    <span class="hint">Picks the starter chart of accounts and the tax form your accounts are mapped to.</span>
                 </div>
             </div>
             <div class="field">
-                <label for="edition">What kind of business is this?</label>
+                <label for="edition">Which menu suits your work?</label>
                 <InputSelect id="edition" @bind-Value="Input.Edition">
                     @foreach (var edition in Enum.GetValues<Edition>())
                     {

@@ -34,6 +34,7 @@
             <form class="search" method="get" action="/search" data-enhance="false" role="search">
                 <input name="q" type="search" placeholder="@L["Search…"]" aria-label="@L["Search"]" />
             </form>
+            <a class="help-topic" href="/help/@OpenBook.Web.Help.HelpTopics.For(ReturnUrl)" title="@L["The user guide's chapter about this page"]">@L["Help"]</a>
             <a class="muted" href="/account/password" title="@L["Change password"] · @AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)">@context.User.Identity?.Name</a>
             <a class="muted" href="/account/region" title="@L["Language and region"]">@System.Globalization.CultureInfo.CurrentCulture.Name</a>
             <button type="button" id="theme-toggle" class="link theme-toggle" aria-label="Theme">Theme: auto</button>

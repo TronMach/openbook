@@ -63,6 +63,7 @@
     const help = [
         ['/', 'Search'],
         ['?', 'Show these shortcuts'],
+        ['g then ?', 'Open the user guide at the page you are on'],
         ['Ctrl + Enter', 'Save the form you are typing in'],
         ['Alt + Q', 'Jump to quick entry (account registers)'],
         ['g then h / s / p / b / i / j / r / a / c / v', 'Go to home, sales, purchases, banking, inventory, journal, reports, accounts, customers, vendors'],
@@ -80,7 +81,8 @@
             dialog.id = 'shortcut-help';
             dialog.setAttribute('aria-label', 'Keyboard shortcuts');
             const rows = help.map(([keys, what]) => `<tr><td><kbd>${keys}</kbd></td><td>${what}</td></tr>`).join('');
-            dialog.innerHTML = `<h2>Keyboard shortcuts</h2><table class="data">${rows}</table><form method="dialog"><button>Close</button></form>`;
+            dialog.innerHTML = `<h2>Keyboard shortcuts</h2><table class="data">${rows}</table>`
+                + `<p><a href="/help">Open the user guide</a></p><form method="dialog"><button>Close</button></form>`;
             document.body.appendChild(dialog);
         }
         if (dialog.open) dialog.close(); else dialog.showModal();
@@ -101,7 +103,9 @@
         if (e.ctrlKey || e.metaKey || e.altKey || isTyping(document.activeElement)) return;
 
         if (pending) {
-            const url = (pending === 'g' ? go : create)[e.key.toLowerCase()];
+            // g + ?: the guide's chapter for this page (the top bar's Help link knows which).
+            const helpLink = pending === 'g' && e.key === '?' ? document.querySelector('a.help-topic') : null;
+            const url = helpLink ? helpLink.getAttribute('href') : (pending === 'g' ? go : create)[e.key.toLowerCase()];
             pending = null;
             if (url) { e.preventDefault(); location.href = url; }
             return;
@@ -117,6 +121,28 @@
             clearTimeout(pendingTimer);
             pendingTimer = setTimeout(() => { pending = null; }, 1500);
         }
+    });
+
+    // Filter boxes (<input data-filter="#list">): hide the list's [data-filter-item]s that don't contain every word typed
+    // (their text plus data-keywords), groups ([data-filter-group]) left empty, and show [data-filter-empty] when nothing
+    // matches. Without script the whole list simply shows.
+    document.addEventListener('input', e => {
+        const box = e.target;
+        if (!(box instanceof HTMLInputElement) || !box.dataset.filter) return;
+        const list = document.querySelector(box.dataset.filter);
+        if (!list) return;
+        const words = box.value.toLowerCase().split(/\s+/).filter(w => w);
+        let shown = 0;
+        for (const item of list.querySelectorAll('[data-filter-item]')) {
+            const text = (item.textContent + ' ' + (item.dataset.keywords || '')).toLowerCase();
+            const match = words.every(w => text.includes(w));
+            item.hidden = !match;
+            if (match) shown++;
+        }
+        for (const group of list.querySelectorAll('[data-filter-group]'))
+            group.hidden = !group.querySelector('[data-filter-item]:not([hidden])');
+        const empty = list.parentElement?.querySelector('[data-filter-empty]');
+        if (empty) empty.hidden = shown > 0;
     });
 
     // Installable app: the service worker caches static files and shows an offline page (never your data).

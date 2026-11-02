@@ -128,6 +128,9 @@ public static class AccessRules
     {
         var value = path.Value ?? "/";
         var write = !(HttpMethods.IsGet(method) || HttpMethods.IsHead(method)) || IsWritePage(value);
+        // The settings index is a list of links, each checked on its own, so everyone may read it.
+        if (IsSettingsIndex(path))
+            return write ? UserRole.Accountant : UserRole.ViewOnly;
         foreach (var (prefix, read, change) in Rules)
         {
             if (path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase))
@@ -136,6 +139,9 @@ public static class AccessRules
 
         return write ? UserRole.Standard : UserRole.ViewOnly;
     }
+
+    private static bool IsSettingsIndex(PathString path) =>
+        string.Equals((path.Value ?? "/").TrimEnd('/'), "/settings", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsWritePage(string path)
     {
@@ -208,7 +214,7 @@ public static class AccessRules
     public static string? AreaOf(PathString path)
     {
         // Search is open to everyone, like the page; its results are filtered by area.
-        if (path.StartsWithSegments("/api/search"))
+        if (path.StartsWithSegments("/api/search") || IsSettingsIndex(path))
             return null;
         if (path.StartsWithSegments("/api") && ApiScopes.AreaOf(path.Value ?? "/") is { } apiArea)
             return apiArea;

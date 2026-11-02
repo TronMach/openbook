@@ -7,8 +7,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.38.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <!-- The user guide, shown in the app at /help (HelpGuide reads it from the help folder beside the app). -->
+  <ItemGroup>
+    <None Include="..\..\docs\user-guide\*.md" Link="help\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -306,7 +306,9 @@ public sealed class AccessRulesTests
     [InlineData("/journal", "GET", UserRole.ViewOnly)]
     [InlineData("/journal/new", "GET", UserRole.Accountant)]
     [InlineData("/accounts", "POST", UserRole.Accountant)]
-    [InlineData("/settings", "GET", UserRole.Accountant)]
+    [InlineData("/settings", "GET", UserRole.ViewOnly)]
+    [InlineData("/settings/company", "GET", UserRole.Accountant)]
+    [InlineData("/settings/company", "POST", UserRole.Accountant)]
     [InlineData("/settings/api-keys", "POST", UserRole.ViewOnly)]
     [InlineData("/settings/users", "GET", UserRole.Admin)]
     [InlineData("/settings/permission-sets/new", "GET", UserRole.Admin)]
@@ -479,6 +481,8 @@ public sealed class AccessRulesTests
     [InlineData("/banking/reconciliations", "banking")]
     [InlineData("/journal/new", "ledger")]
     [InlineData("/settings/close-books", "ledger")]
+    [InlineData("/settings/company", "ledger")]
+    [InlineData("/settings", null)]
     [InlineData("/settings/api-keys", null)]
     [InlineData("/reports/profit-and-loss", "reports")]
     [InlineData("/api/sales/invoices", "sales")]
@@ -496,7 +500,8 @@ public sealed class AccessRulesTests
     {
         string[] withoutArea =
         [
-            "/", "/Error", "/access-denied", "/not-found", "/login", "/setup", "/search", "/account", "/invite", "/portal", "/pay",
+            "/", "/Error", "/access-denied", "/not-found", "/login", "/setup", "/search", "/account", "/invite", "/portal", "/pay", "/help",
+            "/settings", // the index only; its subpages have areas
             "/settings/api-keys", "/settings/users", "/settings/sign-in", "/settings/permission-sets", "/settings/webhooks",
             "/settings/plugins", "/settings/system", "/settings/email", "/settings/online-payments", "/settings/document-reading",
         ];
@@ -507,7 +512,7 @@ public sealed class AccessRulesTests
             .ToList();
         Assert.True(routes.Count > 100);
         var unlisted = routes.Where(r => AccessRules.AreaOf(new PathString(r)) is null
-            && !withoutArea.Any(w => w == "/" ? r == "/" : new PathString(r).StartsWithSegments(w, StringComparison.OrdinalIgnoreCase))).ToList();
+            && !withoutArea.Any(w => w is "/" or "/settings" ? r == w : new PathString(r).StartsWithSegments(w, StringComparison.OrdinalIgnoreCase))).ToList();
         Assert.Empty(unlisted);
     }
 

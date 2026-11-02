@@ -1,0 +1,103 @@
+@page "/help"
+@page "/help/{Chapter}"
+@using OpenBook.Web.Help
+@inject HelpGuide Guide
+
+<PageTitle>@(_chapter?.Title ?? L["User guide"]) · OpenBook</PageTitle>
+
+<div class="wide help-page">
+    <aside class="help-contents" aria-label="@L["Chapters"]">
+        <form method="get" action="/help" role="search" data-enhance="false">
+            <label for="help-q" class="visually-hidden">@L["Search the guide"]</label>
+            <input id="help-q" name="q" type="search" value="@Q" placeholder="@L["Search the guide"]" />
+        </form>
+        <nav>
+            <a href="/help" class="@(Chapter is null && Q is null ? "active" : null)">@L["Contents"]</a>
+            @foreach (var c in Guide.Chapters)
+            {
+                <a href="/help/@c.Key" class="@(c.Key.Equals(Chapter, StringComparison.OrdinalIgnoreCase) ? "active" : null)">@c.Number. @c.Title</a>
+            }
+        </nav>
+    </aside>
+
+    <article class="card help-body">
+        @if (!Guide.IsInstalled)
+        {
+            <h1>@L["User guide"]</h1>
+            <p>
+                @L["The guide isn't installed with this copy of OpenBook. You can read it online:"]
+                <a href="@(HelpGuide.RepositoryDocs + "user-guide/README.md")" rel="noopener">@L["OpenBook user guide on GitHub"]</a>
+            </p>
+        }
+        else if (Q is { Length: > 0 })
+        {
+            <h1>@L["Search the guide"]</h1>
+            @if (_hits.Count == 0)
+            {
+                <p>@L["Nothing in the guide mentions {0}. Try fewer or different words.", Q]</p>
+            }
+            else
+            {
+                <ul class="help-hits">
+                    @foreach (var hit in _hits)
+                    {
+                        <li>
+                            <a href="@HitUrl(hit)"><strong>@hit.Heading</strong></a>
+                            <span class="muted">@hit.Chapter.Number. @hit.Chapter.Title</span>
+                            <div>@hit.Snippet</div>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else if (_html is null)
+        {
+            <h1>@L["No such chapter"]</h1>
+            <p><a href="/help">@L["See the contents"]</a></p>
+        }
+        else
+        {
+            <h1>@(_chapter is null ? L["User guide"] : $"{_chapter.Number}. {_chapter.Title}")</h1>
+            <div class="help-text">@((MarkupString)_html)</div>
+            @if (_chapter is not null)
+            {
+                <p class="help-next">
+                    @if (Guide.Chapters.TakeWhile(c => c != _chapter).LastOrDefault() is { } previous)
+                    {
+                        <a href="/help/@previous.Key">← @previous.Title</a>
+                    }
+                    @if (Guide.Chapters.SkipWhile(c => c != _chapter).Skip(1).FirstOrDefault() is { } next)
+                    {
+                        <a href="/help/@next.Key">@next.Title →</a>
+                    }
+                </p>
+            }
+        }
+    </article>
+</div>
+
+@code {
+    private HelpChapter? _chapter;
+    private string? _html;
+    private IReadOnlyList<HelpHit> _hits = [];
+
+    [Parameter] public string? Chapter { get; set; }
+
+    private static string HitUrl(HelpHit hit) => "/help/" + hit.Chapter.Key + (hit.Anchor is null ? "" : "#" + hit.Anchor);
+
+    [SupplyParameterFromQuery] private string? Q { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (!Guide.IsInstalled)
+            return;
+        if (Q is { Length: > 0 })
+        {
+            _hits = Guide.Search(Q);
+            return;
+        }
+
+        _chapter = Chapter is null ? null : Guide.Find(Chapter);
+        _html = Guide.Html(Chapter);
+    }
+}

@@ -1,0 +1,18 @@
+@* A "Help" link to the user guide's chapter (and section) about this page, for page toolbars. The top bar has one for
+   every page already (HelpTopics); use this where a page wants a more exact section. *@
+<a class="help-link" href="@Href" title="@L["Read about this in the user guide"]">@(Text ?? L["Help"])</a>
+
+@code {
+    /// <summary>The chapter's file name without ".md", like "04-sales".</summary>
+    [Parameter, EditorRequired]
+    public string Chapter { get; set; } = "";
+
+    /// <summary>A heading's id in that chapter (GitHub style: "receiving-payments").</summary>
+    [Parameter]
+    public string? Section { get; set; }
+
+    [Parameter]
+    public string? Text { get; set; }
+
+    private string Href => "/help/" + Chapter + (Section is null ? "" : "#" + Section);
+}

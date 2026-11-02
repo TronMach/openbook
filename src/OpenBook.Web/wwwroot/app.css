@@ -667,3 +667,38 @@ a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
 .preset-swatch.preset-boxed .line { height: 0.45rem; background: none; border: 1px solid #c4c9d0; }
 .preset-back { display: none; }
 @media (max-width: 900px) { .preset-gallery { grid-template-columns: 1fr; } .preset-back { display: inline; } }
+
+/* ---- Usability pass: settings index, help ---- */
+.settings-filter { max-width: 28rem; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr)); gap: 1.25rem; align-items: start; }
+.settings-grid .card { margin: 0; }
+.settings-about { margin-top: -0.4rem; }
+.settings-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.85rem; }
+.settings-list li { display: grid; gap: 0.1rem; }
+.settings-title { font-weight: 600; }
+.settings-what { font-size: 0.9rem; }
+.settings-status { font-size: 0.85rem; color: var(--muted); }
+.settings-status.attention { color: var(--danger); }
+.help-link { font-size: 0.9rem; }
+.topbar .help-topic { color: var(--muted); text-decoration: none; }
+.page:has(> .help-page) { max-width: 1180px; }
+.help-page { display: grid; grid-template-columns: 16rem minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.help-contents { position: sticky; top: 1rem; display: grid; gap: 0.75rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+.help-contents nav { display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.help-contents nav a { text-decoration: none; color: var(--muted); padding: 0.15rem 0.4rem; border-radius: 4px; }
+.help-contents nav a.active { color: var(--text); background: var(--notice-bg); font-weight: 600; }
+.help-text { line-height: 1.6; }
+.help-text h2 { margin-top: 1.75rem; }
+.help-text h3 { font-size: 1rem; margin-top: 1.25rem; }
+.help-text table { border-collapse: collapse; margin: 0.75rem 0; display: block; overflow-x: auto; }
+.help-text th, .help-text td { border: 1px solid var(--border); padding: 0.35rem 0.6rem; text-align: left; vertical-align: top; }
+.help-text code { background: var(--bg); padding: 0 0.25rem; border-radius: 4px; }
+.help-text :target { scroll-margin-top: 1rem; background: var(--notice-bg); }
+.help-hits { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.help-hits .muted { margin-left: 0.5rem; font-size: 0.85rem; }
+.help-next { display: flex; justify-content: space-between; gap: 1rem; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+@media (max-width: 760px) {
+    .help-page { grid-template-columns: 1fr; }
+    .help-contents { position: static; max-height: none; }
+    .help-contents nav { grid-template-columns: 1fr; max-height: 12rem; overflow-y: auto; }
+}

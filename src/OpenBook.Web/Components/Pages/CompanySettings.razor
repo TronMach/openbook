@@ -1,0 +1,252 @@
+@page "/settings/company"
+@using System.ComponentModel.DataAnnotations
+@using OpenBook.Domain.Companies
+@inject CompanySettingsService SettingsService
+
+<PageTitle>@L["Company details"] · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@L["Company details"]</h1>
+        <HelpLink Chapter="01-getting-started" />
+        <a class="button secondary" href="/settings">@L["All settings"]</a>
+    </div>
+    <p class="muted">@L["Your company's name and contact details (printed on invoices and other forms), how its books are kept, and what the menu leads with. Saving changes nothing already entered."]</p>
+
+    @if (_saved)
+    {
+        <div class="alert notice" role="status">@L["Settings saved."]</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    <EditForm Model="Input" FormName="settings" OnValidSubmit="SaveAsync" method="post">
+        <DataAnnotationsValidator />
+
+        <fieldset>
+            <legend>@L["Company"]</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="name">@L["Company name"]</label>
+                    <InputText id="name" @bind-Value="Input.Name" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="field">
+                    <label for="legal-name">@L["Legal name"] <span class="muted">@L["(optional)"]</span></label>
+                    <InputText id="legal-name" @bind-Value="Input.LegalName" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="business-type">@L["Legal structure"]</label>
+                    <InputSelect id="business-type" @bind-Value="Input.BusinessType">
+                        @foreach (var type in Enum.GetValues<BusinessType>())
+                        {
+                            <option value="@type">@Labels.For(type)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">@L["Decides which tax form your accounts are mapped to (Schedule C, Form 1120, Form 990 and so on) for the tax line report."]</span>
+                </div>
+                <div class="field">
+                    <label for="email">@L["Email"] <span class="muted">@L["(optional)"]</span></label>
+                    <InputText id="email" type="email" @bind-Value="Input.Email" />
+                    <ValidationMessage For="() => Input.Email" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="phone">@L["Phone"] <span class="muted">@L["(optional)"]</span></label>
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="address">@L["Address"] <span class="muted">@L["(optional)"]</span></label>
+                <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>@L["Menu"]</legend>
+            <div class="field">
+                <label for="edition">@L["Which menu suits your work?"]</label>
+                <InputSelect id="edition" @bind-Value="Input.Edition">
+                    @foreach (var edition in Enum.GetValues<Edition>())
+                    {
+                        <option value="@edition">@Editions.Label(edition)</option>
+                    }
+                </InputSelect>
+                <span class="hint">@Editions.Description(Input.Edition) @L["It only changes the menu, the home page and which reports come first; everything stays available."]</span>
+            </div>
+            @if (Editions.Menu(Edition.General).Except(Editions.Menu(Input.Edition)).ToList() is { Count: > 0 } left)
+            {
+                <p class="muted">
+                    @L["Not in the menu for this edition:"]
+                    @foreach (var href in left)
+                    {
+                        <a href="@href" style="margin-right: 0.5rem">@href.TrimStart('/')</a>
+                    }
+                </p>
+            }
+        </fieldset>
+
+        <fieldset>
+            <legend>@L["View"]</legend>
+            <div class="field">
+                <label for="default-view">@L["View for people who haven't chosen one"]</label>
+                <InputSelect id="default-view" @bind-Value="Input.DefaultViewMode">
+                    <option value="@ViewMode.Simple">@L["Simple view"]</option>
+                    <option value="@ViewMode.Full">@L["Full view"]</option>
+                </InputSelect>
+                <span class="hint">@L["The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept."]</span>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>@L["Stock"]</legend>
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.AllowSellingShort" />
+                <span>@L["Allow selling more than is on hand"]</span>
+            </label>
+            <span class="hint">@L["For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do."]</span>
+        </fieldset>
+
+        <fieldset>
+            <legend>@L["Books"]</legend>
+            <div class="row">
+                <div class="field">
+                    <label for="fiscal-month">@L["Fiscal year starts in"]</label>
+                    <InputSelect id="fiscal-month" @bind-Value="Input.FiscalYearStartMonth">
+                        @for (var month = 1; month <= 12; month++)
+                        {
+                            <option value="@month">@Labels.Month(month)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">@L["The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions."]</span>
+                </div>
+                <div class="field">
+                    <label for="basis">@L["Reports open on"]</label>
+                    <InputSelect id="basis" @bind-Value="Input.DefaultReportBasis">
+                        @foreach (var basis in Enum.GetValues<ReportBasis>())
+                        {
+                            <option value="@basis">@Labels.For(basis)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">@L["Accrual counts sales and bills when they're entered; cash counts them when money changes hands. Each report can still switch."]</span>
+                </div>
+            </div>
+            <div class="field">
+                <label for="time-zone">@L["Time zone"]</label>
+                <InputSelect id="time-zone" @bind-Value="Input.TimeZoneId" data-search>
+                    <option value="">@L["The server's ({0})", TimeZoneInfo.Local.DisplayName]</option>
+                    @foreach (var (id, name) in TimeZones)
+                    {
+                        <option value="@id">@name</option>
+                    }
+                </InputSelect>
+                <span class="hint">@L["Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run."]</span>
+            </div>
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.UseAccountNumbers" />
+                <span>@L["Use account numbers"]</span>
+            </label>
+            <span class="hint">@L["Shows a number beside each account (like 1000 Checking) and sorts the chart by it. Leave it off if you go by names."]</span>
+            <dl class="facts">
+                <dt>@L["Home currency"]</dt>
+                <dd>@_currency <span class="muted">@L["(set at setup; can't be changed)"]</span></dd>
+            </dl>
+        </fieldset>
+
+        <button type="submit">@L["Save settings"]</button>
+    </EditForm>
+</div>
+
+@code {
+    private string? _currency;
+    private bool _saved;
+    private string? _error;
+
+    [SupplyParameterFromForm]
+    private SettingsModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await SettingsService.GetAsync();
+        _currency = company.HomeCurrency.Code;
+        Input ??= new SettingsModel
+        {
+            Name = company.Name,
+            LegalName = company.LegalName,
+            BusinessType = company.BusinessType,
+            Email = company.Email,
+            Phone = company.Phone,
+            Address = company.Address,
+            FiscalYearStartMonth = company.FiscalYearStartMonth,
+            UseAccountNumbers = company.UseAccountNumbers,
+            DefaultReportBasis = company.DefaultReportBasis,
+            Edition = company.Edition,
+            TimeZoneId = company.TimeZoneId,
+            DefaultViewMode = company.DefaultViewMode,
+            AllowSellingShort = company.AllowSellingShort,
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
+                Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort));
+            _saved = true;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class SettingsModel
+    {
+        [Required(ErrorMessage = "Enter your company's name.")]
+        [StringLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [StringLength(200)]
+        public string? LegalName { get; set; }
+
+        public BusinessType BusinessType { get; set; }
+
+        // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
+        [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
+        public string? Email { get; set; }
+
+        [StringLength(50)]
+        public string? Phone { get; set; }
+
+        [StringLength(1000)]
+        public string? Address { get; set; }
+
+        [Range(1, 12)]
+        public int FiscalYearStartMonth { get; set; } = 1;
+
+        public bool UseAccountNumbers { get; set; }
+
+        public ReportBasis DefaultReportBasis { get; set; }
+
+        public Edition Edition { get; set; }
+
+        /// <summary>IANA id; empty for the server's.</summary>
+        public string? TimeZoneId { get; set; }
+
+        public ViewMode DefaultViewMode { get; set; }
+
+        public bool AllowSellingShort { get; set; }
+    }
+
+    /// <summary>The server's time zones by IANA id (as the company stores them), in offset order.</summary>
+    private static IEnumerable<(string Id, string Name)> TimeZones => TimeZoneInfo.GetSystemTimeZones()
+        .Select(z => (Id: z.HasIanaId ? z.Id : TimeZoneInfo.TryConvertWindowsIdToIanaId(z.Id, out var iana) ? iana : z.Id, z.DisplayName))
+        .DistinctBy(z => z.Id);
+}
