@@ -53,7 +53,8 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
           openbook delete <path>
 
         Options: --url, --key (override the saved settings and OPENBOOK_URL / OPENBOOK_API_KEY),
-                 --closing-password (for changes dated in a closed period).
+                 --closing-password (for changes dated in a closed period),
+                 --idempotency-key KEY (on post/put/delete/import: running it again with the same key repeats the first answer).
         Exit code 0 on success, 1 when the server refuses, 2 for a mistake in the command, 3 when `check` finds problems.
         """;
 
@@ -272,6 +273,9 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         if (options.GetValueOrDefault("closing-password") is { } password)
             client.DefaultRequestHeaders.Add("X-Closing-Password", password);
+        // Running the same command again with the same key gets the first answer instead of doing it twice.
+        if (options.GetValueOrDefault("idempotency-key") is { } key)
+            client.DefaultRequestHeaders.Add("Idempotency-Key", key);
         return client;
     }
 

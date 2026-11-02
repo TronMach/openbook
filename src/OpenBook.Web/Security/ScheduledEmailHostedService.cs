@@ -9,7 +9,7 @@ namespace OpenBook.Web.Security;
 /// email for the invoice page, and logged. The audit log names the actor "system".
 /// </summary>
 internal sealed partial class ScheduledEmailHostedService(
-    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<ScheduledEmailHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Diagnostics.JobStatus status, ILogger<ScheduledEmailHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(1);
 
@@ -33,7 +33,8 @@ internal sealed partial class ScheduledEmailHostedService(
         try
         {
             await using var scope = scopes.CreateAsyncScope();
-            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
+            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct)
+                || !await leases.TryAcquireAsync("scheduled-emails", TimeSpan.FromMinutes(3), ct))
                 return;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
             foreach (var result in await scope.ServiceProvider.GetRequiredService<ScheduledEmailService>().SendDueAsync(ct))

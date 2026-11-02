@@ -3,7 +3,8 @@ using OpenBook.Application.Webhooks;
 namespace OpenBook.Web.Security;
 
 /// <summary>Sends webhook deliveries every few seconds: new audit records become deliveries, then due ones are posted.</summary>
-internal sealed partial class WebhookDispatchService(IServiceScopeFactory scopes, Diagnostics.JobStatus status, ILogger<WebhookDispatchService> logger) : BackgroundService
+internal sealed partial class WebhookDispatchService(
+    IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, Diagnostics.JobStatus status, ILogger<WebhookDispatchService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(5);
 
@@ -18,7 +19,8 @@ internal sealed partial class WebhookDispatchService(IServiceScopeFactory scopes
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var company = scope.ServiceProvider.GetRequiredService<OpenBook.Application.Companies.CompanySetupService>();
-                if (await company.IsSetUpAsync(stoppingToken))
+                // With several servers on one database, one of them sends (JobLeases).
+                if (await company.IsSetUpAsync(stoppingToken) && await leases.TryAcquireAsync("webhooks", TimeSpan.FromMinutes(1), stoppingToken))
                     await scope.ServiceProvider.GetRequiredService<WebhookDispatcher>().RunOnceAsync(stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

@@ -102,6 +102,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Assets.Loan> Loans => Set<OpenBook.Domain.Assets.Loan>();
     public DbSet<ReportSubscription> ReportSubscriptions => Set<ReportSubscription>();
     public DbSet<DashboardPreference> DashboardPreferences => Set<DashboardPreference>();
+    public DbSet<JobLease> JobLeases => Set<JobLease>();
+    public DbSet<IdempotentRequest> IdempotentRequests => Set<IdempotentRequest>();
     public DbSet<ViewPreference> ViewPreferences => Set<ViewPreference>();
     public DbSet<ForecastScenario> ForecastScenarios => Set<ForecastScenario>();
     public DbSet<AdjustingEntry> AdjustingEntries => Set<AdjustingEntry>();
@@ -2156,6 +2158,27 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasKey(a => a.JournalEntryId);
             b.Property(a => a.MarkedBy).HasMaxLength(100);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(a => a.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<JobLease>(b =>
+        {
+            b.ToTable("JobLeases");
+            b.HasKey(l => l.Name);
+            b.Property(l => l.Name).HasMaxLength(JobLease.MaxNameLength);
+            b.Property(l => l.Holder).HasMaxLength(JobLease.MaxHolderLength);
+        });
+
+        modelBuilder.Entity<IdempotentRequest>(b =>
+        {
+            b.ToTable("IdempotentRequests");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Key).HasMaxLength(IdempotentRequest.MaxKeyLength);
+            b.Property(r => r.Caller).HasMaxLength(200);
+            b.Property(r => r.RequestHash).HasMaxLength(64);
+            b.Property(r => r.ContentType).HasMaxLength(200);
+            b.HasIndex(r => new { r.Caller, r.Key }).IsUnique();
+            b.HasIndex(r => r.CreatedUnixMs);
+            b.Ignore(r => r.IsDone);
         });
 
         modelBuilder.Entity<DashboardPreference>(b =>

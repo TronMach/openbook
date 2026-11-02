@@ -15,7 +15,7 @@ namespace OpenBook.Web.Security;
 /// the actor "system".
 /// </summary>
 internal sealed partial class RecurringPostingService(
-    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, Diagnostics.BooksCheckStatus checks, ILogger<RecurringPostingService> logger) : BackgroundService
+    IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Diagnostics.JobStatus status, Diagnostics.BooksCheckStatus checks, ILogger<RecurringPostingService> logger) : BackgroundService
 {
     public const string Actor = "system";
     private static readonly TimeSpan Period = TimeSpan.FromHours(1);
@@ -38,6 +38,9 @@ internal sealed partial class RecurringPostingService(
         if (!await StepAsync("Checking setup", async services =>
         {
             if (!await setup.CheckAsync(services.GetRequiredService<CompanySetupService>(), ct))
+                return false;
+            // With several servers on one database, one of them runs the hourly work; the lease outlasts an hour's gap.
+            if (!await leases.TryAcquireAsync("hourly", TimeSpan.FromMinutes(90), ct))
                 return false;
             // A restored file, or another server instance, may have changed the company's time zone.
             CompanyTime.Use(await services.GetRequiredService<ICompanyStore>().GetCompanyAsync(ct));
@@ -136,6 +139,12 @@ internal sealed partial class RecurringPostingService(
                 else
                     LogCollectionFailed($"Report '{run.ReportName}'", run.Error);
             }
+            return true;
+        }, ct);
+
+        await StepAsync("Idempotency keys", async services =>
+        {
+            await services.GetRequiredService<OpenBook.Application.IIdempotencyStore>().PurgeAsync(ct);
             return true;
         }, ct);
 

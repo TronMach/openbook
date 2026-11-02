@@ -10,7 +10,7 @@ namespace OpenBook.Web.Security;
 /// the channel for its page, and logged.
 /// </summary>
 internal sealed partial class ChannelSyncHostedService(
-    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<ChannelSyncHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Diagnostics.JobStatus status, ILogger<ChannelSyncHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
 
@@ -31,7 +31,8 @@ internal sealed partial class ChannelSyncHostedService(
         try
         {
             await using var scope = scopes.CreateAsyncScope();
-            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
+            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct)
+                || !await leases.TryAcquireAsync("channel-sync", TimeSpan.FromMinutes(90), ct))
                 return;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
             foreach (var (channel, result) in await scope.ServiceProvider.GetRequiredService<ChannelSyncService>().SyncDueAsync(ct))

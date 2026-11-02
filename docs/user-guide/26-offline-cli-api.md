@@ -37,6 +37,8 @@ A key acts as you, with your role, and never does more than your role allows. A 
 
 Programs send the key as `Authorization: Bearer obk_…`. The **REST API** link on the Settings page opens the OpenAPI description of every endpoint, for developers.
 
+To retry a write safely after a timeout, send an `Idempotency-Key` header (any unique text up to 100 characters, such as a GUID) with POST, PUT or DELETE. The first request with a key is done and its answer kept for a day; sending the same request with the same key again gets that answer back (with `Idempotency-Replayed: true`) instead of, say, a second invoice. The same key with a different request is refused (422). The command-line tool takes `--idempotency-key`.
+
 Lists of invoices, payments, sales receipts, bills and bill payments return everything by default. Add `?take=100` (and `&skip=100` for the next page) to get the newest a page at a time, at most 500 per page; the `X-Total-Count` header says how many there are in all.
 
 ## Webhooks

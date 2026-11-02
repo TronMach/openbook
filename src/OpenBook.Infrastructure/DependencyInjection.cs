@@ -68,6 +68,8 @@ public static class DependencyInjection
         }
 
         services.AddScoped<ILedgerStore, EfLedgerStore>();
+        services.AddSingleton<IJobLeases, EfJobLeases>();
+        services.AddSingleton<IIdempotencyStore, EfIdempotencyStore>();
         services.AddScoped<ICompanyStore, EfCompanyStore>();
         services.AddScoped<IBankingStore, EfBankingStore>();
         services.AddScoped<ISalesStore, EfSalesStore>();

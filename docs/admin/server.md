@@ -10,7 +10,7 @@ From the folder with `docker-compose.yml`:
 2. `docker compose up -d` builds the image and starts PostgreSQL and OpenBook. The first start creates the database tables.
 3. Open `http://<server>:8080` and set up the company (or move a desktop company in first: the move needs an empty database).
 
-`GET /healthz` answers `ok` while OpenBook runs and its database answers, for load balancers and monitoring.
+`GET /healthz` answers `ok` while OpenBook runs and its database answers, for load balancers and monitoring. The image has a Docker `HEALTHCHECK` that asks it every 30 seconds (with `dotnet OpenBook.Web.dll healthcheck`, since the image has no curl), so `docker ps` and compose show the container as healthy or unhealthy; `healthcheck --url …` asks another address.
 
 Data lives in two Docker volumes: `db-data` (PostgreSQL) and `app-data` (`/data` in the app: Data Protection keys, logs, the email folder). Both matter for a restore.
 
@@ -132,4 +132,6 @@ Nothing is changed when a check fails; the message says what differed. `move.tar
 - **Updating OpenBook**: take a backup, then `docker compose build --pull && docker compose up -d`. New database changes are applied when OpenBook starts.
 - **Logs**: one file per day in `/data/logs`; **Settings → System** shows background jobs and recent problems.
 - **Offering the QuickBooks export helper**: copy `OpenBook.QuickBooksExport.exe` (built by `tools/package-qb-export.ps1`, see [the desktop guide](desktop.md#the-quickbooks-export-helper)) into a `QuickBooks` folder beside `OpenBook.Web.dll` (in a container, `/app/QuickBooks`) and the import page links to it for accountants.
+- **Rate limits**: sign-in attempts (passwords, two-factor codes, single sign-on, accepting an invitation) are limited to 20 a minute per address, and the links people open without signing in (customer portal, payment pages, invitations, capture devices, Stripe's webhook) to 120. Too many answers 429 "Too many tries". Change them with `OpenBook__RateLimits__SignInPerMinute` and `OpenBook__RateLimits__LinksPerMinute` (0 turns one off). Behind a proxy the limits apply to the client's address only with forwarded headers on (`ASPNETCORE_FORWARDEDHEADERS_ENABLED`, as the compose file sets); otherwise every request comes from the proxy and shares one limit. **Settings → System** shows the limits in force.
+- **More than one OpenBook container** on the same PostgreSQL database (behind a load balancer): every container serves pages, and each background job (the hourly work, scheduled emails, webhooks, bank and channel syncs, backups) runs in one container at a time, which holds a lease on it and renews it each run. If that container stops, another takes the job over once the lease lapses (within 90 minutes for the hourly work, minutes for the rest). Share the Data Protection keys folder between them, or sign-ins and stored secrets won't work across containers.
 - **SQLite on a server**: the image also runs without PostgreSQL (`docker run -p 8080:8080 -v openbook-data:/data openbook`): one company file in `/data`, with the in-app backups. PostgreSQL is better for several people.

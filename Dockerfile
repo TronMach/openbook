@@ -37,4 +37,6 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     OpenBook__DataProtectionKeys=/data/keys
 VOLUME /data
 EXPOSE 8080
+# The app asks its own /healthz (the image has no curl).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 CMD ["dotnet", "OpenBook.Web.dll", "healthcheck"]
 ENTRYPOINT ["dotnet", "OpenBook.Web.dll"]

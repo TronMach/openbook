@@ -7,6 +7,10 @@ using OpenBook.Web.Components;
 using OpenBook.Web.Endpoints;
 using OpenBook.Web.Security;
 
+// Container health checks: answer before building anything.
+if (args is [HealthCheckCommand.Name, ..])
+    return await HealthCheckCommand.RunAsync(args);
+
 var isResetPassword = args is [ResetPasswordCommand.Name, ..];
 var isMakeDemo = args is [DemoCompanyCommand.Name, ..];
 var encryptionCommand = args is [EncryptionCommands.Encrypt or EncryptionCommands.Decrypt, ..] ? args[0] : null;
@@ -94,6 +98,7 @@ builder.Services
         installation.IsDesktop ? DatabaseProvider.Sqlite : DatabaseProviders.Parse(builder.Configuration["OpenBook:Database"], connectionString))
     .AddOpenBookApi()
     .AddOpenBookWebSecurity(installation.KeysFolder ?? builder.Configuration["OpenBook:DataProtectionKeys"]);
+builder.Services.AddOpenBookRateLimits(builder.Configuration);
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
 builder.Services.AddScoped<OpenBook.Web.Components.LineFieldCache>();
 
@@ -118,12 +123,16 @@ if (!app.Environment.IsDevelopment())
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+// Before anything reads the request: sign-in and anonymous links are limited per address (RateLimits).
+app.UseRateLimiter();
 app.UseRequestLocalization(OpenBook.Web.Localization.AppCulture.Options());
 
 app.UseMiddleware<SetupGateMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<AccessMiddleware>();
+// API writes with an Idempotency-Key answer a repeat with the first response (after access is decided).
+app.UseMiddleware<IdempotencyMiddleware>();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

@@ -1525,6 +1525,69 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("FormFonts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Companies.IdempotentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Body")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("Caller")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedUnixMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedUnixMs");
+
+                    b.HasIndex("Caller", "Key")
+                        .IsUnique();
+
+                    b.ToTable("IdempotentRequests", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Companies.JobLease", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Holder")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UntilUnixMs")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("JobLeases", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Companies.PermissionSet", b =>
                 {
                     b.Property<Guid>("Id")

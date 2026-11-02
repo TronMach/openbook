@@ -37,6 +37,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         ["DocumentReadingSettings"] = ["ProtectedApiKey"],
         ["PortalAccess"] = ["TokenHash"],
         ["AttachmentContents"] = ["Data"],
+        ["IdempotentRequests"] = ["Body"],
     };
 
     public async Task<ExportFile> ExportAsync(CancellationToken ct)

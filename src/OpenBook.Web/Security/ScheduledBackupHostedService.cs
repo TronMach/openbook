@@ -10,7 +10,7 @@ namespace OpenBook.Web.Security;
 /// and checks right away at startup, since a desktop computer is often switched off at the scheduled hour.
 /// </summary>
 internal sealed partial class ScheduledBackupHostedService(
-    IServiceScopeFactory scopes, SetupState setup, Hosting.Installation installation, Diagnostics.JobStatus status,
+    IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Hosting.Installation installation, Diagnostics.JobStatus status,
     ILogger<ScheduledBackupHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(15);
@@ -42,6 +42,9 @@ internal sealed partial class ScheduledBackupHostedService(
             await using var scope = scopes.CreateAsyncScope();
             if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
                 return false;
+            // Another server holds the backups lease: nothing to do here (true, so a desktop's first wait ends).
+            if (!await leases.TryAcquireAsync("backups", TimeSpan.FromMinutes(45), ct))
+                return true;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
             var backups = scope.ServiceProvider.GetRequiredService<ScheduledBackupService>();
             if (installation.IsDesktop && await backups.SetUpDefaultAsync(installation.BackupFolder!, ct))

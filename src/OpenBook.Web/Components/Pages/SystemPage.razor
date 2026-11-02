@@ -72,6 +72,7 @@
             <dt>Log folder</dt><dd>@(_log?.Directory ?? "not written")</dd>
             <dt>Data protection keys</dt><dd>@(Configuration["OpenBook:DataProtectionKeys"] ?? "the default location for this user")</dd>
             <dt>Webhooks to private networks</dt><dd>@(Outbound.AllowPrivateNetworks ? "allowed" : "refused")</dd>
+            <dt>Rate limits</dt><dd>@RateLimits.Describe(Configuration)</dd>
             <dt>Add-ins</dt><dd>@(Plugins.SafeMode ? "safe mode: none loaded" : $"{Plugins.Plugins.Count} found")</dd>
         </dl>
     </div>

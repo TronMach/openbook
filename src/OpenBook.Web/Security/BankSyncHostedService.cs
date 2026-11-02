@@ -11,7 +11,7 @@ namespace OpenBook.Web.Security;
 /// auto-add rules) as actor "system"; failures are kept on the connection for its page, and logged.
 /// </summary>
 internal sealed partial class BankSyncHostedService(
-    IServiceScopeFactory scopes, SetupState setup, Diagnostics.JobStatus status, ILogger<BankSyncHostedService> logger) : BackgroundService
+    IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Diagnostics.JobStatus status, ILogger<BankSyncHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
 
@@ -32,7 +32,8 @@ internal sealed partial class BankSyncHostedService(
         try
         {
             await using var scope = scopes.CreateAsyncScope();
-            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct))
+            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct)
+                || !await leases.TryAcquireAsync("bank-sync", TimeSpan.FromMinutes(90), ct))
                 return;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
             foreach (var (connection, result) in await scope.ServiceProvider.GetRequiredService<BankConnectionService>().SyncDueAsync(CompanyTime.Zone, ct))
