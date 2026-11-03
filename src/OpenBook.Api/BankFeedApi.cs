@@ -5,6 +5,7 @@ using OpenBook.Application.Banking;
 using OpenBook.Application.Import;
 using OpenBook.Application;
 using OpenBook.Domain.Banking;
+using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Api;
 
@@ -156,6 +157,22 @@ internal static class BankingProApi
             return Results.File(file.Content, "text/csv");
         });
 
+        banking.MapGet("/recurring-expenses", async (RecurringExpenseService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(RecurringExpenseResponse.From));
+        banking.MapGet("/recurring-expenses/{id:guid}", async (Guid id, RecurringExpenseService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } t ? Results.Ok(RecurringExpenseResponse.From(t)) : Results.NotFound());
+        banking.MapPost("/recurring-expenses", async (RecurringExpenseDetails r, RecurringExpenseService s, CancellationToken ct) =>
+        {
+            var t = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/banking/recurring-expenses/{t.Id}", RecurringExpenseResponse.From(t));
+        });
+        banking.MapPut("/recurring-expenses/{id:guid}", async (Guid id, RecurringExpenseDetails r, RecurringExpenseService s, CancellationToken ct) =>
+            RecurringExpenseResponse.From(await s.UpdateAsync(id, r, ct)));
+        banking.MapPut("/recurring-expenses/{id:guid}/active", async (Guid id, SetActiveRequest r, RecurringExpenseService s, CancellationToken ct) =>
+            RecurringExpenseResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
+        // Records every recurring expense due today (automatic or not).
+        banking.MapPost("/recurring-expenses/record-due", async (RecurringExpenseService s, CancellationToken ct) =>
+            (await s.CreateDueAsync(CompanyTime.Today, automaticOnly: false, ct)).Select(r => new { TemplateId = r.Template.Id, Created = r.Created.Select(t => t.Id).ToList(), r.Error }));
+
         banking.MapGet("/petty-cash", async (PettyCashService s, CancellationToken ct) =>
             (await s.ListAsync(ct)).Select(f => new { f.Fund, f.AccountName, f.Balance, f.ToReplenish, f.LastCount }));
         banking.MapGet("/petty-cash/{id:guid}", async (Guid id, PettyCashService s, CancellationToken ct) =>
@@ -174,4 +191,14 @@ internal static class BankingProApi
         banking.MapPost("/petty-cash/{id:guid}/replenish", async (Guid id, ReplenishRequest r, PettyCashService s, CancellationToken ct) =>
             BankTransactionResponse.From(await s.ReplenishAsync(id, r.FromAccountId, r.Date, ct)));
     }
+}
+
+public sealed record RecurringExpenseResponse(
+    Guid Id, string Name, Guid AccountId, Guid? VendorId, string? Payee, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate,
+    DateOnly? EndDate, int? MaxOccurrences, int OccurrencesPosted, bool AutoCreate, bool IsActive, DateOnly? NextDate, decimal Total,
+    IReadOnlyList<BankSplit> Lines, Guid? LocationId, IReadOnlyList<Guid> TagIds)
+{
+    public static RecurringExpenseResponse From(RecurringExpense t) => new(
+        t.Id, t.Name, t.AccountId, t.VendorId, t.Payee, t.Memo, t.Frequency, t.Interval, t.StartDate, t.EndDate, t.MaxOccurrences, t.OccurrencesPosted,
+        t.AutoCreate, t.IsActive, t.NextDate, t.Total, t.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToSplit()).ToList(), t.LocationId, t.TagIds);
 }

@@ -1,0 +1,123 @@
+@page "/banking/recurring"
+@using OpenBook.Domain.Banking
+@inject RecurringExpenseService Recurring
+@inject VendorService VendorService
+@inject AccountService AccountService
+
+<PageTitle>Recurring expenses · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Recurring expenses</h1>
+        <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
+        <ActionLink Class="button" Href="/banking/recurring/new">New recurring expense</ActionLink>
+    </div>
+    <p class="muted">
+        Expenses paid on a schedule straight from a bank or card account, with no bill: a software subscription on the card,
+        an insurance or loan autopay. Each one is recorded as an ordinary expense. Ones set to record automatically are recorded
+        when they fall due; the rest wait here. For bills you pay later, use <ActionLink Href="/purchases/recurring">recurring bills</ActionLink>.
+    </p>
+
+    @foreach (var result in _results)
+    {
+        <div class="alert @(result.Error is null ? "notice" : "error")" role="status">
+            <strong>@result.Template.Name</strong>:
+            @if (result.Created.Count > 0)
+            {
+                <text>recorded @result.Created.Count @(result.Created.Count == 1 ? "expense" : "expenses"):</text>
+                @foreach (var (spend, i) in result.Created.Select((x, i) => (x, i)))
+                {
+                    @(i == 0 ? " " : ", ")<a href="/banking/transactions/@spend.Id">@Labels.Date(spend.Date)</a>
+                }
+                <text>.</text>
+            }
+            @if (result.Error is not null)
+            {
+                <text> Stopped: @result.Error</text>
+            }
+        </div>
+    }
+
+    @if (_templates.Count == 0)
+    {
+        <div class="card"><p>No recurring expenses yet. <ActionLink Href="/banking/recurring/new">Set one up</ActionLink>.</p></div>
+    }
+    else
+    {
+        @if (_dueCount > 0)
+        {
+            <form class="card" method="post" @formname="create-due" @onsubmit="CreateDueAsync">
+                <AntiforgeryToken />
+                <p>@_dueCount recurring @(_dueCount == 1 ? "expense is" : "expenses are") due.</p>
+                <button type="submit">Record due expenses</button>
+            </form>
+        }
+
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Name</th><th>Paid from</th><th>Paid to</th><th>Schedule</th><th class="num">Amount</th><th>Next</th><th class="num">Recorded</th><th>Recording</th></tr></thead>
+                <tbody>
+                    @foreach (var t in _templates)
+                    {
+                        <tr class="@(t.IsActive ? null : "inactive")">
+                            <td><ActionLink Href="@($"/banking/recurring/{t.Id}")">@t.Name</ActionLink></td>
+                            <td>@(_chart.Find(t.AccountId) is { } a ? _chart.FullName(a.Id) : "")</td>
+                            <td>@(t.VendorId is { } v ? _vendors.GetValueOrDefault(v) : t.Payee)</td>
+                            <td>@RecurrenceLabels.Schedule(t.Frequency, t.Interval, t.StartDate, t.EndDate, t.MaxOccurrences)</td>
+                            <td class="num">@Labels.Amount(t.Total)</td>
+                            <td>
+                                @if (!t.IsActive)
+                                {
+                                    <span class="muted">Inactive</span>
+                                }
+                                else if (t.NextDate is { } next)
+                                {
+                                    @Labels.Date(next)
+                                    @if (next <= Today)
+                                    {
+                                        <span class="badge">Due</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="muted">Finished</span>
+                                }
+                            </td>
+                            <td class="num">@t.OccurrencesPosted</td>
+                            <td>@(t.AutoCreate ? "Automatic" : "Manual")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RecurringExpense> _templates = [];
+    private IReadOnlyList<RecurringExpenseResult> _results = [];
+    private Dictionary<Guid, string> _vendors = [];
+    private ChartOfAccounts _chart = new([]);
+    private int _dueCount;
+
+    private static DateOnly Today => CompanyTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _vendors = (await VendorService.ListAsync(Today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _chart = await AccountService.GetChartAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _templates = await Recurring.ListAsync();
+        _dueCount = _templates.Count(t => t.IsDue(Today));
+    }
+
+    private async Task CreateDueAsync()
+    {
+        _results = await Recurring.CreateDueAsync(Today, automaticOnly: false);
+        await LoadAsync();
+    }
+}

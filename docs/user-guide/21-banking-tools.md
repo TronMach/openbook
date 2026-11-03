@@ -60,3 +60,15 @@ On the box's page, **Count the cash**: the **date** and the **cash counted**, an
 ### Replenishing
 
 **Replenish** transfers the float less the balance from a bank account into the box, bringing it back to the float. The page shows how much that is today.
+
+## Recurring expenses
+
+For something paid on a schedule straight from a bank or card account, with no bill (a software subscription on the card, an insurance or loan autopay), set up **Banking → Recurring expenses → New recurring expense**:
+
+- **Name**, the **Paid from** account (a bank or credit card account), the **vendor** (optional) and **payee**.
+- **Repeat every** so many days, weeks, months or years, the **first payment date**, and optionally an **end date** or a number of **times**.
+- The category lines, as on a bill, and a memo (the name when left blank). A location and tags can go on every expense it records.
+- **Record expenses automatically when due**: OpenBook records each one in the hourly job. Otherwise they wait on the list until you select **Record due expenses**.
+
+Each occurrence is an ordinary expense in the account's register, dated on its schedule; if one is refused (a closed period, an inactive account), the template stops there and says why. Changes to a template apply to future expenses only. For bills you pay later, use [recurring bills](05-purchases.md) instead.
+

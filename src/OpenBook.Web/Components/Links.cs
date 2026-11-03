@@ -109,6 +109,7 @@ public static class Links
         "vendor_credit" => $"/purchases/vendor-credits/{id}",
         "vendor_refund" => $"/purchases/vendor-refunds/{id}",
         "recurring_bill" => $"/purchases/recurring/{id}",
+        "recurring_expense" => $"/banking/recurring/{id}",
         "bank_rule" => $"/banking/rules/{id}",
         "bank_connection" => $"/banking/connections/{id}",
         "petty_cash_fund" => $"/banking/petty-cash/{id}",

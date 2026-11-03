@@ -75,6 +75,12 @@ public interface IBankingStore
     /// <summary>Every petty cash fund, tracked.</summary>
     Task<IReadOnlyList<PettyCashFund>> ListPettyCashFundsAsync(CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<RecurringExpense>> ListRecurringExpensesAsync(CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<RecurringExpense?> GetRecurringExpenseAsync(Guid id, CancellationToken ct);
+
     Task<PettyCashFund?> GetPettyCashFundAsync(Guid id, CancellationToken ct);
 
     /// <summary>The fund's counts, newest first.</summary>
@@ -86,6 +92,7 @@ public interface IBankingStore
     void Add(BankFeedItem item);
     void Add(BankConnection connection);
     void Add(PettyCashFund fund);
+    void Add(RecurringExpense recurringExpense);
     void Add(CashCount count);
     void Add(PositivePaySettings settings);
     void Add(BankRule rule);

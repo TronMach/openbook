@@ -116,6 +116,11 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
 
     public async Task<IReadOnlyList<PettyCashFund>> ListPettyCashFundsAsync(CancellationToken ct) => await db.PettyCashFunds.ToListAsync(ct);
 
+    public async Task<IReadOnlyList<RecurringExpense>> ListRecurringExpensesAsync(CancellationToken ct) =>
+        (await db.RecurringExpenses.ToListAsync(ct)).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    public Task<RecurringExpense?> GetRecurringExpenseAsync(Guid id, CancellationToken ct) => db.RecurringExpenses.SingleOrDefaultAsync(t => t.Id == id, ct);
+
     public Task<PettyCashFund?> GetPettyCashFundAsync(Guid id, CancellationToken ct) => db.PettyCashFunds.SingleOrDefaultAsync(f => f.Id == id, ct);
 
     // SQLite can't ORDER BY a DateTimeOffset, so the tie-break on CountedAt happens in memory.
@@ -128,6 +133,8 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
     public void Add(BankConnection connection) => db.BankConnections.Add(connection);
 
     public void Add(PettyCashFund fund) => db.PettyCashFunds.Add(fund);
+
+    public void Add(RecurringExpense recurringExpense) => db.RecurringExpenses.Add(recurringExpense);
 
     public void Add(CashCount count) => db.CashCounts.Add(count);
 

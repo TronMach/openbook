@@ -94,6 +94,18 @@ internal sealed partial class RecurringPostingService(
             return true;
         }, ct);
 
+        await StepAsync("Recurring expenses", async services =>
+        {
+            foreach (var result in await services.GetRequiredService<OpenBook.Application.Banking.RecurringExpenseService>().CreateDueAsync(today, automaticOnly: true, ct))
+            {
+                if (result.Created.Count > 0)
+                    LogExpensesCreated(result.Created.Count, result.Template.Name);
+                if (result.Error is not null)
+                    LogStopped(result.Template.Name, result.Error);
+            }
+            return true;
+        }, ct);
+
         await StepAsync("Recurring gifts", async services =>
         {
             foreach (var result in await services.GetRequiredService<OpenBook.Application.Nonprofit.RecurringGiftService>().CreateDueAsync(today, automaticOnly: true, ct: ct))
@@ -215,6 +227,9 @@ internal sealed partial class RecurringPostingService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Entered {Count} bills from recurring bill '{Template}'.")]
     private partial void LogBillsCreated(int count, string template);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Recorded {Count} expenses from recurring expense '{Template}'.")]
+    private partial void LogExpensesCreated(int count, string template);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Recurring '{Template}' stopped: {Error}")]
     private partial void LogStopped(string template, string error);

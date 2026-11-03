@@ -60,6 +60,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<BankRule> BankRules => Set<BankRule>();
     public DbSet<BankConnection> BankConnections => Set<BankConnection>();
     public DbSet<PettyCashFund> PettyCashFunds => Set<PettyCashFund>();
+    public DbSet<RecurringExpense> RecurringExpenses => Set<RecurringExpense>();
     public DbSet<CashCount> CashCounts => Set<CashCount>();
     public DbSet<PositivePaySettings> PositivePaySettings => Set<PositivePaySettings>();
 
@@ -173,7 +174,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     [
         typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
         typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
-        typeof(Bill), typeof(VendorCredit), typeof(PurchaseOrder), typeof(RecurringBill),
+        typeof(Bill), typeof(VendorCredit), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
         typeof(BankFeedItem), typeof(RecurringEntry),
         typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
@@ -2486,6 +2487,34 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.Property(x => x.Description).HasMaxLength(1000);
                 l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<RecurringExpense>(b =>
+        {
+            b.ToTable("RecurringExpenses");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).HasMaxLength(100);
+            b.Property(x => x.Payee).HasMaxLength(100);
+            b.Property(x => x.Memo).HasMaxLength(1000);
+            b.Property(x => x.Tags).HasMaxLength(800);
+            b.Ignore(x => x.TagIds);
+            b.Ignore(x => x.NextDate);
+            b.Ignore(x => x.Total);
+            b.Property(x => x.Frequency).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(x => x.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("RecurringExpenseLines");
+                l.WithOwner().HasForeignKey("RecurringExpenseId");
+                l.HasKey("RecurringExpenseId", nameof(RecurringExpenseLine.LineNumber));
+                l.Property(x => x.Description).HasMaxLength(1000);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
