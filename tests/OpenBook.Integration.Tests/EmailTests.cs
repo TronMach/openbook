@@ -79,6 +79,32 @@ public sealed class EmailTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_payment_receipt_says_what_was_paid_and_attaches_nothing()
+    {
+        await SetUpEmail();
+        var first = await Invoice();
+        var second = await Invoice(hours: 3m);
+        var payment = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Mar1.AddDays(5), _undeposited.Id,
+            [new ApplyToInvoice(first.Id, 200m), new ApplyToInvoice(second.Id, 100m)], "1042", Amount: 350m, Method: PaymentMethod.Check)));
+        var source = new EmailSource(EmailKind.PaymentReceipt, payment.Id);
+
+        var draft = await In<EmailService, EmailDraft>(s => s.DraftAsync(source));
+        Assert.Equal("ap@acme.test", draft.To);
+        Assert.Contains("payment of 350.00", draft.Body, StringComparison.Ordinal);
+        Assert.Contains("Paid by check no. 1042.", draft.Body, StringComparison.Ordinal);
+        Assert.Contains($"- Invoice {first.Number}: 200.00, paid in full", draft.Body, StringComparison.Ordinal);
+        Assert.Contains($"- Invoice {second.Number}: 100.00, 200.00 still to pay", draft.Body, StringComparison.Ordinal);
+        Assert.Contains("50.00 is kept as a credit", draft.Body, StringComparison.Ordinal);
+        Assert.Contains("balance with us is now 200.00", draft.Body, StringComparison.Ordinal);
+        Assert.Null((await In<EmailService, EmailPreview>(s => s.PreviewAsync(source, draft))).Attachment);
+
+        await In<EmailService, SentEmail>(s => s.SendAsync(source, draft));
+        var message = Assert.Single(_db.Mail.Sent).Message;
+        Assert.Empty(message.Attachments);
+        Assert.Single(await In<EmailService, IReadOnlyList<SentEmailEntry>>(s => s.HistoryAsync("payment", payment.Id)));
+    }
+
+    [Fact]
     public async Task Emails_go_as_html_in_the_design_look_with_a_plain_copy_and_every_recipient()
     {
         await SetUpEmail();

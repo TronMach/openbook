@@ -27,7 +27,10 @@
     @if (!_configured)
     {
         <p>Email isn't set up yet. <ActionLink Href="/settings/email">Set it up in Settings</ActionLink>, then come back to send.</p>
-        <p><a href="@_pdfLink" target="_blank">Download the PDF</a> to send it yourself instead.</p>
+        @if (_pdfLink is not null)
+        {
+            <p><a href="@_pdfLink" target="_blank">Download the PDF</a> to send it yourself instead.</p>
+        }
     }
     else if (_sentTo is null && _source is not null && _preview is not null)
     {
@@ -123,7 +126,7 @@
     private string _what = "";
     private string _recipient = "they";
     private string _backLink = "/";
-    private string _pdfLink = "";
+    private string? _pdfLink = "";
     private string _path = "";
     private string _query = "";
     private bool _configured;
@@ -223,12 +226,13 @@
             "estimates" => EmailKind.Estimate,
             "credit-memos" => EmailKind.CreditMemo,
             "receipts" => EmailKind.SalesReceipt,
+            "payments" => EmailKind.PaymentReceipt,
             _ => (EmailKind?)null,
         };
         if (kind is not { } k)
             return false;
         (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(k, id), EmailTemplates.Label(k).ToLowerInvariant(), "the customer",
-            $"/sales/{Kind}/{id}", $"/api/sales/{Kind}/{id}/pdf");
+            $"/sales/{Kind}/{id}", k == EmailKind.PaymentReceipt ? null : $"/api/sales/{Kind}/{id}/pdf");
         return true;
     }
 

@@ -154,7 +154,7 @@ public sealed class EmailService(
             notes.Add($"Sample values. The {string.Join(" and ", buttons.Select(b => b[..b.IndexOf(" (", StringComparison.Ordinal)]))} button shows {string.Join("; ", buttons.Select(b => b[(b.IndexOf(" (", StringComparison.Ordinal) + 2)..^1]))}.");
         var settings = await GetSettingsAsync(ct);
         return new EmailPreview(From(settings), "pat@example.com", null, null, composed.Subject, composed.Html ?? EmailFormatter.TextPage(composed.Text),
-            composed.Text, kind is EmailKind.Report or EmailKind.Invitation ? null : $"{EmailTemplates.Label(kind)}.pdf", buttons, notes);
+            composed.Text, kind is EmailKind.Report or EmailKind.Invitation or EmailKind.PaymentReceipt ? null : $"{EmailTemplates.Label(kind)}.pdf", buttons, notes);
     }
 
     // ---- Writing and sending a document's email ----
@@ -225,7 +225,7 @@ public sealed class EmailService(
         var subject = string.IsNullOrWhiteSpace(draft.Subject) ? context.Title : draft.Subject.Trim();
         var composed = EmailFormatter.Compose(Look(design, company), subject, draft.Body ?? "", buttons, preview: true);
         return new EmailPreview(From(settings), to, cc.Length == 0 ? null : cc, bcc.Length == 0 ? null : bcc, subject,
-            composed.Html ?? EmailFormatter.TextPage(composed.Text), composed.Text, pdf == EmailPdf.Link ? null : context.FileName,
+            composed.Html ?? EmailFormatter.TextPage(composed.Text), composed.Text, pdf == EmailPdf.Link || !context.Attaches ? null : context.FileName,
             [.. buttons.Select(b => b.Label)], notes, (await DesignAsync(context, null, ct)).Name);
     }
 
@@ -249,7 +249,7 @@ public sealed class EmailService(
         var pdf = Delivery(source.Kind, context, draft, linkBase, []);
         var attachments = new List<EmailAttachment>();
         string? attached = null;
-        if (pdf != EmailPdf.Link)
+        if (pdf != EmailPdf.Link && context.Attaches)
         {
             var rendered = await provider.RenderAsync(source, draft.DesignId, ct);
             attachments.Add(new EmailAttachment(rendered.FileName, "application/pdf", rendered.Pdf));
@@ -299,7 +299,7 @@ public sealed class EmailService(
         var company = await companies.GetRequiredCompanyAsync(ct);
         var pdf = Delivery(source.Kind, context, draft, await LinkBaseAsync(settings, ct), []);
         var attachments = new List<EmailAttachment>();
-        if (pdf != EmailPdf.Link)
+        if (pdf != EmailPdf.Link && context.Attaches)
         {
             var rendered = await provider.RenderAsync(source, draft.DesignId, ct);
             attachments.Add(new EmailAttachment(rendered.FileName, "application/pdf", rendered.Pdf));
@@ -475,6 +475,7 @@ public sealed class EmailService(
         EmailKind.SalesReceipt => "sales_receipt",
         EmailKind.PurchaseOrder => Purchases.PurchaseOrderService.EntityType,
         EmailKind.GiftAcknowledgment => Nonprofit.GiftService.DonationEntity,
+        EmailKind.PaymentReceipt => Sales.PaymentService.EntityType,
         _ => "customer",
     };
 

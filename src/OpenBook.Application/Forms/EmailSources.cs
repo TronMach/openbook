@@ -18,7 +18,7 @@ internal sealed class SalesEmailSource(
     ISalesStore sales, ICompanyStore companies, FormService forms, ReceivablesService receivables, OnlinePaymentService online, IClock clock) : IEmailSource
 {
     public IReadOnlyCollection<EmailKind> Kinds { get; } =
-        [EmailKind.Invoice, EmailKind.Reminder, EmailKind.Estimate, EmailKind.CreditMemo, EmailKind.SalesReceipt, EmailKind.Statement];
+        [EmailKind.Invoice, EmailKind.Reminder, EmailKind.Estimate, EmailKind.CreditMemo, EmailKind.SalesReceipt, EmailKind.Statement, EmailKind.PaymentReceipt];
 
     public async Task<EmailContext> ContextAsync(EmailSource source, CancellationToken ct)
     {
@@ -66,6 +66,33 @@ internal sealed class SalesEmailSource(
                 });
             }
 
+            case EmailKind.PaymentReceipt:
+            {
+                var p = await sales.GetPaymentAsync(source.Id, ct) ?? throw new EntityNotFoundException(PaymentService.EntityType, source.Id);
+                var customer = await CustomerAsync(p.CustomerId, ct);
+                var invoices = (await sales.GetInvoicesAsync(p.Applications.Select(a => a.InvoiceId).ToList(), ct)).ToDictionary(i => i.Id);
+                var applied = string.Join('\n', p.Applications.Where(a => invoices.ContainsKey(a.InvoiceId)).Select(a =>
+                {
+                    var invoice = invoices[a.InvoiceId];
+                    var left = invoice.Balance == 0m ? "paid in full" : $"{M(invoice.Balance)} still to pay";
+                    return $"- Invoice {invoice.Number}: {M(a.Amount)}{(a.Discount > 0m ? $" (and {M(a.Discount)} early payment discount)" : "")}, {left}";
+                }));
+                var paidBy = p.Method switch
+                {
+                    null => p.Reference is { } r ? $"with reference {r}" : "",
+                    PaymentMethod.Check => p.Reference is { } n ? $"by check no. {n}" : "by check",
+                    { } m => $"by {PaymentMethods.Label(m).ToLowerInvariant()}{(p.Reference is { } r2 ? $", reference {r2}" : "")}",
+                };
+                var owed = (await sales.ListOpenInvoicesAsync(customer.Id, ct)).Sum(i => i.Balance);
+                return new EmailContext(PaymentService.EntityType, p.Id, customer.DisplayName, $"Payment of {M(p.Amount)}", "", customer.Email, new Dictionary<string, string>
+                {
+                    ["customer"] = customer.DisplayName, ["amount"] = M(p.Amount), ["date"] = D(p.Date), ["paid_by"] = paidBy, ["applied"] = applied,
+                    ["credit"] = p.Unapplied > 0m ? $"{M(p.Unapplied)} is kept as a credit for your next invoice." : "",
+                    ["balance"] = M(owed), ["company"] = company.Name,
+                }, null, customer,
+                    Refusal: p.Status == DocumentStatus.Voided ? ("payment.voided", "This payment is voided, so there's no receipt to send.") : null, Attaches: false);
+            }
+
             default:
             {
                 var customer = await CustomerAsync(source.Id, ct);
@@ -83,6 +110,8 @@ internal sealed class SalesEmailSource(
 
     public async Task<RenderedForm> RenderAsync(EmailSource source, Guid? designId, CancellationToken ct)
     {
+        if (source.Kind == EmailKind.PaymentReceipt)
+            throw new InvalidOperationException("Payment receipts have nothing attached.");
         if (source.Kind != EmailKind.Statement)
             return await forms.RenderAsync(FormKindOf(source.Kind), source.Id, designId, ct);
         var (from, to) = source.Period(CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone));

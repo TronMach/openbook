@@ -26,6 +26,10 @@
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_payment.Id}")">History</ActionLink>
         @if (_payment.Status == DocumentStatus.Posted)
         {
+            <ActionLink Class="button secondary" Href="@($"/sales/email/payments/{_payment.Id}")">Email receipt</ActionLink>
+        }
+        @if (_payment.Status == DocumentStatus.Posted)
+        {
             <ActionLink Class="button secondary" Href="@($"/sales/payments/{_payment.Id}/edit")">Change</ActionLink>
         }
         @if (_payment.Unapplied > 0m)
@@ -105,6 +109,7 @@
     <Attachments EntityType="payment" EntityId="_payment.Id" />
 
     <Notes EntityType="payment" EntityId="_payment.Id" />
+    <EmailHistory EntityType="payment" EntityId="_payment.Id" />
 </div>
 
 @code {

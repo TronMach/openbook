@@ -59,11 +59,12 @@ public sealed record EmailWording(EmailKind Kind, string Subject, string Body, b
 /// <param name="Customer">The customer whose copy addresses, design and link choice apply.</param>
 /// <param name="PayOnline">An open invoice and online payments set up: the email gets a "Pay now" button.</param>
 /// <param name="Refusal">Why it can't be sent (a cancelled order), as a domain error code and message.</param>
+/// <param name="Attaches">False for messages that say it all themselves (a payment receipt): no PDF and no link.</param>
 public sealed record EmailContext(
     string EntityType, Guid EntityId, string Name, string Title, string FileName, string? To, IReadOnlyDictionary<string, string> Values,
-    FormDocuments? Document = null, Customer? Customer = null, bool PayOnline = false, (string Code, string Message)? Refusal = null)
+    FormDocuments? Document = null, Customer? Customer = null, bool PayOnline = false, (string Code, string Message)? Refusal = null, bool Attaches = true)
 {
-    public bool CanLink(EmailKind kind) => Customer is not null && DocumentLink.CanLink(EmailService.LinkKind(kind));
+    public bool CanLink(EmailKind kind) => Attaches && Customer is not null && DocumentLink.CanLink(EmailService.LinkKind(kind));
 }
 
 /// <summary>One family of documents that can be emailed (sales forms, purchase orders, donor letters).</summary>

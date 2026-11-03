@@ -22,6 +22,9 @@ public enum EmailKind
     Reminder,
     Report,
     Invitation,
+
+    /// <summary>A thank-you for a customer payment, with what it paid; nothing attached.</summary>
+    PaymentReceipt,
 }
 
 /// <summary>How a customer gets their documents by email.</summary>
@@ -77,6 +80,7 @@ public static partial class EmailTemplates
         EmailKind.GivingStatement => "Giving statement",
         EmailKind.Reminder => "Payment reminder",
         EmailKind.Report => "Scheduled report",
+        EmailKind.PaymentReceipt => "Payment receipt",
         _ => kind.ToString(),
     };
 
@@ -88,6 +92,7 @@ public static partial class EmailTemplates
         EmailKind.PurchaseOrder => "purchase-order",
         EmailKind.GiftAcknowledgment => "gift-acknowledgment",
         EmailKind.GivingStatement => "giving-statement",
+        EmailKind.PaymentReceipt => "payment-receipt",
         _ => kind.ToString().ToLowerInvariant(),
     };
 
@@ -121,6 +126,14 @@ public static partial class EmailTemplates
             Customer, new("invoice", "The invoice's number", "1001"), new("balance", "What's still owed", "1,250.00"),
             new("due", "The due date", Sample(new DateOnly(2026, 3, 31))), new("days", "Days past the due date (0 before)", "5"),
             new("when", "\"is due on …\", \"is due today\" or \"was due on …, n days ago\"", $"was due on {Sample(new DateOnly(2026, 3, 31))}, 5 days ago"), Company,
+        ],
+        EmailKind.PaymentReceipt =>
+        [
+            Customer, new("amount", "The payment's amount", "1,250.00"), new("date", "The payment's date", Sample(new DateOnly(2026, 3, 1))),
+            new("paid_by", "\"by check no. 1042\", \"by card\" (blank when not given)", "by check no. 1042"),
+            new("applied", "A line per invoice it paid, with what's left on each", "- Invoice 1001: 1,250.00, paid in full"),
+            new("credit", "\"… is kept as a credit\" when some wasn't used (blank otherwise)", ""),
+            new("balance", "What the customer owes after it", "0.00"), Company,
         ],
         EmailKind.Report =>
         [
@@ -160,6 +173,8 @@ public static partial class EmailTemplates
         EmailKind.GivingStatement => ("Your {year} giving statement from {company}",
             "Dear {donor},\n\nThank you for your support in {year}. Your giving statement is attached; please keep it for your tax records.\n\nWith gratitude,\n{company}"),
         EmailKind.Reminder => (Sales.CollectionSettings.DefaultSubject, Sales.CollectionSettings.DefaultBody),
+        EmailKind.PaymentReceipt => ("Payment received: thank you from {company}",
+            "Hello,\n\nThank you: we received your payment of {amount} on {date}.\nPaid {paid_by}.\n\n{applied}\n\n{credit}\nYour balance with us is now {balance}.\n\nThank you,\n{company}"),
         EmailKind.Report => ("{report}",
             "{report}, as of {as_of}, is attached.\n\nSent by OpenBook on a schedule set up by {scheduled_by}."),
         EmailKind.Invitation => ("You're invited to {company} in OpenBook",

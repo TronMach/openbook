@@ -133,6 +133,7 @@ public static class EmailEndpoints
             "estimates" => new EmailSource(EmailKind.Estimate, id),
             "credit-memos" => new EmailSource(EmailKind.CreditMemo, id),
             "receipts" => new EmailSource(EmailKind.SalesReceipt, id),
+            "payments" => new EmailSource(EmailKind.PaymentReceipt, id),
             "statement" => new EmailSource(EmailKind.Statement, id, Date("from"), Date("to")),
             _ => null,
         };

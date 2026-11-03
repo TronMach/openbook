@@ -49,13 +49,17 @@ The design's **Footer** closes every email, under your company's name, address, 
 
 ## The wording of each email
 
-**Settings → Email messages** lists every kind of email (invoice, estimate, credit memo, sales receipt, statement, purchase order, gift acknowledgment, giving statement, scheduled report, invitation) with its subject and whether it's still the usual wording. It needs the accountant role.
+**Settings → Email messages** lists every kind of email (invoice, estimate, credit memo, sales receipt, statement, purchase order, gift acknowledgment, giving statement, scheduled report, invitation, payment receipt) with its subject and whether it's still the usual wording. It needs the accountant role.
 
 **Change** opens the wording beside a preview with sample values. Words in braces are filled in when an email is written: click one under **Fill in** to add it where the cursor is (hover over it to see what it means). For example an invoice can use `{customer}`, `{number}`, `{date}`, `{due}`, `{total}`, `{balance}`, `{terms}` and `{company}`. A word in braces the email doesn't know (a typing slip like `{amout}`) is pointed out under the preview and can't be saved.
 
 A line whose fill-ins all come out blank is left out: the estimate's "It's valid until {valid_until}." disappears for an estimate without an end date.
 
 **Preview in the look of** shows the wording in another design's look. **Save**, or **Go back to the usual wording**.
+
+### Payment receipts
+
+A customer payment's page has **Email receipt**: a thank-you that says how much was received, how it was paid (`{paid_by}`, "by check no. 1042"), a line per invoice it paid with what's still owed on each (`{applied}`), any amount kept as credit (`{credit}`) and the customer's balance afterwards. Nothing is attached: the message says it all. It's sent and kept in the payment's email history like any other.
 
 Payment reminders are worded on **Sales → Collections → Settings** ([Collections](10-collections.md)), with the same formatting buttons, fill-ins and preview.
 
