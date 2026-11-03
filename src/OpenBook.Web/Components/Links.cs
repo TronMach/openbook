@@ -140,6 +140,10 @@ public static class Links
         "user" => $"/settings/users/{id}",
         "user_invite" => "/settings/users#invites",
         "permission_set" => $"/settings/permission-sets/{id}",
+        "api_key" => "/settings/api-keys",
+        "webhook" => $"/settings/webhooks/{id}",
+        "billing_rate" => "/time/rates",
+        "form_font" => "/settings/forms",
         _ => null,
     };
 

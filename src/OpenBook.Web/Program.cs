@@ -122,6 +122,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseMiddleware<OpenBook.Web.Diagnostics.NotFoundMiddleware>();
 app.UseHttpsRedirection();
 // Before anything reads the request: sign-in and anonymous links are limited per address (RateLimits).
 app.UseRateLimiter();

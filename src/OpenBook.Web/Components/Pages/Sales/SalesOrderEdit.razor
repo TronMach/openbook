@@ -125,7 +125,8 @@
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<SalesOrderService>().SuggestNumberAsync(),
             Id is { } id ? await sp.GetRequiredService<SalesOrderService>().GetAsync(id) : null,
-            Id is { } id2 && (await sp.GetRequiredService<SalesOrderService>().ProgressAsync(id2)).Started));
+            Id is { } id2 && await sp.GetRequiredService<SalesOrderService>().GetAsync(id2) is not null
+                && (await sp.GetRequiredService<SalesOrderService>().ProgressAsync(id2)).Started));
         _customerId = PresetCustomer;
         DefaultTaxCode();
 

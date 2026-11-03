@@ -23,75 +23,76 @@
     @if (_candidates.Count == 0)
     {
         <div class="card"><p>No bills have brought inventory in yet.</p></div>
-        return;
     }
-
-    @if (_error is not null)
+    else
     {
-        <div class="alert error" role="alert">@_error</div>
-    }
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
 
-    <EditForm Model="Input" FormName="landed-cost" OnValidSubmit="SaveAsync" method="post">
-        <DataAnnotationsValidator />
-        <div class="card">
-            <div class="row">
-                <div class="field">
-                    <label for="date">Date</label>
-                    <InputDate id="date" @bind-Value="Input.Date" />
+        <EditForm Model="Input" FormName="landed-cost" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
+            <div class="card">
+                <div class="row">
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <InputDate id="date" @bind-Value="Input.Date" />
+                    </div>
+                    <div class="field">
+                        <label for="amount">Amount</label>
+                        <InputNumber id="amount" step="0.01" @bind-Value="Input.Amount" />
+                        <ValidationMessage For="() => Input.Amount" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="from">Comes out of</label>
+                        <InputSelect id="from" @bind-Value="Input.FromAccountId" data-search>
+                            <option value="">@InventoryAccounts.LandedCostName (created if needed)</option>
+                            @foreach (var a in _accounts)
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="method">Spread by</label>
+                        <InputSelect id="method" @bind-Value="Input.Method">
+                            <option value="@LandedCostMethod.ByValue">Value (purchase cost)</option>
+                            <option value="@LandedCostMethod.ByQuantity">Quantity</option>
+                        </InputSelect>
+                    </div>
                 </div>
                 <div class="field">
-                    <label for="amount">Amount</label>
-                    <InputNumber id="amount" step="0.01" @bind-Value="Input.Amount" />
-                    <ValidationMessage For="() => Input.Amount" />
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <InputText id="memo" @bind-Value="Input.Memo" />
                 </div>
             </div>
-            <div class="row">
-                <div class="field">
-                    <label for="from">Comes out of</label>
-                    <InputSelect id="from" @bind-Value="Input.FromAccountId" data-search>
-                        <option value="">@InventoryAccounts.LandedCostName (created if needed)</option>
-                        @foreach (var a in _accounts)
+
+            <h2>Bills it goes on</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="check"></th><th>Date</th><th>Vendor</th><th>Bill no.</th><th class="num">Quantity</th><th class="num">Stock value</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _candidates)
                         {
-                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            <tr>
+                                <td class="check"><input type="checkbox" name="Input.BillIds" value="@c.Bill.Id" checked="@Input.BillIds.Contains(c.Bill.Id)" aria-label="Bill from @c.VendorName on @Labels.Date(c.Bill.Date)" /></td>
+                                <td>@Labels.Date(c.Bill.Date)</td>
+                                <td>@c.VendorName</td>
+                                <td><a href="/purchases/bills/@c.Bill.Id">@(c.Bill.Reference ?? "—")</a></td>
+                                <td class="num">@Labels.Quantity(c.StockQuantity)</td>
+                                <td class="num">@Labels.Amount(c.StockValue)</td>
+                            </tr>
                         }
-                    </InputSelect>
-                </div>
-                <div class="field">
-                    <label for="method">Spread by</label>
-                    <InputSelect id="method" @bind-Value="Input.Method">
-                        <option value="@LandedCostMethod.ByValue">Value (purchase cost)</option>
-                        <option value="@LandedCostMethod.ByQuantity">Quantity</option>
-                    </InputSelect>
-                </div>
+                    </tbody>
+                </table>
             </div>
-            <div class="field">
-                <label for="memo">Memo <span class="muted">(optional)</span></label>
-                <InputText id="memo" @bind-Value="Input.Memo" />
-            </div>
-        </div>
-
-        <h2>Bills it goes on</h2>
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th class="check"></th><th>Date</th><th>Vendor</th><th>Bill no.</th><th class="num">Quantity</th><th class="num">Stock value</th></tr></thead>
-                <tbody>
-                    @foreach (var c in _candidates)
-                    {
-                        <tr>
-                            <td class="check"><input type="checkbox" name="Input.BillIds" value="@c.Bill.Id" checked="@Input.BillIds.Contains(c.Bill.Id)" aria-label="Bill from @c.VendorName on @Labels.Date(c.Bill.Date)" /></td>
-                            <td>@Labels.Date(c.Bill.Date)</td>
-                            <td>@c.VendorName</td>
-                            <td><a href="/purchases/bills/@c.Bill.Id">@(c.Bill.Reference ?? "—")</a></td>
-                            <td class="num">@Labels.Quantity(c.StockQuantity)</td>
-                            <td class="num">@Labels.Amount(c.StockValue)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
-        <div class="actions"><button type="submit">Post landed cost</button></div>
-    </EditForm>
+            <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+            <div class="actions"><button type="submit">Post landed cost</button></div>
+        </EditForm>
+    }
 </div>
 
 @code {

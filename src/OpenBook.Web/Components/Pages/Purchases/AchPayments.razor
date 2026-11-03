@@ -27,99 +27,100 @@
     @if (_banks.Count == 0)
     {
         <div class="card"><p>ACH payments come out of a bank account. <ActionLink Href="/accounts/new">Add one</ActionLink> first.</p></div>
-        return;
-    }
-
-    <form class="card filters" method="get" data-enhance="false">
-        <div class="field">
-            <label for="account">Bank account</label>
-            <select id="account" name="accountId" onchange="this.form.submit()">
-                @foreach (var a in _banks)
-                {
-                    <option value="@a.Id" selected="@(a.Id == _accountId)">@_chart.FullName(a.Id)</option>
-                }
-            </select>
-        </div>
-        <noscript><button type="submit" class="secondary">Show</button></noscript>
-    </form>
-
-    <div class="card" id="settings">
-        <h2>Your bank's ACH details</h2>
-        <p class="muted">From your bank's ACH (or "direct deposit origination") setup; they're the same for every file.</p>
-        <PostForm Action="/purchases/ach/settings" data-enhance="false">
-            <AntiforgeryToken />
-            <input type="hidden" name="accountId" value="@_accountId" />
-            <div class="row">
-                <div class="field"><label for="dest">Bank routing number</label><input id="dest" name="destinationRouting" maxlength="9" inputmode="numeric" value="@_settings?.DestinationRouting" required /></div>
-                <div class="field"><label for="dest-name">Bank name</label><input id="dest-name" name="destinationName" maxlength="23" value="@_settings?.DestinationName" required /></div>
-            </div>
-            <div class="row">
-                <div class="field"><label for="origin">Immediate origin</label><input id="origin" name="originId" maxlength="10" value="@_settings?.OriginId" required /></div>
-                <div class="field"><label for="origin-name">Origin name</label><input id="origin-name" name="originName" maxlength="23" value="@_settings?.OriginName" required /></div>
-            </div>
-            <div class="row">
-                <div class="field"><label for="company-id">Company ID</label><input id="company-id" name="companyId" maxlength="10" value="@_settings?.CompanyId" required /></div>
-                <div class="field"><label for="company-name">Company name</label><input id="company-name" name="companyName" maxlength="16" value="@_settings?.CompanyName" required /></div>
-                <div class="field"><label for="description">Entry description</label><input id="description" name="entryDescription" maxlength="10" value="@(_settings?.EntryDescription ?? "VENDOR PAY")" /></div>
-            </div>
-            <div class="actions"><button type="submit" class="secondary">Save bank details</button></div>
-        </PostForm>
-    </div>
-
-    <h2>Payments ready to send</h2>
-    @if (_candidates.Count == 0)
-    {
-        <div class="card"><p>No bill payments from this account to vendors with bank details are waiting. <ActionLink Href="/purchases/pay-bills">Pay bills</ActionLink> first.</p></div>
     }
     else
     {
-        <PostForm Action="/purchases/ach/file" data-enhance="false">
-            <AntiforgeryToken />
-            <input type="hidden" name="accountId" value="@_accountId" />
+        <form class="card filters" method="get" data-enhance="false">
+            <div class="field">
+                <label for="account">Bank account</label>
+                <select id="account" name="accountId" onchange="this.form.submit()">
+                    @foreach (var a in _banks)
+                    {
+                        <option value="@a.Id" selected="@(a.Id == _accountId)">@_chart.FullName(a.Id)</option>
+                    }
+                </select>
+            </div>
+            <noscript><button type="submit" class="secondary">Show</button></noscript>
+        </form>
+
+        <div class="card" id="settings">
+            <h2>Your bank's ACH details</h2>
+            <p class="muted">From your bank's ACH (or "direct deposit origination") setup; they're the same for every file.</p>
+            <PostForm Action="/purchases/ach/settings" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="accountId" value="@_accountId" />
+                <div class="row">
+                    <div class="field"><label for="dest">Bank routing number</label><input id="dest" name="destinationRouting" maxlength="9" inputmode="numeric" value="@_settings?.DestinationRouting" required /></div>
+                    <div class="field"><label for="dest-name">Bank name</label><input id="dest-name" name="destinationName" maxlength="23" value="@_settings?.DestinationName" required /></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label for="origin">Immediate origin</label><input id="origin" name="originId" maxlength="10" value="@_settings?.OriginId" required /></div>
+                    <div class="field"><label for="origin-name">Origin name</label><input id="origin-name" name="originName" maxlength="23" value="@_settings?.OriginName" required /></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label for="company-id">Company ID</label><input id="company-id" name="companyId" maxlength="10" value="@_settings?.CompanyId" required /></div>
+                    <div class="field"><label for="company-name">Company name</label><input id="company-name" name="companyName" maxlength="16" value="@_settings?.CompanyName" required /></div>
+                    <div class="field"><label for="description">Entry description</label><input id="description" name="entryDescription" maxlength="10" value="@(_settings?.EntryDescription ?? "VENDOR PAY")" /></div>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">Save bank details</button></div>
+            </PostForm>
+        </div>
+
+        <h2>Payments ready to send</h2>
+        @if (_candidates.Count == 0)
+        {
+            <div class="card"><p>No bill payments from this account to vendors with bank details are waiting. <ActionLink Href="/purchases/pay-bills">Pay bills</ActionLink> first.</p></div>
+        }
+        else
+        {
+            <PostForm Action="/purchases/ach/file" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="accountId" value="@_accountId" />
+                <table class="data">
+                    <thead><tr><th class="check"></th><th>Date</th><th>Vendor</th><th>To</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _candidates)
+                        {
+                            <tr>
+                                <td class="check"><input type="checkbox" name="payment" value="@c.Payment.Id" checked aria-label="Send payment to @c.Vendor.DisplayName" /></td>
+                                <td><a href="/purchases/payments/@c.Payment.Id">@Labels.Date(c.Payment.Date)</a></td>
+                                <td>@c.Vendor.DisplayName</td>
+                                <td>@c.BankAccount.Kind @c.BankAccount.Masked</td>
+                                <td class="num">@Labels.Amount(c.Payment.Amount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="row">
+                    <div class="field">
+                        <label for="effective">Pay on (effective date)</label>
+                        <input id="effective" type="date" name="effectiveDate" value="@CompanyTime.Today.AddDays(1).ToString("yyyy-MM-dd")" />
+                        <span class="hint">A banking day; most banks need the file a day or two before.</span>
+                    </div>
+                </div>
+                <div class="actions"><button type="submit" disabled="@(_settings is null)">Make ACH file</button></div>
+            </PostForm>
+        }
+
+        @if (_batches.Count > 0)
+        {
+            <h2>Files made</h2>
             <table class="data">
-                <thead><tr><th class="check"></th><th>Date</th><th>Vendor</th><th>To</th><th class="num">Amount</th></tr></thead>
+                <thead><tr><th>Made</th><th>Effective</th><th class="num">Payments</th><th class="num">Total</th><th></th></tr></thead>
                 <tbody>
-                    @foreach (var c in _candidates)
+                    @foreach (var b in _batches)
                     {
                         <tr>
-                            <td class="check"><input type="checkbox" name="payment" value="@c.Payment.Id" checked aria-label="Send payment to @c.Vendor.DisplayName" /></td>
-                            <td><a href="/purchases/payments/@c.Payment.Id">@Labels.Date(c.Payment.Date)</a></td>
-                            <td>@c.Vendor.DisplayName</td>
-                            <td>@c.BankAccount.Kind @c.BankAccount.Masked</td>
-                            <td class="num">@Labels.Amount(c.Payment.Amount)</td>
+                            <td>@b.CreatedAt.InCompanyTime().ToString("g")</td>
+                            <td>@Labels.Date(b.EffectiveDate)</td>
+                            <td class="num">@b.EntryCount</td>
+                            <td class="num">@Labels.Amount(b.Total)</td>
+                            <td><ActionLink Href="@($"/purchases/ach/files/{b.Id}")">Download</ActionLink></td>
                         </tr>
                     }
                 </tbody>
             </table>
-            <div class="row">
-                <div class="field">
-                    <label for="effective">Pay on (effective date)</label>
-                    <input id="effective" type="date" name="effectiveDate" value="@CompanyTime.Today.AddDays(1).ToString("yyyy-MM-dd")" />
-                    <span class="hint">A banking day; most banks need the file a day or two before.</span>
-                </div>
-            </div>
-            <div class="actions"><button type="submit" disabled="@(_settings is null)">Make ACH file</button></div>
-        </PostForm>
-    }
-
-    @if (_batches.Count > 0)
-    {
-        <h2>Files made</h2>
-        <table class="data">
-            <thead><tr><th>Made</th><th>Effective</th><th class="num">Payments</th><th class="num">Total</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var b in _batches)
-                {
-                    <tr>
-                        <td>@b.CreatedAt.InCompanyTime().ToString("g")</td>
-                        <td>@Labels.Date(b.EffectiveDate)</td>
-                        <td class="num">@b.EntryCount</td>
-                        <td class="num">@Labels.Amount(b.Total)</td>
-                        <td><ActionLink Href="@($"/purchases/ach/files/{b.Id}")">Download</ActionLink></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        }
     }
 </div>
 

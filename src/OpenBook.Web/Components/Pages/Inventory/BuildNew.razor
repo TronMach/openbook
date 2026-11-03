@@ -23,127 +23,128 @@
     @if (_assemblies.Count == 0)
     {
         <div class="card"><p>No assemblies yet. <ActionLink Href="/items/new">Add an item</ActionLink> with the type "Assembly" and list its components.</p></div>
-        return;
     }
-
-    <form class="card filters" method="get" data-enhance="false">
-        <div class="row">
-            <div class="field">
-                <label for="item">Assembly</label>
-                <select id="item" name="item" data-search>
-                    @foreach (var a in _assemblies)
-                    {
-                        <option value="@a.Id" selected="@(a.Id == _itemId)">@a.Name</option>
-                    }
-                </select>
-            </div>
-            <div class="field">
-                <label for="quantity">Quantity</label>
-                <input id="quantity" name="quantity" class="amount" inputmode="decimal" value="@_quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
-            </div>
-            <div class="field">
-                <label for="date">Date</label>
-                <input id="date" type="date" name="date" value="@_date.ToString("yyyy-MM-dd")" />
-            </div>
-            @if (_warehouses.Count > 1)
-            {
+    else
+    {
+        <form class="card filters" method="get" data-enhance="false">
+            <div class="row">
                 <div class="field">
-                    <label for="warehouse">Warehouse</label>
-                    <select id="warehouse" name="warehouse">
-                        @foreach (var w in _warehouses)
+                    <label for="item">Assembly</label>
+                    <select id="item" name="item" data-search>
+                        @foreach (var a in _assemblies)
                         {
-                            <option value="@(w.IsDefault ? "" : w.Id.ToString())" selected="@(w.Key == _warehouseId)">@w.Name</option>
+                            <option value="@a.Id" selected="@(a.Id == _itemId)">@a.Name</option>
                         }
                     </select>
                 </div>
-            }
-        </div>
-        <div class="actions"><button type="submit" class="secondary">Check stock</button></div>
-    </form>
-
-    @if (_preview is not null)
-    {
-        @if (_preview.Requirements.Count == 0)
-        {
-            <div class="card"><p>@_preview.Assembly.Name has no components yet. <a href="/items/@_preview.Assembly.Id#components">Add its bill of materials</a>.</p></div>
-        }
-        else
-        {
-            <table class="data">
-                <thead><tr><th>Component</th><th class="num">Per unit</th><th class="num">Needed</th><th class="num">On hand @Labels.Date(_date)</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var r in _preview.Requirements)
-                    {
-                        <tr>
-                            <td><a href="/items/@r.Component.Id">@r.Component.Name</a></td>
-                            <td class="num">@Labels.Quantity(r.PerUnit)</td>
-                            <td class="num">@Labels.Quantity(r.Needed)</td>
-                            <td class="num">@Labels.Quantity(r.OnHand)</td>
-                            <td>@if (r.IsShort) { <span class="badge warn">Short</span> }</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-            <p class="muted">Enough on hand to build @Labels.Quantity(_preview.MaxBuildable).</p>
-
-            <div class="card">
-                @if (_error is not null)
+                <div class="field">
+                    <label for="quantity">Quantity</label>
+                    <input id="quantity" name="quantity" class="amount" inputmode="decimal" value="@_quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" name="date" value="@_date.ToString("yyyy-MM-dd")" />
+                </div>
+                @if (_warehouses.Count > 1)
                 {
-                    <div class="alert error" role="alert">@_error</div>
+                    <div class="field">
+                        <label for="warehouse">Warehouse</label>
+                        <select id="warehouse" name="warehouse">
+                            @foreach (var w in _warehouses)
+                            {
+                                <option value="@(w.IsDefault ? "" : w.Id.ToString())" selected="@(w.Key == _warehouseId)">@w.Name</option>
+                            }
+                        </select>
+                    </div>
                 }
-                <EditForm Model="Input" FormName="build" OnValidSubmit="BuildAsync" method="post">
-                    <DataAnnotationsValidator />
-                    <input type="hidden" name="Input.ItemId" value="@_itemId" />
-                    <input type="hidden" name="Input.Quantity" value="@_quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
-                    <input type="hidden" name="Input.Date" value="@_date.ToString("yyyy-MM-dd")" />
-                    <input type="hidden" name="Input.WarehouseId" value="@_warehouseId" />
-                    <input type="hidden" name="Input.PendingId" value="@_pendingId" />
-                    @if (_preview.Assembly.Tracking != ItemTracking.None)
-                    {
-                        <div class="field">
-                            <label for="lots">@(_preview.Assembly.Tracking == ItemTracking.Serial ? "Serial numbers for the assemblies built" : "Lot for the assemblies built")</label>
-                            <InputText id="lots" @bind-Value="Input.Lots" placeholder="@(_preview.Assembly.Tracking == ItemTracking.Serial ? "SN1, SN2" : "A-1")" />
-                        </div>
-                    }
-                    <div class="row">
-                        <div class="field">
-                            <label for="reference">Reference <span class="muted">(optional)</span></label>
-                            <InputText id="reference" @bind-Value="Input.Reference" />
-                        </div>
-                        <div class="field">
-                            <label for="memo">Memo <span class="muted">(optional)</span></label>
-                            <InputText id="memo" @bind-Value="Input.Memo" />
-                        </div>
-                    </div>
-                    <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
-                    @{
-                        var shortOfStock = _preview.Requirements.Any(r => r.IsShort);
-                        var now = Math.Min(_quantity, _preview.MaxBuildable);
-                    }
-                    <div class="actions">
-                        @if (_pendingId is not null)
-                        {
-                            <button type="submit" name="Input.Mode" value="finish" disabled="@shortOfStock">Finish the pending build: @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
-                        }
-                        else
-                        {
-                            <button type="submit" name="Input.Mode" value="build" disabled="@shortOfStock">Build @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
-                            @if (shortOfStock && now > 0m)
-                            {
-                                <button type="submit" name="Input.Mode" value="partial" class="secondary">Build @Labels.Quantity(now) now, leave @Labels.Quantity(_quantity - now) pending</button>
-                            }
-                            @if (shortOfStock)
-                            {
-                                <button type="submit" name="Input.Mode" value="pending" class="secondary">Save all @Labels.Quantity(_quantity) as pending</button>
-                            }
-                        }
-                    </div>
-                    @if (shortOfStock)
-                    {
-                        <p class="muted">A pending build posts nothing and doesn't hold the components; finish it from the inventory page once they arrive.</p>
-                    }
-                </EditForm>
             </div>
+            <div class="actions"><button type="submit" class="secondary">Check stock</button></div>
+        </form>
+
+        @if (_preview is not null)
+        {
+            @if (_preview.Requirements.Count == 0)
+            {
+                <div class="card"><p>@_preview.Assembly.Name has no components yet. <a href="/items/@_preview.Assembly.Id#components">Add its bill of materials</a>.</p></div>
+            }
+            else
+            {
+                <table class="data">
+                    <thead><tr><th>Component</th><th class="num">Per unit</th><th class="num">Needed</th><th class="num">On hand @Labels.Date(_date)</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _preview.Requirements)
+                        {
+                            <tr>
+                                <td><a href="/items/@r.Component.Id">@r.Component.Name</a></td>
+                                <td class="num">@Labels.Quantity(r.PerUnit)</td>
+                                <td class="num">@Labels.Quantity(r.Needed)</td>
+                                <td class="num">@Labels.Quantity(r.OnHand)</td>
+                                <td>@if (r.IsShort) { <span class="badge warn">Short</span> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <p class="muted">Enough on hand to build @Labels.Quantity(_preview.MaxBuildable).</p>
+
+                <div class="card">
+                    @if (_error is not null)
+                    {
+                        <div class="alert error" role="alert">@_error</div>
+                    }
+                    <EditForm Model="Input" FormName="build" OnValidSubmit="BuildAsync" method="post">
+                        <DataAnnotationsValidator />
+                        <input type="hidden" name="Input.ItemId" value="@_itemId" />
+                        <input type="hidden" name="Input.Quantity" value="@_quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                        <input type="hidden" name="Input.Date" value="@_date.ToString("yyyy-MM-dd")" />
+                        <input type="hidden" name="Input.WarehouseId" value="@_warehouseId" />
+                        <input type="hidden" name="Input.PendingId" value="@_pendingId" />
+                        @if (_preview.Assembly.Tracking != ItemTracking.None)
+                        {
+                            <div class="field">
+                                <label for="lots">@(_preview.Assembly.Tracking == ItemTracking.Serial ? "Serial numbers for the assemblies built" : "Lot for the assemblies built")</label>
+                                <InputText id="lots" @bind-Value="Input.Lots" placeholder="@(_preview.Assembly.Tracking == ItemTracking.Serial ? "SN1, SN2" : "A-1")" />
+                            </div>
+                        }
+                        <div class="row">
+                            <div class="field">
+                                <label for="reference">Reference <span class="muted">(optional)</span></label>
+                                <InputText id="reference" @bind-Value="Input.Reference" />
+                            </div>
+                            <div class="field">
+                                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                                <InputText id="memo" @bind-Value="Input.Memo" />
+                            </div>
+                        </div>
+                        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+                        @{
+                            var shortOfStock = _preview.Requirements.Any(r => r.IsShort);
+                            var now = Math.Min(_quantity, _preview.MaxBuildable);
+                        }
+                        <div class="actions">
+                            @if (_pendingId is not null)
+                            {
+                                <button type="submit" name="Input.Mode" value="finish" disabled="@shortOfStock">Finish the pending build: @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
+                            }
+                            else
+                            {
+                                <button type="submit" name="Input.Mode" value="build" disabled="@shortOfStock">Build @Labels.Quantity(_quantity) @_preview.Assembly.Name</button>
+                                @if (shortOfStock && now > 0m)
+                                {
+                                    <button type="submit" name="Input.Mode" value="partial" class="secondary">Build @Labels.Quantity(now) now, leave @Labels.Quantity(_quantity - now) pending</button>
+                                }
+                                @if (shortOfStock)
+                                {
+                                    <button type="submit" name="Input.Mode" value="pending" class="secondary">Save all @Labels.Quantity(_quantity) as pending</button>
+                                }
+                            }
+                        </div>
+                        @if (shortOfStock)
+                        {
+                            <p class="muted">A pending build posts nothing and doesn't hold the components; finish it from the inventory page once they arrive.</p>
+                        }
+                    </EditForm>
+                </div>
+            }
         }
     }
 </div>

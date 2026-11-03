@@ -202,7 +202,9 @@ public sealed class BankingService(
     public async Task<BankTransaction> ChangeAsync(Guid id, ChangeBankTransactionCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(command.Splits);
+        // The API may leave them out.
+        if (command.Splits is not { Count: > 0 })
+            throw new DomainException("bank.no_splits", "Choose at least one category.");
         if (string.IsNullOrWhiteSpace(command.Reason))
             throw new DomainException("bank.change_reason_required", "Say why the transaction is being changed.");
 

@@ -146,6 +146,8 @@
             _selected = await Webhooks.GetAsync(id);
             if (_selected is null)
             {
+                // The page still renders while the redirect goes out, so the form needs its model.
+                Input ??= new WebhookModel();
                 Navigation.NavigateTo("/settings/webhooks");
                 return;
             }

@@ -131,11 +131,17 @@ public static class OpenBookApi
             await engine.GetAsync(id, ct) is { } entry ? Results.Ok(JournalEntryResponse.From(entry)) : Results.NotFound());
 
         // Correct a hand-entered entry: it's voided and the replacement posted in one save (the response is the replacement).
-        api.MapPut("/journal-entries/{id:guid}", async (Guid id, ChangeJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
+        api.MapPut("/journal-entries/{id:guid}", async (Guid id, ChangeJournalEntryRequest request, PostingEngine engine,
+            OpenBook.Application.Reporting.AdjustingEntryService adjusting, CancellationToken ct) =>
         {
             var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo, l.ClassId)).ToList();
-            return JournalEntryResponse.From(await engine.ChangeAsync(id, new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis,
-                LocationId: request.LocationId, TagIds: request.TagIds), request.Reason, ct));
+            var wasAdjusting = (await adjusting.MarkedAsync(ct)).Contains(id);
+            var changed = await engine.ChangeAsync(id, new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis,
+                LocationId: request.LocationId, TagIds: request.TagIds), request.Reason, ct);
+            // The replacement stays an adjusting entry, as the change page keeps it.
+            if (wasAdjusting)
+                await adjusting.SetAsync(changed.Id, true, ct);
+            return JournalEntryResponse.From(changed);
         });
         api.MapPost("/journal-entries/{id:guid}/void", async (Guid id, VoidJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>
             JournalEntryResponse.From(await engine.VoidAsync(id, request.Reason, ct)));
@@ -185,6 +191,15 @@ public static class OpenBookApi
                         _ => StatusCodes.Status400BadRequest,
                     },
                     extensions: new Dictionary<string, object?> { ["code"] = ex.Code });
+            }
+            catch (ArgumentNullException ex) when (ex.ParamName is { } name && !context.HttpContext.Response.HasStarted)
+            {
+                // A body without a list the service needs ("lines", "applications"): the caller's mistake, not the server's.
+                var field = name[(name.LastIndexOf('.') + 1)..];
+                return Results.Problem(
+                    title: $"The request is missing '{char.ToLowerInvariant(field[0])}{field[1..]}'.",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    extensions: new Dictionary<string, object?> { ["code"] = "request.value_missing" });
             }
         }
     }

@@ -162,6 +162,12 @@
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
             (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(CompanyTime.Today)).Select(v => v.Vendor).ToList()));
+        if (_chart.Find(AccountId) is null)
+        {
+            _error = "That account doesn't exist.";
+            return;
+        }
+
         _accountName = _chart.FullName(AccountId);
         var categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Id != AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable))

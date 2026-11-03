@@ -492,6 +492,7 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Job leases (`IJobLeases` → `EfJobLeases`, table `JobLeases`, expiry as Unix ms since SQLite can't compare DateTimeOffsets): every hosted service asks `TryAcquireAsync(job, ttl)` each run (hourly 90 min, scheduled emails 3 min, webhooks 1 min, bank and channel sync 90 min, backups 45 min); one conditional UPDATE renews or takes a lapsed lease, else the first INSERT wins. Holder = machine:process:random. A new background job takes a lease too.
 - `OpenBook.Web healthcheck` (`Cli/HealthCheckCommand.cs`) before the host is built; the Dockerfile's `HEALTHCHECK` uses it.
 - `ServerHardeningTests`.
+- `PageSmokeTests` (2026-11-03) opens every page, every record page with an id nothing has, every API read and write (empty body) and every form post (empty form) in an empty company, and fails on any 5xx. `NotFoundMiddleware` (Web/Diagnostics) answers an `EntityNotFoundException` outside the API with the not-found page; the API filter answers an `ArgumentNullException` (a list left out of the body) with 400 `request.value_missing`. Never `return;` inside page markup while an element is open (the render fails): use `else`.
 
 ## Usability pass (2026-11-02)
 

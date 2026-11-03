@@ -15,52 +15,53 @@
     @if (_credit is null)
     {
         <p>There's no unused credit to refund. <a href="/sales">Back to sales</a>.</p>
-        return;
     }
-
-    <p class="muted">Pays credit back to @_customer?.DisplayName from @_credit.Label, which has @Labels.Amount(_credit.Available) left.</p>
-
-    @if (_error is not null)
+    else
     {
-        <div class="alert error" role="alert">@_error</div>
-    }
+        <p class="muted">Pays credit back to @_customer?.DisplayName from @_credit.Label, which has @Labels.Amount(_credit.Available) left.</p>
 
-    <EditForm Model="Input" FormName="refund" OnValidSubmit="SaveAsync" method="post">
-        <DataAnnotationsValidator />
-        <div class="field">
-            <label for="amount">Amount</label>
-            <InputNumber id="amount" @bind-Value="Input.Amount" step="0.01" min="0" />
-            <ValidationMessage For="() => Input.Amount" />
-        </div>
-        <div class="field">
-            <label for="account">Paid from</label>
-            <InputSelect id="account" @bind-Value="Input.PaymentAccountId">
-                @foreach (var a in _accounts)
-                {
-                    <option value="@a.Id">@a.Name</option>
-                }
-            </InputSelect>
-        </div>
-        <div class="row">
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+
+        <EditForm Model="Input" FormName="refund" OnValidSubmit="SaveAsync" method="post">
+            <DataAnnotationsValidator />
             <div class="field">
-                <label for="date">Date</label>
-                <InputDate id="date" @bind-Value="Input.Date" />
+                <label for="amount">Amount</label>
+                <InputNumber id="amount" @bind-Value="Input.Amount" step="0.01" min="0" />
+                <ValidationMessage For="() => Input.Amount" />
             </div>
             <div class="field">
-                <label for="reference">Check no. / reference <span class="muted">(optional)</span></label>
-                <InputText id="reference" @bind-Value="Input.Reference" maxlength="30" />
+                <label for="account">Paid from</label>
+                <InputSelect id="account" @bind-Value="Input.PaymentAccountId">
+                    @foreach (var a in _accounts)
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </InputSelect>
             </div>
-        </div>
-        <div class="field">
-            <label for="memo">Memo <span class="muted">(optional)</span></label>
-            <InputText id="memo" @bind-Value="Input.Memo" />
-        </div>
-        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
-        <div class="actions">
-            <button type="submit">Record refund</button>
-            <a href="@_backLink">Cancel</a>
-        </div>
-    </EditForm>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <InputDate id="date" @bind-Value="Input.Date" />
+                </div>
+                <div class="field">
+                    <label for="reference">Check no. / reference <span class="muted">(optional)</span></label>
+                    <InputText id="reference" @bind-Value="Input.Reference" maxlength="30" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <InputText id="memo" @bind-Value="Input.Memo" />
+            </div>
+            <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
+            <div class="actions">
+                <button type="submit">Record refund</button>
+                <a href="@_backLink">Cancel</a>
+            </div>
+        </EditForm>
+    }
 </div>
 
 @code {

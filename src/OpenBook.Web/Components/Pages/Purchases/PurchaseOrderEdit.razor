@@ -153,7 +153,8 @@
             (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory && !i.IsAssembly).ToList(),
             await sp.GetRequiredService<PurchaseOrderService>().SuggestNumberAsync(),
             (Id ?? Copy) is { } id ? await sp.GetRequiredService<PurchaseOrderService>().GetAsync(id) : null,
-            Id is { } id2 && (await sp.GetRequiredService<PurchaseOrderService>().ProgressAsync(id2)).Started));
+            Id is { } id2 && await sp.GetRequiredService<PurchaseOrderService>().GetAsync(id2) is not null
+                && (await sp.GetRequiredService<PurchaseOrderService>().ProgressAsync(id2)).Started));
         _vendorOptions = PickerOptions.Vendors(_vendors);
         _itemOptions = PickerOptions.Items(_items);
         _categoryOptions = PickerOptions.Accounts(BillLineModel.Categories(chart), chart, useNumbers);
