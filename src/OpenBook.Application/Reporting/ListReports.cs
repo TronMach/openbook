@@ -1,0 +1,430 @@
+using OpenBook.Application.Accounts;
+using OpenBook.Application.Companies;
+using OpenBook.Application.Inventory;
+using OpenBook.Application.Purchases;
+using OpenBook.Application.Sales;
+using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Purchases;
+using OpenBook.Domain.Sales;
+
+namespace OpenBook.Application.Reporting;
+
+/// <summary>
+/// The everyday lists and balances people expect to print or export: customer and vendor balances and contact lists,
+/// the item and account lists, open sales and purchase orders, purchases by item, deposit detail and estimates.
+/// </summary>
+public sealed class ListReports(
+    ICompanyStore companies,
+    ISalesStore sales,
+    IPurchasesStore purchases,
+    AccountService accounts,
+    CustomerService customers,
+    VendorService vendors,
+    ReceivablesService receivables,
+    PayablesService payables,
+    InventoryService inventory,
+    ReportLedger ledger,
+    DepositService deposits,
+    PurchaseOrderService purchaseOrders,
+    SalesOrderService salesOrders)
+{
+    public async Task<ReportTable> CustomerBalancesAsync(DateOnly asOf, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var aging = await receivables.AgingAsync(asOf, ct);
+        var rows = aging.Customers
+            .Where(c => c.Buckets.Total != 0m)
+            .Select(c => new ReportTableRow(
+            [
+                new ReportCell(c.Customer.DisplayName, new ReportLink("customer", c.Customer.Id)),
+                new ReportCell(c.Buckets.Total - c.Buckets.Current == 0m ? null : c.Buckets.Total - c.Buckets.Current),
+                c.Buckets.Total,
+            ]))
+            .ToList();
+        rows.Add(new ReportTableRow(["Total", aging.Totals.Total - aging.Totals.Current, aging.Totals.Total], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Customer balance summary",
+            [company.Name, $"As of {asOf:MMM d, yyyy}"],
+            [new("Customer"), new("Past due", ColumnFormat.Money), new("Balance", ColumnFormat.Money)],
+            rows,
+            Note: "Open invoices less unapplied credits, as on the A/R aging; the total matches it.");
+    }
+
+    public async Task<ReportTable> VendorBalancesAsync(DateOnly asOf, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var aging = await payables.AgingAsync(asOf, ct);
+        var rows = aging.Vendors
+            .Where(v => v.Buckets.Total != 0m)
+            .Select(v => new ReportTableRow(
+            [
+                new ReportCell(v.Vendor.DisplayName, new ReportLink("vendor", v.Vendor.Id)),
+                new ReportCell(v.Buckets.Total - v.Buckets.Current == 0m ? null : v.Buckets.Total - v.Buckets.Current),
+                v.Buckets.Total,
+            ]))
+            .ToList();
+        rows.Add(new ReportTableRow(["Total", aging.Totals.Total - aging.Totals.Current, aging.Totals.Total], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Vendor balance summary",
+            [company.Name, $"As of {asOf:MMM d, yyyy}"],
+            [new("Vendor"), new("Past due", ColumnFormat.Money), new("Balance", ColumnFormat.Money)],
+            rows,
+            Note: "Unpaid bills less unapplied vendor credits, as on the A/P aging; the total matches it.");
+    }
+
+    /// <param name="includeInactive">The <c>detail</c> setting: inactive customers too.</param>
+    public async Task<ReportTable> CustomerContactsAsync(bool includeInactive, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var list = await customers.ListAsync(CompanyTime.Today, includeInactive, ct);
+        return new ReportTable(
+            "Customer contact list",
+            [company.Name, includeInactive ? "Every customer" : "Active customers"],
+            [new("Customer"), new("Company"), new("Email"), new("Phone"), new("Billing address"), new("Shipping address"), new("Terms"), new("Balance", ColumnFormat.Money)],
+            [
+                .. list.Select(c => new ReportTableRow(
+                [
+                    new ReportCell(c.FullName ?? c.Customer.DisplayName, new ReportLink("customer", c.Customer.Id)),
+                    c.Customer.CompanyName,
+                    c.Customer.Email,
+                    c.Customer.Phone,
+                    OneLine(c.Customer.BillingAddress),
+                    OneLine(c.Customer.ShippingAddress),
+                    c.Customer.Terms.Label,
+                    new ReportCell(c.Balance == 0m ? null : c.Balance),
+                ], 0)),
+            ],
+            Note: "Balances are as of today.");
+    }
+
+    /// <param name="includeInactive">The <c>detail</c> setting: inactive vendors too.</param>
+    public async Task<ReportTable> VendorContactsAsync(bool includeInactive, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var list = await vendors.ListAsync(CompanyTime.Today, includeInactive, ct);
+        return new ReportTable(
+            "Vendor contact list",
+            [company.Name, includeInactive ? "Every vendor" : "Active vendors"],
+            [new("Vendor"), new("Company"), new("Email"), new("Phone"), new("Address"), new("Your account no."), new("Terms"), new("1099"), new("Balance", ColumnFormat.Money)],
+            [
+                .. list.OrderBy(v => v.Vendor.DisplayName, StringComparer.CurrentCultureIgnoreCase).Select(v => new ReportTableRow(
+                [
+                    new ReportCell(v.Vendor.DisplayName, new ReportLink("vendor", v.Vendor.Id)),
+                    v.Vendor.CompanyName,
+                    v.Vendor.Email,
+                    v.Vendor.Phone,
+                    OneLine(v.Vendor.Address),
+                    v.Vendor.AccountNumber,
+                    v.Vendor.PaymentTermsDays == 0 ? "Due on receipt" : $"Net {v.Vendor.PaymentTermsDays}",
+                    v.Vendor.Track1099 ? "Yes" : null,
+                    new ReportCell(v.Balance == 0m ? null : v.Balance),
+                ])),
+            ],
+            Note: "Balances are as of today. Tax IDs are left out; the 1099 reports show them masked.");
+    }
+
+    /// <param name="includeInactive">The <c>detail</c> setting: inactive items too.</param>
+    public async Task<ReportTable> ItemListAsync(bool includeInactive, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var stock = (await inventory.StockAsync(null, ct)).ToDictionary(s => s.Item.Id, s => s.Quantity);
+        var vendorNames = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
+        var items = (await sales.ListItemsAsync(ct)).Where(i => includeInactive || i.IsActive).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        return new ReportTable(
+            "Product and service list",
+            [company.Name, includeInactive ? "Every item" : "Active items"],
+            [new("Item"), new("Type"), new("Description"), new("Barcode"), new("Price", ColumnFormat.Money), new("Purchase cost", ColumnFormat.Money),
+             new("Income account"), new("Taxable"), new("Preferred vendor"), new("On hand", ColumnFormat.Number)],
+            [
+                .. items.Select(i => new ReportTableRow(
+                [
+                    new ReportCell(i.Name, new ReportLink("item", i.Id)),
+                    TypeLabel(i.Type),
+                    i.Description,
+                    i.Barcode,
+                    i.Rate,
+                    new ReportCell(i.PurchaseCost == 0m ? null : i.PurchaseCost),
+                    chart.Find(i.IncomeAccountId) is { } a ? chart.FullName(a.Id) : null,
+                    i.Taxable ? "Yes" : "No",
+                    i.PreferredVendorId is { } v ? vendorNames.GetValueOrDefault(v) : null,
+                    new ReportCell(i.IsInventory ? stock.GetValueOrDefault(i.Id) : null),
+                ])),
+            ]);
+    }
+
+    /// <summary>Every account with its type and balance (natural sign: debit-normal accounts positive when debited).</summary>
+    /// <param name="includeInactive">The <c>detail</c> setting: inactive accounts too.</param>
+    public async Task<ReportTable> AccountListAsync(DateOnly asOf, bool includeInactive, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var balances = (await ledger.TotalsAsync(ReportBasis.Accrual, asOf, asOf, ct)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+        return new ReportTable(
+            "Account list",
+            [company.Name, $"Balances as of {asOf:MMM d, yyyy} · Accrual basis"],
+            [new("Number"), new("Account"), new("Type"), new("Description"), new("Tax line"), new("Balance", ColumnFormat.Money)],
+            [
+                .. chart.Ordered(includeInactive).Select(x =>
+                {
+                    var a = x.Account;
+                    var balance = balances.GetValueOrDefault(a.Id);
+                    var shown = a.Type.IsBalanceSheet() ? (a.Type.IsDebitNormal() ? balance : -balance) : (decimal?)null;
+                    return new ReportTableRow(
+                    [
+                        a.Number,
+                        new ReportCell(chart.FullName(a.Id) + (a.IsActive ? "" : " (inactive)"), new ReportLink("account", a.Id) { To = asOf }),
+                        a.Type.Describe(),
+                        a.Description,
+                        a.TaxLineKey,
+                        new ReportCell(shown is 0m ? null : shown),
+                    ], x.Depth);
+                }),
+            ],
+            ReportBasis.Accrual,
+            "Balance sheet accounts show their balance in their normal direction; see the profit and loss for income and expense accounts.");
+    }
+
+    /// <summary>Open purchase orders by vendor: what's still to receive and to bill.</summary>
+    public async Task<ReportTable> OpenPurchaseOrdersAsync(CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var vendorNames = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
+        var open = (await purchases.ListPurchaseOrdersAsync(null, ct)).Where(o => o.Status == PurchaseOrderStatus.Open).ToList();
+        var rows = new List<ReportTableRow>();
+        decimal allTotal = 0m, allToBill = 0m;
+        foreach (var group in open.GroupBy(o => o.VendorId).OrderBy(g => vendorNames.GetValueOrDefault(g.Key), StringComparer.CurrentCultureIgnoreCase))
+        {
+            var name = vendorNames.GetValueOrDefault(group.Key) ?? "";
+            rows.Add(new ReportTableRow([new ReportCell(name, new ReportLink("vendor", group.Key)), null, null, null, null, null], 0, ReportRowStyle.Section));
+            decimal total = 0m, toBill = 0m;
+            foreach (var order in group.OrderBy(o => o.Date).ThenBy(o => o.Number, StringComparer.OrdinalIgnoreCase))
+            {
+                var progress = await purchaseOrders.ProgressAsync(order, ct);
+                var left = progress.Lines.Sum(l => l.Line.IsItem ? Math.Max(0m, l.ToBill) * l.Line.UnitCost : Math.Max(0m, l.ToBill));
+                var toReceive = progress.Lines.Where(l => l.Line.IsItem).Sum(l => Math.Max(0m, l.Line.Quantity - Math.Max(l.Received, l.BilledQuantity)));
+                left = decimal.Round(left, 2, MidpointRounding.AwayFromZero);
+                rows.Add(new ReportTableRow(
+                [
+                    new ReportCell($"Purchase order {order.Number}", new ReportLink("purchase_order", order.Id)),
+                    new ReportCell(order.Date),
+                    new ReportCell(order.ExpectedDate),
+                    new ReportCell(toReceive == 0m ? null : toReceive),
+                    order.Total,
+                    left,
+                ], 1));
+                (total, toBill) = (total + order.Total, toBill + left);
+            }
+
+            rows.Add(new ReportTableRow([$"Total {name}", null, null, null, total, toBill], 0, ReportRowStyle.Subtotal));
+            (allTotal, allToBill) = (allTotal + total, allToBill + toBill);
+        }
+
+        rows.Add(new ReportTableRow(["Total", null, null, null, allTotal, allToBill], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Open purchase orders",
+            [company.Name, $"As of {CompanyTime.Today:MMM d, yyyy}"],
+            [new("Vendor and order"), new("Date", ColumnFormat.Date), new("Expected", ColumnFormat.Date), new("Units to receive", ColumnFormat.Number),
+             new("Amount", ColumnFormat.Money), new("Still to bill", ColumnFormat.Money)],
+            rows,
+            Note: "Still to bill is at the order's costs: units not billed yet and what's left of category lines.");
+    }
+
+    /// <summary>Open sales orders by customer: what's still to invoice.</summary>
+    public async Task<ReportTable> OpenSalesOrdersAsync(CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var names = await customers.FullNamesAsync(ct);
+        var open = (await sales.ListSalesOrdersAsync(null, ct)).Where(o => o.Status == SalesOrderStatus.Open).ToList();
+        var rows = new List<ReportTableRow>();
+        decimal allTotal = 0m, allLeft = 0m;
+        foreach (var group in open.GroupBy(o => o.CustomerId).OrderBy(g => names.GetValueOrDefault(g.Key), StringComparer.CurrentCultureIgnoreCase))
+        {
+            var name = names.GetValueOrDefault(group.Key) ?? "";
+            rows.Add(new ReportTableRow([new ReportCell(name, new ReportLink("customer", group.Key)), null, null, null, null, null], 0, ReportRowStyle.Section));
+            decimal total = 0m, left = 0m;
+            foreach (var order in group.OrderBy(o => o.Date).ThenBy(o => o.Number, StringComparer.OrdinalIgnoreCase))
+            {
+                var progress = await salesOrders.ProgressAsync(order, ct);
+                var remaining = Math.Max(0m, order.Subtotal - progress.InvoicedSubtotal);
+                rows.Add(new ReportTableRow(
+                [
+                    new ReportCell($"Sales order {order.Number}", new ReportLink("sales_order", order.Id)),
+                    new ReportCell(order.Date),
+                    new ReportCell(order.ExpectedDate),
+                    order.CustomerReference,
+                    order.Subtotal,
+                    remaining,
+                ], 1));
+                (total, left) = (total + order.Subtotal, left + remaining);
+            }
+
+            rows.Add(new ReportTableRow([$"Total {name}", null, null, null, total, left], 0, ReportRowStyle.Subtotal));
+            (allTotal, allLeft) = (allTotal + total, allLeft + left);
+        }
+
+        rows.Add(new ReportTableRow(["Total", null, null, null, allTotal, allLeft], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Open sales orders",
+            [company.Name, $"As of {CompanyTime.Today:MMM d, yyyy}"],
+            [new("Customer and order"), new("Date", ColumnFormat.Date), new("Expected", ColumnFormat.Date), new("Their PO"),
+             new("Amount", ColumnFormat.Money), new("Still to invoice", ColumnFormat.Money)],
+            rows,
+            Note: "Amounts are before sales tax; tax is worked out again on each invoice.");
+    }
+
+    /// <summary>
+    /// Inventory bought in a period: item lines of posted bills, plus deliveries received into stock before their bill
+    /// (at their received value). Bills from those deliveries clear them on category lines, so nothing counts twice.
+    /// </summary>
+    public async Task<ReportTable> PurchasesByItemAsync(DateOnly from, DateOnly to, bool detail, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var vendorNames = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
+        var bought = new List<(Guid ItemId, Guid VendorId, DateOnly Date, string Label, ReportLink Link, decimal Quantity, decimal Amount)>();
+        foreach (var bill in (await purchases.ListBillsAsync(null, ct)).Where(b => b.Status == DocumentStatus.Posted && b.Date >= from && b.Date <= to))
+        {
+            foreach (var line in bill.Lines.Where(l => l.ItemId is not null))
+                bought.Add((line.ItemId!.Value, bill.VendorId, bill.Date, bill.Reference is { } r ? $"Bill {r}" : "Bill", new ReportLink("bill", bill.Id), line.Quantity ?? 0m, line.Amount));
+        }
+
+        foreach (var order in await purchases.ListPurchaseOrdersAsync(null, ct))
+        {
+            foreach (var receipt in order.Receipts.Where(r => r.InStock && !r.IsVoided && r.Date >= from && r.Date <= to))
+            {
+                if (order.Lines.FirstOrDefault(l => l.LineNumber == receipt.LineNumber)?.ItemId is { } itemId)
+                    bought.Add((itemId, order.VendorId, receipt.Date, $"Received on purchase order {order.Number}", new ReportLink("purchase_order", order.Id), receipt.Quantity, receipt.Value));
+            }
+        }
+
+        var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);
+        var rows = new List<ReportTableRow>();
+        foreach (var group in bought.GroupBy(b => b.ItemId).OrderBy(g => items.GetValueOrDefault(g.Key)?.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var name = new ReportCell(items.GetValueOrDefault(group.Key)?.Name ?? "", new ReportLink("item", group.Key));
+            var quantity = group.Sum(b => b.Quantity);
+            var amount = group.Sum(b => b.Amount);
+            var average = new ReportCell(quantity == 0m ? null : decimal.Round(amount / quantity, 4));
+            if (!detail)
+            {
+                rows.Add(new ReportTableRow([name, null, null, new ReportCell(quantity), amount, average]));
+                continue;
+            }
+
+            rows.Add(new ReportTableRow([name, null, null, null, null, null], 0, ReportRowStyle.Section));
+            rows.AddRange(group.OrderBy(b => b.Date).Select(b => new ReportTableRow(
+                [new ReportCell(b.Label, b.Link), new ReportCell(b.Date), vendorNames.GetValueOrDefault(b.VendorId), new ReportCell(b.Quantity), b.Amount,
+                 new ReportCell(b.Quantity == 0m ? null : decimal.Round(b.Amount / b.Quantity, 4))], 1)));
+            rows.Add(new ReportTableRow([$"Total {name.Value}", null, null, new ReportCell(quantity), amount, average], 0, ReportRowStyle.Subtotal));
+        }
+
+        rows.Add(new ReportTableRow(["Total", null, null, null, bought.Sum(b => b.Amount), null], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            $"Purchases by product {(detail ? "detail" : "summary")}",
+            [company.Name, $"{Comparisons.Describe(from, to)} · Accrual basis"],
+            [new("Item"), new("Date", ColumnFormat.Date), new("Vendor"), new("Quantity", ColumnFormat.Number), new("Amount", ColumnFormat.Money), new("Average cost", ColumnFormat.Money)],
+            rows,
+            ReportBasis.Accrual,
+            "Inventory item lines of posted bills, and deliveries received into stock before their bill. Freight and other category lines aren't included.");
+    }
+
+    /// <summary>Each bank deposit in a period with what went into it.</summary>
+    public async Task<ReportTable> DepositDetailAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var names = await customers.FullNamesAsync(ct);
+        var rows = new List<ReportTableRow>();
+        var list = (await sales.ListDepositsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Date >= from && d.Date <= to)
+            .OrderBy(d => d.Date).ThenBy(d => d.CreatedAt).ToList();
+        foreach (var deposit in list)
+        {
+            var bank = chart.Find(deposit.BankAccountId) is { } a ? chart.FullName(a.Id) : "";
+            rows.Add(new ReportTableRow(
+                [new ReportCell($"Deposit to {bank}", new ReportLink("deposit", deposit.Id)), new ReportCell(deposit.Date), null, deposit.Memo, null], 0, ReportRowStyle.Section));
+            foreach (var item in await deposits.ContentsAsync(deposit, ct))
+            {
+                rows.Add(new ReportTableRow(
+                [
+                    new ReportCell(item.Label, new ReportLink(DepositedEntity(item.Kind), item.Id)),
+                    new ReportCell(item.Date),
+                    item.CustomerId is { } c ? names.GetValueOrDefault(c) : null,
+                    item.Reference,
+                    item.Amount,
+                ], 1));
+            }
+
+            rows.Add(new ReportTableRow([$"Total deposit {deposit.Date:MMM d}", null, null, null, deposit.Total], 0, ReportRowStyle.Subtotal));
+        }
+
+        rows.Add(new ReportTableRow(["Total", null, null, null, list.Sum(d => d.Total)], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Deposit detail",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Deposit and item"), new("Date", ColumnFormat.Date), new("Received from"), new("Reference"), new("Amount", ColumnFormat.Money)],
+            rows,
+            Note: "Deposits made with Make deposit, each with the payments, receipts and other items in it, the way the bank statement shows one total.");
+    }
+
+    /// <summary>Estimates dated in a period, by customer, with their status.</summary>
+    public async Task<ReportTable> EstimatesByCustomerAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var names = await customers.FullNamesAsync(ct);
+        var list = (await sales.ListEstimatesAsync(null, ct)).Where(e => e.Date >= from && e.Date <= to).ToList();
+        var rows = new List<ReportTableRow>();
+        foreach (var group in list.GroupBy(e => e.CustomerId).OrderBy(g => names.GetValueOrDefault(g.Key), StringComparer.CurrentCultureIgnoreCase))
+        {
+            var name = names.GetValueOrDefault(group.Key) ?? "";
+            rows.Add(new ReportTableRow([new ReportCell(name, new ReportLink("customer", group.Key)), null, null, null, null], 0, ReportRowStyle.Section));
+            rows.AddRange(group.OrderBy(e => e.Date).ThenBy(e => e.Number, StringComparer.OrdinalIgnoreCase).Select(e => new ReportTableRow(
+            [
+                new ReportCell($"Estimate {e.Number}", new ReportLink("estimate", e.Id)),
+                new ReportCell(e.Date),
+                new ReportCell(e.ExpirationDate),
+                EstimateStatusLabel(e.Status),
+                e.Total,
+            ], 1)));
+            rows.Add(new ReportTableRow([$"Total {name}", null, null, null, group.Sum(e => e.Total)], 0, ReportRowStyle.Subtotal));
+        }
+
+        rows.Add(new ReportTableRow(["Total", null, null, null, list.Sum(e => e.Total)], 0, ReportRowStyle.Total));
+        var accepted = list.Where(e => e.Status is EstimateStatus.Accepted or EstimateStatus.Closed).Sum(e => e.Total);
+        return new ReportTable(
+            "Estimates by customer",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Customer and estimate"), new("Date", ColumnFormat.Date), new("Expires", ColumnFormat.Date), new("Status"), new("Amount", ColumnFormat.Money)],
+            rows,
+            Note: list.Count == 0 ? null : $"Accepted or invoiced: {accepted:N2} of {list.Sum(e => e.Total):N2}.");
+    }
+
+    internal static string EstimateStatusLabel(EstimateStatus status) => status switch
+    {
+        EstimateStatus.Pending => "Pending",
+        EstimateStatus.Accepted => "Accepted",
+        EstimateStatus.Declined => "Declined",
+        _ => "Invoiced",
+    };
+
+    private static string DepositedEntity(DepositedKind kind) => kind switch
+    {
+        DepositedKind.Payment => "payment",
+        DepositedKind.SalesReceipt => "sales_receipt",
+        DepositedKind.Retainer => "retainer",
+        _ => "donation",
+    };
+
+    private static string TypeLabel(ItemType type) => type switch
+    {
+        ItemType.Service => "Service",
+        ItemType.Inventory => "Inventory product",
+        ItemType.Bundle => "Bundle",
+        ItemType.Assembly => "Assembly",
+        _ => "Non-inventory product",
+    };
+
+    private static string? OneLine(string? address) =>
+        address is null ? null : string.Join(", ", address.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+}

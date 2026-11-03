@@ -40,8 +40,9 @@
                 <div class="field">
                     <label for="detail">Show</label>
                     <select id="detail" name="detail">
-                        <option value="false" selected="@(!_parameters.GetFlag("detail"))">Summary</option>
-                        <option value="true" selected="@_parameters.GetFlag("detail")">Each document</option>
+                        @{ var list = ListReportKeys.Contains(_definition?.Key ?? ""); }
+                        <option value="false" selected="@(!_parameters.GetFlag("detail"))">@(list ? "Active only" : "Summary")</option>
+                        <option value="true" selected="@_parameters.GetFlag("detail")">@(list ? "Include inactive" : "Each document")</option>
                     </select>
                 </div>
             }
@@ -145,6 +146,9 @@
 </div>
 
 @code {
+    /// <summary>Reports whose detail setting means "include inactive" (lists), not "each document".</summary>
+    private static readonly HashSet<string> ListReportKeys = ["customer-contacts", "vendor-contacts", "product-list", "account-list"];
+
     private ReportDefinition? _definition;
     private ReportParameters _parameters = ReportParameters.Parse(null);
     private ReportQuery _query = null!;

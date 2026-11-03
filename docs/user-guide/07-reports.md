@@ -13,15 +13,19 @@
 | Statement of cash flows | Where did the cash come from and go over a period? Operating, investing and financing |
 | Profit and loss by class / by location | The profit and loss with a column per class or location |
 
-**Sales and customers**: Sales by customer, Sales by product or service, Open invoices, A/R aging (who owes you, by how overdue), Price list, Discounts given.
+**Sales and customers**: Sales by customer, Sales by product or service, Open invoices, A/R aging (who owes you, by how overdue), Customer balance summary, Customer contact list, Product and service list, Open sales orders (what's still to invoice), Estimates by customer (with their status), Deposit detail (each bank deposit with the payments in it), Price list, Discounts given.
 
-**Expenses and vendors**: Expenses by vendor, Unpaid bills, A/P aging (what you owe, by how overdue).
+**Expenses and vendors**: Expenses by vendor, Unpaid bills, A/P aging (what you owe, by how overdue), Vendor balance summary, Vendor contact list, Open purchase orders (what's still to receive and bill).
+
+**Inventory**: Inventory valuation, Inventory stock status, Physical inventory worksheet, Purchases by product (quantity, amount and average cost bought in a period).
 
 **Taxes**: 1099 summary and detail, Sales tax liability, Tax summary (your accounts' totals by tax form line).
 
-**Accountant**: Trial balance, General ledger, Journal, Trial balance worksheet, Adjusting journal entries.
+**Accountant**: Account list, Trial balance, General ledger, Journal, Trial balance worksheet, Adjusting journal entries.
 
-Other groups appear for inventory, projects and time, fixed assets and loans, and nonprofits.
+The contact lists, the product and service list and the account list show active records; choose **Include inactive** to list the rest too. Exported to CSV or Excel, they're also the way to take a list into another program.
+
+Other groups appear for projects and time, fixed assets and loans, and nonprofits.
 
 ## Choosing the period
 
