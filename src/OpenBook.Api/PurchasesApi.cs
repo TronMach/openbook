@@ -215,6 +215,9 @@ internal static class PurchasesApi
             : await ApiPaging.PageAsync(response, skip, take, (from, count) => store.ListRecentBillsAsync(from, count, ct), BillResponse.From));
         purchases.MapGet("/bills/{id:guid}", async (Guid id, BillService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } b ? Results.Ok(BillResponse.From(b)) : Results.NotFound());
+        // Bills that may be the same one entered before: same vendor and total, within two weeks.
+        purchases.MapGet("/bills/duplicates", async (Guid vendorId, DateOnly date, decimal total, Guid? except, BillService s, CancellationToken ct) =>
+            (await s.PossibleDuplicatesAsync(vendorId, date, total, except, ct)).Select(BillResponse.From));
         purchases.MapPost("/bills", async (CreateBillCommand r, BillService s, CancellationToken ct) =>
         {
             var b = await s.CreateAsync(r, ct);

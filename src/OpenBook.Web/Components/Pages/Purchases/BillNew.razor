@@ -58,8 +58,19 @@
             <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
 
 
+            @if (_duplicates.Count > 0)
+            {
+                <div class="alert notice" role="alert">
+                    <p>@(_duplicates.Count == 1 ? "This may already be entered:" : "These may already be entered:")
+                        @foreach (var (d, i) in _duplicates.Select((d, i) => (d, i)))
+                        {
+                            @(i > 0 ? "; " : " ")<a href="/purchases/bills/@d.Id" target="_blank">bill @(d.Reference ?? "without a number") of @Labels.Date(d.Date)</a>
+                        }
+                        , from the same vendor for the same amount. Save anyway if it's a different bill.</p>
+                </div>
+            }
             <div class="actions">
-                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save bill</button>
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@(_duplicates.Count > 0 ? "Save anyway" : "Save bill")</button>
                 <a href="/purchases">Cancel</a>
             </div>
         </div>
@@ -146,6 +157,11 @@
         _dueDate = _vendor?.DueDateFor(date) ?? (_dueDate < date ? date : _dueDate);
     }
 
+    private IReadOnlyList<Bill> _duplicates = [];
+
+    /// <summary>The total and vendor the duplicate warning was given for: saving again with them unchanged goes ahead.</summary>
+    private (Guid Vendor, decimal Total, DateOnly Date)? _warnedFor;
+
     private async Task SaveAsync()
     {
         _busy = true;
@@ -153,6 +169,15 @@
         try
         {
             var lines = BillLineModel.Drafts(_lines);
+            var check = (_vendor!.Id, lines.Sum(l => l.Amount), _date);
+            if (_warnedFor != check)
+            {
+                _duplicates = await Ops.RunAsync<BillService, IReadOnlyList<Bill>>(s => s.PossibleDuplicatesAsync(check.Item1, check.Item3, check.Item2));
+                _warnedFor = check;
+                if (_duplicates.Count > 0)
+                    return;
+            }
+
             var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo, LocationId: _locationId, WarehouseId: _warehouseId);
             var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/purchases/bills/{bill.Id}");

@@ -37,6 +37,8 @@ Vendors with unpaid bills can't be made inactive. Vendors can be imported from a
 4. For stock you buy, add **item lines** instead: the inventory item and quantity. They add to stock on hand at the line's cost.
 5. **Save bill**.
 
+If the vendor has a bill for the same amount within two weeks of the date, OpenBook shows it before saving, in case it's the same bill entered twice. Open it to check; **Save anyway** if it's a different one.
+
 Attach the vendor's PDF or a photo to the bill under **Attachments** on its page, so it's there when you need it.
 
 To correct a bill, use **Change** at the top of its page: the bill number, dates, lines, location, warehouse and memo. Say **Why are you changing it?** and **Save changes**. OpenBook reverses the bill's journal entry on its original date and posts the corrected one, so the bill keeps its payments and history; each change is listed under **Changes** on the bill.

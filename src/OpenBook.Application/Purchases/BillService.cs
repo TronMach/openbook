@@ -67,6 +67,21 @@ public sealed class BillService(
 
     public Task<IReadOnlyList<Bill>> ListAsync(Guid? vendorId = null, CancellationToken ct = default) => store.ListBillsAsync(vendorId, ct);
 
+    /// <summary>How close in date a bill for the same amount from the same vendor counts as a possible duplicate.</summary>
+    public const int DuplicateDays = 14;
+
+    /// <summary>
+    /// Posted bills from the vendor for the same total within <see cref="DuplicateDays"/> of the date: worth a second
+    /// look before entering another (the vendor's bill numbers are already unique). Nothing is refused.
+    /// </summary>
+    public async Task<IReadOnlyList<Bill>> PossibleDuplicatesAsync(Guid vendorId, DateOnly date, decimal total, Guid? except = null, CancellationToken ct = default) =>
+        total == 0m
+            ? []
+            : (await store.ListBillsAsync(vendorId, ct))
+                .Where(b => b.Id != except && b.Status == DocumentStatus.Posted && b.Total == total && Math.Abs(b.Date.DayNumber - date.DayNumber) <= DuplicateDays)
+                .OrderBy(b => Math.Abs(b.Date.DayNumber - date.DayNumber))
+                .ToList();
+
     public Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid billId, CancellationToken ct = default) => store.ListPaymentsForBillAsync(billId, ct);
 
     public Task<IReadOnlyList<VendorCredit>> ListCreditsAsync(Guid billId, CancellationToken ct = default) => store.ListVendorCreditsForBillAsync(billId, ct);
