@@ -23,6 +23,11 @@ public sealed class SalesReceipt
     /// <summary>Check number or other reference.</summary>
     public string? Reference { get; private set; }
 
+    /// <summary>Cash, check, card...; null when nobody said.</summary>
+    public PaymentMethod? Method { get; private set; }
+
+    public void SetMethod(PaymentMethod? method) => Method = PaymentMethods.Valid(method);
+
     public string? Memo { get; private set; }
     public decimal Total { get; private set; }
 

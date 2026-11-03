@@ -4996,6 +4996,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Method")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("TEXT");
 
@@ -5793,6 +5797,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Number")

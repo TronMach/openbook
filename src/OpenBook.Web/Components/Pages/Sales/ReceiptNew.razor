@@ -43,6 +43,7 @@
                     <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
                     <input id="reference" @bind="_reference" maxlength="30" />
                 </div>
+                <PaymentMethodField @bind-Value="_method" />
             </div>
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
@@ -88,6 +89,7 @@
     private string? _number;
     private DateOnly _date = CompanyTime.Today;
     private string? _reference;
+    private PaymentMethod? _method;
     private string? _memo;
     private List<SalesLineModel> _lines = [new()];
     private bool _loaded;
@@ -152,6 +154,7 @@
                 _depositAccountId = source.DepositAccountId;
             _locationId = source.LocationId;
             _warehouseId = source.WarehouseId;
+            _method = source.Method;
         }
         else if (_items.FirstOrDefault(i => i.Id == PresetItem && i.IsActive) is { } presetItem)
         {
@@ -181,7 +184,7 @@
         _error = null;
         try
         {
-            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId);
+            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, Method: _method);
             var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command), _closingPassword);
             Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");
         }

@@ -95,7 +95,7 @@ When a customer pays an invoice, record it with **Receive payment**: on the invo
 
 1. Choose the **customer**. Their open invoices are listed.
 2. Enter the **amount received**. It's applied to the oldest invoices first, taking any early payment discount they qualify for. Change the amounts against each invoice if the customer said otherwise, or use **Pay in full** on a row.
-3. Set the **payment date** and the **reference / check no.**
+3. Set the **payment date**, the **reference / check no.** and, if you like, the **payment method** (cash, check, card, bank transfer or other).
 4. Choose where it goes in **Deposit to**:
    - **Undeposited Funds** (the default when your chart has it) if you'll take several payments to the bank together. They wait there until you make a deposit, below.
    - A **bank account** if the money went straight in, such as a bank transfer.
@@ -117,6 +117,10 @@ If you received payments into Undeposited Funds, record the trip to the bank: **
 1. Choose the bank account in **Deposit to** and the **date**.
 2. Tick the payments that went into this deposit, so the total matches the deposit slip or the line on your bank statement.
 3. **Save deposit**.
+
+When the waiting payments were made different ways, **Tick only** buttons above the list tick just the cash, the checks or the card payments, since those usually reach the bank separately.
+
+On a deposit's page, **Deposit slip** opens a PDF to take to the bank: each item with its method and check number, then the cash total, the check total with how many checks, and the deposit total. **Reports → Deposit detail** lists every deposit in a period with what went into it.
 
 This way your bank account in OpenBook shows one deposit for the whole amount, just as your bank statement does, which makes reconciling easy.
 

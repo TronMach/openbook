@@ -20,7 +20,8 @@ public sealed record CreateSalesReceiptCommand(
     Guid? TaxCodeId = null,
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
-    Guid? WarehouseId = null);
+    Guid? WarehouseId = null,
+    PaymentMethod? Method = null);
 
 /// <summary>A correction to a posted sales receipt (<see cref="SalesReceiptService.ChangeAsync"/>).</summary>
 /// <param name="Lines">Every line the receipt should have, tax lines left out (they're recalculated).</param>
@@ -47,7 +48,8 @@ public sealed record ChangeSalesReceiptCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    IReadOnlyList<int?>? FromLines = null);
+    IReadOnlyList<int?>? FromLines = null,
+    PaymentMethod? Method = null);
 
 public sealed class SalesReceiptService(
     ISalesStore store,
@@ -101,6 +103,7 @@ public sealed class SalesReceiptService(
         inventory.Apply(stock, InventorySources.SalesReceipt, id);
 
         var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption);
+        receipt.SetMethod(command.Method);
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
         store.Add(receipt);
@@ -173,6 +176,8 @@ public sealed class SalesReceiptService(
 
         receipt.Change(number, customer?.Id, command.Date, depositAccountId, lines, entry.Id,
             command.Reference ?? receipt.Reference, command.Memo, taxCodeId, exemption);
+        if (command.Method is { } method)
+            receipt.SetMethod(method);
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
         foreach (var item in feed)
@@ -219,6 +224,7 @@ public sealed class SalesReceiptService(
         r.DepositAccountId,
         r.Total,
         r.Reference,
+        Method = r.Method?.ToString(),
         r.Memo,
         Status = r.Status.ToString(),
         r.DepositId,

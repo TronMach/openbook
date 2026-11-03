@@ -15,6 +15,14 @@ public static class BankingEndpoints
 {
     public static IEndpointRouteBuilder MapBankingEndpoints(this IEndpointRouteBuilder app)
     {
+        // A deposit slip to take to the bank, as a PDF.
+        app.MapGet("/banking/deposits/{id:guid}/slip", async (Guid id, HttpContext http, Application.Reporting.ListReports reports, Application.Reporting.IReportExporter exporter, CancellationToken ct) =>
+        {
+            var slip = await reports.DepositSlipAsync(id, ct);
+            http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("inline") { FileNameStar = "Deposit slip.pdf" }.ToString();
+            return Results.File(exporter.ToPdf(slip), "application/pdf");
+        }).RequireAuthorization();
+
         // The audit log's links to a feed line or an import: its account's feed, on the line's tab.
         app.MapGet("/banking/feed-lines/{id:guid}", async (Guid id, BankFeedService feed, CancellationToken ct) =>
             await feed.LocateAsync(id, ct) is { } place

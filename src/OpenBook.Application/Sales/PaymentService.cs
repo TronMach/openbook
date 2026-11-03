@@ -11,6 +11,7 @@ namespace OpenBook.Application.Sales;
 public sealed record ApplyToInvoice(Guid InvoiceId, decimal Amount, decimal Discount = 0m);
 
 /// <param name="Amount">Money received; defaults to the total applied. Anything not applied becomes a credit.</param>
+/// <param name="Method">Cash, check, card...; optional.</param>
 public sealed record ReceivePaymentCommand(
     Guid CustomerId,
     DateOnly Date,
@@ -18,7 +19,8 @@ public sealed record ReceivePaymentCommand(
     IReadOnlyList<ApplyToInvoice> Applications,
     string? Reference = null,
     string? Memo = null,
-    decimal? Amount = null);
+    decimal? Amount = null,
+    PaymentMethod? Method = null);
 
 /// <summary>A correction to a posted customer payment (<see cref="PaymentService.ChangeAsync"/>). The customer can't change.</summary>
 /// <param name="Applications">Every invoice the payment should settle; ones left out are no longer paid by it.</param>
@@ -26,6 +28,7 @@ public sealed record ReceivePaymentCommand(
 /// <param name="Amount">Money received; defaults to the total applied. Anything not applied is the customer's credit.</param>
 /// <param name="DepositAccountId">Null keeps the deposit account.</param>
 /// <param name="Reference">Null keeps the reference; blank clears it.</param>
+/// <param name="Method">Null keeps the payment method.</param>
 public sealed record ChangePaymentCommand(
     DateOnly Date,
     IReadOnlyList<ApplyToInvoice> Applications,
@@ -33,7 +36,8 @@ public sealed record ChangePaymentCommand(
     decimal? Amount = null,
     Guid? DepositAccountId = null,
     string? Reference = null,
-    string? Memo = null);
+    string? Memo = null,
+    PaymentMethod? Method = null);
 
 /// <summary>
 /// Receive payment: one payment, split across as many of the customer's open invoices as needed, with
@@ -114,6 +118,7 @@ public sealed class PaymentService(
 
         payment = CustomerPayment.Create(
             id, customer.Id, command.Date, amount, deposit.Id, receivableId, applications, entry.Id, clock.UtcNow, command.Reference, command.Memo);
+        payment.SetMethod(command.Method);
         foreach (var application in payment.Applications)
             invoices[application.InvoiceId].ApplyPayment(application.Settled);
         store.Add(payment);
@@ -195,6 +200,8 @@ public sealed class PaymentService(
         foreach (var (invoiceId, settled) in old)
             invoices[invoiceId].RemovePayment(settled);
         payment.Change(command.Date, amount, depositId, applications, entry.Id, reference, command.Memo);
+        if (command.Method is { } method)
+            payment.SetMethod(method);
         foreach (var application in payment.Applications)
             invoices[application.InvoiceId].ApplyPayment(application.Settled);
         foreach (var item in feed)
@@ -261,6 +268,7 @@ public sealed class PaymentService(
         p.Amount,
         p.DepositAccountId,
         p.Reference,
+        Method = p.Method?.ToString(),
         p.Memo,
         Status = p.Status.ToString(),
         p.AmountRefunded,

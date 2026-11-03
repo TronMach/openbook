@@ -1,0 +1,20 @@
+@* How the customer paid, for payment and sales receipt forms (interactive: bind Value). *@
+<div class="field">
+    <label for="@Id">Payment method <span class="muted">(optional)</span></label>
+    <select id="@Id" @onchange="ChangeAsync">
+        <option value="" selected="@(Value is null)">Not given</option>
+        @foreach (var method in Enum.GetValues<PaymentMethod>())
+        {
+            <option value="@method" selected="@(Value == method)">@PaymentMethods.Label(method)</option>
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter] public PaymentMethod? Value { get; set; }
+    [Parameter] public EventCallback<PaymentMethod?> ValueChanged { get; set; }
+    [Parameter] public string Id { get; set; } = "payment-method";
+
+    private Task ChangeAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Enum.TryParse<PaymentMethod>(e.Value?.ToString(), out var m) ? m : null);
+}

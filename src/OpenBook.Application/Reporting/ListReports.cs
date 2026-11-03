@@ -347,7 +347,7 @@ public sealed class ListReports(
         {
             var bank = chart.Find(deposit.BankAccountId) is { } a ? chart.FullName(a.Id) : "";
             rows.Add(new ReportTableRow(
-                [new ReportCell($"Deposit to {bank}", new ReportLink("deposit", deposit.Id)), new ReportCell(deposit.Date), null, deposit.Memo, null], 0, ReportRowStyle.Section));
+                [new ReportCell($"Deposit to {bank}", new ReportLink("deposit", deposit.Id)), new ReportCell(deposit.Date), null, null, deposit.Memo, null], 0, ReportRowStyle.Section));
             foreach (var item in await deposits.ContentsAsync(deposit, ct))
             {
                 rows.Add(new ReportTableRow(
@@ -355,21 +355,59 @@ public sealed class ListReports(
                     new ReportCell(item.Label, new ReportLink(DepositedEntity(item.Kind), item.Id)),
                     new ReportCell(item.Date),
                     item.CustomerId is { } c ? names.GetValueOrDefault(c) : null,
+                    PaymentMethods.Label(item.Method) is { Length: > 0 } m ? m : null,
                     item.Reference,
                     item.Amount,
                 ], 1));
             }
 
-            rows.Add(new ReportTableRow([$"Total deposit {deposit.Date:MMM d}", null, null, null, deposit.Total], 0, ReportRowStyle.Subtotal));
+            rows.Add(new ReportTableRow([$"Total deposit {deposit.Date:MMM d}", null, null, null, null, deposit.Total], 0, ReportRowStyle.Subtotal));
         }
 
-        rows.Add(new ReportTableRow(["Total", null, null, null, list.Sum(d => d.Total)], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", null, null, null, null, list.Sum(d => d.Total)], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Deposit detail",
             [company.Name, Comparisons.Describe(from, to)],
-            [new("Deposit and item"), new("Date", ColumnFormat.Date), new("Received from"), new("Reference"), new("Amount", ColumnFormat.Money)],
+            [new("Deposit and item"), new("Date", ColumnFormat.Date), new("Received from"), new("Method"), new("Reference"), new("Amount", ColumnFormat.Money)],
             rows,
             Note: "Deposits made with Make deposit, each with the payments, receipts and other items in it, the way the bank statement shows one total.");
+    }
+
+    /// <summary>
+    /// A deposit slip to take to the bank: each item with how it was paid and its check number, then the cash, check
+    /// and other totals the bank's own slip asks for.
+    /// </summary>
+    public async Task<ReportTable> DepositSlipAsync(Guid depositId, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var deposit = await sales.GetDepositAsync(depositId, ct) ?? throw new EntityNotFoundException("deposit", depositId);
+        var chart = await accounts.GetChartAsync(ct);
+        var names = await customers.FullNamesAsync(ct);
+        var items = await deposits.ContentsAsync(deposit, ct);
+        var bank = chart.Find(deposit.BankAccountId);
+        var rows = items.Select(item => new ReportTableRow(
+        [
+            item.CustomerId is { } c ? names.GetValueOrDefault(c) ?? item.Label : item.Label,
+            PaymentMethods.Label(item.Method) is { Length: > 0 } m ? m : null,
+            item.Reference,
+            item.Amount,
+        ])).ToList();
+        var checks = items.Where(i => i.Method == PaymentMethod.Check).ToList();
+        decimal Sum(Func<UndepositedItem, bool> which) => items.Where(which).Sum(i => i.Amount);
+        rows.Add(new ReportTableRow(["Cash", null, null, Sum(i => i.Method == PaymentMethod.Cash)], 0, ReportRowStyle.Subtotal));
+        rows.Add(new ReportTableRow([$"Checks ({checks.Count})", null, null, checks.Sum(i => i.Amount)], 0, ReportRowStyle.Subtotal));
+        if (Sum(i => i.Method is not (PaymentMethod.Cash or PaymentMethod.Check)) is not 0m and var other)
+            rows.Add(new ReportTableRow(["Other (card, transfer, not given)", null, null, other], 0, ReportRowStyle.Subtotal));
+        rows.Add(new ReportTableRow(["Total deposit", null, null, deposit.Total], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Deposit slip",
+            [
+                company.LegalName ?? company.Name,
+                $"{(bank is null ? "" : chart.FullName(bank.Id))}{(bank?.Number is { } n ? $" ({n})" : "")} · {deposit.Date:MMMM d, yyyy}",
+            ],
+            [new("Received from"), new("Method"), new("Check no. / reference"), new("Amount", ColumnFormat.Money)],
+            rows,
+            Note: deposit.Status == DocumentStatus.Voided ? "This deposit is voided." : deposit.Memo);
     }
 
     /// <summary>Estimates dated in a period, by customer, with their status.</summary>

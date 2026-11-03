@@ -64,6 +64,7 @@
                     <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
                     <input id="reference" @bind="_reference" maxlength="30" />
                 </div>
+                <PaymentMethodField @bind-Value="_method" />
                 <div class="field">
                     <label for="memo">Memo <span class="muted">(optional)</span></label>
                     <input id="memo" @bind="_memo" maxlength="1000" />
@@ -139,6 +140,7 @@
     private DateOnly _date;
     private decimal? _amount;
     private string? _reference;
+    private PaymentMethod? _method;
     private string? _memo;
     private string? _reason;
     private List<RowModel> _rows = [];
@@ -184,6 +186,7 @@
             _date = _payment.Date;
             _amount = _payment.Amount;
             _reference = _payment.Reference;
+            _method = _payment.Method;
             _memo = _payment.Memo;
         }
 
@@ -211,7 +214,7 @@
             var command = new ChangePaymentCommand(_date,
                 _rows.Where(r => (r.Amount ?? 0m) > 0m || (r.Discount ?? 0m) > 0m)
                     .Select(r => new ApplyToInvoice(r.Invoice.Id, r.Amount ?? 0m, r.Discount ?? 0m)).ToList(),
-                _reason!, _amount ?? 0m, _depositAccountId, _reference ?? "", _memo);
+                _reason!, _amount ?? 0m, _depositAccountId, _reference ?? "", _memo, _method);
             await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/payments/{Id}");
         }

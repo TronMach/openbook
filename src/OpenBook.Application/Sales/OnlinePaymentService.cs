@@ -180,12 +180,13 @@ public sealed class OnlinePaymentService(
         var applied = Math.Min(amount, invoice.Balance);
         var payment = await payments.ReceiveAsync(new ReceivePaymentCommand(
             invoice.CustomerId,
-            DateOnly.FromDateTime(now.LocalDateTime),
+            CompanyTime.TodayAt(now, CompanyTime.Zone),
             settings.DepositAccountId ?? throw new DomainException("online.not_set_up", "Choose the account online payments are deposited to."),
             applied > 0m ? [new ApplyToInvoice(invoice.Id, applied)] : [],
             Reference: reference is null ? "Online" : reference.Length > 30 ? reference[..30] : reference,
             Memo: $"Paid online ({link.Provider}) for invoice {invoice.Number}",
-            Amount: amount), ct);
+            Amount: amount,
+            Method: PaymentMethod.Card), ct);
         link.RecordPayment(payment.Id);
         await store.SaveChangesAsync(ct);
     }

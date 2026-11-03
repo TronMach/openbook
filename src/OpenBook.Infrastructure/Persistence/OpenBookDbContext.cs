@@ -1601,6 +1601,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.ToTable("SalesReceipts");
             TaxedDocument(b);
             b.HasKey(r => r.Id);
+            b.Property(r => r.Method).HasConversion<string>().HasMaxLength(20);
             b.Property(r => r.Number).HasMaxLength(20);
             b.HasIndex(r => r.Number).IsUnique();
             b.Property(r => r.Reference).HasMaxLength(30);
@@ -1620,6 +1621,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("CustomerPayments");
             b.HasKey(p => p.Id);
+            b.Property(p => p.Method).HasConversion<string>().HasMaxLength(20);
             b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             b.Property(p => p.Reference).HasMaxLength(30);
             b.Property(p => p.Memo).HasMaxLength(1000);

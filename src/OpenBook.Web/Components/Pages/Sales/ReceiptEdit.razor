@@ -58,6 +58,7 @@
                 <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
                 <input id="reference" @bind="_reference" maxlength="30" />
             </div>
+            <PaymentMethodField @bind-Value="_method" />
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
@@ -99,6 +100,7 @@
     private string? _number;
     private DateOnly _date;
     private string? _reference;
+    private PaymentMethod? _method;
     private string? _memo;
     private string? _reason;
     private List<SalesLineModel> _lines = [];
@@ -145,6 +147,7 @@
             _number = _receipt.Number;
             _date = _receipt.Date;
             _reference = _receipt.Reference;
+            _method = _receipt.Method;
             _memo = _receipt.Memo;
             _taxCodeId = _receipt.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
             _locationId = _receipt.LocationId;
@@ -168,7 +171,7 @@
         {
             var lines = _lines.Where(l => !l.IsBlank).ToList();
             var command = new ChangeSalesReceiptCommand(_date, SalesLineModel.Drafts(lines), _reason!, _customerId, _depositAccountId, _number,
-                _reference ?? "", _memo, _taxCodeId ?? Guid.Empty, _locationId, WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList());
+                _reference ?? "", _memo, _taxCodeId ?? Guid.Empty, _locationId, WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList(), Method: _method);
             await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/receipts/{Id}");
         }

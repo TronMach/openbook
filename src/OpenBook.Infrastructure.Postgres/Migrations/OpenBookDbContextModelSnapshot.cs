@@ -5003,6 +5003,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("Method")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("uuid");
 
@@ -5801,6 +5805,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("Memo")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Number")
                         .IsRequired()

@@ -9,7 +9,8 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Sales;
 
 /// <summary>A payment or sales receipt sitting in an undeposited funds account.</summary>
-public sealed record UndepositedItem(DepositedKind Kind, Guid Id, DateOnly Date, Guid? CustomerId, string Label, string? Reference, Guid AccountId, decimal Amount);
+/// <param name="Method">How it was paid, when the payment or sales receipt says.</param>
+public sealed record UndepositedItem(DepositedKind Kind, Guid Id, DateOnly Date, Guid? CustomerId, string Label, string? Reference, Guid AccountId, decimal Amount, PaymentMethod? Method = null);
 
 /// <summary>
 /// Another kind of document that can wait in undeposited funds (nonprofit gifts), so the deposit service needn't know it.
@@ -65,12 +66,12 @@ public sealed class DepositService(
         var payments = undeposited.Payments
             .Where(p => p.Amount > 0m && Holding(p.DepositAccountId))
             .Select(p => new UndepositedItem(DepositedKind.Payment, p.Id, p.Date, p.CustomerId,
-                $"Payment from {customers.GetValueOrDefault(p.CustomerId)}", p.Reference, p.DepositAccountId, p.Amount));
+                $"Payment from {customers.GetValueOrDefault(p.CustomerId)}", p.Reference, p.DepositAccountId, p.Amount, p.Method));
         var receipts = undeposited.Receipts
             .Where(r => Holding(r.DepositAccountId))
             .Select(r => new UndepositedItem(DepositedKind.SalesReceipt, r.Id, r.Date, r.CustomerId,
                 r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}",
-                r.Reference, r.DepositAccountId, r.Total));
+                r.Reference, r.DepositAccountId, r.Total, r.Method));
         var retainers = undeposited.Retainers
             .Where(r => Holding(r.DepositAccountId))
             .Select(r => new UndepositedItem(DepositedKind.Retainer, r.Id, r.Date, r.CustomerId,
@@ -219,9 +220,9 @@ public sealed class DepositService(
             items.Add(line.Kind switch
             {
                 DepositedKind.Payment when payments.TryGetValue(line.SourceId, out var p) => new UndepositedItem(line.Kind, p.Id, p.Date, p.CustomerId,
-                    $"Payment from {customers.GetValueOrDefault(p.CustomerId)}", p.Reference, line.FromAccountId, line.Amount),
+                    $"Payment from {customers.GetValueOrDefault(p.CustomerId)}", p.Reference, line.FromAccountId, line.Amount, p.Method),
                 DepositedKind.SalesReceipt when receipts.TryGetValue(line.SourceId, out var r) => new UndepositedItem(line.Kind, r.Id, r.Date, r.CustomerId,
-                    r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}", r.Reference, line.FromAccountId, line.Amount),
+                    r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}", r.Reference, line.FromAccountId, line.Amount, r.Method),
                 DepositedKind.Retainer when await store.GetRetainerAsync(line.SourceId, ct) is { } retainer => new UndepositedItem(line.Kind, retainer.Id, retainer.Date,
                     retainer.CustomerId, $"Retainer from {customers.GetValueOrDefault(retainer.CustomerId)}", retainer.Reference, line.FromAccountId, line.Amount),
                 _ when others.TryGetValue((line.Kind, line.SourceId), out var other) => other with { AccountId = line.FromAccountId, Amount = line.Amount },

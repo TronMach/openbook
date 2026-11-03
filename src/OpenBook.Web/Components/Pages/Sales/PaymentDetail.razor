@@ -57,6 +57,7 @@
             <dt>Received into</dt><dd>@_chart.FullName(_payment.DepositAccountId)</dd>
             @if (_payment.DepositId is { } depositId) { <dt>Bank deposit</dt><dd><a href="/banking/deposits/@depositId">View deposit</a></dd> }
             @if (_payment.Reference is not null) { <dt>Reference</dt><dd>@_payment.Reference</dd> }
+            @if (_payment.Method is { } method) { <dt>Payment method</dt><dd>@PaymentMethods.Label(method)</dd> }
             @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }
             <dt>Journal entry</dt><dd><a href="/journal/@_payment.JournalEntryId">View</a></dd>
         </dl>

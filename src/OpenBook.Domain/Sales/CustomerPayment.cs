@@ -73,6 +73,11 @@ public sealed class CustomerPayment
     /// <summary>The bank deposit that moved it out of undeposited funds.</summary>
     public Guid? DepositId { get; private set; }
 
+    /// <summary>Cash, check, card...; null when nobody said.</summary>
+    public PaymentMethod? Method { get; private set; }
+
+    public void SetMethod(PaymentMethod? method) => Method = PaymentMethods.Valid(method);
+
     public IReadOnlyList<PaymentApplication> Applications => _applications;
 
     public decimal AmountApplied => _applications.Sum(a => a.Amount);

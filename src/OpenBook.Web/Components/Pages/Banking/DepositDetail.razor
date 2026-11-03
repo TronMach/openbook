@@ -21,6 +21,7 @@
             <span class="badge">Voided</span>
         }
         <ActionLink Class="button secondary" Href="@($"/banking/{_deposit.BankAccountId}")">Register</ActionLink>
+        <a class="button secondary" href="/banking/deposits/@_deposit.Id/slip" target="_blank">Deposit slip</a>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_deposit.Id}")">History</ActionLink>
         @if (_deposit.Status == DocumentStatus.Posted)
         {
@@ -43,22 +44,20 @@
     </div>
 
     <table class="data" style="margin-top: 1rem">
-        <thead><tr><th>Item</th><th>From</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th>Item</th><th>Method</th><th>Reference</th><th>From</th><th class="num">Amount</th></tr></thead>
         <tbody>
-            @foreach (var line in _deposit.Lines.OrderBy(l => l.LineNumber))
+            @foreach (var item in _contents)
             {
                 <tr>
-                    <td>
-                        <a href="@Links.ForDeposited(line.Kind, line.SourceId)">
-                            @DepositService.Describe(line.Kind)
-                        </a>
-                    </td>
-                    <td class="muted">@_chart.FullName(line.FromAccountId)</td>
-                    <td class="num">@Labels.Amount(line.Amount)</td>
+                    <td><a href="@Links.ForDeposited(item.Kind, item.Id)">@item.Label</a></td>
+                    <td>@PaymentMethods.Label(item.Method)</td>
+                    <td>@item.Reference</td>
+                    <td class="muted">@_chart.FullName(item.AccountId)</td>
+                    <td class="num">@Labels.Amount(item.Amount)</td>
                 </tr>
             }
         </tbody>
-        <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_deposit.Total)</td></tr></tfoot>
+        <tfoot><tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_deposit.Total)</td></tr></tfoot>
     </table>
 
     <DocumentChangeList Changes="_changes" />
@@ -104,9 +103,12 @@
         _deposit = await Deposits.GetAsync(Id);
         _chart = await AccountService.GetChartAsync();
         _changes = await Deposits.ChangesAsync(Id);
+        if (_deposit is not null)
+            _contents = await Deposits.ContentsAsync(_deposit);
     }
 
     private IReadOnlyList<DocumentChange> _changes = [];
+    private IReadOnlyList<UndepositedItem> _contents = [];
 
     private async Task VoidAsync()
     {

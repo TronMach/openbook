@@ -48,12 +48,22 @@
             </div>
         </div>
 
+        @if (_items.Select(i => i.Item.Method).Distinct().Count() > 1)
+        {
+            <div class="toolbar" role="group" aria-label="Tick by payment method">
+                <span class="muted">Tick only:</span>
+                @foreach (var method in _items.Select(i => i.Item.Method).Distinct().OrderBy(m => m is null ? 99 : (int)m))
+                {
+                    <button type="button" class="secondary" @onclick="() => TickOnly(method)">@(method is null ? "No method given" : PaymentMethods.Label(method))</button>
+                }
+            </div>
+        }
         <div class="table-wrap">
             <table class="data entry">
                 <thead>
                     <tr>
                         <th><input type="checkbox" aria-label="Select all" checked="@(_items.All(i => i.Selected))" @onchange="SelectAll" /></th>
-                        <th>Date</th><th>Received from</th><th>Reference</th><th>Held in</th><th class="num">Amount</th>
+                        <th>Date</th><th>Received from</th><th>Method</th><th>Reference</th><th>Held in</th><th class="num">Amount</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -65,6 +75,7 @@
                             <td>
                                 <a href="@Links.ForDeposited(row.Item.Kind, row.Item.Id)" target="_blank">@row.Item.Label</a>
                             </td>
+                            <td>@PaymentMethods.Label(row.Item.Method)</td>
                             <td>@row.Item.Reference</td>
                             <td class="muted">@_chart.FullName(row.Item.AccountId)</td>
                             <td class="num">@Labels.Amount(row.Item.Amount)</td>
@@ -72,7 +83,7 @@
                     }
                 </tbody>
                 <tfoot>
-                    <tr><td colspan="5">Deposit total (@_items.Count(i => i.Selected) selected)</td><td class="num">@Labels.Amount(Total)</td></tr>
+                    <tr><td colspan="6">Deposit total (@_items.Count(i => i.Selected) selected)</td><td class="num">@Labels.Amount(Total)</td></tr>
                 </tfoot>
             </table>
         </div>
@@ -140,6 +151,13 @@
         }
 
         _loaded = true;
+    }
+
+    /// <summary>Cash and checks usually go to the bank together, card payments arrive on their own.</summary>
+    private void TickOnly(PaymentMethod? method)
+    {
+        foreach (var row in _items)
+            row.Selected = row.Item.Method == method;
     }
 
     private void SelectAll(ChangeEventArgs e)

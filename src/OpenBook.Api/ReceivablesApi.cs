@@ -343,6 +343,8 @@ internal static class ReceivablesApi
 
         sales.MapGet("/deposits/undeposited", async (DepositService s, CancellationToken ct) => await s.UndepositedAsync(ct));
         sales.MapGet("/deposits", async (DepositService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(DepositResponse.From));
+        sales.MapGet("/deposits/{id:guid}/slip", async (Guid id, OpenBook.Application.Reporting.ListReports r, OpenBook.Application.Reporting.IReportExporter exporter, CancellationToken ct) =>
+            Results.File(exporter.ToPdf(await r.DepositSlipAsync(id, ct)), "application/pdf", "Deposit slip.pdf"));
         sales.MapGet("/deposits/{id:guid}", async (Guid id, DepositService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } d ? Results.Ok(DepositResponse.From(d)) : Results.NotFound());
         sales.MapPost("/deposits", async (MakeDepositRequest r, DepositService s, CancellationToken ct) =>

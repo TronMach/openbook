@@ -104,12 +104,13 @@ public sealed record PaymentResponse(
     IReadOnlyList<PaymentApplicationResponse> Applications,
     decimal Unapplied,
     decimal AmountRefunded,
-    Guid? DepositId)
+    Guid? DepositId,
+    PaymentMethod? Method = null)
 {
     public static PaymentResponse From(CustomerPayment p) => new(
         p.Id, p.CustomerId, p.Date, p.Amount, p.DepositAccountId, p.Reference, p.Memo, p.Status, p.JournalEntryId,
         p.Applications.Select(a => new PaymentApplicationResponse(a.InvoiceId, a.Amount, a.Discount, a.AppliedOn)).ToList(),
-        p.Unapplied, p.AmountRefunded, p.DepositId);
+        p.Unapplied, p.AmountRefunded, p.DepositId, p.Method);
 }
 
 public sealed record PaymentApplicationResponse(Guid InvoiceId, decimal Amount, decimal Discount, DateOnly AppliedOn);
@@ -131,11 +132,12 @@ public sealed record SalesReceiptResponse(
     string? TaxExemption = null,
     decimal Subtotal = 0m,
     decimal TaxTotal = 0m,
-    Guid? LocationId = null)
+    Guid? LocationId = null,
+    PaymentMethod? Method = null)
 {
     public static SalesReceiptResponse From(SalesReceipt r) => new(
         r.Id, r.Number, r.CustomerId, r.Date, r.DepositAccountId, r.Reference, r.Memo, r.Total, r.Status, r.JournalEntryId,
-        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal, r.LocationId);
+        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal, r.LocationId, r.Method);
 }
 
 public sealed record SetActiveRequest(bool Active);

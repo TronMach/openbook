@@ -62,6 +62,7 @@
                 <dt>Date</dt><dd>@Labels.Date(_receipt.Date)</dd>
                 @if (_customer is not null) { <dt>Customer</dt><dd><a href="/customers/@_customer.Id">@_customer.DisplayName</a></dd> }
                 @if (_receipt.Reference is not null) { <dt>Reference</dt><dd>@_receipt.Reference</dd> }
+                @if (_receipt.Method is { } method) { <dt>Payment method</dt><dd>@PaymentMethods.Label(method)</dd> }
                 <dt class="no-print">Deposited to</dt><dd class="no-print">@_chart.FullName(_receipt.DepositAccountId)</dd>
             </dl>
         </div>

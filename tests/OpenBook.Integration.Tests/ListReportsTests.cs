@@ -52,8 +52,8 @@ public sealed class ListReportsTests : IAsyncLifetime
         var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(_service.Id, "Advice", 3m, 100m)])));
         await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_parts.Id, Mar1, [new BillLineDraft(_widget.InventoryAssetAccountId!.Value, 50m, "Widgets", _widget.Id, 10m),
             new BillLineDraft(_supplies.Id, 15m, "Paper")], Reference: "B-77")));
-        var payment = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Mar1, _undeposited.Id, [new ApplyToInvoice(invoice.Id, 100m)])));
-        await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(_checking.Id, Mar1.AddDays(1), [(DepositedKind.Payment, payment.Id)])));
+        var payment = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Mar1, _undeposited.Id, [new ApplyToInvoice(invoice.Id, 100m)], "1042", Method: PaymentMethod.Check)));
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(_checking.Id, Mar1.AddDays(1), [(DepositedKind.Payment, payment.Id)])));
         await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, Mar1, [new SalesLineDraft(_service.Id, "More advice", 2m, 100m)])));
         await In<SalesOrderService, SalesOrder>(s => s.CreateAsync(new SaveSalesOrderCommand(_acme.Id, Mar1, [new SalesLineDraft(_widget.Id, "Widget", 4m, 20m)])));
         await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(_parts.Id, Mar1, [new PurchaseOrderLineDraft(_widget.Id, null, null, 6m, 5m)])));
@@ -76,8 +76,12 @@ public sealed class ListReportsTests : IAsyncLifetime
         var purchased = await Run("purchases-by-item", period);
         Assert.Equal((10m, 50m, 5m), ((decimal)Cell(purchased, "Widget", 3)!, (decimal)Cell(purchased, "Widget", 4)!, (decimal)Cell(purchased, "Widget", 5)!));
         var deposits = await Run("deposit-detail", period);
-        Assert.Equal(100m, Cell(deposits, "Total", 4));
+        Assert.Equal(100m, Cell(deposits, "Total", 5));
         Assert.Contains(deposits.Rows, r => r.Depth == 1 && r.Cells[2].Value as string == "Acme");
+        Assert.Contains(deposits.Rows, r => r.Depth == 1 && r.Cells[3].Value as string == "Check" && r.Cells[4].Value as string == "1042");
+        var slip = await In<ListReports, ReportTable>(s => s.DepositSlipAsync(deposit.Id));
+        Assert.Equal((100m, 0m, 100m), ((decimal)Cell(slip, "Checks (1)", 3)!, (decimal)Cell(slip, "Cash", 3)!, (decimal)Cell(slip, "Total deposit", 3)!));
+        Assert.Equal(("Acme", "Check", "1042"), (slip.Rows[0].Cells[0].Value as string, slip.Rows[0].Cells[1].Value as string, slip.Rows[0].Cells[2].Value as string));
         var estimates = await Run("estimates-by-customer", period);
         Assert.Equal("Pending", estimates.Rows.First(r => r.Depth == 1).Cells[3].Value);
     }
