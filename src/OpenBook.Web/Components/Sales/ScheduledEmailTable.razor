@@ -25,7 +25,7 @@
                         <td><a href="/sales/invoices/@e.InvoiceId">@(Invoices.TryGetValue(e.InvoiceId, out var label) ? label : "Invoice")</a></td>
                     }
                     <td>@e.SendAt.InCompanyTime().ToString("g")</td>
-                    <td>@e.To</td>
+                    <td>@e.To@(e.Cc is { } cc ? $" (cc {cc})" : "")</td>
                     <td>@e.Subject</td>
                     <td>
                         @(e.Status switch

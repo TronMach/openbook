@@ -67,7 +67,11 @@ public sealed class FormService(
         _ => FormDocuments.SalesReceipt,
     };
 
-    public async Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    public Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        RenderStatementAsync(customerId, from, to, null, ct);
+
+    /// <param name="designId">Print with this design rather than the usual one; null = the usual one.</param>
+    public async Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, Guid? designId, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var statement = await receivables.StatementAsync(customerId, from, to, ct);
@@ -83,7 +87,7 @@ public sealed class FormService(
             [("Current", aging.Current), ("1–30 days", aging.Days1To30), ("31–60 days", aging.Days31To60), ("61–90 days", aging.Days61To90), ("Over 90 days", aging.Over90)],
             company.HomeCurrency.Code,
             Unstyled);
-        form = await designs.ApplyAsync(form, await designs.ForAsync(FormDocuments.Statement, customerId, ct), ct);
+        form = await designs.ApplyAsync(form, await designs.ChosenAsync(FormDocuments.Statement, customerId, designId, ct), ct);
         return new RenderedForm(FileName(company, form.Title, to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), renderer.Render(form), customerId,
             $"Statement {to.ToString("d", CultureInfo.CurrentCulture)}");
     }

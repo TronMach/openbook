@@ -12,7 +12,7 @@ This chapter is about getting paid on time, and what to do when a customer doesn
 
 A *statement* shows a customer their account over a period: the balance brought forward, each invoice, payment and credit with a running balance, and an aging of what's still open.
 
-On the customer's page select **Statement**, choose **From** and **To**, then **Show**. **PDF** prints it; **Email** sends it with a message you can edit.
+On the customer's page select **Statement**, choose **From** and **To**, then **Show**. **PDF** prints it; **Email** sends it with a message you can edit beside a preview ([Email](29-email.md)).
 
 For a sub-customer billed with its parent, the statement is the parent's, and includes the sub-customer's invoices.
 
@@ -31,10 +31,10 @@ Reminders and late fees are off until an accountant sets them up under **Setting
 In **Collection settings → Payment reminders**:
 
 - **When, in days from the due date**: a list such as `-3, 7, 30`, meaning 3 days before the due date, then a week late, then a month late (up to 6 steps). Each invoice gets each reminder once. If OpenBook misses a step (it was off, or the invoice was entered late), it skips to the latest step reached rather than sending an old one late.
-- **Subject** and **Message**, with placeholders filled in for each invoice: `{customer}`, `{invoice}`, `{balance}`, `{due}`, `{days}` (days late), `{when}` ("is due on …" or "was due on …, 9 days ago") and `{company}`.
+- **Subject** and **Message**, beside a preview with sample values, with words in braces filled in for each invoice: `{customer}`, `{invoice}`, `{balance}`, `{due}`, `{days}` (days late), `{when}` ("is due on …" or "was due on …, 9 days ago") and `{company}`. Click one under **Fill in** to add it; the formatting buttons work as in [Email](29-email.md).
 - **Send reminders automatically**: sent in the background every hour. Otherwise they wait on the collections page for you to review.
 
-Each reminder emails the invoice PDF as it stands, so it shows what's still owed. Email needs to be set up first (**Settings → Email**, by an administrator).
+Each reminder emails the invoice as it stands, so it shows what's still owed: attached or as a link, as the customer is set to get documents, copied to their Cc addresses, in the invoice's design, with **Pay now** when online payments are on. Email needs to be set up first (**Settings → Email**, by an administrator).
 
 ## Late fees
 

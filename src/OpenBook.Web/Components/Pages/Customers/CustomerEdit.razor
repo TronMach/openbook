@@ -300,7 +300,11 @@
                 <p class="hint">Their invoices, estimates, credit memos, sales receipts and statements print with it. <ActionLink Href="/settings/forms">Designs</ActionLink></p>
             </section>
         }
+        <CustomerEmailCard Customer="_customer" Error="@EmailError" />
+
         <CustomFieldPanel EntityType="customer" EntityId="_customer.Id" />
+
+        <EmailHistory EntityType="customer" EntityId="_customer.Id" />
 
         <Notes EntityType="customer" EntityId="_customer.Id" />
     }
@@ -313,6 +317,7 @@
     private IReadOnlyList<OpenBook.Domain.Companies.FormDesign> _designs = [];
 
     [SupplyParameterFromQuery] private string? DesignError { get; set; }
+    [SupplyParameterFromQuery] private string? EmailError { get; set; }
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<TaxCode> _taxCodes = [];

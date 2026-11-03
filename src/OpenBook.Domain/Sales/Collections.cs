@@ -90,6 +90,7 @@ public sealed class CollectionSettings
         var steps = ParseSchedule(schedule);
         if (enabled && steps.Count == 0)
             throw new DomainException("reminder.schedule_required", "Enter when to send reminders, in days from the due date (for example -3, 7, 30).");
+        Email.EmailTemplates.Check(Email.EmailKind.Reminder, subject, body);
         RemindersEnabled = enabled;
         ReminderSchedule = string.Join(",", steps.Select(s => s.ToString(CultureInfo.InvariantCulture)));
         ReminderSubject = Text.Optional(subject, 300, "reminder.subject_too_long", "Subject") ?? DefaultSubject;

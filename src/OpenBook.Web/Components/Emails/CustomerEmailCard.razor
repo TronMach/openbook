@@ -1,0 +1,46 @@
+@inject EmailService EmailService
+@* A customer's email preferences: addresses copied on every email, and whether documents go as a PDF, a link, or both.
+   Posts to /customers/{id}/email-settings. *@
+
+<section class="card no-print" id="email-settings">
+    <h2>Email</h2>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    <PostForm Action="@($"/customers/{Customer.Id}/email-settings")" data-enhance="false">
+        <AntiforgeryToken />
+        <div class="field">
+            <label for="email-cc">Copy every email to</label>
+            <input id="email-cc" name="cc" value="@Customer.EmailCc" maxlength="1000" placeholder="ap@example.com" />
+            <span class="hint">Up to five addresses, separated by commas. They're filled into Cc, where you can still change them.</span>
+        </div>
+        <fieldset class="field">
+            <legend>Send their invoices, estimates, credit memos and receipts</legend>
+            <label class="check"><input type="radio" name="pdf" value="Attach" checked="@(Customer.EmailPdf == EmailPdf.Attach)" /> With the PDF attached</label>
+            <label class="check"><input type="radio" name="pdf" value="Link" checked="@(Customer.EmailPdf == EmailPdf.Link)" /> As a link to view it, nothing attached</label>
+            <label class="check"><input type="radio" name="pdf" value="Both" checked="@(Customer.EmailPdf == EmailPdf.Both)" /> Both</label>
+            @if (!_linksPossible)
+            {
+                <span class="hint">Links need the address customers open OpenBook at: <ActionLink Href="/settings/email">set it in the email settings</ActionLink>. Until then the PDF is attached.</span>
+            }
+            else
+            {
+                <span class="hint">A link shows the document as it is when they open it, and the email's history says when it was opened.</span>
+            }
+        </fieldset>
+        <button type="submit" class="secondary">Save</button>
+    </PostForm>
+</section>
+
+@code {
+    private bool _linksPossible = true;
+
+    [Parameter, EditorRequired]
+    public Customer Customer { get; set; } = default!;
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    protected override async Task OnParametersSetAsync() => _linksPossible = await EmailService.LinkBaseAsync() is not null;
+}

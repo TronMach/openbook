@@ -1,9 +1,10 @@
 @page "/sales/collections/settings"
 @inject CollectionService CollectionService
+@inject EmailService EmailService
 
 <PageTitle>Collection settings · OpenBook</PageTitle>
 
-<div class="wide">
+<div class="wide email-page">
     <div class="toolbar">
         <h1>Collection settings</h1>
         <ActionLink Class="button secondary" Href="/sales/collections">Collections</ActionLink>
@@ -67,9 +68,10 @@
         </PostForm>
     </div>
 
-    <div class="card" id="reminders" style="margin-top: 1.5rem">
+    <div class="email-editor" id="reminders" style="margin-top: 1.5rem">
+    <div class="card email-form">
         <h2>Payment reminders</h2>
-        <PostForm Action="/sales/collections/settings/reminders" data-enhance="false">
+        <PostForm Action="/sales/collections/settings/reminders" data-enhance="false" data-email-preview="/sales/collections/settings/preview">
             <AntiforgeryToken />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.RemindersEnabled" />
@@ -87,16 +89,17 @@
                 <label for="subject">Subject</label>
                 <input id="subject" name="subject" maxlength="300" value="@_settings.ReminderSubject" />
             </div>
-            <div class="field">
-                <label for="body">Message</label>
-                <textarea id="body" name="body" rows="8" maxlength="4000">@_settings.ReminderBody</textarea>
-                <span class="hint">
-                    Placeholders: {customer}, {invoice}, {balance}, {due}, {days} (days late), {when} ("is due on …" or "was due on …, 9 days ago")
-                    and {company}. The invoice PDF is attached. Uses the <ActionLink Href="/settings/email">email settings</ActionLink>.
-                </span>
-            </div>
+            <EmailBodyField For="body" Kind="EmailKind.Reminder">
+                <textarea id="body" name="body" rows="10" maxlength="4000">@_settings.ReminderBody</textarea>
+            </EmailBodyField>
+            <p class="hint">
+                The invoice comes with it as each customer gets their documents (attached, or a link), with a "Pay now" button when online payments are on,
+                in the invoice's design. Uses the <ActionLink Href="/settings/email">email settings</ActionLink>.
+            </p>
             <div class="actions"><button type="submit">Save reminders</button></div>
         </PostForm>
+    </div>
+    <EmailPreviewPane Preview="_preview" Recipient="the customer" />
     </div>
 </div>
 
@@ -106,5 +109,11 @@
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? Done { get; set; }
 
-    protected override async Task OnInitializedAsync() => _settings = await CollectionService.GetAsync();
+    private EmailPreview _preview = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await CollectionService.GetAsync();
+        _preview = await EmailService.PreviewTemplateAsync(EmailKind.Reminder, _settings.ReminderSubject, _settings.ReminderBody);
+    }
 }

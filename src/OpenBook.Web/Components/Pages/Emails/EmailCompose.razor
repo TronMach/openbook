@@ -1,0 +1,306 @@
+@page "/sales/email/{Kind}/{Id:guid}"
+@page "/purchases/orders/{Id:guid}/email"
+@page "/nonprofit/gifts/{Id:guid}/email"
+@page "/nonprofit/statements/{Year:int}/{Id:guid}/email"
+@using System.ComponentModel.DataAnnotations
+@inject EmailService Email
+@inject FormDesignService Designs
+@inject OpenBook.Application.Sales.ScheduledEmailService Scheduled
+@inject NavigationManager Navigation
+
+<PageTitle>Email @_what · OpenBook</PageTitle>
+
+<div class="wide email-page">
+    <h1>Email @_what</h1>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_sentTo is not null)
+    {
+        <div class="alert notice" role="status">
+            @(_scheduledFor is { } at ? $"Scheduled to go to {_sentTo} on {at:g}." : $"Sent to {_sentTo}.") <a href="@_backLink">Back</a>
+        </div>
+    }
+
+    @if (!_configured)
+    {
+        <p>Email isn't set up yet. <ActionLink Href="/settings/email">Set it up in Settings</ActionLink>, then come back to send.</p>
+        <p><a href="@_pdfLink" target="_blank">Download the PDF</a> to send it yourself instead.</p>
+    }
+    else if (_sentTo is null && _source is not null && _preview is not null)
+    {
+        <div class="email-editor">
+            <EditForm Model="Input" FormName="email" OnValidSubmit="SendAsync" method="post" class="card email-form"
+                      data-email-preview="@($"{_path}/preview{_query}")" data-email-test="@($"{_path}/test{_query}")" data-enhance="false">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="to">To</label>
+                    <InputText id="to" @bind-Value="Input.To" autocomplete="off" />
+                    <ValidationMessage For="() => Input.To" />
+                    <span class="hint">Several addresses? Separate them with commas.
+                        <button type="button" class="link" data-email-copies aria-expanded="@(_showCopies ? "true" : "false")" hidden="@_showCopies">Add Cc or Bcc</button>
+                    </span>
+                </div>
+                <div class="row" data-email-copy-fields hidden="@(!_showCopies)">
+                    <div class="field"><label for="cc">Cc</label><InputText id="cc" @bind-Value="Input.Cc" autocomplete="off" /></div>
+                    <div class="field"><label for="bcc">Bcc</label><InputText id="bcc" @bind-Value="Input.Bcc" autocomplete="off" /></div>
+                </div>
+                <div class="field">
+                    <label for="subject">Subject</label>
+                    <InputText id="subject" @bind-Value="Input.Subject" maxlength="300" />
+                </div>
+                <EmailBodyField For="body">
+                    <InputTextArea id="body" rows="12" @bind-Value="Input.Body" />
+                </EmailBodyField>
+
+                @if (_designs.Count > 1)
+                {
+                    <div class="field">
+                        <label for="design">Design</label>
+                        <InputSelect id="design" @bind-Value="Input.DesignId" data-email-design>
+                            <option value="">The usual one@(_usualDesign is null ? "" : $" ({_usualDesign})")</option>
+                            @foreach (var d in _designs)
+                            {
+                                <option value="@d.Id">@d.Name</option>
+                            }
+                        </InputSelect>
+                        <span class="hint">The email's look and the PDF's. <ActionLink Href="/settings/forms">Designs</ActionLink></span>
+                    </div>
+                }
+
+                @if (_canLink)
+                {
+                    <fieldset class="field">
+                        <legend>Send the @_what</legend>
+                        <InputRadioGroup @bind-Value="Input.Pdf">
+                            <label class="check"><InputRadio Value="@("Attach")" /> With the PDF attached</label>
+                            <label class="check"><InputRadio Value="@("Link")" /> As a link to view it, nothing attached</label>
+                            <label class="check"><InputRadio Value="@("Both")" /> Both</label>
+                        </InputRadioGroup>
+                    </fieldset>
+                }
+
+                @if (_source.Kind == EmailKind.Invoice)
+                {
+                    <fieldset class="field">
+                        <legend>When</legend>
+                        <InputRadioGroup @bind-Value="Input.When">
+                            <label class="check"><InputRadio Value="@("now")" /> Send now</label>
+                            <label class="check"><InputRadio Value="@("later")" /> Send later, on</label>
+                        </InputRadioGroup>
+                        <InputDate Type="InputDateType.DateTimeLocal" id="send-at" @bind-Value="Input.SendAt" aria-label="Send on" />
+                        <span class="hint">In the company's time zone (@CompanyTime.Zone.DisplayName). The PDF is made when the email goes, so it shows the invoice as it is then.</span>
+                    </fieldset>
+                }
+
+                <div class="actions">
+                    <button type="submit">@(_source.Kind == EmailKind.Invoice ? "Send or schedule" : "Send")</button>
+                    <button type="button" class="secondary" data-email-test-button title="Sends this exactly as it would go, to your own address">Send a test to me</button>
+                    <a href="@_backLink">Cancel</a>
+                </div>
+                <p class="hint">
+                    The wording comes from <ActionLink Href="@($"/settings/email-templates/{EmailTemplates.Key(_source.Kind)}")">the @EmailTemplates.Label(_source.Kind).ToLowerInvariant() email</ActionLink>; changes here are for this one only.
+                </p>
+            </EditForm>
+
+            <EmailPreviewPane Preview="_preview" PdfUrl="@_pdfLink" Recipient="@_recipient" />
+        </div>
+    }
+
+    @if (_source is not null && _known)
+    {
+        <EmailHistory EntityType="@EmailService.EntityTypeOf(_source.Kind)" EntityId="Id" />
+    }
+</div>
+
+@code {
+    private EmailSource? _source;
+    private EmailPreview? _preview;
+    private IReadOnlyList<OpenBook.Domain.Companies.FormDesign> _designs = [];
+    private string? _usualDesign;
+    private string _what = "";
+    private string _recipient = "they";
+    private string _backLink = "/";
+    private string _pdfLink = "";
+    private string _path = "";
+    private string _query = "";
+    private bool _configured;
+    private bool _known;
+    private bool _canLink;
+    private bool _showCopies;
+    private string? _sentTo;
+    private DateTime? _scheduledFor;
+    private string? _error;
+
+    [Parameter]
+    public string? Kind { get; set; }
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [Parameter]
+    public int? Year { get; set; }
+
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+
+    [SupplyParameterFromForm(FormName = "email")]
+    private EmailModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _configured = (await Email.GetSettingsAsync()).IsConfigured;
+        var path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+        _path = path;
+        if (!Describe(path))
+            return;
+        try
+        {
+            var draft = await Email.DraftAsync(_source!);
+            _known = true;
+            Input ??= new EmailModel
+            {
+                To = draft.To, Cc = draft.Cc, Bcc = draft.Bcc, Subject = draft.Subject, Body = draft.Body,
+                Pdf = draft.Pdf?.ToString() ?? "Attach",
+            };
+            _canLink = draft.Pdf is not null;
+            _showCopies = !string.IsNullOrWhiteSpace(Input.Cc) || !string.IsNullOrWhiteSpace(Input.Bcc);
+            if (Document() is not null)
+                _designs = [.. (await Designs.ListAsync()).Where(d => d.IsActive)];
+            _preview = await Email.PreviewAsync(_source!, Draft());
+            _usualDesign = _preview.UsualDesign;
+        }
+        catch (EntityNotFoundException)
+        {
+            _error = $"There's no such {_what}.";
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    /// <summary>What the page is about, from its address.</summary>
+    private bool Describe(string path)
+    {
+        var id = Id;
+        if (path.StartsWith("/purchases/", StringComparison.OrdinalIgnoreCase))
+        {
+            (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(EmailKind.PurchaseOrder, id), "purchase order", "the vendor",
+                $"/purchases/orders/{id}", $"/purchases/orders/{id}/pdf");
+            return true;
+        }
+
+        if (path.StartsWith("/nonprofit/gifts/", StringComparison.OrdinalIgnoreCase))
+        {
+            (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(EmailKind.GiftAcknowledgment, id), "gift acknowledgment", "the donor",
+                $"/nonprofit/gifts/{id}", $"/nonprofit/gifts/{id}/letter");
+            return true;
+        }
+
+        if (Year is { } year)
+        {
+            (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(EmailKind.GivingStatement, id, Year: year), $"{year} giving statement", "the donor",
+                $"/nonprofit/thanks?year={year}", $"/nonprofit/statements/{year}/{id}");
+            return true;
+        }
+
+        if (Kind == "statement")
+        {
+            var (from, to) = new EmailSource(EmailKind.Statement, id, From, To).Period(CompanyTime.Today);
+            var range = $"from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
+            _query = "?" + range;
+            (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(EmailKind.Statement, id, from, to), "statement", "the customer",
+                $"/customers/{id}/statement?{range}", $"/api/sales/customers/{id}/statement/pdf?{range}");
+            return true;
+        }
+
+        var kind = Kind switch
+        {
+            "invoices" => EmailKind.Invoice,
+            "estimates" => EmailKind.Estimate,
+            "credit-memos" => EmailKind.CreditMemo,
+            "receipts" => EmailKind.SalesReceipt,
+            _ => (EmailKind?)null,
+        };
+        if (kind is not { } k)
+            return false;
+        (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(k, id), EmailTemplates.Label(k).ToLowerInvariant(), "the customer",
+            $"/sales/{Kind}/{id}", $"/api/sales/{Kind}/{id}/pdf");
+        return true;
+    }
+
+    private OpenBook.Domain.Companies.FormDocuments? Document() => _source!.Kind switch
+    {
+        EmailKind.Invoice => OpenBook.Domain.Companies.FormDocuments.Invoice,
+        EmailKind.Estimate => OpenBook.Domain.Companies.FormDocuments.Estimate,
+        EmailKind.CreditMemo => OpenBook.Domain.Companies.FormDocuments.CreditMemo,
+        EmailKind.SalesReceipt => OpenBook.Domain.Companies.FormDocuments.SalesReceipt,
+        EmailKind.Statement => OpenBook.Domain.Companies.FormDocuments.Statement,
+        EmailKind.PurchaseOrder => OpenBook.Domain.Companies.FormDocuments.PurchaseOrder,
+        _ => null,
+    };
+
+    private EmailDraft Draft() => new(Input.To ?? "", Input.Subject ?? "", Input.Body ?? "", Input.Cc, Input.Bcc,
+        Guid.TryParse(Input.DesignId, out var design) ? design : null,
+        _canLink && Enum.TryParse<EmailPdf>(Input.Pdf, out var pdf) ? pdf : null);
+
+    private async Task SendAsync()
+    {
+        if (_source is null)
+            return;
+        try
+        {
+            var message = Draft();
+            if (_source.Kind == EmailKind.Invoice && Input.When == "later")
+            {
+                if (Input.SendAt is not { } local)
+                {
+                    _error = "Choose when to send it.";
+                    return;
+                }
+
+                var offset = CompanyTime.Zone.GetUtcOffset(local);
+                await Scheduled.ScheduleAsync(Id, message, new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset));
+                _scheduledFor = local;
+                _sentTo = EmailAddresses.Normalize(message.To, "To");
+            }
+            else
+            {
+                _sentTo = (await Email.SendAsync(_source, message)).To;
+            }
+
+            _error = null;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class EmailModel
+    {
+        [Required(ErrorMessage = "Enter the address to send to.")]
+        public string To { get; set; } = "";
+
+        public string? Cc { get; set; }
+
+        public string? Bcc { get; set; }
+
+        [StringLength(300)]
+        public string? Subject { get; set; }
+
+        [StringLength(20000)]
+        public string? Body { get; set; }
+
+        public string? DesignId { get; set; }
+
+        public string? Pdf { get; set; } = "Attach";
+
+        public string When { get; set; } = "now";
+
+        public DateTime? SendAt { get; set; } = CompanyTime.Today.AddDays(1).ToDateTime(new TimeOnly(9, 0));
+    }
+}

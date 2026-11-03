@@ -146,21 +146,21 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
             return new SentInvite(invite, link, false, "Email isn't set up, so nothing was sent. Copy the link and send it yourself.");
 
         var company = (await store.GetRequiredCompanyAsync(ct)).Name;
-        var greeting = invite.Name is { } name ? $"Hello {name}," : "Hello,";
-        var body = $"""
-            {greeting}
-
-            {currentUser.Actor} has invited you to the books of {company} in OpenBook, {(invite.PermissionSetId is null ? "as " : "with ")}{await AccessAsync(invite, ct)}.
-
-            Choose your username and password here:
-            {link}
-
-            The link works until {invite.ExpiresAt.InCompanyTime():d}.{(invite.AccessEndsOn is { } end ? $" Your access ends on {end:d}." : "")}
-            If you weren't expecting this, you can ignore this email.
-            """;
+        var access = await AccessAsync(invite, ct);
+        var values = new Dictionary<string, string>
+        {
+            ["greeting"] = invite.Name is { } name ? $"Hello {name}," : "Hello,",
+            ["invited_by"] = currentUser.Actor,
+            ["access"] = (invite.PermissionSetId is null ? "as " : "with ") + access,
+            ["link"] = link,
+            ["expires"] = invite.ExpiresAt.InCompanyTime().ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+            ["access_ends"] = invite.AccessEndsOn is { } end ? $"Your access ends on {end.ToString("d", System.Globalization.CultureInfo.CurrentCulture)}." : "",
+            ["company"] = company,
+        };
         try
         {
-            await email.SendMessageAsync(new EmailMessage(invite.Email, $"You're invited to {company} in OpenBook", body, []), ct);
+            await email.SendWordedAsync(Domain.Email.EmailKind.Invitation, invite.Email, values, [], new EmailButton("Accept the invitation", link),
+                EntityType, invite.Id, ct);
         }
         catch (DomainException ex)
         {

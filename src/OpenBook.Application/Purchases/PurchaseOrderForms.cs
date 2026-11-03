@@ -9,9 +9,9 @@ using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
 
-/// <summary>Purchase orders as PDF (the company's form style) and emailed to the vendor.</summary>
+/// <summary>Purchase orders as PDF (the company's form style); <see cref="EmailService"/> emails them to the vendor.</summary>
 public sealed class PurchaseOrderForms(
-    IPurchasesStore store, Sales.ISalesStore sales, ICompanyStore companies, IFormRenderer renderer, EmailService email, CustomFields.CustomFieldService customFields, FormDesignService designs, IClock clock, ICurrentUser user)
+    IPurchasesStore store, Sales.ISalesStore sales, ICompanyStore companies, IFormRenderer renderer, CustomFields.CustomFieldService customFields, FormDesignService designs)
 {
     public Task<RenderedForm> RenderAsync(Guid id, CancellationToken ct = default) => RenderAsync(id, null, ct);
 
@@ -40,32 +40,6 @@ public sealed class PurchaseOrderForms(
         form = await designs.ApplyAsync(form, await designs.ChosenAsync(FormDocuments.PurchaseOrder, null, designId, ct), FormDocuments.PurchaseOrder, ct);
         form = await customFields.DecorateAsync(form, order.Id, ct);
         return new RenderedForm(FormService.FileName(company, form.Title, order.Number), renderer.Render(form), Guid.Empty, $"{form.Title} {order.Number}");
-    }
-
-    public async Task<EmailDraft> DraftAsync(Guid id, CancellationToken ct = default)
-    {
-        var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(PurchaseOrderService.EntityType, id);
-        var vendor = await store.GetVendorAsync(order.VendorId, ct);
-        var company = await companies.GetRequiredCompanyAsync(ct);
-        var expected = order.ExpectedDate is { } date ? $" We'd like it by {D(date)}." : "";
-        return new EmailDraft(vendor?.Email ?? "", $"Purchase order {order.Number} from {company.Name}",
-            $"Hello,\n\nPlease find our purchase order {order.Number} attached.{expected}\n\nThank you,\n{company.Name}");
-    }
-
-    /// <summary>Emails the PDF and records the send on the order.</summary>
-    public async Task SendAsync(Guid id, EmailDraft message, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-        var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(PurchaseOrderService.EntityType, id);
-        if (order.Status == PurchaseOrderStatus.Cancelled)
-            throw new DomainException("purchase_order.cancelled", "This order is cancelled.");
-        var rendered = await RenderAsync(id, ct);
-        var to = Domain.Companies.EmailSettings.Address(message.To, "To") ?? throw new DomainException("email.to_required", "Enter the vendor's email address.");
-        var subject = string.IsNullOrWhiteSpace(message.Subject) ? rendered.Title : message.Subject.Trim();
-        await email.SendMessageAsync(new EmailMessage(to, subject, message.Body ?? "", [new EmailAttachment(rendered.FileName, "application/pdf", rendered.Pdf)]), ct);
-        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Emailed, PurchaseOrderService.EntityType, id, null,
-            JsonSerializer.Serialize(new { To = to, Form = rendered.Title })));
-        await store.SaveChangesAsync(ct);
     }
 
     private static string D(DateOnly date) => date.ToString("d", CultureInfo.CurrentCulture);

@@ -124,7 +124,7 @@ public static class FormDesignEndpoints
     /// paperSize, logoPosition, logoSize, margins, textSize, landscape / autoFieldColumns ("true" when ticked), show (each
     /// part ticked), the column table (columnKey for every row in the table's order, and per key col:{key} = "true" when it
     /// prints, order:{key}, label:{key}, width:{key}, auto:{key} = "true" to fit its contents, align:{key} = Left / Center /
-    /// Right), and title:{document} / message:{document}.
+    /// Right), title:{document} / message:{document}, and emailStyle (Branded / Simple / Plain).
     /// </summary>
     private static FormDesignDetails Details(IFormCollection form)
     {
@@ -156,7 +156,8 @@ public static class FormDesignEndpoints
             Pick("margins", FormMargins.Normal),
             Pick("textSize", FormTextSize.Medium),
             texts,
-            form["companyFontKey"]);
+            form["companyFontKey"],
+            Pick("emailStyle", OpenBook.Domain.Email.EmailStyle.Branded));
     }
 
     private static async Task<IResult> Fonts(Func<Task<string>> change)

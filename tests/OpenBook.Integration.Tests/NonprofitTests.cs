@@ -215,12 +215,15 @@ public sealed class NonprofitTests : IAsyncLifetime
 
         await _db.InScope(sp => sp.GetRequiredService<Application.Forms.EmailService>().SaveSettingsAsync(new Application.Forms.EmailSettingsCommand(
             Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "s3cret", false, "books@charity.test", "Charity", null)));
-        await In<GiftService, bool>(async s => { await s.SendAcknowledgmentAsync(gala.Id, await s.DraftAcknowledgmentAsync(gala.Id)); return true; });
+        var thanks = new Application.Forms.EmailSource(Domain.Email.EmailKind.GiftAcknowledgment, gala.Id);
+        await In<Application.Forms.EmailService, Domain.Email.SentEmail>(async s => await s.SendAsync(thanks, await s.DraftAsync(thanks)));
         Assert.NotNull((await In<GiftService, Donation?>(s => s.GetAsync(gala.Id)))!.AcknowledgedAt);
 
-        var (sent, notSent) = await In<GiftService, (int, IReadOnlyList<string>)>(s => s.SendYearStatementsAsync(2026));
-        Assert.Equal(1, sent);
-        Assert.Empty(notSent);
+        var donors = await In<GiftService, IReadOnlyList<Guid>>(s => s.DonorsInYearAsync(2026));
+        var run = await In<Application.Forms.EmailService, Application.Forms.EmailRun>(s =>
+            s.SendEachAsync([.. donors.Select(d => new Application.Forms.EmailSource(Domain.Email.EmailKind.GivingStatement, d, Year: 2026))]));
+        Assert.Single(run.Sent);
+        Assert.Empty(run.Failed);
         Assert.Equal(["pat@example.test", "pat@example.test"], _db.Mail.Sent.Select(m => m.Message.To));
 
         var giving = await Report("giving-by-donor", "preset=Custom&from=2026-01-01&to=2026-12-31");

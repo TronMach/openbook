@@ -26,10 +26,11 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
         var invoice = await store.GetInvoiceAsync(invoiceId, ct) ?? throw new EntityNotFoundException("invoice", invoiceId);
         if (invoice.Status == DocumentStatus.Voided)
             throw new DomainException("scheduled_email.invoice_voided", "A voided invoice can't be emailed.");
-        if (EmailSettings.Address(message.To, "To") is null)
+        if (Domain.Email.EmailAddresses.Parse(message.To, "To").Count == 0)
             throw new DomainException("email.to_required", "Enter the customer's email address.");
 
-        var scheduled = ScheduledEmail.Create(invoiceId, message.To, message.Subject, message.Body, sendAt, clock.UtcNow, user.Actor);
+        var scheduled = ScheduledEmail.Create(invoiceId, message.To, message.Subject, message.Body, sendAt, clock.UtcNow, user.Actor,
+            message.Cc, message.Bcc, message.DesignId);
         store.Add(scheduled);
         store.Add(Audit(AuditAction.Created, scheduled, null));
         await store.SaveChangesAsync(ct);
@@ -75,7 +76,7 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
             {
                 try
                 {
-                    await email.SendFormAsync(FormKind.Invoice, scheduled.InvoiceId, new EmailDraft(scheduled.To, scheduled.Subject, scheduled.Body), ct);
+                    await email.SendFormAsync(FormKind.Invoice, scheduled.InvoiceId, new EmailDraft(scheduled.To, scheduled.Subject, scheduled.Body, scheduled.Cc, scheduled.Bcc, scheduled.DesignId), ct);
                     scheduled.MarkSent(clock.UtcNow);
                     results.Add(new ScheduledEmailResult(scheduled, null));
                 }
@@ -103,6 +104,8 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
     {
         e.InvoiceId,
         e.To,
+        e.Cc,
+        e.Bcc,
         e.Subject,
         e.SendAt,
         Status = e.Status.ToString(),

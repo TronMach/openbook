@@ -355,7 +355,8 @@ public sealed class ReminderService(ISalesStore store, ICompanyStore companies, 
             string Fill(string template) => CollectionSettings.Fill(template, reminder.Customer.DisplayName, i.Number, i.Balance, i.DueDate, today, company);
             try
             {
-                await email.SendFormAsync(FormKind.Invoice, i.Id, new EmailDraft(reminder.To, Fill(settings.ReminderSubject), Fill(settings.ReminderBody)), ct);
+                await email.SendAsync(new EmailSource(Domain.Email.EmailKind.Reminder, i.Id),
+                    new EmailDraft(reminder.To, Fill(settings.ReminderSubject), Fill(settings.ReminderBody), reminder.Customer.EmailCc), ct);
                 store.Add(InvoiceReminder.Create(i.Id, reminder.Step, clock.UtcNow, reminder.To));
                 await store.SaveChangesAsync(ct);
                 results.Add(new ReminderResult(i, reminder.Step, null));

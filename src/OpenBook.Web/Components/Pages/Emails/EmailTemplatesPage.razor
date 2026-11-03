@@ -1,0 +1,41 @@
+@page "/settings/email-templates"
+@inject EmailService Email
+
+<PageTitle>Email messages · OpenBook</PageTitle>
+
+<div class="wide">
+    <h1>Email messages</h1>
+    <p class="muted">
+        The subject and message each kind of email starts with. Words in braces, like {customer} or {balance}, are filled in when the email is written,
+        and each email can still be changed before it goes. Emails look like the form design they're sent with
+        (<ActionLink Href="/settings/forms">Designs</ActionLink>, Email look).
+    </p>
+
+    <div class="table-scroll">
+        <table class="table">
+            <thead><tr><th>Email</th><th>Subject</th><th>Wording</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _templates)
+                {
+                    <tr>
+                        <td>@EmailTemplates.Label(t.Kind)</td>
+                        <td>@t.Subject</td>
+                        <td class="muted">@(t.IsUsual ? "The usual" : $"Changed {t.UpdatedAt!.Value.InCompanyTime():d} by {t.UpdatedBy}")</td>
+                        <td><ActionLink Href="@($"/settings/email-templates/{EmailTemplates.Key(t.Kind)}")">Change</ActionLink></td>
+                    </tr>
+                }
+                <tr>
+                    <td>@EmailTemplates.Label(EmailKind.Reminder)</td>
+                    <td colspan="2" class="muted">Worded with the reminder schedule.</td>
+                    <td><ActionLink Href="/sales/collections/settings">Collection settings</ActionLink></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<EmailWording> _templates = [];
+
+    protected override async Task OnInitializedAsync() => _templates = await Email.TemplatesAsync();
+}

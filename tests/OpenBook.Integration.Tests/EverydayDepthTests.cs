@@ -180,11 +180,11 @@ public sealed class EverydayDepthTests : IAsyncLifetime
     {
         await Paid(_acme, 1m);
         await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_globex.Id, Jan5, [new SalesLineDraft(_plan.Id, null, 2m, 100m)])));
-        Assert.Equal("email.not_configured", await Refused(() => In<EmailService, StatementEmailRun>(s => s.SendStatementsAsync([_acme.Id], Jan5, Jan10))));
+        Assert.Equal("email.not_configured", await Refused(() => In<EmailService, EmailRun>(s => s.SendStatementsAsync([_acme.Id], Jan5, Jan10))));
         await _db.InScope(sp => sp.GetRequiredService<EmailService>().SaveSettingsAsync(new EmailSettingsCommand(
             EmailDelivery.Smtp, "smtp.test", 587, SmtpSecurity.Auto, "books", "s3cret-pass", false, "books@studio.test", "Studio", null)));
 
-        var run = await In<EmailService, StatementEmailRun>(s => s.SendStatementsAsync([_globex.Id, _acme.Id], Jan5, Jan10));
+        var run = await In<EmailService, EmailRun>(s => s.SendStatementsAsync([_globex.Id, _acme.Id], Jan5, Jan10));
 
         Assert.Equal(["Acme"], run.Sent);
         Assert.Equal(["Globex"], run.NoEmail);

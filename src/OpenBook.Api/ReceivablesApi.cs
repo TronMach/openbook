@@ -144,22 +144,21 @@ public sealed record ConvertEstimateRequest(DateOnly? Date = null);
 
 public sealed record SetEstimateStatusRequest(EstimateStatus Status);
 
-public sealed record EmailFormRequest(string? To = null, string? Subject = null, string? Body = null);
-
 public sealed record FormStyleRequest(FormTemplate Template, string? AccentColor, string? Footer);
 
 public sealed record EmailSettingsResponse(
     EmailDelivery Delivery, string? Host, int Port, SmtpSecurity Security, string? Username, bool HasPassword,
-    string? FromAddress, string? FromName, string? BccAddress, bool IsConfigured)
+    string? FromAddress, string? FromName, string? BccAddress, bool IsConfigured, string? LinkAddress = null)
 {
     public static EmailSettingsResponse From(EmailSettings s) => new(
-        s.Delivery, s.Host, s.Port, s.Security, s.Username, s.ProtectedPassword is not null, s.FromAddress, s.FromName, s.BccAddress, s.IsConfigured);
+        s.Delivery, s.Host, s.Port, s.Security, s.Username, s.ProtectedPassword is not null, s.FromAddress, s.FromName, s.BccAddress, s.IsConfigured, s.LinkAddress);
 }
 
 public sealed record TestEmailRequest(string To);
 
 /// <param name="SendAt">When to send, with its offset (e.g. 2026-11-02T09:00:00-05:00).</param>
-public sealed record ScheduleEmailRequest(DateTimeOffset SendAt, string? To, string? Subject, string? Body);
+public sealed record ScheduleEmailRequest(
+    DateTimeOffset SendAt, string? To, string? Subject, string? Body, string? Cc = null, string? Bcc = null, Guid? DesignId = null);
 
 internal static class ReceivablesApi
 {
@@ -388,19 +387,19 @@ internal static class ReceivablesApi
             var form = await s.RenderAsync(ParseKind(kind), id, design, ct);
             return Pdf(http, form);
         });
-        sales.MapPost("/{kind}/{id:guid}/email", async (string kind, Guid id, EmailFormRequest r, EmailService s, CancellationToken ct) =>
+        // Fields left out take the usual draft's (the customer's address and copies, the template's wording).
+        sales.MapPost("/{kind}/{id:guid}/email", async (string kind, Guid id, EmailRequest r, EmailService s, CancellationToken ct) =>
         {
-            var formKind = ParseKind(kind);
-            var draft = await s.DraftAsync(formKind, id, ct);
-            var message = new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body);
-            await s.SendFormAsync(formKind, id, message, ct);
-            return Results.Ok(new { message.To, message.Subject });
+            ParseKind(kind);
+            var sent = await EmailApi.SendAsync(s, EmailApi.SalesSource(kind, id, null, null), r, ct);
+            return Results.Ok(new { sent.To, sent.Cc, sent.Subject, sent.Id });
         });
         sales.MapGet("/invoices/{id:guid}/scheduled-emails", async (Guid id, ScheduledEmailService s, CancellationToken ct) => await s.ListAsync(id, ct));
         sales.MapPost("/invoices/{id:guid}/scheduled-emails", async (Guid id, ScheduleEmailRequest r, EmailService email, ScheduledEmailService s, CancellationToken ct) =>
         {
             var draft = await email.DraftAsync(FormKind.Invoice, id, ct);
-            var scheduled = await s.ScheduleAsync(id, new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body), r.SendAt, ct);
+            var scheduled = await s.ScheduleAsync(id, new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body, r.Cc ?? draft.Cc, r.Bcc,
+                r.DesignId), r.SendAt, ct);
             return Results.Created($"/api/sales/scheduled-emails/{scheduled.Id}", scheduled);
         });
         sales.MapGet("/scheduled-emails", async (ScheduledEmailService s, CancellationToken ct) => await s.ListAsync(null, ct));
@@ -414,19 +413,17 @@ internal static class ReceivablesApi
             await s.RetryAsync(id, ct);
             return Results.NoContent();
         });
-        sales.MapGet("/customers/{id:guid}/statement/pdf", async (Guid id, DateOnly? from, DateOnly? to, HttpContext http, FormService s, CancellationToken ct) =>
+        sales.MapGet("/customers/{id:guid}/statement/pdf", async (Guid id, DateOnly? from, DateOnly? to, Guid? design, HttpContext http, FormService s, CancellationToken ct) =>
         {
             var end = to ?? Today();
-            var form = await s.RenderStatementAsync(id, from ?? end.AddMonths(-1).AddDays(1), end, ct);
+            var form = await s.RenderStatementAsync(id, from ?? end.AddMonths(-1).AddDays(1), end, design, ct);
             return Pdf(http, form);
         });
-        sales.MapPost("/customers/{id:guid}/statement/email", async (Guid id, DateOnly? from, DateOnly? to, EmailFormRequest r, EmailService s, CancellationToken ct) =>
+        sales.MapPost("/customers/{id:guid}/statement/email", async (Guid id, DateOnly? from, DateOnly? to, EmailRequest r, EmailService s, CancellationToken ct) =>
         {
             var end = to ?? Today();
-            var draft = await s.DraftStatementAsync(id, end, ct);
-            var message = new EmailDraft(r.To ?? draft.To, r.Subject ?? draft.Subject, r.Body ?? draft.Body);
-            await s.SendStatementAsync(id, from ?? end.AddMonths(-1).AddDays(1), end, message, ct);
-            return Results.Ok(new { message.To, message.Subject });
+            var sent = await EmailApi.SendAsync(s, EmailApi.SalesSource("customers", id, from ?? end.AddMonths(-1).AddDays(1), end), r, ct);
+            return Results.Ok(new { sent.To, sent.Cc, sent.Subject, sent.Id });
         });
 
         // Each customer's statement for the period, by email with the usual message; those without an address are listed.
@@ -434,7 +431,7 @@ internal static class ReceivablesApi
         {
             var end = r.To ?? Today();
             var run = await s.SendStatementsAsync(r.CustomerIds ?? [], r.From ?? end.AddMonths(-1).AddDays(1), end, ct);
-            return new { run.Sent, run.NoEmail, Failed = run.Failed.Select(f => new { f.Customer, f.Reason }) };
+            return new { run.Sent, run.NoEmail, Failed = run.Failed.Select(f => new { Customer = f.Name, f.Reason }) };
         });
 
         api.MapGet("/settings/email", async (EmailService s, CancellationToken ct) => EmailSettingsResponse.From(await s.GetSettingsAsync(ct)));

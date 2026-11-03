@@ -1,0 +1,70 @@
+@inject EmailService EmailService
+@inject NavigationManager Navigation
+@* The emails sent about a record, newest first: who to, what it said, what came with it, and whether its "View" link
+   has been opened (with a button to turn the link off). Put it beside <Notes> on record pages. *@
+
+@if (_sent.Count > 0)
+{
+    <section class="card email-history no-print" id="emails">
+        <h2>Emails sent</h2>
+        <ul class="email-history-list">
+            @foreach (var entry in _sent)
+            {
+                var e = entry.Email;
+                <li>
+                    <details>
+                        <summary>
+                            <span class="email-history-subject">@e.Subject</span>
+                            <span class="muted">to @e.To · @e.SentAt.InCompanyTime().ToString("g") · @e.SentBy</span>
+                        </summary>
+                        <dl class="facts compact">
+                            @if (e.Cc is { } cc) { <dt>Cc</dt><dd>@cc</dd> }
+                            @if (e.Bcc is { } bcc) { <dt>Bcc</dt><dd>@bcc</dd> }
+                            <dt>Kind</dt><dd>@EmailTemplates.Label(e.Kind)</dd>
+                            @if (e.Attachment is { } file) { <dt>Attached</dt><dd>@file</dd> }
+                            @if (entry.Link is { } link)
+                            {
+                                <dt>Link</dt>
+                                <dd>
+                                    @(link.LastOpenedAt is { } last
+                                        ? $"Opened {link.FirstOpenedAt!.Value.InCompanyTime():g}" + (last > link.FirstOpenedAt ? $", last {last.InCompanyTime():g}" : "")
+                                        : "Not opened yet")
+                                    @if (link.IsActive)
+                                    {
+                                        <PostForm Action="@($"/sales/email-links/{link.Id}/revoke")" class="inline-form" data-enhance="false">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="returnUrl" value="@_returnUrl" />
+                                            <button type="submit" class="link">Turn the link off</button>
+                                        </PostForm>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted"> · turned off @link.RevokedAt!.Value.InCompanyTime().ToString("d")</span>
+                                    }
+                                </dd>
+                            }
+                        </dl>
+                        <pre class="email-history-body">@EmailFormatter.Text(e.Body)</pre>
+                    </details>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<SentEmailEntry> _sent = [];
+    private string _returnUrl = "/";
+
+    [Parameter, EditorRequired]
+    public string EntityType { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public Guid EntityId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _sent = await EmailService.HistoryAsync(EntityType, EntityId);
+        _returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0] + "#emails";
+    }
+}

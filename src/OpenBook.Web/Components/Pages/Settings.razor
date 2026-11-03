@@ -129,6 +129,14 @@
                         };
                     }, attentionWhen: s => s == L["Off: nothing can be emailed yet"].Value),
                     Keywords: "smtp mail send gmail outlook"),
+                new("/settings/email-templates", L["Email messages"],
+                    L["The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look."],
+                    await Status("/settings/email-templates", async () =>
+                    {
+                        var changed = (await Get<EmailService>().TemplatesAsync()).Count(t => !t.IsUsual);
+                        return changed == 0 ? L["The usual wording"].Value : L["{0} changed", changed].Value;
+                    }),
+                    Keywords: "email wording message template subject body preview"),
                 new("/settings/online-payments", L["Online card payments"],
                     L["A \"Pay now\" link on invoices so customers pay by card through Stripe; payments are recorded by themselves."],
                     await Status("/settings/online-payments", async () => (await Get<OnlinePaymentService>().GetSettingsAsync()).IsReady

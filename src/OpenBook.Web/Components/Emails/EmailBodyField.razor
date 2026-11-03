@@ -1,0 +1,44 @@
+@using OpenBook.Domain.Email
+@* The message box of an email form with its formatting buttons (email.js: bold, italics, link, lists) and, for templates,
+   the placeholders to click in. The textarea itself is the child content, so EditForms bind it as usual. *@
+
+<div class="field email-body" data-email-body>
+    <label for="@For">@Label</label>
+    <div class="email-toolbar" role="toolbar" aria-label="Formatting" aria-controls="@For">
+        <button type="button" class="secondary" data-md="bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
+        <button type="button" class="secondary" data-md="italic" title="Italics (Ctrl+I)"><em>I</em></button>
+        <button type="button" class="secondary" data-md="link" title="Link (Ctrl+K)">Link</button>
+        <button type="button" class="secondary" data-md="bullets" title="Bulleted list">• List</button>
+        <button type="button" class="secondary" data-md="numbers" title="Numbered list">1. List</button>
+    </div>
+    @ChildContent
+    <span class="hint">
+        **bold**, _italics_, [text](https://…) for a link, and lines starting "- " or "1. " for lists. One line break is one line break.
+    </span>
+    @if (Kind is { } kind)
+    {
+        <div class="email-placeholders">
+            <span class="muted">Fill in:</span>
+            @foreach (var p in EmailTemplates.Placeholders(kind))
+            {
+                <button type="button" class="email-chip" data-insert="@("{" + p.Key + "}")" title="@($"{p.Description}, e.g. {p.Sample}")">{@p.Key}</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>The textarea's id.</summary>
+    [Parameter, EditorRequired]
+    public string For { get; set; } = "";
+
+    [Parameter]
+    public string Label { get; set; } = "Message";
+
+    /// <summary>For templates: the kind whose placeholders are offered.</summary>
+    [Parameter]
+    public EmailKind? Kind { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

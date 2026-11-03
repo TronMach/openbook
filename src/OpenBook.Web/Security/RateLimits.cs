@@ -22,7 +22,7 @@ public static class RateLimits
 
     private static readonly string[] SignInPaths = ["/login", "/invite/"];
 
-    private static readonly string[] LinkPaths = ["/portal/", "/pay/", "/invite/", "/capture/device-status/", "/hooks/"];
+    private static readonly string[] LinkPaths = ["/portal/", "/pay/", "/invite/", "/capture/device-status/", "/hooks/", "/view/"];
 
     public static IServiceCollection AddOpenBookRateLimits(this IServiceCollection services, IConfiguration configuration)
     {

@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using System.Text.Json;
 using OpenBook.Application.Forms;
 using OpenBook.Domain.Auditing;
@@ -14,7 +15,7 @@ public sealed record SubscriptionRun(ReportSubscription Subscription, string Rep
 /// <see cref="SendDueAsync"/>; each send is recorded on the subscription and audited as <see cref="AuditAction.Emailed"/>.
 /// </summary>
 public sealed class ReportSubscriptionService(
-    IReportingStore store, ReportCatalog catalog, IReportExporter exporter, EmailService email, IClock clock, ICurrentUser user)
+    IReportingStore store, ReportCatalog catalog, IReportExporter exporter, EmailService email, Companies.ICompanyStore companies, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "report_subscription";
 
@@ -95,11 +96,14 @@ public sealed class ReportSubscriptionService(
             if (saved is null)
                 throw new DomainException("subscription.report_missing", "The saved report no longer exists.");
             var file = await RenderAsync(saved, subscription.Format, ct);
+            var company = (await companies.GetRequiredCompanyAsync(ct)).Name;
             foreach (var to in subscription.RecipientList)
             {
-                await email.SendMessageAsync(new EmailMessage(to, saved.Name,
-                    $"{saved.Name}, as of {CompanyTime.Today:MMM d, yyyy}, is attached.\n\nSent by OpenBook on a schedule set up by {subscription.CreatedBy}.",
-                    [file]), ct);
+                await email.SendWordedAsync(Domain.Email.EmailKind.Report, to, new Dictionary<string, string>
+                {
+                    ["report"] = saved.Name, ["as_of"] = CompanyTime.Today.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+                    ["scheduled_by"] = subscription.CreatedBy, ["company"] = company,
+                }, [file], null, EntityType, subscription.Id, ct);
             }
         }
         catch (DomainException ex)

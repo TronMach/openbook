@@ -132,6 +132,7 @@ public static class Links
         "segment" => $"/segments/{id}",
         "backup_schedule" => "/backup",
         "email_settings" => "/settings/email",
+        "email_template" => "/settings/email-templates",
         "form_style" => $"/settings/forms/{id}",
         "company" => "/settings/company",
         "closing_date" => "/settings/close-books",

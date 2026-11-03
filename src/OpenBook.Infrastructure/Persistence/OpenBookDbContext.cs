@@ -7,6 +7,7 @@ using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
+using OpenBook.Domain.Email;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Notes;
@@ -84,6 +85,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<FormDesign> FormDesigns => Set<FormDesign>();
     public DbSet<FormFont> FormFonts => Set<FormFont>();
     public DbSet<PrintQueueItem> PrintQueue => Set<PrintQueueItem>();
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+    public DbSet<SentEmail> SentEmails => Set<SentEmail>();
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
     public DbSet<OpenBook.Domain.CustomFields.CustomFieldValue> CustomFieldValues => Set<OpenBook.Domain.CustomFields.CustomFieldValue>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
@@ -405,6 +409,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.FromAddress).HasMaxLength(320);
             b.Property(s => s.FromName).HasMaxLength(200);
             b.Property(s => s.BccAddress).HasMaxLength(320);
+            b.Property(s => s.LinkAddress).HasMaxLength(300);
             b.Ignore(s => s.IsConfigured);
         });
 
@@ -1266,6 +1271,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.ExemptionReason).HasConversion<string>().HasMaxLength(20);
             b.HasOne<PriceLevel>().WithMany().HasForeignKey(c => c.PriceLevelId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<FormDesign>().WithMany().HasForeignKey(c => c.FormDesignId).OnDelete(DeleteBehavior.Restrict);
+            b.Property(c => c.EmailCc).HasMaxLength(1000);
+            b.Property(c => c.EmailPdf).HasConversion<string>().HasMaxLength(10);
             b.HasOne<Customer>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -1838,6 +1845,47 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Ignore(s => s.IsReady);
         });
 
+        modelBuilder.Entity<EmailTemplate>(b =>
+        {
+            b.ToTable("EmailTemplates");
+            b.HasKey(t => t.Kind);
+            b.Property(t => t.Kind).HasConversion<string>().HasMaxLength(30);
+            b.Property(t => t.Subject).HasMaxLength(Domain.Email.EmailTemplates.MaxSubject);
+            b.Property(t => t.Body).HasMaxLength(Domain.Email.EmailTemplates.MaxBody);
+            b.Property(t => t.UpdatedBy).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<SentEmail>(b =>
+        {
+            b.ToTable("SentEmails");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Kind).HasConversion<string>().HasMaxLength(30);
+            b.Property(e => e.EntityType).HasMaxLength(50);
+            b.HasIndex(e => new { e.EntityType, e.EntityId });
+            b.Property(e => e.SentBy).HasMaxLength(200);
+            b.Property(e => e.To).HasMaxLength(SentEmail.MaxAddresses);
+            b.Property(e => e.Cc).HasMaxLength(SentEmail.MaxAddresses);
+            b.Property(e => e.Bcc).HasMaxLength(SentEmail.MaxAddresses);
+            b.Property(e => e.Subject).HasMaxLength(Domain.Email.EmailTemplates.MaxSubject);
+            b.Property(e => e.Body).HasMaxLength(Domain.Email.EmailTemplates.MaxBody);
+            b.Property(e => e.Attachment).HasMaxLength(255);
+            b.HasOne<DocumentLink>().WithMany().HasForeignKey(e => e.DocumentLinkId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<FormDesign>().WithMany().HasForeignKey(e => e.DesignId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DocumentLink>(b =>
+        {
+            b.ToTable("DocumentLinks");
+            b.HasKey(l => l.Id);
+            b.Property(l => l.Kind).HasConversion<string>().HasMaxLength(30);
+            b.Property(l => l.TokenHash).HasMaxLength(64);
+            b.HasIndex(l => l.TokenHash).IsUnique();
+            b.Property(l => l.CreatedBy).HasMaxLength(200);
+            b.Ignore(l => l.IsActive);
+            b.HasIndex(l => l.DocumentId);
+            b.HasOne<Customer>().WithMany().HasForeignKey(l => l.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<PrintQueueItem>(b =>
         {
             b.ToTable("PrintQueue");
@@ -1876,6 +1924,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(d => d.LogoSize).HasConversion<string>().HasMaxLength(10);
             b.Property(d => d.Margins).HasConversion<string>().HasMaxLength(10);
             b.Property(d => d.TextSize).HasConversion<string>().HasMaxLength(10);
+            b.Property(d => d.EmailStyle).HasConversion<string>().HasMaxLength(10);
             b.Ignore(d => d.ColumnLabels);
             b.Ignore(d => d.ShowShipTo);
             b.Ignore(d => d.ShowTerms);
@@ -2228,7 +2277,9 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(e => e.InvoiceId);
             b.HasIndex(e => e.Status);
             b.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
-            b.Property(e => e.To).HasMaxLength(320);
+            b.Property(e => e.To).HasMaxLength(SentEmail.MaxAddresses);
+            b.Property(e => e.Cc).HasMaxLength(SentEmail.MaxAddresses);
+            b.Property(e => e.Bcc).HasMaxLength(SentEmail.MaxAddresses);
             b.Property(e => e.Subject).HasMaxLength(ScheduledEmail.MaxSubject);
             b.Property(e => e.Body).HasMaxLength(ScheduledEmail.MaxBody);
             b.Property(e => e.ScheduledBy).HasMaxLength(200);

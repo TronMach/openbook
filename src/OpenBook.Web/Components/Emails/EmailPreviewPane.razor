@@ -1,0 +1,60 @@
+@using OpenBook.Application.Forms
+@* The live preview beside an email form: a mail window with the headers, the message (a sandboxed frame: no scripts,
+   links open nowhere) and the attachment, which the Attachment tab shows. email.js keeps it up to date as the form changes. *@
+
+<section class="email-preview" data-email-pane aria-label="Preview">
+    <div class="email-preview-bar">
+        <div class="segmented" role="group" aria-label="Show">
+            <button type="button" class="secondary" data-email-tab="message" aria-pressed="true">Message</button>
+            @if (PdfUrl is not null)
+            {
+                <button type="button" class="secondary" data-email-tab="attachment" aria-pressed="false" disabled="@(Preview.Attachment is null)">Attachment</button>
+            }
+        </div>
+        <span class="muted preview-note">What @(Recipient) will see</span>
+    </div>
+    <p class="preview-status muted" role="status" data-preview-status></p>
+    <div class="email-window">
+        <dl class="email-headers">
+            <dt>From</dt><dd data-email-head="from">@Preview.From</dd>
+            <dt>To</dt><dd data-email-head="to">@Blank(Preview.To)</dd>
+            <dt data-email-head-label="cc" hidden="@(Preview.Cc is null)">Cc</dt><dd data-email-head="cc" hidden="@(Preview.Cc is null)">@Preview.Cc</dd>
+            <dt data-email-head-label="bcc" hidden="@(Preview.Bcc is null)">Bcc</dt><dd data-email-head="bcc" hidden="@(Preview.Bcc is null)">@Preview.Bcc</dd>
+            <dt>Subject</dt><dd data-email-head="subject"><strong>@Preview.Subject</strong></dd>
+        </dl>
+        <div class="email-attachments" data-email-attachment-row hidden="@(Preview.Attachment is null)">
+            <button type="button" class="email-chip" data-email-tab="attachment" title="Show the attachment">
+                <span aria-hidden="true">📎</span> <span data-email-attachment>@Preview.Attachment</span> <span class="muted" data-email-size></span>
+            </button>
+        </div>
+        <div class="preview-frames email-frames" data-email-view="message">
+            <iframe class="current" sandbox="" title="Preview of the message" srcdoc="@Preview.Html"></iframe>
+        </div>
+        @if (PdfUrl is not null)
+        {
+            <div class="preview-frames email-frames" data-email-view="attachment" data-pdf="@PdfUrl" hidden>
+                <iframe title="Preview of the attachment"></iframe>
+            </div>
+        }
+    </div>
+    <ul class="email-notes" data-email-notes>
+        @foreach (var note in Preview.Notes)
+        {
+            <li>@note</li>
+        }
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public EmailPreview Preview { get; set; } = default!;
+
+    /// <summary>The PDF to show on the Attachment tab (a design choice adds <c>design=</c>); null when the email has none.</summary>
+    [Parameter]
+    public string? PdfUrl { get; set; }
+
+    [Parameter]
+    public string Recipient { get; set; } = "they";
+
+    private static string Blank(string text) => text.Length == 0 ? "(no address yet)" : text;
+}

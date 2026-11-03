@@ -106,9 +106,15 @@
                 <InputText id="bcc" type="email" @bind-Value="Input.BccAddress" />
                 <span class="hint">A hidden copy of every message goes here, so you have a record of what was sent.</span>
             </div>
+            <div class="field">
+                <label for="link-address">Address customers open OpenBook at <span class="muted">(optional)</span></label>
+                <InputText id="link-address" @bind-Value="Input.LinkAddress" placeholder="https://books.example.com" />
+                <span class="hint">For customers who get a "View invoice" link instead of the PDF (chosen on each customer). It must be reachable from the internet.</span>
+            </div>
         </fieldset>
         <button type="submit">Save</button>
     </EditForm>
+    <p class="hint">The wording of each email is in <ActionLink Href="/settings/email-templates">Email messages</ActionLink>.</p>
 
     @if (_configured)
     {
@@ -151,6 +157,7 @@
             FromAddress = settings.FromAddress,
             FromName = settings.FromName,
             BccAddress = settings.BccAddress,
+            LinkAddress = settings.LinkAddress,
         };
         if (Saved)
             _message = "Email settings saved.";
@@ -161,7 +168,7 @@
         try
         {
             await Email.SaveSettingsAsync(new EmailSettingsCommand(Input.Delivery, Input.Host, Input.Port ?? 587, Input.Security, Input.Username,
-                Input.NewPassword, Input.ClearPassword, Input.FromAddress, Input.FromName, Input.BccAddress));
+                Input.NewPassword, Input.ClearPassword, Input.FromAddress, Input.FromName, Input.BccAddress, Input.LinkAddress));
             Navigation.NavigateTo("/settings/email?saved=true");
         }
         catch (DomainException ex)
@@ -207,5 +214,7 @@
 
         [StringLength(320)]
         public string? BccAddress { get; set; }
+
+        public string? LinkAddress { get; set; }
     }
 }

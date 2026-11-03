@@ -56,7 +56,7 @@ public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string
 /// </summary>
 public sealed class GiftService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine,
-    ICompanyStore companies, IFormRenderer renderer, EmailService email, FormDesignService designs, IClock clock, ICurrentUser user)
+    ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IClock clock, ICurrentUser user)
 {
     public const string DonationEntity = "donation";
     public const string PledgeEntity = "pledge";
@@ -331,70 +331,17 @@ public sealed class GiftService(
         return new RenderedForm(FormService.FileName(company, $"Giving statements {year}", ""), renderer.Render(letters), Guid.Empty, $"Giving statements {year}");
     }
 
-    public async Task<EmailDraft> DraftAcknowledgmentAsync(Guid id, CancellationToken ct = default)
+    /// <summary>The donors who gave in the year (posted gifts), in name order, for emailing their statements.</summary>
+    public async Task<IReadOnlyList<Guid>> DonorsInYearAsync(int year, CancellationToken ct = default) =>
+        [.. (await GiversAsync(year, ct)).Select(g => g.Donor.Id)];
+
+    /// <summary>Marks a gift thanked once its acknowledgment is emailed (saved by the caller) and gives the audit record.</summary>
+    internal async Task<AuditRecord> MarkAcknowledgedAsync(Guid id, CancellationToken ct)
     {
         var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
-        var donor = await DonorAsync(donation.DonorId, ct, activeOnly: false);
-        var company = await companies.GetRequiredCompanyAsync(ct);
-        return new EmailDraft(donor.Email ?? "", $"Thank you from {company.Name}",
-            $"Dear {donor.DisplayName},\n\nThank you for your gift. Your acknowledgment letter is attached; please keep it for your tax records.\n\nWith gratitude,\n{company.Name}");
-    }
-
-    public async Task<EmailDraft> DraftYearStatementAsync(Guid donorId, int year, CancellationToken ct = default)
-    {
-        var donor = await DonorAsync(donorId, ct, activeOnly: false);
-        var company = await companies.GetRequiredCompanyAsync(ct);
-        return new EmailDraft(donor.Email ?? "", $"Your {year} giving statement from {company.Name}",
-            $"Dear {donor.DisplayName},\n\nThank you for your support in {year}. Your giving statement is attached; please keep it for your tax records.\n\nWith gratitude,\n{company.Name}");
-    }
-
-    /// <summary>Emails a gift's acknowledgment and marks the gift thanked.</summary>
-    public async Task SendAcknowledgmentAsync(Guid id, EmailDraft message, CancellationToken ct = default)
-    {
-        var rendered = await AcknowledgmentAsync(id, ct);
-        await SendAsync(message, rendered, ct);
-        var donation = (await store.GetDonationAsync(id, ct))!;
         var before = Snapshot(donation);
         donation.MarkAcknowledged(clock.UtcNow);
-        store.Add(Audit(AuditAction.Emailed, donation, before));
-        await store.SaveChangesAsync(ct);
-    }
-
-    /// <summary>Emails a donor's giving statement for the year (recorded on the donor).</summary>
-    public async Task SendYearStatementAsync(Guid donorId, int year, EmailDraft message, CancellationToken ct = default)
-    {
-        var rendered = await YearStatementAsync(donorId, year, ct);
-        await SendAsync(message, rendered, ct);
-        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Emailed, "customer", donorId, null,
-            JsonSerializer.Serialize(new { To = message.To, Form = rendered.Title })));
-        await store.SaveChangesAsync(ct);
-    }
-
-    /// <summary>Emails every donor with an email address their statement for the year; returns how many went and who was skipped or failed.</summary>
-    public async Task<(int Sent, IReadOnlyList<string> NotSent)> SendYearStatementsAsync(int year, CancellationToken ct = default)
-    {
-        var sent = 0;
-        var notSent = new List<string>();
-        foreach (var giver in await GiversAsync(year, ct))
-        {
-            if (string.IsNullOrWhiteSpace(giver.Donor.Email))
-            {
-                notSent.Add($"{giver.Donor.DisplayName}: no email address");
-                continue;
-            }
-
-            try
-            {
-                await SendYearStatementAsync(giver.Donor.Id, year, await DraftYearStatementAsync(giver.Donor.Id, year, ct), ct);
-                sent++;
-            }
-            catch (DomainException ex) when (ex.Code != "email.not_configured")
-            {
-                notSent.Add($"{giver.Donor.DisplayName}: {ex.Message}");
-            }
-        }
-
-        return (sent, notSent);
+        return Audit(AuditAction.Emailed, donation, before);
     }
 
     /// <summary>The letter's wording: the gifts, what the donor got in return (or that they got nothing), and the tax-exempt statement.</summary>
@@ -447,13 +394,6 @@ public sealed class GiftService(
             settings.SignerTitle,
             company.HomeCurrency.Code,
             await designs.DefaultStyleAsync(ct));
-    }
-
-    private async Task SendAsync(EmailDraft draft, RenderedForm rendered, CancellationToken ct)
-    {
-        var to = Domain.Companies.EmailSettings.Address(draft.To, "To") ?? throw new DomainException("email.to_required", "Enter the donor's email address.");
-        var subject = string.IsNullOrWhiteSpace(draft.Subject) ? rendered.Title : draft.Subject.Trim();
-        await email.SendMessageAsync(new EmailMessage(to, subject, draft.Body ?? "", [new EmailAttachment(rendered.FileName, "application/pdf", rendered.Pdf)]), ct);
     }
 
     private static DateOnly YearEnd(int year) => new(year, 12, 31);

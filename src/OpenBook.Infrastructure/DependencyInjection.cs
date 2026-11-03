@@ -92,6 +92,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Forms.IFormDesignStore, EfFormDesignStore>();
         services.AddScoped<OpenBook.Application.Forms.IFormFontStore, EfFormFontStore>();
         services.AddScoped<OpenBook.Application.Forms.IPrintQueueStore, EfPrintQueueStore>();
+        services.AddScoped<IEmailStore, EfEmailStore>();
         services.AddSingleton<OpenBook.Application.Forms.IBundledFonts, Forms.BundledFonts>();
         services.TryAddSingleton<OpenBook.Application.Forms.IGoogleFonts>(_ => new Forms.GoogleFontsClient());
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();

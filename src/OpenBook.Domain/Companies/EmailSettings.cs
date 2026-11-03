@@ -46,6 +46,9 @@ public sealed class EmailSettings
     /// <summary>Copies every message to this address, e.g. for your own records.</summary>
     public string? BccAddress { get; private set; }
 
+    /// <summary>The address customers reach OpenBook at ("https://books.example.com"), for "View" links in emails.</summary>
+    public string? LinkAddress { get; private set; }
+
     public bool IsConfigured => Delivery switch
     {
         EmailDelivery.Smtp => Host is not null && FromAddress is not null,
@@ -58,7 +61,7 @@ public sealed class EmailSettings
     /// <param name="protectedPassword">Null keeps the current password.</param>
     public void Update(
         EmailDelivery delivery, string? host, int port, SmtpSecurity security, string? username, string? protectedPassword,
-        string? fromAddress, string? fromName, string? bccAddress)
+        string? fromAddress, string? fromName, string? bccAddress, string? linkAddress = null)
     {
         if (!Enum.IsDefined(delivery) || !Enum.IsDefined(security))
             throw new DomainException("email.settings_invalid", "Unknown email setting.");
@@ -81,6 +84,19 @@ public sealed class EmailSettings
         FromAddress = from;
         FromName = Text.Optional(fromName, 200, "email.from_name_too_long", "From name");
         BccAddress = Address(bccAddress, "Copy address");
+        LinkAddress = WebAddress(linkAddress);
+    }
+
+    /// <summary>An absolute https (or http) address without a trailing slash, or null when blank.</summary>
+    public static string? WebAddress(string? value)
+    {
+        var text = Text.Optional(value, 300, "email.link_address_too_long", "The address")?.TrimEnd('/');
+        if (text is null)
+            return null;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+            || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new DomainException("email.link_address_invalid", "Enter the address as https://… (the one customers open OpenBook at).");
+        return text;
     }
 
     /// <summary>A trimmed address with one @ and a dot after it, or null when blank.</summary>

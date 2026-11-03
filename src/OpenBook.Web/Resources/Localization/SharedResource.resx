@@ -707,6 +707,9 @@
   <data name="Email each invoice to the customer when it's created" xml:space="preserve">
     <value>Email each invoice to the customer when it's created</value>
   </data>
+  <data name="Email messages" xml:space="preserve">
+    <value>Email messages</value>
+  </data>
   <data name="End date" xml:space="preserve">
     <value>End date</value>
   </data>
@@ -2177,6 +2180,12 @@
   <data name="The user guide's chapter about this page" xml:space="preserve">
     <value>The user guide's chapter about this page</value>
   </data>
+  <data name="The usual wording" xml:space="preserve">
+    <value>The usual wording</value>
+  </data>
+  <data name="The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look." xml:space="preserve">
+    <value>The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look.</value>
+  </data>
   <data name="Theme" xml:space="preserve">
     <value>Theme</value>
   </data>
@@ -2527,6 +2536,9 @@
   </data>
   <data name="{0} agencies · {1} tax codes" xml:space="preserve">
     <value>{0} agencies · {1} tax codes</value>
+  </data>
+  <data name="{0} changed" xml:space="preserve">
+    <value>{0} changed</value>
   </data>
   <data name="{0} connections" xml:space="preserve">
     <value>{0} connections</value>

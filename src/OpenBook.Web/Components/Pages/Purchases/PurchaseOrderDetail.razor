@@ -1,6 +1,5 @@
 @page "/purchases/orders/{Id:guid}"
 @inject PurchaseOrderService Orders
-@inject PurchaseOrderForms Forms
 @inject VendorService VendorService
 @inject BillApprovalService Approvals
 
@@ -26,6 +25,10 @@
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_order.Id}")">History</ActionLink>
         <a class="button secondary" href="/purchases/orders/@_order.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.PurchaseOrder" Id="_order.Id" PdfUrl="@($"/purchases/orders/{_order.Id}/pdf")" />
+        @if (_order.Status != PurchaseOrderStatus.Cancelled)
+        {
+            <ActionLink Class="button secondary" Href="@($"/purchases/orders/{_order.Id}/email")">Email</ActionLink>
+        }
         @if (open && !_progress.Started && !anyReceived)
         {
             <ActionLink Class="button secondary" Href="@($"/purchases/orders/{_order.Id}/edit")">Edit</ActionLink>
@@ -44,22 +47,6 @@
     {
         <div class="alert notice" role="status">Sent to the vendor.</div>
     }
-    @if (_order.Status != PurchaseOrderStatus.Cancelled && _draft is not null)
-    {
-        <details class="card">
-            <summary>Email to the vendor</summary>
-            <PostForm Action="@($"/purchases/orders/{_order.Id}/email")" data-enhance="false">
-                <AntiforgeryToken />
-                <div class="row">
-                    <div class="field"><label for="po-to">To</label><input id="po-to" name="to" type="email" value="@_draft.To" required /></div>
-                    <div class="field"><label for="po-subject">Subject</label><input id="po-subject" name="subject" value="@_draft.Subject" maxlength="300" /></div>
-                </div>
-                <div class="field"><label for="po-body">Message</label><textarea id="po-body" name="body" rows="4">@_draft.Body</textarea></div>
-                <div class="actions"><button type="submit">Send with the PDF</button></div>
-            </PostForm>
-        </details>
-    }
-
     <div class="card">
         <dl class="facts">
             <dt>Vendor</dt><dd><a href="/vendors/@_order.VendorId">@_vendorName</a></dd>
@@ -224,6 +211,8 @@
 
     <CustomFieldPanel EntityType="purchase_order" EntityId="_order.Id" />
 
+    <EmailHistory EntityType="purchase_order" EntityId="_order.Id" />
+
     <Notes EntityType="purchase_order" EntityId="_order.Id" />
 </div>
 
@@ -232,7 +221,6 @@
     private PurchaseOrderProgress? _progress;
     private PurchasingSettings? _settings;
     private string? _vendorName;
-    private OpenBook.Application.Forms.EmailDraft? _draft;
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -247,7 +235,6 @@
         _progress = await Orders.ProgressAsync(Id);
         _settings = await Approvals.GetSettingsAsync();
         _vendorName = (await VendorService.GetAsync(_order.VendorId))?.DisplayName;
-        _draft = await Forms.DraftAsync(Id);
     }
 
     private string MatchRule() =>

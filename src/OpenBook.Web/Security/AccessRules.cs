@@ -33,6 +33,8 @@ public static class AccessRules
         ("/portal", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/pay/", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/hooks", UserRole.ViewOnly, UserRole.ViewOnly),
+        // A "View" link from an email (the endpoint checks its token).
+        ("/view", UserRole.ViewOnly, UserRole.ViewOnly),
         // Accepting an invitation (the page checks its token), even while signed in as someone else.
         ("/invite", UserRole.ViewOnly, UserRole.ViewOnly),
 

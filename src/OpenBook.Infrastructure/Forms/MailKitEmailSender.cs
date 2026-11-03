@@ -44,14 +44,25 @@ internal sealed class MailKitEmailSender(OpenBookStorage storage) : IEmailSender
         var mime = new MimeMessage();
         var from = settings.FromAddress ?? throw new InvalidOperationException("No from address is set.");
         mime.From.Add(new MailboxAddress(settings.FromName ?? from, from));
-        mime.To.Add(MailboxAddress.Parse(message.To));
+        foreach (var to in message.To.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            mime.To.Add(MailboxAddress.Parse(to));
+        foreach (var cc in message.Cc)
+            mime.Cc.Add(MailboxAddress.Parse(cc));
+        foreach (var hidden in message.Bcc)
+            mime.Bcc.Add(MailboxAddress.Parse(hidden));
         if (settings.BccAddress is { } bcc)
             mime.Bcc.Add(MailboxAddress.Parse(bcc));
         if (message.ReplyTo is { } replyTo)
             mime.ReplyTo.Add(MailboxAddress.Parse(replyTo));
         mime.Subject = message.Subject;
 
-        var body = new BodyBuilder { TextBody = message.Body };
+        var body = new BodyBuilder { TextBody = message.Body, HtmlBody = message.HtmlBody };
+        foreach (var image in message.InlineImages)
+        {
+            var resource = body.LinkedResources.Add(image.ContentId, image.Content, ContentType.Parse(image.ContentType));
+            resource.ContentId = image.ContentId;
+        }
+
         foreach (var attachment in message.Attachments)
             body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType));
         mime.Body = body.ToMessageBody();

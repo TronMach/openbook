@@ -85,7 +85,8 @@ public sealed record FormDesignDetails(
     FormMargins Margins = FormMargins.Normal,
     FormTextSize TextSize = FormTextSize.Medium,
     IReadOnlyDictionary<FormDocuments, (string? Title, string? Message)>? Texts = null,
-    string? CompanyFontKey = null);
+    string? CompanyFontKey = null,
+    Email.EmailStyle EmailStyle = Email.EmailStyle.Branded);
 
 /// <summary>The four headings designs had before columns could be chosen (the API still takes them).</summary>
 public sealed record FormColumnLabels(string? Description = null, string? Quantity = null, string? Rate = null, string? Amount = null)
@@ -197,6 +198,9 @@ public sealed class FormDesign
     public FormTextSize TextSize { get; private set; }
     public IReadOnlyList<FormDesignText> Texts => _texts;
 
+    /// <summary>How emails sent with this design look (its logo, accent color and footer).</summary>
+    public Email.EmailStyle EmailStyle { get; private set; }
+
     /// <summary>In print order.</summary>
     public IReadOnlyList<FormColumn> Columns => [.. _columns.OrderBy(c => c.Position)];
 
@@ -253,8 +257,8 @@ public sealed class FormDesign
         var color = string.IsNullOrWhiteSpace(details.AccentColor) ? Company.DefaultAccentColor : details.AccentColor.Trim().ToLowerInvariant();
         if (color.Length != 7 || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
             throw new DomainException("company.color_invalid", "Enter the accent color as #rrggbb.");
-        if (!Enum.IsDefined(details.Margins) || !Enum.IsDefined(details.TextSize))
-            throw new DomainException("formdesign.option_invalid", "Choose the margins and text size from the lists.");
+        if (!Enum.IsDefined(details.Margins) || !Enum.IsDefined(details.TextSize) || !Enum.IsDefined(details.EmailStyle))
+            throw new DomainException("formdesign.option_invalid", "Choose the margins, text size and email look from the lists.");
         var columns = BuildColumns(details.Columns ?? FormColumns.Standard);
         var texts = new List<FormDesignText>();
         foreach (var (document, (title, message)) in details.Texts ?? new Dictionary<FormDocuments, (string?, string?)>())
@@ -280,6 +284,7 @@ public sealed class FormDesign
         Landscape = details.Landscape;
         Margins = details.Margins;
         TextSize = details.TextSize;
+        EmailStyle = details.EmailStyle;
         _columns.Clear();
         _columns.AddRange(columns);
         _texts.Clear();
@@ -289,7 +294,7 @@ public sealed class FormDesign
     /// <summary>The design's settings, to change a few and save them back.</summary>
     public FormDesignDetails ToDetails() => new(
         Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, Show, [.. Columns.Select(c => c.ToDraft())], AutoFieldColumns,
-        Landscape, Margins, TextSize, _texts.ToDictionary(t => t.Document, t => (t.Title, t.Message)), CompanyFontKey);
+        Landscape, Margins, TextSize, _texts.ToDictionary(t => t.Document, t => (t.Title, t.Message)), CompanyFontKey, EmailStyle);
 
     /// <summary>The design's title for a document, else <paramref name="usual"/>.</summary>
     public string TitleFor(FormDocuments document, string usual) => _texts.FirstOrDefault(t => t.Document == document)?.Title ?? usual;

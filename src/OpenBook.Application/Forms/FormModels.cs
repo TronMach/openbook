@@ -168,8 +168,20 @@ public interface IFormRenderer
 
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
 
+/// <param name="To">One address, or several separated by ", ".</param>
+/// <param name="Body">The plain-text part.</param>
 public sealed record EmailMessage(
-    string To, string Subject, string Body, IReadOnlyList<EmailAttachment> Attachments, string? ReplyTo = null);
+    string To, string Subject, string Body, IReadOnlyList<EmailAttachment> Attachments, string? ReplyTo = null)
+{
+    public IReadOnlyList<string> Cc { get; init; } = [];
+    public IReadOnlyList<string> Bcc { get; init; } = [];
+
+    /// <summary>The HTML part; null for plain-text messages.</summary>
+    public string? HtmlBody { get; init; }
+
+    /// <summary>Images the HTML shows by content id (the logo).</summary>
+    public IReadOnlyList<EmailInlineImage> InlineImages { get; init; } = [];
+}
 
 /// <summary>Sends email with the company's settings. Implemented with MailKit in Infrastructure.</summary>
 public interface IEmailSender

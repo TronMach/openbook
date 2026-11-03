@@ -13,6 +13,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 ## The simple view
 
 28. [The simple view](28-simple-view.md): a short menu bar by task and a home page that walks through each step, for a business one person runs; switching between it and the full view.
+29. [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, and what was sent.
 
 ## Everyday work
 

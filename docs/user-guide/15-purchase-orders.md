@@ -12,7 +12,7 @@ A *purchase order* (PO) is what you send a vendor to order goods or services. It
 - Lines: an **inventory item** with quantity and unit cost, or a **category** line (an account and an amount) for anything else.
 - **Message to the vendor**, printed on the PO.
 
-**Save purchase order**. From its page, **PDF** prints it, and **Email to the vendor** opens a message you can edit (**Send with the PDF**). A PO can be edited until something is received or billed against it.
+**Save purchase order**. From its page, **PDF** prints it, and **Email** opens a message to the vendor beside a live preview ([Email](29-email.md)). A PO can be edited until something is received or billed against it.
 
 ### Receiving goods
 

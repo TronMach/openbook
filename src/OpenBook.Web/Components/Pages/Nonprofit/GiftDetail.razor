@@ -74,15 +74,7 @@
         {
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Send the acknowledgment</h2>
-                <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/email")" data-enhance="false">
-                    <AntiforgeryToken />
-                    <div class="row">
-                        <div class="field"><label for="to">To</label><input id="to" name="to" type="email" value="@_draft?.To" required /></div>
-                        <div class="field"><label for="subject">Subject</label><input id="subject" name="subject" value="@_draft?.Subject" maxlength="300" /></div>
-                    </div>
-                    <div class="field"><label for="body">Message</label><textarea id="body" name="body" rows="5">@_draft?.Body</textarea></div>
-                    <div class="actions"><button type="submit">Email the letter</button></div>
-                </PostForm>
+                <p><ActionLink Class="button" Href="@($"/nonprofit/gifts/{_gift.Id}/email")">Email the letter</ActionLink></p>
                 @if (_gift.AcknowledgedAt is null)
                 {
                     <PostForm Action="/nonprofit/thanks/mark" data-enhance="false" style="margin-top: 0.75rem">
@@ -93,6 +85,8 @@
                     </PostForm>
                 }
             </div>
+
+            <EmailHistory EntityType="donation" EntityId="_gift.Id" />
 
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>
@@ -112,7 +106,6 @@
     private Donation? _gift;
     private Customer? _donor;
     private string? _purpose;
-    private EmailDraft? _draft;
     private ChartOfAccounts _chart = new([]);
 
     [Parameter] public Guid Id { get; set; }
@@ -129,6 +122,5 @@
         _chart = await AccountService.GetChartAsync();
         if (_gift.ClassId is { } classId)
             _purpose = (await Segments.NamesAsync()).GetValueOrDefault(classId);
-        _draft = await GiftService.DraftAcknowledgmentAsync(Id);
     }
 }

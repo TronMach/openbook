@@ -471,6 +471,19 @@ public sealed class AccessRulesTests
     [InlineData("/reports/trial-balance-worksheet", "GET", UserRole.Accountant)]
     [InlineData("/reports/cash-forecast", "GET", UserRole.ViewOnly)]
     [InlineData("/reports/cash-forecast/scenarios", "POST", UserRole.Standard)]
+    [InlineData("/sales/email/invoices/0190a7a2-0000-7000-8000-000000000000", "GET", UserRole.Standard)]
+    [InlineData("/sales/email/invoices/0190a7a2-0000-7000-8000-000000000000/preview", "POST", UserRole.Standard)]
+    [InlineData("/purchases/orders/0190a7a2-0000-7000-8000-000000000000/email", "GET", UserRole.Standard)]
+    [InlineData("/nonprofit/statements/2026/0190a7a2-0000-7000-8000-000000000000/email/test", "POST", UserRole.Standard)]
+    [InlineData("/settings/email-templates", "GET", UserRole.Accountant)]
+    [InlineData("/settings/email-templates/invoice/preview", "POST", UserRole.Accountant)]
+    [InlineData("/settings/email", "GET", UserRole.Admin)]
+    [InlineData("/api/settings/email-templates/invoice", "GET", UserRole.ViewOnly)]
+    [InlineData("/api/settings/email-templates/invoice", "PUT", UserRole.Accountant)]
+    [InlineData("/sales/collections/settings/preview", "POST", UserRole.Accountant)]
+    [InlineData("/sales/email-links/0190a7a2-0000-7000-8000-000000000000/revoke", "POST", UserRole.Standard)]
+    [InlineData("/customers/0190a7a2-0000-7000-8000-000000000000/email-settings", "POST", UserRole.Standard)]
+    [InlineData("/view/obd_token", "GET", UserRole.ViewOnly)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
 

@@ -66,6 +66,20 @@ public sealed class Customer
 
     public void SetFormDesign(Guid? designId) => FormDesignId = designId == Guid.Empty ? null : designId;
 
+    /// <summary>Addresses copied on every email to the customer (their accounts payable inbox, say).</summary>
+    public string? EmailCc { get; private set; }
+
+    /// <summary>Whether their documents go as an attached PDF, a link, or both.</summary>
+    public Domain.Email.EmailPdf EmailPdf { get; private set; }
+
+    public void SetEmailPreferences(string? cc, Domain.Email.EmailPdf pdf)
+    {
+        if (!Enum.IsDefined(pdf))
+            throw new DomainException("customer.email_pdf_invalid", "Choose how documents are sent from the list.");
+        EmailCc = Domain.Email.EmailAddresses.Normalize(cc, "Copy to", 5);
+        EmailPdf = pdf;
+    }
+
     public bool IsActive { get; private set; }
 
     public static Customer Create(CustomerDetails details)

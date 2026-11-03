@@ -32,6 +32,11 @@ public sealed class ScheduledEmail
     public string To { get; private set; }
     public string Subject { get; private set; }
     public string Body { get; private set; }
+    public string? Cc { get; private set; }
+    public string? Bcc { get; private set; }
+
+    /// <summary>The form design to send with; null = the invoice's usual one.</summary>
+    public Guid? DesignId { get; private set; }
 
     /// <summary>When to send (UTC).</summary>
     public DateTimeOffset SendAt { get; private set; }
@@ -46,7 +51,9 @@ public sealed class ScheduledEmail
 
     public bool IsPending => Status == ScheduledEmailStatus.Scheduled;
 
-    public static ScheduledEmail Create(Guid invoiceId, string to, string? subject, string? body, DateTimeOffset sendAt, DateTimeOffset now, string actor)
+    public static ScheduledEmail Create(
+        Guid invoiceId, string to, string? subject, string? body, DateTimeOffset sendAt, DateTimeOffset now, string actor,
+        string? cc = null, string? bcc = null, Guid? designId = null)
     {
         if (string.IsNullOrWhiteSpace(to))
             throw new DomainException("email.to_required", "Enter the customer's email address.");
@@ -63,7 +70,10 @@ public sealed class ScheduledEmail
         {
             Id = Guid.CreateVersion7(),
             InvoiceId = invoiceId,
-            To = to.Trim(),
+            To = Email.EmailAddresses.Join(Email.EmailAddresses.Parse(to, "To")) ?? to.Trim(),
+            Cc = Email.EmailAddresses.Normalize(cc, "Cc"),
+            Bcc = Email.EmailAddresses.Normalize(bcc, "Bcc"),
+            DesignId = designId == Guid.Empty ? null : designId,
             Subject = subject,
             Body = body ?? "",
             SendAt = sendAt.ToUniversalTime(),

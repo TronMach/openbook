@@ -1,0 +1,143 @@
+@page "/settings/email-templates/{Key}"
+@inject EmailService Email
+@inject FormDesignService Designs
+@inject NavigationManager Navigation
+
+<PageTitle>@_label email · OpenBook</PageTitle>
+
+<div class="wide email-page">
+    <p><a href="/settings/email-templates">Email messages</a></p>
+    <h1>@_label email</h1>
+
+    @if (_kind is null)
+    {
+        <p>There's no email called "@Key".</p>
+    }
+    else
+    {
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+        @if (_done is not null)
+        {
+            <div class="alert notice" role="status">@_done</div>
+        }
+
+        <div class="email-editor">
+            <div class="card email-form">
+                <EditForm Model="Input" FormName="template" OnValidSubmit="SaveAsync" method="post" data-enhance="false"
+                          data-email-preview="@($"/settings/email-templates/{Key}/preview")">
+                    <div class="field">
+                        <label for="subject">Subject</label>
+                        <InputText id="subject" @bind-Value="Input.Subject" maxlength="300" />
+                    </div>
+                    <EmailBodyField For="body" Kind="_kind">
+                        <InputTextArea id="body" rows="14" @bind-Value="Input.Body" />
+                    </EmailBodyField>
+                    <p class="hint">A line whose fill-ins all come out blank is left out (an estimate without an end date has no "valid until" line).</p>
+
+                    @if (_designs.Count > 1)
+                    {
+                        <div class="field">
+                            <label for="design">Preview in the look of</label>
+                            <InputSelect id="design" @bind-Value="Input.DesignId">
+                                <option value="">The default design</option>
+                                @foreach (var d in _designs)
+                                {
+                                    <option value="@d.Id">@d.Name</option>
+                                }
+                            </InputSelect>
+                            <span class="hint">Each email goes in its document's design; this only changes the preview.</span>
+                        </div>
+                    }
+
+                    <div class="design-save">
+                        <button type="submit">Save</button>
+                        <a href="/settings/email-templates">Cancel</a>
+                        <span class="muted">@(_wording!.IsUsual ? "This is the usual wording." : $"Changed {_wording.UpdatedAt!.Value.InCompanyTime():g} by {_wording.UpdatedBy}.")</span>
+                    </div>
+                </EditForm>
+                @if (!_wording!.IsUsual)
+                {
+                    <form method="post" @formname="reset" @onsubmit="ResetAsync" data-enhance="false" style="margin-top: 1rem">
+                        <AntiforgeryToken />
+                        <button type="submit" class="secondary">Go back to the usual wording</button>
+                    </form>
+                }
+            </div>
+
+            @if (_preview is not null)
+            {
+                <EmailPreviewPane Preview="_preview" Recipient="the customer" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private EmailKind? _kind;
+    private string _label = "";
+    private EmailWording? _wording;
+    private EmailPreview? _preview;
+    private IReadOnlyList<OpenBook.Domain.Companies.FormDesign> _designs = [];
+    private string? _error;
+    private string? _done;
+
+    [Parameter]
+    public string Key { get; set; } = "";
+
+    [SupplyParameterFromForm(FormName = "template")]
+    private TemplateModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _kind = EmailTemplates.FromKey(Key);
+        if (_kind is not { } kind)
+            return;
+        if (kind == EmailKind.Reminder)
+        {
+            Navigation.NavigateTo("/sales/collections/settings");
+            return;
+        }
+
+        _label = EmailTemplates.Label(kind);
+        _wording = await Email.TemplateAsync(kind);
+        Input ??= new TemplateModel { Subject = _wording.Subject, Body = _wording.Body };
+        _designs = [.. (await Designs.ListAsync()).Where(d => d.IsActive)];
+        await PreviewAsync();
+    }
+
+    private async Task PreviewAsync() =>
+        _preview = await Email.PreviewTemplateAsync(_kind!.Value, Input.Subject, Input.Body, Guid.TryParse(Input.DesignId, out var d) ? d : null);
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            _wording = await Email.SaveTemplateAsync(_kind!.Value, Input.Subject, Input.Body);
+            (_done, _error) = ("Saved. New emails start with this wording.", null);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+
+        await PreviewAsync();
+    }
+
+    private async Task ResetAsync()
+    {
+        _wording = await Email.ResetTemplateAsync(_kind!.Value);
+        Input = new TemplateModel { Subject = _wording.Subject, Body = _wording.Body };
+        (_done, _error) = ("Back to the usual wording.", null);
+        await PreviewAsync();
+    }
+
+    private sealed class TemplateModel
+    {
+        public string? Subject { get; set; }
+        public string? Body { get; set; }
+        public string? DesignId { get; set; }
+    }
+}

@@ -95,19 +95,6 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/gifts/{id}", () => gifts.VoidAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
-        app.MapPost("/nonprofit/gifts/{id:guid}/email", async (Guid id, IFormCollection form, GiftService gifts, CancellationToken ct) =>
-        {
-            try
-            {
-                await gifts.SendAcknowledgmentAsync(id, new EmailDraft(form["to"].ToString(), form["subject"].ToString(), form["body"].ToString()), ct);
-                return Results.Redirect($"/nonprofit/gifts/{id}?sent=true");
-            }
-            catch (DomainException ex)
-            {
-                return Results.Redirect($"/nonprofit/gifts/{id}?error={Uri.EscapeDataString(ex.Message)}");
-            }
-        }).RequireAuthorization();
-
         app.MapGet("/nonprofit/gifts/{id:guid}/letter", async (Guid id, GiftService gifts, CancellationToken ct) =>
             Results.File((await gifts.AcknowledgmentAsync(id, ct)).Pdf, "application/pdf")).RequireAuthorization();
 
@@ -126,12 +113,14 @@ public static class NonprofitEndpoints
         app.MapGet("/nonprofit/statements/{year:int}/{donorId:guid}", async (int year, Guid donorId, GiftService gifts, CancellationToken ct) =>
             Results.File((await gifts.YearStatementAsync(donorId, year, ct)).Pdf, "application/pdf")).RequireAuthorization();
 
-        app.MapPost("/nonprofit/statements/{year:int}/email", async (int year, IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        app.MapPost("/nonprofit/statements/{year:int}/email", async (int year, IFormCollection form, GiftService gifts, EmailService email, CancellationToken ct) =>
         {
             try
             {
-                var (sent, notSent) = await gifts.SendYearStatementsAsync(year, ct);
-                var done = $"{sent} statement(s) sent." + (notSent.Count > 0 ? $" Not sent: {string.Join("; ", notSent)}." : "");
+                var donors = await gifts.DonorsInYearAsync(year, ct);
+                var run = await email.SendEachAsync([.. donors.Select(d => new EmailSource(OpenBook.Domain.Email.EmailKind.GivingStatement, d, Year: year))], ct);
+                var notSent = run.NoEmail.Select(n => $"{n}: no email address").Concat(run.Failed.Select(f => $"{f.Name}: {f.Reason}")).ToList();
+                var done = $"{run.Sent.Count} statement(s) sent." + (notSent.Count > 0 ? $" Not sent: {string.Join("; ", notSent)}." : "");
                 return Results.Redirect($"/nonprofit/thanks?year={year}&done={Uri.EscapeDataString(done)}");
             }
             catch (DomainException ex)

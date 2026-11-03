@@ -222,6 +222,17 @@
                         </div>
                     </details>
 
+                    <details class="design-section" open>
+                        <summary>Email look</summary>
+                        <fieldset class="field">
+                            <legend>Emails sent with this design</legend>
+                            <label class="check"><input type="radio" name="emailStyle" value="Branded" checked="@(_design.EmailStyle == EmailStyle.Branded)" /> <span>With the logo, over a band of the accent color</span></label>
+                            <label class="check"><input type="radio" name="emailStyle" value="Simple" checked="@(_design.EmailStyle == EmailStyle.Simple)" /> <span>Simple: the company name in the accent color</span></label>
+                            <label class="check"><input type="radio" name="emailStyle" value="Plain" checked="@(_design.EmailStyle == EmailStyle.Plain)" /> <span>Plain text only</span></label>
+                            <span class="hint">The footer above closes every email too. The wording is in <ActionLink Href="/settings/email-templates">Email messages</ActionLink>, where the preview shows this look.</span>
+                        </fieldset>
+                    </details>
+
                     <details class="design-section" open="@(_design.Texts.Count > 0)">
                         <summary>Titles and messages</summary>
                         <p class="hint">Blank keeps the usual title and adds no message.</p>

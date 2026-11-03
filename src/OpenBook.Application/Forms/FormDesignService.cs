@@ -185,6 +185,10 @@ public sealed class FormDesignService(
         return design.IsActive ? design : throw new DomainException("formdesign.inactive", $"{design.Name} is switched off.");
     }
 
+    /// <summary>The default design (the built-in one before setup).</summary>
+    public async Task<FormDesign> DefaultAsync(CancellationToken ct = default) =>
+        (await store.ListAsync(ct)).FirstOrDefault(d => d.IsDefault) ?? Standard();
+
     /// <summary>The default design's look, for forms that aren't one of <see cref="FormDocuments"/> (donor letters).</summary>
     public async Task<FormStyle> DefaultStyleAsync(CancellationToken ct = default) =>
         await StyleAsync((await store.ListAsync(ct)).FirstOrDefault(d => d.IsDefault) ?? Standard(), ct);
@@ -436,5 +440,6 @@ public sealed class FormDesignService(
         Margins = d.Margins.ToString(),
         TextSize = d.TextSize.ToString(),
         Texts = d.Texts.Select(t => new { Document = t.Document.ToString(), t.Title, t.Message }),
+        EmailStyle = d.EmailStyle.ToString(),
     });
 }
