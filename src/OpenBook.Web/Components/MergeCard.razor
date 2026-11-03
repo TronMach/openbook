@@ -1,0 +1,79 @@
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
+@inject CustomerService Customers
+@inject VendorService Vendors
+@inject ItemService Items
+
+@* "Merge into another": a duplicate customer, vendor or item hands everything it has to the one chosen and is made
+   inactive. Posts to /merge/{Kind} (accountant role); the result comes back in the address. *@
+@if (_merged is not null)
+{
+    <div class="alert success" role="status">@_merged was merged into this @Noun: its documents, notes and files are here now.</div>
+}
+@if (_error is not null)
+{
+    <div class="alert error" role="alert">@_error</div>
+}
+@if (_choices.Count > 0)
+{
+    <details class="card no-print" id="merge" open="@(_error is not null)">
+        <summary>Merge into another @Noun…</summary>
+        <p class="muted">
+            For duplicates: everything @Name has (@What) moves to the @Noun you choose, and @Name is made inactive with "(merged)"
+            after its name. Amounts and accounts already posted don't change. This can't be undone.
+        </p>
+        <PostForm Action="@($"/merge/{Kind}")" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="from" value="@Id" />
+            <div class="field">
+                <label for="merge-into">Merge into</label>
+                <select id="merge-into" name="into" required data-search>
+                    <option value="">Choose…</option>
+                    @foreach (var (id, name) in _choices)
+                    {
+                        <option value="@id">@name</option>
+                    }
+                </select>
+            </div>
+            <label class="check">
+                <input type="checkbox" name="confirm" value="true" required />
+                <span>I understand @Name will be merged and this can't be undone</span>
+            </label>
+            <div class="actions"><button type="submit" class="danger">Merge</button></div>
+        </PostForm>
+    </details>
+}
+
+@code {
+    /// <summary>"customers", "vendors" or "items".</summary>
+    [Parameter, EditorRequired] public string Kind { get; set; } = "";
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    private List<(Guid Id, string Name)> _choices = [];
+    private string? _merged;
+    private string? _error;
+
+    private string Noun => Kind switch { "customers" => "customer", "vendors" => "vendor", _ => "item" };
+
+    private string What => Kind switch
+    {
+        "customers" => "invoices, payments, estimates, orders, time, notes and files",
+        "vendors" => "bills, payments, expenses, purchase orders, notes and files",
+        _ => "lines on sales and purchase documents, prices, notes and files",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        _merged = query.TryGetValue("merged", out var merged) ? merged.ToString() : null;
+        _error = query.TryGetValue("mergeError", out var error) ? error.ToString() : null;
+        var today = CompanyTime.Today;
+        _choices = Kind switch
+        {
+            "customers" => (await Customers.ListAsync(today)).Where(c => c.Customer.Id != Id).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList(),
+            "vendors" => (await Vendors.ListAsync(today)).Where(v => v.Vendor.Id != Id).Select(v => (v.Vendor.Id, v.Vendor.DisplayName)).ToList(),
+            _ => (await Items.ListAsync()).Where(i => i.Id != Id && !i.IsInventory && !i.IsBundle).Select(i => (i.Id, i.Name)).ToList(),
+        };
+    }
+}

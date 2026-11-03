@@ -14,6 +14,15 @@ internal static class PortabilityApi
 {
     public static void MapPortabilityApi(this RouteGroupBuilder api)
     {
+        // Merging duplicates: everything of mergeId moves to keepId, which is kept (accountant role).
+        api.MapPost("/merge/{kind}", async (string kind, MergeRequest r, Application.Lists.MergeService s, CancellationToken ct) => kind switch
+        {
+            "customers" => Results.Ok(await s.MergeCustomersAsync(r.MergeId, r.KeepId, ct)),
+            "vendors" => Results.Ok(await s.MergeVendorsAsync(r.MergeId, r.KeepId, ct)),
+            "items" => Results.Ok(await s.MergeItemsAsync(r.MergeId, r.KeepId, ct)),
+            _ => Results.NotFound(),
+        });
+
         // Bodies are the files themselves (text/csv, or the .iif text). With dryRun=true nothing is saved.
         var import = api.MapGroup("/import");
         import.MapPost("/journal-entries", async (HttpRequest request, bool? dryRun, JournalImportService s, CancellationToken ct) =>
@@ -83,3 +92,7 @@ internal static class PortabilityApi
         return await reader.ReadToEndAsync(ct);
     }
 }
+
+/// <param name="MergeId">The duplicate, made inactive.</param>
+/// <param name="KeepId">The one everything moves to.</param>
+public sealed record MergeRequest(Guid MergeId, Guid KeepId);

@@ -142,6 +142,9 @@ public sealed class Customer
 
     public bool ExemptionExpired(DateOnly today) => ExemptionCertificate is not null && ExemptionExpiresOn is { } e && e < today;
 
+    /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>
+    public void Rename(string name) => DisplayName = NormalizeName(name);
+
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;

@@ -23,6 +23,12 @@ A customer with unpaid invoices can't be made inactive; once they're settled, **
 
 To add many at once, use **Customers → Import CSV** with a CSV file of names, emails, phones and addresses. As with every import, you get a preview first and nothing is added until every row is good. Customers that already exist are skipped.
 
+### Merging duplicates
+
+When the same customer was entered twice, open the one to get rid of and use **Merge into another customer…** at the bottom of its page: choose the customer to keep, tick the box to confirm, and **Merge**. Everything the duplicate had (invoices, payments, estimates, orders, credits, time, notes, files and custom field values) moves to the one kept, and the duplicate is made inactive with "(merged)" after its name. Amounts and accounts already posted don't change, and the audit log records the merge. It needs the accountant role and can't be undone.
+
+A customer with sub-customers can't be merged until they're moved; two customers that each have something only one may have (each a project, say) can't be merged either. Vendors merge the same way from the vendor's page (bills, payments, expenses, purchase orders, and items that name it as their preferred vendor), and services and non-inventory products from the item's page (two items of the same type; inventory products, bundles and assemblies keep their own stock histories and can't be merged).
+
 ## Products and services
 
 Every line on an invoice that charges something names a *product or service* (an *item*). The item sets the line's description, default price and the income account the sale goes to.

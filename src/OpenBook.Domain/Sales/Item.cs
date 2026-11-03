@@ -240,6 +240,9 @@ public sealed class Item
         };
     }
 
+    /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>
+    public void Rename(string name) => Name = NormalizeName(name);
+
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;

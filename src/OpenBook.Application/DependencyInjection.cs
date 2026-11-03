@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<StatementReports>();
         services.AddScoped<ActivityReports>();
         services.AddScoped<ListReports>();
+        services.AddScoped<Lists.MergeService>();
         services.AddScoped<ReportCatalog>();
         services.AddScoped<BudgetService>();
         services.AddScoped<SavedReportService>();

@@ -92,6 +92,9 @@ public sealed class Vendor
             : throw new DomainException("vendor.1099_box_invalid", "Unknown 1099 box.");
     }
 
+    /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>
+    public void Rename(string name) => DisplayName = NormalizeName(name);
+
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;

@@ -246,6 +246,7 @@ app.MapPost("/settings/system/updates/install", async (IFormCollection form, Ope
         """, "text/html");
 }).RequireAuthorization();
 app.MapPurchasingEndpoints();
+app.MapMergeEndpoints();
 app.MapOnlineEndpoints();
 app.MapDocumentEndpoints();
 app.MapCustomFieldEndpoints();

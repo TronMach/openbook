@@ -375,6 +375,10 @@
 {
     <CustomFieldPanel EntityType="item" EntityId="_item.Id" />
     <Notes EntityType="item" EntityId="_item.Id" />
+    @if (!_item.IsInventory && !_item.IsBundle)
+    {
+        <MergeCard Kind="items" Id="_item.Id" Name="@_item.Name" />
+    }
 }
 
 @code {
