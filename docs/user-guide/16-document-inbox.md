@@ -22,15 +22,17 @@ However a file is read, check the result against the document before you post it
 
 ## Receipts
 
-**Purchases → Receipts → Upload receipt**: choose a photo or PDF. OpenBook keeps the file and tries to read the vendor (vendors you already have are recognized by name), the date, the total and the tax.
+**Purchases → Receipts → Upload receipts**: choose a photo or PDF, or several at once (up to 10). OpenBook keeps the file and tries to read the vendor (vendors you already have are recognized by name), the date, the total and the tax.
 
 Open the receipt to **Record as an expense**: check the **vendor** or **payee**, choose **paid from** (the card or bank account), the **category**, **date** and **amount**, then **Record expense**. The receipt file is attached to the expense. The text that was read is shown below the form so you can compare.
 
-**Dismiss** a receipt that isn't an expense or was entered already, for example because it also arrived through a bank import.
+**Dismiss** a receipt that isn't an expense or was entered already, for example because it also arrived through a bank import. If the same file was uploaded before, the receipt's page says so, with a link to the earlier one.
 
 ## The document inbox
 
-Upload a file and say **what it is**: vendor invoice, customer purchase order, packing slip or vendor quote. **Upload and read**.
+Upload a file, or several of the same kind at once (up to 10), and say **what it is**: vendor invoice, customer purchase order, packing slip or vendor quote. **Upload and read**. One file opens straight away; several are listed in the inbox to check one by one, with **Next to check** on each page.
+
+On a purchase order's page, **upload the vendor's invoice** and **upload the packing slip** open the inbox for that order: what's read is matched to the order unless the document names another one.
 
 Open it from the inbox to see the file beside what was read:
 
@@ -40,6 +42,10 @@ Open it from the inbox to see the file beside what was read:
 - **Lines**, each with code, description, quantity, unit price and amount, and the **item** it was matched to: by barcode, name, the PO's line, or a code you taught it before.
 
 Correct anything wrong and **Save**. If the lines don't add up to the total, OpenBook warns you to look for a missed or misread line. When you save, it remembers the item you chose for each product code from that vendor or customer, so next time it matches by itself.
+
+Before you enter it, the page warns when the document may already be in the books: the same file uploaded before (to the inbox or as a receipt), a bill from the vendor with the same invoice number, or one for the same total within two weeks of its date. Dismiss it if it's a copy.
+
+Documents waiting to be checked and receipts waiting to be recorded are listed on the home page's to-do list.
 
 **Read again** (with Claude or on the server) replaces the fields, including your corrections. **Dismiss** removes a document from the inbox; **Put it back in the inbox** restores it.
 

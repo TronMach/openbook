@@ -2143,6 +2143,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2214,6 +2218,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("FileHash");
 
                     b.HasIndex("PurchaseOrderId");
 
@@ -4125,6 +4131,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("Date")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -4157,6 +4167,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BankTransactionId");
+
+                    b.HasIndex("FileHash");
 
                     b.HasIndex("VendorId");
 

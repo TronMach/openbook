@@ -13,25 +13,41 @@ public static class DocumentEndpoints
 {
     public static IEndpointRouteBuilder MapDocumentEndpoints(this IEndpointRouteBuilder app)
     {
-        // Fields: file, kind, claude ("true" to let Claude read it when switched on).
-        app.MapPost("/documents/upload", async (IFormFile? file, HttpRequest request, DocumentCaptureService documents, CancellationToken ct) =>
+        // Fields: file (one or several), kind, claude ("true" to let Claude read it when switched on), purchaseOrderId (optional:
+        // uploaded from that order). One file opens its page; several go back to the inbox, saying what was read and what was refused.
+        // The form is bound (not read by hand) so the antiforgery check runs.
+        app.MapPost("/documents/upload", async (IFormCollection form, DocumentCaptureService documents, CancellationToken ct) =>
         {
-            var form = await request.ReadFormAsync(ct);
-            if (file is null || file.Length == 0)
+            var files = form.Files.GetFiles("file").Where(f => f.Length > 0).ToList();
+            if (files.Count == 0)
                 return Results.Redirect($"/documents?error={Uri.EscapeDataString("Choose a file.")}");
+            if (files.Count > MaxFiles)
+                return Results.Redirect($"/documents?error={Uri.EscapeDataString($"Upload at most {MaxFiles} files at once.")}");
             if (!Enum.TryParse<DocumentKind>(form["kind"], out var kind) || !Enum.IsDefined(kind))
                 return Results.Redirect($"/documents?error={Uri.EscapeDataString("Choose what kind of document it is.")}");
-            try
+            var order = Id(form["purchaseOrderId"]);
+            var made = new List<Guid>();
+            var refused = new List<string>();
+            foreach (var file in files)
             {
-                await using var stream = file.OpenReadStream();
-                var document = await documents.UploadAsync(kind, file.FileName, stream, form["claude"] == "true", ct);
-                return Results.Redirect($"/documents/{document.Id}");
+                try
+                {
+                    await using var stream = file.OpenReadStream();
+                    made.Add((await documents.UploadAsync(kind, file.FileName, stream, form["claude"] == "true", order, ct)).Id);
+                }
+                catch (DomainException ex)
+                {
+                    refused.Add($"{file.FileName}: {ex.Message}");
+                }
             }
-            catch (DomainException ex)
-            {
-                return Results.Redirect($"/documents?error={Uri.EscapeDataString(ex.Message)}");
-            }
-        }).RequireAuthorization();
+
+            if (made.Count == 1 && refused.Count == 0)
+                return Results.Redirect($"/documents/{made[0]}");
+            var query = $"uploaded={made.Count}";
+            if (refused.Count > 0)
+                query += $"&error={Uri.EscapeDataString(string.Join(" ", refused))}";
+            return Results.Redirect($"/documents?{query}");
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxUploadBytes));
 
         // Fields: party, partyId, number, date, dueDate, orderReference, purchaseOrderId, subtotal, tax, shipping, total, rows,
         // and per row i: desc:i, sku:i, qty:i, price:i, amount:i, item:i.
@@ -99,6 +115,12 @@ public static class DocumentEndpoints
 
         return app;
     }
+
+    /// <summary>Files one upload may carry; each is read in turn.</summary>
+    public const int MaxFiles = 10;
+
+    /// <summary>Room for <see cref="MaxFiles"/> files of the largest size an attachment may be.</summary>
+    public const long MaxUploadBytes = MaxFiles * (Domain.Attachments.Attachment.MaxBytes + (64 * 1024));
 
     private static async Task<IResult> Back(string page, Func<Task<string>> change)
     {

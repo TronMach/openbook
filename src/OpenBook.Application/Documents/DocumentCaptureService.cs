@@ -12,6 +12,16 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Documents;
 
+/// <summary>Earlier uploads of the same file, and bills that may already stand for a vendor's invoice.</summary>
+/// <param name="NumberedBill">The vendor's bill with the document's number, already entered.</param>
+/// <param name="SimilarBills">The vendor's bills for the same total within two weeks of the document's date.</param>
+public sealed record DocumentDuplicates(
+    IReadOnlyList<CapturedDocument> SameFile, IReadOnlyList<Domain.Purchases.ReceiptCapture> SameFileReceipts, Domain.Purchases.Bill? NumberedBill,
+    IReadOnlyList<Domain.Purchases.Bill> SimilarBills)
+{
+    public bool Any => SameFile.Count > 0 || SameFileReceipts.Count > 0 || NumberedBill is not null || SimilarBills.Count > 0;
+}
+
 public interface IDocumentStore
 {
     /// <summary>Tracked.</summary>
@@ -19,6 +29,9 @@ public interface IDocumentStore
 
     /// <summary>Newest first.</summary>
     Task<IReadOnlyList<CapturedDocument>> ListDocumentsAsync(CancellationToken ct);
+
+    /// <summary>Documents whose file has this SHA-256, oldest first.</summary>
+    Task<IReadOnlyList<CapturedDocument>> ListDocumentsByFileHashAsync(string hash, CancellationToken ct);
 
     /// <summary>Tracked; null until the settings are first saved.</summary>
     Task<DocumentReadingSettings?> GetReadingSettingsAsync(CancellationToken ct);
@@ -103,7 +116,9 @@ public sealed class DocumentCaptureService(
     /// reason in <see cref="CapturedDocument.ReadNote"/>.
     /// </summary>
     /// <param name="useClaude">Null: Claude reads it when switched on. False keeps this file on the server.</param>
-    public async Task<CapturedDocument> UploadAsync(DocumentKind kind, string fileName, Stream content, bool? useClaude = null, CancellationToken ct = default)
+    /// <param name="purchaseOrderId">Our purchase order it belongs to, when it's uploaded from the order: used when reading doesn't find one.</param>
+    public async Task<CapturedDocument> UploadAsync(
+        DocumentKind kind, string fileName, Stream content, bool? useClaude = null, Guid? purchaseOrderId = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(content);
         using var buffer = new MemoryStream();
@@ -115,16 +130,50 @@ public sealed class DocumentCaptureService(
         Domain.Attachments.Attachment.Create(EntityType, Guid.Empty, fileName, buffer.Length, clock.UtcNow, user.Actor);
 
         var document = CapturedDocument.Create(kind, fileName, clock.UtcNow, user.Actor);
+        document.SetFileHash(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length))));
         store.Add(document);
         store.Add(Audit(AuditAction.Created, document, null));
         await store.SaveChangesAsync(ct);
         buffer.Position = 0;
         await attachments.AddAsync(EntityType, document.Id, fileName, buffer, ct);
 
-        await ReadAsync(document, useClaude ?? true, ct);
+        await ReadAsync(document, useClaude ?? true, ct, purchaseOrderId);
         await store.SaveChangesAsync(ct);
         return document;
     }
+
+    /// <summary>
+    /// What may make a document a duplicate: the same file uploaded before (to the inbox or as a receipt), and, for a
+    /// vendor's invoice, a bill already entered with its number or for its total close to its date.
+    /// </summary>
+    public async Task<DocumentDuplicates> DuplicatesAsync(CapturedDocument document, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        IReadOnlyList<CapturedDocument> files = [];
+        IReadOnlyList<ReceiptCapture> receipts = [];
+        if (document.FileHash is { } hash)
+        {
+            files = (await store.ListDocumentsByFileHashAsync(hash, ct)).Where(d => d.Id != document.Id).ToList();
+            receipts = await purchases.ListReceiptsByFileHashAsync(hash, ct);
+        }
+
+        Bill? numbered = null;
+        IReadOnlyList<Bill> similar = [];
+        if (document.Kind == DocumentKind.VendorInvoice && document.VendorId is { } vendorId && document.Status == CapturedDocumentStatus.New)
+        {
+            var bills = (await purchases.ListBillsAsync(vendorId, ct)).Where(b => b.Status == Domain.Common.DocumentStatus.Posted).ToList();
+            if (document.Number is { } number)
+                numbered = bills.FirstOrDefault(b => string.Equals(b.Reference?.Trim(), number.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (document.Total is { } total && document.Date is { } date)
+                similar = bills.Where(b => b.Id != numbered?.Id && b.Total == total && Math.Abs(b.Date.DayNumber - date.DayNumber) <= Purchases.BillService.DuplicateDays).ToList();
+        }
+
+        return new DocumentDuplicates(files, receipts, numbered, similar);
+    }
+
+    /// <summary>The next document waiting to be checked after this one (oldest first), or null.</summary>
+    public async Task<CapturedDocument?> NextWaitingAsync(Guid after, CancellationToken ct = default) =>
+        (await store.ListDocumentsAsync(ct)).Where(d => d.Status == CapturedDocumentStatus.New && d.Id != after).OrderBy(d => d.CreatedAt).FirstOrDefault();
 
     /// <summary>Reads the file again (by Claude or on the server), replacing the fields and any corrections.</summary>
     public async Task<CapturedDocument> ReadAgainAsync(Guid id, bool useClaude, CancellationToken ct = default)
@@ -204,8 +253,10 @@ public sealed class DocumentCaptureService(
         return document;
     }
 
-    private async Task ReadAsync(CapturedDocument document, bool useClaude, CancellationToken ct)
+    /// <param name="orderHint">The purchase order to fall back on when reading finds none (the one it was uploaded from, or the one chosen before).</param>
+    private async Task ReadAsync(CapturedDocument document, bool useClaude, CancellationToken ct, Guid? orderHint = null)
     {
+        orderHint ??= document.PurchaseOrderId;
         var files = await attachments.ListAsync(EntityType, document.Id, ct);
         var file = files.Count > 0 ? files[0] : null;
         var bytes = file is null ? [] : await attachments.GetContentAsync(file.Id, ct) ?? [];
@@ -264,7 +315,11 @@ public sealed class DocumentCaptureService(
         Guid? customerId = fromVendor ? null : DocumentMatching.Party(document.Party, text2, customers.Select(c => (c.Id, c.DisplayName)));
         PurchaseOrder? order = null;
         if (fromVendor && document.Kind != DocumentKind.VendorQuote)
-            order = DocumentMatching.PurchaseOrder(document.OrderReference, vendorId, await purchases.ListPurchaseOrdersAsync(null, ct));
+        {
+            var orders = await purchases.ListPurchaseOrdersAsync(null, ct);
+            order = DocumentMatching.PurchaseOrder(document.OrderReference, vendorId, orders)
+                ?? orders.FirstOrDefault(o => o.Id == orderHint && (vendorId is null || o.VendorId == vendorId));
+        }
         vendorId ??= order?.VendorId;
         var items = (await sales.ListItemsAsync(ct)).Where(i => i.IsActive).ToList();
         var codes = (vendorId ?? customerId) is { } partyId

@@ -132,6 +132,9 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public async Task<IReadOnlyList<ReceiptCapture>> ListReceiptsAsync(CancellationToken ct) =>
         (await db.ReceiptCaptures.AsNoTracking().ToListAsync(ct)).OrderByDescending(r => r.CreatedAt).ToList();
 
+    public async Task<IReadOnlyList<ReceiptCapture>> ListReceiptsByFileHashAsync(string hash, CancellationToken ct) =>
+        (await db.ReceiptCaptures.AsNoTracking().Where(r => r.FileHash == hash).ToListAsync(ct)).OrderBy(r => r.CreatedAt).ToList();
+
     public void Add(ReceiptCapture receipt) => db.ReceiptCaptures.Add(receipt);
 
     public void Add(PurchasingSettings settings) => db.PurchasingSettings.Add(settings);

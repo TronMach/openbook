@@ -24,12 +24,15 @@ public static class DocumentsApi
         documents.MapGet("", async (DocumentCaptureService s, CancellationToken ct) => await s.ListAsync(ct));
         documents.MapGet("/{id:guid}", async (Guid id, DocumentCaptureService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } d ? Results.Ok(d) : Results.NotFound());
-        // The file is the raw body: ?kind=VendorInvoice&fileName=invoice.pdf[&claude=false].
-        documents.MapPost("", async (HttpRequest request, DocumentKind kind, string fileName, bool? claude, DocumentCaptureService s, CancellationToken ct) =>
+        // The file is the raw body: ?kind=VendorInvoice&fileName=invoice.pdf[&claude=false][&purchaseOrderId=…].
+        documents.MapPost("", async (HttpRequest request, DocumentKind kind, string fileName, bool? claude, Guid? purchaseOrderId, DocumentCaptureService s, CancellationToken ct) =>
         {
-            var document = await s.UploadAsync(kind, fileName, request.Body, claude, ct);
+            var document = await s.UploadAsync(kind, fileName, request.Body, claude, purchaseOrderId, ct);
             return Results.Created($"/api/documents/{document.Id}", document);
         });
+        // Earlier uploads of the same file, and bills that may already stand for it.
+        documents.MapGet("/{id:guid}/duplicates", async (Guid id, DocumentCaptureService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } d ? Results.Ok(await s.DuplicatesAsync(d, ct)) : Results.NotFound());
         documents.MapPut("/{id:guid}", async (Guid id, DocumentReview r, DocumentCaptureService s, CancellationToken ct) => await s.ReviewAsync(id, r, ct));
         documents.MapPost("/{id:guid}/read", async (Guid id, ReadDocumentRequest r, DocumentCaptureService s, CancellationToken ct) => await s.ReadAgainAsync(id, r.UseClaude, ct));
         documents.MapPost("/{id:guid}/dismiss", async (Guid id, DocumentCaptureService s, CancellationToken ct) => await s.DismissAsync(id, ct));

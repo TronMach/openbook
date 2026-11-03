@@ -23,6 +23,18 @@
         <div class="alert error" role="alert">@Error</div>
     }
 
+    @if (_sameFile.Count > 0 && _receipt.Status == ReceiptStatus.New)
+    {
+        <div class="alert notice" role="alert">
+            The same file was uploaded before:
+            @foreach (var (r, i) in _sameFile.Select((r, i) => (r, i)))
+            {
+                @(i == 0 ? " " : "; ")<a href="/purchases/receipts/@r.Id">@r.FileName, @r.CreatedAt.InCompanyTime().ToString("g")</a>@(r.Status == ReceiptStatus.Recorded ? " (recorded)" : "")
+            }
+            . Dismiss this one if it's a copy.
+        </div>
+    }
+
     @if (_receipt.Status == ReceiptStatus.Recorded && _receipt.BankTransactionId is { } spendId)
     {
         <div class="alert notice" role="status">Recorded: <a href="/banking/transactions/@spendId">see the expense</a>.</div>
@@ -119,6 +131,7 @@
 </div>
 
 @code {
+    private IReadOnlyList<ReceiptCapture> _sameFile = [];
     private ReceiptCapture? _receipt;
     private ChartOfAccounts _chart = new([]);
     private List<Account> _payFrom = [];
@@ -134,6 +147,7 @@
         _receipt = await ReceiptService.GetAsync(Id);
         if (_receipt is null)
             return;
+        _sameFile = await ReceiptService.SameFileAsync(_receipt);
         _chart = await AccountService.GetChartAsync();
         var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _payFrom = accounts.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();

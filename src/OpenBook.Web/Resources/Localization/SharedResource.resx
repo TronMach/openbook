@@ -551,6 +551,9 @@
   <data name="Cost" xml:space="preserve">
     <value>Cost</value>
   </data>
+  <data name="Counting what's on order and promised to customers" xml:space="preserve">
+    <value>Counting what's on order and promised to customers</value>
+  </data>
   <data name="Counts toward" xml:space="preserve">
     <value>Counts toward</value>
   </data>
@@ -664,6 +667,9 @@
   </data>
   <data name="Document reading" xml:space="preserve">
     <value>Document reading</value>
+  </data>
+  <data name="Documents to check" xml:space="preserve">
+    <value>Documents to check</value>
   </data>
   <data name="Donor Center" xml:space="preserve">
     <value>Donor Center</value>
@@ -1706,6 +1712,9 @@
   <data name="Receipts" xml:space="preserve">
     <value>Receipts</value>
   </data>
+  <data name="Receipts to record" xml:space="preserve">
+    <value>Receipts to record</value>
+  </data>
   <data name="Receive a payment" xml:space="preserve">
     <value>Receive a payment</value>
   </data>
@@ -2338,6 +2347,9 @@
   </data>
   <data name="Vendor credit" xml:space="preserve">
     <value>Vendor credit</value>
+  </data>
+  <data name="Vendor invoices, orders and packing slips uploaded and read" xml:space="preserve">
+    <value>Vendor invoices, orders and packing slips uploaded and read</value>
   </data>
   <data name="Vendor refund" xml:space="preserve">
     <value>Vendor refund</value>

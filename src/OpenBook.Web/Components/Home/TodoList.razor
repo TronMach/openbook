@@ -102,7 +102,10 @@
         Add(figures.OpenEstimates, L["Estimates waiting for an answer"], "/sales?show=estimates");
         Add(figures.OrdersToReceive, L["Purchase orders still to receive"], "/purchases/orders");
         if (figures.StockItems > 0)
-            Add((await Get<InventoryService>().StockAsync()).Count(s => s.NeedsReorder), L["Items to reorder"], "/reports/inventory-stock");
+            Add((await Get<ReorderService>().DueAsync()).Count, L["Items to reorder"], "/purchases/reorder", L["Counting what's on order and promised to customers"]);
+        Add((await Get<OpenBook.Application.Documents.DocumentCaptureService>().ListAsync()).Count(d => d.Status == OpenBook.Domain.Documents.CapturedDocumentStatus.New),
+            L["Documents to check"], "/documents", L["Vendor invoices, orders and packing slips uploaded and read"]);
+        Add((await Get<ReceiptService>().ListAsync()).Count(r => r.Status == ReceiptStatus.New), L["Receipts to record"], "/purchases/receipts");
         if (Company.Edition == Edition.Nonprofit)
             Add((await Get<GiftService>().ListAsync()).Count(g => g.Status == DocumentStatus.Posted && g.AcknowledgedAt is null), L["Gifts not yet thanked"], "/nonprofit/thanks");
 

@@ -4,6 +4,7 @@
 @inject DocumentCaptureService DocumentService
 @inject VendorService VendorService
 @inject CustomerService CustomerService
+@inject PurchaseOrderService Orders
 
 <PageTitle>Document inbox · OpenBook</PageTitle>
 
@@ -19,7 +20,8 @@
     <p class="muted">
         Upload a vendor's invoice, a customer's purchase order, a packing slip or a vendor's quote as a PDF, scan or photo. OpenBook reads
         who it's from, its number, dates, totals and lines, matches them to your vendors or customers, purchase orders and items, and you
-        check them against the document before turning it into a record.
+        check them against the document before turning it into a record. Already paid it on the spot? Upload it under
+        <ActionLink Href="/purchases/receipts">Receipts</ActionLink> instead, to record it as an expense.
         @if (_settings.IsReady)
         {
             <span>Reading with Claude is on: files you tick below are sent to Anthropic to read.</span>
@@ -34,23 +36,33 @@
     {
         <div class="alert error" role="alert">@Error</div>
     }
+    @if (Uploaded is > 0 and var uploaded)
+    {
+        <div class="alert notice" role="status">@(uploaded == 1 ? "1 document was" : $"{uploaded} documents were") uploaded and read. Check each one below.</div>
+    }
 
     <div class="card">
         <PostForm Action="/documents/upload" enctype="multipart/form-data" data-enhance="false">
             <AntiforgeryToken />
+            @if (_order is not null)
+            {
+                <input type="hidden" name="purchaseOrderId" value="@_order.Id" />
+                <p>For purchase order <a href="/purchases/orders/@_order.Id">@_order.Number</a>@(_names.GetValueOrDefault(_order.VendorId) is { } vendor ? $" to {vendor}" : ""): what's read is matched to it unless the document names another.</p>
+            }
             <div class="row">
                 <div class="field">
                     <label for="kind">What is it?</label>
                     <select id="kind" name="kind" required>
-                        @foreach (var kind in Enum.GetValues<DocumentKind>())
+                        @foreach (var kind in Enum.GetValues<DocumentKind>().Where(k => _order is null || DocumentKinds.IsFromVendor(k)))
                         {
-                            <option value="@kind">@DocumentKinds.Label(kind)</option>
+                            <option value="@kind" selected="@(kind == Kind)">@DocumentKinds.Label(kind)</option>
                         }
                     </select>
                 </div>
                 <div class="field">
-                    <label for="file">File</label>
-                    <input id="file" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt,.csv" required />
+                    <label for="file">Files</label>
+                    <input id="file" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt,.csv" multiple required />
+                    <span class="hint">Choose several at once if you like (up to @OpenBook.Web.Endpoints.DocumentEndpoints.MaxFiles, all of the same kind).</span>
                 </div>
             </div>
             @if (_settings.IsReady)
@@ -102,9 +114,21 @@
 
     [SupplyParameterFromQuery] private bool ShowAll { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Uploaded { get; set; }
+
+    /// <summary>The kind to start with (a purchase order's page asks for a vendor invoice or a packing slip).</summary>
+    [SupplyParameterFromQuery(Name = "kind")] private string? KindText { get; set; }
+
+    /// <summary>Uploading for one of our purchase orders, from its page.</summary>
+    [SupplyParameterFromQuery(Name = "order")] private Guid? OrderId { get; set; }
+
+    private PurchaseOrder? _order;
+
+    private DocumentKind Kind => Enum.TryParse<DocumentKind>(KindText, out var k) ? k : DocumentKind.VendorInvoice;
 
     protected override async Task OnInitializedAsync()
     {
+        _order = OrderId is { } orderId ? await Orders.GetAsync(orderId) : null;
         _admin = AuthState is not null && (await AuthState).User.CanReach("/settings/document-reading");
         _settings = await DocumentService.GetSettingsAsync();
         _documents = (await DocumentService.ListAsync()).Where(d => ShowAll || d.Status == CapturedDocumentStatus.New).ToList();

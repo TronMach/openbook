@@ -11,7 +11,8 @@
     </div>
     <p class="muted">
         Upload receipts as they come in; OpenBook reads the vendor, date, total and tax from PDFs and text@(ReceiptService.CanReadImages ? " and photos" : "")
-        (on this computer: nothing is sent anywhere), and you record each as an expense with the receipt attached.
+        (on this computer: nothing is sent anywhere), and you record each as an expense with the receipt attached. A vendor's invoice
+        to pay later goes in the <ActionLink Href="/documents">document inbox</ActionLink> instead, to become a bill.
         @if (!ReceiptService.CanReadImages)
         {
             <span>Photos are kept but not read until Tesseract OCR is installed and <code>OpenBook:Ocr:TesseractPath</code> points at it.</span>
@@ -22,12 +23,17 @@
     {
         <div class="alert error" role="alert">@Error</div>
     }
+    @if (Uploaded is > 0 and var uploaded)
+    {
+        <div class="alert notice" role="status">@(uploaded == 1 ? "1 receipt was" : $"{uploaded} receipts were") uploaded and read. Record each one below.</div>
+    }
 
     <div class="card">
         <PostForm Action="/purchases/receipts/upload" enctype="multipart/form-data" data-enhance="false" class="inline">
             <AntiforgeryToken />
-            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt" required aria-label="Receipt file" />
-            <button type="submit">Upload receipt</button>
+            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt" multiple required aria-label="Receipt files" />
+            <button type="submit">Upload receipts</button>
+            <span class="hint">Several at once if you like, up to @OpenBook.Web.Endpoints.DocumentEndpoints.MaxFiles.</span>
         </PostForm>
     </div>
 
@@ -61,6 +67,7 @@
 
     [SupplyParameterFromQuery] private bool ShowAll { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Uploaded { get; set; }
 
     protected override async Task OnInitializedAsync() =>
         _receipts = (await ReceiptService.ListAsync()).Where(r => ShowAll || r.Status == ReceiptStatus.New).ToList();

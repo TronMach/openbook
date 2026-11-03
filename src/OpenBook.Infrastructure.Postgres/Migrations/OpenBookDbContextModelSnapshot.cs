@@ -2150,6 +2150,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2221,6 +2225,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("FileHash");
 
                     b.HasIndex("PurchaseOrderId");
 
@@ -4132,6 +4138,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly?>("Date")
                         .HasColumnType("date");
 
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -4164,6 +4174,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BankTransactionId");
+
+                    b.HasIndex("FileHash");
 
                     b.HasIndex("VendorId");
 

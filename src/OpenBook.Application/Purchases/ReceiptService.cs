@@ -50,6 +50,7 @@ public sealed class ReceiptService(
         Domain.Attachments.Attachment.Create(EntityType, Guid.Empty, fileName, buffer.Length, clock.UtcNow, user.Actor);
 
         var capture = ReceiptCapture.Create(fileName, clock.UtcNow, user.Actor);
+        capture.SetFileHash(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length))));
         store.Add(capture);
         store.Add(Audit(AuditAction.Created, capture, null));
         await store.SaveChangesAsync(ct);
@@ -64,6 +65,13 @@ public sealed class ReceiptService(
         capture.Read(text, fields, vendor?.Id);
         await store.SaveChangesAsync(ct);
         return capture;
+    }
+
+    /// <summary>Other receipts with the same file: the same receipt uploaded twice.</summary>
+    public async Task<IReadOnlyList<ReceiptCapture>> SameFileAsync(ReceiptCapture capture, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+        return capture.FileHash is { } hash ? (await store.ListReceiptsByFileHashAsync(hash, ct)).Where(r => r.Id != capture.Id).ToList() : [];
     }
 
     /// <summary>Records the expense (one category line) and attaches the receipt file to it.</summary>

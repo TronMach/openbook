@@ -22,6 +22,10 @@
     <div class="toolbar">
         <h1>@DocumentKinds.Label(_document.Kind): @_document.FileName</h1>
         <ActionLink Class="button secondary" Href="/documents">Inbox</ActionLink>
+        @if (_next is not null)
+        {
+            <ActionLink Class="button secondary" Href="@($"/documents/{_next.Id}")">Next to check</ActionLink>
+        }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_document.Id}")">History</ActionLink>
     </div>
 
@@ -36,6 +40,32 @@
     else if (Done is "read")
     {
         <div class="alert notice" role="status">Read again; the fields below are the new reading.</div>
+    }
+
+    @if (_duplicates is { Any: true } dup)
+    {
+        <div class="alert notice" role="alert">
+            <strong>This may already be in the books.</strong>
+            <ul>
+                @foreach (var d in dup.SameFile)
+                {
+                    <li>The same file was uploaded on @d.CreatedAt.InCompanyTime().ToString("g"): <a href="/documents/@d.Id">@d.FileName</a> (@(d.Status switch { CapturedDocumentStatus.Done => "done", CapturedDocumentStatus.Dismissed => "dismissed", _ => "still to check" })).</li>
+                }
+                @foreach (var r in dup.SameFileReceipts)
+                {
+                    <li>The same file was uploaded as a receipt on @r.CreatedAt.InCompanyTime().ToString("g"): <a href="/purchases/receipts/@r.Id">@r.FileName</a>.</li>
+                }
+                @if (dup.NumberedBill is { } bill)
+                {
+                    <li>Bill @bill.Reference from this vendor is already entered: <a href="/purchases/bills/@bill.Id">@Labels.Date(bill.Date), @Labels.Amount(bill.Total)</a>. Entering it again would be refused.</li>
+                }
+                @foreach (var b in dup.SimilarBills)
+                {
+                    <li>The vendor has a bill for the same amount close to this date: <a href="/purchases/bills/@b.Id">@(b.Reference is { } r ? $"bill {r}" : "a bill without a number") of @Labels.Date(b.Date)</a>.</li>
+                }
+            </ul>
+            <span>Dismiss this one if it's a copy.</span>
+        </div>
     }
 
     @if (_document.Status == CapturedDocumentStatus.Done && _document.ResultId is { } resultId)
@@ -334,6 +364,8 @@
 
 @code {
     private CapturedDocument? _document;
+    private DocumentDuplicates? _duplicates;
+    private CapturedDocument? _next;
     private OpenBook.Domain.Attachments.Attachment? _file;
     private DocumentReadingSettings _settings = default!;
     private bool _fromVendor;
@@ -364,6 +396,8 @@
         if (_document is null)
             return;
         _settings = await DocumentService.GetSettingsAsync();
+        _duplicates = await DocumentService.DuplicatesAsync(_document);
+        _next = await DocumentService.NextWaitingAsync(_document.Id);
         var files = await AttachmentService.ListAsync(DocumentCaptureService.EntityType, _document.Id);
         _file = files.Count > 0 ? files[0] : null;
         _fromVendor = DocumentKinds.IsFromVendor(_document.Kind);

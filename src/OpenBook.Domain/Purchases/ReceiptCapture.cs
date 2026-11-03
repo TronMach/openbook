@@ -43,6 +43,11 @@ public sealed class ReceiptCapture
     /// <summary>The expense it became.</summary>
     public Guid? BankTransactionId { get; private set; }
 
+    /// <summary>SHA-256 of the file (lower-case hex), to notice the same file uploaded twice; null for files from before it was kept.</summary>
+    public string? FileHash { get; private set; }
+
+    public void SetFileHash(string? hash) => FileHash = hash;
+
     public static ReceiptCapture Create(string fileName, DateTimeOffset now, string? createdBy) => new()
     {
         Id = Guid.CreateVersion7(),

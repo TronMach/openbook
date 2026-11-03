@@ -172,6 +172,11 @@ public sealed class CapturedDocument
     public Guid? ResultId { get; private set; }
     public DateTimeOffset? DoneAt { get; private set; }
 
+    /// <summary>SHA-256 of the file (lower-case hex), to notice the same file uploaded twice; null for files from before it was kept.</summary>
+    public string? FileHash { get; private set; }
+
+    public void SetFileHash(string? hash) => FileHash = hash;
+
     public static CapturedDocument Create(DocumentKind kind, string fileName, DateTimeOffset now, string? createdBy)
     {
         if (!Enum.IsDefined(kind))

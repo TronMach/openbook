@@ -106,6 +106,9 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<ReceiptCapture>> ListReceiptsAsync(CancellationToken ct);
 
+    /// <summary>Receipts whose file has this SHA-256, oldest first.</summary>
+    Task<IReadOnlyList<ReceiptCapture>> ListReceiptsByFileHashAsync(string hash, CancellationToken ct);
+
     void Add(Vendor vendor);
     void Add(Bill bill);
     void Add(BillPayment payment);

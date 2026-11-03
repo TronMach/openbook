@@ -1783,6 +1783,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("ReceiptCaptures");
             b.HasKey(r => r.Id);
+            b.Property(r => r.FileHash).HasMaxLength(64);
+            b.HasIndex(r => r.FileHash);
             b.Property(r => r.FileName).HasMaxLength(255);
             b.Property(r => r.CreatedBy).HasMaxLength(200);
             b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
@@ -1798,6 +1800,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("CapturedDocuments");
             b.HasKey(d => d.Id);
+            b.Property(d => d.FileHash).HasMaxLength(64);
+            b.HasIndex(d => d.FileHash);
             b.HasIndex(d => d.Status);
             b.Property(d => d.Kind).HasConversion<string>().HasMaxLength(20);
             b.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);

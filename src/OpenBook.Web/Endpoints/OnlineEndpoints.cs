@@ -121,21 +121,36 @@ public static class OnlineEndpoints
                 return "portal=revoked";
             })).RequireAuthorization();
 
-        app.MapPost("/purchases/receipts/upload", async (IFormFile? file, ReceiptService receipts, CancellationToken ct) =>
+        // Field: file (one or several). One opens its page; several go back to the list, saying what was refused.
+        app.MapPost("/purchases/receipts/upload", async (IFormCollection form, ReceiptService receipts, CancellationToken ct) =>
         {
-            if (file is null || file.Length == 0)
+            var files = form.Files.GetFiles("file").Where(f => f.Length > 0).ToList();
+            if (files.Count == 0)
                 return Results.Redirect($"/purchases/receipts?error={Uri.EscapeDataString("Choose a receipt file.")}");
-            try
+            if (files.Count > DocumentEndpoints.MaxFiles)
+                return Results.Redirect($"/purchases/receipts?error={Uri.EscapeDataString($"Upload at most {DocumentEndpoints.MaxFiles} receipts at once.")}");
+            var made = new List<Guid>();
+            var refused = new List<string>();
+            foreach (var file in files)
             {
-                await using var stream = file.OpenReadStream();
-                var capture = await receipts.UploadAsync(file.FileName, stream, ct);
-                return Results.Redirect($"/purchases/receipts/{capture.Id}");
+                try
+                {
+                    await using var stream = file.OpenReadStream();
+                    made.Add((await receipts.UploadAsync(file.FileName, stream, ct)).Id);
+                }
+                catch (DomainException ex)
+                {
+                    refused.Add($"{file.FileName}: {ex.Message}");
+                }
             }
-            catch (DomainException ex)
-            {
-                return Results.Redirect($"/purchases/receipts?error={Uri.EscapeDataString(ex.Message)}");
-            }
-        }).RequireAuthorization();
+
+            if (made.Count == 1 && refused.Count == 0)
+                return Results.Redirect($"/purchases/receipts/{made[0]}");
+            var query = $"uploaded={made.Count}";
+            if (refused.Count > 0)
+                query += $"&error={Uri.EscapeDataString(string.Join(" ", refused))}";
+            return Results.Redirect($"/purchases/receipts?{query}");
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(DocumentEndpoints.MaxUploadBytes));
 
         // Fields: accountId, categoryId, vendorId, payee, date, amount, memo.
         app.MapPost("/purchases/receipts/{id:guid}/record", async (Guid id, IFormCollection form, ReceiptService receipts, ClosedPeriodOverride closing, CancellationToken ct) =>

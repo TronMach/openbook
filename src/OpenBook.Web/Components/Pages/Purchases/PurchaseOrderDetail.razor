@@ -135,7 +135,8 @@
     {
         <div class="card" style="margin-top: 1.5rem" id="receive">
             <h2>Receive goods</h2>
-            <p class="muted">Record what arrived, to match against the vendor's bill. Stock goes into the books when the bill is entered.</p>
+            <p class="muted">Record what arrived, to match against the vendor's bill. Stock goes into the books when the bill is entered.
+                Have the packing slip as a file? <ActionLink Href="@($"/documents?kind=PackingSlip&order={_order.Id}")">Upload it</ActionLink> and OpenBook reads the quantities.</p>
             <PostForm Action="@($"/purchases/orders/{_order.Id}/receive")" data-enhance="false">
                 <AntiforgeryToken />
                 <table class="data">
@@ -167,6 +168,7 @@
             <p class="muted">
                 Filled in with @(anyReceived ? "what's been received and not billed yet" : "everything still to bill"); change the quantities and the vendor's
                 costs to match their invoice. @MatchRule()
+                Or <ActionLink Href="@($"/documents?kind=VendorInvoice&order={_order.Id}")">upload the vendor's invoice</ActionLink> and OpenBook reads it and matches it to this order.
             </p>
             <PostForm Action="@($"/purchases/orders/{_order.Id}/bill")" data-enhance="false">
                 <AntiforgeryToken />

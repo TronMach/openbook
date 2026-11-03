@@ -13,6 +13,9 @@ internal sealed class EfDocumentStore(OpenBookDbContext db) : IDocumentStore
     public async Task<IReadOnlyList<CapturedDocument>> ListDocumentsAsync(CancellationToken ct) =>
         (await db.CapturedDocuments.AsNoTracking().ToListAsync(ct)).OrderByDescending(d => d.CreatedAt).ToList();
 
+    public async Task<IReadOnlyList<CapturedDocument>> ListDocumentsByFileHashAsync(string hash, CancellationToken ct) =>
+        (await db.CapturedDocuments.AsNoTracking().Where(d => d.FileHash == hash).ToListAsync(ct)).OrderBy(d => d.CreatedAt).ToList();
+
     public Task<DocumentReadingSettings?> GetReadingSettingsAsync(CancellationToken ct) => db.DocumentReadingSettings.SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<DocumentItemCode>> ListItemCodesAsync(Guid partyId, CancellationToken ct) =>

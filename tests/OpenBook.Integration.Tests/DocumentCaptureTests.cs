@@ -80,6 +80,39 @@ public sealed class DocumentCaptureTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_same_file_twice_and_an_invoice_already_billed_are_pointed_out()
+    {
+        var first = await Upload(DocumentKind.VendorInvoice, "invoice.txt", Invoice.Replace("NUMBER", "1", StringComparison.Ordinal));
+        Assert.False((await In<DocumentCaptureService, DocumentDuplicates>(s => s.DuplicatesAsync(first))).Any);
+
+        var again = await Upload(DocumentKind.VendorInvoice, "invoice copy.txt", Invoice.Replace("NUMBER", "1", StringComparison.Ordinal));
+        var receipt = await In<ReceiptService, ReceiptCapture>(s => s.UploadAsync("invoice.txt", new MemoryStream(Encoding.UTF8.GetBytes(Invoice.Replace("NUMBER", "1", StringComparison.Ordinal)))));
+        var duplicates = await In<DocumentCaptureService, DocumentDuplicates>(s => s.DuplicatesAsync(again));
+        Assert.Equal(first.Id, Assert.Single(duplicates.SameFile).Id);
+        Assert.Equal(receipt.Id, Assert.Single(duplicates.SameFileReceipts).Id);
+        // Receipts only compare with other receipts: this is the first one with the file.
+        Assert.Empty(await In<ReceiptService, IReadOnlyList<ReceiptCapture>>(s => s.SameFileAsync(receipt)));
+
+        // A bill with the invoice's number, entered by hand, is found too.
+        var expenses = await _db.CreateAccount("Supplies", AccountType.Expense, "6100");
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_supplier.Id, Oct1, [new BillLineDraft(expenses.Id, 65m, "Parts")], Reference: "PS-881")));
+        duplicates = await In<DocumentCaptureService, DocumentDuplicates>(s => s.DuplicatesAsync(first));
+        Assert.Equal(bill.Id, duplicates.NumberedBill?.Id);
+        Assert.Equal(first.Id, (await In<DocumentCaptureService, CapturedDocument?>(s => s.NextWaitingAsync(again.Id)))?.Id);
+    }
+
+    [Fact]
+    public async Task A_document_uploaded_from_a_purchase_order_is_matched_to_it_when_it_names_none()
+    {
+        var order = await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(_supplier.Id, Oct1,
+            [new PurchaseOrderLineDraft(_widget.Id, null, null, 10m, 5m)])));
+        var text = Invoice.Replace("Your PO: PO-NUMBER", "", StringComparison.Ordinal);
+        var document = await In<DocumentCaptureService, CapturedDocument>(s => s.UploadAsync(DocumentKind.VendorInvoice, "invoice.txt",
+            new MemoryStream(Encoding.UTF8.GetBytes(text)), purchaseOrderId: order.Id));
+        Assert.Equal((order.Id, _supplier.Id), (document.PurchaseOrderId, document.VendorId));
+    }
+
+    [Fact]
     public async Task Claude_reads_documents_once_switched_on_and_falls_back_to_the_server_when_it_fails()
     {
         Assert.Equal("document_reading.key_required", await Refused(() =>
