@@ -130,6 +130,6 @@ public sealed class ReorderTests : IAsyncLifetime
             s.CountAsync(new InventoryCountCommand(Mar1.AddDays(2), [new CountedItem(gadget.Id, -1m)]))))).Code);
 
         var sheet = await In<ReportCatalog, ReportTable>(s => s.RunAsync("physical-inventory-worksheet", ReportParameters.Parse("")));
-        Assert.Equal([("Bolt", 5m), ("Gadget", 2m), ("Widget", 10m)], sheet.Rows.Select(r => (r.Cells[0].Value as string, (decimal)r.Cells[3].Value!)).ToArray());
+        Assert.Equal([("Bolt", 5m), ("Gadget", 2m), ("Widget", 10m)], sheet.Rows.Where(r => r.Style == ReportRowStyle.Normal).Select(r => (r.Cells[0].Value as string, (decimal)r.Cells[3].Value!)).ToArray());
     }
 }

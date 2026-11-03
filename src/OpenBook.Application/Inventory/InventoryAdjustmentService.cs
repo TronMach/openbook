@@ -140,7 +140,7 @@ public sealed class InventoryAdjustmentService(
     public async Task<InventoryAdjustment?> CountAsync(InventoryCountCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        if (command.Counts.Count == 0)
+        if (command.Counts is null || command.Counts.Count == 0)
             throw new DomainException("count.nothing", "Enter the quantity counted for at least one item.");
         if (command.Counts.Select(c => c.ItemId).Distinct().Count() != command.Counts.Count)
             throw new DomainException("count.duplicate", "Count each item once.");

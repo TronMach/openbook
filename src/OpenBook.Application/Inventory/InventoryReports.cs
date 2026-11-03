@@ -125,7 +125,7 @@ public sealed class InventoryReports(
         var key = warehouse?.Key;
         var today = CompanyTime.Today;
         var held = (await inventory.StockByPlaceAsync(null, today, ct)).Where(s => s.Place.WarehouseId == key && s.Quantity != 0m).ToLookup(s => s.Item.Id);
-        var items = (await inventory.StockAsync(null, ct)).Select(s => s.Item).Where(i => i.IsActive).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        var items = (await inventory.StockAsync(null, ct)).Select(s => s.Item).Where(i => i.IsActive).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
         var rows = new List<ReportTableRow>();
         foreach (var item in items)
@@ -142,6 +142,8 @@ public sealed class InventoryReports(
             rows.AddRange(held[item.Id].GroupBy(s => s.Lot ?? "").OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase).Select(g => new ReportTableRow(
                 [$"{(item.Tracking == ItemTracking.Serial ? "Serial" : "Lot")} {g.Key}", null, null, new ReportCell(g.Sum(s => s.Quantity)), null, null], 1)));
         }
+
+        rows.Add(new ReportTableRow([$"{items.Count} item{(items.Count == 1 ? "" : "s")} to count", null, null, null, null, null], 0, ReportRowStyle.Total));
 
         return new ReportTable(
             "Physical inventory worksheet",

@@ -95,6 +95,7 @@ public sealed class ListReports(
                     c.Customer.Terms.Label,
                     new ReportCell(c.Balance == 0m ? null : c.Balance),
                 ], 0)),
+                Count(list.Count, "customer", 8, list.Sum(c => c.Balance)),
             ],
             Note: "Balances are as of today.");
     }
@@ -121,6 +122,7 @@ public sealed class ListReports(
                     v.Vendor.Track1099 ? "Yes" : null,
                     new ReportCell(v.Balance == 0m ? null : v.Balance),
                 ])),
+                Count(list.Count, "vendor", 9, list.Sum(v => v.Balance)),
             ],
             Note: "Balances are as of today. Tax IDs are left out; the 1099 reports show them masked.");
     }
@@ -132,7 +134,7 @@ public sealed class ListReports(
         var chart = await accounts.GetChartAsync(ct);
         var stock = (await inventory.StockAsync(null, ct)).ToDictionary(s => s.Item.Id, s => s.Quantity);
         var vendorNames = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
-        var items = (await sales.ListItemsAsync(ct)).Where(i => includeInactive || i.IsActive).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        var items = (await sales.ListItemsAsync(ct)).Where(i => includeInactive || i.IsActive).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         return new ReportTable(
             "Product and service list",
             [company.Name, includeInactive ? "Every item" : "Active items"],
@@ -152,6 +154,7 @@ public sealed class ListReports(
                     i.PreferredVendorId is { } v ? vendorNames.GetValueOrDefault(v) : null,
                     new ReportCell(i.IsInventory ? stock.GetValueOrDefault(i.Id) : null),
                 ])),
+                Count(items.Count, "item", 10, null),
             ]);
     }
 
@@ -182,6 +185,7 @@ public sealed class ListReports(
                         new ReportCell(shown is 0m ? null : shown),
                     ], x.Depth);
                 }),
+                Count(chart.Ordered(includeInactive).Count(), "account", 6, null),
             ],
             ReportBasis.Accrual,
             "Balance sheet accounts show their balance in their normal direction; see the profit and loss for income and expense accounts.");
@@ -398,6 +402,16 @@ public sealed class ListReports(
             [new("Customer and estimate"), new("Date", ColumnFormat.Date), new("Expires", ColumnFormat.Date), new("Status"), new("Amount", ColumnFormat.Money)],
             rows,
             Note: list.Count == 0 ? null : $"Accepted or invoiced: {accepted:N2} of {list.Sum(e => e.Total):N2}.");
+    }
+
+    /// <summary>A list's last row: "3 customers", with an optional total in the last column, so even an empty list has a row.</summary>
+    private static ReportTableRow Count(int count, string noun, int columns, decimal? total)
+    {
+        var cells = new ReportCell?[columns];
+        cells[0] = $"{count} {noun}{(count == 1 ? "" : "s")}";
+        if (total is { } t)
+            cells[columns - 1] = t;
+        return new ReportTableRow(cells, 0, ReportRowStyle.Total);
     }
 
     internal static string EstimateStatusLabel(EstimateStatus status) => status switch
