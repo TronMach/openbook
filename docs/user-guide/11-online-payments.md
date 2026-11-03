@@ -34,6 +34,7 @@ A portal link is a private web address where one customer can see their account 
 
 - their open invoices, with **Pay now** when online payments are on, and PDFs to download
 - paid invoices from the last year
+- estimates waiting for an answer, which they can open as a PDF and **Accept** (typing their name) or **Decline** (with a reason if they like), and those answered recently
 - a statement of recent activity
 
 On the customer's page, under **Customer portal**, select **Make a portal link**. **Copy it straight away: it's only shown once.** Send it to the customer.
@@ -41,3 +42,5 @@ On the customer's page, under **Customer portal**, select **Make a portal link**
 Because anyone with the link can see that customer's account, share it only with them. If it might have leaked, select **Turn off** next to it and make a new one. The list shows when each link was last used.
 
 A sub-customer billed with its parent sees the parent's account.
+
+When a customer answers an estimate in the portal, the estimate's status changes to **Accepted** or **Declined** and its page says who answered, when, and what they wrote; the audit log records it as "portal:" and the customer's name. An expired estimate can't be accepted. If you change the status yourself afterwards, your choice stands and the customer's answer stays in the history.

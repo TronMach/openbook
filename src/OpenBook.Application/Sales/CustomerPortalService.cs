@@ -8,12 +8,14 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Sales;
 
 /// <summary>What a customer sees in the portal: who it's from, what they owe and their recent activity.</summary>
+/// <param name="Estimates">Estimates waiting for an answer, then those answered or invoiced in the last 90 days.</param>
 public sealed record PortalView(
-    Company Company, Customer Customer, IReadOnlyList<Invoice> OpenInvoices, IReadOnlyList<Invoice> PaidInvoices, CustomerStatement Statement, bool CanPayOnline);
+    Company Company, Customer Customer, IReadOnlyList<Invoice> OpenInvoices, IReadOnlyList<Invoice> PaidInvoices, CustomerStatement Statement, bool CanPayOnline,
+    IReadOnlyList<Estimate> Estimates);
 
 /// <summary>
 /// The customer portal: links (tokens) that let a customer see their open and recent invoices and statement, download
-/// invoices and pay online, without an account. A sub-customer billed with its parent is seen through the parent.
+/// invoices and pay online, and accept or decline estimates, without an account. A sub-customer billed with its parent is seen through the parent.
 /// </summary>
 public sealed class CustomerPortalService(
     ISalesStore store, ICompanyStore companies, ReceivablesService receivables, OnlinePaymentService online, IClock clock, ICurrentUser user)
@@ -69,7 +71,8 @@ public sealed class CustomerPortalService(
             return null;
         var billed = await PaymentService.BilledAsync(store, customer.Id, ct);
         var invoices = (await store.ListInvoicesAsync(null, ct)).Where(i => billed.Contains(i.CustomerId) && i.Status == DocumentStatus.Posted).ToList();
-        var today = DateOnly.FromDateTime(clock.UtcNow.LocalDateTime);
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
+        var estimates = (await store.ListEstimatesAsync(null, ct)).Where(e => billed.Contains(e.CustomerId)).ToList();
         var statement = await receivables.StatementAsync(customer.Id, today.AddDays(-(int)StatementPeriod.TotalDays), today, ct);
         return new PortalView(
             await companies.GetRequiredCompanyAsync(ct),
@@ -77,7 +80,35 @@ public sealed class CustomerPortalService(
             invoices.Where(i => i.IsOpen).OrderBy(i => i.DueDate).ToList(),
             invoices.Where(i => !i.IsOpen && i.Date >= today.AddDays(-365)).OrderByDescending(i => i.Date).Take(20).ToList(),
             statement,
-            (await online.GetSettingsAsync(ct)).IsReady);
+            (await online.GetSettingsAsync(ct)).IsReady,
+            [
+                .. estimates.Where(e => e.Status == EstimateStatus.Pending).OrderBy(e => e.Date),
+                .. estimates.Where(e => e.Status != EstimateStatus.Pending && (e.RespondedAt ?? e.CreatedAt) >= clock.UtcNow - StatementPeriod).OrderByDescending(e => e.Date),
+            ]);
+    }
+
+    /// <summary>The estimate, if the token's customer may see it; null otherwise.</summary>
+    public async Task<Estimate?> EstimateForAsync(string? token, Guid estimateId, CancellationToken ct = default)
+    {
+        if (await CustomerForAsync(token, ct) is not { } customer)
+            return null;
+        var estimate = await store.GetEstimateAsync(estimateId, ct);
+        return estimate is not null && (await PaymentService.BilledAsync(store, customer.Id, ct)).Contains(estimate.CustomerId) ? estimate : null;
+    }
+
+    /// <summary>
+    /// The customer accepts (typing their name) or declines (with an optional note) a pending estimate. Audited on the
+    /// estimate as the portal; null when the token can't see it.
+    /// </summary>
+    public async Task<Estimate?> RespondAsync(string? token, Guid estimateId, bool accept, string? name, string? note, CancellationToken ct = default)
+    {
+        if (await CustomerForAsync(token, ct) is not { } customer || await EstimateForAsync(token, estimateId, ct) is not { } estimate)
+            return null;
+        var before = EstimateService.Snapshot(estimate);
+        estimate.Respond(accept, name, note, CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone), clock.UtcNow);
+        store.Add(AuditRecord.Create(clock.UtcNow, $"portal: {customer.DisplayName}", AuditAction.Updated, EstimateService.EntityType, estimate.Id, before, EstimateService.Snapshot(estimate)));
+        await store.SaveChangesAsync(ct);
+        return estimate;
     }
 
     /// <summary>The invoice, if the token's customer may see it; null otherwise.</summary>

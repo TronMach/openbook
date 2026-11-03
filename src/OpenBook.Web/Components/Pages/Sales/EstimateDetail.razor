@@ -34,6 +34,13 @@
         }
     </div>
 
+    @if (_estimate.RespondedAt is { } answeredAt)
+    {
+        <div class="alert @(_estimate.Status == EstimateStatus.Declined ? "notice" : "success")" role="status">
+            @(_estimate.Status == EstimateStatus.Declined ? "Declined" : "Accepted") online@(_estimate.RespondedBy is { } by ? $" by {by}" : "")
+            on @answeredAt.InCompanyTime().ToString("MMM d, yyyy h:mm tt", System.Globalization.CultureInfo.CurrentCulture)@(_estimate.ResponseNote is { } note ? $": “{note}”" : ".")
+        </div>
+    }
     @if ((_error ?? Error) is { } error)
     {
         <div class="alert error no-print" role="alert">@error</div>

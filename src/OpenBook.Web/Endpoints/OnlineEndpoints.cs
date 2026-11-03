@@ -60,6 +60,34 @@ public static class OnlineEndpoints
             }
         }).AllowAnonymous();
 
+        app.MapGet("/portal/{token}/estimates/{id:guid}/pdf", async (string token, Guid id, HttpContext http, CustomerPortalService portal, FormService forms, CancellationToken ct) =>
+        {
+            if (await portal.EstimateForAsync(token, id, ct) is null)
+                return Results.NotFound();
+            var form = await forms.RenderAsync(FormKind.Estimate, id, ct);
+            http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("inline") { FileNameStar = form.FileName }.ToString();
+            http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            return Results.File(form.Pdf, "application/pdf");
+        }).AllowAnonymous();
+
+        // Fields: name (required to accept), note.
+        app.MapPost("/portal/{token}/estimates/{id:guid}/{answer:regex(^(accept|decline)$)}", async (string token, Guid id, string answer, IFormCollection form, CustomerPortalService portal, CancellationToken ct) =>
+        {
+            var page = $"/portal/{Uri.EscapeDataString(token)}";
+            try
+            {
+                var accept = answer == "accept";
+                var estimate = await portal.RespondAsync(token, id, accept, form["name"], form["note"], ct);
+                return estimate is null
+                    ? Results.NotFound()
+                    : Results.Redirect($"{page}?done={Uri.EscapeDataString(accept ? $"Thank you: estimate {estimate.Number} is accepted." : $"Estimate {estimate.Number} is declined. Thank you for letting us know.")}#estimates");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}#estimates");
+            }
+        }).AllowAnonymous();
+
         app.MapPost("/sales/invoices/{id:guid}/payment-link", async (Guid id, OnlinePaymentService online, CancellationToken ct) =>
             await Back($"/sales/invoices/{id}", "#online", async () =>
             {

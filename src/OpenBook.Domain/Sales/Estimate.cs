@@ -58,6 +58,14 @@ public sealed class Estimate
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? LastEmailedAt { get; private set; }
 
+    /// <summary>The name the customer typed when accepting or declining it in the portal; null when decided here.</summary>
+    public string? RespondedBy { get; private set; }
+
+    public DateTimeOffset? RespondedAt { get; private set; }
+
+    /// <summary>What the customer wrote with their answer (a reason for declining, say).</summary>
+    public string? ResponseNote { get; private set; }
+
     public IReadOnlyList<SalesLine> Lines => _lines;
 
     public bool IsExpired(DateOnly today) => Status == EstimateStatus.Pending && ExpirationDate is { } e && e < today;
@@ -105,7 +113,24 @@ public sealed class Estimate
         EnsureOpen();
         if (status is EstimateStatus.Closed || !Enum.IsDefined(status))
             throw new DomainException("estimate.status_invalid", "Turn the estimate into an invoice to close it.");
+        // Set here, the status is the business's own; the customer's earlier answer stays in the history.
+        (RespondedBy, RespondedAt, ResponseNote) = (null, null, null);
         Status = status;
+    }
+
+    /// <summary>The customer's own answer from the portal: only while pending and not expired.</summary>
+    public void Respond(bool accept, string? name, string? note, DateOnly today, DateTimeOffset at)
+    {
+        EnsureOpen();
+        if (Status != EstimateStatus.Pending)
+            throw new DomainException("estimate.answered", $"Estimate {Number} has already been {(Status == EstimateStatus.Accepted ? "accepted" : "declined")}.");
+        if (IsExpired(today))
+            throw new DomainException("estimate.expired", $"Estimate {Number} expired on {ExpirationDate:MMM d, yyyy}. Ask for a new one.");
+        RespondedBy = Text.Optional(name, 100, "estimate.name_too_long", "Name")
+            ?? (accept ? throw new DomainException("estimate.name_required", "Type your name to accept the estimate.") : null);
+        ResponseNote = Text.Optional(note, 500, "estimate.note_too_long", "Note");
+        RespondedAt = at.ToUniversalTime();
+        Status = accept ? EstimateStatus.Accepted : EstimateStatus.Declined;
     }
 
     public void MarkInvoiced(Guid invoiceId)

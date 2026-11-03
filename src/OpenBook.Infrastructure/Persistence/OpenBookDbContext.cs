@@ -1660,6 +1660,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(e => e.Memo).HasMaxLength(1000);
             b.Property(e => e.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
             b.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(e => e.RespondedBy).HasMaxLength(100);
+            b.Property(e => e.ResponseNote).HasMaxLength(500);
             b.HasOne<Customer>().WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);
             // No FK to Invoices: invoices already reference their estimate, and the two would form a cycle.
             b.OwnsMany(e => e.Lines, l => SalesLines(l, "EstimateLines", "EstimateId"));

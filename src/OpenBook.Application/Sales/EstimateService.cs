@@ -138,6 +138,8 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         e.Memo,
         e.TaxCodeId,
         e.TaxExemption,
+        e.RespondedBy,
+        e.ResponseNote,
         Lines = e.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
     });
 }

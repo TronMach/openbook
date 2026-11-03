@@ -24,6 +24,10 @@
     {
         <div class="alert error" role="alert">@Error</div>
     }
+    @if (Done is not null)
+    {
+        <div class="alert success" role="status">@Done</div>
+    }
 
     <div class="summary-bar">
         <div><span class="label">You owe</span><span class="value">@Labels.Amount(_view.OpenInvoices.Sum(i => i.Balance))</span></div>
@@ -55,6 +59,52 @@
                                     <AntiforgeryToken />
                                     <button type="submit">Pay now</button>
                                 </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_view.Estimates.Count > 0)
+    {
+        <h2 id="estimates">Estimates</h2>
+        <table class="data">
+            <thead><tr><th>Estimate</th><th>Date</th><th>Expires</th><th class="num">Total</th><th>Your answer</th></tr></thead>
+            <tbody>
+                @foreach (var e in _view.Estimates)
+                {
+                    <tr>
+                        <td><a href="/portal/@Token/estimates/@e.Id/pdf" target="_blank">@e.Number</a></td>
+                        <td>@Labels.Date(e.Date)</td>
+                        <td>@(e.ExpirationDate is { } x ? Labels.Date(x) : "")</td>
+                        <td class="num">@Labels.Amount(e.Total)</td>
+                        <td>
+                            @if (e.Status != EstimateStatus.Pending)
+                            {
+                                <span>@(e.Status == EstimateStatus.Declined ? "Declined" : "Accepted")@(e.RespondedBy is { } by ? $" by {by}" : "")@(e.RespondedAt is { } at ? $" on {Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime))}" : "")</span>
+                            }
+                            else if (e.IsExpired(_today))
+                            {
+                                <span class="muted">Expired: ask for a new one</span>
+                            }
+                            else
+                            {
+                                <form method="post" action="/portal/@Token/estimates/@e.Id/accept" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="text" name="name" maxlength="100" required placeholder="Your name" aria-label="Your name, to accept estimate @e.Number" />
+                                    <button type="submit">Accept</button>
+                                </form>
+                                <details class="inline">
+                                    <summary>Decline</summary>
+                                    <form method="post" action="/portal/@Token/estimates/@e.Id/decline" data-enhance="false">
+                                        <AntiforgeryToken />
+                                        <input type="text" name="name" maxlength="100" placeholder="Your name (optional)" aria-label="Your name" />
+                                        <input type="text" name="note" maxlength="500" placeholder="Why? (optional)" aria-label="Why you're declining" />
+                                        <button type="submit" class="secondary">Decline estimate</button>
+                                    </form>
+                                </details>
                             }
                         </td>
                     </tr>
@@ -102,6 +152,7 @@
 
     [Parameter] public string Token { get; set; } = "";
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
 
     protected override async Task OnInitializedAsync() => _view = await Portal.ViewAsync(Token);
 }
