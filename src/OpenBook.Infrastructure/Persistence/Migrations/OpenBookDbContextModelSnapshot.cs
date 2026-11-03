@@ -5344,6 +5344,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PreferredVendorId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("PurchaseCost")
                         .HasColumnType("INTEGER")
                         .HasColumnName("PurchaseCostTenThousandths");
@@ -5355,6 +5358,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long?>("ReorderPoint")
                         .HasColumnType("INTEGER")
                         .HasColumnName("ReorderPointTenThousandths");
+
+                    b.Property<long?>("ReorderQuantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ReorderQuantityTenThousandths");
 
                     b.Property<string>("SellShort")
                         .IsRequired()

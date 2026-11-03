@@ -16,6 +16,25 @@ public static class PurchasingEndpoints
 {
     public static IEndpointRouteBuilder MapPurchasingEndpoints(this IEndpointRouteBuilder app)
     {
+        // Fields: pick (item ids ticked), vendor:{itemId}, qty:{itemId}, cost:{itemId}, date, expectedDate, warehouseId.
+        app.MapPost("/purchases/reorder", async (IFormCollection form, Application.Inventory.ReorderService reorder, CancellationToken ct) =>
+            await Back("/purchases/reorder", async () =>
+            {
+                var lines = new List<Application.Inventory.ReorderLine>();
+                foreach (var pick in form["pick"])
+                {
+                    if (!Guid.TryParse(pick, out var itemId))
+                        continue;
+                    var vendorId = Id(form[$"vendor:{itemId}"]) ?? throw new DomainException("reorder.vendor_required", "Choose a vendor for every ticked item.");
+                    var quantity = Number(form[$"qty:{itemId}"]) ?? throw new DomainException("reorder.quantity_required", "Give a quantity for every ticked item.");
+                    lines.Add(new Application.Inventory.ReorderLine(itemId, vendorId, quantity, Number(form[$"cost:{itemId}"])));
+                }
+
+                var made = await reorder.CreateOrdersAsync(lines, Date(form["date"]) ?? Today(), Date(form["expectedDate"]), Id(form["warehouseId"]), ct);
+                var numbers = string.Join(", ", made.Select(o => o.Number));
+                return "done=" + Uri.EscapeDataString(made.Count == 1 ? $"Purchase order {numbers} is made." : $"Purchase orders {numbers} are made.");
+            })).RequireAuthorization();
+
         // Fields: qty:{lineNumber}, date, note.
         app.MapPost("/purchases/orders/{id:guid}/receive", async (Guid id, IFormCollection form, PurchaseOrderService orders, CancellationToken ct) =>
             await Back($"/purchases/orders/{id}", async () =>
@@ -179,6 +198,14 @@ public static class PurchasingEndpoints
 
     private static decimal? Amount(string? value) =>
         StatementValues.TryParseAmount(value, out var amount) ? amount : null;
+
+    private static decimal? Number(string? value)
+    {
+        var text = value?.Trim();
+        return string.IsNullOrEmpty(text) ? null
+            : decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) || StatementValues.TryParseAmount(text, out number) ? number
+            : throw new DomainException("reorder.number_invalid", $"'{text}' isn't a number.");
+    }
 
     private static DateOnly Today() => CompanyTime.Today;
 }

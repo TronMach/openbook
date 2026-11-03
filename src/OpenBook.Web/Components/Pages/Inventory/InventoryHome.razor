@@ -28,6 +28,7 @@
             <ActionLink Class="button secondary" Href="/reports/inventory-stock">Stock status</ActionLink>
         </div>
         <div class="hub-group"><span class="hub-label">Tools</span>
+            <ActionLink Class="button secondary" Href="/purchases/reorder">Reorder stock</ActionLink>
             <ActionLink Class="button secondary" Href="/inventory/labels">Labels</ActionLink>
         </div>
         <div class="hub-group"><span class="hub-label">Set up</span>
@@ -49,7 +50,7 @@
     {
         @if (_stock.Count(s => s.NeedsReorder) is > 0 and var low)
         {
-            <div class="alert notice" role="status">@(low == 1 ? "1 item is" : $"{low} items are") at or below the reorder point.</div>
+            <div class="alert notice" role="status">@(low == 1 ? "1 item is" : $"{low} items are") at or below the reorder point. <ActionLink Href="/purchases/reorder">Reorder stock</ActionLink></div>
         }
         <table class="data">
             <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder point</th><th class="num">Average cost</th><th class="num">Asset value</th><th></th></tr></thead>

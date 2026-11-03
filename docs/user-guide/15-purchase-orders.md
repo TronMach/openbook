@@ -28,6 +28,12 @@ The PO tracks what's been ordered, received and billed, and closes when everythi
 
 To correct a bill entered from a PO, use **Change** on the bill. It lists the order's lines with what's been ordered, received and billed on other bills: change the quantity and unit cost (or the amount, on a category line) the bill covers, and the **Other lines** (freight, tax) that aren't on the order. Say **Why are you changing it?** and **Save changes**. OpenBook bills the order again as if the bill were entered now: goods received into stock clear "Received Not Billed" again, the 3-way match and approval rules run again, and the PO closes or reopens with what's left. Changing it is refused once stock it brought in has been sold or used, and on a cancelled PO (void the bill instead).
 
+### Reordering stock
+
+**Purchases → Reorder stock** (also on the Inventory page) lists the inventory products at or below their reorder point once open orders are counted: what's on hand, plus what's on purchase orders and not in stock yet, less what open sales orders still have to deliver. Each line suggests the item's **reorder quantity**, or enough to bring it back above the reorder point, and the item's **preferred vendor** and purchase cost (both set on the item's page).
+
+Tick the items to order, change vendors, quantities or costs if you like, choose the **order date** (and an **expected by** date), then **Make purchase orders**. OpenBook makes one purchase order per vendor, with the memo "Reorder"; if any of them can't be made, none are. **Every inventory product** lists items that don't need ordering too, so you can add them. Assemblies aren't listed: you build them.
+
 ## The 3-way match and approvals
 
 When a bill comes from a PO, OpenBook compares the order, what was received and the bill. It holds the bill for approval if:

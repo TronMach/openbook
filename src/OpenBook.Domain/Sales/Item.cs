@@ -107,6 +107,15 @@ public sealed class Item
     /// <summary>What a scanner reads off the product (UPC, EAN, or your own code); unique among items.</summary>
     public string? Barcode { get; private set; }
 
+    /// <summary>Who you usually buy it from: reordering groups items into one purchase order per preferred vendor.</summary>
+    public Guid? PreferredVendorId { get; private set; }
+
+    /// <summary>
+    /// Inventory products: how many to order once stock (with what's on order) falls to the reorder point; null orders
+    /// enough to bring it back up to the reorder point.
+    /// </summary>
+    public decimal? ReorderQuantity { get; private set; }
+
     /// <summary>Whether stock on hand and its cost are tracked: inventory products and assemblies.</summary>
     public bool IsInventory => IsTracked(Type);
 
@@ -175,6 +184,7 @@ public sealed class Item
         Rate = SalesLine.ValidRate(details.Rate);
         Barcode = NormalizeBarcode(details.Barcode);
         Taxable = details.Taxable;
+        PreferredVendorId = details.PreferredVendorId is { } vendor && vendor != Guid.Empty ? vendor : null;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
             ? throw new DomainException("item.income_account_required", "Choose the income account this item's sales are counted in.")
             : details.IncomeAccountId;
@@ -186,7 +196,7 @@ public sealed class Item
             _components.Clear();
         if (!IsInventory)
         {
-            (InventoryAssetAccountId, CostAccountId, ReorderPoint) = (null, null, null);
+            (InventoryAssetAccountId, CostAccountId, ReorderPoint, ReorderQuantity) = (null, null, null, null);
             CostMethod = InventoryCostMethod.Fifo;
             Tracking = Inventory.ItemTracking.None;
             AutoBuild = false;
@@ -220,6 +230,13 @@ public sealed class Item
             < 0m => throw new DomainException("item.reorder_point_invalid", "The reorder point can't be negative."),
             { } r when decimal.Round(r, SalesLine.Precision) != r => throw new DomainException("item.reorder_point_invalid", "The reorder point can have up to 4 decimal places."),
             { } r => r,
+        };
+        ReorderQuantity = details.ReorderQuantity switch
+        {
+            null => null,
+            <= 0m => throw new DomainException("item.reorder_quantity_invalid", "The quantity to reorder must be more than zero (leave it blank to order back up to the reorder point)."),
+            { } q when decimal.Round(q, SalesLine.Precision) != q => throw new DomainException("item.reorder_quantity_invalid", "The quantity to reorder can have up to 4 decimal places."),
+            { } q => q,
         };
     }
 
@@ -289,4 +306,6 @@ public sealed record ItemDetails(
     Inventory.ItemTracking Tracking = Inventory.ItemTracking.None,
     string? Barcode = null,
     bool AutoBuild = false,
-    ShortStock SellShort = ShortStock.Company);
+    ShortStock SellShort = ShortStock.Company,
+    Guid? PreferredVendorId = null,
+    decimal? ReorderQuantity = null);

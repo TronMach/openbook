@@ -10,7 +10,8 @@ namespace OpenBook.Application.Inventory;
 /// Inventory valuation (cost on hand) and stock status (quantities against reorder points), for all stock or one
 /// warehouse (<c>warehouseId</c> is a warehouse's id; the default warehouse's stock is stored without one).
 /// </summary>
-public sealed class InventoryReports(InventoryService inventory, IInventoryStore store, ReportLedger ledger, ICompanyStore companies, WarehouseService warehouses)
+public sealed class InventoryReports(
+    InventoryService inventory, IInventoryStore store, ReportLedger ledger, ICompanyStore companies, WarehouseService warehouses, ReorderService reorder)
 {
     public async Task<ReportTable> ValuationAsync(DateOnly asOf, bool detail, Guid? warehouseId = null, CancellationToken ct = default)
     {
@@ -77,35 +78,39 @@ public sealed class InventoryReports(InventoryService inventory, IInventoryStore
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var warehouse = await WarehouseAsync(warehouseId, ct);
-        var stock = (await inventory.StockAsync(null, ct)).Where(s => s.Item.IsActive).ToList();
-        if (warehouse is not null)
-        {
-            // Quantities and value in that warehouse only; reorder points are company-wide.
-            var there = (await inventory.StockByPlaceAsync(null, null, ct)).Where(s => s.Place.WarehouseId == warehouse.Key).ToLookup(s => s.Item.Id);
-            stock = stock.Select(s => new StockLevel(s.Item, there[s.Item.Id].Sum(x => x.Quantity), there[s.Item.Id].Sum(x => x.Value))).ToList();
-        }
+        // Quantities and value in that warehouse only; reorder points are company-wide.
+        var values = warehouse is null
+            ? (await inventory.StockAsync(null, ct)).ToDictionary(s => s.Item.Id, s => s.Value)
+            : (await inventory.StockByPlaceAsync(null, null, ct)).Where(s => s.Place.WarehouseId == warehouse.Key).GroupBy(s => s.Item.Id).ToDictionary(g => g.Key, g => g.Sum(s => s.Value));
+        var outlook = await reorder.OutlookAsync(warehouse, ct);
+        decimal Value(StockOutlook o) => values.GetValueOrDefault(o.Item.Id);
 
-        var rows = stock
-            .OrderByDescending(s => s.NeedsReorder)
-            .ThenBy(s => s.Item.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(s => new ReportTableRow(
+        var rows = outlook
+            .OrderByDescending(o => o.NeedsReorder)
+            .ThenBy(o => o.Item.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(o => new ReportTableRow(
             [
-                new ReportCell(s.Item.Name, new ReportLink("item", s.Item.Id)),
-                new ReportCell(s.Quantity),
-                new ReportCell(s.Item.ReorderPoint),
-                s.NeedsReorder ? "Reorder" : null,
-                new ReportCell(s.Item.PurchaseCost == 0m ? null : s.Item.PurchaseCost),
-                s.Value,
+                new ReportCell(o.Item.Name, new ReportLink("item", o.Item.Id)),
+                new ReportCell(o.OnHand),
+                new ReportCell(o.OnPurchaseOrders == 0m ? null : o.OnPurchaseOrders),
+                new ReportCell(o.OnSalesOrders == 0m ? null : o.OnSalesOrders),
+                new ReportCell(o.Available),
+                new ReportCell(o.Item.ReorderPoint),
+                o.NeedsReorder ? o.Item.IsAssembly ? "Build" : "Reorder" : null,
+                new ReportCell(o.NeedsReorder ? o.Suggested : null),
+                new ReportCell(o.Item.PurchaseCost == 0m ? null : o.Item.PurchaseCost),
+                Value(o),
             ]))
             .ToList();
-        rows.Add(new ReportTableRow(["Total", null, null, $"{stock.Count(s => s.NeedsReorder)} to reorder", null, stock.Sum(s => s.Value)], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", null, null, null, null, null, $"{outlook.Count(o => o.NeedsReorder)} to reorder", null, null, outlook.Sum(Value)], 0, ReportRowStyle.Total));
 
         return new ReportTable(
             "Inventory stock status",
             [company.Name, $"As of {CompanyTime.Today:MMM d, yyyy}{(warehouse is null ? "" : $" · {warehouse.Name}")}"],
-            [new("Item"), new("On hand", ColumnFormat.Number), new("Reorder point", ColumnFormat.Number), new("Status"), new("Purchase cost", ColumnFormat.Money), new("Asset value", ColumnFormat.Money)],
+            [new("Item"), new("On hand", ColumnFormat.Number), new("On purchase orders", ColumnFormat.Number), new("On sales orders", ColumnFormat.Number),
+             new("Available", ColumnFormat.Number), new("Reorder point", ColumnFormat.Number), new("Status"), new("Suggested order", ColumnFormat.Number), new("Purchase cost", ColumnFormat.Money), new("Asset value", ColumnFormat.Money)],
             rows,
-            Note: "Items at or below their reorder point come first.");
+            Note: "Available is on hand less what open sales orders still have to deliver. An item needs reordering when available plus what's on order falls to its reorder point; those come first.");
     }
 
     /// <summary>The warehouse a report is limited to; null for all stock.</summary>

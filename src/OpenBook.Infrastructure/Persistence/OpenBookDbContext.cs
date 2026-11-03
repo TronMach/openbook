@@ -1329,6 +1329,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
             b.Property(i => i.PurchaseCost).HasColumnName("PurchaseCostTenThousandths").HasConversion(TenThousandths);
             b.Property(i => i.ReorderPoint).HasColumnName("ReorderPointTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(i => i.ReorderQuantity).HasColumnName("ReorderQuantityTenThousandths").HasConversion(NullableTenThousandths);
             b.Ignore(i => i.IsInventory);
             b.OwnsMany(i => i.QuantityBreaks, q =>
             {

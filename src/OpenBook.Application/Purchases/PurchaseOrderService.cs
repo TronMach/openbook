@@ -393,7 +393,7 @@ public sealed class PurchaseOrderService(
     }
 
     /// <param name="except">A bill being corrected: what it bills now doesn't count.</param>
-    private async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct, Guid? except = null)
+    internal async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct, Guid? except = null)
     {
         var made = (await store.ListBillsAsync(order.VendorId, ct)).Where(b => b.PurchaseOrderId == order.Id && b.Id != except).OrderBy(b => b.Date).ToList();
         var billed = made.Where(b => b.Status == DocumentStatus.Posted).SelectMany(b => b.SourceLines).ToLookup(s => s.LineNumber);

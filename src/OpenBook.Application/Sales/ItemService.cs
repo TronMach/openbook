@@ -8,7 +8,7 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Sales;
 
 /// <summary>Products and services.</summary>
-public sealed class ItemService(ISalesStore store, AccountService accounts, IInventoryStore inventory, InventoryAccounts inventoryAccounts, IClock clock, ICurrentUser user)
+public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore purchases, AccountService accounts, IInventoryStore inventory, InventoryAccounts inventoryAccounts, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "item";
 
@@ -144,6 +144,13 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
             Item.EnsureInventoryAssetAccount(chart.Get(details.InventoryAssetAccountId ?? Guid.Empty));
             Item.EnsureCostAccount(chart.Get(details.CostAccountId ?? Guid.Empty));
         }
+
+        if (details.PreferredVendorId is { } vendorId && vendorId != Guid.Empty)
+        {
+            var vendor = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+            if (!vendor.IsActive && (except is null || (await GetAsync(except.Value, ct))?.PreferredVendorId != vendorId))
+                throw new DomainException("item.vendor_inactive", $"{vendor.DisplayName} is inactive. Choose an active vendor.");
+        }
     }
 
     /// <summary>An inventory item without accounts gets "Inventory Asset" and "Cost of Goods Sold" (created on first use).</summary>
@@ -177,6 +184,8 @@ public sealed class ItemService(ISalesStore store, AccountService accounts, IInv
         i.AutoBuild,
         SellShort = i.SellShort.ToString(),
         i.Barcode,
+        i.PreferredVendorId,
+        i.ReorderQuantity,
         Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });

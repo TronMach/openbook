@@ -123,6 +123,12 @@ internal static class PurchasesApi
 
         var purchases = api.MapGroup("/purchases");
 
+        // Inventory products against open orders; all=true for every one, else those needing reordering.
+        purchases.MapGet("/reorder", async (bool? all, Application.Inventory.ReorderService s, CancellationToken ct) =>
+            (await s.OutlookAsync(null, ct)).Where(o => all == true || o.NeedsReorder).Select(o => new ReorderResponse(
+                o.Item.Id, o.Item.Name, o.Item.PreferredVendorId, o.OnHand, o.OnPurchaseOrders, o.OnSalesOrders, o.Available, o.Item.ReorderPoint, o.NeedsReorder, o.Suggested, o.Item.PurchaseCost)));
+        purchases.MapPost("/reorder", async (ReorderRequest r, Application.Inventory.ReorderService s, CancellationToken ct) =>
+            (await s.CreateOrdersAsync(r.Lines, r.Date ?? CompanyTime.Today, r.ExpectedDate, r.WarehouseId, ct)).Select(o => PurchaseOrderResponse.From(o)));
         purchases.MapGet("/orders", async (Guid? vendorId, PurchaseOrderService s, CancellationToken ct) =>
             (await s.ListAsync(vendorId, ct)).Select(o => PurchaseOrderResponse.From(o)));
         purchases.MapGet("/orders/{id:guid}", async (Guid id, PurchaseOrderService s, CancellationToken ct) =>
@@ -243,3 +249,10 @@ internal static class PurchasesApi
             BillPaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
     }
 }
+
+public sealed record ReorderResponse(
+    Guid ItemId, string Name, Guid? PreferredVendorId, decimal OnHand, decimal OnPurchaseOrders, decimal OnSalesOrders, decimal Available,
+    decimal? ReorderPoint, bool NeedsReorder, decimal Suggested, decimal PurchaseCost);
+
+/// <param name="Date">Defaults to today.</param>
+public sealed record ReorderRequest(IReadOnlyList<Application.Inventory.ReorderLine> Lines, DateOnly? Date = null, DateOnly? ExpectedDate = null, Guid? WarehouseId = null);

@@ -218,7 +218,7 @@ public sealed class InventoryFlowTests : IAsyncLifetime
         Assert.Equal(50m, before.Find("Total inventory", 3));
 
         var status = await Run(sp => sp.GetRequiredService<InventoryReports>().StockStatusAsync());
-        Assert.Equal("Reorder", status.Rows[0].Cells[3].Value);
-        Assert.Equal("1 to reorder", status.Find("Total", 3));
+        Assert.Equal("Reorder", status.Rows[0].Cells[6].Value);
+        Assert.Equal("1 to reorder", status.Find("Total", 6));
     }
 }

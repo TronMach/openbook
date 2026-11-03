@@ -102,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<LabelService>();
         services.AddScoped<LandedCostService>();
         services.AddScoped<InventoryReports>();
+        services.AddScoped<ReorderService>();
         services.AddScoped<InvoiceService>();
         services.AddScoped<PaymentService>();
         services.AddScoped<SalesReceiptService>();

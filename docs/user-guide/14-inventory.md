@@ -17,6 +17,7 @@ If you sell goods you keep in stock, make them **inventory** items. OpenBook the
 - **Inventory asset account** and **cost of goods sold account**: leave them on *Default* to use "Inventory Asset" and "Cost of Goods Sold" (created when first needed).
 - **Purchase cost**: the default unit cost for stock added by adjustments.
 - **Reorder point**: at or below this quantity the item is flagged for reordering.
+- **Reorder quantity** and **Preferred vendor**: what [reordering stock](15-purchase-orders.md#reordering-stock) suggests, and whom it orders from. Leave the quantity blank to order back up to the reorder point.
 - **Costing**: **FIFO (first in, first out)**, or **Weighted average**, which costs every sale at the average of what's on hand.
 - **Lot or serial numbers**: none, lots, or serial numbers (below).
 - **Barcode**: scanning it into any item picker chooses the item.
@@ -111,4 +112,4 @@ The part for stock still on hand raises its cost; the part for stock already sol
 ## Reports
 
 - **Inventory valuation**: quantity and value on hand as of a date, per item, or in detail by layer, bin and lot, with a line checking it against the asset accounts. Can be limited to one warehouse.
-- **Inventory stock status**: on hand against reorder points: what to reorder.
+- **Inventory stock status**: on hand, on purchase orders and on sales orders, what's available, and what to reorder, with a suggested quantity.

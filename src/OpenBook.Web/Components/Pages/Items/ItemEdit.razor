@@ -4,6 +4,7 @@
 @using OpenBook.Application.Inventory
 @using OpenBook.Domain.Inventory
 @inject ItemService ItemService
+@inject VendorService VendorService
 @inject AccountService AccountService
 @inject InventoryService Inventory
 @inject WarehouseService WarehouseService
@@ -114,6 +115,24 @@
                     <label for="reorder">@(_simple ? "Reorder when you're down to" : "Reorder point") <span class="muted">(optional)</span></label>
                     <InputNumber id="reorder" step="any" @bind-Value="Input.ReorderPoint" />
                     <span class="hint">Flagged for reordering at or below this quantity.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="reorder-quantity">@(_simple ? "How many to order then" : "Reorder quantity") <span class="muted">(optional)</span></label>
+                    <InputNumber id="reorder-quantity" step="any" @bind-Value="Input.ReorderQuantity" />
+                    <span class="hint">Suggested when reordering. Leave blank to order back up to the reorder point.</span>
+                </div>
+                <div class="field">
+                    <label for="preferred-vendor">@(_simple ? "Who do you buy it from?" : "Preferred vendor") <span class="muted">(optional)</span></label>
+                    <InputSelect id="preferred-vendor" @bind-Value="Input.PreferredVendorId" data-search>
+                        <option value="">None</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </InputSelect>
+                    <span class="hint"><ActionLink Href="/purchases/reorder">Reorder stock</ActionLink> puts it on a purchase order to them.</span>
                 </div>
             </div>
         </fieldset>
@@ -360,6 +379,7 @@
 
 @code {
     private Item? _item;
+    private IReadOnlyList<Vendor> _vendors = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _incomeAccounts = [];
     private List<Account> _assetAccounts = [];
@@ -518,7 +538,10 @@
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
                 CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
+                PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity,
             };
+        _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).Select(v => v.Vendor)
+            .Where(v => v.IsActive || v.Id == _item?.PreferredVendorId).ToList();
     }
 
     /// <summary>One row per document (a sale can take from several layers), in order.</summary>
@@ -549,7 +572,8 @@
             var method = _assetLocked ? _item!.CostMethod : Input.CostMethod;
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
-                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort);
+                asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort,
+                Input.PreferredVendorId, Input.ReorderQuantity);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
             Navigation.NavigateTo(_item is null && Item.HasComponents(saved.Type) ? $"/items/{saved.Id}#components" : "/items");
@@ -602,5 +626,9 @@
 
         [StringLength(50)]
         public string? Barcode { get; set; }
+
+        public Guid? PreferredVendorId { get; set; }
+
+        public decimal? ReorderQuantity { get; set; }
     }
 }

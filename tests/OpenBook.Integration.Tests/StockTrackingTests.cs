@@ -286,6 +286,6 @@ public sealed class StockTrackingExtrasTests : IAsyncLifetime
         var mainStatus = await Run(sp => sp.GetRequiredService<OpenBook.Application.Reporting.ReportCatalog>().RunAsync("inventory-stock",
             OpenBook.Application.Reporting.ReportParameters.Parse($"?warehouseId={main.Id}")));
         var status = mainStatus.Rows.First(r => r.Cells[0]?.Value as string == "Nut");
-        Assert.Equal((4m, "Reorder"), ((decimal)status.Cells[1]!.Value!, status.Cells[3]?.Value as string));
+        Assert.Equal((4m, "Reorder"), ((decimal)status.Cells[1]!.Value!, status.Cells[6]?.Value as string));
     }
 }

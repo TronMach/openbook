@@ -5351,6 +5351,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("PreferredVendorId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("PurchaseCost")
                         .HasColumnType("bigint")
                         .HasColumnName("PurchaseCostTenThousandths");
@@ -5362,6 +5365,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<long?>("ReorderPoint")
                         .HasColumnType("bigint")
                         .HasColumnName("ReorderPointTenThousandths");
+
+                    b.Property<long?>("ReorderQuantity")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ReorderQuantityTenThousandths");
 
                     b.Property<string>("SellShort")
                         .IsRequired()

@@ -1,0 +1,124 @@
+@page "/purchases/reorder"
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Purchases
+@inject ReorderService Reorder
+@inject VendorService Vendors
+@inject WarehouseService WarehouseService
+
+<PageTitle>Reorder stock · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Reorder stock</h1>
+        <ActionLink Class="button secondary" Href="/purchases/orders">Purchase orders</ActionLink>
+    </div>
+    <p class="muted">
+        Inventory products at or below their reorder point once open orders are counted: what's on hand, plus what's on purchase orders
+        and not in stock yet, less what open sales orders still have to deliver. Tick what to order and OpenBook makes one purchase
+        order per vendor. Set each item's preferred vendor and reorder quantity on its page.
+        <HelpLink Chapter="15-purchase-orders" Section="reordering-stock" />
+    </p>
+
+    @if (Done is { } done)
+    {
+        <div class="alert success" role="status">@done</div>
+    }
+    @if (Error is { } error)
+    {
+        <div class="alert error" role="alert">@error</div>
+    }
+
+    <nav class="toolbar" aria-label="Show">
+        <a class="button @(All ? "secondary" : null)" href="/purchases/reorder">Needs reordering</a>
+        <a class="button @(All ? null : "secondary")" href="/purchases/reorder?all=true">Every inventory product</a>
+    </nav>
+
+    @if (_rows.Count == 0)
+    {
+        <div class="card"><p>@(All ? "No inventory products yet." : "Nothing needs reordering. Items get here when they fall to their reorder point.")</p></div>
+    }
+    else
+    {
+        <PostForm Action="/purchases/reorder" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="form-grid">
+                <label>Order date <input type="date" name="date" value="@_today.ToString("yyyy-MM-dd")" required /></label>
+                <label>Expected by <input type="date" name="expectedDate" /></label>
+                @if (_warehouses.Count > 1)
+                {
+                    <label>
+                        Deliver to
+                        <select name="warehouseId">
+                            @foreach (var w in _warehouses)
+                            {
+                                <option value="@(w.Key?.ToString() ?? "")">@w.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+            </div>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th class="check"></th><th>Item</th><th class="num">On hand</th><th class="num">On purchase orders</th><th class="num">On sales orders</th>
+                            <th class="num">Reorder point</th><th>Vendor</th><th class="num">Quantity</th><th class="num">Unit cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in _rows)
+                        {
+                            var id = o.Item.Id;
+                            <tr>
+                                <td class="check"><input type="checkbox" name="pick" value="@id" checked="@o.NeedsReorder" aria-label="Order @o.Item.Name" /></td>
+                                <td><a href="/items/@id">@o.Item.Name</a></td>
+                                <td class="num">@Labels.Quantity(o.OnHand)</td>
+                                <td class="num">@(o.OnPurchaseOrders == 0m ? "" : Labels.Quantity(o.OnPurchaseOrders))</td>
+                                <td class="num">@(o.OnSalesOrders == 0m ? "" : Labels.Quantity(o.OnSalesOrders))</td>
+                                <td class="num">@(o.Item.ReorderPoint is { } point ? Labels.Quantity(point) : "")</td>
+                                <td>
+                                    <select name="vendor:@id" aria-label="Vendor for @o.Item.Name" data-search>
+                                        <option value="">Choose a vendor</option>
+                                        @foreach (var v in _vendors)
+                                        {
+                                            <option value="@v.Id" selected="@(v.Id == o.Item.PreferredVendorId)">@v.DisplayName</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td class="num">
+                                    <input class="num" type="text" inputmode="decimal" name="qty:@id" size="7" aria-label="Quantity of @o.Item.Name"
+                                           value="@(o.NeedsReorder ? o.Suggested.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) : "")" />
+                                </td>
+                                <td class="num">
+                                    <input class="num" type="text" inputmode="decimal" name="cost:@id" size="8" aria-label="Unit cost of @o.Item.Name"
+                                           value="@o.Item.PurchaseCost.ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture)" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="actions"><button type="submit">Make purchase orders</button></div>
+        </PostForm>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<StockOutlook> _rows = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private DateOnly _today;
+
+    [SupplyParameterFromQuery] private bool All { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = CompanyTime.Today;
+        var outlook = await Reorder.OutlookAsync();
+        _rows = outlook.Where(o => !o.Item.IsAssembly && (All || o.NeedsReorder)).ToList();
+        _vendors = (await Vendors.ListAsync(_today)).Select(v => v.Vendor).ToList();
+        _warehouses = await WarehouseService.ListAsync();
+    }
+}

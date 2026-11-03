@@ -118,7 +118,7 @@ public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBu
         : remaining.Where(r => r.Value != 0m && lines.Any(l => l.LineNumber == r.Key && l.Kind == SalesLineKind.Item))
             .Select(r => new InvoiceSourceLine(r.Key, r.Value)).ToList();
 
-    private async Task<InvoicingProgress> ProgressAsync(SalesOrder order, CancellationToken ct)
+    internal async Task<InvoicingProgress> ProgressAsync(SalesOrder order, CancellationToken ct)
     {
         var made = (await store.ListInvoicesAsync(order.CustomerId, ct)).Where(i => i.SalesOrderId == order.Id).OrderBy(i => i.Date).ToList();
         var invoiced = PartialInvoicing.Invoiced(made);

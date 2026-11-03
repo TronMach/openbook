@@ -9,6 +9,7 @@
         <h1>Purchase orders</h1>
         <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
         <a class="button secondary" href="@(ShowAll ? "/purchases/orders" : "/purchases/orders?showAll=true")">@(ShowAll ? "Open only" : "Show all")</a>
+        <ActionLink Class="button secondary" Href="/purchases/reorder">Reorder stock</ActionLink>
         <ActionLink Class="button" Href="/purchases/orders/new">New purchase order</ActionLink>
     </div>
     <p class="muted">Orders post nothing. Record goods as they arrive, then enter the vendor's bill from the order: it's matched to both.</p>
