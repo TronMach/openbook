@@ -31,8 +31,8 @@ public static class PurchasingEndpoints
                 }
 
                 var made = await reorder.CreateOrdersAsync(lines, Date(form["date"]) ?? Today(), Date(form["expectedDate"]), Id(form["warehouseId"]), ct);
-                var numbers = string.Join(", ", made.Select(o => o.Number));
-                return "done=" + Uri.EscapeDataString(made.Count == 1 ? $"Purchase order {numbers} is made." : $"Purchase orders {numbers} are made.");
+                // The page links each order it made.
+                return "made=" + string.Join(",", made.Select(o => o.Id));
             })).RequireAuthorization();
 
         // Fields: qty:{lineNumber}, date, note.

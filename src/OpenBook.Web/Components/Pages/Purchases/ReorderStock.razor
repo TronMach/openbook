@@ -2,6 +2,7 @@
 @using OpenBook.Application.Inventory
 @using OpenBook.Domain.Purchases
 @inject ReorderService Reorder
+@inject PurchaseOrderService Orders
 @inject VendorService Vendors
 @inject WarehouseService WarehouseService
 
@@ -19,9 +20,16 @@
         <HelpLink Chapter="15-purchase-orders" Section="reordering-stock" />
     </p>
 
-    @if (Done is { } done)
+    @if (_made.Count > 0)
     {
-        <div class="alert success" role="status">@done</div>
+        <div class="alert success" role="status">
+            @(_made.Count == 1 ? "Purchase order" : "Purchase orders")
+            @foreach (var (order, i) in _made.Select((o, i) => (o, i)))
+            {
+                @(i == 0 ? "" : ", ")<a href="/purchases/orders/@order.Id">@order.Number</a>
+            }
+            @(_made.Count == 1 ? " is made." : " are made.") Review and send @(_made.Count == 1 ? "it" : "them") from @(_made.Count == 1 ? "its" : "their") page.
+        </div>
     }
     @if (Error is { } error)
     {
@@ -110,7 +118,10 @@
     private DateOnly _today;
 
     [SupplyParameterFromQuery] private bool All { get; set; }
-    [SupplyParameterFromQuery] private string? Done { get; set; }
+    /// <summary>The purchase orders just made, by id, comma separated.</summary>
+    [SupplyParameterFromQuery] private string? Made { get; set; }
+
+    private List<PurchaseOrder> _made = [];
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
     protected override async Task OnInitializedAsync()
@@ -120,5 +131,10 @@
         _rows = outlook.Where(o => !o.Item.IsAssembly && (All || o.NeedsReorder)).ToList();
         _vendors = (await Vendors.ListAsync(_today)).Select(v => v.Vendor).ToList();
         _warehouses = await WarehouseService.ListAsync();
+        foreach (var part in (Made ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(ReorderService.MaxLines))
+        {
+            if (Guid.TryParse(part, out var id) && await Orders.GetAsync(id) is { } order)
+                _made.Add(order);
+        }
     }
 }
