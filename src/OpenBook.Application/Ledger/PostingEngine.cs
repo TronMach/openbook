@@ -40,7 +40,9 @@ public sealed class PostingEngine(
     IPasswordHasher hasher,
     ClosedPeriodOverride closedPeriod,
     IClock clock,
-    ICurrentUser user)
+    ICurrentUser user,
+    Attachments.AttachmentService attachments,
+    Notes.NoteService notes)
 {
     private const string EntityType = "journal_entry";
 
@@ -89,6 +91,9 @@ public sealed class PostingEngine(
 
         await StageVoidAsync(entry.Id, $"Changed: {reason.Trim()}", fromDocument: false, ct);
         var replacement = await StageAsync(command with { Source = JournalEntry.ManualSource, SourceId = null }, ct);
+        // The entry's files and notes go on with it (the voided one keeps its own).
+        await attachments.StageCopiesAsync(EntityType, entry.Id, replacement.Id, ct);
+        await notes.StageCopiesAsync(EntityType, entry.Id, replacement.Id, ct);
         store.Add(Audit(AuditAction.Updated, entry.Id, before: null,
             after: JsonSerializer.Serialize(new Dictionary<string, object> { [DocumentChanges.ReasonKey] = reason.Trim(), ["ReplacedBy"] = replacement.Number })));
         await store.SaveChangesAsync(ct);

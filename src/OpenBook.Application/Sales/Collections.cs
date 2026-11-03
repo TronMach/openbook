@@ -233,13 +233,12 @@ public sealed class LateFeeService(
         var settings = await collections.GetAsync(ct);
         if (!settings.LateFeesEnabled)
             return [];
-        var all = await store.ListInvoicesAsync(null, ct);
-        var lastFee = all.Where(i => i.LateFeeForInvoiceId is not null && i.Status == DocumentStatus.Posted)
-            .GroupBy(i => i.LateFeeForInvoiceId!.Value)
-            .ToDictionary(g => g.Key, g => g.Max(i => i.Date));
+        // Open invoices and the fees already charged: never the whole history (this runs every hour).
+        var open = await store.ListOpenInvoicesAsync(null, ct);
+        var lastFee = await store.LastLateFeesAsync(ct);
         var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var due = new List<LateFeeDue>();
-        foreach (var invoice in all.Where(i => i.IsOpen && i.LateFeeForInvoiceId is null && i.Date <= today)
+        foreach (var invoice in open.Where(i => i.LateFeeForInvoiceId is null && i.Date <= today)
                      .OrderBy(i => i.DueDate).ThenBy(i => i.Number, StringComparer.Ordinal))
         {
             var customer = customers[invoice.CustomerId];

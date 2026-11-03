@@ -22,6 +22,9 @@ public interface IUndepositedSource
     /// <summary>Posted documents of this kind in a holding account and not deposited.</summary>
     Task<IReadOnlyList<UndepositedItem>> WaitingAsync(Func<Guid, bool> holding, IReadOnlyDictionary<Guid, string> customers, CancellationToken ct);
 
+    /// <summary>These documents (deposited or not) described like waiting ones; ids it doesn't know are left out.</summary>
+    Task<IReadOnlyList<UndepositedItem>> DescribeAsync(IReadOnlyCollection<Guid> ids, IReadOnlyDictionary<Guid, string> customers, CancellationToken ct);
+
     Task MarkAsync(IReadOnlyCollection<Guid> ids, Guid depositId, CancellationToken ct);
 
     Task ClearAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
@@ -202,16 +205,14 @@ public sealed class DepositService(
         return deposit;
     }
 
-    /// <summary>
-    /// A deposit's own items described like waiting ones (for the form that changes it). Gifts, whose documents this
-    /// service doesn't read, show as "Gift" dated with the deposit.
-    /// </summary>
+    /// <summary>A deposit's own items described like waiting ones (for the form that changes it).</summary>
     public async Task<IReadOnlyList<UndepositedItem>> ContentsAsync(BankDeposit deposit, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(deposit);
         var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
         var payments = (await store.GetPaymentsAsync(deposit.Lines.Where(l => l.Kind == DepositedKind.Payment).Select(l => l.SourceId).ToList(), ct)).ToDictionary(p => p.Id);
         var receipts = (await store.GetReceiptsAsync(deposit.Lines.Where(l => l.Kind == DepositedKind.SalesReceipt).Select(l => l.SourceId).ToList(), ct)).ToDictionary(r => r.Id);
+        var others = await OtherKindsAsync(deposit.Lines, customers, ct);
         var items = new List<UndepositedItem>();
         foreach (var line in deposit.Lines.OrderBy(l => l.LineNumber))
         {
@@ -223,6 +224,7 @@ public sealed class DepositService(
                     r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}", r.Reference, line.FromAccountId, line.Amount),
                 DepositedKind.Retainer when await store.GetRetainerAsync(line.SourceId, ct) is { } retainer => new UndepositedItem(line.Kind, retainer.Id, retainer.Date,
                     retainer.CustomerId, $"Retainer from {customers.GetValueOrDefault(retainer.CustomerId)}", retainer.Reference, line.FromAccountId, line.Amount),
+                _ when others.TryGetValue((line.Kind, line.SourceId), out var other) => other with { AccountId = line.FromAccountId, Amount = line.Amount },
                 _ => new UndepositedItem(line.Kind, line.SourceId, deposit.Date, null, Describe(line.Kind), null, line.FromAccountId, line.Amount),
             });
         }
@@ -234,7 +236,7 @@ public sealed class DepositService(
     public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
         DocumentChanges.ListAsync(ledger, EntityType, id, ct);
 
-    /// <summary>When each of a deposit's payments, receipts and retainers was received (gifts aren't looked up).</summary>
+    /// <summary>When each of a deposit's items was received.</summary>
     private async Task<Dictionary<(DepositedKind, Guid), DateOnly>> DatesAsync(IEnumerable<DepositLine> lines, CancellationToken ct)
     {
         var list = lines.ToList();
@@ -246,7 +248,27 @@ public sealed class DepositService(
         foreach (var line in list.Where(l => l.Kind == DepositedKind.Retainer))
             if (await store.GetRetainerAsync(line.SourceId, ct) is { } retainer)
                 dates[(DepositedKind.Retainer, retainer.Id)] = retainer.Date;
+        foreach (var (key, item) in await OtherKindsAsync(list, new Dictionary<Guid, string>(), ct))
+            dates[key] = item.Date;
         return dates;
+    }
+
+    /// <summary>The lines of kinds registered from outside Sales (gifts), described by their own source.</summary>
+    private async Task<Dictionary<(DepositedKind, Guid), UndepositedItem>> OtherKindsAsync(
+        IEnumerable<DepositLine> lines, IReadOnlyDictionary<Guid, string> customers, CancellationToken ct)
+    {
+        var list = lines.ToList();
+        var found = new Dictionary<(DepositedKind, Guid), UndepositedItem>();
+        foreach (var source in sources)
+        {
+            var ids = list.Where(l => l.Kind == source.Kind).Select(l => l.SourceId).ToList();
+            if (ids.Count == 0)
+                continue;
+            foreach (var item in await source.DescribeAsync(ids, customers, ct))
+                found[(item.Kind, item.Id)] = item;
+        }
+
+        return found;
     }
 
     private async Task MarkAsync(IReadOnlyCollection<DepositItem> items, Guid depositId, CancellationToken ct)

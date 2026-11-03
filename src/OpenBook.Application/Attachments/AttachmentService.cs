@@ -78,6 +78,22 @@ public sealed class AttachmentService(IAttachmentStore store, IClock clock, ICur
         await store.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Copies one record's files onto another (a changed journal entry's replacement) without saving, keeping who
+    /// added each and when; audited <see cref="AuditAction.Attached"/> on the new record.
+    /// </summary>
+    internal async Task StageCopiesAsync(string entityType, Guid fromId, Guid toId, CancellationToken ct)
+    {
+        foreach (var file in await store.ListAsync(entityType, fromId, ct))
+        {
+            if (await store.GetContentAsync(file.Id, ct) is not { } bytes)
+                continue;
+            var copy = Attachment.Create(entityType, toId, file.FileName, file.Size, file.AddedAt, file.AddedBy);
+            store.Add(copy, new AttachmentContent(copy.Id, bytes));
+            store.Add(Audit(AuditAction.Attached, copy, before: null, after: Snapshot(copy)));
+        }
+    }
+
     // Logged against the record the file belongs to, so it shows in that record's history.
     private AuditRecord Audit(AuditAction action, Attachment a, string? before, string after) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, a.EntityType, a.EntityId, before, after);

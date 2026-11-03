@@ -46,6 +46,19 @@ public sealed class NoteService(INoteStore store, IAttachmentStore records, IClo
         return note;
     }
 
+    /// <summary>
+    /// Copies one record's notes onto another (a changed journal entry's replacement) without saving, keeping who
+    /// wrote each and when; audited <see cref="AuditAction.NoteAdded"/> on the new record.
+    /// </summary>
+    internal async Task StageCopiesAsync(string entityType, Guid fromId, Guid toId, CancellationToken ct)
+    {
+        foreach (var note in await store.ListAsync(entityType, fromId, ct))
+        {
+            store.Add(Note.Create(entityType, toId, note.Text, note.CreatedAt, note.CreatedBy));
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.NoteAdded, entityType, toId, null, JsonSerializer.Serialize(new { Note = note.Text })));
+        }
+    }
+
     public async Task<Note> RemoveAsync(Guid id, CancellationToken ct = default)
     {
         var note = await store.GetAsync(id, ct) ?? throw new EntityNotFoundException("note", id);

@@ -140,6 +140,7 @@ public static class Links
         "user" => $"/settings/users/{id}",
         "user_invite" => "/settings/users#invites",
         "permission_set" => $"/settings/permission-sets/{id}",
+        "bank_feed_item" or "bank_feed_import" => $"/banking/feed-lines/{id}",
         "api_key" => "/settings/api-keys",
         "webhook" => $"/settings/webhooks/{id}",
         "billing_rate" => "/time/rates",

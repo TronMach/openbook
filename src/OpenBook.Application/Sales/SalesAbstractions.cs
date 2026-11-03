@@ -79,6 +79,9 @@ public interface ISalesStore
     /// <summary>Posted invoices with a balance (<see cref="Invoice.IsOpen"/>), untracked, with lines, newest first.</summary>
     Task<IReadOnlyList<Invoice>> ListOpenInvoicesAsync(Guid? customerId, CancellationToken ct);
 
+    /// <summary>For each invoice charged a late fee, the date of its latest posted late fee invoice.</summary>
+    Task<IReadOnlyDictionary<Guid, DateOnly>> LastLateFeesAsync(CancellationToken ct);
+
     Task<IReadOnlyList<string>> ListInvoiceNumbersAsync(CancellationToken ct);
 
     Task<CustomerPayment?> GetPaymentAsync(Guid id, CancellationToken ct);

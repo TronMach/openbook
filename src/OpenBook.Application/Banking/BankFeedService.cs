@@ -149,6 +149,17 @@ public sealed class BankFeedService(
         }).ToList();
     }
 
+    /// <summary>
+    /// Where a feed line (by its id) or an import (by its batch id, as the audit log names them) is reviewed: its
+    /// account and the line's status. Null when there's neither, or an import queued no lines.
+    /// </summary>
+    public async Task<(Guid AccountId, BankFeedStatus Status)?> LocateAsync(Guid id, CancellationToken ct = default)
+    {
+        if (await bank.GetFeedItemAsync(id, ct) is { } item)
+            return (item.AccountId, item.Status);
+        return await bank.FindFeedItemInBatchAsync(id, ct) is { } first ? (first.AccountId, BankFeedStatus.Pending) : null;
+    }
+
     public async Task<int> PendingCountAsync(Guid accountId, CancellationToken ct = default) =>
         (await bank.ListFeedItemsAsync(accountId, ct)).Count(i => i.Status == BankFeedStatus.Pending);
 

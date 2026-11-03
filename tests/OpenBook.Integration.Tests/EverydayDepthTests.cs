@@ -89,6 +89,28 @@ public sealed class EverydayDepthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_changed_journal_entry_takes_its_files_and_notes_along()
+    {
+        var original = await PostRent(900m);
+        await In<OpenBook.Application.Attachments.AttachmentService, OpenBook.Domain.Attachments.Attachment>(s =>
+            s.AddAsync("journal_entry", original.Id, "lease.pdf", new MemoryStream("%PDF-1.4 lease"u8.ToArray())));
+        await In<OpenBook.Application.Notes.NoteService, OpenBook.Domain.Notes.Note>(s => s.AddAsync("journal_entry", original.Id, "Per the new lease"));
+
+        var replacement = await In<PostingEngine, JournalEntry>(s => s.ChangeAsync(original.Id,
+            new PostJournalEntryCommand(Jan5, [JournalLineDraft.Dr(_rent.Id, 950m), JournalLineDraft.Cr(_equity.Id, 950m)]), "Rent went up"));
+
+        var files = await In<OpenBook.Application.Attachments.AttachmentService, IReadOnlyList<OpenBook.Domain.Attachments.Attachment>>(s => s.ListAsync("journal_entry", replacement.Id));
+        var file = Assert.Single(files);
+        Assert.Equal("lease.pdf", file.FileName);
+        Assert.Equal("%PDF-1.4 lease"u8.ToArray(), await In<OpenBook.Application.Attachments.AttachmentService, byte[]?>(s => s.GetContentAsync(file.Id)));
+        var note = Assert.Single(await In<OpenBook.Application.Notes.NoteService, IReadOnlyList<OpenBook.Domain.Notes.Note>>(s => s.ListAsync("journal_entry", replacement.Id)));
+        Assert.Equal("Per the new lease", note.Text);
+        // The voided entry keeps its own.
+        Assert.Single(await In<OpenBook.Application.Attachments.AttachmentService, IReadOnlyList<OpenBook.Domain.Attachments.Attachment>>(s => s.ListAsync("journal_entry", original.Id)));
+        Assert.Single(await In<OpenBook.Application.Notes.NoteService, IReadOnlyList<OpenBook.Domain.Notes.Note>>(s => s.ListAsync("journal_entry", original.Id)));
+    }
+
+    [Fact]
     public async Task Only_hand_entered_entries_without_an_automatic_reversal_can_be_changed()
     {
         var accrual = await PostRent(500m, reverseOn: new DateOnly(2026, 2, 1));
@@ -137,6 +159,33 @@ public sealed class EverydayDepthTests : IAsyncLifetime
             new MakeDepositCommand(_checking.Id, Jan10, []), "Nothing"))));
         Assert.Equal("deposit.before_payment", await Refused(() => In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id,
             new MakeDepositCommand(_checking.Id, new DateOnly(2026, 1, 1), [(DepositedKind.Payment, first.Id)]), "Earlier"))));
+    }
+
+    [Fact]
+    public async Task A_deposit_holding_a_gift_describes_it_and_keeps_its_date_when_changed()
+    {
+        var first = await Paid(_acme, 1m);
+        var gift = await In<OpenBook.Application.Nonprofit.GiftService, OpenBook.Domain.Nonprofit.Donation>(s =>
+            s.RecordAsync(new OpenBook.Application.Nonprofit.RecordGiftCommand(_globex.Id, Jan10, 75m, _undeposited.Id, Reference: "1042")));
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(_checking.Id, Jan10,
+            [(DepositedKind.Payment, first.Id), (DepositedKind.Gift, gift.Id)])));
+
+        var contents = await _db.InScope(async sp =>
+        {
+            var service = sp.GetRequiredService<DepositService>();
+            return await service.ContentsAsync((await service.GetAsync(deposit.Id))!);
+        });
+        var held = contents.Single(i => i.Kind == DepositedKind.Gift);
+        Assert.Equal((Jan10, "1042", 75m), (held.Date, held.Reference, held.Amount));
+        Assert.Contains("Globex", held.Label, StringComparison.Ordinal);
+
+        // The payment came in on the 5th, the gift on the 10th: the deposit can't move before the gift.
+        Assert.Equal("deposit.before_payment", await Refused(() => In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id,
+            new MakeDepositCommand(_checking.Id, new DateOnly(2026, 1, 7), [(DepositedKind.Payment, first.Id), (DepositedKind.Gift, gift.Id)]), "Earlier"))));
+        var changed = await In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id,
+            new MakeDepositCommand(_checking.Id, new DateOnly(2026, 1, 7), [(DepositedKind.Payment, first.Id)]), "The gift went in the next day"));
+        Assert.Equal(100m, changed.Total);
+        await AssertBooksAgree();
     }
 
     // ---- Batch invoicing ----

@@ -178,6 +178,15 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .ThenByDescending(i => i.CreatedAt)
             .ToList();
 
+    public async Task<IReadOnlyDictionary<Guid, DateOnly>> LastLateFeesAsync(CancellationToken ct) =>
+        // Only fee invoices are read (two columns each); the latest per invoice is found here, not in SQL.
+        (await db.Invoices.AsNoTracking()
+            .Where(i => i.LateFeeForInvoiceId != null && i.Status == DocumentStatus.Posted)
+            .Select(i => new { For = i.LateFeeForInvoiceId!.Value, i.Date })
+            .ToListAsync(ct))
+            .GroupBy(f => f.For)
+            .ToDictionary(g => g.Key, g => g.Max(f => f.Date));
+
     public async Task<IReadOnlyList<string>> ListInvoiceNumbersAsync(CancellationToken ct) =>
         await db.Invoices.Select(i => i.Number).ToListAsync(ct);
 

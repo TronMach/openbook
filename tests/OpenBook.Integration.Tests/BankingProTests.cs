@@ -206,6 +206,18 @@ public sealed class BankingProTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_audit_log_finds_a_feed_line_or_an_import_by_its_id()
+    {
+        await Queue(_checking.Id, await Preview(_checking.Id, SgmlOfx));
+        var amazon = (await Review(_checking.Id)).Single(r => r.Item.FitId == "F100").Item;
+        await _db.InScope(sp => sp.GetRequiredService<BankFeedService>().ExcludeAsync(amazon.Id));
+
+        Assert.Equal((_checking.Id, BankFeedStatus.Excluded), await In<BankFeedService, (Guid, BankFeedStatus)?>(s => s.LocateAsync(amazon.Id)));
+        Assert.Equal((_checking.Id, BankFeedStatus.Pending), await In<BankFeedService, (Guid, BankFeedStatus)?>(s => s.LocateAsync(amazon.ImportBatchId)));
+        Assert.Null(await In<BankFeedService, (Guid, BankFeedStatus)?>(s => s.LocateAsync(Guid.NewGuid())));
+    }
+
+    [Fact]
     public async Task Card_lines_use_the_holders_view_charges_out_payments_in()
     {
         await Queue(_card.Id, await Preview(_card.Id, XmlOfx));

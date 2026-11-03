@@ -15,6 +15,12 @@ public static class BankingEndpoints
 {
     public static IEndpointRouteBuilder MapBankingEndpoints(this IEndpointRouteBuilder app)
     {
+        // The audit log's links to a feed line or an import: its account's feed, on the line's tab.
+        app.MapGet("/banking/feed-lines/{id:guid}", async (Guid id, BankFeedService feed, CancellationToken ct) =>
+            await feed.LocateAsync(id, ct) is { } place
+                ? Results.Redirect($"/banking/{place.AccountId}/feed?show={place.Status}")
+                : Results.NotFound()).RequireAuthorization();
+
         app.MapPost("/banking/connections/connect", async (IFormCollection form, BankConnectionService connections, CancellationToken ct) =>
         {
             try

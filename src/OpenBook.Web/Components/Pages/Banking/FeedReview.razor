@@ -156,6 +156,10 @@
     [Parameter]
     public Guid AccountId { get; set; }
 
+    /// <summary>The tab to open (?show=Added), for links from the audit log. Enums don't bind from the query.</summary>
+    [SupplyParameterFromQuery(Name = "show")]
+    private string? Show { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         (_chart, _useNumbers, var vendors) = await Ops.RunAsync(async sp => (
@@ -169,6 +173,8 @@
         }
 
         _accountName = _chart.FullName(AccountId);
+        if (Enum.TryParse<BankFeedStatus>(Show, ignoreCase: true, out var shown) && Enum.IsDefined(shown))
+            _status = shown;
         var categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Id != AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable))
             .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income));
