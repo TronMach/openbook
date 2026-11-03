@@ -120,11 +120,15 @@ public sealed class FileLoggerProvider : ILoggerProvider
         _ => "     ",
     };
 
-    public void Dispose()
+    /// <summary>Stops taking lines and waits for the writer to finish them and close the file.</summary>
+    /// <returns>False when the time ran out and the writer is still going, so the file may still be open.</returns>
+    public bool Close(TimeSpan timeout)
     {
         _queue.Writer.TryComplete();
-        _writer.Wait(TimeSpan.FromSeconds(2));
+        return _writer.Wait(timeout);
     }
+
+    public void Dispose() => Close(TimeSpan.FromSeconds(2));
 
     private sealed class FileLogger(FileLoggerProvider provider, string category) : ILogger
     {

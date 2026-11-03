@@ -60,6 +60,8 @@ public sealed partial class DiagnosticsTests : IDisposable
 
             Assert.Equal(["Backup failed.", "Reminder to ap@acme.test not sent."], provider.RecentProblems.Select(p => p.Message));
             Assert.Equal("InvalidOperationException: boom", provider.RecentProblems[0].Exception);
+            // The writer closes the file in its own time, which a busy machine can stretch past Dispose's limit.
+            Assert.True(provider.Close(TimeSpan.FromMinutes(1)), "The log writer didn't finish.");
         }
 
         var file = Assert.Single(Directory.GetFiles(_folder, "openbook-*.log"));
