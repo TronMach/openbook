@@ -63,6 +63,11 @@ internal static class InventoryApi
             return Results.Created($"/api/inventory/adjustments/{adjustment.Id}", InventoryAdjustmentResponse.From(adjustment));
         });
 
+        // A physical count: one adjustment for the differences, or 204 when everything matched.
+        inventory.MapPost("/count", async (InventoryCountCommand c, InventoryAdjustmentService s, CancellationToken ct) =>
+            await s.CountAsync(c, ct) is { } adjustment
+                ? Results.Created($"/api/inventory/adjustments/{adjustment.Id}", InventoryAdjustmentResponse.From(adjustment))
+                : Results.NoContent());
         inventory.MapPost("/adjustments/{id:guid}/void", async (Guid id, VoidInventoryAdjustmentRequest r, InventoryAdjustmentService s, CancellationToken ct) =>
             InventoryAdjustmentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

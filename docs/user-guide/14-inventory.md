@@ -56,6 +56,12 @@ A sale whose shortfall has since been filled can't be voided directly, because t
 
 The value of the change goes to the adjustment account. An adjustment can be voided, unless stock it added has since been sold.
 
+### Counting stock
+
+For a full stock count, **Inventory → Count sheet** prints the **Physical inventory worksheet**: every inventory product with what the books hold in a warehouse and blank **Counted** and **Difference** columns to write in (lot and serial items list each lot).
+
+Then **Inventory → Count stock**: choose the warehouse (when there's more than one), the **count date** and the **adjustment account**, and enter what was counted for each item; leave an item blank to skip it. **Record the count** makes one inventory adjustment for the differences between the counts and the books on that date: stock found comes in at the item's purchase cost, stock missing goes out at its cost. If everything matched, nothing is posted. Items with lot or serial numbers are counted on an ordinary adjustment, lot by lot.
+
 ## Selling
 
 Inventory items go on invoices and sales receipts like any item. When you save, OpenBook takes the stock out and posts its cost. Credit memos for returned goods put stock back, at what it last sold for at cost.
@@ -112,4 +118,5 @@ The part for stock still on hand raises its cost; the part for stock already sol
 ## Reports
 
 - **Inventory valuation**: quantity and value on hand as of a date, per item, or in detail by layer, bin and lot, with a line checking it against the asset accounts. Can be limited to one warehouse.
+- **Physical inventory worksheet**: the count sheet (above).
 - **Inventory stock status**: on hand, on purchase orders and on sales orders, what's available, and what to reorder, with a suggested quantity.

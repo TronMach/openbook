@@ -10,7 +10,10 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Integration.Tests;
 
-/// <summary>Reordering: stock against open purchase and sales orders, and purchase orders made per preferred vendor.</summary>
+/// <summary>
+/// Reordering (stock against open purchase and sales orders, purchase orders made per preferred vendor) and physical
+/// counts recorded as one adjustment.
+/// </summary>
 public sealed class ReorderTests : IAsyncLifetime
 {
     private static readonly DateOnly Mar1 = new(2026, 3, 1);
@@ -105,5 +108,28 @@ public sealed class ReorderTests : IAsyncLifetime
         Assert.Equal("item.vendor_inactive", error.Code);
         Assert.Equal("item.reorder_quantity_invalid", (await Assert.ThrowsAsync<DomainException>(() => In<ItemService, Item>(s => s.UpdateAsync(widget.Id,
             new ItemDetails("Widget", ItemType.Inventory, _sales, 20m, ReorderQuantity: 0m))))).Code);
+    }
+
+    [Fact]
+    public async Task A_count_adjusts_only_the_differences()
+    {
+        var widget = await Stocked("Widget", 10m, 0m, null);
+        var gadget = await Stocked("Gadget", 3m, 0m, null);
+        var bolt = await Stocked("Bolt", 0m, 0m, null);
+
+        // Widget counted as on the books; 1 gadget missing; 5 bolts found at their purchase cost (4).
+        var adjustment = await In<InventoryAdjustmentService, OpenBook.Domain.Inventory.InventoryAdjustment?>(s => s.CountAsync(new InventoryCountCommand(Mar1.AddDays(1),
+            [new CountedItem(widget.Id, 10m), new CountedItem(gadget.Id, 2m), new CountedItem(bolt.Id, 5m)])));
+        Assert.NotNull(adjustment);
+        Assert.Equal([(gadget.Id, -1m, -4m), (bolt.Id, 5m, 20m)], adjustment.Lines.Select(l => (l.ItemId, l.QuantityChange, l.ValueChange)).ToArray());
+        Assert.Equal("Physical count", adjustment.Reference);
+
+        Assert.Null(await In<InventoryAdjustmentService, OpenBook.Domain.Inventory.InventoryAdjustment?>(s => s.CountAsync(new InventoryCountCommand(Mar1.AddDays(2),
+            [new CountedItem(gadget.Id, 2m)]))));
+        Assert.Equal("count.quantity_invalid", (await Assert.ThrowsAsync<DomainException>(() => In<InventoryAdjustmentService, OpenBook.Domain.Inventory.InventoryAdjustment?>(s =>
+            s.CountAsync(new InventoryCountCommand(Mar1.AddDays(2), [new CountedItem(gadget.Id, -1m)]))))).Code);
+
+        var sheet = await In<ReportCatalog, ReportTable>(s => s.RunAsync("physical-inventory-worksheet", ReportParameters.Parse("")));
+        Assert.Equal([("Bolt", 5m), ("Gadget", 2m), ("Widget", 10m)], sheet.Rows.Select(r => (r.Cells[0].Value as string, (decimal)r.Cells[3].Value!)).ToArray());
     }
 }

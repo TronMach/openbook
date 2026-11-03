@@ -185,6 +185,8 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - `EfInventoryStore.ListMovementsAsync` includes unsaved added movements, so several documents in one save see each other's stock.
 - Reports: `inventory-valuation` (as of a date, summary or layers, with a tie-out row to the asset accounts) and `inventory-stock` (reorder status) in `ReportCatalog`, built by `InventoryReports`.
 
+- Physical counts (2026-11-03): `InventoryAdjustmentService.CountAsync(InventoryCountCommand)` compares counts with the warehouse's stock on the date and makes one adjustment for the differences (reference "Physical count"; increases at purchase cost into no bin, decreases from any bin); null when all matched; lot/serial items refused (`count.tracked`). Report `physical-inventory-worksheet` (`InventoryReports.CountSheetAsync`, lots listed). Page `/inventory/count` posts `count:{itemId}` to `/inventory/count` (`InventoryEndpoints`); API `POST /api/inventory/count`.
+
 ## Multi-user and server (V1.8)
 
 - `UserRole` (ViewOnly < Standard < Accountant < Admin) on `User`, plus `IsActive`; users are deactivated, never deleted. Changing a role or deactivating rotates the security stamp, so sessions end. `UserService` keeps at least one active admin and refuses changes to yourself. Inactive users sign in like a wrong password.

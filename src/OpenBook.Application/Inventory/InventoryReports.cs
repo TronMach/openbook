@@ -113,6 +113,44 @@ public sealed class InventoryReports(
             Note: "Available is on hand less what open sales orders still have to deliver. An item needs reordering when available plus what's on order falls to its reorder point; those come first.");
     }
 
+    /// <summary>
+    /// A count sheet: every active tracked item with what the books hold in the warehouse (the default one when none is
+    /// chosen and there are several) and blank columns to write the count in; lot and serial items list each lot.
+    /// </summary>
+    public async Task<ReportTable> CountSheetAsync(Guid? warehouseId = null, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var all = await warehouses.ListAsync(ct: ct);
+        var warehouse = await WarehouseAsync(warehouseId, ct) ?? (all.Count > 1 ? all.FirstOrDefault(w => w.IsDefault) : null);
+        var key = warehouse?.Key;
+        var today = CompanyTime.Today;
+        var held = (await inventory.StockByPlaceAsync(null, today, ct)).Where(s => s.Place.WarehouseId == key && s.Quantity != 0m).ToLookup(s => s.Item.Id);
+        var items = (await inventory.StockAsync(null, ct)).Select(s => s.Item).Where(i => i.IsActive).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+
+        var rows = new List<ReportTableRow>();
+        foreach (var item in items)
+        {
+            var name = new ReportCell(item.Name, new ReportLink("item", item.Id));
+            var onHand = held[item.Id].Sum(s => s.Quantity);
+            if (item.Tracking == ItemTracking.None)
+            {
+                rows.Add(new ReportTableRow([name, item.Description, item.Barcode, new ReportCell(onHand), null, null]));
+                continue;
+            }
+
+            rows.Add(new ReportTableRow([name, item.Description, item.Barcode, new ReportCell(onHand), null, null], 0, ReportRowStyle.Section));
+            rows.AddRange(held[item.Id].GroupBy(s => s.Lot ?? "").OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase).Select(g => new ReportTableRow(
+                [$"{(item.Tracking == ItemTracking.Serial ? "Serial" : "Lot")} {g.Key}", null, null, new ReportCell(g.Sum(s => s.Quantity)), null, null], 1)));
+        }
+
+        return new ReportTable(
+            "Physical inventory worksheet",
+            [company.Name, $"As of {today:MMM d, yyyy}{(warehouse is null ? "" : $" · {warehouse.Name}")}"],
+            [new("Item"), new("Description"), new("Barcode"), new("On hand", ColumnFormat.Number), new("Counted", ColumnFormat.Number), new("Difference", ColumnFormat.Number)],
+            rows,
+            Note: "Write what's on the shelf in Counted, then enter the counts under Inventory › Count stock: OpenBook adjusts for the differences. Lot and serial items are adjusted lot by lot.");
+    }
+
     /// <summary>The warehouse a report is limited to; null for all stock.</summary>
     private async Task<Warehouse?> WarehouseAsync(Guid? warehouseId, CancellationToken ct) =>
         warehouseId is { } id && id != Guid.Empty

@@ -74,6 +74,36 @@ public static class InventoryEndpoints
             }
         }).RequireAuthorization();
 
+        // Fields: count:{itemId} (blank = not counted), date, warehouseId, accountId, reference.
+        app.MapPost("/inventory/count", async (IFormCollection form, InventoryAdjustmentService adjustments, CancellationToken ct) =>
+        {
+            var warehouse = Guid.TryParse(form["warehouseId"], out var w) ? w : (Guid?)null;
+            var back = "/inventory/count" + (warehouse is { } wid ? $"?warehouseId={wid}&" : "?");
+            try
+            {
+                var counts = new List<CountedItem>();
+                foreach (var (field, values) in form)
+                {
+                    var text = values.ToString().Trim();
+                    if (!field.StartsWith("count:", StringComparison.Ordinal) || text.Length == 0 || !Guid.TryParse(field[6..], out var itemId))
+                        continue;
+                    counts.Add(decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var counted)
+                        ? new CountedItem(itemId, counted)
+                        : throw new DomainException("count.quantity_invalid", $"'{text}' isn't a number."));
+                }
+
+                var date = DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : Application.CompanyTime.Today;
+                var reference = form["reference"].ToString().Trim();
+                var made = await adjustments.CountAsync(new InventoryCountCommand(date, counts, warehouse,
+                    Guid.TryParse(form["accountId"], out var account) ? account : null, reference.Length == 0 ? null : reference), ct);
+                return Results.Redirect($"{back}done={(made is null ? "matched" : made.Id.ToString())}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/inventory/pending-builds/{id:guid}/cancel", async (Guid id, IFormCollection form, AssemblyBuildService builds, CancellationToken ct) =>
         {
             try

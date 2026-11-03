@@ -1,0 +1,140 @@
+@page "/inventory/count"
+@using OpenBook.Application.Inventory
+@inject InventoryService Inventory
+@inject WarehouseService WarehouseService
+@inject AccountService AccountService
+
+<PageTitle>Count stock · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Count stock</h1>
+        <a class="button secondary" href="@SheetUrl" target="_blank">Print count sheet</a>
+        <ActionLink Class="button secondary" Href="/inventory">Back to inventory</ActionLink>
+    </div>
+    <p class="muted">
+        Enter what's actually on the shelf. OpenBook compares each count with what the books hold on the count date and records one
+        inventory adjustment for the differences: stock found comes in at the item's purchase cost, stock missing goes out at its cost.
+        Leave an item blank to skip it. Items with lot or serial numbers are counted lot by lot on
+        <ActionLink Href="/inventory/adjustments/new">an adjustment</ActionLink>.
+        <HelpLink Chapter="14-inventory" Section="counting-and-adjusting" />
+    </p>
+
+    @if (Done is { } done)
+    {
+        <div class="alert success" role="status">
+            @if (Guid.TryParse(done, out var adjustmentId))
+            {
+                <span>The count is recorded. <a href="/inventory/adjustments/@adjustmentId">See the adjustment</a>.</span>
+            }
+            else
+            {
+                <span>Everything counted matched the books: nothing to adjust.</span>
+            }
+        </div>
+    }
+    @if (Error is { } error)
+    {
+        <div class="alert error" role="alert">@error</div>
+    }
+
+    @if (_warehouses.Count > 1)
+    {
+        <form method="get" action="/inventory/count" class="toolbar">
+            <label>
+                Warehouse
+                <select name="warehouseId" onchange="this.form.requestSubmit()">
+                    @foreach (var w in _warehouses)
+                    {
+                        <option value="@w.Id" selected="@(w.Id == _warehouse?.Id)">@w.Name</option>
+                    }
+                </select>
+            </label>
+            <noscript><button type="submit" class="secondary">Show</button></noscript>
+        </form>
+    }
+
+    @if (_rows.Count == 0)
+    {
+        <div class="card"><p>No inventory products to count. <ActionLink Href="/items/new">Add one</ActionLink> with the type "Inventory product".</p></div>
+    }
+    else
+    {
+        <PostForm Action="/inventory/count" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="warehouseId" value="@_warehouse?.Id" />
+            <div class="form-grid">
+                <label>Count date <input type="date" name="date" value="@_today.ToString("yyyy-MM-dd")" required /></label>
+                <label>Reference <input type="text" name="reference" maxlength="50" placeholder="Physical count" /></label>
+                <label>
+                    Adjustment account
+                    <select name="accountId" data-search>
+                        <option value="">Inventory Shrinkage (the usual)</option>
+                        @foreach (var a in _accounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </label>
+            </div>
+            <input type="search" class="filter" data-filter="#count-list" placeholder="Filter items" aria-label="Filter items" />
+            <div class="table-wrap">
+                <table class="data" id="count-list">
+                    <thead><tr><th>Item</th><th>Barcode</th><th class="num">In the books</th><th class="num">Counted</th></tr></thead>
+                    <tbody>
+                        @foreach (var (item, held) in _rows)
+                        {
+                            <tr data-filter-item>
+                                <td><a href="/items/@item.Id">@item.Name</a></td>
+                                <td>@item.Barcode</td>
+                                <td class="num">@Labels.Quantity(held)</td>
+                                <td class="num">
+                                    @if (item.Tracking == ItemTracking.None)
+                                    {
+                                        <input class="num" type="text" inputmode="decimal" name="count:@item.Id" size="8" aria-label="Counted @item.Name" />
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">By lot</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        <tr data-filter-empty hidden><td colspan="4" class="muted">No items match.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="actions"><button type="submit">Record the count</button></div>
+        </PostForm>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Warehouse? _warehouse;
+    private List<(Item Item, decimal Held)> _rows = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _accounts = [];
+    private DateOnly _today;
+
+    [SupplyParameterFromQuery] private Guid? WarehouseId { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private string SheetUrl => "/reports/physical-inventory-worksheet" + (_warehouse is { IsDefault: false } w ? $"?warehouseId={w.Id}" : "");
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = CompanyTime.Today;
+        _warehouses = await WarehouseService.ListAsync();
+        _warehouse = _warehouses.FirstOrDefault(w => w.Id == WarehouseId) ?? _warehouses.FirstOrDefault(w => w.IsDefault);
+        var key = _warehouse?.Key;
+        var held = (await Inventory.StockByPlaceAsync(null, _today)).Where(s => s.Place.WarehouseId == key).GroupBy(s => s.Item.Id).ToDictionary(g => g.Key, g => g.Sum(s => s.Quantity));
+        _rows = (await Inventory.StockAsync()).Select(s => s.Item).Where(i => i.IsActive)
+            .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(i => (i, held.GetValueOrDefault(i.Id))).ToList();
+        _chart = await AccountService.GetChartAsync();
+        _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type.ClassOf() is AccountClass.Expense or AccountClass.Equity).ToList();
+    }
+}

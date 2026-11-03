@@ -18,6 +18,13 @@ public sealed record CreateInventoryAdjustmentCommand(
     string? Reference = null,
     string? Memo = null);
 
+/// <summary>A counted quantity: what's actually on the shelf.</summary>
+public sealed record CountedItem(Guid ItemId, decimal Counted);
+
+/// <summary>A physical count of one warehouse (null for the default one) on a date.</summary>
+/// <param name="AdjustmentAccountId">Null for "Inventory Shrinkage".</param>
+public sealed record InventoryCountCommand(DateOnly Date, IReadOnlyList<CountedItem> Counts, Guid? WarehouseId = null, Guid? AdjustmentAccountId = null, string? Reference = null);
+
 /// <summary>Quantity adjustments: increases open a layer at the given unit cost, decreases take FIFO cost.</summary>
 public sealed class InventoryAdjustmentService(
     IInventoryStore store,
@@ -123,6 +130,41 @@ public sealed class InventoryAdjustmentService(
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, EntityType, id, null, Snapshot(adjustment)));
         await store.SaveChangesAsync(ct);
         return adjustment;
+    }
+
+    /// <summary>
+    /// Records a physical count: one adjustment for the differences between what was counted and what the books hold in
+    /// that warehouse on the date (increases at the item's purchase cost, into no bin; decreases from any bin, FIFO).
+    /// Null when everything counted matched. Lot and serial items are counted lot by lot on an ordinary adjustment.
+    /// </summary>
+    public async Task<InventoryAdjustment?> CountAsync(InventoryCountCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.Counts.Count == 0)
+            throw new DomainException("count.nothing", "Enter the quantity counted for at least one item.");
+        if (command.Counts.Select(c => c.ItemId).Distinct().Count() != command.Counts.Count)
+            throw new DomainException("count.duplicate", "Count each item once.");
+        var place = await warehouses.CheckAsync(new StockPlace(command.WarehouseId, null), ct);
+        var items = await sales.GetItemsAsync(command.Counts.Select(c => c.ItemId).ToList(), ct);
+        var held = (await inventory.StockByPlaceAsync(null, command.Date, ct)).Where(s => s.Place.WarehouseId == place.WarehouseId)
+            .GroupBy(s => s.Item.Id).ToDictionary(g => g.Key, g => g.Sum(s => s.Quantity));
+
+        var lines = new List<InventoryAdjustmentLineDraft>();
+        foreach (var count in command.Counts)
+        {
+            var item = InventoryService.InventoryItem(items, count.ItemId);
+            if (count.Counted < 0m || decimal.Round(count.Counted, Domain.Sales.SalesLine.Precision) != count.Counted)
+                throw new DomainException("count.quantity_invalid", $"The count for {item.Name} must be zero or more, with up to 4 decimal places.");
+            if (item.Tracking != ItemTracking.None)
+                throw new DomainException("count.tracked", $"{item.Name} has lot or serial numbers: count it on an inventory adjustment, lot by lot.");
+            var change = count.Counted - held.GetValueOrDefault(item.Id);
+            if (change != 0m)
+                lines.Add(new InventoryAdjustmentLineDraft(item.Id, change, null, place));
+        }
+
+        if (lines.Count == 0)
+            return null;
+        return await CreateAsync(new CreateInventoryAdjustmentCommand(command.Date, lines, command.AdjustmentAccountId, command.Reference ?? "Physical count", "Physical inventory count"), ct);
     }
 
     public async Task<InventoryAdjustment> VoidAsync(Guid id, string reason, CancellationToken ct = default)
