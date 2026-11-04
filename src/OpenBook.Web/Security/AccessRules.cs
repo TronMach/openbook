@@ -17,6 +17,10 @@ public static class AccessRules
 {
     private static readonly (string Prefix, UserRole Read, UserRole Write)[] Rules =
     [
+        // The connection of interactive pages. Reaching a page is checked when it's opened, and everything it does then
+        // goes through Operations, which checks the session each time.
+        ("/_blazor", UserRole.ViewOnly, UserRole.ViewOnly),
+
         // Everyone: their own password and API keys, saved reports, signing out.
         ("/account", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/settings/api-keys", UserRole.ViewOnly, UserRole.ViewOnly),
@@ -127,6 +131,15 @@ public static class AccessRules
     {
         "new", "edit", "import", "apply", "pay", "pay-bills", "transfer", "reconcile", "feed", "record", "opening-balances", "email", "batch",
     };
+
+    /// <summary>
+    /// A limited key never reaches what only admins may do, whatever area its path falls in: sign-in, Stripe and email
+    /// settings all sit under an area's prefix. Whole-company copies are the exception: a key can be given the "data" area for them.
+    /// </summary>
+    public static bool ClosedToLimitedKeys(PathString path, string method) =>
+        Required(path, method) == UserRole.Admin
+        && !path.StartsWithSegments("/api/backup", StringComparison.OrdinalIgnoreCase)
+        && !path.StartsWithSegments("/api/export", StringComparison.OrdinalIgnoreCase);
 
     public static UserRole Required(PathString path, string method)
     {
@@ -336,7 +349,8 @@ public sealed class AccessMiddleware(RequestDelegate next)
             {
                 var scopes = http.User.FindAll(ApiKeyAuthenticationHandler.ScopeClaim).Select(c => c.Value).ToList();
                 var write = !(HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method));
-                if (!http.Request.Path.StartsWithSegments("/api") || !ApiScopes.Allows(scopes, http.Request.Path.Value ?? "/", write))
+                if (!http.Request.Path.StartsWithSegments("/api") || !ApiScopes.Allows(scopes, http.Request.Path.Value ?? "/", write)
+                    || AccessRules.ClosedToLimitedKeys(http.Request.Path, http.Request.Method))
                 {
                     http.Response.StatusCode = StatusCodes.Status403Forbidden;
                     await http.Response.WriteAsJsonAsync(new { code = "auth.scope", message = "This API key isn't allowed to do that. Its areas: " + string.Join(", ", scopes) + "." });

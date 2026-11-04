@@ -33,7 +33,7 @@ OpenBook has a REST API for connecting other programs and writing your own tools
 1. **Create a key**: give it a name, an optional expiry date, and choose **what the key can do**: everything your role allows, or only reading and/or changing some areas (ledger, sales, purchases, documents, banking, inventory, projects, channels, assets, nonprofit, reports, capture, data).
 2. The key (starting `obk_`) is **shown once**. Copy it into the program that needs it.
 
-A key acts as you, with your role, and never does more than your role allows. A limited key can't reach users, keys or webhooks at all. **Revoke** a key you no longer use; its last use is shown in the list.
+A key acts as you, with your role, and never does more than your role allows. A limited key can't reach users, keys, webhooks or anything else only administrators may change, such as the sign-in, email and online payment settings. Backups and full exports are the exception: they come with the data area, so give that area only to a program you trust with everything. **Revoke** a key you no longer use; its last use is shown in the list.
 
 Programs send the key as `Authorization: Bearer obk_…`. The **REST API** link on the Settings page opens the OpenAPI description of every endpoint, for developers.
 

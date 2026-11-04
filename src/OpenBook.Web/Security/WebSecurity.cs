@@ -140,17 +140,25 @@ public static class WebSecurity
             ? returnUrl
             : "/";
 
+    /// <summary>
+    /// Whether a signed-in person's cookie still counts. A cookie from before roles or sessions existed has no role or
+    /// session claim: sign in again to get one.
+    /// </summary>
+    internal static async Task<bool> IsSessionValidAsync(ClaimsPrincipal? principal, AuthService auth, CancellationToken ct = default)
+    {
+        var stamp = principal?.FindFirstValue(StampClaim);
+        return Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+            && stamp is not null
+            && principal?.FindFirstValue(ClaimTypes.Role) is not null
+            && AuthService.SessionIdOf(principal) is { } sessionId
+            && await auth.IsSessionValidAsync(userId, stamp, sessionId, ct);
+    }
+
     // Runs on every authenticated request, so a password change or restore signs out other sessions immediately.
     private static async Task ValidateSessionAsync(CookieValidatePrincipalContext ctx)
     {
-        var stamp = ctx.Principal?.FindFirstValue(StampClaim);
-        // A cookie from before roles or sessions existed has no role or session claim: sign in again to get one.
-        var valid = Guid.TryParse(ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
-            && stamp is not null
-            && ctx.Principal?.FindFirstValue(ClaimTypes.Role) is not null
-            && AuthService.SessionIdOf(ctx.Principal!) is { } sessionId
-            && await ctx.HttpContext.RequestServices.GetRequiredService<AuthService>().IsSessionValidAsync(userId, stamp, sessionId, ctx.HttpContext.RequestAborted);
-        if (!valid)
+        var auth = ctx.HttpContext.RequestServices.GetRequiredService<AuthService>();
+        if (!await IsSessionValidAsync(ctx.Principal, auth, ctx.HttpContext.RequestAborted))
         {
             ctx.RejectPrincipal();
             await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -253,12 +261,16 @@ internal sealed class OnlinePaymentActor(CircuitUser circuit)
 internal sealed class CircuitUser
 {
     public ClaimsPrincipal? Principal { get; set; }
+
+    /// <summary>True on an interactive page's connection, which outlives the request whose cookie was checked.</summary>
+    public bool InCircuit { get; set; }
 }
 
 internal sealed class UserCircuitHandler(AuthenticationStateProvider auth, CircuitUser user) : CircuitHandler, IDisposable
 {
     public override Task OnCircuitOpenedAsync(Circuit circuit, CancellationToken cancellationToken)
     {
+        user.InCircuit = true;
         auth.AuthenticationStateChanged += OnAuthenticationChanged;
         return base.OnCircuitOpenedAsync(circuit, cancellationToken);
     }

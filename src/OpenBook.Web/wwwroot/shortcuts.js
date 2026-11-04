@@ -29,6 +29,13 @@
         applyTheme();
     });
 
+    // A button that asks first. The question is data, so a name in it (a file's, say) can never run as script: an
+    // inline onclick builds JavaScript from it, and HTML encoding doesn't stop that.
+    document.addEventListener('click', e => {
+        const asking = e.target instanceof Element ? e.target.closest('[data-confirm]') : null;
+        if (asking && !confirm(asking.dataset.confirm)) e.preventDefault();
+    });
+
     // Drop-down menus (<details class="menu">: the simple view's menu bar, the full view's drop-downs, the account menu,
     // a center's "New transaction"): one open at a time, closed by a click elsewhere or Esc; in a menu bar, while one is
     // open, pointing at another opens it.

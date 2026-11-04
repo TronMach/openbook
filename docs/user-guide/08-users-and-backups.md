@@ -15,7 +15,7 @@ Administrators add people on **Settings → Users and invitations**. Each person
 
 Pages a role can't use are left out of its menu. On pages, buttons and forms it can't use stay visible but greyed out, saying what they need; selecting one opens a page that says which access is missing and names the administrators who can give it. They work again as soon as an administrator changes the role (the person signs in once more).
 
-From the Users page an administrator can change someone's role, **reset their password** or **make them inactive** when they leave. Changing a role or making someone inactive signs them out everywhere at once. People are never deleted, so their name stays on what they entered. There's always at least one active administrator, and you can't change your own role or deactivate yourself.
+From the Users page an administrator can change someone's role, **reset their password** or **make them inactive** when they leave. Changing a role or making someone inactive signs them out everywhere at once, and a form they still have open stops working: saving it tells them they've been signed out. People are never deleted, so their name stays on what they entered. There's always at least one active administrator, and you can't change your own role or deactivate yourself.
 
 ## Two-factor sign-in
 

@@ -97,7 +97,7 @@ public static class ApiScopes
         ["nonprofit"] = ("Nonprofit: gifts, pledges, grants and donor restrictions", ["/api/nonprofit"]),
         ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),
         ["capture"] = ("Offline capture (time, mileage, expenses, receipts)", ["/api/capture"]),
-        ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields", "/api/print", "/api/merge"]),
+        ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields", "/api/settings/custom-fields", "/api/print", "/api/merge"]),
     };
 
     /// <summary>Checks and orders scopes; "area:write" makes "area:read" redundant.</summary>
@@ -129,7 +129,14 @@ public static class ApiScopes
         return area is not null && (scopes.Contains($"{area}:write") || (!write && scopes.Contains($"{area}:read")));
     }
 
-    /// <summary>The area an API path belongs to; null for paths outside every area (users, keys, webhooks, …).</summary>
+    /// <summary>
+    /// The area an API path belongs to, by its longest matching prefix; null for paths outside every area (users,
+    /// keys, webhooks, …).
+    /// </summary>
     public static string? AreaOf(string path) =>
-        Areas.FirstOrDefault(a => a.Value.Paths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase) || path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase))).Key;
+        Areas.SelectMany(a => a.Value.Paths.Select(p => (Area: a.Key, Prefix: p)))
+            .Where(a => path.Equals(a.Prefix, StringComparison.OrdinalIgnoreCase) || path.StartsWith(a.Prefix + "/", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(a => a.Prefix.Length)
+            .Select(a => a.Area)
+            .FirstOrDefault();
 }

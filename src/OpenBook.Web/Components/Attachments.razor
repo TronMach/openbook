@@ -25,7 +25,7 @@
                     <PostForm Action="@($"/attachments/{file.Id}/remove")" class="inline-form">
                         <AntiforgeryToken />
                         <input type="hidden" name="returnUrl" value="@ReturnUrl" />
-                        <button type="submit" class="link" onclick="return confirm('Remove @file.FileName?')">Remove</button>
+                        <button type="submit" class="link" data-confirm="Remove @file.FileName?">Remove</button>
                     </PostForm>
                 </li>
             }

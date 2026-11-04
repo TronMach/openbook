@@ -282,6 +282,31 @@ public sealed class ApiAccessTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_limited_key_of_an_admin_cannot_change_sign_in_settings()
+    {
+        string token;
+        await using (var scope = _app.Services.CreateAsyncScope())
+        {
+            var sp = scope.ServiceProvider;
+            var owner = (await sp.GetRequiredService<UserService>().ListAsync()).Single(u => u.Username == "owner");
+            token = (await sp.GetRequiredService<ApiKeyService>().CreateAsync(owner.Id, "journal", scopes: ["ledger:write"])).Token;
+        }
+
+        var client = Client(null);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/accounts")).StatusCode);
+        foreach (var path in new[] { "/api/settings/sign-in", "/api/settings/email", "/api/settings/online-payments", "/api/settings/document-reading" })
+        {
+            var refused = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+            Assert.Contains("auth.scope", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+
+        var change = await client.PutAsJsonAsync("/api/settings/sign-in", new { twoFactorRequiredFrom = (string?)null });
+        Assert.Equal(HttpStatusCode.Forbidden, change.StatusCode);
+    }
+
+    [Fact]
     public async Task A_device_can_ask_whether_it_was_removed_without_signing_in()
     {
         var response = await Client(null).GetAsync($"/capture/device-status/{Guid.NewGuid()}");
@@ -488,6 +513,8 @@ public sealed class AccessRulesTests
     [InlineData("/sales/email-links/0190a7a2-0000-7000-8000-000000000000/revoke", "POST", UserRole.Standard)]
     [InlineData("/customers/0190a7a2-0000-7000-8000-000000000000/email-settings", "POST", UserRole.Standard)]
     [InlineData("/view/obd_token", "GET", UserRole.ViewOnly)]
+    [InlineData("/_blazor/negotiate", "POST", UserRole.ViewOnly)]
+    [InlineData("/_blazor", "GET", UserRole.ViewOnly)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
 
@@ -535,6 +562,37 @@ public sealed class AccessRulesTests
 
     private static System.Security.Claims.ClaimsPrincipal Principal(UserRole role, IReadOnlyDictionary<string, UserRole>? areas = null) =>
         new(new System.Security.Claims.ClaimsIdentity(WebSecurity.Claims(new AuthenticatedUser(Guid.NewGuid(), "pat", "stamp", role, areas)), "test"));
+
+    [Fact]
+    public void A_permission_set_can_open_the_connection_of_interactive_pages()
+    {
+        var clerk = Principal(UserRole.Standard, new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard });
+        Assert.True(AccessRules.Allows(clerk, "/_blazor/negotiate", "POST", out _));
+    }
+
+    [Theory]
+    [InlineData("/api/settings/sign-in", "GET", true)]
+    [InlineData("/api/settings/sign-in", "PUT", true)]
+    [InlineData("/api/settings/sign-in/sso", "PUT", true)]
+    [InlineData("/api/settings/email", "PUT", true)]
+    [InlineData("/api/settings/online-payments", "PUT", true)]
+    [InlineData("/api/settings/document-reading", "PUT", true)]
+    [InlineData("/api/users", "GET", true)]
+    [InlineData("/api/webhooks", "GET", true)]
+    [InlineData("/api/backup", "GET", false)]
+    [InlineData("/api/export", "GET", false)]
+    [InlineData("/api/settings/form-designs", "PUT", false)]
+    [InlineData("/api/customers", "POST", false)]
+    public void Limited_keys_are_kept_off_what_only_admins_may_do(string path, string method, bool closed) =>
+        Assert.Equal(closed, AccessRules.ClosedToLimitedKeys(new PathString(path), method));
+
+    [Theory]
+    [InlineData("/api/settings/custom-fields", "data")]
+    [InlineData("/api/settings/custom-fields/presets", "data")]
+    [InlineData("/api/settings/forms", "ledger")]
+    [InlineData("/api/custom-fields/customer/1", "data")]
+    [InlineData("/api/users", null)]
+    public void An_api_path_belongs_to_its_longest_prefix(string path, string? area) => Assert.Equal(area, ApiScopes.AreaOf(path));
 
     [Fact]
     public void A_permission_set_decides_by_area()
