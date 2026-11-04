@@ -1,5 +1,6 @@
 @using OpenBook.Domain.Companies
-@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Diagnostics
+@inherits OrderedLayout
 @inject OpenBook.Application.Companies.ViewModeService Views
 @inject NavigationManager Navigation
 
@@ -125,6 +126,10 @@ else
     protected override async Task OnInitializedAsync()
     {
         if (HttpContext?.User.Identity?.IsAuthenticated != true)
+            return;
+        // A re-executed status page must draw without waiting: the framework doesn't wait for it, and would dispose
+        // its services under a query on a database that really waits. So "not found" shows the usual menu.
+        if (HttpContext.Features.Get<IStatusCodeReExecuteFeature>() is not null)
             return;
         var view = await Views.CurrentAsync(HttpContext.RequestAborted);
         _edition = view.Edition;

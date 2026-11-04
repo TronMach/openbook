@@ -18,23 +18,26 @@ namespace OpenBook.Integration.Tests;
 public sealed partial class PageSmokeTests : IAsyncLifetime
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), $"openbook-pages-{Guid.NewGuid():N}");
+    private WebTestDatabase _database = null!;
     private WebApplicationFactory<Program> _app = null!;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_folder);
+        _database = new WebTestDatabase(_folder, "pages.db");
+        await _database.CreateAsync();
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
-            b.UseSetting("ConnectionStrings:OpenBook", $"Data Source={Path.Combine(_folder, "pages.db")}");
+            _database.Apply(b);
             b.UseSetting("OpenBook:DataProtectionKeys", Path.Combine(_folder, "keys"));
         });
-        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
     {
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
+        await _database.DropAsync();
         Directory.Delete(_folder, recursive: true);
     }
 
@@ -85,6 +88,21 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
             .ToList();
         Assert.True(pages.Count > 50, $"Only {pages.Count} pages found.");
         Assert.Empty(await FailingAsync(browser, pages));
+    }
+
+    [Fact]
+    public async Task A_page_that_does_not_exist_answers_at_once_every_time()
+    {
+        var browser = await SetUpAsync(_app);
+        foreach (var path in new[] { "/no/such/page", "/no/such/page", "/api/customers/01a00000-0000-7000-8000-000000000001", "/no/such/page" })
+        {
+            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var response = await browser.GetAsync(path, patience.Token);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            var page = await response.Content.ReadAsStringAsync(patience.Token);
+            Assert.Contains("Not Found", page, StringComparison.Ordinal);
+            Assert.Contains("href=\"/sales\"", page, StringComparison.Ordinal); // the menu, for someone signed in
+        }
     }
 
     [Fact]

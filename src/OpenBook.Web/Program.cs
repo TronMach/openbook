@@ -101,6 +101,7 @@ builder.Services
 builder.Services.AddOpenBookRateLimits(builder.Configuration);
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
 builder.Services.AddScoped<OpenBook.Web.Components.LineFieldCache>();
+builder.Services.AddScoped<OpenBook.Web.Components.RenderTurn>();
 
 var app = builder.Build();
 

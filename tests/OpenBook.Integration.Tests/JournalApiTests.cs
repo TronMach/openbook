@@ -11,23 +11,26 @@ namespace OpenBook.Integration.Tests;
 public sealed class JournalApiTests : IAsyncLifetime
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), $"openbook-journal-api-{Guid.NewGuid():N}");
+    private WebTestDatabase _database = null!;
     private WebApplicationFactory<Program> _app = null!;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_folder);
+        _database = new WebTestDatabase(_folder, "journal.db");
+        await _database.CreateAsync();
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
-            b.UseSetting("ConnectionStrings:OpenBook", $"Data Source={Path.Combine(_folder, "journal.db")}");
+            _database.Apply(b);
             b.UseSetting("OpenBook:DataProtectionKeys", Path.Combine(_folder, "keys"));
         });
-        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
     {
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
+        await _database.DropAsync();
         Directory.Delete(_folder, recursive: true);
     }
 

@@ -159,23 +159,26 @@ public sealed class SimpleViewTests : IAsyncLifetime
 public sealed partial class SimpleViewWebTests : IAsyncLifetime
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), $"openbook-view-{Guid.NewGuid():N}");
+    private WebTestDatabase _database = null!;
     private WebApplicationFactory<Program> _app = null!;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_folder);
+        _database = new WebTestDatabase(_folder);
+        await _database.CreateAsync();
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
-            b.UseSetting("ConnectionStrings:OpenBook", $"Data Source={Path.Combine(_folder, "web.db")}");
+            _database.Apply(b);
             b.UseSetting("OpenBook:DataProtectionKeys", Path.Combine(_folder, "keys"));
         });
-        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
     {
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
+        await _database.DropAsync();
         Directory.Delete(_folder, recursive: true);
     }
 
@@ -262,7 +265,8 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
         await using var scope = _app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OpenBookDbContext>();
         Assert.Equal(ViewMode.Simple, (await db.Companies.SingleAsync()).DefaultViewMode);
-        Assert.Equal(("owner", ViewMode.Simple), await db.ViewPreferences.Select(p => ValueTuple.Create(p.Username, p.Mode)).SingleAsync());
+        var own = await db.ViewPreferences.SingleAsync();
+        Assert.Equal(("owner", ViewMode.Simple), (own.Username, own.Mode));
     }
 
     [Fact]

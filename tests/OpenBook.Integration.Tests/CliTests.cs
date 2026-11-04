@@ -13,15 +13,18 @@ namespace OpenBook.Integration.Tests;
 public sealed class CliTests : IAsyncLifetime
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), $"openbook-cli-{Guid.NewGuid():N}");
+    private WebTestDatabase _database = null!;
     private WebApplicationFactory<Program> _app = null!;
     private string _key = null!;
 
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_folder);
+        _database = new WebTestDatabase(_folder, "cli.db");
+        await _database.CreateAsync();
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
-            b.UseSetting("ConnectionStrings:OpenBook", $"Data Source={Path.Combine(_folder, "cli.db")}");
+            _database.Apply(b);
             b.UseSetting("OpenBook:DataProtectionKeys", Path.Combine(_folder, "keys"));
             b.UseEnvironment("Development");
         });
@@ -37,6 +40,7 @@ public sealed class CliTests : IAsyncLifetime
     {
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
+        await _database.DropAsync();
         Directory.Delete(_folder, recursive: true);
     }
 

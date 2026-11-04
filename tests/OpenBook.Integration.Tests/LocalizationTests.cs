@@ -15,25 +15,28 @@ namespace OpenBook.Integration.Tests;
 public sealed partial class LocalizationTests : IAsyncLifetime
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), $"openbook-l10n-{Guid.NewGuid():N}");
+    private WebTestDatabase _database = null!;
     private WebApplicationFactory<Program> _app = null!;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_folder);
+        _database = new WebTestDatabase(_folder, "l10n.db");
+        await _database.CreateAsync();
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
-            b.UseSetting("ConnectionStrings:OpenBook", $"Data Source={Path.Combine(_folder, "l10n.db")}");
+            _database.Apply(b);
             b.UseSetting("OpenBook:DataProtectionKeys", Path.Combine(_folder, "keys"));
             b.UseEnvironment("Development");
         });
         _ = _app.Server;
-        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
     {
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
+        await _database.DropAsync();
         Directory.Delete(_folder, recursive: true);
     }
 
