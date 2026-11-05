@@ -172,11 +172,12 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 
     private static readonly Type[] Versioned =
     [
-        typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
+        typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(SalesReceipt), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
         typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
         typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(ReceiptCapture), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
         typeof(BankFeedItem), typeof(RecurringEntry),
-        typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
+        typeof(Domain.Nonprofit.Donation), typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
+        typeof(Domain.Assets.Loan),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
         typeof(Item),
     ];
@@ -250,6 +251,13 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     /// </summary>
     private void TouchOwners()
     {
+        // What's paid on a pledge is summed from its gifts: the same goes for it.
+        foreach (var gift in ChangeTracker.Entries<Domain.Nonprofit.Donation>().Where(e => e.State is EntityState.Added or EntityState.Modified && e.Entity.PledgeId is not null))
+        {
+            if (ChangeTracker.Entries<Domain.Nonprofit.Pledge>().FirstOrDefault(p => p.Entity.Id == gift.Entity.PledgeId) is { State: EntityState.Unchanged or EntityState.Modified } pledge)
+                pledge.Property(VersionProperty).IsModified = true;
+        }
+
         var entries = ChangeTracker.Entries().ToList();
         var owners = new HashSet<(Type, object)>();
         foreach (var entry in entries)
@@ -2276,6 +2284,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.Caller).HasMaxLength(200);
             b.Property(r => r.RequestHash).HasMaxLength(64);
             b.Property(r => r.ContentType).HasMaxLength(200);
+            b.Property(r => r.Location).HasMaxLength(2000);
+            b.Property(r => r.ContentDisposition).HasMaxLength(500);
             b.HasIndex(r => new { r.Caller, r.Key }).IsUnique();
             b.HasIndex(r => r.CreatedUnixMs);
             b.Ignore(r => r.IsDone);

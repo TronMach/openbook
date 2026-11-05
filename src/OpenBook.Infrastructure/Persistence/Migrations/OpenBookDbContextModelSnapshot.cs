@@ -248,6 +248,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ProceedsEntryId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset?>("VoidedAt")
                         .HasColumnType("TEXT");
 
@@ -1639,6 +1643,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ContentDisposition")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ContentType")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
@@ -1649,6 +1657,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("Key")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RequestHash")
@@ -3066,6 +3078,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -5980,6 +5996,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long>("Total")
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("TEXT");

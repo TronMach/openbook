@@ -50,7 +50,13 @@ public sealed class BooksCheckService(
     DepositService deposits,
     InventoryService inventory,
     ICompanyStore companies,
-    IClock clock)
+    IClock clock,
+    SalesTax.ISalesTaxStore salesTax,
+    Inventory.IInventoryStore stock,
+    Assets.IAssetStore assets,
+    Nonprofit.INonprofitStore nonprofit,
+    Channels.IChannelStore channels,
+    Channels.IChannelOrderStore channelOrders)
 {
     /// <summary>Most findings listed per check; the summary still counts them all.</summary>
     public const int MaxFindings = 50;
@@ -111,7 +117,95 @@ public sealed class BooksCheckService(
         await purchases.ListPaymentsAsync(null, ct),
         await purchases.ListVendorCreditsAsync(null, ct),
         await purchases.ListVendorRefundsAsync(null, ct),
-        await banking.ListAllTransactionsAsync(ct));
+        await banking.ListAllTransactionsAsync(ct),
+        await nonprofit.ListDonationsAsync(ct),
+        await OtherDocumentsAsync(ct));
+
+    /// <summary>
+    /// Everything else that posts: documents with an entry each, and rows of a record that each post their own (the
+    /// entry's source id is then the record's). A new one goes here, or in <see cref="Documents"/> if the other checks use it.
+    /// </summary>
+    private async Task<IReadOnlyList<Document>> OtherDocumentsAsync(CancellationToken ct)
+    {
+        var list = new List<Document>();
+        void Add(string label, string entityType, Guid id, string source, Guid? entryId, bool posted)
+        {
+            if (entryId is { } entry && entry != Guid.Empty)
+                list.Add(new Document(label, entityType, id, source, entry, posted));
+        }
+
+        foreach (var p in await salesTax.ListPaymentsAsync(null, ct))
+            Add($"Sales tax payment of {p.Date:MMM d, yyyy}", "sales_tax_payment", p.Id, Domain.SalesTax.SalesTaxPayment.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted);
+        foreach (var a in await stock.ListAdjustmentsAsync(ct))
+            Add($"Inventory adjustment of {a.Date:MMM d, yyyy}", "inventory_adjustment", a.Id, Domain.Inventory.InventoryAdjustment.Source, a.JournalEntryId, a.Status == DocumentStatus.Posted);
+        foreach (var b in await stock.ListBuildsAsync(ct))
+            Add($"Assembly build of {b.Date:MMM d, yyyy}", "assembly_build", b.Id, Domain.Inventory.AssemblyBuild.Source, b.JournalEntryId, b.Status == DocumentStatus.Posted);
+        foreach (var l in await stock.ListLandedCostsAsync(ct))
+            Add($"Landed cost of {l.Date:MMM d, yyyy}", "landed_cost", l.Id, Domain.Inventory.LandedCost.Source, l.JournalEntryId, l.Status == DocumentStatus.Posted);
+        foreach (var r in await assets.ListRunsAsync(ct))
+            Add($"Depreciation through {r.Date:MMM d, yyyy}", "depreciation_run", r.Id, Domain.Assets.DepreciationRun.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted);
+        foreach (var a in await assets.ListAssetsAsync(ct))
+            Add($"Disposal of {a.Name}", "fixed_asset", a.Id, Domain.Assets.FixedAsset.DisposalSource, a.DisposalEntryId, true);
+        foreach (var l in await assets.ListLoansAsync(ct))
+        {
+            Add($"Proceeds of {l.Name}", "loan", l.Id, Domain.Assets.Loan.Source, l.ProceedsEntryId, !l.IsVoided);
+            foreach (var p in l.PaymentsMade)
+                Add($"Payment on {l.Name} of {p.Date:MMM d, yyyy}", "loan", l.Id, Domain.Assets.Loan.PaymentSource, p.JournalEntryId, !p.IsVoided);
+        }
+
+        foreach (var r in await nonprofit.ListReleasesAsync(ct))
+            Add($"Restriction release of {r.Date:MMM d, yyyy}", "restriction_release", r.Id, Domain.Nonprofit.RestrictionRelease.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted);
+        foreach (var g in await nonprofit.ListDonationsAsync(ct))
+        {
+            Add($"Gift {g.Number}", "donation", g.Id, Domain.Nonprofit.Donation.Source, g.JournalEntryId, g.Status == DocumentStatus.Posted);
+            Add($"Gift {g.Number}, its cash-basis entry", "donation", g.Id, Domain.Nonprofit.Donation.Source, g.CashEntryId, g.Status == DocumentStatus.Posted);
+        }
+
+        foreach (var p in await nonprofit.ListPledgesAsync(ct))
+        {
+            Add($"Pledge {p.Number}", "pledge", p.Id, Domain.Nonprofit.Pledge.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted);
+            Add($"Pledge {p.Number}, the cancelled part", "pledge", p.Id, Domain.Nonprofit.Pledge.CancelSource, p.CancelEntryId, true);
+        }
+
+        foreach (var g in await nonprofit.ListGrantsAsync(ct))
+        {
+            var standing = g.Status != Domain.Nonprofit.GrantStatus.Voided;
+            Add($"Grant {g.Name}", "grant", g.Id, Domain.Nonprofit.Grant.AwardSource, g.AwardEntryId, standing);
+            foreach (var r in g.Receipts)
+            {
+                Add($"Receipt on grant {g.Name} of {r.Date:MMM d, yyyy}", "grant", g.Id, Domain.Nonprofit.Grant.ReceiptSource, r.EntryId, !r.IsVoided);
+                Add($"Receipt on grant {g.Name} of {r.Date:MMM d, yyyy}, its cash-basis entry", "grant", g.Id, Domain.Nonprofit.Grant.ReceiptSource, r.CashEntryId, !r.IsVoided);
+            }
+
+            foreach (var r in g.Recognitions)
+                Add($"Recognition on grant {g.Name} of {r.Date:MMM d, yyyy}", "grant", g.Id, Domain.Nonprofit.Grant.RecognitionSource, r.EntryId, !r.IsVoided);
+        }
+
+        foreach (var r in await sales.ListRetainersAsync(null, ct))
+        {
+            foreach (var a in r.Applications)
+                Add($"Retainer applied on {a.AppliedOn:MMM d, yyyy}", "retainer", r.Id, Retainer.ApplicationSource, a.JournalEntryId, !a.IsVoided);
+            foreach (var x in r.Refunds)
+                Add($"Retainer refund of {x.Date:MMM d, yyyy}", "retainer", r.Id, Retainer.RefundSource, x.JournalEntryId, !x.IsVoided);
+        }
+
+        foreach (var o in await purchases.ListPurchaseOrdersAsync(null, ct))
+        {
+            foreach (var row in o.Receipts.Where(x => x.StockSourceId is not null))
+                Add($"Delivery {row.ReceiptNumber} on purchase order {o.Number}", "purchase_order", row.StockSourceId!.Value, Purchases.PurchaseOrderService.ReceiptSource, row.JournalEntryId, !row.IsVoided);
+        }
+
+        foreach (var p in await channels.ListPayoutsAsync(null, ct))
+            Add($"Payout of {p.Date:MMM d, yyyy}", "channel_payout", p.Id, Domain.Channels.ChannelPayout.Source, p.JournalEntryId, p.Status == Domain.Channels.PayoutStatus.Posted);
+        foreach (var b in await channelOrders.ListBatchesAsync(null, ct))
+        {
+            Add($"Orders of {b.Date:MMM d, yyyy}", "channel_orders", b.Id, Domain.Channels.ChannelOrderBatch.Source, b.JournalEntryId, b.Status == Domain.Channels.PayoutStatus.Posted);
+            foreach (var r in await channelOrders.ListReturnsAsync(b.Id, ct))
+                Add($"Return of {r.Date:MMM d, yyyy}", "channel_return", r.Id, Domain.Channels.ChannelReturn.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted);
+        }
+
+        return list;
+    }
 
     private sealed record Data(
         ChartOfAccounts Chart,
@@ -129,7 +223,9 @@ public sealed class BooksCheckService(
         IReadOnlyList<BillPayment> BillPayments,
         IReadOnlyList<VendorCredit> VendorCredits,
         IReadOnlyList<VendorRefund> VendorRefunds,
-        IReadOnlyList<BankTransaction> BankTransactions)
+        IReadOnlyList<BankTransaction> BankTransactions,
+        IReadOnlyList<Domain.Nonprofit.Donation> Gifts,
+        IReadOnlyList<Document> OtherDocuments)
     {
         /// <summary>Lines on the accrual basis (cash-only entries, such as a pledge's cash side, left out).</summary>
         public IEnumerable<LedgerLine> Accrual => Lines.Where(l => l.Basis.AppliesTo(ReportBasis.Accrual));
@@ -154,6 +250,7 @@ public sealed class BooksCheckService(
         .. d.VendorRefunds.Select(r => new Document($"Vendor refund of {r.Date:MMM d, yyyy}", "vendor_refund", r.Id, VendorRefund.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
         .. d.BankTransactions.Select(t => new Document($"{Describe(t.Kind)} of {t.Date:MMM d, yyyy}", "bank_transaction", t.Id, BankTransaction.SourceFor(t.Kind), t.JournalEntryId,
             t.Status == BankTransactionStatus.Posted)),
+        .. d.OtherDocuments,
     ];
 
     private static string BillLabel(Bill bill) => bill.Reference is { } number ? $"Bill {number}" : $"Bill of {bill.Date:MMM d, yyyy}";
@@ -339,11 +436,12 @@ public sealed class BooksCheckService(
 
     private async Task<CheckResult> UndepositedTieAsync(Data d, CancellationToken ct)
     {
-        // Holding accounts: any account a payment, receipt or retainer was ever recorded to, other than a bank.
+        // Holding accounts: any account a payment, receipt, retainer or gift of money was ever recorded to, other than a bank.
         var waiting = await deposits.UndepositedAsync(ct);
         var holding = d.Payments.Select(p => p.DepositAccountId)
             .Concat(d.Receipts.Select(r => r.DepositAccountId))
             .Concat(d.Retainers.Select(r => r.DepositAccountId))
+            .Concat(d.Gifts.Where(g => g.Kind == Domain.Nonprofit.GiftKind.Cash).Select(g => g.DebitAccountId))
             .Concat(waiting.Select(w => w.AccountId))
             .Where(id => d.Chart.Find(id)?.Type == AccountType.OtherCurrentAsset)
             .ToHashSet();

@@ -46,6 +46,9 @@ public sealed class IdempotentRequest
     /// <summary>How long a key is remembered.</summary>
     public static readonly TimeSpan KeptFor = TimeSpan.FromDays(1);
 
+    /// <summary>A reservation unanswered for this long belongs to a process that stopped: the key is free again.</summary>
+    public static readonly TimeSpan AbandonedAfter = TimeSpan.FromMinutes(15);
+
     private IdempotentRequest()
     {
         Key = string.Empty;
@@ -76,13 +79,19 @@ public sealed class IdempotentRequest
     public string? ContentType { get; private set; }
     public byte[]? Body { get; private set; }
 
+    /// <summary>The answer's Location and Content-Disposition headers, so a repeat answers the same.</summary>
+    public string? Location { get; private set; }
+    public string? ContentDisposition { get; private set; }
+
     public bool IsDone => StatusCode != 0;
 
-    public void Complete(int statusCode, string? contentType, byte[] body)
+    public void Complete(int statusCode, string? contentType, byte[] body, string? location = null, string? contentDisposition = null)
     {
         ArgumentNullException.ThrowIfNull(body);
         StatusCode = statusCode;
         ContentType = contentType;
         Body = body;
+        Location = location;
+        ContentDisposition = contentDisposition;
     }
 }

@@ -56,7 +56,7 @@ public sealed class ServerHardeningTests
         Assert.False(running.Earlier!.IsDone);
         Assert.True((await Store(s => s.ReserveAsync("k1", "someone-else", "hash", default))).Reserved);
 
-        await Store(async s => { await s.CompleteAsync("k1", "owner", 201, "application/json", "{\"id\":1}"u8.ToArray(), default); return true; });
+        await Store(async s => { await s.CompleteAsync("k1", "owner", 201, "application/json", "{\"id\":1}"u8.ToArray(), null, null, default); return true; });
         var done = await Store(s => s.ReserveAsync("k1", "owner", "hash", default));
         Assert.Equal(201, done.Earlier!.StatusCode);
 
@@ -159,5 +159,30 @@ public sealed class ServerHardeningTests
             SqliteConnection.ClearAllPools();
             Directory.Delete(_folder, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task A_refusal_leaves_the_key_free_and_an_abandoned_reservation_is_taken_over()
+    {
+        await using var db = new LedgerDatabase();
+        await db.InitializeAsync();
+        Task<T> Store<T>(Func<IIdempotencyStore, Task<T>> work) => db.InScope(sp => work(sp.GetRequiredService<IIdempotencyStore>()));
+
+        Assert.True((await Store(s => s.ReserveAsync("k", "me", "hash", default))).Reserved);
+        Assert.False((await Store(s => s.ReserveAsync("k", "me", "hash", default))).Reserved);
+
+        db.Clock.UtcNow = db.Clock.UtcNow.Add(IdempotentRequest.AbandonedAfter).AddSeconds(1);
+        Assert.True((await Store(s => s.ReserveAsync("k", "me", "hash", default))).Reserved);
+
+        await Store(async s =>
+        {
+            await s.CompleteAsync("k", "me", 201, "application/json", [1], "/api/thing/1", "attachment", default);
+            return 0;
+        });
+        db.Clock.UtcNow = db.Clock.UtcNow.Add(IdempotentRequest.AbandonedAfter).AddSeconds(1);
+        var (reserved, earlier) = await Store(s => s.ReserveAsync("k", "me", "hash", default));
+        Assert.False(reserved);
+        Assert.Equal("/api/thing/1", earlier!.Location);
+        Assert.Equal("attachment", earlier.ContentDisposition);
     }
 }

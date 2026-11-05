@@ -27,6 +27,8 @@ public sealed record MoveResult(int Tables, long Rows, long JournalEntries, long
 public sealed class PostgresMove(IClock clock, string actor)
 {
     /// <summary>Columns holding secrets encrypted by the host (<see cref="ISecretProtector"/>) are named like this.</summary>
+    private const long MaxBatchBytes = 64 * 1024 * 1024;
+
     public const string ProtectedPrefix = "Protected";
 
     public async Task<MoveResult> RunAsync(
@@ -44,7 +46,7 @@ public sealed class PostgresMove(IClock clock, string actor)
         try
         {
             progress?.Report("Copying and checking the company file...");
-            await CopyFileAsync(new SqliteConnectionStringBuilder(sqliteConnectionString) { Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString(), copy, ct);
+            CopyFiles(Path.GetFullPath(source.DataSource), copyPath);
             var sqliteOptions = new DbContextOptionsBuilder<OpenBookDbContext>().UseSqlite(copy).Options;
             await using var sqlite = new OpenBookDbContext(sqliteOptions);
             await SqliteBackupService.ValidateAsync(copy, sqlite.Database.GetMigrations().ToHashSet(StringComparer.Ordinal), !string.IsNullOrEmpty(source.Password), ct);
@@ -118,22 +120,35 @@ public sealed class PostgresMove(IClock clock, string actor)
         catch (SqliteException ex)
         {
             throw new DomainException("move.source_unreadable",
-                $"The company file can't be read ({ex.Message}). If it's encrypted, set OpenBook:EncryptionKey to its key.");
+                ex.SqliteErrorCode == 26
+                    ? $"The company file can't be read ({ex.Message}). If it's encrypted, set OpenBook:EncryptionKey to its key."
+                    : $"The company file can't be read: {ex.Message}");
         }
         finally
         {
             SqliteConnection.ClearAllPools();
             File.Delete(copyPath);
+            File.Delete(copyPath + "-wal");
+            File.Delete(copyPath + "-shm");
         }
     }
 
-    private static async Task CopyFileAsync(string sourceConnectionString, string destinationConnectionString, CancellationToken ct)
+    /// <summary>
+    /// A plain copy, the write-ahead log with it: OpenBook is stopped, and a company file in write-ahead mode can't be
+    /// opened in a folder that can't be written to, which is where a container finds it.
+    /// </summary>
+    private static void CopyFiles(string from, string to)
     {
-        await using var from = new SqliteConnection(sourceConnectionString);
-        await using var to = new SqliteConnection(destinationConnectionString);
-        await from.OpenAsync(ct);
-        await to.OpenAsync(ct);
-        from.BackupDatabase(to);
+        try
+        {
+            File.Copy(from, to);
+            if (File.Exists(from + "-wal"))
+                File.Copy(from + "-wal", to + "-wal");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new DomainException("move.source_unreadable", $"The company file can't be read: {ex.Message}");
+        }
     }
 
     /// <summary>Principal tables before the tables that point at them. A cycle between tables is a model change this needs to learn.</summary>
@@ -176,6 +191,7 @@ public sealed class PostgresMove(IClock clock, string actor)
         command.CommandText = $"SELECT {string.Join(", ", columns.Select(c => Quote(c.Name)))} FROM {Quote(from.Name)}";
         await using var rows = await command.ExecuteReaderAsync(ct);
         var batch = new List<object?[]>();
+        var bytes = 0L;
         var all = selfReferences.Count > 0 ? new List<object?[]>() : null;
         long count = 0;
         var secrets = 0;
@@ -211,10 +227,12 @@ public sealed class PostgresMove(IClock clock, string actor)
             else
             {
                 batch.Add(values);
-                if (batch.Count == batchSize)
+                bytes += values.Sum(v => v is byte[] b ? b.Length : 0L);
+                if (batch.Count == batchSize || bytes >= MaxBatchBytes)
                 {
                     await InsertAsync(connection, transaction, to, columns, write, batch, ct);
                     batch.Clear();
+                    bytes = 0;
                 }
             }
         }
@@ -284,7 +302,15 @@ public sealed class PostgresMove(IClock clock, string actor)
         }
 
         command.CommandText = sql.ToString();
-        await command.ExecuteNonQueryAsync(ct);
+        command.CommandTimeout = 0;
+        try
+        {
+            await command.ExecuteNonQueryAsync(ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == "22001")
+        {
+            throw new DomainException("move.text_too_long", $"A value in {table.Name} is longer than PostgreSQL's column allows, so nothing was moved: {ex.MessageText}.");
+        }
     }
 
     /// <summary>Identity columns (the audit log's ids, owned rows' numbers) continue after the copied values.</summary>

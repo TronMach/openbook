@@ -129,6 +129,9 @@ public sealed class JournalEntry
         if (lines.Count < 2)
             throw new DomainException("journal.too_few_lines", "A journal entry needs at least two lines.");
 
+        if (Normalize(memo) is { Length: > MaxMemoLength })
+            throw new DomainException("journal.memo_too_long", $"A memo can have at most {MaxMemoLength} characters.");
+
         var entry = new JournalEntry
         {
             Id = Guid.CreateVersion7(),
@@ -148,6 +151,8 @@ public sealed class JournalEntry
         foreach (var draft in lines)
         {
             lineNumber++;
+            if (Normalize(draft.Memo) is { Length: > MaxMemoLength })
+                throw new DomainException("journal.memo_too_long", $"Line {lineNumber}: a memo can have at most {MaxMemoLength} characters.");
             entry._lines.Add(new JournalLine(lineNumber, draft.AccountId, SignedAmount(draft, lineNumber, currency), Normalize(draft.Memo)));
         }
 
@@ -163,6 +168,13 @@ public sealed class JournalEntry
     /// Marks this entry voided and returns the reversing entry that cancels it. The reversal is dated
     /// the same day so the original period's figures are corrected, as QuickBooks does.
     /// </summary>
+    public const int MaxMemoLength = 1000;
+    public const int MaxVoidReasonLength = 500;
+
+    /// <summary>A memo put together from other text, or brought in from a file: cut to fit rather than refused.</summary>
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(memo))]
+    public static string? Fit(string? memo) => memo is { Length: > MaxMemoLength } ? memo[..(MaxMemoLength - 1)].TrimEnd() + "…" : memo;
+
     /// <summary>The earliest year the books take: a year typed with two digits arrives as 0026, far before every report's range.</summary>
     public const int MinYear = 1900;
 
@@ -174,6 +186,8 @@ public sealed class JournalEntry
             throw new DomainException("journal.already_voided", $"Entry #{Number} is already voided.");
         if (string.IsNullOrWhiteSpace(reason))
             throw new DomainException("journal.void_reason_required", "Voiding needs a reason.");
+        if (reason.Trim().Length > MaxVoidReasonLength)
+            throw new DomainException("journal.void_reason_too_long", $"A reason can have at most {MaxVoidReasonLength} characters.");
         if (reversalNumber <= 0)
             throw new DomainException("journal.number_invalid", "Entry numbers start at 1.");
 

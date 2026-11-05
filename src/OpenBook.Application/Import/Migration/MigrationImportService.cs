@@ -153,7 +153,7 @@ public sealed class MigrationImportService(
             var lines = t.Lines.Select(l => l.Amount > 0m
                 ? JournalLineDraft.Dr(final.FindByFullName(l.Account)!.Id, l.Amount, LineMemo(l.Memo))
                 : JournalLineDraft.Cr(final.FindByFullName(l.Account)!.Id, -l.Amount, LineMemo(l.Memo))).ToList();
-            await engine.StageAsync(new PostJournalEntryCommand(t.Date, lines, t.Memo, JournalEntry.ImportSource, batch), ct);
+            await engine.StageAsync(new PostJournalEntryCommand(t.Date, lines, JournalEntry.Fit(t.Memo), JournalEntry.ImportSource, batch), ct);
         }
 
         if (plan.Transactions.Count > 0)

@@ -250,7 +250,7 @@ public sealed class BankingService(
         var before = Snapshot(transaction);
 
         await engine.StageVoidAsync(transaction.JournalEntryId, $"Transaction changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
-        var entryMemo = string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
+        var entryMemo = JournalEntry.Fit(string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim())));
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
             postings,
@@ -409,7 +409,7 @@ public sealed class BankingService(
         await EnsureNotReceivablesAsync(command.Splits, null, ct);
         var postings = BankTransaction.SplitPostings(command.Kind, account.Id, command.Splits);
         var id = Guid.CreateVersion7();
-        var entryMemo = string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
+        var entryMemo = JournalEntry.Fit(string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim())));
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
             postings,

@@ -186,7 +186,7 @@ public sealed class PostingEngine(
                 company.HomeCurrency,
                 command.Lines.Select(l => new JournalLineDraft(l.AccountId, l.Credit, l.Debit, l.Memo)).ToList(),
                 clock.UtcNow,
-                $"Reversal of #{entry.Number}" + (entry.Memo is null ? string.Empty : $": {entry.Memo}"),
+                JournalEntry.Fit($"Reversal of #{entry.Number}" + (entry.Memo is null ? string.Empty : $": {entry.Memo}")),
                 JournalEntry.AutoReversalSource,
                 entry.Id,
                 command.Basis);

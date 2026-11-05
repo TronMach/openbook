@@ -63,6 +63,20 @@ public sealed class StripeGateway : IPaymentGateway, IDisposable
     private async Task<CheckoutSession> SendAsync(HttpRequestMessage message, string secretKey, CancellationToken ct)
     {
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+        try
+        {
+            return await ReadAsync(message, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or KeyNotFoundException or InvalidOperationException
+            || ex is TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            // Every caller knows what to do with a refusal; a failure of any other kind would stop an invoice email.
+            throw new DomainException("online.provider_unreachable", "Stripe can't be reached just now. Try again in a little while.");
+        }
+    }
+
+    private async Task<CheckoutSession> ReadAsync(HttpRequestMessage message, CancellationToken ct)
+    {
         using var response = await _client.SendAsync(message, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         using var json = JsonDocument.Parse(body.Length == 0 ? "{}" : body);

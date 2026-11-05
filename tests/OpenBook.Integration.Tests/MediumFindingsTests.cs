@@ -532,4 +532,40 @@ public sealed class MediumFindingsTests : IAsyncLifetime
         var item = Assert.Single(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()));
         Assert.Equal(PaymentMethod.Check, item.Method);
     }
+
+    [Fact]
+    public async Task Memos_and_void_reasons_past_their_limits_are_refused_on_either_database()
+    {
+        var long1 = new string('x', 1001);
+        var cash = JournalLineDraft.Dr(_checking.Id, 10m);
+        var loan = JournalLineDraft.Cr(_liability.Id, 10m);
+
+        Assert.Equal("journal.memo_too_long", await Refused(() => In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Mar1, [cash, loan], long1)))));
+
+        var entry = await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Mar1, [cash, loan], new string('m', 1000), ReverseOn: Mar5)));
+        Assert.Equal("journal.void_reason_too_long", await Refused(() => In<PostingEngine, JournalEntry>(s => s.VoidAsync(entry.Id, new string('r', 501)))));
+    }
+
+    private sealed class StripeAnswers(Func<HttpResponseMessage> answer) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(answer());
+    }
+
+    [Fact]
+    public async Task A_failing_stripe_is_a_refusal_every_caller_understands()
+    {
+        Func<HttpResponseMessage>[] failures =
+        [
+            () => new HttpResponseMessage(System.Net.HttpStatusCode.BadGateway) { Content = new StringContent("<html>Bad gateway</html>") },
+            () => new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{}") },
+            () => throw new HttpRequestException("No route to host"),
+            () => throw new TaskCanceledException("Timed out"),
+        ];
+
+        foreach (var failure in failures)
+        {
+            using var gateway = new OpenBook.Infrastructure.Payments.StripeGateway(new StripeAnswers(failure));
+            Assert.Equal("online.provider_unreachable", await Refused(() => gateway.GetCheckoutAsync("sk_test", "cs_1", default)));
+        }
+    }
 }

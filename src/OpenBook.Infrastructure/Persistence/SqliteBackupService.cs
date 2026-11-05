@@ -86,6 +86,10 @@ internal sealed class SqliteBackupService(
 
             await using var db = new OpenBookDbContext(dbOptions);
             var company = await db.Companies.AsNoTracking().SingleAsync(CancellationToken.None);
+
+            // Everyone starts again on the restored books, and a session ended after the backup was taken stays ended.
+            foreach (var session in await db.UserSessions.Where(s => s.EndedAt == null).ToListAsync(CancellationToken.None))
+                session.End(clock.UtcNow);
             db.AuditRecords.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Restored, "company", company.Id, null,
                 JsonSerializer.Serialize(new { Backup = Path.GetFileName(originalFileName), SafetyCopy = Path.GetFileName(safetyCopy) })));
             await db.SaveChangesAsync(CancellationToken.None);

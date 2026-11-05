@@ -155,4 +155,15 @@ public sealed class FixedAssetsTests : IAsyncLifetime
         var report = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("loans", ReportParameters.Parse("")));
         Assert.Equal(9_189.33m, report.Find("Van loan", 6));
     }
+
+    [Fact]
+    public async Task An_asset_cant_be_disposed_of_before_depreciation_already_posted()
+    {
+        var van = await Van();
+        await In<DepreciationService, DepreciationRun>(s => s.RunAsync(new DateOnly(2026, 12, 31)));
+
+        Assert.Equal("asset.depreciated_after", await Refused(() => In<FixedAssetService, FixedAsset>(s => s.DisposeAsync(van.Id, new DisposeAssetCommand(new DateOnly(2026, 6, 30), 0m, null)))));
+
+        await In<FixedAssetService, FixedAsset>(s => s.DisposeAsync(van.Id, new DisposeAssetCommand(new DateOnly(2027, 1, 31), 0m, null)));
+    }
 }

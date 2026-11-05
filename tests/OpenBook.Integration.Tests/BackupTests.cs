@@ -182,4 +182,22 @@ public sealed class BackupTests : IAsyncLifetime
 
         Assert.Equal("backup.ledger_corrupt", await RestoreRejected(path));
     }
+
+    [SqliteFact]
+    public async Task Restoring_ends_every_session_in_the_backup()
+    {
+        var id = await _db.InScope(async sp =>
+        {
+            var db = sp.GetRequiredService<OpenBookDbContext>();
+            var session = OpenBook.Domain.Companies.UserSession.Start((await db.Users.FirstAsync()).Id, "stamp", null, null, DateTimeOffset.UtcNow);
+            db.UserSessions.Add(session);
+            await db.SaveChangesAsync();
+            return session.Id;
+        });
+
+        await Restore(await CreateBackup());
+
+        var ended = await _db.InScope(sp => sp.GetRequiredService<OpenBookDbContext>().UserSessions.AsNoTracking().SingleAsync(s => s.Id == id));
+        Assert.NotNull(ended.EndedAt);
+    }
 }

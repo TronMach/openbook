@@ -51,7 +51,11 @@ internal sealed class EfIdempotencyStore(IServiceScopeFactory scopes, IClock clo
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OpenBookDbContext>();
         if (await Find(db, key, caller, ct) is { } earlier)
-            return (false, earlier);
+        {
+            if (earlier.IsDone || clock.UtcNow.ToUnixTimeMilliseconds() - earlier.CreatedUnixMs < IdempotentRequest.AbandonedAfter.TotalMilliseconds)
+                return (false, earlier);
+            await db.IdempotentRequests.Where(r => r.Id == earlier.Id).ExecuteDeleteAsync(ct);
+        }
 
         db.IdempotentRequests.Add(new IdempotentRequest(key, caller, requestHash, clock.UtcNow));
         try
@@ -67,14 +71,14 @@ internal sealed class EfIdempotencyStore(IServiceScopeFactory scopes, IClock clo
         }
     }
 
-    public async Task CompleteAsync(string key, string caller, int statusCode, string? contentType, byte[] body, CancellationToken ct)
+    public async Task CompleteAsync(string key, string caller, int statusCode, string? contentType, byte[] body, string? location, string? contentDisposition, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OpenBookDbContext>();
         var request = await db.IdempotentRequests.SingleOrDefaultAsync(r => r.Caller == caller && r.Key == key, ct);
         if (request is null)
             return;
-        request.Complete(statusCode, contentType, body);
+        request.Complete(statusCode, contentType, body, location, contentDisposition);
         await db.SaveChangesAsync(ct);
     }
 

@@ -175,6 +175,9 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
             : await accounts.GainLossAsync(ct);
 
         var runs = await store.ListRunsAsync(ct);
+        if (runs.FirstOrDefault(r => r.Status == DocumentStatus.Posted && r.Date > command.Date && r.Lines.Any(l => l.AssetId == asset.Id && l.Amount != 0m)) is { } later)
+            throw new DomainException("asset.depreciated_after", $"Depreciation is posted through {later.Date:yyyy-MM-dd}, after this date. Void the runs back to {command.Date:yyyy-MM-dd} first, or it would stay in the books after the sale.");
+
         var posted = Posted(asset, runs);
         var catchUp = Math.Max(0m, Depreciation.ScheduledThrough(asset, command.Date) - asset.PriorDepreciation - posted);
         var booked = asset.PriorDepreciation + posted;

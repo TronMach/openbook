@@ -196,7 +196,7 @@ public interface IIdempotencyStore
     /// <summary>Reserves the caller's key for this request; when it's already taken, the earlier request instead.</summary>
     Task<(bool Reserved, Domain.Companies.IdempotentRequest? Earlier)> ReserveAsync(string key, string caller, string requestHash, CancellationToken ct);
 
-    Task CompleteAsync(string key, string caller, int statusCode, string? contentType, byte[] body, CancellationToken ct);
+    Task CompleteAsync(string key, string caller, int statusCode, string? contentType, byte[] body, string? location, string? contentDisposition, CancellationToken ct);
 
     /// <summary>Lets the key go, so the request can be sent again (after a server error, or a response too big to keep).</summary>
     Task ForgetAsync(string key, string caller, CancellationToken ct);

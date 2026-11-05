@@ -74,8 +74,8 @@ public sealed class JournalImportService(
         var batch = Guid.CreateVersion7();
         foreach (var entry in result.Entries)
         {
-            var lines = entry.Lines.Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit, l.Credit, l.Memo, l.ClassId)).ToList();
-            await engine.StageAsync(new PostJournalEntryCommand(entry.Date!.Value, lines, entry.Memo, JournalEntry.ImportSource, batch,
+            var lines = entry.Lines.Select(l => new JournalLineDraft(l.AccountId!.Value, l.Debit, l.Credit, JournalEntry.Fit(l.Memo), l.ClassId)).ToList();
+            await engine.StageAsync(new PostJournalEntryCommand(entry.Date!.Value, lines, JournalEntry.Fit(entry.Memo), JournalEntry.ImportSource, batch,
                 LocationId: entry.LocationId, TagIds: entry.TagIds), ct);
         }
 

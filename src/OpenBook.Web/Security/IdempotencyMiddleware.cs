@@ -62,11 +62,15 @@ public sealed class IdempotencyMiddleware(RequestDelegate next)
         try
         {
             await next(http);
+            // A refusal saved nothing, so sending it again (with the closing password, say) must be able to succeed.
             var status = http.Response.StatusCode;
-            if (status < 500 && copy.Length <= IdempotentRequest.MaxBodyBytes)
+            if (status < 400 && copy.Length <= IdempotentRequest.MaxBodyBytes)
             {
-                await store.CompleteAsync(key, caller, status, http.Response.ContentType, copy.ToArray(), CancellationToken.None);
+                // From here the work is done: if the answer can't be kept, the key stays taken rather than letting a repeat do it twice.
                 kept = true;
+                await store.CompleteAsync(key, caller, status, http.Response.ContentType, copy.ToArray(),
+                    http.Response.Headers.Location.ToString() is { Length: > 0 } location ? location : null,
+                    http.Response.Headers.ContentDisposition.ToString() is { Length: > 0 } disposition ? disposition : null, CancellationToken.None);
             }
         }
         finally
@@ -98,6 +102,10 @@ public sealed class IdempotencyMiddleware(RequestDelegate next)
         http.Response.StatusCode = earlier.StatusCode;
         if (earlier.ContentType is { } type)
             http.Response.ContentType = type;
+        if (earlier.Location is { } location)
+            http.Response.Headers.Location = location;
+        if (earlier.ContentDisposition is { } disposition)
+            http.Response.Headers.ContentDisposition = disposition;
         http.Response.Headers[ReplayedHeader] = "true";
         if (earlier.Body is { Length: > 0 } body)
             await http.Response.Body.WriteAsync(body, http.RequestAborted);
