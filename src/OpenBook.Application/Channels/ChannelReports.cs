@@ -138,12 +138,20 @@ public static class ChannelReports
         var warnings = new List<string>();
         var groups = new Dictionary<string, (List<ChannelLineDraft> Lines, decimal? Reported, DateOnly? Paid)>();
         var transfers = 0;
+        var unpaid = 0;
         foreach (var row in rows)
         {
             if (!Amount(row, net, out var rowNet))
                 continue;
             var kind = (CsvColumns.Field(row, type) ?? "").Trim();
             var key = CsvColumns.Field(row, payoutId) ?? "";
+            // Not paid out yet: it comes with its payout, and as a payout of its own now it would post money that hasn't arrived.
+            if (key is "" or "--")
+            {
+                unpaid++;
+                continue;
+            }
+
             var on = Date(CsvColumns.Field(row, date), order) ?? default;
             if (!groups.TryGetValue(key, out var group))
                 groups[key] = group = ([], null, null);
@@ -196,13 +204,13 @@ public static class ChannelReports
 
         if (transfers > 0)
             warnings.Add($"{transfers} transfer row(s) were left out.");
+        if (unpaid > 0)
+            warnings.Add($"{unpaid} row(s) have no payout yet, so they're left out: they'll come in with the file that has their payout.");
         var payouts = groups.Where(g => g.Value.Lines.Count > 0).Select(g =>
         {
             var lines = g.Value.Lines;
             var paid = g.Value.Paid ?? lines.Max(l => l.Date);
-            var id = g.Key.Length > 0 ? g.Key : $"ebay:{lines.Min(l => l.Date):yyyyMMdd}-{lines.Max(l => l.Date):yyyyMMdd}";
-            if (g.Key.Length == 0)
-                warnings.Add("Some transactions have no payout id yet (not paid out); they're imported as one payout for the period.");
+            var id = g.Key;
             return new PayoutData(id, paid, Fix(lines, paid), lines.Min(l => l.Date), lines.Max(l => l.Date), g.Value.Reported);
         }).ToList();
         return new ChannelReadResult(payouts, warnings);
@@ -348,6 +356,7 @@ public static class ChannelReports
 
         var groups = new Dictionary<string, (List<ChannelLineDraft> Lines, DateOnly? Paid)>();
         var transfers = 0;
+        var unpaid = 0;
         foreach (var row in rows)
         {
             var kindText = (CsvColumns.Field(row, type) ?? "").Trim();
@@ -377,6 +386,13 @@ public static class ChannelReports
 
             var on = Date(CsvColumns.Field(row, date), order) ?? default;
             var key = CsvColumns.Field(row, payout) ?? "";
+            // With a payout column, a row with nothing in it hasn't been paid out yet (it comes with its payout later).
+            if (payout is not null && key is "" or "--")
+            {
+                unpaid++;
+                continue;
+            }
+
             if (!groups.TryGetValue(key, out var group))
                 groups[key] = group = ([], null);
             if (group.Paid is null && Date(CsvColumns.Field(row, payoutDate), order) is { } paid)

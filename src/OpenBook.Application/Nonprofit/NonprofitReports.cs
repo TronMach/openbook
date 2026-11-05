@@ -41,6 +41,11 @@ public sealed class NonprofitReports(
         var opening = NetAssets(chart, all.Where(l => l.Date < from));
         var closing = NetAssets(chart, all);
         rows.Add(new ReportTableRow(["Net assets, beginning of period", opening.Without, opening.With, opening.Without + opening.With], 0, ReportRowStyle.Subtotal));
+        // Equity entries (opening balances, say) change net assets without being income or expense.
+        var change = NetAssets(chart, period);
+        var other = (Without: closing.Without - opening.Without - change.Without, With: closing.With - opening.With - change.With);
+        if (other.Without != 0m || other.With != 0m)
+            rows.Add(new ReportTableRow(["Other changes in net assets", other.Without, other.With, other.Without + other.With], 0));
         rows.Add(new ReportTableRow(["Net assets, end of period", closing.Without, closing.With, closing.Without + closing.With], 0, ReportRowStyle.Total));
 
         return new ReportTable(
@@ -132,10 +137,10 @@ public sealed class NonprofitReports(
         var positions = (await grants.PositionsAsync(asOf, ct)).Where(p => p.Grant.Status != GrantStatus.Voided && p.Grant.AwardedOn <= asOf).ToList();
         var rows = positions.Select(p => new ReportTableRow([
             new ReportCell($"{p.Grant.Name}{(p.Grant.Status == GrantStatus.Closed ? " (closed)" : "")}", new ReportLink("grant", p.Grant.Id)), p.Funder,
-            p.Grant.EndsOn.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Grant.Amount, p.Grant.Recognized, p.Grant.Received, p.Grant.Due,
-            p.Spent, p.Unspent])).ToList();
-        rows.Add(new ReportTableRow(["Total", null, null, positions.Sum(p => p.Grant.Amount), positions.Sum(p => p.Grant.Recognized), positions.Sum(p => p.Grant.Received),
-            positions.Sum(p => p.Grant.Due), positions.Sum(p => p.Spent), positions.Sum(p => p.Unspent)], 0, ReportRowStyle.Total));
+            p.Grant.EndsOn.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Grant.Amount, p.Grant.RecognizedBy(asOf), p.Grant.ReceivedBy(asOf),
+            p.Grant.RecognizedBy(asOf) - p.Grant.ReceivedBy(asOf), p.Spent, p.Unspent])).ToList();
+        rows.Add(new ReportTableRow(["Total", null, null, positions.Sum(p => p.Grant.Amount), positions.Sum(p => p.Grant.RecognizedBy(asOf)), positions.Sum(p => p.Grant.ReceivedBy(asOf)),
+            positions.Sum(p => p.Grant.RecognizedBy(asOf) - p.Grant.ReceivedBy(asOf)), positions.Sum(p => p.Spent), positions.Sum(p => p.Unspent)], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Grants",
             [company.Name, $"As of {asOf:MMM d, yyyy}"],

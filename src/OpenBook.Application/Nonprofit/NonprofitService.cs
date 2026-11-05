@@ -116,7 +116,11 @@ public sealed class NonprofitService(
     {
         ArgumentNullException.ThrowIfNull(command);
         var classId = command.ClassId == Guid.Empty ? null : command.ClassId;
+        // Later releases count too: a backdated one mustn't take what's been released since.
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         var held = (await PurposesAsync(command.Date, ct)).FirstOrDefault(p => p.ClassId == classId)?.Balance ?? 0m;
+        if (command.Date < today)
+            held = Math.Min(held, (await PurposesAsync(today, ct)).FirstOrDefault(p => p.ClassId == classId)?.Balance ?? 0m);
         if (command.Amount > held)
             throw new DomainException("release.more_than_restricted",
                 held <= 0m ? "Nothing is held with donor restrictions for this purpose on that date."

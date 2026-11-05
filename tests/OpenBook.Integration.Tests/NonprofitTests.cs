@@ -499,4 +499,15 @@ public sealed class NonprofitTests : IAsyncLifetime
         var byPurpose = await Report("restricted-net-assets", "asOf=2026-12-31");
         Assert.Equal(300m, byPurpose.Find("Programs:Scholarships", 5));
     }
+
+    [Fact]
+    public async Task Two_grants_cant_share_a_class_in_the_same_dates()
+    {
+        var city = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("City")));
+        await NewGrant(new GrantCommand("Mural project", city.Id, 3000m, Jan1, Jan1, Dec31, ClassId: _scholarships));
+
+        var refused = await Assert.ThrowsAsync<DomainException>(() => NewGrant(new GrantCommand("Second", city.Id, 1000m, Jan1, Jan1, Dec31, ClassId: _scholarships)));
+
+        Assert.Equal("grant.class_shared", refused.Code);
+    }
 }

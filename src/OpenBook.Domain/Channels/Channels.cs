@@ -75,6 +75,8 @@ public sealed class SalesChannel
     /// <summary>Where <see cref="ChannelLineType.Cleared"/> lines go: usually Undeposited Funds, where invoices paid online wait.</summary>
     public Guid? ClearingAccountId { get; private set; }
 
+    public void UseClearingAccount(Guid accountId) => ClearingAccountId = accountId;
+
     public bool IsActive { get; private set; }
 
     /// <summary>A Shopify store's domain (shop.myshopify.com) for a live connection.</summary>

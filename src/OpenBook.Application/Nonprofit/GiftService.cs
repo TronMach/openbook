@@ -55,7 +55,7 @@ public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string
 /// giving statement per year, with the IRS wording on what the donor received in return.
 /// </summary>
 public sealed class GiftService(
-    INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine,
+    INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine, NonprofitService nonprofit,
     ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IClock clock, ICurrentUser user)
 {
     public const string DonationEntity = "donation";
@@ -166,6 +166,7 @@ public sealed class GiftService(
         var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
         if (donation.Status == DocumentStatus.Voided)
             throw new DomainException("donation.already_voided", "This gift is already voided.");
+        await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount, ct);
         var before = Snapshot(donation);
         await engine.StageVoidAsync(donation.JournalEntryId, reason, fromDocument: true, ct);
         if (donation.CashEntryId is { } cash)
@@ -174,6 +175,16 @@ public sealed class GiftService(
         store.Add(Audit(AuditAction.Voided, donation, before));
         await store.SaveChangesAsync(ct);
         return donation;
+    }
+
+    /// <summary>Taking back restricted money that's been released would leave the purpose below zero: the release goes first.</summary>
+    private async Task EnsureNotReleasedAsync(Guid incomeAccountId, Guid? classId, decimal amount, CancellationToken ct)
+    {
+        if (!(await accounts.GetChartAsync(ct)).Get(incomeAccountId).DonorRestricted)
+            return;
+        var held = (await nonprofit.PurposesAsync(CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone), ct)).FirstOrDefault(p => p.ClassId == classId)?.Balance ?? 0m;
+        if (held < amount)
+            throw new DomainException("gift.released", $"Only {held:N2} of this purpose is still restricted; the rest has been released. Void that release first.");
     }
 
     /// <summary>Marks gifts as thanked (letters printed or sent another way).</summary>
@@ -242,6 +253,7 @@ public sealed class GiftService(
             throw new DomainException("pledge.already_voided", "This pledge is already voided.");
         if (Paid(pledge.Id, await store.ListDonationsAsync(ct)) > 0m)
             throw new DomainException("pledge.has_payments", "Gifts have been paid on this pledge. Void them first.");
+        await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, pledge.Amount, ct);
         var before = Snapshot(pledge);
         await engine.StageVoidAsync(pledge.JournalEntryId, reason, fromDocument: true, ct);
         pledge.Void();
@@ -260,6 +272,7 @@ public sealed class GiftService(
         var unpaid = pledge.Amount - Paid(pledge.Id, await store.ListDonationsAsync(ct));
         pledge.Cancel(unpaid, on, Guid.Empty); // checks before anything is staged
         pledge.UndoCancel();
+        await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, unpaid, ct);
         var before = Snapshot(pledge);
         var memo = $"Rest of pledge {pledge.Number} cancelled";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(on,

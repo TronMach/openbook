@@ -71,7 +71,7 @@ public sealed class ChannelSyncService(
                 ?? throw new DomainException("channel.credential_unreadable", "The saved key can't be read on this computer. Connect the channel again.");
             var payouts = await client.FetchPayoutsAsync(channel.Kind, channel.ShopDomain, key, since, ct);
             if (channel.Kind == ChannelKind.Stripe)
-                payouts = await ClearInvoicePaymentsAsync(payouts, ct);
+                payouts = await ClearInvoicePaymentsAsync(channel, payouts, ct);
 
             // Shopify: the orders behind the charges split them into sales, shipping and tax, and move stock.
             IReadOnlyList<ChannelOrderDraft> fetched = [];
@@ -164,9 +164,18 @@ public sealed class ChannelSyncService(
     }
 
     /// <summary>Charges for invoices paid through OpenBook's payment links are already in the books: mark them Cleared.</summary>
-    private async Task<IReadOnlyList<PayoutData>> ClearInvoicePaymentsAsync(IReadOnlyList<PayoutData> payouts, CancellationToken ct)
+    private async Task<IReadOnlyList<PayoutData>> ClearInvoicePaymentsAsync(SalesChannel channel, IReadOnlyList<PayoutData> payouts, CancellationToken ct)
     {
-        var recorded = (await sales.ListPaymentsAsync(null, ct)).Select(p => p.Reference).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        // The channel may be older than the online payments set up since: without an account they'd go to adjustments.
+        if (channel.ClearingAccountId is null)
+        {
+            if ((await sales.GetOnlinePaymentSettingsAsync(ct))?.DepositAccountId is not { } clearing)
+                return payouts;
+            channel.UseClearingAccount(clearing);
+        }
+
+        var recorded = (await sales.ListPaymentsAsync(null, ct)).Where(p => p.Status == Domain.Common.DocumentStatus.Posted)
+            .Select(p => p.Reference).OfType<string>().ToHashSet(StringComparer.Ordinal);
         if (recorded.Count == 0)
             return payouts;
         return payouts.Select(p => p with

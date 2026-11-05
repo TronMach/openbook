@@ -95,3 +95,5 @@ In the **Nonprofit** group:
 - **Giving by donor**, **Lapsed donors** (gave last year but not yet this year) and **Open pledges**.
 - **Grants**: awards, spending, recognized income and what funders still owe.
 - **Form 990 Part IX expenses**: expenses by 990 line and function, from your accounts' tax lines.
+
+Each grant needs its own class or subclass: two grants on one class in the same dates are refused, because both would count the same spending. A gift or pledge whose restricted money has been released can't be voided until that release is.

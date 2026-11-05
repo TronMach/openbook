@@ -22,6 +22,7 @@ public interface IChannelStore
 
     void Add(SalesChannel channel);
     void Add(ChannelPayout payout);
+    void Remove(ChannelPayout payout);
     void Add(AuditRecord record);
     Task SaveChangesAsync(CancellationToken ct);
 }
@@ -180,6 +181,18 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
             warnings = [.. warnings, $"{heldLines} line(s) of this file were imported before (same date, type, amount and reference), so they're left out."];
         if (!save || fresh.Count == 0)
             return new PayoutImportResult(fresh, old, warnings, []);
+
+        // A dismissed payout never posted: a fresh import of it takes its place.
+        var ids = fresh.Select(p => p.ExternalId).ToHashSet(StringComparer.Ordinal);
+        var replaced = (await store.ListPayoutsAsync(channel.Id, ct)).Where(p => p.Status == PayoutStatus.Dismissed && ids.Contains(p.ExternalId)).ToList();
+        foreach (var old2 in replaced)
+        {
+            store.Remove(old2);
+            store.Add(Audit(AuditAction.Deleted, PayoutEntity, old2.Id, PayoutSnapshot(old2, channel), null));
+        }
+
+        if (replaced.Count > 0)
+            await store.SaveChangesAsync(ct);
 
         var saved = new List<ChannelPayout>();
         foreach (var p in fresh)

@@ -62,6 +62,30 @@ public sealed class GrantService(
 
     public Task<Grant?> GetAsync(Guid id, CancellationToken ct = default) => store.GetGrantAsync(id, ct);
 
+    /// <summary>
+    /// A grant's spending is what's on its class and subclasses: two grants sharing that in the same dates would each
+    /// count the same spending, and a conditional one would recognize income twice for it.
+    /// </summary>
+    private async Task EnsureOwnClassAsync(Guid classId, DateOnly startsOn, DateOnly endsOn, CancellationToken ct)
+    {
+        var parents = (await segments.ListAsync(SegmentKind.Class, includeInactive: true, ct)).ToDictionary(s => s.Segment.Id, s => s.Segment.ParentId);
+        HashSet<Guid> WithParents(Guid id)
+        {
+            var found = new HashSet<Guid> { id };
+            for (var at = id; parents.GetValueOrDefault(at) is { } parent && found.Add(parent); at = parent)
+            {
+            }
+
+            return found;
+        }
+
+        var mine = WithParents(classId);
+        var other = (await store.ListGrantsAsync(ct)).FirstOrDefault(g => g.Status != GrantStatus.Voided && g.StartsOn <= endsOn && startsOn <= g.EndsOn
+            && (mine.Contains(g.ClassId) || WithParents(g.ClassId).Contains(classId)));
+        if (other is not null)
+            throw new DomainException("grant.class_shared", $"{other.Name} uses that class (or one it belongs to) in the same dates, and both would count the same spending. Give each grant its own class or subclass.");
+    }
+
     /// <summary>Every grant's position through the date (spending on accrual basis).</summary>
     public async Task<IReadOnlyList<GrantPosition>> PositionsAsync(DateOnly asOf, CancellationToken ct = default)
     {
@@ -91,6 +115,7 @@ public sealed class GrantService(
             if (segment.Kind != SegmentKind.Class)
                 throw new DomainException("grant.class_kind", "Choose a class for the grant.");
             classId = segment.Id;
+            await EnsureOwnClassAsync(classId, command.StartsOn, command.EndsOn, ct);
         }
         else
         {

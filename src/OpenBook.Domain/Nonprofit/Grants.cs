@@ -73,6 +73,13 @@ public sealed class Grant
 
     public decimal Received => _receipts.Where(r => !r.IsVoided).Sum(r => r.Amount);
 
+    /// <summary>What the funder had paid by the date.</summary>
+    public decimal ReceivedBy(DateOnly date) => _receipts.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount);
+
+    /// <summary>Income so far on the date.</summary>
+    public decimal RecognizedBy(DateOnly date) =>
+        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : Amount;
+
     /// <summary>Income so far: the award (unconditional) or what's been recognized (conditional).</summary>
     public decimal Recognized => Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount) : Amount;
 

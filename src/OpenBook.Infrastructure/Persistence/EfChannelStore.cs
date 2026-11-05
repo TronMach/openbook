@@ -19,9 +19,11 @@ internal sealed class EfChannelStore(OpenBookDbContext db) : IChannelStore
     public Task<ChannelPayout?> GetPayoutAsync(Guid id, CancellationToken ct) => db.ChannelPayouts.SingleOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<IReadOnlySet<string>> PayoutIdsAsync(Guid channelId, CancellationToken ct) =>
-        (await db.ChannelPayouts.Where(p => p.ChannelId == channelId).Select(p => p.ExternalId).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+        (await db.ChannelPayouts.Where(p => p.ChannelId == channelId && p.Status != PayoutStatus.Dismissed).Select(p => p.ExternalId).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
 
     public void Add(SalesChannel channel) => db.SalesChannels.Add(channel);
+
+    public void Remove(ChannelPayout payout) => db.ChannelPayouts.Remove(payout);
 
     public void Add(ChannelPayout payout) => db.ChannelPayouts.Add(payout);
 
