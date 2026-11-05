@@ -238,7 +238,7 @@ public sealed class BankingService(
         if (feed.Count > 0 && amount != transaction.Amount)
             throw new DomainException("bank.feed_amount",
                 $"This transaction stands for a line from the bank feed, so its amount stays {transaction.Amount:N2}. Undo the feed line first to change it.");
-        if (await IsIssuedCheckAsync(transaction, ct)
+        if (IsIssuedCheck(transaction)
             && (amount != transaction.Amount || !SameText(payee, transaction.Payee) || !SameText(command.Reference, transaction.Reference)))
             throw new DomainException("bank.check_issued",
                 "This check has been printed or sent to the bank in a positive pay file, so its amount, payee and number stay. Void it and write a new one instead.");
@@ -331,12 +331,9 @@ public sealed class BankingService(
     public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
         DocumentChanges.ListAsync(ledger, EntityType, id, ct);
 
-    /// <summary>A check the bank already knows of: printed, or numbered and dated within what positive pay has sent.</summary>
-    private async Task<bool> IsIssuedCheckAsync(BankTransaction transaction, CancellationToken ct) =>
-        transaction.Kind == BankTransactionKind.Spend
-        && (transaction.PrintedAt is not null
-            || PositivePayService.IsCheckNumber(transaction.Reference)
-            && (await bank.GetPositivePaySettingsAsync(transaction.AccountId, ct))?.LastExportedThrough is { } through && transaction.Date <= through);
+    /// <summary>A check the bank already knows of: printed, or sent in a positive pay file.</summary>
+    private static bool IsIssuedCheck(BankTransaction transaction) =>
+        transaction.Kind == BankTransactionKind.Spend && (transaction.PrintedAt is not null || transaction.PositivePaySentAt is not null);
 
     private static bool SameText(string? a, string? b) =>
         string.Equals(string.IsNullOrWhiteSpace(a) ? null : a.Trim(), string.IsNullOrWhiteSpace(b) ? null : b.Trim(), StringComparison.Ordinal);

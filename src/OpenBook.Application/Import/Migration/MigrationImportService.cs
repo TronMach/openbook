@@ -365,6 +365,8 @@ public sealed class MigrationImportService(
         if (repeats > 0)
             warnings.Add($"{repeats} transaction{(repeats == 1 ? " matches an entry" : "s match entries")} from an earlier import (same date, memo, accounts and amounts), so {(repeats == 1 ? "it's" : "they're")} left out. If one is a genuine repeat, enter it by hand.");
         if (plannedTransactions.Any(t => t.Lines.Any(l => TypeOf(l.Account) is AccountType.AccountsReceivable or AccountType.AccountsPayable)))
+            warnings.Add("On the cash basis these count when they were entered, not when they were paid: take the move-in year's cash-basis figures from your old program.");
+        if (plannedTransactions.Any(t => t.Lines.Any(l => TypeOf(l.Account) is AccountType.AccountsReceivable or AccountType.AccountsPayable)))
             warnings.Add("Some transactions post to A/R or A/P. They come in as journal entries, so they change balances but won't appear as open invoices or bills in aging and statements.");
 
         return new Plan(new MigrationResult(rows, warnings), plannedAccounts, plannedCustomers, plannedVendors, plannedItems, plannedTransactions);

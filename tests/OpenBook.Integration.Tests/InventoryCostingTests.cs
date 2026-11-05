@@ -265,6 +265,27 @@ public sealed class InventoryCostingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Two_auto_builds_sharing_a_component_cannot_take_more_than_there_is()
+    {
+        var box = await NewItem("Box", ItemType.Inventory);
+        var first = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Basket A", ItemType.Assembly, _sales.Id, 40m, AutoBuild: true)));
+        var second = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Basket B", ItemType.Assembly, _sales.Id, 40m, AutoBuild: true)));
+        first = await Components(first, (box, 5m));
+        second = await Components(second, (box, 5m));
+        await Buy(Jan10, (box, 6m, 60m));
+        var customer = await Run(sp => sp.GetRequiredService<CustomerService>().CreateAsync(new CustomerDetails("Two baskets")));
+        Task<Invoice> Both(Item extra, decimal quantity) => Run(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(customer.Id, Feb1,
+            [new SalesLineDraft(first.Id, null, 1m, 40m), new SalesLineDraft(extra.Id, null, quantity, 40m)])));
+
+        Assert.Equal("inventory.insufficient", await Refused(() => Both(second, 1m)));
+        Assert.Equal("inventory.insufficient", await Refused(() => Both(box, 2m)));
+        Assert.Equal(6m, (await Stock(box)).Quantity);
+
+        await Both(box, 1m); // exactly what there is
+        Assert.Equal(0m, (await Stock(box)).Quantity);
+    }
+
+    [Fact]
     public async Task Auto_build_assemblies_build_what_a_sale_is_short_of_in_the_same_entry()
     {
         var soap = await NewItem("Soap bar", ItemType.Inventory);

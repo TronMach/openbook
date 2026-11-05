@@ -207,7 +207,7 @@ else
         <div class="field">
             <label for="file">Backup file</label>
             <input id="file" name="file" type="file" accept=".db,.sqlite,.sqlite3" required />
-            <span class="hint">Up to @(AccountEndpoints.MaxBackupUploadBytes / 1024 / 1024) MB.</span>
+            <span class="hint">Up to @(AccountEndpoints.MaxBackupUploadBytes / 1024 / 1024) MB. For a larger one, stop OpenBook and run its <code>restore-backup</code> command on this computer, which checks the file the same way.</span>
         </div>
         <div class="field">
             <label for="password">Your password</label>

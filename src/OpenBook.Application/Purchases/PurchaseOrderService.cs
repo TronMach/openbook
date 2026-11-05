@@ -29,7 +29,7 @@ public sealed record ReceiveGoodsCommand(DateOnly Date, IReadOnlyList<ReceiveLin
 
 /// <param name="Quantity">Units billed on an item line (ignored on a category line).</param>
 /// <param name="UnitCost">The vendor's unit cost (item line) or amount (category line); null for the order's.</param>
-public sealed record BillOrderLine(int LineNumber, decimal Quantity, decimal? UnitCost = null);
+public sealed record BillOrderLine(int LineNumber, decimal Quantity, decimal? UnitCost = null, string? Lots = null);
 
 /// <param name="Lines">What to bill; null for what's been received and not billed (everything left when nothing is recorded as received).</param>
 /// <param name="Extra">Bill lines that aren't on the order (freight, sales tax), added after the order's lines and left out of the 3-way match.</param>
@@ -290,7 +290,8 @@ public sealed class PurchaseOrderService(
         var lines = order.Lines.ToDictionary(l => l.LineNumber);
         var picks = bill.SourceLines.OrderBy(s => s.LineNumber)
             .Select(s => lines[s.LineNumber].IsItem
-                ? new BillOrderLine(s.LineNumber, s.Quantity, s.Quantity == 0m ? 0m : decimal.Round(s.Amount / s.Quantity, 4, MidpointRounding.AwayFromZero))
+                ? new BillOrderLine(s.LineNumber, s.Quantity, s.Quantity == 0m ? 0m : decimal.Round(s.Amount / s.Quantity, 4, MidpointRounding.AwayFromZero),
+                    bill.Lines.FirstOrDefault(l => l.ItemId is not null && l.ItemId == lines[s.LineNumber].ItemId)?.Lots)
                 : new BillOrderLine(s.LineNumber, 1m, s.Amount))
             .ToList();
         var settings = await store.GetPurchasingSettingsAsync(ct) ?? PurchasingSettings.Create();
@@ -346,10 +347,10 @@ public sealed class PurchaseOrderService(
                     if (accruedBilled != accruedAmount)
                         drafts.Add(new Domain.Purchases.BillLineDraft((await PriceVarianceAsync(ct)).Id, accruedBilled - accruedAmount, $"{line.Description}: price difference"));
                     if (pick.Quantity > accruedQuantity)
-                        drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount - accruedBilled, line.Description, line.ItemId, pick.Quantity - accruedQuantity));
+                        drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount - accruedBilled, line.Description, line.ItemId, pick.Quantity - accruedQuantity, Lots: pick.Lots));
                 }
                 else
-                    drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount, line.Description, line.ItemId, pick.Quantity));
+                    drafts.Add(new Domain.Purchases.BillLineDraft(Guid.Empty, amount, line.Description, line.ItemId, pick.Quantity, Lots: pick.Lots));
                 sources.Add(new BillSourceLine(line.LineNumber, pick.Quantity, amount, accruedQuantity, accruedAmount));
 
                 var billed = status.BilledQuantity + pick.Quantity;

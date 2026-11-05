@@ -83,6 +83,61 @@ public sealed class ChannelTests : IAsyncLifetime
     private static decimal Total(PayoutData p, ChannelLineType type) => p.Lines.Where(l => l.Type == type).Sum(l => l.Amount);
 
     [Fact]
+    public void Etsy_sales_come_out_net_of_the_tax_it_pays_on()
+    {
+        var month = Assert.Single(ChannelReports.Read(ChannelKind.Etsy, Etsy).Payouts);
+
+        Assert.Equal(23m, Total(month, ChannelLineType.Sale));
+        Assert.Equal(0m, Total(month, ChannelLineType.Tax) + Total(month, ChannelLineType.MarketplaceTax));
+        Assert.Equal(21.37m, month.Net);
+    }
+
+    [Fact]
+    public async Task An_overlapping_file_with_no_payout_ids_brings_only_what_is_new()
+    {
+        var channel = await Channel(ChannelKind.Etsy);
+        await Import(channel, Etsy);
+
+        var result = await Import(channel, Etsy + "\"March 12, 2026\",Sale,Payment for Order #2,Order #2,USD,$10.00,--,$10.00,--\n");
+
+        var fresh = Assert.Single(result.New);
+        Assert.Equal(10m, Assert.Single(fresh.Lines).Amount);
+        Assert.Contains(result.Warnings, w => w.Contains("imported before", StringComparison.Ordinal));
+        Assert.Equal(2, (await In<ChannelService, IReadOnlyList<ChannelPayout>>(s => s.PayoutsAsync(channel.Id))).Count);
+    }
+
+    [Fact]
+    public void A_refund_takes_the_orders_tax_back_out()
+    {
+        var payout = new PayoutData("p1", new DateOnly(2026, 3, 9),
+            [new ChannelLineDraft(new DateOnly(2026, 3, 2), ChannelLineType.Sale, 108m, "order 5000", null),
+                new ChannelLineDraft(new DateOnly(2026, 3, 3), ChannelLineType.Refund, -108m, "order 5000", null)],
+            new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 3));
+
+        var split = Assert.Single(ChannelSyncService.SplitCharges([payout], [new ChannelOrderDraft("5000", new DateOnly(2026, 3, 2), null, null, 1m, 100m, 0m, 8m)]));
+
+        Assert.Equal(0m, Total(split, ChannelLineType.Tax));
+        Assert.Equal(-100m, Total(split, ChannelLineType.Refund));
+        Assert.Equal(100m, Total(split, ChannelLineType.Sale));
+    }
+
+    [Fact]
+    public async Task A_line_with_no_sku_is_mapped_by_its_title()
+    {
+        var channel = await Channel(ChannelKind.Other);
+        var orders = "Order ID,Sale Date,SKU,Title,Quantity,Price\nA1,2026-03-02,,Custom engraving,1,20.00\n";
+        await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(channel.Id, Encoding.UTF8.GetBytes(orders)));
+        var batch = Assert.Single(await In<ChannelOrderService, IReadOnlyList<ChannelOrderBatch>>(s => s.BatchesAsync(channel.Id)));
+        Assert.Equal("channel.sku_unmapped", (await Assert.ThrowsAsync<DomainException>(() => In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(batch.Id)))).Code);
+
+        var choice = Assert.Single(await In<ChannelOrderService, IReadOnlyList<SkuChoice>>(s => s.SkusAsync(channel.Id)));
+        Assert.Equal("Custom engraving", choice.Sku);
+        await _db.InScope(async sp => { await sp.GetRequiredService<ChannelOrderService>().MapSkuAsync(channel.Id, choice.Sku, null); return true; });
+
+        Assert.Equal(PayoutStatus.Posted, (await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(batch.Id))).Status);
+    }
+
+    [Fact]
     public void An_amazon_settlement_reads_into_typed_lines_that_add_up_to_the_deposit()
     {
         var payout = Assert.Single(ChannelReports.Read(ChannelKind.Amazon, Amazon).Payouts);

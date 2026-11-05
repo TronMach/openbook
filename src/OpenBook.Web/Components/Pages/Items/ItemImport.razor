@@ -12,8 +12,9 @@
 
     <div class="card">
         <p>
-            Upload a CSV with a header row. A <strong>name</strong> column is required. Type ("Service" or "Non-inventory"),
-            description, price, income account (full name or number) and columns named after your custom fields are used when present. Rows without an
+            Upload a CSV with a header row. A <strong>name</strong> column is required. Type ("Service", "Non-inventory" or "Inventory"),
+            description, price, income account (full name or number) and columns named after your custom fields are used when present, and inventory rows also take
+            cost, barcode and reorder point. Quantities don't come in: enter starting stock with <strong>Adjust quantities</strong>. Rows without an
             income account use the default below. Items already in OpenBook are skipped; nothing is imported unless every row is valid.
         </p>
         <div class="row">

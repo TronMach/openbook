@@ -39,13 +39,14 @@
                 </div>
                 <div class="field">
                     <label for="from">From</label>
-                    <input id="from" type="date" name="from" value="@_from.ToString("yyyy-MM-dd")" />
+                    <input id="from" type="date" name="from" value="@_from?.ToString("yyyy-MM-dd")" />
                 </div>
                 <div class="field">
                     <label for="to">To</label>
-                    <input id="to" type="date" name="to" value="@_to.ToString("yyyy-MM-dd")" />
+                    <input id="to" type="date" name="to" value="@_to?.ToString("yyyy-MM-dd")" />
                 </div>
             </div>
+            <p class="hint">Leave the dates blank for everything the bank hasn't been told yet: new checks and voids, whatever their date. Dates send those checks again.</p>
             <div class="actions"><button type="submit" class="secondary">Show checks</button></div>
             @if (_settings?.LastExportedThrough is { } through)
             {
@@ -55,7 +56,7 @@
 
         @if (_checks.Count == 0)
         {
-            <div class="card"><p>No numbered checks on this account in that range. Only references made of digits count as check numbers.</p></div>
+            <div class="card"><p>@(_from is null && _to is null ? "The bank knows of every numbered check on this account." : "No numbered checks on this account in that range.") Only references made of digits count as check numbers.</p></div>
         }
         else
         {
@@ -81,8 +82,8 @@
             <PostForm class="card" Action="/banking/positive-pay/export" data-enhance="false">
                 <AntiforgeryToken />
                 <input type="hidden" name="accountId" value="@_accountId" />
-                <input type="hidden" name="from" value="@_from.ToString("yyyy-MM-dd")" />
-                <input type="hidden" name="to" value="@_to.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="from" value="@_from?.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="to" value="@_to?.ToString("yyyy-MM-dd")" />
                 <h2>Issue file</h2>
                 <div class="row">
                     <div class="field">
@@ -111,8 +112,8 @@
     private ChartOfAccounts _chart = new([]);
     private List<Account> _banks = [];
     private Guid _accountId;
-    private DateOnly _from;
-    private DateOnly _to;
+    private DateOnly? _from;
+    private DateOnly? _to;
     private PositivePaySettings? _settings;
     private IReadOnlyList<PositivePayCheck> _checks = [];
 
@@ -130,13 +131,12 @@
         _accountId = AccountId is { } chosen && _banks.Any(b => b.Id == chosen) ? chosen : _banks[0].Id;
         _settings = await PayService.SettingsAsync(_accountId);
 
-        // By default: from the day after the last export (or the start of the month) to today.
-        var today = CompanyTime.Today;
-        _to = Parse(To) ?? today;
-        _from = Parse(From) ?? _settings.LastExportedThrough?.AddDays(1) ?? new DateOnly(today.Year, today.Month, 1);
-        if (_from > _to)
-            _from = _to;
-        _checks = await PayService.ListAsync(_accountId, _from, _to);
+        // By default, what the bank hasn't had; dates are for sending checks again.
+        _to = Parse(To);
+        _from = Parse(From);
+        _checks = _from is null && _to is null
+            ? await PayService.UnsentAsync(_accountId)
+            : await PayService.ListAsync(_accountId, _from ?? DateOnly.MinValue, _to ?? CompanyTime.Today);
     }
 
     private static DateOnly? Parse(string? text) =>

@@ -106,7 +106,7 @@ public sealed class GrantService(
             var memo = $"Grant: {command.Name.Trim()} ({funder.DisplayName})";
             awardEntry = (await engine.StageAsync(new PostJournalEntryCommand(command.AwardedOn,
                 [JournalLineDraft.Dr(receivable.Id, command.Amount, memo, classId), JournalLineDraft.Cr(income.Id, command.Amount, memo, classId)],
-                memo, Grant.AwardSource, id), ct)).Id;
+                memo, Grant.AwardSource, id, EntryBasis.AccrualOnly), ct)).Id;
         }
 
         var grant = Grant.Create(id, command.Name, funder.Id, command.Reference, command.Amount, command.AwardedOn, command.StartsOn, command.EndsOn,
@@ -156,7 +156,21 @@ public sealed class GrantService(
         }
 
         var entry = await engine.StageAsync(new PostJournalEntryCommand(date, lines, memo, Grant.ReceiptSource, grant.Id), ct);
-        grant.AddReceipt(date, amount, bank.Id, entry.Id);
+
+        // On the cash basis the money is the income: this clears the receivable and advance the entry above credited.
+        Guid? cashEntry = null;
+        if (grant.CashOnReceipt)
+        {
+            var cash = new List<JournalLineDraft>();
+            if (amount - advance > 0m)
+                cash.Add(JournalLineDraft.Dr(grant.ReceivableAccountId, amount - advance, memo, grant.ClassId));
+            if (advance > 0m)
+                cash.Add(JournalLineDraft.Dr(grant.AdvanceAccountId!.Value, advance, memo, grant.ClassId));
+            cash.Add(JournalLineDraft.Cr(grant.IncomeAccountId, amount, memo, grant.ClassId));
+            cashEntry = (await engine.StageAsync(new PostJournalEntryCommand(date, cash, $"{memo} (cash basis)", Grant.ReceiptSource, grant.Id, EntryBasis.CashOnly), ct)).Id;
+        }
+
+        grant.AddReceipt(date, amount, bank.Id, entry.Id, cashEntry);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -181,7 +195,8 @@ public sealed class GrantService(
         if (amount - fromAdvance > 0m)
             lines.Add(JournalLineDraft.Dr(grant.ReceivableAccountId, amount - fromAdvance, memo, grant.ClassId));
         lines.Add(JournalLineDraft.Cr(grant.IncomeAccountId, amount, memo, grant.ClassId));
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(through, lines, memo, Grant.RecognitionSource, grant.Id), ct);
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(through, lines, memo, Grant.RecognitionSource, grant.Id,
+            grant.CashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct);
         grant.AddRecognition(through, position.ReadyToRecognize, entry.Id);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
@@ -195,6 +210,8 @@ public sealed class GrantService(
         var before = Snapshot(grant);
         grant.VoidReceipt(line); // checks before the reversal is staged
         await engine.StageVoidAsync(receipt.EntryId, reason, fromDocument: true, ct);
+        if (receipt.CashEntryId is { } cashEntry)
+            await engine.StageVoidAsync(cashEntry, reason, fromDocument: true, ct);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;

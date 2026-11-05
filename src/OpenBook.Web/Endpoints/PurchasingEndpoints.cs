@@ -74,7 +74,7 @@ public static class PurchasingEndpoints
             {
                 var quantities = Numbered(form, "qty:").ToDictionary(x => x.Line, x => x.Value);
                 var lines = Numbered(form, "cost:")
-                    .Select(x => new BillOrderLine(x.Line, quantities.TryGetValue(x.Line, out var q) ? q : 1m, x.Value))
+                    .Select(x => new BillOrderLine(x.Line, quantities.TryGetValue(x.Line, out var q) ? q : 1m, x.Value, form[$"lots:{x.Line}"].ToString() is { Length: > 0 } lots ? lots : null))
                     .Where(l => l.Quantity != 0m && (quantities.ContainsKey(l.LineNumber) || l.UnitCost != 0m))
                     .ToList();
                 var bill = await orders.CreateBillAsync(id, new BillFromOrderCommand(Date(form["date"]) ?? Today(), form["reference"], lines), ct);

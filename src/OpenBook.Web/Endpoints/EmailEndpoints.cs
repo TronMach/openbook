@@ -73,6 +73,26 @@ public static class EmailEndpoints
             return Results.File(form.Pdf, "application/pdf");
         }).AllowAnonymous();
 
+        // The "Pay now" button in an email: a fresh checkout for what's owed when the customer clicks.
+        app.MapGet("/view/{token}/pay", async (string token, EmailService email, OpenBook.Application.Sales.OnlinePaymentService online, OpenBook.Web.Security.OnlinePaymentActor actor, CancellationToken ct) =>
+        {
+            static IResult Page(string title, string text, int status) => Results.Content(
+                $"<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>{title}</title></head>" +
+                $"<body style=\"font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;\"><h1>{title}</h1><p>{System.Net.WebUtility.HtmlEncode(text)}</p></body></html>", "text/html", statusCode: status);
+
+            if (await email.InvoiceToPayAsync(token, ct) is not { } invoiceId)
+                return Page("This link doesn't work any more", "Please ask whoever sent it for a new copy.", StatusCodes.Status404NotFound);
+            actor.Use();
+            try
+            {
+                return Results.Redirect((await online.LinkForInvoiceAsync(invoiceId, ct)).Url);
+            }
+            catch (OpenBook.Domain.Common.DomainException ex)
+            {
+                return Page("Nothing to pay here", ex.Message, StatusCodes.Status200OK);
+            }
+        }).AllowAnonymous();
+
         return app;
     }
 

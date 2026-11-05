@@ -36,7 +36,7 @@ public sealed record PayoutImportResult(IReadOnlyList<PayoutData> New, IReadOnly
 /// Sales channels and their payouts. A report is read by <see cref="ChannelReports"/>; payouts not seen before (by the
 /// channel's id for them) wait as Pending until posted, each as one journal entry (<see cref="ChannelPayout.Source"/>).
 /// </summary>
-public sealed class ChannelService(IChannelStore store, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user)
+public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user)
 {
     public const string ChannelEntity = "sales_channel";
     public const string PayoutEntity = "channel_payout";
@@ -101,8 +101,63 @@ public sealed class ChannelService(IChannelStore store, AccountService accounts,
         if (!channel.IsActive)
             throw new DomainException("channel.inactive", $"{channel.Name} is inactive.");
         var read = ChannelReports.Read(channel.Kind, Encoding.UTF8.GetString(content), fileName);
-        return await AddAsync(channel, read.Payouts, read.Warnings, save, ct);
+        return await AddAsync(channel, await SplitByOrdersAsync(channel, read.Payouts, ct), read.Warnings, save, ct);
     }
+
+    /// <summary>A Shopify payout file has charges gross: the order reports already imported say what's tax and shipping.</summary>
+    private async Task<IReadOnlyList<PayoutData>> SplitByOrdersAsync(SalesChannel channel, IReadOnlyList<PayoutData> payouts, CancellationToken ct)
+    {
+        if (channel.Kind != ChannelKind.Shopify)
+            return payouts;
+        var held = (await orders.ListBatchesAsync(channel.Id, ct)).Where(b => b.Status != PayoutStatus.Dismissed).SelectMany(b => b.Lines)
+            .Select(l => new ChannelOrderDraft(l.OrderId, l.Date, l.Sku, l.Title, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Region)).ToList();
+        return ChannelSyncService.SplitCharges(payouts, held);
+    }
+
+    /// <summary>
+    /// Lines of a file with no payout ids that are already held: such a file's id comes from its dates and total, so an
+    /// overlapping one looks new. Each line held answers for one incoming, so identical lines in a file both come in once.
+    /// </summary>
+    private async Task<(IReadOnlyList<PayoutData> Payouts, int Left)> WithoutHeldLinesAsync(Guid channelId, IReadOnlyList<PayoutData> payouts, CancellationToken ct)
+    {
+        if (!payouts.Any(p => DerivedId().IsMatch(p.ExternalId)))
+            return (payouts, 0);
+        var held = (await store.ListPayoutsAsync(channelId, ct)).Where(p => p.Status != PayoutStatus.Dismissed).SelectMany(p => p.Lines)
+            .GroupBy(l => (l.Date, l.Type, l.Amount, l.Reference)).ToDictionary(g => g.Key, g => g.Count());
+        var left = 0;
+        var kept = new List<PayoutData>();
+        foreach (var payout in payouts)
+        {
+            if (!DerivedId().IsMatch(payout.ExternalId))
+            {
+                kept.Add(payout);
+                continue;
+            }
+
+            var lines = new List<ChannelLineDraft>();
+            foreach (var line in payout.Lines)
+            {
+                var key = (line.Date, line.Type, line.Amount, line.Reference);
+                if (held.GetValueOrDefault(key) > 0)
+                {
+                    held[key]--;
+                    left++;
+                }
+                else
+                {
+                    lines.Add(line);
+                }
+            }
+
+            if (lines.Count > 0)
+                kept.Add(payout with { Lines = lines });
+        }
+
+        return (kept, left);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\w+:\d{8}-\d{8}:")]
+    private static partial System.Text.RegularExpressions.Regex DerivedId();
 
     /// <summary>Records a connection change on the channel (the credential itself never goes in the audit log).</summary>
     internal async Task SaveConnectionAsync(SalesChannel channel, string before, CancellationToken ct)
@@ -119,6 +174,10 @@ public sealed class ChannelService(IChannelStore store, AccountService accounts,
         var known = await store.PayoutIdsAsync(channel.Id, ct);
         var fresh = payouts.Where(p => !known.Contains(p.ExternalId)).GroupBy(p => p.ExternalId).Select(g => g.First()).ToList();
         var old = payouts.Where(p => known.Contains(p.ExternalId)).ToList();
+        (var unheld, var heldLines) = await WithoutHeldLinesAsync(channel.Id, fresh, ct);
+        fresh = [.. unheld];
+        if (heldLines > 0)
+            warnings = [.. warnings, $"{heldLines} line(s) of this file were imported before (same date, type, amount and reference), so they're left out."];
         if (!save || fresh.Count == 0)
             return new PayoutImportResult(fresh, old, warnings, []);
 

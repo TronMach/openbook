@@ -591,6 +591,12 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("PositivePaySentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset?>("PrintedAt")
                         .HasColumnType("TEXT");
 
@@ -3123,6 +3129,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("AwardedOn")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CashOnReceipt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("ClassId")
                         .HasColumnType("TEXT");
 
@@ -4008,6 +4017,12 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("PaymentAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PositivePaySentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PositivePayVoidSentAt")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("PrintedAt")
@@ -7830,6 +7845,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("BankAccountId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<Guid?>("CashEntryId")
+                                .HasColumnType("TEXT");
+
                             b1.Property<DateOnly>("Date")
                                 .HasColumnType("TEXT");
 
@@ -9051,6 +9069,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -9300,6 +9321,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -9453,6 +9477,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.Property<string>("Lots")
                                 .HasMaxLength(1000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("PriceSource")
@@ -9915,6 +9942,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("TEXT");
 
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -10052,6 +10082,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.Property<string>("Lots")
                                 .HasMaxLength(1000)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("PriceSource")

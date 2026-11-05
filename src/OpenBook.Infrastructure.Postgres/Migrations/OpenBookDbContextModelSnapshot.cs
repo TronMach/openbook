@@ -598,6 +598,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<DateTimeOffset?>("PositivePaySentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset?>("PrintedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3130,6 +3136,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly>("AwardedOn")
                         .HasColumnType("date");
 
+                    b.Property<bool>("CashOnReceipt")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("ClassId")
                         .HasColumnType("uuid");
 
@@ -4016,6 +4025,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid>("PaymentAccountId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("PositivePaySentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("PrintedAt")
                         .HasColumnType("timestamp with time zone");
@@ -7861,6 +7876,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<Guid>("BankAccountId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<Guid?>("CashEntryId")
+                                .HasColumnType("uuid");
+
                             b1.Property<DateOnly>("Date")
                                 .HasColumnType("date");
 
@@ -9098,6 +9116,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
 
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -9349,6 +9370,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
 
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -9505,6 +9529,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<string>("Lots")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
+
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
@@ -9972,6 +9999,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
 
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("uuid");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -10112,6 +10142,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<string>("Lots")
                                 .HasMaxLength(1000)
                                 .HasColumnType("character varying(1000)");
+
+                            b1.Property<Guid?>("OwnerCustomerId")
+                                .HasColumnType("uuid");
 
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)

@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -39,20 +40,28 @@ public sealed class PositivePayService(
         return await bank.GetPositivePaySettingsAsync(accountId, ct) ?? PositivePaySettings.For(accountId);
     }
 
-    /// <summary>Checks dated in the range, oldest first. Only numeric references count as check numbers.</summary>
-    public async Task<IReadOnlyList<PositivePayCheck>> ListAsync(Guid accountId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    /// <summary>Checks dated in the range, oldest first, to send again. Only numeric references count as check numbers.</summary>
+    public Task<IReadOnlyList<PositivePayCheck>> ListAsync(Guid accountId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        to < from
+            ? throw new DomainException("positive_pay.range_invalid", "The end date is before the start date.")
+            : ChecksAsync(accountId, (date, _) => date >= from && date <= to, ct);
+
+    /// <summary>What the bank hasn't been told yet, whatever its date: new checks, and voids of ones it knows of.</summary>
+    public Task<IReadOnlyList<PositivePayCheck>> UnsentAsync(Guid accountId, CancellationToken ct = default) =>
+        ChecksAsync(accountId, (_, needsSending) => needsSending, ct);
+
+    private async Task<IReadOnlyList<PositivePayCheck>> ChecksAsync(Guid accountId, Func<DateOnly, bool, bool> wanted, CancellationToken ct)
     {
         EnsureBank((await accounts.GetChartAsync(ct)).Get(accountId));
-        if (to < from)
-            throw new DomainException("positive_pay.range_invalid", "The end date is before the start date.");
-
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
         var expenses = (await bank.ListAllTransactionsAsync(ct))
-            .Where(t => t.AccountId == accountId && t.Kind == BankTransactionKind.Spend && t.Date >= from && t.Date <= to && IsCheckNumber(t.Reference))
+            .Where(t => t.AccountId == accountId && t.Kind == BankTransactionKind.Spend && IsCheckNumber(t.Reference)
+                && wanted(t.Date, t.NeedsSendingToBank(t.Status == BankTransactionStatus.Voided)))
             .Select(t => new PositivePayCheck(CheckKind.Expense, t.Id, t.Date, t.Reference!.Trim(), t.Amount,
                 t.Payee ?? (t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null) ?? string.Empty, t.Status == BankTransactionStatus.Voided));
         var payments = (await purchases.ListPaymentsAsync(null, ct))
-            .Where(p => p.PaymentAccountId == accountId && p.AchBatchId is null && p.Date >= from && p.Date <= to && IsCheckNumber(p.Reference))
+            .Where(p => p.PaymentAccountId == accountId && p.AchBatchId is null && IsCheckNumber(p.Reference)
+                && wanted(p.Date, p.NeedsSendingToBank(p.Status == DocumentStatus.Voided)))
             .Select(p => new PositivePayCheck(CheckKind.BillPayment, p.Id, p.Date, p.Reference!.Trim(), p.Amount,
                 vendors.GetValueOrDefault(p.VendorId) ?? string.Empty, p.Status == DocumentStatus.Voided));
         return expenses.Concat(payments)
@@ -62,13 +71,18 @@ public sealed class PositivePayService(
             .ToList();
     }
 
-    /// <summary>Writes the issue file and remembers the layout and the range covered.</summary>
-    public async Task<PositivePayFile> ExportAsync(Guid accountId, DateOnly from, DateOnly to, PositivePayOptions options, CancellationToken ct = default)
+    /// <summary>
+    /// Writes the issue file and records, check by check, what the bank now knows. With no dates it holds everything the
+    /// bank hasn't had; with dates, those dates' checks, to send again.
+    /// </summary>
+    public async Task<PositivePayFile> ExportAsync(Guid accountId, DateOnly? from, DateOnly? to, PositivePayOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var checks = await ListAsync(accountId, from, to, ct);
+        var today = CompanyTime.Today;
+        var ranged = from is not null || to is not null;
+        var checks = ranged ? await ListAsync(accountId, from ?? DateOnly.MinValue, to ?? today, ct) : await UnsentAsync(accountId, ct);
         if (checks.Count == 0)
-            throw new DomainException("positive_pay.no_checks", "There are no numbered checks on this account in that range.");
+            throw new DomainException("positive_pay.no_checks", ranged ? "There are no numbered checks on this account in that range." : "The bank knows of every numbered check on this account.");
 
         var settings = await bank.GetPositivePaySettingsAsync(accountId, ct);
         if (settings is null)
@@ -92,7 +106,15 @@ public sealed class PositivePayService(
         }
 
         var now = clock.UtcNow;
-        settings.Exported(now, to);
+        foreach (var check in checks)
+        {
+            if (check.Kind == CheckKind.Expense)
+                (await bank.GetTransactionAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+            else
+                (await purchases.GetPaymentAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+        }
+
+        settings.Exported(now, to ?? today);
         var total = checks.Where(c => !c.Void).Sum(c => c.Amount);
         bank.Add(AuditRecord.Create(now, user.Actor, AuditAction.Created, "positive_pay_export", accountId, null, JsonSerializer.Serialize(new
         {
@@ -107,7 +129,7 @@ public sealed class PositivePayService(
 
         var name = (await accounts.GetChartAsync(ct)).Get(accountId).Name;
         var safe = new string(name.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
-        var fileName = FormattableString.Invariant($"positive-pay-{(safe.Length == 0 ? "account" : safe)}-{from:yyyyMMdd}-{to:yyyyMMdd}.csv");
+        var fileName = FormattableString.Invariant($"positive-pay-{(safe.Length == 0 ? "account" : safe)}-{(ranged ? $"{from ?? to:yyyyMMdd}-{to ?? today:yyyyMMdd}" : $"{today:yyyyMMdd}")}.csv");
         return new PositivePayFile(fileName, Encoding.ASCII.GetBytes(csv.ToString()), checks.Count, total);
     }
 

@@ -80,12 +80,12 @@ public static class BankingEndpoints
             var back = $"/banking/positive-pay?accountId={accountId}&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
             try
             {
-                if (accountId is null || from is null || to is null)
-                    throw new DomainException("positive_pay.fields_required", "Choose the account and both dates.");
+                if (accountId is null)
+                    throw new DomainException("positive_pay.fields_required", "Choose the account.");
                 var options = new PositivePayOptions(form["bankAccountNumber"],
                     Enum.TryParse<PositivePayDateFormat>(form["dateFormat"], out var format) ? format : PositivePayDateFormat.MonthDayYear,
                     form["includeHeader"] == "true");
-                var file = await service.ExportAsync(accountId.Value, from.Value, to.Value, options, ct);
+                var file = await service.ExportAsync(accountId.Value, from, to, options, ct);
                 http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = file.FileName }.ToString();
                 return Results.File(file.Content, "text/csv");
             }

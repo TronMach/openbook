@@ -81,8 +81,8 @@ public sealed class ChannelOrderService(
     {
         var mapped = (await store.ListSkusAsync(channelId, ct)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
         var items = await sales.ListItemsAsync(ct);
-        var seen = (await store.ListBatchesAsync(channelId, ct)).SelectMany(b => b.Lines).Where(l => l.Sku is not null)
-            .GroupBy(l => l.Sku!, StringComparer.OrdinalIgnoreCase).Select(g => (Sku: g.Key, g.First().Title));
+        var seen = (await store.ListBatchesAsync(channelId, ct)).SelectMany(b => b.Lines)
+            .GroupBy(l => l.MappingKey, StringComparer.OrdinalIgnoreCase).Select(g => (Sku: g.Key, g.First().Title));
         return seen.Concat(mapped.Keys.Select(k => (Sku: k, Title: (string?)null))).DistinctBy(s => s.Sku, StringComparer.OrdinalIgnoreCase)
             .Select(s => mapped.TryGetValue(s.Sku, out var m) ? new SkuChoice(s.Sku, s.Title, m.ItemId, true, false)
                 : Automatic(s.Sku, items) is { } auto ? new SkuChoice(s.Sku, s.Title, auto.Id, true, true)
@@ -118,13 +118,13 @@ public sealed class ChannelOrderService(
             throw new DomainException("channel.orders_not_pending", "Only orders waiting to be posted can be posted.");
 
         var mapping = (await SkusAsync(channel.Id, ct)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
-        var unmapped = batch.Lines.Where(l => l.Sku is null || !mapping.TryGetValue(l.Sku, out var m) || !m.Mapped)
-            .Select(l => l.Sku ?? $"(no SKU: {l.Title})").Distinct().ToList();
+        var unmapped = batch.Lines.Where(l => !mapping.TryGetValue(l.MappingKey, out var m) || !m.Mapped)
+            .Select(l => l.MappingKey).Distinct().ToList();
         if (unmapped.Count > 0)
             throw new DomainException("channel.sku_unmapped", $"Say which item each SKU is first (or that it isn't stocked): {string.Join(", ", unmapped.Take(10))}{(unmapped.Count > 10 ? "…" : "")}.");
 
-        var stocked = batch.Lines.Where(l => l.Quantity > 0m && mapping[l.Sku!].ItemId is not null)
-            .GroupBy(l => mapping[l.Sku!].ItemId!.Value).Select(g => (ItemId: g.Key, Quantity: g.Sum(l => l.Quantity))).ToList();
+        var stocked = batch.Lines.Where(l => l.Quantity > 0m && mapping[l.MappingKey].ItemId is not null)
+            .GroupBy(l => mapping[l.MappingKey].ItemId!.Value).Select(g => (ItemId: g.Key, Quantity: g.Sum(l => l.Quantity))).ToList();
         var items = await sales.GetItemsAsync(stocked.Select(s => s.ItemId).ToList(), ct);
         var lines = stocked.Select((s, i) => SalesLine.Create(i + 1, new SalesLineDraft(s.ItemId, null, s.Quantity, 0m), items.GetValueOrDefault(s.ItemId))).ToList();
         var before = Snapshot(batch, channel);
@@ -199,7 +199,7 @@ public sealed class ChannelOrderService(
             var line = batch.Lines.FirstOrDefault(l => l.LineNumber == orderLine) ?? throw new DomainException("channel.return_line", "That order line isn't in these orders.");
             if (quantity < 0m || quantity > line.Quantity - returned.GetValueOrDefault(orderLine))
                 throw new DomainException("channel.return_too_many", $"Order {line.OrderId}: at most {line.Quantity - returned.GetValueOrDefault(orderLine):0.####} can come back.");
-            if (line.Sku is null || !mapping.TryGetValue(line.Sku, out var sku) || sku.ItemId is not { } itemId)
+            if (!mapping.TryGetValue(line.MappingKey, out var sku) || sku.ItemId is not { } itemId)
                 throw new DomainException("channel.return_not_stocked", $"Order {line.OrderId}: {line.Sku ?? line.Title} isn't a stocked item.");
             byItem.Add((itemId, quantity));
         }

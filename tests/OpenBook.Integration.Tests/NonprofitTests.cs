@@ -357,6 +357,34 @@ public sealed class NonprofitTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task On_the_cash_basis_a_grant_is_income_when_the_money_comes()
+    {
+        var foundation = await Donor("Riverside Foundation");
+        var grant = await NewGrant(new GrantCommand("Literacy 2026", foundation.Id, 10000m, new DateOnly(2026, 1, 5), Jan1, Dec31, IncomeAccountId: Account("Grants:Restricted")));
+        Assert.Equal((10000m, 0m), (await IncomeAsync(ReportBasis.Accrual, "Grants:Restricted"), await IncomeAsync(ReportBasis.Cash, "Grants:Restricted")));
+
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 3, 1), 4000m, Account("Checking")));
+        Assert.Equal((10000m, 4000m), (await IncomeAsync(ReportBasis.Accrual, "Grants:Restricted"), await IncomeAsync(ReportBasis.Cash, "Grants:Restricted")));
+
+        await In<GrantService, Grant>(s => s.VoidReceiptAsync(grant.Id, 1, "Wrong grant"));
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Cash, "Grants:Restricted"));
+    }
+
+    [Fact]
+    public async Task On_the_cash_basis_a_conditional_grant_paid_ahead_is_income_at_once()
+    {
+        var city = await Donor("City Arts Council");
+        var grant = await NewGrant(new GrantCommand("Mural project", city.Id, 3000m, Jan1, Jan1, Dec31, ClassId: _scholarships, Conditional: true));
+
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 2, 1), 3000m, Account("Checking")));
+        Assert.Equal((0m, 3000m), (await IncomeAsync(ReportBasis.Accrual, GrantService.GrantsIncomeName), await IncomeAsync(ReportBasis.Cash, GrantService.GrantsIncomeName)));
+
+        await Post(new DateOnly(2026, 4, 1), Dr(Account("Program Supplies"), 1200m, classId: _scholarships), Cr(Account("Checking"), 1200m));
+        await In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, new DateOnly(2026, 4, 30)));
+        Assert.Equal((1200m, 3000m), (await IncomeAsync(ReportBasis.Accrual, GrantService.GrantsIncomeName), await IncomeAsync(ReportBasis.Cash, GrantService.GrantsIncomeName)));
+    }
+
+    [Fact]
     public async Task A_conditional_grant_becomes_income_as_it_is_spent()
     {
         var city = await Donor("City Arts Council");

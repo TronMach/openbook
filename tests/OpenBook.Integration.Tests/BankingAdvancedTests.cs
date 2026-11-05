@@ -65,6 +65,39 @@ public sealed class BankingAdvancedTests : BankingFixture
         Assert.DoesNotContain(audit, a => (a.After ?? "").Contains("secret", StringComparison.Ordinal) || (a.After ?? "").Contains("protected", StringComparison.Ordinal));
     }
 
+    private static readonly PositivePayOptions BankFile = new("000123456789", PositivePayDateFormat.MonthDayYear, true);
+
+    private Task<BankTransaction> Check(string number, DateOnly date, decimal amount) =>
+        Db.InScope(sp => sp.GetRequiredService<BankingService>().RecordAsync(new RecordBankTransactionCommand(
+            BankTransactionKind.Spend, Checking.Id, date, [new BankSplit(Supplies.Id, amount)], Payee: "Paper Co", Reference: number)));
+
+    [Fact]
+    public async Task The_bank_hears_of_a_void_and_a_late_check_whatever_their_dates()
+    {
+        var march = new DateOnly(2026, 3, 5);
+        var check = await Check("1001", march, 50m);
+        Assert.Equal("1001", Assert.Single(await PositivePay(s => s.UnsentAsync(Checking.Id))).Number);
+        await PositivePay(s => s.ExportAsync(Checking.Id, null, null, BankFile));
+        Assert.Empty(await PositivePay(s => s.UnsentAsync(Checking.Id)));
+
+        var late = await Check("1002", march, 60m);
+        await Db.InScope(sp => sp.GetRequiredService<BankingService>().VoidAsync(check.Id, "Lost in the post"));
+
+        var waiting = await PositivePay(s => s.UnsentAsync(Checking.Id));
+        Assert.Equal([("1001", true), ("1002", false)], waiting.OrderBy(c => c.Number).Select(c => (c.Number, c.Void)));
+
+        await PositivePay(s => s.ExportAsync(Checking.Id, null, null, BankFile));
+        Assert.Empty(await PositivePay(s => s.UnsentAsync(Checking.Id)));
+        Assert.Equal("positive_pay.no_checks", await Refused(() => PositivePay(s => s.ExportAsync(Checking.Id, null, null, BankFile))));
+
+        // Only what the bank really has is locked.
+        var unsent = await Check("1003", march, 70m);
+        await Db.InScope(sp => sp.GetRequiredService<BankingService>().ChangeAsync(unsent.Id,
+            new ChangeBankTransactionCommand(march, [new BankSplit(Supplies.Id, 75m)], "Typed wrongly", Payee: "Paper Co", Reference: "1003")));
+        Assert.Equal("bank.check_issued", await Refused(() => Db.InScope(sp => sp.GetRequiredService<BankingService>().ChangeAsync(late.Id,
+            new ChangeBankTransactionCommand(march, [new BankSplit(Supplies.Id, 65m)], "Typed wrongly", Payee: "Paper Co", Reference: "1002")))));
+    }
+
     [Fact]
     public async Task The_first_sync_goes_back_to_the_chosen_start_date_however_far()
     {

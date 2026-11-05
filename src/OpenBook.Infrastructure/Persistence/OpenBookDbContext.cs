@@ -271,10 +271,14 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         try
         {
             var written = await base.SaveChangesAsync(acceptAllChangesOnSuccess: false, cancellationToken);
-            await JournalEntries
-                .IgnoreQueryFilters()
-                .Where(e => newEntryIds.Contains(e.Id))
-                .ExecuteUpdateAsync(s => s.SetProperty(e => EF.Property<bool>(e, IsSealed), true), cancellationToken);
+            // In pieces: SQLite takes at most 32,766 values in a statement, and a large import has more entries than that.
+            foreach (var part in newEntryIds.Chunk(5_000))
+            {
+                await JournalEntries
+                    .IgnoreQueryFilters()
+                    .Where(e => part.Contains(e.Id))
+                    .ExecuteUpdateAsync(s => s.SetProperty(e => EF.Property<bool>(e, IsSealed), true), cancellationToken);
+            }
 
             if (ownTransaction is not null)
                 await ownTransaction.CommitAsync(cancellationToken);

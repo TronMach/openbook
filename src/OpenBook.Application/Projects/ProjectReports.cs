@@ -49,10 +49,18 @@ public sealed class ProjectReports(
         ArgumentNullException.ThrowIfNull(project);
         var customerId = project.Customer.Id;
         bool InRange(DateOnly d) => (from is null || d >= from) && d <= to;
-        static decimal Net(IEnumerable<SalesLine> lines) => lines.Where(l => l.Kind != SalesLineKind.Tax).Sum(l => l.Amount);
+        // Lines belonging to another of its projects are that project's income, not this one's.
+        decimal Net(IEnumerable<SalesLine> lines) => lines.Where(l => l.Kind != SalesLineKind.Tax && (l.OwnerCustomerId is null || l.OwnerCustomerId == customerId)).Sum(l => l.Amount);
 
-        var income =
-            (await sales.ListInvoicesAsync(customerId, ct)).Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date)).Sum(i => Net(i.Lines))
+        // Work billed on the client's invoice: by the line's owner, or on older invoices by the group, which is the project's name.
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var billTo = CustomerTree.BillTo(customerId, customers);
+        var onClientInvoices = billTo == customerId ? 0m : (await sales.ListInvoicesAsync(billTo, ct))
+            .Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date))
+            .Sum(i => i.Lines.Where(l => l.Kind != SalesLineKind.Tax && (l.OwnerCustomerId == customerId || (l.OwnerCustomerId is null && l.Group == project.Customer.DisplayName))).Sum(l => l.Amount));
+
+        var income = onClientInvoices
+            + (await sales.ListInvoicesAsync(customerId, ct)).Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date)).Sum(i => Net(i.Lines))
             + (await sales.ListReceiptsAsync(ct)).Where(r => r.CustomerId == customerId && r.Status == DocumentStatus.Posted && InRange(r.Date)).Sum(r => Net(r.Lines))
             - (await sales.ListCreditMemosAsync(customerId, ct)).Where(c => c.Status == DocumentStatus.Posted && InRange(c.Date)).Sum(c => Net(c.Lines));
 

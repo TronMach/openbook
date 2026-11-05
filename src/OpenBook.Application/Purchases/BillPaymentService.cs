@@ -170,7 +170,7 @@ public sealed class BillPaymentService(
         var draft = BillPayment.Create(payment.Id, payment.VendorId, command.Date, accountId, payment.PayableAccountId,
             applications.Select(a => (a.BillId, a.Amount)).ToList(), Guid.Empty, clock.UtcNow, reference, memo);
         var moneyChanged = draft.Amount != payment.Amount || accountId != payment.PaymentAccountId;
-        if (await IsIssuedAsync(payment, ct) && (moneyChanged || !string.Equals(reference, payment.Reference, StringComparison.Ordinal)))
+        if (IsIssued(payment) && (moneyChanged || !string.Equals(reference, payment.Reference, StringComparison.Ordinal)))
             throw new DomainException("payment.check_issued",
                 "This payment has been printed as a check, sent by ACH or in a positive pay file, so its amount, account and number stay. Void it and pay again instead.");
         var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.PaymentAccountId, payment.JournalEntryId, null, ct);
@@ -208,11 +208,9 @@ public sealed class BillPaymentService(
     public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
         DocumentChanges.ListAsync(ledger, EntityType, id, ct);
 
-    /// <summary>A payment the bank or vendor already knows of: printed, sent by ACH, or numbered and dated within what positive pay has sent.</summary>
-    private async Task<bool> IsIssuedAsync(BillPayment payment, CancellationToken ct) =>
-        payment.PrintedAt is not null || payment.AchBatchId is not null
-        || Banking.PositivePayService.IsCheckNumber(payment.Reference)
-        && (await bank.GetPositivePaySettingsAsync(payment.PaymentAccountId, ct))?.LastExportedThrough is { } through && payment.Date <= through;
+    /// <summary>A payment the bank or vendor already knows of: printed, sent by ACH, or sent in a positive pay file.</summary>
+    private static bool IsIssued(BillPayment payment) =>
+        payment.PrintedAt is not null || payment.AchBatchId is not null || payment.PositivePaySentAt is not null;
 
     public async Task<BillPayment> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {

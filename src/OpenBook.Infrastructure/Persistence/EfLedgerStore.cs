@@ -10,6 +10,8 @@ namespace OpenBook.Infrastructure.Persistence;
 
 internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
 {
+    private long _highestStaged;
+
     public async Task<IReadOnlyList<Account>> ListAccountsAsync(CancellationToken ct) =>
         await db.Accounts.ToListAsync(ct);
 
@@ -55,13 +57,9 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     // Counts entries added but not yet saved, so one save can hold several (an import, a void).
     public async Task<long> NextEntryNumberAsync(CancellationToken ct)
     {
+        // Remembered as they're added: asking the change tracker each time makes a large import take the square of its size.
         var saved = await db.JournalEntries.IgnoreQueryFilters().MaxAsync(e => (long?)e.Number, ct) ?? 0;
-        var staged = db.ChangeTracker.Entries<JournalEntry>()
-            .Where(e => e.State == EntityState.Added)
-            .Select(e => e.Entity.Number)
-            .DefaultIfEmpty(0)
-            .Max();
-        return Math.Max(saved, staged) + 1;
+        return Math.Max(saved, _highestStaged) + 1;
     }
 
     public Task<bool> IsInReconciliationAsync(Guid entryId, CancellationToken ct) =>
@@ -159,7 +157,11 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
 
     public void Add(RecurringEntry recurring) => db.RecurringEntries.Add(recurring);
 
-    public void Add(JournalEntry entry) => db.JournalEntries.Add(entry);
+    public void Add(JournalEntry entry)
+    {
+        _highestStaged = Math.Max(_highestStaged, entry.Number);
+        db.JournalEntries.Add(entry);
+    }
 
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);
 

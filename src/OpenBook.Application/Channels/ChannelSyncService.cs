@@ -129,21 +129,23 @@ public sealed class ChannelSyncService(
     }
 
     /// <summary>
-    /// Splits each Shopify charge ("order {id}") into sales, shipping and tax in the order's proportions (a partial
-    /// charge takes its share), with the order's ship-to state. Charges without a known order stay as sales.
+    /// Splits each Shopify charge or refund ("order {id}", or the order's number in a payout file) into sales, shipping and
+    /// tax in the order's proportions (a partial one takes its share), with the order's ship-to state, so tax on a refund
+    /// comes back out of the liability. Those without a known order stay whole.
     /// </summary>
     public static IReadOnlyList<PayoutData> SplitCharges(IReadOnlyList<PayoutData> payouts, IReadOnlyList<ChannelOrderDraft> orders)
     {
         ArgumentNullException.ThrowIfNull(payouts);
         ArgumentNullException.ThrowIfNull(orders);
-        var byOrder = orders.GroupBy(o => o.OrderId).ToDictionary(g => g.Key, g => (Sales: g.Sum(o => o.Sales), Shipping: g.Sum(o => o.Shipping),
+        static string Key(string reference) => (reference.StartsWith("order ", StringComparison.Ordinal) ? reference[6..] : reference).Trim().TrimStart('#');
+        var byOrder = orders.GroupBy(o => Key(o.OrderId)).ToDictionary(g => g.Key, g => (Sales: g.Sum(o => o.Sales), Shipping: g.Sum(o => o.Shipping),
             Tax: g.Sum(o => o.Tax), Region: g.Select(o => o.Region).FirstOrDefault(r => r is not null)));
         return payouts.Select(p => p with
         {
             Lines = p.Lines.SelectMany(l =>
             {
-                if (l.Type != ChannelLineType.Sale || l.Reference is not { } reference || !reference.StartsWith("order ", StringComparison.Ordinal)
-                    || !byOrder.TryGetValue(reference[6..], out var order) || order.Sales + order.Shipping + order.Tax is var total && total <= 0m)
+                if (l.Type is not (ChannelLineType.Sale or ChannelLineType.Refund) || l.Reference is not { } reference
+                    || !byOrder.TryGetValue(Key(reference), out var order) || order.Sales + order.Shipping + order.Tax is var total && total <= 0m)
                     return [l];
                 var share = l.Amount / total;
                 var tax = decimal.Round(order.Tax * share, 2, MidpointRounding.AwayFromZero);

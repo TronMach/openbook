@@ -242,7 +242,16 @@ public static class ChannelReports
                 _ => ChannelLineType.Adjustment,
             };
             var text = string.Join(" · ", new[] { kind, CsvColumns.Field(row, title) }.Where(t => !string.IsNullOrWhiteSpace(t)));
-            lines.Add(new ChannelLineDraft(Date(CsvColumns.Field(row, date), order) ?? default, lineType, value, CsvColumns.Field(row, info), text));
+            var on = Date(CsvColumns.Field(row, date), order) ?? default;
+            var reference = CsvColumns.Field(row, info);
+            lines.Add(new ChannelLineDraft(on, lineType, value, reference, text));
+
+            // The sale row includes the tax, and Etsy pays it on: sales come out net, and the tax lines cancel, as on eBay.
+            if (lineType == ChannelLineType.MarketplaceTax)
+            {
+                lines.Add(new ChannelLineDraft(on, ChannelLineType.Sale, value, reference, text));
+                lines.Add(new ChannelLineDraft(on, ChannelLineType.Tax, -value, reference, text));
+            }
         }
 
         return WholeFile("etsy", lines, transfers);
@@ -261,6 +270,8 @@ public static class ChannelReports
         var impact = columns.Find("balanceimpact");
         var id = columns.Find("transactionid");
         var name = columns.Find("name");
+        var taxColumn = columns.Find("salestax");
+        var shippingColumn = columns.Find("shippingandhandlingamount", "shippingamount");
         var order = DateOrderOf(rows, date);
         var lines = new List<ChannelLineDraft>();
         var transfers = 0;
@@ -287,8 +298,25 @@ public static class ChannelReports
                 : kind.Contains("payment", StringComparison.OrdinalIgnoreCase) && amount > 0m ? ChannelLineType.Sale
                 : kind.Contains("fee", StringComparison.OrdinalIgnoreCase) ? ChannelLineType.Fee
                 : ChannelLineType.Adjustment;
+            var label = string.Join(" · ", new[] { kind, who }.Where(t => !string.IsNullOrWhiteSpace(t)));
+            // Gross includes any tax and shipping the buyer paid: when the download has them, they aren't income.
+            if (lineType == ChannelLineType.Sale)
+            {
+                if (Amount(row, taxColumn, out var tax) && tax != 0m)
+                {
+                    lines.Add(new ChannelLineDraft(on, ChannelLineType.Tax, tax, reference, label));
+                    amount -= tax;
+                }
+
+                if (Amount(row, shippingColumn, out var shipping) && shipping != 0m)
+                {
+                    lines.Add(new ChannelLineDraft(on, ChannelLineType.Shipping, shipping, reference, label));
+                    amount -= shipping;
+                }
+            }
+
             if (amount != 0m)
-                lines.Add(new ChannelLineDraft(on, lineType, amount, reference, string.Join(" · ", new[] { kind, who }.Where(t => !string.IsNullOrWhiteSpace(t)))));
+                lines.Add(new ChannelLineDraft(on, lineType, amount, reference, label));
             if (Amount(row, fee, out var f) && f != 0m)
                 lines.Add(new ChannelLineDraft(on, ChannelLineType.Fee, f, reference, "PayPal fee")); // signed already: negative is a fee taken
         }

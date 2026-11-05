@@ -24,7 +24,7 @@ With receiving into stock on, a delivery doesn't count units a bill has already 
 
 ### Billing from the PO
 
-When the vendor's bill comes, use **Enter the vendor's bill** on the PO. Enter **their invoice number** and the **bill date**. By default the bill covers what's been received and not yet billed (or everything left, if nothing was received); change the quantities and costs to match the vendor's bill. **Enter bill**.
+When the vendor's bill comes, use **Enter the vendor's bill** on the PO. For items tracked by lot or serial number, enter what arrived in **Lots or serial numbers**. Enter **their invoice number** and the **bill date**. By default the bill covers what's been received and not yet billed (or everything left, if nothing was received); change the quantities and costs to match the vendor's bill. **Enter bill**.
 
 The PO tracks what's been ordered, received and billed, and closes when everything is billed. **Cancel the rest of the order** if the vendor can't supply it. Voiding a bill puts its quantities back on the PO.
 

@@ -36,7 +36,7 @@ On the channel's page, **Import a payout report**. The page says where to downlo
 - **Stripe**: Balance › Payouts › Export, or Reports › Payout reconciliation (CSV).
 - **Other (CSV)**: any file with a date, a type (sale, refund, fee, shipping, tax…) and an amount (or gross and fee) column; a payout ID column groups rows into payouts.
 
-Payouts already imported are skipped, so overlapping files are safe.
+Payouts already imported are skipped. PayPal, Etsy and CSV files with no payout ID are compared line by line instead: a line with the same date, type, amount and reference as one you've imported is left out, and the import says how many, so overlapping files are safe.
 
 ### Live connection (Shopify and Stripe)
 

@@ -118,7 +118,7 @@ public sealed record BankConnectionAccountResponse(
     string RemoteId, string Name, string? Institution, string? Currency, decimal? Balance, DateOnly? BalanceDate, Guid? AccountId, DateOnly? ImportFrom,
     DateOnly? FetchedThrough);
 
-public sealed record PositivePayExportRequest(Guid AccountId, DateOnly From, DateOnly To, string? BankAccountNumber, PositivePayDateFormat DateFormat, bool IncludeHeader = true);
+public sealed record PositivePayExportRequest(Guid AccountId, DateOnly? From, DateOnly? To, string? BankAccountNumber, PositivePayDateFormat DateFormat, bool IncludeHeader = true);
 
 public sealed record UpdatePettyCashFundRequest(decimal FloatAmount, string? Custodian, bool Active = true);
 
@@ -148,8 +148,8 @@ internal static class BankingProApi
             return Results.NoContent();
         });
 
-        banking.MapGet("/positive-pay", async (Guid accountId, DateOnly from, DateOnly to, PositivePayService s, CancellationToken ct) =>
-            await s.ListAsync(accountId, from, to, ct));
+        banking.MapGet("/positive-pay", async (Guid accountId, DateOnly? from, DateOnly? to, PositivePayService s, CancellationToken ct) =>
+            from is null && to is null ? await s.UnsentAsync(accountId, ct) : await s.ListAsync(accountId, from ?? DateOnly.MinValue, to ?? CompanyTime.Today, ct));
         banking.MapPost("/positive-pay/export", async (PositivePayExportRequest r, HttpContext http, PositivePayService s, CancellationToken ct) =>
         {
             var file = await s.ExportAsync(r.AccountId, r.From, r.To, new PositivePayOptions(r.BankAccountNumber, r.DateFormat, r.IncludeHeader), ct);

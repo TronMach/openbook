@@ -179,6 +179,8 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
 
         var postings = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
+        // One history per item for the whole sale: a component is taken by a build and by its own line, or by two builds.
+        var histories = new Dictionary<Guid, List<InventoryMovement>>();
         foreach (var group in parts.GroupBy(p => p.Item.Id))
         {
             var item = group.First().Item;
@@ -187,7 +189,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             if (item.Tracking == ItemTracking.Serial && group.Any(p => p.Quantity != decimal.Truncate(p.Quantity)))
                 throw new DomainException("lot.serial_whole", $"{item.Name} is tracked by serial number, so its quantities are whole units.");
 
-            var history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
+            var history = await SharedHistoryAsync(histories, item.Id, ct);
             var filter = await ForPickingAsync(item, StockFilter.In(warehouseId), ct);
             var takes = new List<FifoTake>();
 
@@ -198,7 +200,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                 var shortfall = group.Sum(p => p.Quantity) - available;
                 if (shortfall > 0m)
                 {
-                    var build = await PlanBuildAsync(item, await ComponentsAsync(item, ct), shortfall, date, warehouseId, [], ct, fill: false);
+                    var build = await PlanBuildAsync(item, await ComponentsAsync(item, ct), shortfall, date, warehouseId, [], ct, fill: false, histories);
                     postings.AddRange(build.Plan.Postings);
                     movements.AddRange(build.Plan.Movements);
                     history.AddRange(build.Outputs);
@@ -398,7 +400,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     /// <param name="fill">False for a build inside a sale (assemble to order): the sale takes its output next.</param>
     internal async Task<BuildPlan> PlanBuildAsync(
         Item assembly, IReadOnlyDictionary<Guid, Item> components, decimal quantity, DateOnly date, Guid? warehouseId,
-        IReadOnlyList<(string Lot, decimal Quantity)> outputLots, CancellationToken ct, bool fill = true)
+        IReadOnlyList<(string Lot, decimal Quantity)> outputLots, CancellationToken ct, bool fill = true, Dictionary<Guid, List<InventoryMovement>>? histories = null)
     {
         var lines = new List<(Guid ItemId, decimal Quantity, decimal Cost, string? Lots)>();
         var postings = new List<JournalLineDraft>();
@@ -409,7 +411,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var needed = decimal.Round(quantity * c.Quantity, SalesLine.Precision, MidpointRounding.AwayFromZero);
             if (component.Tracking == ItemTracking.Serial && needed != decimal.Truncate(needed))
                 throw new DomainException("lot.serial_whole", $"{component.Name} is tracked by serial number, so builds must use whole units of it.");
-            var history = (await store.ListMovementsAsync(component.Id, ct)).ToList();
+            var history = await SharedHistoryAsync(histories ?? [], component.Id, ct);
             var takes = TakeAndSimulate(component, history, needed, date, await ForPickingAsync(component, StockFilter.In(warehouseId), ct),
                 await ShortfallCostAsync(component, history, ct));
             var cost = takes.Sum(t => t.Cost);
@@ -439,6 +441,14 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         }
 
         return new BuildPlan(new InventoryPlan(postings, movements), lines, outputs);
+    }
+
+    /// <summary>The item's movements, with what this plan has already taken of it.</summary>
+    private async Task<List<InventoryMovement>> SharedHistoryAsync(Dictionary<Guid, List<InventoryMovement>> histories, Guid itemId, CancellationToken ct)
+    {
+        if (!histories.TryGetValue(itemId, out var history))
+            histories[itemId] = history = (await store.ListMovementsAsync(itemId, ct)).ToList();
+        return history;
     }
 
     /// <summary>An assembly's components, which must all be tracked stock.</summary>

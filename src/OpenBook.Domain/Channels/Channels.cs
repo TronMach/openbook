@@ -376,6 +376,10 @@ public sealed class ChannelOrderLine
     public DateOnly Date { get; private set; }
     public string? Sku { get; private set; }
     public string? Title { get; private set; }
+
+    /// <summary>What the line is mapped to an item by: its SKU, or its title for a listing or custom item that has none.</summary>
+    public string MappingKey => Sku ?? Cut(Title, 100) ?? "(no SKU or title)";
+
     public decimal Quantity { get; private set; }
     public decimal Sales { get; private set; }
     public decimal Shipping { get; private set; }

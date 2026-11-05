@@ -54,7 +54,7 @@ Good to know:
 
 - **Nothing is imported unless every row is valid.** The preview shows what will come in and lists any problems. Fix them in the file and upload again.
 - **What's already in is left as it is**, so you can import lists first and transactions later, or run an import twice without duplicates. Names you already have aren't touched. A transaction with the same date, memo, accounts and amounts as one from an earlier import is shown as already there and left out, and the preview says how many; if one is a genuine repeat, enter it by hand. After **Undo the whole import**, the file can come in again.
-- **Transactions come in as journal entries**, one each, so balances and reports are right. They don't become invoices or bills, so the A/R and A/P aging won't list them; enter still-open invoices and bills as documents (and leave them out of the imported history, or reverse their effect with a journal entry, so they aren't counted twice).
+- **Transactions come in as journal entries**, one each, so balances and accrual reports are right. On the cash basis an imported invoice or bill counts when it was entered, not when it was paid, so take the move-in year's cash-basis figures, and its 1099 totals, from your old program. They don't become invoices or bills, so the A/R and A/P aging won't list them; enter still-open invoices and bills as documents (and leave them out of the imported history, or reverse their effect with a journal entry, so they aren't counted twice).
 - OpenBook's subaccounts must have their parent's type. A GnuCash account whose type differs from its parent's becomes a top-level account of its own.
 - One currency only: transactions in other currencies are refused.
 

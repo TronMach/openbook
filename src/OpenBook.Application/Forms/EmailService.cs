@@ -258,14 +258,22 @@ public sealed class EmailService(
 
         var buttons = new List<EmailButton>();
         DocumentLink? link = null;
+        string? token = null;
         if (pdf != EmailPdf.Attach)
         {
-            (link, var token) = DocumentLink.Create(LinkKind(source.Kind), source.Id, context.Customer!.Id, clock.UtcNow, user.Actor);
+            (link, token) = DocumentLink.Create(LinkKind(source.Kind), source.Id, context.Customer!.Id, clock.UtcNow, user.Actor);
             buttons.Add(new EmailButton(Article(source.Kind), $"{linkBase}/view/{token}"));
         }
 
-        if (context.PayOnline && await provider.PayLinkAsync(source, ct) is { } payUrl)
-            buttons.Add(new EmailButton("Pay now", payUrl));
+        if (context.PayOnline)
+        {
+            // Through OpenBook when customers can reach it: a checkout page lasts a day, an invoice's terms a month.
+            if (token is null && linkBase is not null)
+                (link, token) = DocumentLink.Create(LinkKind(source.Kind), source.Id, context.Customer!.Id, clock.UtcNow, user.Actor);
+            var payUrl = token is null ? await provider.PayLinkAsync(source, ct) : $"{linkBase}/view/{token}/pay";
+            if (payUrl is not null)
+                buttons.Add(new EmailButton("Pay now", payUrl));
+        }
 
         var composed = EmailFormatter.Compose(Look(design, company), subject, body, buttons);
         await TransportAsync(Message(to, cc, bcc, composed, attachments), ct);
@@ -431,6 +439,11 @@ public sealed class EmailService(
     }
 
     /// <summary>The document behind a "View" link, as it stands now, in the customer's design; null when the link is unknown or turned off.</summary>
+    /// <summary>The invoice an emailed "Pay now" button is for, while its link is on; null otherwise.</summary>
+    public async Task<Guid?> InvoiceToPayAsync(string token, CancellationToken ct = default) =>
+        !string.IsNullOrEmpty(token) && token.StartsWith(DocumentLink.TokenPrefix, StringComparison.Ordinal)
+        && await store.FindLinkAsync(DocumentLink.Hash(token), ct) is { IsActive: true, Kind: EmailKind.Invoice } link ? link.DocumentId : null;
+
     public async Task<RenderedForm?> OpenLinkAsync(string token, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(token) || !token.StartsWith(DocumentLink.TokenPrefix, StringComparison.Ordinal)

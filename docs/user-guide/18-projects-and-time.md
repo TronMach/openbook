@@ -65,7 +65,7 @@ Bill and expense lines can be charged to a project for its profitability without
 
 In the **Projects and time** group:
 
-- **Project profitability**: income, costs (marked expenses, time at cost rates, mileage at the year's rate) and margin per project.
+- **Project profitability**: income (including work billed on the client's own invoice), costs (marked expenses, time at cost rates, mileage at the year's rate) and margin per project.
 - **Unbilled work**: time, mileage and expenses not yet on an invoice, per client, with the oldest work.
 - **Utilization**: per person, available hours, hours worked, the billable share, billable value and what was invoiced.
 - **Time by customer** and **Mileage log**.

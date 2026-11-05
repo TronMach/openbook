@@ -32,7 +32,7 @@ Many banks protect business accounts from check fraud with *positive pay*: you s
 
 **Banking → Positive pay**:
 
-1. Choose the **account**, **from** and **to** dates, and **Show checks**. Numbered checks from that account are listed; voided ones are marked V. The page shows when you last exported and through which date.
+1. Choose the **account**. With the dates left blank, it lists everything the bank hasn't been told yet: new checks and voids of checks it already has, whatever their date. Enter **from** and **to** dates and **Show checks** to send those dates' checks again. Voided ones are marked V.
 2. Under **Issue file**, fill in the **account number at the bank**, the **date format** your bank wants, and whether to **include a header row**. OpenBook remembers these for the account.
 3. **Download CSV** and upload it to your bank.
 

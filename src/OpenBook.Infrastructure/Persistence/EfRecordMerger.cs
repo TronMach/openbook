@@ -41,7 +41,7 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
             ?? throw new InvalidOperationException("Merging needs an open transaction.");
         var (principal, names) = kind switch
         {
-            MergeKind.Customer => (typeof(Customer), new[] { "CustomerId", "DonorId", "FunderId", "PartyId", "TargetId" }),
+            MergeKind.Customer => (typeof(Customer), new[] { "CustomerId", "OwnerCustomerId", "DonorId", "FunderId", "PartyId", "TargetId" }),
             MergeKind.Vendor => (typeof(Vendor), ["VendorId", "PreferredVendorId", "PartyId", "TargetId"]),
             _ => (typeof(Item), ["ItemId", "TargetId"]),
         };

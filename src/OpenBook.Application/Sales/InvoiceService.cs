@@ -143,7 +143,7 @@ public sealed class InvoiceService(
         {
             var itemId = await billables.ItemIdAsync(ct);
             drafts.AddRange(billable.Select(b => new SalesLineDraft(itemId, b.Description, 1m, b.Amount, PriceSource: BillableExpenseService.PriceSource,
-                Group: groups?.GetValueOrDefault(b.CustomerId))));
+                Group: groups?.GetValueOrDefault(b.CustomerId), OwnerCustomerId: groups is null ? null : b.CustomerId)));
         }
 
         drafts.AddRange(await projectBilling.DraftsAsync(charges, groups, ct));

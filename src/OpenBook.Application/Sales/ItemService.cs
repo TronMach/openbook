@@ -154,7 +154,7 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
     }
 
     /// <summary>An inventory item without accounts gets "Inventory Asset" and "Cost of Goods Sold" (created on first use).</summary>
-    private async Task<ItemDetails> WithInventoryAccountsAsync(ItemDetails details, CancellationToken ct)
+    internal async Task<ItemDetails> WithInventoryAccountsAsync(ItemDetails details, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(details);
         if (!Item.IsTracked(details.Type))

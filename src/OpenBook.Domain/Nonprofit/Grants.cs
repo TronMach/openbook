@@ -95,6 +95,12 @@ public sealed class Grant
 
     public void UseAdvanceAccount(Guid accountId) => AdvanceAccountId ??= accountId;
 
+    /// <summary>
+    /// Income on the cash basis comes with the money: the award and recognitions are accrual only, and each receipt has a
+    /// cash-only entry. False on grants entered before this, whose posted entries count on both bases and stay as they are.
+    /// </summary>
+    public bool CashOnReceipt { get; private set; }
+
     public static Grant Create(
         Guid id, string name, Guid funderId, string? reference, decimal amount, DateOnly awardedOn, DateOnly startsOn, DateOnly endsOn,
         Guid classId, Guid incomeAccountId, Guid receivableAccountId, bool conditional, string? terms, Guid? awardEntryId, DateTimeOffset createdAt)
@@ -103,6 +109,7 @@ public sealed class Grant
         return new Grant
         {
             Id = id,
+            CashOnReceipt = true,
             Name = name.Trim(),
             FunderId = funderId,
             Reference = Text.Optional(reference, 50, "grant.reference_too_long", "Reference"),
@@ -168,10 +175,10 @@ public sealed class Grant
             throw new DomainException("grant.overpaid", $"That would be more than the {Amount:N2} awarded.");
     }
 
-    public GrantReceipt AddReceipt(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId)
+    public GrantReceipt AddReceipt(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId, Guid? cashEntryId = null)
     {
         CheckReceipt(amount);
-        var receipt = new GrantReceipt(_receipts.Count + 1, date, amount, bankAccountId, entryId, AdvancePartOf(amount));
+        var receipt = new GrantReceipt(_receipts.Count + 1, date, amount, bankAccountId, entryId, AdvancePartOf(amount)) { CashEntryId = cashEntryId };
         _receipts.Add(receipt);
         return receipt;
     }
@@ -275,6 +282,9 @@ public sealed class GrantReceipt
     public decimal Amount { get; private set; }
     public Guid BankAccountId { get; private set; }
     public Guid EntryId { get; private set; }
+
+    /// <summary>The cash-only entry putting the money into income on the cash basis (<see cref="Grant.CashOnReceipt"/>).</summary>
+    public Guid? CashEntryId { get; internal set; }
 
     /// <summary>The part paid ahead of the income, credited to the refundable advance rather than the receivable.</summary>
     public decimal AdvancePart { get; private set; }

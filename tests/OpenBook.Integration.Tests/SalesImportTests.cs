@@ -79,15 +79,33 @@ public sealed class SalesImportTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Inventory_items_come_in_with_their_stock_details()
+    {
+        const string csv = "Name,Type,Price,Income Account,Cost,Barcode,Reorder Point\nBolt,Inventory,2.50,4000,1.25,BOLT-1,40\n";
+        var chartBefore = (await Run(sp => sp.GetRequiredService<AccountService>().GetChartAsync())).All.Count;
+
+        var preview = await Run(sp => sp.GetRequiredService<ItemImportService>().PreviewAsync(csv, null));
+        Assert.Equal(ImportRowStatus.New, Assert.Single(preview.Rows).Status);
+        Assert.Equal(chartBefore, (await Run(sp => sp.GetRequiredService<AccountService>().GetChartAsync())).All.Count);
+
+        await Run(sp => sp.GetRequiredService<ItemImportService>().ImportAsync(csv, null));
+
+        var item = (await Run(sp => sp.GetRequiredService<ItemService>().ListAsync())).Single(i => i.Name == "Bolt");
+        Assert.Equal((ItemType.Inventory, 1.25m, "BOLT-1", 40m), (item.Type, item.PurchaseCost, item.Barcode, item.ReorderPoint));
+        var chart = await Run(sp => sp.GetRequiredService<AccountService>().GetChartAsync());
+        Assert.Equal("Inventory Asset", chart.Get(item.InventoryAssetAccountId!.Value).Name);
+    }
+
+    [Fact]
     public async Task Item_rows_report_unknown_accounts_inventory_types_and_missing_defaults()
     {
-        const string csv = "Name,Type,Price,Income Account\nA,Service,1,Nowhere\nB,Inventory,1,4000\nC,Service,1,\nD,Service,1,Checking\n";
+        const string csv = "Name,Type,Price,Income Account\nA,Service,1,Nowhere\nB,Gadget,1,4000\nC,Service,1,\nD,Service,1,Checking\n";
 
         var rows = (await Run(sp => sp.GetRequiredService<ItemImportService>().PreviewAsync(csv, null))).Rows;
 
         Assert.All(rows, r => Assert.Equal(ImportRowStatus.Error, r.Status));
         Assert.Contains("no account 'Nowhere'", rows[0].Message, StringComparison.Ordinal);
-        Assert.Contains("Inventory items arrive", rows[1].Message, StringComparison.Ordinal);
+        Assert.Contains("isn't a known item type", rows[1].Message, StringComparison.Ordinal);
         Assert.Contains("choose a default", rows[2].Message, StringComparison.Ordinal);
         Assert.Contains("isn't an income account", rows[3].Message, StringComparison.Ordinal);
     }

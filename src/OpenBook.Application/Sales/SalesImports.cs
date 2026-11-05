@@ -138,7 +138,8 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
 
 /// <summary>
 /// Products and services CSV import, all-or-nothing. A name column is required; type ("Service",
-/// "Non-inventory"), description, price and income account (full name or number) are optional. Rows
+/// "Non-inventory", "Inventory"), description, price and income account (full name or number) are optional, and inventory
+/// rows take cost, barcode and reorder point. Quantities aren't imported: starting stock is an adjustment. Rows
 /// without an income account use <c>defaultIncomeAccountId</c>.
 /// </summary>
 public sealed class ItemImportService(ISalesStore store, ItemService items, AccountService accounts, CustomFieldImport fieldImport)
@@ -150,10 +151,13 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
 
     public async Task<ImportResult<ItemImportRow>> ImportAsync(string csv, Guid? defaultIncomeAccountId, CancellationToken ct = default)
     {
-        var (result, created, fields, fieldValues) = await PlanAsync(csv, defaultIncomeAccountId, ct);
+        var (result, created, fields, fieldValues, stocked) = await PlanAsync(csv, defaultIncomeAccountId, ct);
         SalesImport.EnsureImportable(result.ErrorCount, created.Count);
         foreach (var item in created)
         {
+            // Stock accounts are only made now: a preview leaves the chart alone.
+            if (stocked.TryGetValue(item.Id, out var details))
+                item.Update(await items.WithInventoryAccountsAsync(details, ct));
             store.Add(item);
             fields.Add(item.Id, fieldValues[item.Id]);
             store.Add(items.Audit(AuditAction.Created, item, before: null));
@@ -163,7 +167,7 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
         return result;
     }
 
-    private async Task<(ImportResult<ItemImportRow> Result, List<Item> Created, CustomFieldColumns Fields, Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>> FieldValues)> PlanAsync(string csv, Guid? defaultIncomeAccountId, CancellationToken ct)
+    private async Task<(ImportResult<ItemImportRow> Result, List<Item> Created, CustomFieldColumns Fields, Dictionary<Guid, IReadOnlyList<(CustomField Field, string Value)>> FieldValues, Dictionary<Guid, ItemDetails> Stocked)> PlanAsync(string csv, Guid? defaultIncomeAccountId, CancellationToken ct)
     {
         var records = SalesImport.Records(csv, MaxRows);
         var cols = new CsvColumns(records[0]);
@@ -176,13 +180,19 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
         var price = cols.Find("price", "rate", "salesprice", "unitprice", "salespricerate");
         var account = cols.Find("incomeaccount", "account", "incomeaccountname");
         var taxable = cols.Find("taxable", "salestax", "tax", "taxcode", "salestaxcode");
+        var cost = cols.Find("cost", "purchasecost", "unitcost");
+        var barcode = cols.Find("barcode", "upc", "sku");
+        var reorder = cols.Find("reorderpoint", "reorder");
 
         var chart = await accounts.GetChartAsync(ct);
         Account? defaultAccount = defaultIncomeAccountId is { } d ? chart.Get(d) : null;
         if (defaultAccount is not null)
             Item.EnsureIncomeAccount(defaultAccount);
 
-        var existing = (await store.ListItemsAsync(ct)).Select(i => i.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var known = await store.ListItemsAsync(ct);
+        var existing = known.Select(i => i.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var barcodes = known.Select(i => i.Barcode).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var stocked = new Dictionary<Guid, ItemDetails>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var created = new List<Item>();
         var rows = new List<ItemImportRow>();
@@ -206,6 +216,15 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
                     F(price) is { } p ? ParseRate(p) : 0m,
                     F(description),
                     F(taxable) is not { } tx || ParseTaxable(tx));
+                if (Item.IsTracked(details.Type))
+                {
+                    details = details with
+                    {
+                        PurchaseCost = F(cost) is { } c ? ParseRate(c) : 0m,
+                        Barcode = F(barcode),
+                        ReorderPoint = F(reorder) is { } point ? ParseRate(point) : null,
+                    };
+                }
 
                 var custom = fieldColumns.Read(r);
                 if (itemName is not null && existing.Contains(itemName.Trim()))
@@ -217,7 +236,13 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
                 if (itemName is not null && !seen.Add(itemName.Trim()))
                     throw new DomainException("import.duplicate_row", "This item appears more than once in the file.");
 
-                var made = Item.Create(details);
+                if (details.Barcode is { } code && !barcodes.Add(code))
+                    throw new DomainException("import.barcode_taken", $"Another item has the barcode {code}.");
+
+                // Checked with stand-ins for the stock accounts, which are made when the import runs.
+                var made = Item.Create(Item.IsTracked(details.Type) ? details with { InventoryAssetAccountId = Guid.NewGuid(), CostAccountId = Guid.NewGuid() } : details);
+                if (Item.IsTracked(details.Type))
+                    stocked[made.Id] = details;
                 created.Add(made);
                 fieldValues[made.Id] = custom;
                 rows.Add(new ItemImportRow(r.Line, details, chart.FullName(incomeAccount.Id), ImportRowStatus.New, null));
@@ -228,7 +253,7 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
             }
         }
 
-        return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
+        return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues, stocked);
     }
 
     /// <summary>"Yes"/"No", "Tax"/"Non" (QuickBooks' sales tax codes), "true"/"false" and the like.</summary>
@@ -243,9 +268,8 @@ public sealed class ItemImportService(ISalesStore store, ItemService items, Acco
     {
         "service" or "services" => ItemType.Service,
         "noninventory" or "noninventorypart" or "noninventoryitem" or "product" or "nonstock" or "goods" => ItemType.NonInventory,
-        "inventory" or "inventorypart" or "inventoryitem" =>
-            throw new DomainException("import.inventory_type", "Inventory items arrive in a later version; import these as non-inventory for now."),
-        _ => throw new DomainException("import.item_type_invalid", $"'{text}' isn't a known item type. Use \"Service\" or \"Non-inventory\"."),
+        "inventory" or "inventorypart" or "inventoryitem" => ItemType.Inventory,
+        _ => throw new DomainException("import.item_type_invalid", $"'{text}' isn't a known item type. Use \"Service\", \"Non-inventory\" or \"Inventory\"."),
     };
 
     /// <summary>Prices use a dot for decimals (up to 4 places); currency symbols and thousands commas are ignored.</summary>

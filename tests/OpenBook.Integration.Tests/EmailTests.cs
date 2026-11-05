@@ -221,9 +221,13 @@ public sealed class EmailTests : IAsyncLifetime
 
         await In<EmailService, SentEmail>(s => s.SendAsync(For(invoice), draft));
         var message = Assert.Single(_db.Mail.Sent).Message;
-        Assert.Single(_db.Stripe.Created);
         Assert.Contains(">Pay now</a>", message.HtmlBody, StringComparison.Ordinal);
-        Assert.Contains("Pay now: https://", message.Body, StringComparison.Ordinal);
+
+        // The button goes through OpenBook, so it still works once a checkout page would have expired.
+        Assert.Empty(_db.Stripe.Created);
+        var token = System.Text.RegularExpressions.Regex.Match(message.Body, @"Pay now: https://books\.studio\.test/view/(obd_[^/]+)/pay").Groups[1].Value;
+        Assert.Equal(invoice.Id, await In<EmailService, Guid?>(s => s.InvoiceToPayAsync(token)));
+        Assert.Null(await In<EmailService, Guid?>(s => s.InvoiceToPayAsync("obd_nothing")));
     }
 
     [Fact]

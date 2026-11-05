@@ -87,6 +87,22 @@ public sealed class OrderBillChangeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Lot_items_on_an_order_are_billed_with_their_lots()
+    {
+        var income = await _db.CreateAccount("Lot sales", AccountType.Income, "4100");
+        var lotted = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Vitamins", ItemType.Inventory, income.Id, 20m, Tracking: ItemTracking.Lot)));
+        var order = await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(_supplier.Id, Mar1, [new PurchaseOrderLineDraft(lotted.Id, null, null, 10m, 5m)])));
+
+        Assert.Equal("lot.required", await Refused(() => In<PurchaseOrderService, Bill>(s => s.CreateBillAsync(order.Id, new BillFromOrderCommand(Mar5, "INV-1", [new BillOrderLine(1, 10m)])))));
+
+        var bill = await In<PurchaseOrderService, Bill>(s => s.CreateBillAsync(order.Id, new BillFromOrderCommand(Mar5, "INV-1", [new BillOrderLine(1, 10m, null, "A-1 x 6; B-2 x 4")])));
+
+        Assert.Equal(10m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(lotted.Id)))!.Quantity);
+        var parts = await In<PurchaseOrderService, BillFromOrderParts>(s => s.BillPartsAsync(bill.Id));
+        Assert.Equal("A-1 x 6; B-2 x 4", Assert.Single(parts.Picks).Lots);
+    }
+
+    [Fact]
     public async Task Stock_received_before_clears_received_not_billed_again()
     {
         await In<BillApprovalService, PurchasingSettings>(s => s.SaveSettingsAsync(new PurchasingSettingsCommand(null, 0m, false, false, ReceiveIntoStock: true)));

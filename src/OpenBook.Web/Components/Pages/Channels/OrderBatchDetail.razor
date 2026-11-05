@@ -163,7 +163,7 @@
         _returns = await Orders.ListReturnsAsync(_batch.Id);
         _returned = await Orders.ReturnedAsync(_batch.Id);
         var skus = (await Orders.SkusAsync(_batch.ChannelId)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
-        _unmapped = _batch.Lines.Select(l => l.Sku ?? "(no SKU)").Distinct(StringComparer.OrdinalIgnoreCase)
+        _unmapped = _batch.Lines.Select(l => l.MappingKey).Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(s => !skus.TryGetValue(s, out var m) || !m.Mapped).ToList();
     }
 }

@@ -1,5 +1,6 @@
 @page "/purchases/orders/{Id:guid}"
 @inject PurchaseOrderService Orders
+@inject ItemService ItemService
 @inject VendorService VendorService
 @inject BillApprovalService Approvals
 
@@ -173,7 +174,7 @@
             <PostForm Action="@($"/purchases/orders/{_order.Id}/bill")" data-enhance="false">
                 <AntiforgeryToken />
                 <table class="data">
-                    <thead><tr><th>Line</th><th class="num">Quantity</th><th class="num">Their unit cost / amount</th></tr></thead>
+                    <thead><tr><th>Line</th><th class="num">Quantity</th><th class="num">Their unit cost / amount</th>@if (_tracked.Count > 0) { <th>Lots or serial numbers</th> }</tr></thead>
                     <tbody>
                         @foreach (var s in _progress.Lines.Where(l => l.ToBill > 0m))
                         {
@@ -190,6 +191,15 @@
                                     <input name="cost:@s.Line.LineNumber" class="amount" inputmode="decimal" aria-label="Unit cost or amount billed"
                                            value="@((s.Line.IsItem ? s.Line.UnitCost : s.ToBill).ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture))" />
                                 </td>
+                                @if (_tracked.Count > 0)
+                                {
+                                    <td>
+                                        @if (s.Line.ItemId is { } itemId && _tracked.Contains(itemId))
+                                        {
+                                            <input name="lots:@s.Line.LineNumber" aria-label="Lots or serial numbers received" placeholder="A-1 x 3; B-2 x 2" />
+                                        }
+                                    </td>
+                                }
                             </tr>
                         }
                     </tbody>
@@ -220,6 +230,7 @@
 
 @code {
     private PurchaseOrder? _order;
+    private HashSet<Guid> _tracked = [];
     private PurchaseOrderProgress? _progress;
     private PurchasingSettings? _settings;
     private string? _vendorName;
@@ -235,6 +246,7 @@
         if (_order is null)
             return;
         _progress = await Orders.ProgressAsync(Id);
+        _tracked = (await ItemService.ListAsync(includeInactive: true)).Where(i => i.Tracking != OpenBook.Domain.Inventory.ItemTracking.None).Select(i => i.Id).ToHashSet();
         _settings = await Approvals.GetSettingsAsync();
         _vendorName = (await VendorService.GetAsync(_order.VendorId))?.DisplayName;
     }

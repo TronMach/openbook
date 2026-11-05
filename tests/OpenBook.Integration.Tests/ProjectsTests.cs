@@ -36,6 +36,22 @@ public sealed class ProjectsTests : IAsyncLifetime
 
     public Task DisposeAsync() => _db.DisposeAsync();
 
+    [Fact]
+    public async Task Work_billed_on_the_clients_invoice_is_the_projects_income()
+    {
+        var first = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), "Website", _acme.Id)));
+        var second = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), "Logo", _acme.Id)));
+        var day = new DateOnly(2026, 3, 2);
+        var website = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, day, 10m, first.CustomerId, _consulting.Id, true)));
+        var logo = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, day, 2m, second.CustomerId, _consulting.Id, true)));
+
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, day, [], TimeEntryIds: [website.Id, logo.Id])));
+
+        var figures = await In<ProjectReports, IReadOnlyList<ProjectFigures>>(s => s.ProfitabilityAsync(null, new DateOnly(2026, 12, 31)));
+        Assert.Equal(1200m, figures.Single(f => f.Project.Project.Id == first.Id).Income);
+        Assert.Equal(240m, figures.Single(f => f.Project.Project.Id == second.Id).Income);
+    }
+
     private Task<T> In<TService, T>(Func<TService, Task<T>> work) where TService : notnull =>
         _db.InScope(sp => work(sp.GetRequiredService<TService>()));
 
