@@ -3931,6 +3931,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("JournalEntryId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("LinesFromOrder")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("TEXT");
 
@@ -4132,6 +4135,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("ApprovalThresholdMinor");
 
+                    b.Property<bool>("Net1099Refunds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("PriceTolerancePercent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("PriceTolerancePercentTenThousandths");
@@ -4198,6 +4204,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("VendorName")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

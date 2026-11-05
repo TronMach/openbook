@@ -103,7 +103,7 @@ public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBu
             throw new DomainException("salesorder.not_open", $"Sales order {order.Number} is {order.Status.ToString().ToLowerInvariant()}.");
         var progress = await ProgressAsync(order, ct);
         var picks = Picks(order.Lines, progress.Remaining, command);
-        var (drafts, sources, completes) = PartialInvoicing.Build(order.Lines, progress.Remaining, picks);
+        var (drafts, sources, completes) = PartialInvoicing.Build(order.Lines, progress.Remaining, picks, PartialInvoicing.Billed(order.Lines, progress.Invoices));
         var memo = order.CustomerReference is null ? order.Memo : $"Your PO {order.CustomerReference}" + (order.Memo is null ? "" : $"\n{order.Memo}");
         return await invoices.CreateAsync(
             new CreateInvoiceCommand(order.CustomerId, command.Date, drafts, command.DueDate, command.Number, memo,

@@ -27,7 +27,7 @@ public sealed record RecordReceiptCommand(Guid AccountId, Guid? CategoryId, Date
 /// as an expense with the file attached, or dismiss it.
 /// </summary>
 public sealed class ReceiptService(
-    IPurchasesStore store, AttachmentService attachments, IReceiptTextExtractor extractor, BankingService banking, IClock clock, ICurrentUser user)
+    IUnitOfWork unit, IPurchasesStore store, AttachmentService attachments, IReceiptTextExtractor extractor, BankingService banking, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "receipt";
 
@@ -88,6 +88,8 @@ public sealed class ReceiptService(
         var category = command.CategoryId ?? vendor?.DefaultExpenseAccountId
             ?? throw new DomainException("receipt.category_required", "Choose what the expense was for.");
 
+        // All or nothing: the receipt's version stops a second press, and a failure leaves no expense behind.
+        await using var transaction = await unit.BeginAsync(ct);
         var spend = await banking.RecordAsync(new RecordBankTransactionCommand(
             BankTransactionKind.Spend, command.AccountId, command.Date, [new BankSplit(category, command.Amount, command.Memo)],
             Payee: command.Payee ?? vendor?.DisplayName ?? capture.VendorName, Memo: command.Memo, VendorId: vendor?.Id), ct);
@@ -100,6 +102,7 @@ public sealed class ReceiptService(
         capture.Recorded(spend.Id);
         store.Add(Audit(AuditAction.Updated, capture, before));
         await store.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return spend;
     }
 

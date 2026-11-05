@@ -97,6 +97,13 @@ public sealed class Estimate
         if (total <= 0m)
             throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
 
+        // What the customer accepted online was this offer: a different one needs their answer again.
+        if (RespondedAt is not null && (customerId != CustomerId || total != Total || !SameLines(lines)))
+        {
+            Status = EstimateStatus.Pending;
+            (RespondedBy, RespondedAt, ResponseNote) = (null, null, null);
+        }
+
         CustomerId = customerId;
         Date = date;
         ExpirationDate = expirationDate;
@@ -107,6 +114,12 @@ public sealed class Estimate
         _lines.AddRange(lines);
         Total = total;
     }
+
+    private bool SameLines(IReadOnlyList<SalesLine> lines) =>
+        lines.Select(Offer).SequenceEqual(_lines.OrderBy(l => l.LineNumber).Select(Offer));
+
+    private static (Guid? Item, string? Description, decimal Quantity, decimal Rate, decimal Amount) Offer(SalesLine line) =>
+        (line.ItemId, line.Description, line.Quantity, line.Rate, line.Amount);
 
     public void SetStatus(EstimateStatus status)
     {

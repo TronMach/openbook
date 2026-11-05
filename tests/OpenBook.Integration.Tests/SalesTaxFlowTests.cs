@@ -306,4 +306,30 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
         Assert.Equal(-2.00m, await Balance(_city.LiabilityAccountId, ReportBasis.Cash));
         Assert.Equal(-12.50m, await Balance(_stateDor.LiabilityAccountId));
     }
+
+    [Fact]
+    public async Task The_liability_report_shows_the_percent_each_period_charged()
+    {
+        var stateOnly = await Tax(s => s.CreateCodeAsync(new TaxCodeDetails("State only", [_state.Id])));
+        await Invoice(_acme, Mar1, stateOnly.Id, Widgets(1));
+        await Tax(s => s.UpdateRateAsync(_state.Id, new TaxRateDetails("State", _stateDor.Id, 7m)));
+        await Invoice(_acme, Mar1.AddDays(2), stateOnly.Id, Widgets(1));
+
+        var report = await In<SalesTaxReports, TaxLiabilityReport>(s => s.LiabilityAsync(Mar1, new DateOnly(2026, 3, 31)));
+
+        Assert.Equal([6.25m, 7m], report.Agencies.Single(a => a.Agency.Id == _stateDor.Id).Rates.Select(r => r.Percent));
+    }
+
+    [Fact]
+    public async Task A_paid_period_has_nothing_left_to_pay()
+    {
+        await Invoice(_acme, Mar1, null, Widgets(1));
+        var periodEnd = new DateOnly(2026, 3, 31);
+        var owed = (await In<SalesTaxPaymentService, IReadOnlyDictionary<Guid, decimal>>(s => s.OwedForPeriodAsync(periodEnd)))[_stateDor.Id];
+        Assert.True(owed > 0m);
+
+        await In<SalesTaxPaymentService, SalesTaxPayment>(s => s.PayAsync(new PaySalesTaxCommand(_stateDor.Id, periodEnd.AddDays(20), _checking.Id, owed, PeriodEnd: periodEnd)));
+
+        Assert.Equal(0m, (await In<SalesTaxPaymentService, IReadOnlyDictionary<Guid, decimal>>(s => s.OwedForPeriodAsync(periodEnd)))[_stateDor.Id]);
+    }
 }

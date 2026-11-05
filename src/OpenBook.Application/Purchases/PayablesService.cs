@@ -9,7 +9,7 @@ namespace OpenBook.Application.Purchases;
 
 public sealed record OpenBill(Bill Bill, decimal Balance, int DaysPastDue);
 
-public sealed record VendorAging(Vendor Vendor, AgingBuckets Buckets, IReadOnlyList<OpenBill> Bills, IReadOnlyList<(VendorCredit Credit, decimal Amount)> Credits);
+public sealed record VendorAging(Vendor Vendor, AgingBuckets Buckets, IReadOnlyList<OpenBill> Bills, IReadOnlyList<(VendorCredit Credit, decimal Amount)> Credits, decimal PaidAhead = 0m);
 
 public sealed record PayablesAgingReport(DateOnly AsOf, IReadOnlyList<VendorAging> Vendors)
 {
@@ -17,9 +17,18 @@ public sealed record PayablesAgingReport(DateOnly AsOf, IReadOnlyList<VendorAgin
 }
 
 /// <param name="CardPayments">Paid by credit card: reported by the card company on 1099-K, so left out of the total.</param>
-public sealed record Vendor1099(Vendor Vendor, decimal Total, decimal CardPayments, bool MeetsThreshold);
+/// <param name="Vendor">The vendor.</param>
+/// <param name="Total">Paid by cash, check or bank in the year, less refunds when the company nets them.</param>
+/// <param name="CardPayments">Paid by card (Form 1099-K), left out of <paramref name="Total"/>; less refunds to a card when netted.</param>
+/// <param name="MeetsThreshold">Whether a 1099 is due.</param>
+/// <param name="Refunds">Refunds the vendor made in the year.</param>
+public sealed record Vendor1099(Vendor Vendor, decimal Total, decimal CardPayments, bool MeetsThreshold, decimal Refunds = 0m);
 
-public sealed record Report1099(int Year, decimal Threshold, IReadOnlyList<Vendor1099> Vendors);
+/// <param name="Year">The tax year.</param>
+/// <param name="Threshold">The reporting threshold used.</param>
+/// <param name="Vendors">Vendors tracked for 1099s.</param>
+/// <param name="RefundsNetted">Whether refunds are taken off the totals (<see cref="PurchasingSettings.Net1099Refunds"/>).</param>
+public sealed record Report1099(int Year, decimal Threshold, IReadOnlyList<Vendor1099> Vendors, bool RefundsNetted = false);
 
 /// <summary>What you owe vendors by age (A/P aging), and what you paid 1099 vendors in a year.</summary>
 public sealed class PayablesService(IPurchasesStore store, AccountService accounts)
@@ -48,6 +57,11 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             foreach (var a in c.Applications.Where(a => a.AppliedOn <= asOf))
                 settled[a.BillId] = settled.GetValueOrDefault(a.BillId) + a.Amount;
 
+        // Paid or credited ahead of a bill dated after the day: money you're owed on it, not a settlement of anything.
+        var later = bills.Where(b => b.Date > asOf).Select(b => b.Id).ToHashSet();
+        var paidAhead = payments.Where(p => p.Status == DocumentStatus.Posted && p.Date <= asOf)
+            .GroupBy(p => p.VendorId)
+            .ToDictionary(g => g.Key, g => g.SelectMany(p => p.Applications).Where(a => later.Contains(a.BillId)).Sum(a => a.Amount));
         var billsOf = bills.ToLookup(b => b.VendorId);
         var creditsOf = credits.ToLookup(c => c.VendorId);
         var refundsOf = refunds.ToLookup(r => r.VendorCreditId);
@@ -69,15 +83,16 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             var unused = new List<(VendorCredit, decimal)>();
             foreach (var credit in creditsOf[vendor.Id].Where(c => c.Status == DocumentStatus.Posted && c.Date <= asOf).OrderBy(c => c.Date))
             {
-                var left = credit.Total - credit.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
+                var left = credit.Total - credit.Applications.Where(a => a.AppliedOn <= asOf && !later.Contains(a.BillId)).Sum(a => a.Amount)
                     - refundsOf[credit.Id].Where(r => r.Status == DocumentStatus.Posted && r.Date <= asOf).Sum(r => r.Amount);
                 if (left != 0m)
                     unused.Add((credit, left));
             }
 
-            buckets = buckets with { Current = buckets.Current - unused.Sum(c => c.Item2) };
-            if (open.Count > 0 || unused.Count > 0)
-                result.Add(new VendorAging(vendor, buckets, open, unused));
+            var ahead = paidAhead.GetValueOrDefault(vendor.Id);
+            buckets = buckets with { Current = buckets.Current - unused.Sum(c => c.Item2) - ahead };
+            if (open.Count > 0 || unused.Count > 0 || ahead != 0m)
+                result.Add(new VendorAging(vendor, buckets, open, unused, ahead));
         }
 
         return new PayablesAgingReport(asOf, result);
@@ -111,15 +126,26 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
         foreach (var e in (await store.ListExpensesAsync(null, ct)).Where(e => e.Status == BankTransactionStatus.Posted && e.VendorId is not null && InYear(e.Date)))
             Add(e.VendorId!.Value, e.AccountId, e.Amount);
 
+        var refundsInYear = (await store.ListVendorRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && InYear(r.Date)).ToList();
+        var refunds = refundsInYear.GroupBy(r => r.VendorId).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+        var net = (await store.GetPurchasingSettingsAsync(ct))?.Net1099Refunds ?? false;
+        if (net)
+        {
+            // Off the side the money went back to: a refund to a card comes off the card's total.
+            foreach (var r in refundsInYear)
+                Add(r.VendorId, r.DepositAccountId, -r.Amount);
+        }
+
         var vendors = (await store.ListVendorsAsync(ct))
             .Where(v => v.Track1099)
             .OrderBy(v => v.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Select(v =>
             {
                 var (reportable, card) = paid.GetValueOrDefault(v.Id);
-                return new Vendor1099(v, reportable, card, reportable >= limit && reportable > 0m);
+                (reportable, card) = (Math.Max(0m, reportable), Math.Max(0m, card));
+                return new Vendor1099(v, reportable, card, reportable >= limit && reportable > 0m, refunds.GetValueOrDefault(v.Id));
             })
             .ToList();
-        return new Report1099(year, limit, vendors);
+        return new Report1099(year, limit, vendors, net);
     }
 }

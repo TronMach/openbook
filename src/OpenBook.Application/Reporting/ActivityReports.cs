@@ -266,6 +266,12 @@ public sealed class ActivityReports(
         foreach (var e in (await purchases.ListExpensesAsync(null, ct)).Where(e => e.Status == BankTransactionStatus.Posted && e.Date.Year == year && e.VendorId is { } v && vendors.ContainsKey(v)))
             payments.Add((e.VendorId!.Value, e.Date, "Expense", e.Reference, e.AccountId, e.Amount, new ReportLink("bank_transaction", e.Id)));
 
+        if ((await purchases.GetPurchasingSettingsAsync(ct))?.Net1099Refunds == true)
+        {
+            foreach (var r in (await purchases.ListVendorRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date.Year == year && vendors.ContainsKey(r.VendorId)))
+                payments.Add((r.VendorId, r.Date, "Refund", r.Reference, r.DepositAccountId, -r.Amount, new ReportLink("vendor_credit", r.VendorCreditId)));
+        }
+
         bool IsCard(Guid accountId) => chart.Find(accountId)?.Type == AccountType.CreditCard;
         var rows = new List<ReportTableRow>();
         foreach (var group in payments.GroupBy(p => p.VendorId).OrderBy(g => vendors[g.Key].DisplayName, StringComparer.OrdinalIgnoreCase))

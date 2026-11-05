@@ -150,7 +150,7 @@ public sealed class SalesReceiptService(
 
         var drafts = command.Lines.ToList();
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
-            new TaxAsCharged(receipt.TaxCodeId, receipt.TaxExemption, receipt.CustomerId, receipt.Lines), ct);
+            new TaxAsCharged(receipt.TaxCodeId, receipt.TaxExemption, receipt.CustomerId, receipt.Lines, command.FromLines), ct);
         if (receipt.DepositId is not null && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {receipt.Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");

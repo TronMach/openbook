@@ -6,9 +6,14 @@ using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
 
-public sealed record VendorSummary(Vendor Vendor, decimal Balance, int OpenBills, decimal Overdue);
+/// <param name="Vendor">The vendor.</param>
+/// <param name="Balance">What you owe: open bills less unused credit, as on the aging.</param>
+/// <param name="OpenBills">How many bills are open.</param>
+/// <param name="Overdue">How much of them is overdue.</param>
+/// <param name="Credit">Unused vendor credits, and bill payments dated ahead of their bills.</param>
+public sealed record VendorSummary(Vendor Vendor, decimal Balance, int OpenBills, decimal Overdue, decimal Credit = 0m);
 
-public sealed class VendorService(IPurchasesStore store, AccountService accounts, IClock clock, ICurrentUser user)
+public sealed class VendorService(IPurchasesStore store, AccountService accounts, PayablesService payables, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "vendor";
 
@@ -17,14 +22,16 @@ public sealed class VendorService(IPurchasesStore store, AccountService accounts
     {
         var vendors = await store.ListVendorsAsync(ct);
         var open = (await store.ListOpenBillsAsync(null, ct)).ToLookup(b => b.VendorId);
+        var credit = (await payables.AgingAsync(today, ct)).Vendors.ToDictionary(a => a.Vendor.Id, a => a.Credits.Sum(c => c.Amount) + a.PaidAhead);
         return vendors
             .Where(v => includeInactive || v.IsActive)
             .OrderBy(v => v.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .Select(v => new VendorSummary(
                 v,
-                open[v.Id].Sum(b => b.Balance),
+                open[v.Id].Sum(b => b.Balance) - credit.GetValueOrDefault(v.Id),
                 open[v.Id].Count(),
-                open[v.Id].Where(b => b.IsOverdue(today)).Sum(b => b.Balance)))
+                open[v.Id].Where(b => b.IsOverdue(today)).Sum(b => b.Balance),
+                credit.GetValueOrDefault(v.Id)))
             .ToList();
     }
 

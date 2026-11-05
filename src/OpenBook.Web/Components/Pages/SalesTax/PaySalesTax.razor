@@ -38,10 +38,14 @@
                         <option value="">Choose…</option>
                         @foreach (var a in _agencies)
                         {
-                            <option value="@a.Id">@a.Name (owed at period end: @Labels.Amount(_owedAtEnd.GetValueOrDefault(a.Id)))</option>
+                            <option value="@a.Id">@a.Name (still to pay for this period: @Labels.Amount(_owedAtEnd.GetValueOrDefault(a.Id)))</option>
                         }
                     </InputSelect>
                     <ValidationMessage For="() => Input.AgencyId" />
+                    @if (Input.AgencyId is { } chosen && _owedAtEnd.GetValueOrDefault(chosen) <= 0m)
+                    {
+                        <p class="hint">Nothing is left to pay for this period. For tax collected since, choose a later period end.</p>
+                    }
                 </div>
                 <div class="field">
                     <label for="period">For the period ending</label>
@@ -150,7 +154,7 @@
         {
             var agency = _agencies.FirstOrDefault(a => a.Id == PresetAgency) ?? (_agencies.Count == 1 ? _agencies[0] : null);
             var periodEnd = agency is null ? today : FilingPeriods.LastCompleted(agency.FilingFrequency, today).To;
-            _owedAtEnd = await Payments.OwedAsync(periodEnd);
+            _owedAtEnd = await Payments.OwedForPeriodAsync(periodEnd);
             Input = new PayModel
             {
                 AgencyId = agency?.Id,
@@ -162,7 +166,7 @@
         }
         else
         {
-            _owedAtEnd = await Payments.OwedAsync(Input.PeriodEnd ?? today);
+            _owedAtEnd = await Payments.OwedForPeriodAsync(Input.PeriodEnd ?? today);
         }
     }
 

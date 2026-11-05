@@ -18,7 +18,8 @@ public sealed record ReceivableDocuments(
     IReadOnlyList<CreditMemo> CreditMemos,
     IReadOnlyList<CustomerRefund> Refunds,
     IReadOnlyList<BadDebtWriteOff> WriteOffs,
-    IReadOnlyList<Retainer> Retainers);
+    IReadOnlyList<Retainer> Retainers,
+    IReadOnlyCollection<Guid>? InvoicesDatedLater = null);
 
 public interface ISalesStore
 {
@@ -33,6 +34,8 @@ public interface ISalesStore
 
     /// <summary>Tracked, with lines.</summary>
     Task<IReadOnlyList<Invoice>> GetInvoicesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    Task<IReadOnlyList<Invoice>> ListLateFeesOnAsync(Guid invoiceId, CancellationToken ct);
 
     /// <summary>Untracked, with lines, newest first.</summary>
     Task<IReadOnlyList<Invoice>> ListInvoicesAsync(Guid? customerId, CancellationToken ct);

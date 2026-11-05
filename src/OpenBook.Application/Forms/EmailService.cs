@@ -366,7 +366,9 @@ public sealed class EmailService(
         if (from > to)
             throw new DomainException("statement.dates_invalid", "The statement's end date is before its start date.");
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        // A billed sub-customer's statement is its parent's: one each, to whoever is billed.
         var ordered = customerIds.Distinct().Select(id => customers.GetValueOrDefault(id) ?? throw new EntityNotFoundException("customer", id))
+            .Select(c => customers[CustomerTree.BillTo(c.Id, customers)]).DistinctBy(c => c.Id)
             .OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .Select(c => new EmailSource(EmailKind.Statement, c.Id, from, to)).ToList();
         return await SendEachAsync(ordered, ct);

@@ -49,7 +49,7 @@
                                     @if (a.RegistrationNumber is not null) { <span class="muted"> · @a.RegistrationNumber</span> }
                                 </td>
                                 <td>@a.FilingFrequency</td>
-                                <td><a href="/reports/sales-tax?preset=Custom&amp;from=@from.ToString("yyyy-MM-dd")&amp;to=@to.ToString("yyyy-MM-dd")">@Labels.Date(from) – @Labels.Date(to)</a></td>
+                                <td><a href="/reports/sales-tax?preset=Custom&amp;from=@from.ToString("yyyy-MM-dd")&amp;to=@to.ToString("yyyy-MM-dd")">@Labels.Date(from) – @Labels.Date(to)</a>@(_payments.Any(p => p.AgencyId == a.Id && p.PeriodEnd == to && p.Status == DocumentStatus.Posted) ? " · paid" : "")</td>
                                 <td class="num">@Labels.Amount(_owed.GetValueOrDefault(a.Id))</td>
                                 <td>
                                     @if (_owed.GetValueOrDefault(a.Id) > 0m)

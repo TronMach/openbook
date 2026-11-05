@@ -15,7 +15,7 @@ Everything here starts from **Sales** in the menu.
 - **Sub-customer of** puts a job, project or location under another customer, up to five levels. Tick **bill with parent** to have the parent billed and sent statements for it.
 - **Tax code** and **exemption certificate** decide the sales tax on their invoices (see [Sales tax](12-sales-tax.md)).
 
-The customer page shows their invoices, payments and balance, and has a **Statement** you can print or email.
+The customer page shows their invoices, payments and balance, and has a **Statement** you can print or email. Balances on the customer and vendor lists take off unused credit, so they match the aging reports and statements.
 
 **Customer Center** on the customer list shows the list and one customer side by side, with every transaction they have; see [The simple view](28-simple-view.md#customer-vendor-and-item-centers). The products and services list has an **Item Center** button that does the same for items.
 

@@ -103,7 +103,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
             throw new DomainException("estimate.declined", $"Estimate {estimate.Number} was declined.");
         var progress = await ProgressAsync(estimate, ct);
         var picks = SalesOrderService.Picks(estimate.Lines, progress.Remaining, command);
-        var (drafts, sources, completes) = PartialInvoicing.Build(estimate.Lines, progress.Remaining, picks);
+        var (drafts, sources, completes) = PartialInvoicing.Build(estimate.Lines, progress.Remaining, picks, PartialInvoicing.Billed(estimate.Lines, progress.Invoices));
         return await invoices.CreateAsync(
             new CreateInvoiceCommand(estimate.CustomerId, command.Date, drafts, command.DueDate, command.Number, estimate.Memo, estimate.Id,
                 TaxCodeId: estimate.TaxCodeId ?? Guid.Empty, LocationId: estimate.LocationId),

@@ -204,8 +204,12 @@
 
     private void ChangeDate(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
-            _date = date;
+        if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
+            return;
+        _date = date;
+        // Early payment discounts depend on the date, so the amount is spread again.
+        if (_amount is { } received)
+            Allocate(received);
     }
 
     private void PayInFull(RowModel row)
@@ -224,6 +228,11 @@
         }
 
         _amount = received;
+        Allocate(received);
+    }
+
+    private void Allocate(decimal received)
+    {
         var remaining = received;
         foreach (var row in _rows)
         {

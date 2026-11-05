@@ -47,7 +47,7 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
         documents.AddRange((await sales.ListCreditMemosAsync(null, ct)).Where(c => c.Status == DocumentStatus.Posted && InRange(c.Date))
             .Select(c => (c.Lines, c.TaxExemption is not null, -1)));
 
-        var rows = new Dictionary<Guid, (decimal Total, decimal NonTaxable, decimal Exempt, decimal Taxable, decimal Tax)>();
+        var rows = new Dictionary<(Guid Rate, decimal Percent), (decimal Total, decimal NonTaxable, decimal Exempt, decimal Taxable, decimal Tax)>();
         var untaxed = 0m;
         foreach (var (lines, exempt, sign) in documents)
         {
@@ -62,8 +62,10 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
             var taxable = sign * TaxCalculator.TaxableAmount(lines);
             foreach (var line in taxLines)
             {
-                var row = rows.GetValueOrDefault(line.TaxRateId!.Value);
-                rows[line.TaxRateId.Value] = (
+                // By the percent charged: a rate that changed is two rows, and a past period keeps the percent it had.
+                var key = (line.TaxRateId!.Value, line.Rate);
+                var row = rows.GetValueOrDefault(key);
+                rows[key] = (
                     row.Total + total,
                     row.NonTaxable + total - taxable,
                     row.Exempt + (exempt ? taxable : 0m),
@@ -84,10 +86,10 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
             .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .Select(agency => new TaxLiabilityAgency(
                 agency,
-                rates.Where(r => r.AgencyId == agency.Id && rows.ContainsKey(r.Id))
-                    .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                    .Select(r => (Rate: r, Row: rows[r.Id]))
-                    .Select(x => new TaxLiabilityRow(x.Rate.Id, x.Rate.Name, x.Rate.Percent, x.Row.Total, x.Row.NonTaxable, x.Row.Exempt, x.Row.Taxable, x.Row.Tax))
+                rates.Where(r => r.AgencyId == agency.Id)
+                    .SelectMany(r => rows.Where(x => x.Key.Rate == r.Id).Select(x => (Rate: r, x.Key.Percent, Row: x.Value)))
+                    .OrderBy(x => x.Rate.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Percent)
+                    .Select(x => new TaxLiabilityRow(x.Rate.Id, x.Rate.Name, x.Percent, x.Row.Total, x.Row.NonTaxable, x.Row.Exempt, x.Row.Taxable, x.Row.Tax))
                     .ToList(),
                 startOwed.GetValueOrDefault(agency.Id),
                 paid.GetValueOrDefault(agency.Id),

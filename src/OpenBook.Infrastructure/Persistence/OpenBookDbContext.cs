@@ -174,7 +174,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     [
         typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
         typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
-        typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
+        typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(ReceiptCapture), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
         typeof(BankFeedItem), typeof(RecurringEntry),
         typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),

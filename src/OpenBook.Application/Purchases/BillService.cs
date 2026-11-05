@@ -45,7 +45,7 @@ public sealed record ChangeBillCommand(
     IReadOnlyList<int?>? FromLines = null);
 
 /// <summary>What part of a purchase order a bill bills, the 3-way match differences found, and whether that finishes it.</summary>
-internal sealed record BillSource(Guid PurchaseOrderId, IReadOnlyList<BillSourceLine> Lines, IReadOnlyList<string> Exceptions, bool Completes);
+internal sealed record BillSource(Guid PurchaseOrderId, IReadOnlyList<BillSourceLine> Lines, IReadOnlyList<string> Exceptions, bool Completes, int LinesFromOrder = 0);
 
 public sealed class BillService(
     IPurchasesStore store,
@@ -129,7 +129,7 @@ public sealed class BillService(
         bill.Hold(holds);
         if (source is not null)
         {
-            bill.SetSource(source.PurchaseOrderId, source.Lines);
+            bill.SetSource(source.PurchaseOrderId, source.Lines, source.LinesFromOrder);
             if (source.Completes && await store.GetPurchaseOrderAsync(source.PurchaseOrderId, ct) is { } order)
             {
                 var orderBefore = PurchaseOrderService.Snapshot(order);
@@ -227,7 +227,7 @@ public sealed class BillService(
         bill.Rehold(holds, user.Actor);
         if (source is not null)
         {
-            bill.SetSource(source.PurchaseOrderId, source.Lines);
+            bill.SetSource(source.PurchaseOrderId, source.Lines, source.LinesFromOrder);
             if (await store.GetPurchaseOrderAsync(source.PurchaseOrderId, ct) is { } order
                 && (source.Completes ? order.Status == PurchaseOrderStatus.Open : order.Status == PurchaseOrderStatus.Closed))
             {

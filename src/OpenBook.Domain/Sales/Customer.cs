@@ -212,6 +212,23 @@ public static class CustomerTree
     }
 
     /// <summary>The customer and every customer billed to it.</summary>
+    /// <summary>
+    /// What makes a sale to the customer tax exempt on the date: its own certificate, else, for a sub-customer billed with
+    /// its parent, the parent's (a project is covered by its client's).
+    /// </summary>
+    public static string? ExemptionOn(Customer? customer, DateOnly date, IEnumerable<Customer> customers)
+    {
+        ArgumentNullException.ThrowIfNull(customers);
+        for (var i = 0; customer is not null && i <= MaxDepth; i++)
+        {
+            if (customer.ExemptionOn(date) is { } exemption)
+                return exemption;
+            customer = customer is { BillWithParent: true, ParentId: { } parent } ? customers.FirstOrDefault(c => c.Id == parent) : null;
+        }
+
+        return null;
+    }
+
     public static IReadOnlySet<Guid> Billed(Guid customerId, IReadOnlyDictionary<Guid, Customer> byId) =>
         byId.Keys.Where(id => BillTo(id, byId) == customerId).Append(customerId).ToHashSet();
 

@@ -101,12 +101,12 @@ public static class DashboardEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapGet("/accountant/1099", async (int? year, AccountantPackageService packages, CancellationToken ct) =>
+        app.MapGet("/accountant/1099", async (int? year, decimal? threshold, AccountantPackageService packages, CancellationToken ct) =>
         {
             var y = year ?? CompanyTime.Today.Year - 1;
             try
             {
-                return Results.File(await packages.Filing1099CsvAsync(y, audit: true, ct: ct), "text/csv", $"1099 filing data {y}.csv");
+                return Results.File(await packages.Filing1099CsvAsync(y, audit: true, threshold: threshold, ct: ct), "text/csv", $"1099 filing data {y}.csv");
             }
             catch (DomainException ex)
             {

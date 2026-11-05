@@ -88,6 +88,16 @@
                 {
                     <dt class="no-print">@L["From"]</dt><dd class="no-print"><a href="/sales/estimates/@estimateId">@L["Estimate"]</a></dd>
                 }
+                @if (_lateFees.Count > 0)
+                {
+                    <dt class="no-print">Late fees on this invoice</dt>
+                    <dd class="no-print">
+                        @foreach (var fee in _lateFees)
+                        {
+                            <a href="/sales/invoices/@fee.Id">@fee.Number</a>@(fee.Status == DocumentStatus.Voided ? " (void)" : "") @(" ")
+                        }
+                    </dd>
+                }
                 @if (_invoice.LateFeeForInvoiceId is { } overdueId)
                 {
                     <dt class="no-print">@L["Late fee on"]</dt><dd class="no-print"><a href="/sales/invoices/@overdueId">@L["Overdue invoice"]</a></dd>
@@ -280,6 +290,7 @@
 </div>
 
 @code {
+    private IReadOnlyList<Invoice> _lateFees = [];
     private Func<StockPlace, string> _place = _ => "";
     private Invoice? _invoice;
     private Customer? _customer;
@@ -307,6 +318,7 @@
         VoidInput ??= new();
         _place = await WarehouseService.NamerAsync();
         _invoice = await Invoices.GetAsync(Id);
+        _lateFees = await Invoices.LateFeesOnAsync(Id);
         if (_invoice is null)
             return;
         _customer = await CustomerService.GetAsync(_invoice.CustomerId);

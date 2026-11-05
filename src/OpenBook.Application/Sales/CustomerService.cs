@@ -7,11 +7,13 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
 
+/// <param name="Balance">What they owe: open invoices less unused credit, as on the aging and statements.</param>
 /// <param name="Level">0 at the top; sub-customers count up from 1.</param>
 /// <param name="FullName">"Parent:Child".</param>
-public sealed record CustomerSummary(Customer Customer, decimal Balance, int OpenInvoices, decimal Overdue, int Level = 0, string? FullName = null);
+/// <param name="Credit">Unused credit memos and unapplied payments.</param>
+public sealed record CustomerSummary(Customer Customer, decimal Balance, int OpenInvoices, decimal Overdue, int Level = 0, string? FullName = null, decimal Credit = 0m);
 
-public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPricingStore pricing, IClock clock, ICurrentUser user)
+public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPricingStore pricing, ReceivablesService receivables, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "customer";
 
@@ -21,14 +23,29 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
         var customers = await store.ListCustomersAsync(ct);
         var names = CustomerTree.FullNames(customers);
         var open = (await store.ListOpenInvoicesAsync(null, ct)).ToLookup(i => i.CustomerId);
+        var credit = (await receivables.AgingAsync(today, ct)).Customers.ToDictionary(a => a.Customer.Id, a => a.Credits.Sum(c => c.Amount));
         return CustomerTree.Ordered(customers.Where(c => includeInactive || c.IsActive))
             .Select(x => new CustomerSummary(
                 x.Customer,
-                open[x.Customer.Id].Sum(i => i.Balance),
+                open[x.Customer.Id].Sum(i => i.Balance) - credit.GetValueOrDefault(x.Customer.Id),
                 open[x.Customer.Id].Count(),
                 open[x.Customer.Id].Where(i => i.IsOverdue(today)).Sum(i => i.Balance),
                 x.Level,
-                names[x.Customer.Id]))
+                names[x.Customer.Id],
+                credit.GetValueOrDefault(x.Customer.Id)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Who gets a statement: everyone with a balance, sub-customers billed with a parent counted in the parent's, once each.
+    /// </summary>
+    public async Task<IReadOnlyList<CustomerSummary>> StatementListAsync(DateOnly today, CancellationToken ct = default)
+    {
+        var all = await ListAsync(today, includeInactive: true, ct);
+        var byId = all.ToDictionary(s => s.Customer.Id, s => s.Customer);
+        return all.GroupBy(s => CustomerTree.BillTo(s.Customer.Id, byId))
+            .Select(g => all.Single(s => s.Customer.Id == g.Key) with { Balance = g.Sum(s => s.Balance), OpenInvoices = g.Sum(s => s.OpenInvoices), Overdue = g.Sum(s => s.Overdue) })
+            .Where(s => s.Balance != 0m)
             .ToList();
     }
 
@@ -64,11 +81,28 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
         await CheckTaxCodeAsync(details.TaxCodeId, customer.TaxCodeId, ct);
         await CheckPriceLevelAsync(details.PriceLevelId, customer.PriceLevelId, ct);
         await CheckParentAsync(customer.Id, details.ParentId, customer.ParentId, ct);
+        if (customer.BillWithParent && (!details.BillWithParent || details.ParentId != customer.ParentId))
+            await EnsureNotSettledByOthersAsync(customer, ct);
         var before = Snapshot(customer);
         customer.Update(details);
         store.Add(Audit(AuditAction.Updated, customer, before));
         await store.SaveChangesAsync(ct);
         return customer;
+    }
+
+    /// <summary>
+    /// A statement lists an account's own documents, so while another customer's money settles this one's invoices
+    /// they have to stay on one account, or each statement shows half of it.
+    /// </summary>
+    private async Task EnsureNotSettledByOthersAsync(Customer customer, CancellationToken ct)
+    {
+        var documents = await store.ListReceivablesForAsync([customer.Id], ct);
+        var own = documents.Invoices.Where(i => i.CustomerId == customer.Id).Select(i => i.Id).ToHashSet();
+        var others = documents.Payments.Where(p => p.Status == DocumentStatus.Posted && p.CustomerId != customer.Id).SelectMany(p => p.Applications.Select(a => a.InvoiceId))
+            .Concat(documents.CreditMemos.Where(c => c.Status == DocumentStatus.Posted && c.CustomerId != customer.Id).SelectMany(c => c.Applications.Select(a => a.InvoiceId)))
+            .Concat(documents.Retainers.Where(r => r.Status == DocumentStatus.Posted && r.CustomerId != customer.Id).SelectMany(r => r.Applications.Where(a => !a.IsVoided).Select(a => a.InvoiceId)));
+        if (others.Any(own.Contains))
+            throw new DomainException("customer.settled_by_parent", $"Payments or credits from the customer billed for {customer.DisplayName} are applied to its invoices, so it stays billed with them.");
     }
 
     public async Task<Customer> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)

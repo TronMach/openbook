@@ -40,6 +40,18 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
         return scheduled;
     }
 
+    /// <summary>An email that couldn't go when it was meant to: kept as failed, to try again or cancel.</summary>
+    public async Task QueueFailedAsync(Guid invoiceId, EmailDraft message, string reason, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var now = clock.UtcNow;
+        var failed = ScheduledEmail.Create(invoiceId, message.To, message.Subject, message.Body, now.AddMinutes(1), now, user.Actor, message.Cc, message.Bcc, message.DesignId);
+        failed.MarkFailed(reason);
+        store.Add(failed);
+        store.Add(Audit(AuditAction.Created, failed, null));
+        await store.SaveChangesAsync(ct);
+    }
+
     public async Task CancelAsync(Guid id, CancellationToken ct = default)
     {
         var scheduled = await GetAsync(id, ct);

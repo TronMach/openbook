@@ -2,6 +2,7 @@
 @using OpenBook.Application.Reporting
 @inject AdjustingEntryService Adjusting
 @inject CompanySettingsService Settings
+@inject OpenBook.Application.Purchases.PayablesService Payables
 
 <PageTitle>Accountant tools · OpenBook</PageTitle>
 
@@ -41,8 +42,16 @@
             template you download from the IRS IRIS Taxpayer Portal (its headers must match the IRS's exactly), or upload it to your filing service.
             The file holds full taxpayer IDs: keep it private. Downloads are recorded in the audit log.
         </p>
+        @if (_missingTaxIds.Count > 0)
+        {
+            <div class="alert error" role="alert">
+                @(_missingTaxIds.Count == 1 ? "This vendor needs a 1099" : "These vendors need a 1099") for @(CompanyTime.Today.Year - 1) but @(_missingTaxIds.Count == 1 ? "has" : "have") no tax ID, so the file would leave it blank:
+                @string.Join(", ", _missingTaxIds). <a href="/reports/1099?year=@(CompanyTime.Today.Year - 1)">See the 1099 summary</a>
+            </div>
+        }
         <form method="get" action="/accountant/1099" data-enhance="false" class="inline">
             <label>Tax year <input type="number" name="year" class="short" value="@(CompanyTime.Today.Year - 1)" /></label>
+            <label>Threshold <span class="muted">(blank for the usual one)</span> <input type="number" name="threshold" class="short" step="0.01" min="0" /></label>
             <button type="submit" class="secondary">Download 1099 data</button>
         </form>
     </div>
@@ -76,6 +85,7 @@
 
 @code {
     private IReadOnlyList<JournalEntry> _entries = [];
+    private List<string> _missingTaxIds = [];
     private DateOnly _from;
     private DateOnly _to;
 
@@ -89,5 +99,6 @@
         (_from, _to) = (last.From ?? today, last.To);
         var current = DateRanges.For(DatePreset.ThisFiscalYearToDate, today, company.FiscalYearStartMonth);
         _entries = await Adjusting.ListAsync(current.From, DateOnly.MaxValue);
+        _missingTaxIds = (await Payables.Report1099Async(today.Year - 1)).Vendors.Where(v => v.MeetsThreshold && v.Vendor.TaxId is null).Select(v => v.Vendor.DisplayName).ToList();
     }
 }

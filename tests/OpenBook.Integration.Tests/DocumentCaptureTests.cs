@@ -270,6 +270,24 @@ public sealed class DocumentCaptureTests : IAsyncLifetime
         Assert.Equal(_bracket.Id, Assert.Single(next.Lines).ItemId);
     }
 
+    [Fact]
+    public async Task An_item_printed_twice_bills_one_order_line_and_the_printed_amount_decides()
+    {
+        var order = await WidgetOrder(7m);
+        var document = await Upload(DocumentKind.VendorInvoice, "invoice.txt", Invoice.Replace("NUMBER", order.Number, StringComparison.Ordinal));
+        var lines = new List<DocumentReviewLine>
+        {
+            new("Widget", null, 4m, 1.43m, 5.72m, _widget.Id),
+            new("Widget", null, 3m, 1.43m, 4.28m, _widget.Id),
+        };
+        await In<DocumentCaptureService, CapturedDocument>(s => s.ReviewAsync(document.Id, Review(document) with { Lines = lines, Tax = null, Shipping = null, Total = 10m, PurchaseOrderId = order.Id }));
+
+        var bill = await In<DocumentConversionService, Bill>(s => s.MakeBillAsync(document.Id, new DocumentAccounts()));
+
+        Assert.Equal(10m, bill.Total);
+        Assert.Equal(7m, Assert.Single(bill.SourceLines).Quantity);
+    }
+
     private static DocumentReview Review(CapturedDocument d) => new(
         d.Party, d.VendorId, d.CustomerId, d.Number, d.Date, d.DueDate, d.OrderReference, d.PurchaseOrderId, d.Subtotal, d.Tax, d.Shipping, d.Total,
         d.Lines.Select(l => new DocumentReviewLine(l.Description, l.Sku, l.Quantity, l.UnitPrice, l.Amount, l.ItemId)).ToList());

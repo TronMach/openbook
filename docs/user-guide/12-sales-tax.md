@@ -30,6 +30,8 @@ OpenBook adds the tax under the subtotal: taxable lines, less their share of any
 
 On the customer's page, enter their **exemption certificate number**, the **reason** and the **expiry date**. While it's valid, their sales are taxed at zero and reported as exempt. Attach the certificate itself to the customer under **Attachments**. The Sales tax page lists every exempt customer.
 
+A project or other sub-customer billed with its parent is covered by the parent's certificate.
+
 ## What you owe
 
 The **Sales tax** page lists each agency with **Owed today** and the **period to file**.
@@ -38,7 +40,7 @@ The **Sales tax** page lists each agency with **Owed today** and the **period to
 
 ## Paying the tax
 
-When you file, record the payment: **Pay** on the agency's row (or **Sales tax → Pay sales tax**).
+When you file, record the payment: **Pay** on the agency's row (or **Sales tax → Pay sales tax**). The amount starts at what's left to pay for the period, and a period with a payment recorded says **paid** on the Sales tax page.
 
 1. Choose the **agency** and **for the period ending**. The amount starts as what was owed on that date.
 2. Set the **payment date**, **paid from** (bank account) and **amount paid**.

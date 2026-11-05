@@ -83,7 +83,10 @@ internal sealed class SalesEmailSource(
                     PaymentMethod.Check => p.Reference is { } n ? $"by check no. {n}" : "by check",
                     { } m => $"by {PaymentMethods.Label(m).ToLowerInvariant()}{(p.Reference is { } r2 ? $", reference {r2}" : "")}",
                 };
-                var owed = (await sales.ListOpenInvoicesAsync(customer.Id, ct)).Sum(i => i.Balance);
+                // The whole account: a client's receipt counts what its billed projects owe too.
+                var owed = 0m;
+                foreach (var billed in CustomerTree.Billed(customer.Id, (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id)))
+                    owed += (await sales.ListOpenInvoicesAsync(billed, ct)).Sum(i => i.Balance);
                 return new EmailContext(PaymentService.EntityType, p.Id, customer.DisplayName, $"Payment of {M(p.Amount)}", "", customer.Email, new Dictionary<string, string>
                 {
                     ["customer"] = customer.DisplayName, ["amount"] = M(p.Amount), ["date"] = D(p.Date), ["paid_by"] = paidBy, ["applied"] = applied,

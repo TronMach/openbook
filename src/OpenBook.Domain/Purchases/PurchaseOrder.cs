@@ -322,9 +322,15 @@ public sealed class PurchasingSettings
     /// </summary>
     public bool ReceiveIntoStock { get; private set; }
 
+    /// <summary>
+    /// Whether refunds from a vendor come off what's reported for them on 1099s. Off by default: it's a question for the
+    /// business's tax adviser, so it's their choice, and either way the refunds show in a column of their own.
+    /// </summary>
+    public bool Net1099Refunds { get; private set; }
+
     public static PurchasingSettings Create() => new() { Id = Guid.CreateVersion7(), RequireReceipt = true };
 
-    public void Update(decimal? approvalThreshold, decimal priceTolerancePercent, bool requireReceipt, bool allowSelfApproval, bool? receiveIntoStock = null)
+    public void Update(decimal? approvalThreshold, decimal priceTolerancePercent, bool requireReceipt, bool allowSelfApproval, bool? receiveIntoStock = null, bool? net1099Refunds = null)
     {
         if (approvalThreshold is { } t)
         {
@@ -340,6 +346,7 @@ public sealed class PurchasingSettings
         RequireReceipt = requireReceipt;
         AllowSelfApproval = allowSelfApproval;
         ReceiveIntoStock = receiveIntoStock ?? ReceiveIntoStock;
+        Net1099Refunds = net1099Refunds ?? Net1099Refunds;
     }
 
     /// <summary>The most a billed cost may be against the ordered one before it's an exception.</summary>

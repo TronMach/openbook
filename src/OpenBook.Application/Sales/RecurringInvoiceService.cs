@@ -13,7 +13,7 @@ namespace OpenBook.Application.Sales;
 public sealed record RecurringInvoiceResult(RecurringInvoice Template, IReadOnlyList<Invoice> Created, string? Error, int Emailed = 0, string? EmailError = null);
 
 /// <summary>Recurring invoices: templates that create an invoice on a schedule, optionally emailing it.</summary>
-public sealed class RecurringInvoiceService(IUnitOfWork unit, ISalesStore store, InvoiceService invoices, EmailService email, PostingEngine engine, IClock clock, ICurrentUser user)
+public sealed class RecurringInvoiceService(IUnitOfWork unit, ISalesStore store, InvoiceService invoices, EmailService email, ScheduledEmailService scheduled, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "recurring_invoice";
     public const int MaxCatchUp = 60;
@@ -115,26 +115,38 @@ public sealed class RecurringInvoiceService(IUnitOfWork unit, ISalesStore store,
         return results;
     }
 
+    /// <summary>
+    /// A failure doesn't stop the others. One that can be tried again waits as a failed scheduled email, so the
+    /// invoice isn't left unsent with only a line in the log to say so.
+    /// </summary>
     private async Task<(int Sent, string? Error)> EmailAsync(IReadOnlyList<Invoice> created, CancellationToken ct)
     {
         var sent = 0;
+        string? error = null;
         foreach (var invoice in created)
         {
+            EmailDraft? draft = null;
             try
             {
-                var draft = await email.DraftAsync(FormKind.Invoice, invoice.Id, ct);
+                draft = await email.DraftAsync(FormKind.Invoice, invoice.Id, ct);
                 if (string.IsNullOrEmpty(draft.To))
-                    return (sent, "The customer has no email address.");
+                {
+                    error = $"Invoice {invoice.Number}: the customer has no email address.";
+                    continue;
+                }
+
                 await email.SendFormAsync(FormKind.Invoice, invoice.Id, draft, ct);
                 sent++;
             }
             catch (DomainException ex)
             {
-                return (sent, ex.Message);
+                error = $"Invoice {invoice.Number}: {ex.Message}";
+                if (draft is { To.Length: > 0 })
+                    await scheduled.QueueFailedAsync(invoice.Id, draft, ex.Message, ct);
             }
         }
 
-        return (sent, null);
+        return (sent, error);
     }
 
     private async Task EnsureCustomerAsync(Guid customerId, CancellationToken ct)

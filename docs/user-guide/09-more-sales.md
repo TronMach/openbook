@@ -21,6 +21,8 @@ An *estimate* (quote) posts nothing to the books. It's a document you send, and 
 
 An estimate's status is **Pending** until you mark it **Accepted** or **Declined** with the buttons on its page. After its valid-until date it shows as **Expired**. You can **Edit** it freely until it's invoiced.
 
+If a customer accepted or declined an estimate online and you then change its customer, lines or total, it goes back to **Pending**: they answered a different offer. Changing only the date or message keeps their answer.
+
 ### Turning it into an invoice
 
 On the estimate's page, **Invoice** offers three choices:

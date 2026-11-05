@@ -122,6 +122,22 @@ public static class PartialInvoicing
             .GroupBy(l => l.LineNumber)
             .ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
 
+    /// <summary>
+    /// What the source's posted invoices have charged for each item line. Worked out, not stored: each charged its
+    /// quantity at the line's rate, rounded to the cent.
+    /// </summary>
+    public static IReadOnlyDictionary<int, decimal> Billed(IReadOnlyList<SalesLine> lines, IEnumerable<Invoice> invoices)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(invoices);
+        var rates = lines.ToDictionary(l => l.LineNumber, l => l.Rate);
+        return invoices.Where(i => i.Status == DocumentStatus.Posted)
+            .SelectMany(i => i.SourceLines)
+            .Where(l => rates.ContainsKey(l.LineNumber))
+            .GroupBy(l => l.LineNumber)
+            .ToDictionary(g => g.Key, g => g.Sum(l => decimal.Round(l.Quantity * rates[l.LineNumber], 2, MidpointRounding.AwayFromZero)));
+    }
+
     /// <summary>What's left of each billable line (item lines and amount discounts), in line order.</summary>
     public static IReadOnlyDictionary<int, decimal> Remaining(IReadOnlyList<SalesLine> lines, IReadOnlyDictionary<int, decimal> invoiced)
     {
@@ -159,7 +175,8 @@ public static class PartialInvoicing
     /// and whether the source is then fully invoiced.
     /// </summary>
     public static (IReadOnlyList<SalesLineDraft> Drafts, IReadOnlyList<InvoiceSourceLine> Sources, bool Completes) Build(
-        IReadOnlyList<SalesLine> lines, IReadOnlyDictionary<int, decimal> remaining, IReadOnlyList<InvoiceSourceLine> picks)
+        IReadOnlyList<SalesLine> lines, IReadOnlyDictionary<int, decimal> remaining, IReadOnlyList<InvoiceSourceLine> picks,
+        IReadOnlyDictionary<int, decimal>? billed = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         ArgumentNullException.ThrowIfNull(remaining);
@@ -192,6 +209,9 @@ public static class PartialInvoicing
                 case SalesLineKind.Item when line.ItemId is not null:
                     if (!picked.TryGetValue(line.LineNumber, out var quantity))
                         continue;
+                    // Each invoice rounds to the cent: the one that clears a line charges what's left of it, so they add up.
+                    if (quantity == remaining.GetValueOrDefault(line.LineNumber) && billed?.GetValueOrDefault(line.LineNumber) is { } charged and not 0m)
+                        draft = draft with { Rate = decimal.Round((line.Amount - charged) / quantity, SalesLine.Precision, MidpointRounding.AwayFromZero), PriceSource = draft.PriceSource ?? "Balance of the line" };
                     drafts.Add(draft with { Quantity = quantity, Lots = quantity == line.Quantity ? draft.Lots : null });
                     sources.Add(new InvoiceSourceLine(line.LineNumber, quantity));
                     break;

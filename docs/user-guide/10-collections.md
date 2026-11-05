@@ -26,6 +26,8 @@ For a sub-customer billed with its parent, the statement is the parent's, and in
 
 Reminders and late fees are off until an accountant sets them up under **Settings** on this page (also **Settings → Late fees and reminders**).
 
+A late fee is an invoice of its own, listed on the page of the invoice it was charged on. To void an invoice with a late fee on it, void the fee first.
+
 ## Payment reminders
 
 In **Collection settings → Payment reminders**:

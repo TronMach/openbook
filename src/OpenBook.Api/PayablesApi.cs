@@ -136,6 +136,7 @@ internal static class PayablesApi
                     Box = v.Vendor.Form1099Box,
                     v.Total,
                     v.CardPayments,
+                    v.Refunds,
                     v.MeetsThreshold,
                 }),
             };

@@ -220,7 +220,7 @@
         _queue = await Print.QueueAsync();
         _printed = await Print.PrintedAsync();
         _documents = await Print.DocumentsAsync(_kind, _from, _to);
-        _balances = [.. (await Customers.ListAsync(_today)).Where(c => c.Balance != 0m)];
+        _balances = await Customers.StatementListAsync(_today);
     }
 
     private static string Link(PrintableDocument d) => d.Document switch

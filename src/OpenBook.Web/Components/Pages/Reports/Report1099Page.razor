@@ -36,7 +36,7 @@
             <header class="report-heading">
                 <h1>1099 summary for @_report.Year</h1>
                 <p>@_companyName</p>
-                <p>Vendors tracked for 1099s · threshold @Labels.Amount(_report.Threshold)</p>
+                <p>Vendors tracked for 1099s · threshold @Labels.Amount(_report.Threshold) · refunds @(_report.RefundsNetted ? "taken off the totals" : "shown, not taken off")</p>
             </header>
 
             @if (_report.Vendors.Count == 0)
@@ -48,7 +48,7 @@
                 <table class="data">
                     <thead>
                         <tr>
-                            <th>Vendor</th><th>Tax ID</th><th>Form and box</th><th class="num">Paid by cash, check or bank</th><th class="num">Paid by card (1099-K)</th><th>File a 1099?</th>
+                            <th>Vendor</th><th>Tax ID</th><th>Form and box</th><th class="num">Paid by cash, check or bank</th><th class="num">Paid by card (1099-K)</th><th class="num">Refunds received</th><th>File a 1099?</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -60,6 +60,7 @@
                                 <td>@Labels.For(v.Vendor.Form1099Box)</td>
                                 <td class="num">@Labels.Amount(v.Total)</td>
                                 <td class="num">@Labels.AmountOrBlank(v.CardPayments)</td>
+                                <td class="num">@Labels.AmountOrBlank(v.Refunds)</td>
                                 <td>
                                     @if (v.MeetsThreshold)
                                     {
@@ -77,6 +78,7 @@
                         <tr class="grand-total">
                             <td colspan="3">Total reportable (@_report.Vendors.Count(v => v.MeetsThreshold) @(_report.Vendors.Count(v => v.MeetsThreshold) == 1 ? "vendor" : "vendors"))</td>
                             <td class="num">@Labels.Amount(_report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total))</td>
+                            <td></td>
                             <td></td>
                             <td></td>
                         </tr>

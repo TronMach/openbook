@@ -992,6 +992,9 @@
   <data name="Invoice date" xml:space="preserve">
     <value>Invoice date</value>
   </data>
+  <data name="Invoice emails that failed" xml:space="preserve">
+    <value>Invoice emails that failed</value>
+  </data>
   <data name="Invoice number" xml:space="preserve">
     <value>Invoice number</value>
   </data>

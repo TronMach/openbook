@@ -384,4 +384,17 @@ public sealed class CollectionsTests : IAsyncLifetime
         _db.Mail.Failure = null;
         Assert.Null(Assert.Single(await In<ReminderService, IReadOnlyList<ReminderResult>>(s => s.SendAsync(Mar31.AddDays(8)))).Error);
     }
+
+    [Fact]
+    public async Task An_invoice_with_a_late_fee_on_it_cant_be_voided_until_the_fee_is()
+    {
+        var invoice = await Invoice(_acme, 1000m, Mar1);
+        await In<CollectionService, CollectionSettings>(s => s.SaveLateFeesAsync(new LateFeeSettingsCommand(true, true, 0m, 25m, 0, 0)));
+        var fee = Assert.Single(await In<LateFeeService, IReadOnlyList<Invoice>>(s => s.ChargeAsync(invoice.DueDate.AddDays(1))));
+
+        Assert.Equal("invoice.has_late_fees", (await Assert.ThrowsAsync<DomainException>(() => In<InvoiceService, Invoice>(s => s.VoidAsync(invoice.Id, "Wrong")))).Code);
+
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(fee.Id, "Waived"));
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(invoice.Id, "Wrong"));
+    }
 }

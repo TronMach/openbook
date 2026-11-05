@@ -54,6 +54,10 @@
                 <input type="checkbox" name="receiveIntoStock" value="true" checked="@_settings.ReceiveIntoStock" />
                 <span>Put goods in stock when they're received on a purchase order, at the order's cost, against "Received Not Billed"; the bill then clears it, with any price difference to "Purchase Price Variance" (not for lot or serial items)</span>
             </label>
+            <label class="check">
+                <input type="checkbox" name="net1099Refunds" value="true" checked="@_settings.Net1099Refunds" />
+                <span>Take refunds from a vendor off what's reported for them on 1099s. Whether to report the net figure is a question for your tax adviser.</span>
+            </label>
             <div class="actions"><button type="submit">Save</button></div>
         </PostForm>
     </div>

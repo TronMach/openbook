@@ -166,7 +166,9 @@ public sealed class CreditService(
 
         var drafts = command.Lines.ToList();
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
-            new TaxAsCharged(credit.TaxCodeId, credit.TaxExemption, credit.CustomerId, credit.Lines), ct);
+            new TaxAsCharged(credit.TaxCodeId, credit.TaxExemption, credit.CustomerId, credit.Lines, command.FromLines), ct);
+        if (credit.AmountRefunded > 0m && (await store.ListRefundsAsync(credit.CustomerId, ct)).Any(r => r.CreditMemoId == credit.Id && r.Status == DocumentStatus.Posted && r.Date < command.Date))
+            throw new DomainException("refund.before_source", "This credit memo has a refund dated before that, and a refund can't come before its credit.");
         var used = credit.AmountApplied + credit.AmountRefunded;
         if (lines.Sum(l => l.Amount) < used)
             throw new DomainException("creditmemo.total_below_used",
@@ -372,6 +374,8 @@ public sealed class CreditService(
 
         if (command.Amount > available)
             throw new DomainException("refund.exceeds_credit", $"Only {available:N2} of that credit is available.");
+        if (command.Date < (memo?.Date ?? payment!.Date))
+            throw new DomainException("refund.before_source", "A refund can't be dated before the credit it pays back.");
         var customer = await store.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
 
         var id = Guid.CreateVersion7();

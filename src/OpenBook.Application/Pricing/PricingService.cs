@@ -177,8 +177,9 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
         {
             if (level.Kind == PriceLevelKind.PerItem && level.PriceFor(item.Id) is null)
                 continue;
-            var quote = context.Quote(item, date, 1m);
-            text.Append(CultureInfo.InvariantCulture, $"{CsvField(item.Name)},{item.Rate:0.00##},{quote.Price:0.00##}\r\n");
+            // The price as it was set, so exporting and importing again changes nothing; a percent level's is worked out.
+            var price = level.PriceFor(item.Id) ?? context.Quote(item, date, 1m).Price;
+            text.Append(CultureInfo.InvariantCulture, $"{CsvField(item.Name)},{item.Rate:0.00##},{price:0.00##}\r\n");
         }
 
         return text.ToString();

@@ -387,8 +387,11 @@ public sealed class AccountantPackageService(
     /// The 1099 filing data for a year: one row per vendor that meets the threshold, with the fields the IRS forms ask
     /// for (full TIN, address, form and box, amount), to copy into the IRIS upload template or a filing service.
     /// </summary>
+    /// <param name="year">The tax year.</param>
     /// <param name="audit">True when the file leaves OpenBook on its own (downloaded), so the export is audited.</param>
-    public async Task<byte[]> Filing1099CsvAsync(int year, bool audit = false, CancellationToken ct = default)
+    /// <param name="threshold">The year's published figure; null for the default, which is only an estimate from 2027.</param>
+    /// <param name="ct">Cancels the export.</param>
+    public async Task<byte[]> Filing1099CsvAsync(int year, bool audit = false, decimal? threshold = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         if (audit)
@@ -398,7 +401,7 @@ public sealed class AccountantPackageService(
             await companies.SaveChangesAsync(ct);
         }
 
-        var report = await payables.Report1099Async(year, null, ct);
+        var report = await payables.Report1099Async(year, threshold, ct);
         var csv = new StringBuilder();
         csv.Append("Form,Box,Recipient name,Recipient business name,Recipient TIN,TIN type,Recipient address,Amount,Payer name,Payer address,Tax year\r\n");
         foreach (var v in report.Vendors.Where(v => v.MeetsThreshold).OrderBy(v => v.Vendor.DisplayName, StringComparer.OrdinalIgnoreCase))

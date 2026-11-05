@@ -104,4 +104,5 @@ To correct a vendor credit, use **Change** at the top of its page: the credit nu
 - The **Purchases** page lists recent bills, payments, expenses and vendor credits. **Unpaid bills** shows every unpaid one; the other lists show the newest 100, with **Show 100 more** below.
 - **Reports → A/P aging** shows what you owe and how overdue it is; **Unpaid bills** lists each one.
 - **Reports → 1099 summary** totals what each tracked vendor was paid in a year (bill payments and expenses, not card payments, which the card company reports).
+  Refunds a vendor made in the year show in their own column. They aren't taken off the total unless you tick **Take refunds from a vendor off what's reported for them on 1099s** in the purchasing settings (**Bills to approve → Settings**): whether to report the net figure is a question for your tax adviser. The filing data on **Accountant tools** takes a threshold for years whose figure has been published, and warns about vendors over it with no tax ID.
 - The **profit and loss** shows the costs under each category.

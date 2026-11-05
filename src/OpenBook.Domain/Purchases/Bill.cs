@@ -68,10 +68,17 @@ public sealed class Bill
     /// <summary>For a bill made from a purchase order: what it bills of each order line.</summary>
     public IReadOnlyList<BillSourceLine> SourceLines => _sourceLines;
 
-    public void SetSource(Guid purchaseOrderId, IReadOnlyList<BillSourceLine> lines)
+    /// <summary>
+    /// How many of its lines, from the top, came from the order; the rest were added. Null on bills from before this was
+    /// kept. It can't be worked out later, because a delivery since changes how an order line would be split.
+    /// </summary>
+    public int? LinesFromOrder { get; private set; }
+
+    public void SetSource(Guid purchaseOrderId, IReadOnlyList<BillSourceLine> lines, int linesFromOrder)
     {
         ArgumentNullException.ThrowIfNull(lines);
         PurchaseOrderId = purchaseOrderId;
+        LinesFromOrder = linesFromOrder;
         _sourceLines.Clear();
         _sourceLines.AddRange(lines);
     }
@@ -102,7 +109,29 @@ public sealed class Bill
         if (reasons.Count == 0)
             return;
         Approval = BillApproval.Pending;
-        HoldReason = Text.Optional(string.Join('\n', reasons), 2000, "bill.hold_too_long", "Hold reason");
+        HoldReason = HoldText(reasons);
+    }
+
+    /// <summary>One reason per line, as many as fit: a long order billed early must still go in.</summary>
+    private static string HoldText(IReadOnlyList<string> reasons)
+    {
+        const int limit = 2000;
+        const int room = 40;
+        var text = string.Join('\n', reasons);
+        if (text.Length <= limit)
+            return text;
+        var kept = new List<string>();
+        var length = 0;
+        foreach (var reason in reasons)
+        {
+            if (length + reason.Length + 1 > limit - room)
+                break;
+            kept.Add(reason);
+            length += reason.Length + 1;
+        }
+
+        kept.Add($"... and {reasons.Count - kept.Count} more differences.");
+        return string.Join('\n', kept);
     }
 
     public void Approve(string by, DateTimeOffset at, string? note) => Decide(BillApproval.Approved, by, at, note);
@@ -186,7 +215,8 @@ public sealed class Bill
         {
             if (draft.AccountId == Guid.Empty)
                 throw new DomainException("bill.line_account_required", $"Line {index}: choose a category.");
-            if (draft.Amount == 0m)
+            // Goods can come free (a sample, a line at no cost on an order): they still go into stock.
+            if (draft.Amount == 0m && draft.ItemId is null)
                 throw new DomainException("bill.line_zero", $"Line {index}: the amount can't be zero.");
             if (decimal.Round(draft.Amount, 2) != draft.Amount)
                 throw new DomainException("money.precision", $"Line {index}: amounts can have at most 2 decimal places.");
@@ -213,7 +243,7 @@ public sealed class Bill
     {
         ArgumentNullException.ThrowIfNull(lines);
         var drafts = new List<JournalLineDraft> { JournalLineDraft.Cr(payableAccountId, lines.Sum(l => l.Amount), memo) };
-        drafts.AddRange(lines.Select(l => l.Amount > 0m
+        drafts.AddRange(lines.Where(l => l.Amount != 0m).Select(l => l.Amount > 0m
             ? JournalLineDraft.Dr(l.AccountId, l.Amount, l.Description, l.ClassId)
             : JournalLineDraft.Cr(l.AccountId, -l.Amount, l.Description, l.ClassId)));
         return drafts;
@@ -318,7 +348,7 @@ public sealed class Bill
 
         SetEnteredBy(changedBy);
         Approval = BillApproval.Pending;
-        HoldReason = Text.Optional(string.Join('\n', reasons), 2000, "bill.hold_too_long", "Hold reason");
+        HoldReason = HoldText(reasons);
     }
 
     public void Void()

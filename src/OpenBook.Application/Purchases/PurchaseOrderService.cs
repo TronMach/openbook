@@ -133,6 +133,13 @@ public sealed class PurchaseOrderService(
     public async Task<PurchaseOrder> CancelAsync(Guid id, CancellationToken ct = default)
     {
         var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        // A cancelled order takes no bills, so what's arrived would never be paid for or come off "Received Not Billed".
+        var unbilled = (await ProgressAsync(order, ct)).Lines
+            .Where(l => l.Line.IsItem && l.Line.UnitCost > 0m && l.Received > l.BilledQuantity)
+            .Select(l => l.Line.Description ?? $"line {l.Line.LineNumber}").ToList();
+        if (unbilled.Count > 0)
+            throw new DomainException("purchaseorder.received_not_billed",
+                $"Goods have arrived on this order and aren't billed ({string.Join(", ", unbilled)}). Enter the bill for them, or take the delivery back, then cancel the rest.");
         var before = Snapshot(order);
         order.Cancel();
         store.Add(Audit(AuditAction.Updated, order, before));
@@ -295,7 +302,7 @@ public sealed class PurchaseOrderService(
                 : new BillOrderLine(s.LineNumber, 1m, s.Amount))
             .ToList();
         var settings = await store.GetPurchasingSettingsAsync(ct) ?? PurchasingSettings.Create();
-        var fromOrder = picks.Count == 0 ? 0 : (await PlanBillAsync(order, progress, settings, picks, extra: null, ct)).Drafts.Count;
+        var fromOrder = bill.LinesFromOrder ?? (picks.Count == 0 ? 0 : (await PlanBillAsync(order, progress, settings, picks, extra: null, ct)).Drafts.Count);
         var extra = bill.Lines.OrderBy(l => l.LineNumber).Skip(fromOrder).Select(l => l.ToDraft()).ToList();
         return new BillFromOrderParts(order, progress.Lines, picks, extra);
     }
@@ -343,7 +350,8 @@ public sealed class PurchaseOrderService(
                         ? inStockValue - status.BilledFromStockAmount
                         : decimal.Round(accruedQuantity * line.UnitCost, 2, MidpointRounding.AwayFromZero);
                     var accruedBilled = accruedQuantity == pick.Quantity ? amount : decimal.Round(accruedQuantity * cost, 2, MidpointRounding.AwayFromZero);
-                    drafts.Add(new Domain.Purchases.BillLineDraft((await ReceivedNotBilledAsync(ct)).Id, accruedAmount, $"{line.Description} (received)"));
+                    if (accruedAmount != 0m)
+                        drafts.Add(new Domain.Purchases.BillLineDraft((await ReceivedNotBilledAsync(ct)).Id, accruedAmount, $"{line.Description} (received)"));
                     if (accruedBilled != accruedAmount)
                         drafts.Add(new Domain.Purchases.BillLineDraft((await PriceVarianceAsync(ct)).Id, accruedBilled - accruedAmount, $"{line.Description}: price difference"));
                     if (pick.Quantity > accruedQuantity)
@@ -374,13 +382,14 @@ public sealed class PurchaseOrderService(
             }
         }
 
-        if (drafts.Count == 0)
+        if (sources.Count == 0)
             throw new DomainException("purchaseorder.nothing_to_bill", "Enter the quantities to bill.");
+        var fromOrder = drafts.Count;
         drafts.AddRange(extra ?? []);
         var completes = progress.Lines.All(l =>
             (l.Line.IsItem ? l.BilledQuantity : l.BilledAmount) + sources.Where(s => s.LineNumber == l.Line.LineNumber).Sum(s => l.Line.IsItem ? s.Quantity : s.Amount)
             >= (l.Line.IsItem ? l.Line.Quantity : l.Line.Amount));
-        return (drafts, new BillSource(order.Id, sources, exceptions, completes));
+        return (drafts, new BillSource(order.Id, sources, exceptions, completes, fromOrder));
     }
 
     /// <summary>

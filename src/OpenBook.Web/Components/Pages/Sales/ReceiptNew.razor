@@ -103,7 +103,7 @@
 
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
-    private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
+    private string? TaxExemption => SelectedTax is null ? null : CustomerTree.ExemptionOn(TaxCustomer, _date, _customers);
     private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
 
     /// <summary>Starts the document with the customer's tax code, when it can be charged.</summary>

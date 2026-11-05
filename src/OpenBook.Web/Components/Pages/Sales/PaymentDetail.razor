@@ -135,7 +135,7 @@
             return;
         _customer = await CustomerService.GetAsync(_payment.CustomerId);
         _chart = await AccountService.GetChartAsync();
-        _invoices = (await Invoices.ListAsync(_payment.CustomerId)).ToDictionary(i => i.Id);
+        _invoices = (await Invoices.GetManyAsync(_payment.Applications.Select(a => a.InvoiceId).ToList())).ToDictionary(i => i.Id);
         _changes = await Payments.ChangesAsync(Id);
     }
 

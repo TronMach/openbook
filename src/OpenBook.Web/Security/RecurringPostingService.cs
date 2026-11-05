@@ -64,61 +64,71 @@ internal sealed partial class RecurringPostingService(
 
         await StepAsync("Recurring entries", async services =>
         {
+            var failures = new List<string>();
             foreach (var result in await services.GetRequiredService<RecurringEntryService>().PostDueAsync(today, autoPostOnly: true, ct))
             {
                 if (result.Posted.Count > 0)
                     LogPosted(result.Posted.Count, result.Template.Name);
                 if (result.Error is not null)
-                    LogStopped(result.Template.Name, result.Error);
+                    failures.Add(Stopped(result.Template.Name, result.Error));
             }
+            EnsureNone(failures);
             return true;
         }, ct);
 
         await StepAsync("Recurring invoices", async services =>
         {
+            var failures = new List<string>();
             foreach (var result in await services.GetRequiredService<RecurringInvoiceService>().CreateDueAsync(today, automaticOnly: true, ct))
             {
                 if (result.Created.Count > 0)
                     LogInvoicesCreated(result.Created.Count, result.Template.Name, result.Emailed);
                 if (result.Error is not null)
-                    LogStopped(result.Template.Name, result.Error);
+                    failures.Add(Stopped(result.Template.Name, result.Error));
                 if (result.EmailError is not null)
-                    LogStopped(result.Template.Name, result.EmailError);
+                    failures.Add(Stopped(result.Template.Name, result.EmailError));
             }
+            EnsureNone(failures);
             return true;
         }, ct);
 
         await StepAsync("Recurring bills", async services =>
         {
+            var failures = new List<string>();
             foreach (var result in await services.GetRequiredService<RecurringBillService>().CreateDueAsync(today, automaticOnly: true, ct))
             {
                 if (result.Created.Count > 0)
                     LogBillsCreated(result.Created.Count, result.Template.Name);
                 if (result.Error is not null)
-                    LogStopped(result.Template.Name, result.Error);
+                    failures.Add(Stopped(result.Template.Name, result.Error));
             }
+            EnsureNone(failures);
             return true;
         }, ct);
 
         await StepAsync("Recurring expenses", async services =>
         {
+            var failures = new List<string>();
             foreach (var result in await services.GetRequiredService<OpenBook.Application.Banking.RecurringExpenseService>().CreateDueAsync(today, automaticOnly: true, ct))
             {
                 if (result.Created.Count > 0)
                     LogExpensesCreated(result.Created.Count, result.Template.Name);
                 if (result.Error is not null)
-                    LogStopped(result.Template.Name, result.Error);
+                    failures.Add(Stopped(result.Template.Name, result.Error));
             }
+            EnsureNone(failures);
             return true;
         }, ct);
 
         await StepAsync("Recurring gifts", async services =>
         {
+            var failures = new List<string>();
             foreach (var result in await services.GetRequiredService<OpenBook.Application.Nonprofit.RecurringGiftService>().CreateDueAsync(today, automaticOnly: true, ct: ct))
             {
                 if (result.Error is not null)
                     LogStopped($"recurring gift {result.Template.Id}", result.Error);
             }
+            EnsureNone(failures);
             return true;
         }, ct);
 
@@ -184,6 +194,19 @@ internal sealed partial class RecurringPostingService(
     /// saved again by the next part, and any failure is logged rather than stopping the other parts or the app.
     /// </summary>
     /// <returns>The step's answer; false when it failed.</returns>
+    /// <summary>A template that stopped is a failure of the step, or the System page would call it healthy.</summary>
+    private string Stopped(string template, string error)
+    {
+        LogStopped(template, error);
+        return $"{template}: {error}";
+    }
+
+    private static void EnsureNone(List<string> failures)
+    {
+        if (failures.Count > 0)
+            throw new DomainException("job.items_failed", string.Join("; ", failures));
+    }
+
     private async Task<bool> StepAsync(string what, Func<IServiceProvider, Task<bool>> step, CancellationToken ct)
     {
         var started = DateTimeOffset.UtcNow;

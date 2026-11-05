@@ -81,6 +81,12 @@ public sealed class InvoiceService(
 
     public Task<Invoice?> GetAsync(Guid id, CancellationToken ct = default) => store.GetInvoiceAsync(id, ct);
 
+    /// <summary>The invoices with these ids, whoever's they are (a parent's payment can settle a sub-customer's).</summary>
+    public Task<IReadOnlyList<Invoice>> GetManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default) => store.GetInvoicesAsync(ids, ct);
+
+    /// <summary>Late fee invoices charged on this one, standing or voided.</summary>
+    public Task<IReadOnlyList<Invoice>> LateFeesOnAsync(Guid id, CancellationToken ct = default) => store.ListLateFeesOnAsync(id, ct);
+
     public Task<IReadOnlyList<Invoice>> ListAsync(Guid? customerId = null, CancellationToken ct = default) => store.ListInvoicesAsync(customerId, ct);
 
     public Task<IReadOnlyList<CustomerPayment>> ListPaymentsAsync(Guid invoiceId, CancellationToken ct = default) =>
@@ -244,7 +250,7 @@ public sealed class InvoiceService(
         var drafts = command.Lines.ToList();
         EnsureLockedLinesKept(invoice, drafts);
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
-            new TaxAsCharged(invoice.TaxCodeId, invoice.TaxExemption, invoice.CustomerId, invoice.Lines), ct);
+            new TaxAsCharged(invoice.TaxCodeId, invoice.TaxExemption, invoice.CustomerId, invoice.Lines, command.FromLines), ct);
         var dueDate = command.DueDate ?? command.Date.AddDays(invoice.DueDate.DayNumber - invoice.Date.DayNumber);
         if (lines.Sum(l => l.Amount) < invoice.AmountPaid)
             throw new DomainException("invoice.total_below_paid",
@@ -353,6 +359,8 @@ public sealed class InvoiceService(
             throw new DomainException("invoice.already_voided", $"Invoice {invoice.Number} is already voided.");
         if (invoice.AmountPaid > 0m)
             throw new DomainException("invoice.has_payments", $"Invoice {invoice.Number} has payments or credits applied. Void or remove those first.");
+        if ((await store.ListLateFeesOnAsync(invoice.Id, ct)).Where(f => f.Status == DocumentStatus.Posted).Select(f => f.Number).ToList() is { Count: > 0 } fees)
+            throw new DomainException("invoice.has_late_fees", $"Invoice {invoice.Number} has late fees on it ({string.Join(", ", fees)}). Void those first.");
 
         var stock = await inventory.PlanReversalAsync(InventorySources.Invoice, invoice.Id, invoice.Date, $"invoice {invoice.Number}", ct);
         var before = Snapshot(invoice);

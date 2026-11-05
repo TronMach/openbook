@@ -362,7 +362,7 @@ public static class Prices
                 price = price * (100m + level.Percent) / 100m;
                 steps.Add($"{level.Name} ({Signed(level.Percent)}%)");
             }
-            else if (level.Kind == PriceLevelKind.PerItem && level.PriceFor(item.Id) is { } levelPrice)
+            else if (level.Kind == PriceLevelKind.PerItem && level.PriceFor(item.Id) is { } levelPrice && levelPrice != price)
             {
                 price = levelPrice;
                 steps.Add(level.Name);
@@ -400,7 +400,7 @@ public static class Prices
         }
 
         price = Math.Max(0m, price);
-        price = steps.Count == 0 ? item.Rate : Round(price, deciding?.Rounding ?? companyRounding);
+        price = steps.Count == 0 || price == item.Rate ? item.Rate : Round(price, deciding?.Rounding ?? companyRounding);
         return new PriceQuote(item.Rate, decimal.Round(price, SalesLine.Precision, MidpointRounding.AwayFromZero), steps);
     }
 }

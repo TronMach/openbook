@@ -50,6 +50,20 @@ public sealed class SalesTaxPaymentService(
         return agencies.ToDictionary(a => a.Id, a => -balances.GetValueOrDefault(a.LiabilityAccountId));
     }
 
+    /// <summary>
+    /// What's left to pay for the period ending on the date: the balance then, less payments made since for that period.
+    /// A payment dated after the period doesn't touch the balance on its last day, so it would otherwise look unpaid.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, decimal>> OwedForPeriodAsync(DateOnly periodEnd, CancellationToken ct = default)
+    {
+        var owed = await OwedAsync(periodEnd, ct);
+        var paid = (await store.ListPaymentsAsync(null, ct))
+            .Where(p => p.Status == DocumentStatus.Posted && p.PeriodEnd == periodEnd && p.Date > periodEnd)
+            .GroupBy(p => p.AgencyId)
+            .ToDictionary(g => g.Key, g => g.Sum(p => p.LiabilitySettled));
+        return owed.ToDictionary(o => o.Key, o => o.Value - paid.GetValueOrDefault(o.Key));
+    }
+
     public async Task<SalesTaxPayment> PayAsync(PaySalesTaxCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);

@@ -52,7 +52,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _open = (await Billables.ListAsync()).Where(b => b.InvoiceId is null).ToList();
+        _open = (await Billables.ListAsync()).Where(b => b.InvoiceId is null && b.IsBillable).ToList();
         _names = await CustomerService.FullNamesAsync();
     }
 }

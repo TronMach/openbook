@@ -119,7 +119,7 @@ public static class PurchasingEndpoints
             await Back("/purchases/approvals/settings", async () =>
             {
                 await approvals.SaveSettingsAsync(new PurchasingSettingsCommand(
-                    Amount(form["threshold"]), Amount(form["tolerance"]) ?? 0m, form["requireReceipt"] == "true", form["allowSelfApproval"] == "true", form["receiveIntoStock"] == "true"), ct);
+                    Amount(form["threshold"]), Amount(form["tolerance"]) ?? 0m, form["requireReceipt"] == "true", form["allowSelfApproval"] == "true", form["receiveIntoStock"] == "true", form["net1099Refunds"] == "true"), ct);
                 return "done=saved";
             })).RequireAuthorization();
 

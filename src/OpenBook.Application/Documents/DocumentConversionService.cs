@@ -51,19 +51,24 @@ public sealed class DocumentConversionService(
         var extra = new List<BillLineDraft>();
         var expected = 0m;
         var used = new HashSet<int>();
+        var ordered = new Dictionary<int, (decimal Quantity, decimal Amount, int First)>();
         foreach (var line in Priced(document))
         {
-            var orderLine = order?.Lines.FirstOrDefault(l => !used.Contains(l.LineNumber) &&
-                (line.Line.ItemId is { } itemId ? l.ItemId == itemId : l.ItemId is null && string.Equals(l.Description, line.Line.Description, StringComparison.OrdinalIgnoreCase)));
+            bool Same(PurchaseOrderLine l) => line.Line.ItemId is { } itemId
+                ? l.ItemId == itemId
+                : l.ItemId is null && string.Equals(l.Description, line.Line.Description, StringComparison.OrdinalIgnoreCase);
+
+            // An item printed twice is one order line billed in two pieces.
+            var orderLine = order?.Lines.FirstOrDefault(l => !used.Contains(l.LineNumber) && Same(l))
+                ?? (line.Line.ItemId is null ? null : order?.Lines.FirstOrDefault(Same));
             if (orderLine is not null)
             {
                 used.Add(orderLine.LineNumber);
                 if (orderLine.IsItem)
                 {
                     var quantity = line.Line.Quantity ?? throw new DomainException("document.quantity_required", $"Enter the quantity on line {line.Line.LineNumber}.");
-                    var cost = line.Line.UnitPrice ?? decimal.Round(line.Amount / quantity, 4, MidpointRounding.AwayFromZero);
-                    picks.Add(new BillOrderLine(orderLine.LineNumber, quantity, cost));
-                    expected += decimal.Round(quantity * cost, 2, MidpointRounding.AwayFromZero);
+                    var soFar = ordered.GetValueOrDefault(orderLine.LineNumber, (0m, 0m, line.Line.LineNumber));
+                    ordered[orderLine.LineNumber] = (soFar.Item1 + quantity, soFar.Item2 + line.Amount, soFar.Item3);
                 }
                 else
                 {
@@ -76,6 +81,17 @@ public sealed class DocumentConversionService(
 
             extra.Add(BillLine(line, vendor, items, accounts));
             expected += line.Amount;
+        }
+
+        // The printed amount decides, as on a plain bill: unit prices are often rounded, or come before a discount.
+        foreach (var (number, (quantity, amount, first)) in ordered)
+        {
+            var cost = decimal.Round(amount / quantity, 4, MidpointRounding.AwayFromZero);
+            if (decimal.Round(quantity * cost, 2, MidpointRounding.AwayFromZero) != amount)
+                throw new DomainException("document.line_cost", string.Create(CultureInfo.CurrentCulture,
+                    $"Line {first}: {quantity:0.####} at a unit cost of four decimals can't come to exactly {amount:N2}. Correct the line's amount."));
+            picks.Add(new BillOrderLine(number, quantity, cost));
+            expected += amount;
         }
 
         var charges = Charges(document, vendor, accounts).ToList();

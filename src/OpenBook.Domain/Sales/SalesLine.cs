@@ -254,6 +254,18 @@ public sealed class SalesLine
         };
     }
 
+    /// <summary>On a correction: this line carries on <paramref name="original"/>, so it stays as it was sold.</summary>
+    /// <param name="original">The line it continues, for the same item.</param>
+    /// <param name="keepAccount">False when the old income account has been made inactive.</param>
+    public void KeepFrom(SalesLine original, bool keepAccount)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        if (keepAccount)
+            IncomeAccountId = original.IncomeAccountId;
+        ListRate = original.ListRate;
+        PriceSource = Rate == original.Rate ? original.PriceSource : Rate == ListRate ? null : ManualPrice;
+    }
+
     /// <summary>
     /// The draft that would recreate this line (for copying an estimate or a recurring template). Tax lines
     /// have none: they're recalculated.

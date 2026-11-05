@@ -270,6 +270,8 @@ public sealed class VendorCreditService(
             throw new DomainException("refund.amount_not_positive", "Enter an amount above zero.");
         if (command.Amount > credit.Balance)
             throw new DomainException("refund.exceeds_credit", $"This credit has only {credit.Balance:N2} left.");
+        if (command.Date < credit.Date)
+            throw new DomainException("refund.before_source", "A refund can't be dated before the credit it pays back.");
         var account = (await accounts.GetChartAsync(ct)).Get(command.DepositAccountId);
         if (account.Type is not (AccountType.Bank or AccountType.CreditCard or AccountType.OtherCurrentAsset) || !account.IsActive)
             throw new DomainException("refund.account_type", $"'{account.Name}' can't receive a refund; choose a bank, card or Undeposited Funds account.");

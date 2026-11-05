@@ -183,11 +183,12 @@ public sealed class ReceivablesService(ISalesStore store)
             buckets = buckets.Add(daysPastDue, balance);
         }
 
+        var later = data.DatedAfter(asOf);
         var refunds = customerIds.SelectMany(id => data.RefundsOf[id]).Where(r => r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
         var credits = new List<OpenCredit>();
         foreach (var c in customerIds.SelectMany(id => data.CreditMemosOf[id]).Where(c => c.Status == DocumentStatus.Posted && c.Date <= asOf))
         {
-            var left = c.Total - c.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
+            var left = c.Total - c.Applications.Where(a => a.AppliedOn <= asOf && !later.Contains(a.InvoiceId)).Sum(a => a.Amount)
                 - refunds.Where(r => r.CreditMemoId == c.Id).Sum(r => r.Amount);
             if (left != 0m)
                 credits.Add(new OpenCredit(CreditKind.CreditMemo, c.Id, $"Credit memo {c.Number}", c.Date, left));
@@ -195,7 +196,7 @@ public sealed class ReceivablesService(ISalesStore store)
 
         foreach (var p in customerIds.SelectMany(id => data.PaymentsOf[id]).Where(p => p.Status == DocumentStatus.Posted && p.Date <= asOf))
         {
-            var left = p.Amount - p.Applications.Where(a => a.AppliedOn <= asOf).Sum(a => a.Amount)
+            var left = p.Amount - p.Applications.Where(a => a.AppliedOn <= asOf && !later.Contains(a.InvoiceId)).Sum(a => a.Amount)
                 - refunds.Where(r => r.CustomerPaymentId == p.Id).Sum(r => r.Amount);
             if (left != 0m)
                 credits.Add(new OpenCredit(CreditKind.Payment, p.Id, p.Reference is null ? "Unapplied payment" : $"Unapplied payment {p.Reference}", p.Date, left));
@@ -216,12 +217,19 @@ public sealed class ReceivablesService(ISalesStore store)
         IReadOnlyList<CreditMemo> CreditMemos,
         IReadOnlyList<CustomerRefund> Refunds,
         IReadOnlyList<BadDebtWriteOff> WriteOffs,
-        IReadOnlyList<Retainer> Retainers)
+        IReadOnlyList<Retainer> Retainers,
+        IReadOnlyCollection<Guid> Later)
     {
         public Ledger(IReadOnlyList<Customer> customers, ReceivableDocuments documents)
-            : this(customers, documents.Invoices, documents.Payments, documents.CreditMemos, documents.Refunds, documents.WriteOffs, documents.Retainers)
+            : this(customers, documents.Invoices, documents.Payments, documents.CreditMemos, documents.Refunds, documents.WriteOffs, documents.Retainers, documents.InvoicesDatedLater ?? [])
         {
         }
+
+        /// <summary>
+        /// Invoices not yet dated on the date. An application to one isn't a settlement of anything then: the money
+        /// counts as credit, or the aging is short of A/R by the amount.
+        /// </summary>
+        public HashSet<Guid> DatedAfter(DateOnly asOf) => [.. Later, .. Invoices.Where(i => i.Date > asOf).Select(i => i.Id)];
 
         public ILookup<Guid, Invoice> InvoicesOf { get; } = Invoices.ToLookup(i => i.CustomerId);
         public ILookup<Guid, CustomerPayment> PaymentsOf { get; } = Payments.ToLookup(p => p.CustomerId);

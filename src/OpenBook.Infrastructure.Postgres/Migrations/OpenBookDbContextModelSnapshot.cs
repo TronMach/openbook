@@ -3938,6 +3938,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("JournalEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("LinesFromOrder")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("uuid");
 
@@ -4139,6 +4142,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("ApprovalThresholdMinor");
 
+                    b.Property<bool>("Net1099Refunds")
+                        .HasColumnType("boolean");
+
                     b.Property<long>("PriceTolerancePercent")
                         .HasColumnType("bigint")
                         .HasColumnName("PriceTolerancePercentTenThousandths");
@@ -4205,6 +4211,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("VendorName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

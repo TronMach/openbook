@@ -10,13 +10,13 @@ namespace OpenBook.Application.Sales;
 public sealed record BuiltSalesLines(IReadOnlyList<SalesLine> Lines, Guid? TaxCodeId, string? TaxExemption);
 
 /// <summary>The tax a document was charged, which a correction keeps.</summary>
-public sealed record TaxAsCharged(Guid? TaxCodeId, string? TaxExemption, Guid? CustomerId, IReadOnlyList<SalesLine> Lines);
+public sealed record TaxAsCharged(Guid? TaxCodeId, string? TaxExemption, Guid? CustomerId, IReadOnlyList<SalesLine> Lines, IReadOnlyList<int?>? FromLines = null);
 
 /// <summary>
 /// Turns line drafts into validated sales lines: prices automatically priced lines for the customer, looks up the
 /// items and, when needed, the discounts account; then adds the sales tax lines.
 /// </summary>
-public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccounts, ISalesTaxStore taxes, PricingService pricing)
+public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccounts, ISalesTaxStore taxes, PricingService pricing, ILedgerStore ledger)
 {
     /// <summary>Lines without sales tax.</summary>
     public async Task<IReadOnlyList<SalesLine>> BuildAsync(IReadOnlyList<SalesLineDraft> drafts, CancellationToken ct)
@@ -46,8 +46,25 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
             return new BuiltSalesLines(lines, null, null);
 
         var components = await SalesTaxService.ComponentsAsync(taxes, id, ct);
-        var exemption = customer?.ExemptionOn(date);
+        var exemption = customer is { BillWithParent: true } ? CustomerTree.ExemptionOn(customer, date, await store.ListCustomersAsync(ct)) : customer?.ExemptionOn(date);
         return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, exemption is not null)], id, exemption);
+    }
+
+    /// <summary>
+    /// A line that goes on being the same item keeps the income account and list price it was sold under: a change
+    /// to the item since doesn't reach back into a document being corrected.
+    /// </summary>
+    private async Task KeepOriginalsAsync(IReadOnlyList<SalesLine> lines, TaxAsCharged charged, CancellationToken ct)
+    {
+        var old = charged.Lines.Where(l => l.Kind != SalesLineKind.Tax).ToDictionary(l => l.LineNumber);
+        var active = await ledger.GetAccountsAsync(old.Values.Select(l => l.IncomeAccountId).OfType<Guid>().Distinct().ToList(), ct);
+        var current = lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).ToList();
+        for (var i = 0; i < current.Count; i++)
+        {
+            var from = charged.FromLines is { } map ? (i < map.Count ? map[i] : null) : current[i].LineNumber;
+            if (from is { } number && old.TryGetValue(number, out var original) && original.ItemId is not null && original.ItemId == current[i].ItemId)
+                current[i].KeepFrom(original, original.IncomeAccountId is { } account && active.TryGetValue(account, out var a) && a.IsActive);
+        }
     }
 
     /// <summary>
@@ -63,9 +80,14 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         var codeId = taxCodeId ?? charged.TaxCodeId ?? Guid.Empty;
         var components = TaxCalculator.Charged(charged.Lines);
         if (codeId != charged.TaxCodeId || customer?.Id != charged.CustomerId || components.Count == 0)
-            return await BuildAsync(drafts, customer, codeId, date, ct);
+        {
+            var built = await BuildAsync(drafts, customer, codeId, date, ct);
+            await KeepOriginalsAsync(built.Lines, charged, ct);
+            return built;
+        }
 
         var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
+        await KeepOriginalsAsync(lines, charged, ct);
         return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, charged.TaxExemption is not null)], codeId, charged.TaxExemption);
     }
 

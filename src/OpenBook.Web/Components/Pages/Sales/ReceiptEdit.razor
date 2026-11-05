@@ -119,7 +119,7 @@
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
     private bool KeepsTax => _taxCodeId == _receipt?.TaxCodeId && _customerId == _receipt?.CustomerId;
-    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _receipt?.TaxExemption : TaxCustomer?.ExemptionOn(_date);
+    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _receipt?.TaxExemption : CustomerTree.ExemptionOn(TaxCustomer, _date, _customers);
     private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
 
     private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty

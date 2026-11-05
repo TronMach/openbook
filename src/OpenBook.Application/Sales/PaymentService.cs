@@ -187,6 +187,8 @@ public sealed class PaymentService(
         var discountsAccount = discount > 0m ? await salesAccounts.GetOrCreateDiscountsAsync(ct) : null;
         // Validates the amounts before anything is staged.
         CustomerPayment.Create(payment.Id, customer.Id, command.Date, amount, depositId, payment.ReceivableAccountId, applications, Guid.Empty, clock.UtcNow, reference, command.Memo);
+        if (payment.AmountRefunded > 0m && (await store.ListRefundsAsync(payment.CustomerId, ct)).Any(r => r.CustomerPaymentId == payment.Id && r.Status == DocumentStatus.Posted && r.Date < command.Date))
+            throw new DomainException("refund.before_source", "This payment has a refund dated before that, and a refund can't come before the money it pays back.");
         if (amount - applications.Sum(a => a.Amount) < payment.AmountRefunded)
             throw new DomainException("payment.refund_not_covered",
                 $"{payment.AmountRefunded:N2} of this payment was refunded, so at least that much has to stay unapplied.");

@@ -91,15 +91,17 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .Select(r => new { r.CustomerPaymentId, r.CreditMemoId }).ToListAsync(ct);
         var paymentsRefundedLater = refundedLater.Where(r => r.CustomerPaymentId != null).Select(r => r.CustomerPaymentId!.Value).ToList();
         var memosRefundedLater = refundedLater.Where(r => r.CreditMemoId != null).Select(r => r.CreditMemoId!.Value).ToList();
+        // Paid or credited ahead of an invoice dated after the day: credit on it, though nothing's unused now.
+        var datedLater = await db.Invoices.Where(i => i.Date > asOf).Select(i => i.Id).ToListAsync(ct);
         var creditPayments = await db.CustomerPayments.AsNoTracking()
             .Where(p => p.Status == posted && p.Date <= asOf && (p.Amount - p.Applications.Sum(a => a.Amount) - p.AmountRefunded != 0m
-                || p.Applications.Any(a => a.AppliedOn > asOf) || paymentsRefundedLater.Contains(p.Id)))
+                || p.Applications.Any(a => a.AppliedOn > asOf || datedLater.Contains(a.InvoiceId)) || paymentsRefundedLater.Contains(p.Id)))
             .ToListAsync(ct);
         var creditMemos = await db.CreditMemos.AsNoTracking()
             .Where(c => c.Status == posted && c.Date <= asOf && (c.Total - c.Applications.Sum(a => a.Amount) - c.AmountRefunded != 0m
-                || c.Applications.Any(a => a.AppliedOn > asOf) || memosRefundedLater.Contains(c.Id)))
+                || c.Applications.Any(a => a.AppliedOn > asOf || datedLater.Contains(a.InvoiceId)) || memosRefundedLater.Contains(c.Id)))
             .ToListAsync(ct);
-        return await WithSettlementsAsync(invoices, creditPayments, creditMemos, [], [], ct);
+        return await WithSettlementsAsync(invoices, creditPayments, creditMemos, [], [], ct) with { InvoicesDatedLater = datedLater };
     }
 
     public async Task<ReceivableDocuments> ListReceivablesForAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken ct)
@@ -177,6 +179,9 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .OrderByDescending(i => i.Date)
             .ThenByDescending(i => i.CreatedAt)
             .ToList();
+
+    public async Task<IReadOnlyList<Invoice>> ListLateFeesOnAsync(Guid invoiceId, CancellationToken ct) =>
+        await db.Invoices.AsNoTracking().Where(i => i.LateFeeForInvoiceId == invoiceId).ToListAsync(ct);
 
     public async Task<IReadOnlyDictionary<Guid, DateOnly>> LastLateFeesAsync(CancellationToken ct) =>
         // Only fee invoices are read (two columns each); the latest per invoice is found here, not in SQL. Voided ones
