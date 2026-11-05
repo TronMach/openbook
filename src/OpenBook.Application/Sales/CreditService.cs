@@ -165,7 +165,8 @@ public sealed class CreditService(
             throw new DomainException("creditmemo.number_taken", $"Credit memo number {number} is already used.");
 
         var drafts = command.Lines.ToList();
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId ?? credit.TaxCodeId ?? Guid.Empty, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
+            new TaxAsCharged(credit.TaxCodeId, credit.TaxExemption, credit.CustomerId, credit.Lines), ct);
         var used = credit.AmountApplied + credit.AmountRefunded;
         if (lines.Sum(l => l.Amount) < used)
             throw new DomainException("creditmemo.total_below_used",

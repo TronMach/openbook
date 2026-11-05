@@ -9,6 +9,9 @@ namespace OpenBook.Application.Sales;
 /// <param name="TaxExemption">The customer's exemption on the document date, when they have one.</param>
 public sealed record BuiltSalesLines(IReadOnlyList<SalesLine> Lines, Guid? TaxCodeId, string? TaxExemption);
 
+/// <summary>The tax a document was charged, which a correction keeps.</summary>
+public sealed record TaxAsCharged(Guid? TaxCodeId, string? TaxExemption, Guid? CustomerId, IReadOnlyList<SalesLine> Lines);
+
 /// <summary>
 /// Turns line drafts into validated sales lines: prices automatically priced lines for the customer, looks up the
 /// items and, when needed, the discounts account; then adds the sales tax lines.
@@ -45,6 +48,25 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         var components = await SalesTaxService.ComponentsAsync(taxes, id, ct);
         var exemption = customer?.ExemptionOn(date);
         return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, exemption is not null)], id, exemption);
+    }
+
+    /// <summary>
+    /// Lines for a corrected document. Under the same customer and tax code it keeps the rates and exemption it was
+    /// charged, whatever they are today, and whether or not the code can still be charged: only the amounts follow the
+    /// lines. Another code is charged as it stands now.
+    /// </summary>
+    /// <param name="taxCodeId">Null keeps the document's code; <see cref="Guid.Empty"/> charges no tax.</param>
+    public async Task<BuiltSalesLines> BuildCorrectionAsync(
+        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, TaxAsCharged charged, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(charged);
+        var codeId = taxCodeId ?? charged.TaxCodeId ?? Guid.Empty;
+        var components = TaxCalculator.Charged(charged.Lines);
+        if (codeId != charged.TaxCodeId || customer?.Id != charged.CustomerId || components.Count == 0)
+            return await BuildAsync(drafts, customer, codeId, date, ct);
+
+        var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
+        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, charged.TaxExemption is not null)], codeId, charged.TaxExemption);
     }
 
     /// <summary>Automatic item lines get the quoted price and its source; quantity breaks see the item's total on the document.</summary>

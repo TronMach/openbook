@@ -109,6 +109,21 @@ public sealed class AccountantToolsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_1099_file_has_what_was_paid_outside_cards()
+    {
+        var card = await _db.CreateAccount("Visa", AccountType.CreditCard, "2100");
+        var contractor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Dana Designs", Track1099: true, TaxId: "12-3456789")));
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(
+            BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(_contractors.Id, 5_000m)], VendorId: contractor.Id)));
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(
+            BankTransactionKind.Spend, card.Id, Mar1, [new BankSplit(_contractors.Id, 1_000m)], VendorId: contractor.Id)));
+
+        var csv = Encoding.UTF8.GetString(await In<AccountantPackageService, byte[]>(s => s.Filing1099CsvAsync(2026)));
+
+        Assert.Contains(",5000.00,", csv.Split("\r\n")[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_package_holds_every_report_and_the_1099_data_with_full_tax_ids()
     {
         var contractor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Dana Designs", Address: "1 Main St\nSpringfield", Track1099: true, TaxId: "12-3456789")));

@@ -1,6 +1,6 @@
 @* The tax code picker on sales forms; hidden until the company has tax codes. *@
 
-@if (Choices.Count > 0 || Value is not null)
+@if (Choices.Count > 0 || Value is not null || CustomerCodeOff)
 {
     <div class="field">
         <label for="tax-code">Sales tax</label>
@@ -11,7 +11,11 @@
                 <option value="@c.Code.Id">@c.Code.Name (@Labels.Percent(c.CombinedPercent))</option>
             }
         </select>
-        @if (Exemption is not null)
+        @if (CustomerCodeOff && Value is null)
+        {
+            <span class="hint warn">This customer's tax code can't be charged now, so no tax is set. Choose one, or give the customer another code.</span>
+        }
+        else if (Exemption is not null)
         {
             <span class="hint">Exempt: @Exemption. Tax is charged at zero.</span>
         }
@@ -28,6 +32,10 @@
 
     [Parameter]
     public Guid? Value { get; set; }
+
+    /// <summary>The customer has a tax code, but it can't be charged now.</summary>
+    [Parameter]
+    public bool CustomerCodeOff { get; set; }
 
     [Parameter]
     public EventCallback<Guid?> ValueChanged { get; set; }

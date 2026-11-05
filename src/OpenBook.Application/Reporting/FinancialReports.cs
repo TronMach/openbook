@@ -54,17 +54,13 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
         var types = chart.All.ToDictionary(a => a.Id, a => a.Type);
         decimal NetIncome(IEnumerable<LedgerLine> ls) =>
             -ls.Where(l => types.TryGetValue(l.AccountId, out var t) && !t.IsBalanceSheet()).Sum(l => l.Amount);
-        var retained = NetIncome(lines.Where(l => l.Date < fiscalStart));
+        var retained = -PriorYears(lines, fiscalStart, chart).Sum(l => l.Amount);
         var thisYear = NetIncome(lines.Where(l => l.Date >= fiscalStart));
 
         var equity = BuildSection("Equity", chart, amounts, [AccountType.Equity], show);
         var equityRows = equity.Rows.ToList();
 
-        // With a top-level "Retained Earnings" account (as in the starter charts), prior years' income shows
-        // on it, combined with anything posted to it directly; otherwise as a computed line.
-        var retainedAccount = chart.Ordered(includeInactive: false).Select(x => x.Account).FirstOrDefault(a =>
-            a.Type == AccountType.Equity && a.ParentId is null && string.Equals(a.Name, "Retained Earnings", StringComparison.OrdinalIgnoreCase)
-            && !chart.ChildrenOf(a.Id).Any());
+        var retainedAccount = RetainedEarningsAccount(chart);
         var retainedRow = retainedAccount is null ? -1 : equityRows.FindIndex(r => r.AccountId == retainedAccount.Id);
         if (retainedRow >= 0)
             equityRows[retainedRow] = equityRows[retainedRow] with { Amount = (equityRows[retainedRow].Amount ?? 0m) + retained };
@@ -85,15 +81,37 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
             new ReportSection("Equity", equityRows, equity.Total + retained + thisYear));
     }
 
+    /// <summary>
+    /// No closing entries are posted, so income and expense lines from before the fiscal year are, in effect,
+    /// retained earnings: they don't belong to their accounts' balances any more.
+    /// </summary>
+    internal static IReadOnlyList<LedgerLine> PriorYears(IEnumerable<LedgerLine> lines, DateOnly fiscalStart, ChartOfAccounts chart)
+    {
+        var types = chart.All.ToDictionary(a => a.Id, a => a.Type);
+        return lines.Where(l => l.Date < fiscalStart && types.TryGetValue(l.AccountId, out var t) && !t.IsBalanceSheet()).ToList();
+    }
+
+    /// <summary>
+    /// A top-level "Retained Earnings" account (as in the starter charts), where prior years' income shows, combined
+    /// with anything posted to it directly; without one it's a computed line.
+    /// </summary>
+    internal static Account? RetainedEarningsAccount(ChartOfAccounts chart) =>
+        chart.Ordered(includeInactive: false).Select(x => x.Account).FirstOrDefault(a =>
+            a.Type == AccountType.Equity && a.ParentId is null && string.Equals(a.Name, "Retained Earnings", StringComparison.OrdinalIgnoreCase)
+            && !chart.ChildrenOf(a.Id).Any());
+
     /// <param name="accountId">Only this account (and its subaccounts); null for every account with activity.</param>
     /// <param name="filter">Only lines of this class, location or tag (opening balances too).</param>
     public async Task<GeneralLedger> GeneralLedgerAsync(
         DateOnly? from, DateOnly to, ReportBasis? basis = null, Guid? accountId = null, SegmentFilter? filter = null, CancellationToken ct = default)
     {
-        var reportBasis = basis ?? (await companies.GetRequiredCompanyAsync(ct)).DefaultReportBasis;
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        // History before the period only gives opening balances, so it comes folded.
-        var lines = await ledger.LinesSinceAsync(reportBasis, from ?? DateOnly.MinValue, to, filter, ct);
+        // History before the fiscal year only gives opening balances, so it comes folded. Income and expense accounts
+        // start each fiscal year at zero, as the P&L and balance sheet do, so their opening is this year's so far.
+        var yearStart = from is { } start ? company.FiscalYearStart(start) : DateOnly.MinValue;
+        var lines = await ledger.LinesSinceAsync(reportBasis, yearStart, to, filter, ct);
         var include = accountId is { } id ? Subtree(chart, id).ToHashSet() : null;
 
         var result = new List<GeneralLedgerAccount>();
@@ -105,7 +123,9 @@ public sealed class FinancialReports(ReportLedger ledger, AccountService account
 
             var sign = account.Type.IsDebitNormal() ? 1m : -1m;
             var accountLines = byAccount[account.Id].ToList();
-            var opening = from is { } f ? sign * accountLines.Where(l => l.Date < f).Sum(l => l.Amount) : 0m;
+            var opening = from is { } f
+                ? sign * accountLines.Where(l => l.Date < f && (account.Type.IsBalanceSheet() || l.Date >= yearStart)).Sum(l => l.Amount)
+                : 0m;
             var balance = opening;
             var period = new List<GeneralLedgerLine>();
             foreach (var line in accountLines.Where(l => from is null || l.Date >= from))

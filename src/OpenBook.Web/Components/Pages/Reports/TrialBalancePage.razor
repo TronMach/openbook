@@ -63,7 +63,16 @@
                             {
                                 <td>@line.Number</td>
                             }
-                            <td><a href="/reports/general-ledger?accountId=@line.AccountId&preset=Custom&from=1900-01-01&to=@_report.AsOf.ToString("yyyy-MM-dd")&basis=@_report.Basis">@line.FullName</a></td>
+                            <td>
+                                @if (line.AccountId == Guid.Empty)
+                                {
+                                    @line.FullName
+                                }
+                                else
+                                {
+                                    <a href="/reports/general-ledger?accountId=@line.AccountId&preset=Custom&from=@((line.Type.IsBalanceSheet() ? new DateOnly(1900, 1, 1) : _report.FiscalStart).ToString("yyyy-MM-dd"))&to=@_report.AsOf.ToString("yyyy-MM-dd")&basis=@_report.Basis">@line.FullName</a>
+                                }
+                            </td>
                             <td class="muted">@Labels.For(line.Type)</td>
                             <td class="num">@Labels.AmountOrBlank(line.Debit.Amount)</td>
                             <td class="num">@Labels.AmountOrBlank(line.Credit.Amount)</td>

@@ -162,14 +162,86 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
         Assert.Null(untaxedInvoice.TaxCodeId);
     }
 
+    private async Task RetireSpringfieldAsync()
+    {
+        await In<CustomerService, Customer>(s => s.UpdateAsync(_acme.Id, new CustomerDetails("Acme")));
+        await In<CustomerService, Customer>(s => s.UpdateAsync(_reseller.Id, new CustomerDetails("Reseller")));
+        await Tax(s => s.SetCodeActiveAsync(_springfield.Id, false));
+    }
+
+    private Task<Invoice> Corrected(Invoice invoice, IReadOnlyList<SalesLineDraft>? lines = null, Guid? taxCode = null) =>
+        In<InvoiceService, Invoice>(s => s.ChangeAsync(invoice.Id, new ChangeInvoiceCommand(
+            invoice.Date, lines ?? SalesLine.Drafts(invoice.Lines), "Corrected", Memo: "A new memo", TaxCodeId: taxCode)));
+
+    private static decimal TotalOf(Invoice invoice) => invoice.Lines.Sum(l => l.Amount);
+
+    [Fact]
+    public async Task A_correction_keeps_the_rates_the_document_was_charged()
+    {
+        var invoice = await Invoice(_acme, Mar1, null, Widgets(10)); // 1,000 at 6.25% + 2%
+        await Tax(s => s.UpdateRateAsync(_state.Id, new TaxRateDetails("State", _stateDor.Id, 7m)));
+
+        var memoOnly = await Corrected(invoice);
+        Assert.Equal(1_082.50m, TotalOf(memoOnly));
+        Assert.Equal([6.25m, 2m], memoOnly.Lines.Where(l => l.Kind == SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => l.Rate));
+        Assert.Equal(TotalOf(invoice), TotalOf(memoOnly));
+
+        var moreLines = await Corrected(memoOnly, [Widgets(20)]);
+        Assert.Equal(2_165m, TotalOf(moreLines)); // the tax follows the lines, at the same rates
+
+        var fresh = await Invoice(_acme, Mar1, null, Widgets(10));
+        Assert.Equal(1_090m, TotalOf(fresh)); // new documents take the new rate
+    }
+
+    [Fact]
+    public async Task A_correction_keeps_the_exemption_the_document_had()
+    {
+        var invoice = await Invoice(_reseller, Mar1, null, Widgets(10));
+        Assert.Equal(1_000m, TotalOf(invoice));
+        await In<CustomerService, Customer>(s => s.UpdateAsync(_reseller.Id, new CustomerDetails("Reseller", TaxCodeId: _springfield.Id))); // the certificate's gone since
+
+        var corrected = await In<InvoiceService, Invoice>(s => s.ChangeAsync(invoice.Id, new ChangeInvoiceCommand(
+            new DateOnly(2026, 3, 2), SalesLine.Drafts(invoice.Lines), "Corrected")));
+
+        Assert.Equal(1_000m, TotalOf(corrected));
+        Assert.Equal(invoice.TaxExemption, corrected.TaxExemption);
+    }
+
+    [Fact]
+    public async Task A_document_under_a_retired_code_can_still_be_corrected()
+    {
+        var invoice = await Invoice(_acme, Mar1, null, Widgets(10));
+        await RetireSpringfieldAsync();
+
+        var kept = await Corrected(invoice, taxCode: _springfield.Id);
+        Assert.Equal((1_082.50m, _springfield.Id), (TotalOf(kept), kept.TaxCodeId));
+        Assert.Equal(1_082.50m, TotalOf(await Corrected(kept))); // leaving the code out keeps it too
+
+        var choices = await Tax(s => s.ListChoicesForDocumentAsync(kept.TaxCodeId, kept.Lines));
+        Assert.Equal(8.25m, Assert.Single(choices, c => c.Code.Id == _springfield.Id).CombinedPercent);
+    }
+
+    [Fact]
+    public async Task Choosing_no_tax_or_another_code_on_a_correction_still_works()
+    {
+        var invoice = await Invoice(_acme, Mar1, null, Widgets(10));
+        var other = await Tax(s => s.CreateCodeAsync(new TaxCodeDetails("State only", [_state.Id])));
+        await Tax(s => s.UpdateRateAsync(_state.Id, new TaxRateDetails("State", _stateDor.Id, 7m)));
+
+        Assert.Equal(1_070m, TotalOf(await Corrected(invoice, taxCode: other.Id))); // another code, as it stands today
+        var untaxed = await Corrected((await In<InvoiceService, Invoice?>(s => s.GetAsync(invoice.Id)))!, taxCode: Guid.Empty);
+        Assert.Equal((1_000m, (Guid?)null), (TotalOf(untaxed), untaxed.TaxCodeId));
+    }
+
     [Fact]
     public async Task Inactive_codes_and_rates_are_refused()
     {
         Assert.Equal("tax.rate_in_code", await Refused(() => Tax(s => s.SetRateActiveAsync(_cityRate.Id, false))));
         Assert.Equal("tax.agency_has_rates", await Refused(() => Tax(s => s.SetAgencyActiveAsync(_city.Id, false))));
 
-        await Tax(s => s.SetCodeActiveAsync(_springfield.Id, false));
-        Assert.Equal("tax.code_inactive", await Refused(() => Invoice(_acme, Mar1, null, Widgets(1))));
+        Assert.Equal("tax.code_in_use", await Refused(() => Tax(s => s.SetCodeActiveAsync(_springfield.Id, false))));
+        await RetireSpringfieldAsync();
+        Assert.Equal("tax.code_inactive", await Refused(() => Invoice(_acme, Mar1, _springfield.Id, Widgets(1))));
         Assert.Equal("tax.code_inactive", await Refused(() => In<CustomerService, Customer>(s =>
             s.CreateAsync(new CustomerDetails("New", TaxCodeId: _springfield.Id)))));
         Assert.DoesNotContain(await Tax(s => s.ListChoicesAsync()), c => c.Code.Id == _springfield.Id);

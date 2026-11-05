@@ -24,6 +24,8 @@ public interface ISalesTaxStore
 
     Task<TaxCode?> GetCodeAsync(Guid id, CancellationToken ct);
 
+    Task<int> CountActiveCustomersOnAsync(Guid codeId, CancellationToken ct);
+
     Task<SalesTaxPayment?> GetPaymentAsync(Guid id, CancellationToken ct);
 
     /// <summary>Untracked, newest first.</summary>
@@ -195,6 +197,9 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         var code = await store.GetCodeAsync(id, ct) ?? throw new EntityNotFoundException(CodeEntity, id);
         if (active)
             await ComponentsAsync(store, code, ct);
+        else if (await store.CountActiveCustomersOnAsync(id, ct) is var customers and > 0)
+            throw new DomainException("tax.code_in_use",
+                $"{customers} active customer{(customers == 1 ? " uses" : "s use")} tax code '{code.Name}'. Give them another code first, or their sales would go untaxed.");
         var before = Snapshot(code);
         if (active)
             code.Reactivate();
@@ -214,6 +219,20 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
             .Where(c => c.IsActive && c.RateIds.All(id => rates.GetValueOrDefault(id) is { IsActive: true } r && agencies.GetValueOrDefault(r.AgencyId) is { IsActive: true }))
             .Select(c => new TaxCodeChoice(c, c.RateIds.Select(id => Component(rates[id], agencies[rates[id].AgencyId])).ToList()))
             .ToList();
+    }
+
+    /// <summary>
+    /// The choices on a document's Change page: the codes that can be charged now, with the document's own code at the
+    /// rates it was charged, even when that code can't be chosen any more, because a correction keeps them.
+    /// </summary>
+    public async Task<IReadOnlyList<TaxCodeChoice>> ListChoicesForDocumentAsync(Guid? taxCodeId, IReadOnlyList<Domain.Sales.SalesLine> lines, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var choices = await ListChoicesAsync(ct);
+        var charged = TaxCalculator.Charged(lines);
+        if (taxCodeId is not { } id || charged.Count == 0 || await store.GetCodeAsync(id, ct) is not { } code)
+            return choices;
+        return [.. choices.Where(c => c.Code.Id != id), new TaxCodeChoice(code, charged)];
     }
 
     /// <summary>What a code charges now; refuses inactive codes, rates and agencies.</summary>

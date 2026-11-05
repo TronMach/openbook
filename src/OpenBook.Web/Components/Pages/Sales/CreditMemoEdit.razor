@@ -96,8 +96,9 @@
     private Guid? _locationId;
 
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
-    private string? TaxExemption => SelectedTax is null ? null : _customer?.ExemptionOn(_date);
-    private bool TaxExemptionExpired => SelectedTax is not null && _customer?.ExemptionCertificate is not null && TaxExemption is null;
+    private bool KeepsTax => _taxCodeId == _credit?.TaxCodeId;
+    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _credit?.TaxExemption : _customer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && _customer?.ExemptionCertificate is not null && TaxExemption is null;
 
     private bool CanSave => SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason);
 
@@ -108,7 +109,7 @@
         {
             _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
-            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_credit.TaxCodeId, _credit.Lines));
             (_customer, _items) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<CustomerService>().GetAsync(_credit.CustomerId),
                 await sp.GetRequiredService<ItemService>().ListAsync()));
@@ -116,7 +117,7 @@
             _number = _credit.Number;
             _date = _credit.Date;
             _memo = _credit.Memo;
-            _taxCodeId = _credit.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+            _taxCodeId = _credit.TaxCodeId;
             _locationId = _credit.LocationId;
             _warehouseId = _credit.WarehouseId;
             _lines = _credit.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l =>

@@ -7,6 +7,7 @@ using OpenBook.Application.Pricing;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Application.SalesTax;
+using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
@@ -374,7 +375,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         [
             .. tb.Lines.Select(l => new ReportTableRow(
             [
-                new ReportCell(l.Number is { } n && company.UseAccountNumbers ? $"{n} {l.FullName}" : l.FullName, new ReportLink("account", l.AccountId) { To = tb.AsOf }),
+                l.AccountId == Guid.Empty ? new ReportCell(l.FullName) : new ReportCell(l.Number is { } n && company.UseAccountNumbers ? $"{n} {l.FullName}" : l.FullName,
+                    new ReportLink("account", l.AccountId) { From = l.Type.IsBalanceSheet() ? null : tb.FiscalStart, To = tb.AsOf }),
                 new ReportCell(l.Debit.Amount == 0m ? null : l.Debit.Amount),
                 new ReportCell(l.Credit.Amount == 0m ? null : l.Credit.Amount),
             ])),

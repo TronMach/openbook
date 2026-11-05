@@ -149,7 +149,8 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
         var drafts = command.Lines.ToList();
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId ?? receipt.TaxCodeId ?? Guid.Empty, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
+            new TaxAsCharged(receipt.TaxCodeId, receipt.TaxExemption, receipt.CustomerId, receipt.Lines), ct);
         if (receipt.DepositId is not null && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {receipt.Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");

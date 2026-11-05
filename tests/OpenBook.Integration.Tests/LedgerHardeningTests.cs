@@ -154,8 +154,11 @@ public sealed class LedgerHardeningTests : IAsyncLifetime
         Assert.Equal(100m, reversal.Lines.Single(l => l.AccountId == _sales.Id).Debit);
         Assert.Equal(100m, reversal.Lines.Single(l => l.AccountId == _cash.Id).Credit);
 
+        // The new year starts with the reversal; last year's sale has gone to retained earnings.
         var tb = await _db.InScope(sp => sp.GetRequiredService<TrialBalanceQuery>().RunAsync(new DateOnly(2026, 1, 1)));
-        Assert.Equal(0m, tb.TotalDebits.Amount);
+        Assert.DoesNotContain(tb.Lines, l => l.AccountId == _cash.Id);
+        Assert.Equal(100m, tb.Lines.Single(l => l.AccountId == _sales.Id).Debit.Amount);
+        Assert.Equal(100m, tb.Lines.Single(l => l.AccountId == Guid.Empty).Credit.Amount);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
 using OpenBook.Application.Accounts;
@@ -222,10 +223,91 @@ public sealed class PortabilityTests : IAsyncLifetime
         var item = (await Run(sp => sp.GetRequiredService<ItemService>().ListAsync())).Single();
         Assert.Equal((150m, chart.FindByFullName("Consulting Income")!.Id), (item.Rate, item.IncomeAccountId));
 
-        // Importing the same file again: everything already exists except the transactions.
+        // Importing the same file again: everything already exists, transactions included.
         var again = await Run(sp => sp.GetRequiredService<IifImportService>().PreviewAsync(Sample));
         Assert.Equal(0, again.Count(MigrationKind.Account, MigrationRowStatus.New));
         Assert.Equal(1, again.Count(MigrationKind.Customer, MigrationRowStatus.Exists));
+        Assert.Equal(0, again.Count(MigrationKind.Transaction, MigrationRowStatus.New));
+        Assert.True(again.Count(MigrationKind.Transaction, MigrationRowStatus.Exists) > 0);
+        Assert.Contains(again.Warnings, w => w.Contains("earlier import", StringComparison.Ordinal));
+        Assert.False(again.CanImport);
+    }
+
+    private static string Deposits(params string[] rows) => Iif(
+        [
+            "!ACCNT|NAME|ACCNTTYPE", "ACCNT|Business Checking|BANK", "ACCNT|Consulting Income|INC",
+            "!TRNS|TRNSID|TRNSTYPE|DATE|ACCNT|NAME|AMOUNT|DOCNUM|MEMO", "!SPL|SPLID|TRNSTYPE|DATE|ACCNT|NAME|AMOUNT|DOCNUM|MEMO", "!ENDTRNS",
+            .. rows.SelectMany(r => r.Split(';')),
+        ]);
+
+    private static string Deposit(string date, string amount) =>
+        $"TRNS||DEPOSIT|{date}|Business Checking||{amount}|D1|Deposit;SPL||DEPOSIT|{date}|Consulting Income||-{amount}||;ENDTRNS";
+
+    private Task<decimal> CheckingBalance() => Run(async sp =>
+    {
+        var chart = await sp.GetRequiredService<AccountService>().GetChartAsync();
+        return await Balance(chart.FindByFullName("Business Checking")!.Id);
+    });
+
+    [Fact]
+    public async Task Importing_a_file_twice_adds_nothing_the_second_time()
+    {
+        var file = Deposits(Deposit("1/15/2026", "900.00"), Deposit("1/16/2026", "100.00"));
+        await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(file));
+
+        var refused = await Assert.ThrowsAsync<DomainException>(() => Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(file)));
+
+        Assert.Equal("import.nothing_new", refused.Code);
+        Assert.Equal(1_000m, await CheckingBalance());
+    }
+
+    [Fact]
+    public async Task A_second_file_brings_in_only_what_is_new()
+    {
+        await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(Deposits(Deposit("1/15/2026", "900.00"))));
+
+        await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(Deposits(Deposit("1/15/2026", "900.00"), Deposit("2/1/2026", "50.00"))));
+
+        Assert.Equal(950m, await CheckingBalance());
+    }
+
+    [Fact]
+    public async Task Two_identical_transactions_in_a_file_both_come_in_once()
+    {
+        var file = Deposits(Deposit("1/15/2026", "25.00"), Deposit("1/15/2026", "25.00"));
+        await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(file));
+        Assert.Equal(50m, await CheckingBalance());
+
+        var again = await Run(sp => sp.GetRequiredService<IifImportService>().PreviewAsync(file));
+
+        Assert.Equal(2, again.Count(MigrationKind.Transaction, MigrationRowStatus.Exists));
+    }
+
+    [Fact]
+    public async Task An_import_undone_can_come_in_again()
+    {
+        var file = Deposits(Deposit("1/15/2026", "900.00"));
+        await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(file));
+        var batch = await _db.InDb(db => db.JournalEntries.Where(e => e.Source == JournalEntry.ImportSource).Select(e => e.SourceId!.Value).FirstAsync());
+        await Run(sp => sp.GetRequiredService<JournalImportService>().VoidBatchAsync(batch, "Wrong file"));
+        Assert.Equal(0m, await CheckingBalance());
+
+        await Run(sp => sp.GetRequiredService<IifImportService>().ImportAsync(file));
+
+        Assert.Equal(900m, await CheckingBalance());
+    }
+
+    [Fact]
+    public async Task A_journal_csv_imported_twice_adds_nothing_the_second_time()
+    {
+        var csv = "Date,Account,Debit,Credit,Memo\n2026-01-15,Checking,100,,Owner money\n2026-01-15,Owner's Equity,,100,Owner money\n";
+        await Run(sp => sp.GetRequiredService<JournalImportService>().ImportEntriesAsync(csv));
+
+        var again = await Run(sp => sp.GetRequiredService<JournalImportService>().PreviewEntriesAsync(csv));
+
+        Assert.Empty(again.Entries);
+        Assert.False(again.CanImport);
+        Assert.Contains(again.Warnings, w => w.Contains("earlier import", StringComparison.Ordinal));
     }
 
     [Fact]

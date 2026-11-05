@@ -125,8 +125,9 @@
     private Guid? _locationId;
 
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
-    private string? TaxExemption => SelectedTax is null ? null : _customer?.ExemptionOn(_date);
-    private bool TaxExemptionExpired => SelectedTax is not null && _customer?.ExemptionCertificate is not null && TaxExemption is null;
+    private bool KeepsTax => _taxCodeId == _invoice?.TaxCodeId;
+    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _invoice?.TaxExemption : _customer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && _customer?.ExemptionCertificate is not null && TaxExemption is null;
 
     private bool CanSave => !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason)
         && (_allLocked || SalesLineModel.Total(_lines) + _locked.Sum(l => l.Amount) > 0m);
@@ -138,7 +139,7 @@
         {
             _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
-            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_invoice.TaxCodeId, _invoice.Lines));
             (_customer, _items) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<CustomerService>().GetAsync(_invoice.CustomerId),
                 await sp.GetRequiredService<ItemService>().ListAsync()));
@@ -147,7 +148,7 @@
             _date = _invoice.Date;
             _dueDate = _invoice.DueDate;
             _memo = _invoice.Memo;
-            _taxCodeId = _invoice.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+            _taxCodeId = _invoice.TaxCodeId;
             _locationId = _invoice.LocationId;
             _warehouseId = _invoice.WarehouseId;
 

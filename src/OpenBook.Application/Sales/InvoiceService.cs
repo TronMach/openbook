@@ -243,7 +243,8 @@ public sealed class InvoiceService(
 
         var drafts = command.Lines.ToList();
         EnsureLockedLinesKept(invoice, drafts);
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId ?? invoice.TaxCodeId ?? Guid.Empty, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
+            new TaxAsCharged(invoice.TaxCodeId, invoice.TaxExemption, invoice.CustomerId, invoice.Lines), ct);
         var dueDate = command.DueDate ?? command.Date.AddDays(invoice.DueDate.DayNumber - invoice.Date.DayNumber);
         if (lines.Sum(l => l.Amount) < invoice.AmountPaid)
             throw new DomainException("invoice.total_below_paid",

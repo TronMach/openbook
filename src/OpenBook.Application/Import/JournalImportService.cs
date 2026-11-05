@@ -173,7 +173,16 @@ public sealed class JournalImportService(
         }
 
         var entries = groups.Select(g => PlanEntry(g.Key, g.Rows, chart, company, order, dateColumn, accountColumn, debitColumn, creditColumn, amountColumn, memoColumn, segmentColumns)).ToList();
-        return new JournalImportResult(entries, warnings);
+        var valid = entries.Where(e => e.IsValid && e.Date is not null && e.Lines.All(l => l.AccountId is not null)).ToList();
+        if (valid.Count == 0)
+            return new JournalImportResult(entries, warnings);
+
+        // An entry from an earlier import isn't imported again.
+        var before = await ImportedBefore.LoadAsync(engine, valid.Min(e => e.Date!.Value), valid.Max(e => e.Date!.Value), ct);
+        var repeats = valid.Where(e => before.Take(e.Date!.Value, e.Memo, e.Lines.Select(l => (l.AccountId!.Value, l.Debit - l.Credit)))).ToHashSet();
+        if (repeats.Count > 0)
+            warnings.Add($"{repeats.Count} entr{(repeats.Count == 1 ? "y matches one" : "ies match ones")} from an earlier import (same date, memo, accounts and amounts), so {(repeats.Count == 1 ? "it's" : "they're")} left out. If one is a genuine repeat, enter it by hand.");
+        return new JournalImportResult(entries.Where(e => !repeats.Contains(e)).ToList(), warnings);
     }
 
     /// <summary>Active segments of a kind by full name ("Parent:Child"), ignoring case.</summary>

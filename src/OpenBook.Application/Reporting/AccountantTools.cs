@@ -231,12 +231,17 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
         var fiscal = DateRanges.For(DatePreset.ThisFiscalYearToDate, asOf, company.FiscalYearStartMonth);
         var adjusting = (await ListAsync(fiscal.From, asOf, ct)).Select(e => e.Id).ToHashSet();
         // Adjusting entries are this fiscal year's, so history before it comes folded.
-        return (await ledger.LinesSinceAsync(basis, fiscal.From ?? asOf, asOf, ct: ct))
+        var fiscalStart = fiscal.From ?? asOf;
+        var lines = await ledger.LinesSinceAsync(basis, fiscalStart, asOf, ct: ct);
+        var prior = FinancialReports.PriorYears(lines, fiscalStart, chart);
+        var retainedAccount = FinancialReports.RetainedEarningsAccount(chart);
+        var computed = retainedAccount is null ? Guid.Empty : retainedAccount.Id;
+        return lines.Except(prior).Concat(prior.Select(l => l with { AccountId = computed }))
             .GroupBy(l => l.AccountId)
             .Select(g =>
             {
                 var adjustments = g.Where(l => adjusting.Contains(l.JournalEntryId)).Sum(l => l.Amount);
-                return new WorksheetLine(g.Key, chart.Find(g.Key) is { } a ? chart.FullName(a.Id) : "", g.Sum(l => l.Amount) - adjustments, adjustments);
+                return new WorksheetLine(g.Key, chart.Find(g.Key) is { } a ? chart.FullName(a.Id) : "Retained earnings", g.Sum(l => l.Amount) - adjustments, adjustments);
             })
             .Where(l => l.Unadjusted != 0m || l.Adjustments != 0m)
             .OrderBy(l => chart.Find(l.AccountId)?.Number ?? "￿", StringComparer.Ordinal).ThenBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
@@ -247,11 +252,18 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var lines = await WorksheetAsync(asOf, basis, ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var fiscalStart = company.FiscalYearStart(asOf);
+        ReportLink Link(Guid account) => new("account", account)
+        {
+            From = chart.Find(account)?.Type.IsBalanceSheet() == false ? fiscalStart : null,
+            To = asOf,
+        };
         static ReportCell Dr(decimal v) => v > 0m ? new ReportCell(v) : ReportCell.Empty;
         static ReportCell Cr(decimal v) => v < 0m ? new ReportCell(-v) : ReportCell.Empty;
         var rows = lines.Select(l => new ReportTableRow(
         [
-            new ReportCell(l.Name, new ReportLink("account", l.AccountId) { To = asOf }),
+            l.AccountId == Guid.Empty ? new ReportCell(l.Name) : new ReportCell(l.Name, Link(l.AccountId)),
             Dr(l.Unadjusted), Cr(l.Unadjusted), Dr(l.Adjustments), Cr(l.Adjustments), Dr(l.Adjusted), Cr(l.Adjusted),
         ])).ToList();
         static decimal D(IEnumerable<decimal> v) => v.Where(x => x > 0m).Sum();
@@ -395,7 +407,7 @@ public sealed class AccountantPackageService(
             var tin = v.Vendor.TaxId ?? "";
             csv.AppendJoin(',', [
                 form, box, Field(v.Vendor.DisplayName), Field(v.Vendor.CompanyName), Field(tin), TinType(tin), Field(v.Vendor.Address),
-                (v.Total - v.CardPayments).ToString("0.00", CultureInfo.InvariantCulture), Field(company.Name), Field(company.Address),
+                v.Total.ToString("0.00", CultureInfo.InvariantCulture), Field(company.Name), Field(company.Address),
                 year.ToString(CultureInfo.InvariantCulture),
             ]).Append("\r\n");
         }

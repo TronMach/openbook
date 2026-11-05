@@ -33,6 +33,9 @@ public sealed class FixedAssetsTests : IAsyncLifetime
 
     private static async Task<string> Refused(Func<Task> action) => (await Assert.ThrowsAsync<DomainException>(action)).Code;
 
+    // The year things are dated in: an income or expense account's balance on a trial balance is that fiscal year's.
+    private static readonly DateOnly YearEnd = new(2026, 12, 31);
+
     private async Task<decimal> Balance(string accountName, DateOnly? asOf = null)
     {
         var account = await _db.InDb(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Name == accountName));
@@ -56,7 +59,7 @@ public sealed class FixedAssetsTests : IAsyncLifetime
         Assert.Equal(300m, Assert.Single(preview).Amount);
         var march = await In<DepreciationService, DepreciationRun>(s => s.RunAsync(new DateOnly(2026, 3, 31)));
         Assert.Equal(-300m, await Balance(AssetAccounts.AccumulatedName));
-        Assert.Equal(300m, await Balance(AssetAccounts.ExpenseName));
+        Assert.Equal(300m, await Balance(AssetAccounts.ExpenseName, YearEnd));
         Assert.Equal("depreciation.nothing_due", await Refused(() => In<DepreciationService, DepreciationRun>(s => s.RunAsync(new DateOnly(2026, 3, 31)))));
 
         var june = await In<DepreciationService, DepreciationRun>(s => s.RunAsync(new DateOnly(2026, 6, 30)));
@@ -89,8 +92,8 @@ public sealed class FixedAssetsTests : IAsyncLifetime
         Assert.Equal(0m, await Balance(AssetAccounts.AccumulatedName));
         Assert.Equal(-3_600m, await Balance("Equipment"));
         Assert.Equal(3_000m, await Balance("Checking"));
-        Assert.Equal(200m, await Balance(AssetAccounts.GainLossName)); // book value 3,200 sold for 3,000
-        Assert.Equal(400m, await Balance(AssetAccounts.ExpenseName));
+        Assert.Equal(200m, await Balance(AssetAccounts.GainLossName, YearEnd)); // book value 3,200 sold for 3,000
+        Assert.Equal(400m, await Balance(AssetAccounts.ExpenseName, YearEnd));
         Assert.Empty(await In<DepreciationService, IReadOnlyList<DepreciationDue>>(s => s.PreviewAsync(new DateOnly(2026, 12, 31))));
         Assert.Equal("asset.disposed", await Refused(() => In<FixedAssetService, FixedAsset>(s => s.DisposeAsync(van.Id, new DisposeAssetCommand(new DateOnly(2026, 6, 1))))));
 
@@ -99,7 +102,7 @@ public sealed class FixedAssetsTests : IAsyncLifetime
 
         await In<FixedAssetService, FixedAsset>(s => s.UndoDisposalAsync(van.Id, "Sale fell through"));
         Assert.Equal(-300m, await Balance(AssetAccounts.AccumulatedName));
-        Assert.Equal(0m, await Balance(AssetAccounts.GainLossName));
+        Assert.Equal(0m, await Balance(AssetAccounts.GainLossName, YearEnd));
         Assert.Equal(100m, Assert.Single(await In<DepreciationService, IReadOnlyList<DepreciationDue>>(s => s.PreviewAsync(new DateOnly(2026, 4, 30)))).Amount);
     }
 
@@ -125,7 +128,7 @@ public sealed class FixedAssetsTests : IAsyncLifetime
         var extra = await In<LoanService, LoanPayment>(s => s.PayAsync(loan.Id, new LoanPaymentCommand(new DateOnly(2026, 3, 1), _checking.Id, 2_000m)));
         Assert.Equal((45.95m, 1_954.05m), (extra.Interest, extra.Principal)); // 9,189.33 × 0.5%
         Assert.Equal(-7_235.28m, await Balance("Bank Loan"));
-        Assert.Equal(95.95m, await Balance(AssetAccounts.InterestName));
+        Assert.Equal(95.95m, await Balance(AssetAccounts.InterestName, YearEnd));
 
         Assert.Equal("loan.payment_order", await Refused(() => In<LoanService, LoanPayment>(s => s.PayAsync(loan.Id, new LoanPaymentCommand(new DateOnly(2026, 2, 15), _checking.Id)))));
         Assert.Equal("loan.payment_not_latest", await Refused(() => In<LoanService, Loan>(s => s.VoidPaymentAsync(loan.Id, first.Id, "x"))));

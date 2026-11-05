@@ -25,7 +25,7 @@ public enum MigrationRowStatus
 {
     New,
 
-    /// <summary>Already in OpenBook (same name); left as it is.</summary>
+    /// <summary>Already in OpenBook (same name, or a transaction imported before); left as it is.</summary>
     Exists,
 
     /// <summary>Something OpenBook doesn't import, such as an estimate or a non-posting account.</summary>
@@ -47,7 +47,8 @@ public sealed record MigrationResult(IReadOnlyList<MigrationRow> Rows, IReadOnly
 /// <summary>
 /// Moving in from another program: a reader (<see cref="MigrationReaders"/>) turns the export into <see cref="MigrationData"/>,
 /// which this checks against the books and imports. Accounts, customers, vendors and products already in OpenBook (same
-/// name, ignoring case) are left alone. Transactions become journal entries (source "ledger.import", one batch per file,
+/// name, ignoring case) are left alone, and so are transactions imported before (<see cref="ImportedBefore"/>), so
+/// importing a file again adds nothing. Transactions become journal entries (source "ledger.import", one batch per file,
 /// positive amounts debits); they don't become invoices or bills, so A/R and A/P aging won't list them. Everything imports
 /// in one database transaction, or nothing does.
 /// </summary>
@@ -302,8 +303,11 @@ public sealed class MigrationImportService(
             rows.Add(new MigrationRow(MigrationKind.Item, i.Line, name, i.KindLabel, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? i.Note));
         }
 
-        // Transactions: one journal entry each.
+        // Transactions: one journal entry each, unless an earlier import brought it in.
         var plannedTransactions = new List<PlannedTransaction>();
+        var dated = data.Transactions.Where(t => t.Date is not null).Select(t => t.Date!.Value).ToList();
+        var before = dated.Count == 0 ? null : await ImportedBefore.LoadAsync(engine, dated.Min(), dated.Max(), ct);
+        var repeats = 0;
         foreach (var source in data.Transactions)
         {
             var t = source with { Lines = source.Lines.Select(l => l with { Account = Resolve(l.Account) }).ToList() };
@@ -337,12 +341,22 @@ public sealed class MigrationImportService(
                 errors.Add($"its lines don't balance (off by {Math.Abs(lines.Sum(l => l.Amount)).ToString("N2", CultureInfo.CurrentCulture)})");
 
             var memo = t.Memo is { Length: > 1000 } full ? full[..1000] : t.Memo;
+            if (errors.Count == 0 && before is not null && lines.All(l => chart.FindByFullName(l.Account) is not null)
+                && before.Take(date, memo, lines.Select(l => (chart.FindByFullName(l.Account)!.Id, l.Amount))))
+            {
+                repeats++;
+                rows.Add(new MigrationRow(MigrationKind.Transaction, t.Line, t.Label, detail, MigrationRowStatus.Exists, "Imported before: the same date, memo, accounts and amounts."));
+                continue;
+            }
+
             if (errors.Count == 0)
                 plannedTransactions.Add(new PlannedTransaction(date, memo, lines));
             rows.Add(new MigrationRow(MigrationKind.Transaction, t.Line, t.Label, detail, errors.Count == 0 ? MigrationRowStatus.New : MigrationRowStatus.Error,
                 errors.Count == 0 ? null : string.Join("; ", errors.Distinct())));
         }
 
+        if (repeats > 0)
+            warnings.Add($"{repeats} transaction{(repeats == 1 ? " matches an entry" : "s match entries")} from an earlier import (same date, memo, accounts and amounts), so {(repeats == 1 ? "it's" : "they're")} left out. If one is a genuine repeat, enter it by hand.");
         if (plannedTransactions.Any(t => t.Lines.Any(l => TypeOf(l.Account) is AccountType.AccountsReceivable or AccountType.AccountsPayable)))
             warnings.Add("Some transactions post to A/R or A/P. They come in as journal entries, so they change balances but won't appear as open invoices or bills in aging and statements.");
 

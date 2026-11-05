@@ -18,7 +18,7 @@ OpenBook works out sales tax on invoices, sales receipts, estimates and credit m
 4. On each **customer**, choose their **tax code**. New invoices, receipts and estimates for them start with it.
 5. On each **product or service**, tick **Taxable** if sales tax applies to it.
 
-When a rate changes, edit its percentage. The new rate applies to documents from then on; existing ones keep the tax they were charged.
+When a rate changes, edit its percentage. The new rate applies to documents from then on; existing ones keep the tax they were charged, even when you change them later: the tax follows the lines, at the rates and exemption the document had. Choosing a different tax code on the document uses that code as it stands now.
 
 ## On sales
 
@@ -51,4 +51,4 @@ The payment clears that much of the agency's liability. To correct one, void it 
 
 ## Turning things off
 
-Rates, codes and agencies are made inactive, never deleted. A rate still used by an active code, or an agency with active rates, can't be made inactive until those are.
+Rates, codes and agencies are made inactive, never deleted. A rate still used by an active code, or an agency with active rates, can't be made inactive until those are, and a code can't be while active customers use it: give them another code first. Changing a document that was charged under an inactive code keeps its tax.

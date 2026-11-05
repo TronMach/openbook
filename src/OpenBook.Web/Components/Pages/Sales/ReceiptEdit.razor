@@ -118,8 +118,9 @@
 
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
-    private string? TaxExemption => SelectedTax is null ? null : TaxCustomer?.ExemptionOn(_date);
-    private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
+    private bool KeepsTax => _taxCodeId == _receipt?.TaxCodeId && _customerId == _receipt?.CustomerId;
+    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _receipt?.TaxExemption : TaxCustomer?.ExemptionOn(_date);
+    private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
 
     private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty
         && !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason);
@@ -131,7 +132,7 @@
         {
             _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
-            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_receipt.TaxCodeId, _receipt.Lines));
             (_customers, _items, _chart) = await Ops.RunAsync(async sp => (
                 (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_receipt.Date)).Select(s => s.Customer)
                     .Where(c => c.IsActive || c.Id == _receipt.CustomerId).ToList(),
@@ -149,7 +150,7 @@
             _reference = _receipt.Reference;
             _method = _receipt.Method;
             _memo = _receipt.Memo;
-            _taxCodeId = _receipt.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
+            _taxCodeId = _receipt.TaxCodeId;
             _locationId = _receipt.LocationId;
             _warehouseId = _receipt.WarehouseId;
             _lines = _receipt.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l =>

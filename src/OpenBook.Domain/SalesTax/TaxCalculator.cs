@@ -79,6 +79,22 @@ public static class TaxCalculator
             .ToList();
     }
 
+    /// <summary>The rates a document's tax lines were charged at, in print order.</summary>
+    public static IReadOnlyList<TaxComponent> Charged(IEnumerable<SalesLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        return lines.Where(l => l.Kind == SalesLineKind.Tax && l.TaxRateId is not null && l.IncomeAccountId is not null)
+            .OrderBy(l => l.LineNumber)
+            .Select(l => new TaxComponent(l.TaxRateId!.Value, NameIn(l.Description, l.Rate), l.Rate, l.IncomeAccountId!.Value))
+            .ToList();
+    }
+
+    private static string NameIn(string? description, decimal percent)
+    {
+        var suffix = Describe("", percent);
+        return description is not null && description.EndsWith(suffix, StringComparison.Ordinal) ? description[..^suffix.Length] : description ?? "";
+    }
+
     public static string Describe(string name, decimal percent) =>
         $"{name} ({percent.ToString("0.####", CultureInfo.InvariantCulture)}%)";
 }

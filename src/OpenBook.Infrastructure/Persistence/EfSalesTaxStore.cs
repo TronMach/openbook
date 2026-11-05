@@ -9,6 +9,9 @@ internal sealed class EfSalesTaxStore(OpenBookDbContext db) : ISalesTaxStore
 {
     public async Task<IReadOnlyList<TaxAgency>> ListAgenciesAsync(CancellationToken ct) => await db.TaxAgencies.ToListAsync(ct);
 
+    public Task<int> CountActiveCustomersOnAsync(Guid codeId, CancellationToken ct) =>
+        db.Customers.CountAsync(c => c.TaxCodeId == codeId && c.IsActive, ct);
+
     public Task<TaxAgency?> GetAgencyAsync(Guid id, CancellationToken ct) => db.TaxAgencies.SingleOrDefaultAsync(a => a.Id == id, ct);
 
     public async Task<IReadOnlyList<TaxRate>> ListRatesAsync(CancellationToken ct) => await db.TaxRates.ToListAsync(ct);
