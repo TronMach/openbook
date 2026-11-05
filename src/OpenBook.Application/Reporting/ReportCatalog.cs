@@ -418,9 +418,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
 
     private async Task<ReportTable> JournalAsync(Company company, DateRange range, CancellationToken ct)
     {
-        const int maxEntries = 500;
         var chart = await services.GetRequiredService<Accounts.AccountService>().GetChartAsync(ct);
-        var (entries, total) = await services.GetRequiredService<PostingEngine>().ListAsync(new JournalEntryFilter(range.From, range.To, 0, maxEntries), ct);
+        var entries = await services.GetRequiredService<PostingEngine>().ListAllAsync(new JournalEntryFilter(range.From, range.To), ct);
         var rows = new List<ReportTableRow>();
         foreach (var entry in entries.OrderBy(e => e.Date).ThenBy(e => e.Number))
         {
@@ -446,8 +445,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Journal",
             [company.Name, $"{Period(range)} · every entry as posted"],
             [new("Account"), new("Date", ColumnFormat.Date), new("No.", ColumnFormat.Number), new("Type"), new("Memo"), new("Debit", ColumnFormat.Money), new("Credit", ColumnFormat.Money)],
-            rows,
-            Note: total > entries.Count ? $"Only the first {entries.Count} of {total} entries are included. Choose a shorter period." : null);
+            rows);
     }
 
     private static readonly ReportColumn[] AgingColumns =

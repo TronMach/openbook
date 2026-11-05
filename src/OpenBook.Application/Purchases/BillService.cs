@@ -182,6 +182,9 @@ public sealed class BillService(
                 .Any(b => b.Id != bill.Id && b.Status == DocumentStatus.Posted && string.Equals(b.Reference, reference, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException("bill.reference_taken", $"There's already a bill {reference} from {vendor.DisplayName}.");
 
+        if (source is not null && await store.GetPurchaseOrderAsync(source.PurchaseOrderId, ct) is { } fromOrder)
+            await EnsureDeliveriesCoveredAsync(fromOrder, bill, source.Lines, ct);
+
         var oldLines = bill.Lines.ToList();
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([bill.JournalEntryId], ct)).Select(t => t.TagId).ToList();
@@ -286,6 +289,8 @@ public sealed class BillService(
             throw new DomainException("bill.already_voided", "This bill is already voided.");
         if (bill.AmountPaid > 0m)
             throw new DomainException("bill.has_payments", "This bill has payments or credits applied. Void or remove those first.");
+        if (bill.PurchaseOrderId is { } fromOrderId && await store.GetPurchaseOrderAsync(fromOrderId, ct) is { } fromOrder)
+            await EnsureDeliveriesCoveredAsync(fromOrder, bill, null, ct);
 
         var stock = await inventory.PlanReversalAsync(InventorySources.Bill, bill.Id, bill.Date, "this bill", ct);
         await Sales.BillableExpenseService.ReleaseAsync(sales, Domain.Sales.BillableSource.Bill, bill.Id, clock, user, ct);
@@ -303,6 +308,12 @@ public sealed class BillService(
         }
         await store.SaveChangesAsync(ct);
         return bill;
+    }
+
+    private async Task EnsureDeliveriesCoveredAsync(PurchaseOrder order, Bill bill, IReadOnlyList<BillSourceLine>? lines, CancellationToken ct)
+    {
+        if ((await store.GetPurchasingSettingsAsync(ct))?.ReceiveIntoStock == true)
+            PurchaseOrderService.EnsureDeliveriesCovered(order, await store.ListBillsAsync(bill.VendorId, ct), bill, lines);
     }
 
     internal static AuditRecord Audit(IClock clock, ICurrentUser user, AuditAction action, Bill b, string? before) =>

@@ -7,7 +7,8 @@
     work as hard, which can freeze the machine. This caps the tests running at once (-Threads, default a quarter of
     the cores; 12 for PostgreSQL, whose tests spend most of their time waiting on the database server) and starts the
     run at below-normal priority (the test host inherits it). A trx results file is saved per test
-    project, so failures are named.
+    project, so failures are named. Exits 1 if any test failed, going by the results files as well as dotnet's exit
+    code, and if no tests ran at all.
 
 .EXAMPLE
     powershell -File tools/run-tests.ps1                      # SQLite: every test project
@@ -49,7 +50,26 @@ $arguments += @('-nologo', '-v', 'q', '--logger', "trx;LogFilePrefix=$name", '--
 Write-Host "Running the $name tests, at most $Threads at once, at below-normal priority. Results: $Results\${name}_*.trx (one per test project)"
 # Windows PowerShell joins the arguments with spaces, so quote any that contain one.
 $quoted = $arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
+$started = Get-Date
 $process = Start-Process -FilePath 'dotnet' -ArgumentList $quoted -WorkingDirectory $root -NoNewWindow -PassThru
+# Windows PowerShell only gives a -PassThru process an ExitCode if its handle was asked for while it ran.
+$null = $process.Handle
 $process.PriorityClass = 'BelowNormal'
 $process.WaitForExit()
-exit $process.ExitCode
+$code = $process.ExitCode
+
+# The results files decide as well, so a failure can't be lost to how a shell reports exit codes.
+$failed = 0
+$ran = 0
+$files = @(Get-ChildItem -Path $Results -Filter "${name}_*.trx" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $started })
+foreach ($file in $files) {
+    $document = New-Object System.Xml.XmlDocument
+    $document.Load($file.FullName)
+    $counters = $document.DocumentElement.ResultSummary.Counters
+    $failed += [int]$counters.failed + [int]$counters.error + [int]$counters.timeout + [int]$counters.aborted
+    $ran += [int]$counters.total
+}
+if ($failed -gt 0) { Write-Host "$failed test(s) failed."; exit 1 }
+if ($ran -eq 0) { Write-Host "No tests ran."; exit 1 }
+if ($null -eq $code -or $code -ne 0) { Write-Host "dotnet test ended with exit code '$code'."; exit 1 }
+exit 0

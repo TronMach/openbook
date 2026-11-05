@@ -70,6 +70,9 @@ public sealed record PurchaseOrderLineStatus(
 
     /// <summary>Received and not billed yet (item lines).</summary>
     public decimal ReceivedNotBilled => Line.IsItem ? Math.Max(0m, Received - BilledQuantity) : 0m;
+
+    /// <summary>Units billed that came into stock with the bill rather than with a delivery.</summary>
+    public decimal BilledIntoStock => BilledQuantity - BilledFromStock;
 }
 
 public sealed record PurchaseOrderProgress(IReadOnlyList<Bill> Bills, IReadOnlyList<PurchaseOrderLineStatus> Lines)
@@ -137,7 +140,10 @@ public sealed class PurchaseOrderService(
         return order;
     }
 
-    /// <summary>Records goods arriving. Nothing posts: stock enters the books with the bill.</summary>
+    /// <summary>
+    /// Records goods arriving. Nothing posts unless the company receives into stock (<see cref="PurchasingSettings.ReceiveIntoStock"/>);
+    /// otherwise stock enters the books with the bill.
+    /// </summary>
     public async Task<int> ReceiveAsync(Guid id, ReceiveGoodsCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -156,17 +162,26 @@ public sealed class PurchaseOrderService(
         var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(order);
         var rows = order.Receipts.Where(r => r.ReceiptNumber == receiptNumber && !r.IsVoided).ToList();
+        var progress = await ProgressAsync(order, ct);
+        foreach (var line in rows.GroupBy(r => r.LineNumber))
+        {
+            var status = progress.Lines.First(l => l.Line.LineNumber == line.Key);
+            var inStock = order.InStock(line.Key).Quantity;
+            var fromDelivery = line.Where(r => r.InStock).Sum(r => r.Quantity);
+
+            // Units already billed against "Received Not Billed" must stay covered by deliveries in stock.
+            if (inStock - fromDelivery < status.BilledFromStock)
+                throw new DomainException("purchaseorder.receipt_billed", "Part of this delivery has been billed. Void that bill first.");
+
+            // A later delivery may have gone into stock because this one had used up what a bill brought in.
+            var extra = Math.Max(0m, Extra(status, inStock));
+            var received = status with { Received = status.Received - line.Sum(r => r.Quantity) };
+            if (Extra(received, inStock - fromDelivery) > extra)
+                throw new DomainException("purchaseorder.receipt_counted_on", "A later delivery counted on this one. Take that delivery back first.");
+        }
+
         if (rows.FirstOrDefault(r => r.InStock) is { StockSourceId: { } stockId } first)
         {
-            // Units already billed against "Received Not Billed" must stay covered by deliveries in stock.
-            var progress = await ProgressAsync(order, ct);
-            foreach (var line in rows.GroupBy(r => r.LineNumber))
-            {
-                var billed = progress.Lines.First(l => l.Line.LineNumber == line.Key).BilledFromStock;
-                if (order.InStock(line.Key).Quantity - line.Sum(r => r.Quantity) < billed)
-                    throw new DomainException("purchaseorder.receipt_billed", "Part of this delivery has been billed. Void that bill first.");
-            }
-
             var stock = await inventory.PlanReversalAsync(InventorySources.PurchaseReceipt, stockId, first.Date, $"delivery {receiptNumber}", ct);
             if (first.JournalEntryId is { } entryId)
                 await engine.StageVoidAsync(entryId, $"Delivery {receiptNumber} of PO {order.Number} taken back", fromDocument: true, ct);
@@ -177,6 +192,32 @@ public sealed class PurchaseOrderService(
         store.Add(Audit(AuditAction.Updated, order, before));
         await store.SaveChangesAsync(ct);
         return order;
+    }
+
+    /// <summary>Units of a line in stock beyond what's been received or billed of it.</summary>
+    private static decimal Extra(PurchaseOrderLineStatus status, decimal inStock) =>
+        inStock + status.BilledIntoStock - Math.Max(status.Received, status.BilledQuantity);
+
+    /// <summary>
+    /// Refuses to take units out of the bills of an order when a delivery left them out of stock because those bills
+    /// had brought them in: the goods have arrived, so they'd go missing from stock.
+    /// </summary>
+    /// <param name="bills">The vendor's bills.</param>
+    /// <param name="bill">The bill being voided or changed.</param>
+    /// <param name="lines">What it bills after the change; null when it's being voided.</param>
+    internal static void EnsureDeliveriesCovered(PurchaseOrder order, IEnumerable<Bill> bills, Bill bill, IReadOnlyList<BillSourceLine>? lines)
+    {
+        var others = bills.Where(b => b.PurchaseOrderId == order.Id && b.Status == DocumentStatus.Posted && b.Id != bill.Id).ToList();
+        foreach (var line in order.Lines.Where(l => l.IsItem))
+        {
+            var outOfStock = order.Received.GetValueOrDefault(line.LineNumber) - order.InStock(line.LineNumber).Quantity
+                - others.SelectMany(b => b.SourceLines).Where(s => s.LineNumber == line.LineNumber).Sum(s => s.Quantity - s.AccruedQuantity);
+            var now = bill.SourceLines.Where(s => s.LineNumber == line.LineNumber).Sum(s => s.Quantity - s.AccruedQuantity);
+            var after = (lines ?? []).Where(s => s.LineNumber == line.LineNumber).Sum(s => s.Quantity - s.AccruedQuantity);
+            if (after < now && after < outOfStock)
+                throw new DomainException("purchaseorder.delivery_counted_on",
+                    $"A delivery on purchase order {order.Number} counted on this bill's units being in stock already. Take that delivery back first.");
+        }
     }
 
     public async Task<PurchaseOrderProgress> ProgressAsync(Guid id, CancellationToken ct = default) =>
@@ -290,8 +331,10 @@ public sealed class PurchaseOrderService(
                 var amount = decimal.Round(pick.Quantity * cost, 2, MidpointRounding.AwayFromZero);
                 // Units already in stock from deliveries clear "Received Not Billed" at the value they came in at; the rest
                 // go into stock with the bill.
+                // Units delivered but left out of stock are in only through bills, so they stay item lines.
                 var (inStock, inStockValue) = order.InStock(line.LineNumber);
-                var accruedQuantity = Math.Min(pick.Quantity, Math.Max(0m, inStock - status.BilledFromStock));
+                var outOfStock = Math.Max(0m, status.Received - inStock - status.BilledIntoStock);
+                var accruedQuantity = Math.Min(pick.Quantity - Math.Min(pick.Quantity, outOfStock), Math.Max(0m, inStock - status.BilledFromStock));
                 var accruedAmount = 0m;
                 if (accruedQuantity > 0m)
                 {
@@ -342,10 +385,14 @@ public sealed class PurchaseOrderService(
     /// <summary>
     /// Puts delivery <paramref name="number"/> in stock at the order's unit costs, in the order's warehouse (one layer per
     /// row): Dr each item's inventory asset / Cr "Received Not Billed". Lot and serial items are refused (their numbers go on the bill).
+    /// Units a bill brought in before they arrived are in stock already, so they're recorded as received and left out
+    /// (<see cref="StockedRowsAsync"/>).
     /// </summary>
     private async Task PutInStockAsync(PurchaseOrder order, int number, DateOnly date, CancellationToken ct)
     {
-        var rows = order.Receipts.Where(r => r.ReceiptNumber == number).ToList();
+        var rows = await StockedRowsAsync(order, number, ct);
+        if (rows.Count == 0)
+            return;
         var lines = order.Lines.ToDictionary(l => l.LineNumber);
         var values = rows.ToDictionary(r => r.Id, r => decimal.Round(r.Quantity * lines[r.LineNumber].UnitCost, 2, MidpointRounding.AwayFromZero));
         var drafts = rows.Select(r => new Domain.Purchases.BillLineDraft(Guid.Empty, values[r.Id], lines[r.LineNumber].Description, lines[r.LineNumber].ItemId, r.Quantity)).ToList();
@@ -367,6 +414,33 @@ public sealed class PurchaseOrderService(
 
         inventory.Apply(plan, InventorySources.PurchaseReceipt, stockId);
         order.MarkInStock(number, stockId, entryId, values);
+    }
+
+    /// <summary>
+    /// The rows of a delivery that go into stock. A line needs in stock from deliveries what's been received less what
+    /// bills brought in; a row only partly needed is split, so its other units stay on a row of their own.
+    /// </summary>
+    private async Task<List<PurchaseOrderReceipt>> StockedRowsAsync(PurchaseOrder order, int number, CancellationToken ct)
+    {
+        var progress = await ProgressAsync(order, ct);
+        var stocked = new List<PurchaseOrderReceipt>();
+        foreach (var line in order.Receipts.Where(r => r.ReceiptNumber == number).ToList().GroupBy(r => r.LineNumber))
+        {
+            var status = progress.Lines.First(l => l.Line.LineNumber == line.Key);
+            var needed = status.Received - status.BilledIntoStock - order.InStock(line.Key).Quantity;
+            foreach (var row in line)
+            {
+                var units = Math.Min(row.Quantity, Math.Max(0m, needed));
+                if (units == 0m)
+                    continue;
+                if (units < row.Quantity)
+                    order.SplitReceipt(row.Id, units);
+                stocked.Add(row);
+                needed -= units;
+            }
+        }
+
+        return stocked;
     }
 
     private Task<Account> ReceivedNotBilledAsync(CancellationToken ct) =>

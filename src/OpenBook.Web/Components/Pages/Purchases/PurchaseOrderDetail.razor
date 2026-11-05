@@ -85,12 +85,12 @@
                     <tr class="@(voided ? "inactive" : null)">
                         <td>@group.Key @(voided ? "(taken back)" : "")</td>
                         <td>@Labels.Date(group.First().Date)</td>
-                        <td>@string.Join(", ", group.Select(r => $"{Labels.Quantity(r.Quantity)} × {_order.Lines.First(l => l.LineNumber == r.LineNumber).Description}"))</td>
+                        <td>@string.Join(", ", group.GroupBy(r => r.LineNumber).Select(l => $"{Labels.Quantity(l.Sum(r => r.Quantity))} × {_order.Lines.First(o => o.LineNumber == l.Key).Description}"))</td>
                         <td>
                             @group.First().Note
-                            @if (group.First() is { InStock: true } posted)
+                            @if (group.FirstOrDefault(r => r.InStock) is { } posted)
                             {
-                                <span class="muted">In stock at @Labels.Amount(group.Sum(r => r.Value))</span>
+                                <span class="muted">In stock at @Labels.Amount(group.Sum(r => r.Value))@(group.All(r => r.InStock) ? "" : "; the rest came in with a bill")</span>
                                 @if (posted.JournalEntryId is { } entryId)
                                 {
                                     <a href="/journal/@entryId">entry</a>
@@ -98,7 +98,7 @@
                             }
                         </td>
                         <td>
-                            @if (!voided && open)
+                            @if (!voided && _order.Status != PurchaseOrderStatus.Cancelled)
                             {
                                 <PostForm Action="@($"/purchases/orders/{_order.Id}/receipts/{group.Key}/void")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
@@ -131,7 +131,7 @@
         </table>
     }
 
-    @if (open && _progress.Lines.Any(l => l.Line.IsItem && l.Received < l.Line.Quantity))
+    @if (_order.Status != PurchaseOrderStatus.Cancelled && _progress.Lines.Any(l => l.Line.IsItem && l.Received < l.Line.Quantity))
     {
         <div class="card" style="margin-top: 1.5rem" id="receive">
             <h2>Receive goods</h2>

@@ -251,6 +251,21 @@ public sealed class PostingEngine(
         return store.ListEntriesAsync(filter, ct);
     }
 
+    /// <summary>Every entry the filter finds, however many pages that takes, for what has to be whole (its Skip and Take are ignored).</summary>
+    public async Task<IReadOnlyList<JournalEntry>> ListAllAsync(JournalEntryFilter filter, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        const int page = 500;
+        var all = new List<JournalEntry>();
+        for (var skip = 0; ; skip += page)
+        {
+            var (entries, total) = await ListAsync(filter with { Skip = skip, Take = page }, ct);
+            all.AddRange(entries);
+            if (skip + page >= total)
+                return all;
+        }
+    }
+
     /// <summary>
     /// Refuses changes dated on or before the closing date unless the closing password was given, and
     /// records every override in the audit log.

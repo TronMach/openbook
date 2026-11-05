@@ -98,6 +98,8 @@ public sealed class PurchaseOrderReceipt
     internal void Void() => IsVoided = true;
 
     internal void Posted(Guid stockSourceId, Guid? entryId, decimal value) => (StockSourceId, JournalEntryId, Value) = (stockSourceId, entryId, value);
+
+    internal void Keep(decimal quantity) => Quantity = quantity;
 }
 
 /// <summary>
@@ -191,11 +193,15 @@ public sealed class PurchaseOrder
         Total = built.Sum(l => l.Amount);
     }
 
-    /// <summary>Records goods arriving: quantities per item line, up to what's still to come.</summary>
+    /// <summary>
+    /// Records goods arriving: quantities per item line, up to what's still to come. A closed order takes them too: it
+    /// closes when everything is billed, and goods can arrive after their bill.
+    /// </summary>
     public int Receive(DateOnly date, IReadOnlyList<(int LineNumber, decimal Quantity)> quantities, string? note)
     {
         ArgumentNullException.ThrowIfNull(quantities);
-        EnsureOpen();
+        if (Status == PurchaseOrderStatus.Cancelled)
+            throw new DomainException("purchaseorder.not_open", $"Purchase order {Number} is cancelled.");
         if (date < Date)
             throw new DomainException("purchaseorder.received_before_order", "Goods can't be received before the order date.");
         var picked = quantities.Where(q => q.Quantity != 0m).ToList();
@@ -220,12 +226,23 @@ public sealed class PurchaseOrder
         return receiptNumber;
     }
 
-    /// <summary>Records that delivery <paramref name="receiptNumber"/> went into stock, with each row's value.</summary>
+    /// <summary>
+    /// Divides a delivery row: it keeps <paramref name="quantity"/> and a new row of the delivery holds the rest, for
+    /// units that don't go into stock with the others because a bill already brought them in.
+    /// </summary>
+    public void SplitReceipt(Guid rowId, decimal quantity)
+    {
+        var row = _receipts.Single(r => r.Id == rowId);
+        _receipts.Add(new PurchaseOrderReceipt(Guid.CreateVersion7(), row.ReceiptNumber, row.Date, row.LineNumber, row.Quantity - quantity, row.Note));
+        row.Keep(quantity);
+    }
+
+    /// <summary>Records that the rows of delivery <paramref name="receiptNumber"/> in <paramref name="values"/> went into stock, with their values.</summary>
     public void MarkInStock(int receiptNumber, Guid stockSourceId, Guid? entryId, IReadOnlyDictionary<Guid, decimal> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        foreach (var row in _receipts.Where(r => r.ReceiptNumber == receiptNumber && !r.IsVoided))
-            row.Posted(stockSourceId, entryId, values.GetValueOrDefault(row.Id));
+        foreach (var row in _receipts.Where(r => r.ReceiptNumber == receiptNumber && !r.IsVoided && values.ContainsKey(r.Id)))
+            row.Posted(stockSourceId, entryId, values[row.Id]);
     }
 
     /// <summary>Units and value of a line that went into stock on receipt (deliveries not taken back).</summary>

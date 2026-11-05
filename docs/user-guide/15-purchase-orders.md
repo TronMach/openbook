@@ -20,6 +20,8 @@ When a delivery arrives, use **Receive goods** on the PO: enter what arrived on 
 
 By default, receiving only records what arrived, to check the bill against; the stock enters the books when the bill is entered. If you want stock available to sell as soon as it arrives, an accountant can turn on receiving into stock in the approval settings (below). Received goods are then posted at the order's cost against "Received Not Billed", and the bill clears that account later, with any price difference going to "Purchase Price Variance".
 
+With receiving into stock on, a delivery doesn't count units a bill has already brought in, so goods billed before they arrive go into stock once. The delivery still records everything that arrived. Because of that, a bill can't be voided or cut back while a delivery depends on its units, and a delivery can't be taken back while a later one depends on it: take the later delivery back first. Goods can still be received on a closed order, which closes once everything is billed, even if some haven't arrived.
+
 ### Billing from the PO
 
 When the vendor's bill comes, use **Enter the vendor's bill** on the PO. Enter **their invoice number** and the **bill date**. By default the bill covers what's been received and not yet billed (or everything left, if nothing was received); change the quantities and costs to match the vendor's bill. **Enter bill**.

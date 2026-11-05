@@ -21,7 +21,7 @@
 
     @if (_total > _entries.Count)
     {
-        <div class="alert notice no-print" role="status">Showing the first @_entries.Count of @_total entries. Choose a shorter period to see them all.</div>
+        <div class="alert notice no-print" role="status">Showing the newest @_entries.Count of @_total entries. Export the report for all of them, or choose a shorter period.</div>
     }
 
     @if (_entries.Count == 0)
@@ -59,7 +59,7 @@
                 }
                 <tfoot>
                     <tr>
-                        <td colspan="5">Total</td>
+                        <td colspan="5">@(_total > _entries.Count ? "Total of these entries" : "Total")</td>
                         <td class="num">@Labels.Amount(_entries.Sum(e => e.TotalDebits.Amount))</td>
                         <td class="num">@Labels.Amount(_entries.Sum(e => e.TotalCredits.Amount))</td>
                     </tr>

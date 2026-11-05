@@ -16,18 +16,14 @@ internal sealed class ImportedBefore
     public static async Task<ImportedBefore> LoadAsync(PostingEngine engine, DateOnly from, DateOnly to, CancellationToken ct)
     {
         var result = new ImportedBefore();
-        for (var skip = 0; ; skip += 500)
+        var entries = await engine.ListAllAsync(new JournalEntryFilter(from, to, Source: JournalEntry.ImportSource), ct);
+        foreach (var entry in entries.Where(e => e.Status == JournalEntryStatus.Posted && e.ReversesEntryId is null))
         {
-            var (entries, total) = await engine.ListAsync(new JournalEntryFilter(from, to, skip, 500, JournalEntry.ImportSource), ct);
-            foreach (var entry in entries.Where(e => e.Status == JournalEntryStatus.Posted && e.ReversesEntryId is null))
-            {
-                var key = Key(entry.Date, entry.Memo, entry.Lines.Select(l => (l.AccountId, l.Amount)));
-                result._standing[key] = result._standing.GetValueOrDefault(key) + 1;
-            }
-
-            if (skip + 500 >= total)
-                return result;
+            var key = Key(entry.Date, entry.Memo, entry.Lines.Select(l => (l.AccountId, l.Amount)));
+            result._standing[key] = result._standing.GetValueOrDefault(key) + 1;
         }
+
+        return result;
     }
 
     /// <summary>True when this was imported before; that entry then can't answer for another one.</summary>
