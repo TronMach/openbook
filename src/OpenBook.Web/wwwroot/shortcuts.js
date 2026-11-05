@@ -109,6 +109,32 @@
     };
     document.addEventListener('input', watchChanges);
     document.addEventListener('change', watchChanges);
+    // A form that comes back with an error loses what was typed; a long sheet (a stock count) shouldn't.
+    const typedKey = form => 'ob-typed:' + location.pathname;
+    document.addEventListener('submit', e => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-keep-typed')) return;
+        const typed = {};
+        for (const field of form.querySelectorAll('input[type="text"], input[type="date"]'))
+            if (field.name && field.value) typed[field.name] = field.value;
+        try { sessionStorage.setItem(typedKey(form), JSON.stringify(typed)); } catch { /* the sheet just comes back empty */ }
+    });
+    function restoreTyped() {
+        const form = document.querySelector('form[data-keep-typed]');
+        if (!form) return;
+        try {
+            const saved = sessionStorage.getItem(typedKey(form));
+            sessionStorage.removeItem(typedKey(form));
+            if (!saved || !new URLSearchParams(location.search).has('error')) return;
+            for (const [name, value] of Object.entries(JSON.parse(saved))) {
+                const field = form.querySelector(`[name="${CSS.escape(name)}"]`);
+                if (field) field.value = value;
+            }
+        } catch { /* nothing to bring back */ }
+    }
+    restoreTyped();
+    window.Blazor?.addEventListener?.('enhancedload', restoreTyped);
+
     document.addEventListener('submit', e => {
         const form = e.target;
         if (form instanceof HTMLFormElement && form.hasAttribute('data-needs-saved') && unsaved

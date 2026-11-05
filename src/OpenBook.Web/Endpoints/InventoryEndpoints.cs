@@ -1,3 +1,5 @@
+using OpenBook.Web.Security;
+using OpenBook.Application.Ledger;
 using System.Globalization;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Sales;
@@ -75,8 +77,9 @@ public static class InventoryEndpoints
         }).RequireAuthorization();
 
         // Fields: count:{itemId} (blank = not counted), date, warehouseId, accountId, reference.
-        app.MapPost("/inventory/count", async (IFormCollection form, InventoryAdjustmentService adjustments, CancellationToken ct) =>
+        app.MapPost("/inventory/count", async (IFormCollection form, InventoryAdjustmentService adjustments, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } password ? password : null;
             var warehouse = Guid.TryParse(form["warehouseId"], out var w) ? w : (Guid?)null;
             var back = "/inventory/count" + (warehouse is { } wid ? $"?warehouseId={wid}&" : "?");
             try
@@ -100,7 +103,7 @@ public static class InventoryEndpoints
             }
             catch (DomainException ex)
             {
-                return Results.Redirect($"{back}error={Uri.EscapeDataString(ex.Message)}");
+                return Results.Redirect($"{back}error={Uri.EscapeDataString(ex.Message)}{(ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "")}");
             }
         }).RequireAuthorization();
 

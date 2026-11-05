@@ -50,7 +50,8 @@ public sealed class AssemblyBuildService(
         foreach (var c in assembly.Components)
         {
             var component = components[c.ComponentItemId];
-            var onHand = (await store.ListMovementsAsync(component.Id, ct)).Where(m => m.Date <= date && m.WarehouseId == key).Sum(m => m.Quantity);
+            // What the build could actually take: expired lots and stock since gone to later sales don't count.
+            var onHand = Fifo.Available(await store.ListMovementsAsync(component.Id, ct), date, await inventory.ForPickingAsync(component, StockFilter.In(key), ct));
             requirements.Add(new BuildRequirement(component, c.Quantity, Needed(quantity, c.Quantity), onHand));
             var possible = Math.Floor(Math.Max(0m, onHand) / c.Quantity);
             max = max is null ? possible : Math.Min(max.Value, possible);

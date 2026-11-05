@@ -59,6 +59,8 @@ public sealed class WarehouseService(IInventoryStore store, IClock clock, ICurre
         var before = Snapshot(warehouse);
         warehouse.Update(name, address);
         await EnsureUniqueAsync(warehouse.Name, id, ct);
+        if (warehouse.IsActive && !active && (await store.ListQuantitiesAtAsync(warehouse.Key, null, ct)).Sum() != 0m)
+            throw new DomainException("warehouse.has_stock", $"{warehouse.Name} has stock in it, so it stays active. Transfer the stock out first.");
         warehouse.SetActive(active);
         store.Add(Audit(AuditAction.Updated, warehouse, before));
         await store.SaveChangesAsync(ct);
@@ -82,6 +84,13 @@ public sealed class WarehouseService(IInventoryStore store, IClock clock, ICurre
     public async Task<Bin> SetBinActiveAsync(Guid binId, bool active, CancellationToken ct = default)
     {
         var bin = (await store.ListBinsAsync(ct)).FirstOrDefault(b => b.Id == binId) ?? throw new EntityNotFoundException("bin", binId);
+        if (bin.IsActive && !active)
+        {
+            var home = (await store.ListWarehousesAsync(ct)).First(w => w.Id == bin.WarehouseId);
+            if ((await store.ListQuantitiesAtAsync(home.Key, bin.Id, ct)).Sum() != 0m)
+                throw new DomainException("bin.has_stock", $"Bin {bin.Name} has stock in it, so it stays active. Transfer the stock out first.");
+        }
+
         bin.SetActive(active);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, bin.WarehouseId, null,
             JsonSerializer.Serialize(new { Bin = bin.Name, bin.IsActive })));

@@ -187,7 +187,7 @@
                     ? (IReadOnlyList<BillableLine>)(await sp.GetRequiredService<BillableExpenseService>().LinesAsync(BillableSource.Expense, Id)).Where(l => l.Billable is not null).ToList()
                     : []));
             _title = Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type);
-            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != _transaction.AccountId).ToList();
+            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != _transaction.AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
             foreach (var used in splits.Select(s => s.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
                 _categories.Add(_chart.Get(used));
 

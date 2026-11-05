@@ -33,6 +33,8 @@ public sealed class BankConnectionService(
     private const string EntityType = "bank_connection";
 
     /// <summary>How often the background service fetches; SimpleFIN allows about 24 requests a day.</summary>
+    private const int QuietDays = 30;
+
     public static readonly TimeSpan SyncEvery = TimeSpan.FromHours(6);
 
     /// <summary>A newly linked account without a start date fetches this far back.</summary>
@@ -135,11 +137,12 @@ public sealed class BankConnectionService(
                 ?? throw new DomainException("connection.credential_unreadable",
                     "The saved credential can't be read here (the company file may have moved to another computer). Disconnect and connect again.");
             var linked = connection.Accounts.Where(a => a.AccountId is not null).ToList();
-            DateOnly? from = linked.Count == 0 ? null : linked.Min(a => Start(a, today));
+            var chart = await accounts.GetChartAsync(ct);
+            var fetching = linked.Where(a => chart.Find(a.AccountId!.Value) is { IsActive: true }).ToList();
+            DateOnly? from = fetching.Count == 0 ? null : fetching.Min(a => Start(a, today));
             var snapshot = await Client(connection.Provider).FetchAsync(access, from, today, zone, ct);
             Refresh(connection, snapshot);
 
-            var chart = await accounts.GetChartAsync(ct);
             var problems = new List<string>(Messages(snapshot) is { } m ? [m] : []);
             foreach (var remote in linked)
             {
@@ -147,6 +150,12 @@ public sealed class BankConnectionService(
                 if (target is not { IsActive: true })
                 {
                     problems.Add($"{remote.Name}: the linked account is inactive, so nothing was fetched.");
+                    continue;
+                }
+
+                if (snapshot.Accounts.All(a => a.Id != remote.RemoteId))
+                {
+                    problems.Add($"{remote.Name}: the service no longer lists this account.");
                     continue;
                 }
 
@@ -161,10 +170,13 @@ public sealed class BankConnectionService(
                     queued += result.Queued;
                     autoAdded += result.AutoAdded;
                     skipped += result.Skipped;
+                    if (result.NotAdded is { } note)
+                        problems.Add(note);
                 }
 
-                if (posted.Count > 0)
-                    remote.Fetched(posted[^1].Date);
+                // A quiet account mustn't hold back the range fetched for every account: it moves on a month behind today.
+                var quiet = today.AddDays(-QuietDays);
+                remote.Fetched(posted.Count > 0 && posted[^1].Date > quiet ? posted[^1].Date : quiet);
             }
 
             connection.SyncSucceeded(now, problems.Count == 0 ? null : string.Join(" ", problems));

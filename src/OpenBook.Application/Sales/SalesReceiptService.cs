@@ -165,10 +165,24 @@ public sealed class SalesReceiptService(
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([receipt.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(receipt);
 
-        var back = await inventory.PlanReversalAsync(InventorySources.SalesReceipt, receipt.Id, receipt.Date, $"sales receipt {receipt.Number}", ct);
+        // As for an invoice: stock that can't be reversed stays as it is when the correction leaves it alone.
+        var sameStock = command.Date == receipt.Date && warehouseId == receipt.WarehouseId && SalesLine.SameStock(receipt.Lines, lines);
+        InventoryPlan? back = null;
+        try
+        {
+            back = await inventory.PlanReversalAsync(InventorySources.SalesReceipt, receipt.Id, receipt.Date, $"sales receipt {receipt.Number}", ct);
+        }
+        catch (DomainException ex) when (ex.Code == "inventory.shortfall_filled" && sameStock)
+        {
+        }
+
+        var keptStock = back is null
+            ? await InventoryService.KeptStockAsync(ledger, receipt.JournalEntryId, SalesLine.Postings(receipt.DepositAccountId, receipt.Lines, null).Count, ct)
+            : null;
         await engine.StageVoidAsync(receipt.JournalEntryId, $"Sales receipt changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
-        inventory.Apply(back, InventorySources.SalesReceipt, receipt.Id);
-        var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
+        if (back is not null)
+            inventory.Apply(back, InventorySources.SalesReceipt, receipt.Id);
+        var stock = keptStock ?? await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
             new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(depositAccountId, lines, memo), .. stock.Postings], memo, SalesReceipt.Source, receipt.Id,

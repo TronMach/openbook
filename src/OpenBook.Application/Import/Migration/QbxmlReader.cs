@@ -67,12 +67,13 @@ internal static class QbxmlReader
                 _ => null,
             };
             var terms = i.Child("SalesOrPurchase") ?? i.Child("SalesAndPurchase");
-            var price = MigrationReaders.Amount(terms.Text("Price") ?? terms.Text("SalesPrice")) ?? 0m;
+            // Inventory parts have these directly, not under SalesOrPurchase.
+            var price = MigrationReaders.Amount(terms.Text("Price") ?? terms.Text("SalesPrice") ?? i.Text("SalesPrice")) ?? 0m;
             var income = (terms?.Child("AccountRef") ?? terms?.Child("IncomeAccountRef") ?? i.Child("IncomeAccountRef")).Text("FullName");
             var note = type is null ? "Discounts, subtotals, groups, payments and tax items aren't imported."
                 : kind == "Inventory" ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
             data.Items.Add(new SourceItem(MigrationReaders.LineOf(i), i.Text("FullName") ?? i.Text("Name") ?? "", kind, type, income, Math.Abs(price),
-                terms.Text("Desc") ?? terms.Text("SalesDesc"), note));
+                terms.Text("Desc") ?? terms.Text("SalesDesc") ?? i.Text("SalesDesc"), note));
         }
 
         var journals = document.Named("ReportRet").Where(QbxmlJournal.IsJournal).ToList();

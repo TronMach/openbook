@@ -21,6 +21,10 @@
         <div class="alert notice" role="status">
             @result.Queued @(result.Queued == 1 ? "line is" : "lines are") waiting for review@(result.AutoAdded > 0 ? $"; rules added {result.AutoAdded} straight to the books" : "")@(result.Skipped > 0 ? $"; {result.Skipped} already imported were skipped" : "").
             <ActionLink Href="@($"/banking/{AccountId}/feed")">Review them now</ActionLink>.
+            @if (result.NotAdded is { } notAdded)
+            {
+                <p>@notAdded</p>
+            }
         </div>
     }
 
@@ -233,7 +237,7 @@
         _error = null;
         try
         {
-            var lines = Selected.Select(r => new FeedLine(r.Row.Date!.Value, r.Row.Amount!.Value, r.Row.Payee, r.Row.Reference, r.Row.Memo, r.Row.FitId)).ToList();
+            var lines = Selected.Select(r => new FeedLine(r.Row.Date!.Value, r.Row.Amount!.Value, r.Row.Payee, r.Row.Reference, r.Row.Memo, r.Row.FitId, Occurrence: r.Row.Occurrence)).ToList();
             _result = await Ops.RunAsync<BankFeedService, FeedImportResult>(s => s.QueueAsync(AccountId, lines));
             _preview = null;
             _rows = [];

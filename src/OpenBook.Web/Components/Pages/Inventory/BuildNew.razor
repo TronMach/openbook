@@ -27,6 +27,10 @@
     else
     {
         <form class="card filters" method="get" data-enhance="false">
+            @if (_pendingId is { } pendingId)
+            {
+                <input type="hidden" name="pending" value="@pendingId" />
+            }
             <div class="row">
                 <div class="field">
                     <label for="item">Assembly</label>

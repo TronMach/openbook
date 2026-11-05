@@ -29,7 +29,8 @@ public sealed record BankImportRow(
     bool PossibleDuplicate,
     string? Error,
     string? FitId = null,
-    bool AlreadyImported = false)
+    bool AlreadyImported = false,
+    int? Occurrence = null)
 {
     public bool IsValid => Error is null;
 }

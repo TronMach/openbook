@@ -12,7 +12,7 @@ Each channel has **settings** for where things go. Leave them on the defaults un
 
 | Part of a payout | Default account |
 | --- | --- |
-| The money that reaches you | A bank account, or Undeposited Funds |
+| The money that reaches you | A bank account, so the bank line can be matched to the payout. **Make deposit** doesn't list payouts |
 | Sales | Online Sales (income) |
 | Shipping charged | Shipping Income |
 | Refunds | Refunds and Returns (income, reducing sales) |

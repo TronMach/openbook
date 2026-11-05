@@ -193,13 +193,15 @@
     private async Task LoadAsync()
     {
         var review = await Ops.RunAsync<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(AccountId, _status));
+        // What's been chosen on other lines stays: acting on one line mustn't lose the rest.
+        var chosen = _rows.ToDictionary(r => r.Item.Id);
         _rows = review.Select(r => new Row(r.Item, r.Matches)
         {
-            CategoryId = r.Suggestion?.CategoryAccountId,
-            VendorId = r.Suggestion?.VendorId,
-            Payee = r.Suggestion?.Payee,
+            CategoryId = chosen.GetValueOrDefault(r.Item.Id)?.CategoryId ?? r.Suggestion?.CategoryAccountId,
+            VendorId = chosen.GetValueOrDefault(r.Item.Id)?.VendorId ?? r.Suggestion?.VendorId,
+            Payee = chosen.GetValueOrDefault(r.Item.Id)?.Payee ?? r.Suggestion?.Payee,
             RuleName = r.Suggestion?.Rule.Name,
-            MatchEntryId = r.Matches.FirstOrDefault()?.JournalEntryId,
+            MatchEntryId = chosen.GetValueOrDefault(r.Item.Id)?.MatchEntryId ?? r.Matches.FirstOrDefault()?.JournalEntryId,
         }).ToList();
         _loaded = true;
     }

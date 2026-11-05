@@ -152,7 +152,8 @@ public sealed class JournalImportService(
         // Group lines into entries: by the entry column, or until the running total balances.
         var groups = new List<(string Key, List<CsvRecord> Rows)>();
         var running = 0m;
-        foreach (var row in rows)
+        // A row with no amount says nothing: left out, or the post would refuse it after a clean preview.
+        foreach (var row in rows.Where(r => LineAmount(r, debitColumn, creditColumn, amountColumn) != 0m))
         {
             var key = CsvColumns.Field(row, entryColumn);
             if (entryColumn is not null)

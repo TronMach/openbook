@@ -254,6 +254,14 @@ public sealed class SalesLine
         };
     }
 
+    /// <summary>Whether two sets of lines move the same stock: the same items, quantities and lots, in order.</summary>
+    public static bool SameStock(IEnumerable<SalesLine> first, IEnumerable<SalesLine> second)
+    {
+        static IEnumerable<(Guid? ItemId, decimal Quantity, string? Lots)> Stock(IEnumerable<SalesLine> lines) =>
+            lines.Where(l => l.Kind == SalesLineKind.Item && l.ItemId is not null).OrderBy(l => l.LineNumber).Select(l => (l.ItemId, l.Quantity, l.Lots));
+        return Stock(first).SequenceEqual(Stock(second));
+    }
+
     /// <summary>On a correction: this line carries on <paramref name="original"/>, so it stays as it was sold.</summary>
     /// <param name="original">The line it continues, for the same item.</param>
     /// <param name="keepAccount">False when the old income account has been made inactive.</param>

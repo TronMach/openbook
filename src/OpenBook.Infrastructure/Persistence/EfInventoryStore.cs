@@ -13,6 +13,9 @@ internal sealed class EfInventoryStore(OpenBookDbContext db) : IInventoryStore
         return [.. saved, .. Pending().Where(m => itemId == null || m.ItemId == itemId)];
     }
 
+    public async Task<IReadOnlyList<decimal>> ListQuantitiesAtAsync(Guid? warehouseId, Guid? binId, CancellationToken ct) =>
+        await db.InventoryMovements.Where(m => m.WarehouseId == warehouseId && (binId == null || m.BinId == binId)).Select(m => m.Quantity).ToListAsync(ct);
+
     public async Task<IReadOnlyList<InventoryMovement>> ListMovementsForSourceAsync(string sourceType, Guid sourceId, CancellationToken ct)
     {
         var saved = await db.InventoryMovements.AsNoTracking().Where(m => m.SourceType == sourceType && m.SourceId == sourceId).ToListAsync(ct);

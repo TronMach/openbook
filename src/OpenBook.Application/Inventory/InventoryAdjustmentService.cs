@@ -84,7 +84,8 @@ public sealed class InventoryAdjustmentService(
             {
                 var received = InventoryService.Required(named, item);
                 InventoryService.EnsureNewSerials(item, received, history);
-                value = decimal.Round(draft.QuantityChange * (draft.UnitCost ?? item.PurchaseCost), 2, MidpointRounding.AwayFromZero);
+                // Purchase cost is blank unless someone typed it: the latest receipt or the average is a better guess than nothing.
+                value = decimal.Round(draft.QuantityChange * (draft.UnitCost ?? Costing.EstimatedUnitCost(item, history)), 2, MidpointRounding.AwayFromZero);
                 var receipts = received.Count > 0 ? received.Select(l => (l.Quantity, (string?)l.Lot)).ToList() : [(draft.QuantityChange, (string?)null)];
                 // Stock found fills what was sold before it was counted, correcting that cost (InventoryService.Receive).
                 var stock = InventoryService.Receive(item, history, InventoryService.Split(receipts, value)
@@ -116,8 +117,8 @@ public sealed class InventoryAdjustmentService(
         }
 
         var total = lines.Sum(l => l.ValueChange);
-        if (postings.Count == 0)
-            throw new DomainException("inventory.adjustment_zero_value", "These changes have no cost to post. Enter a unit cost for the stock added.");
+        if (postings.Count == 0 && corrections.Count == 0)
+            throw new DomainException("inventory.adjustment_zero_value", "These changes come to no value at all, so there's nothing to post. On an inventory adjustment, enter a unit cost for stock added.");
         if (total > 0m)
             postings.Add(JournalLineDraft.Cr(adjustmentAccount.Id, total, "Inventory adjustment"));
         else if (total < 0m)

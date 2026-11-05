@@ -33,6 +33,7 @@ public static partial class Ofx
             throw new DomainException("ofx.invalid", "That isn't an OFX, QFX or QBO file.");
 
         var transactions = new List<OfxTransaction>();
+        var accounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? accountId = null, currency = null;
         decimal? balance = null;
         DateOnly? balanceDate = null;
@@ -73,6 +74,7 @@ public static partial class Ofx
             {
                 case "ACCTID":
                     accountId ??= value;
+                    accounts.Add(value);
                     break;
                 case "CURDEF":
                     currency ??= value;
@@ -91,6 +93,9 @@ public static partial class Ofx
             transactions.Add(Transaction(current, ++line));
         if (transactions.Count == 0)
             throw new DomainException("ofx.no_transactions", "The file has no transactions.");
+        // Their lines can't be told apart here, and they'd all land on the account being imported into.
+        if (accounts.Count > 1)
+            throw new DomainException("ofx.several_accounts", $"This file holds {accounts.Count} accounts. Download each account's statement separately and import them one at a time.");
         return new OfxStatement(accountId, currency, balance, balanceDate, transactions);
     }
 

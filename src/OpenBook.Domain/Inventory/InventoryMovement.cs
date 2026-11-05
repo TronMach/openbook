@@ -265,6 +265,9 @@ public static class Fifo
             var where = filter.Lot is { } lot ? $" in lot {lot}" : "";
             where += filter.AnyWarehouse ? "" : " at that warehouse" + (filter.AnyBin ? "" : filter.BinId is null ? " (outside bins)" : " and bin");
             var note = expired > 0m ? $" ({expired:0.####} more is in expired lots; name a lot to use it anyway)" : "";
+            var later = Slices(movements).Where(s => s.Quantity > 0m && s.Date > date && filter.Matches(s)).Sum(s => s.Quantity);
+            if (later > 0m)
+                note += $" ({later:0.####} came in after that date: what was there then has gone to later sales. Date this on or after that receipt, or void those sales)";
             throw new DomainException("inventory.insufficient",
                 $"There {(available == 1m ? "is" : "are")} only {available:0.####} of {itemName}{where} on hand on {date:yyyy-MM-dd}{note}; {quantity:0.####} needed. Enter the purchase, transfer or adjustment first.");
         }

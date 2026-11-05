@@ -33,7 +33,7 @@ Run it monthly, quarterly or once a year; whatever's due since the last run is p
 
 ### Selling or disposing of an asset
 
-On the asset's page, **Sell or dispose of it**: the **date**, what it **sold for** (zero if scrapped) and where the **money went** (a bank account, or Undeposited Funds). **Dispose**.
+On the asset's page, **Sell or dispose of it**: the **date**, what it **sold for** (zero if scrapped) and where the **money went** (a bank account, or another current asset account; **Make deposit** doesn't list these, so if it waits in Undeposited Funds, enter a deposit on the bank account with Undeposited Funds as its category). **Dispose**.
 
 OpenBook posts the depreciation due up to that date, takes the asset's cost and accumulated depreciation off the books, records the money received, and puts the difference to "Gain or Loss on Disposal of Assets". **Undo the disposal** reverses it.
 

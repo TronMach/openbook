@@ -49,6 +49,9 @@ public sealed class AccountService(ILedgerStore store, ICompanyStore companies, 
                 "This account has bank transactions or reconciliations, so its type can't change.");
 
         var hasPostings = command.Type != account.Type && await store.HasPostingsAsync(account.Id, ct);
+        // Invoices and bills name the account they're kept in: anything else would stop the agings tying to it.
+        if (hasPostings && (account.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable || command.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable))
+            throw new Domain.Common.DomainException("account.type_receivable", "This account has transactions, so it can't change to or from Accounts Receivable or Accounts Payable.");
         chart.EnsureCanUpdate(account, command.Name, command.Number, command.Type, command.ParentId, hasPostings);
 
         // Net assets read the flag as it is now, so changing it restates every past statement.

@@ -60,7 +60,7 @@
     }
     else
     {
-        <PostForm Action="/inventory/count" data-enhance="false">
+        <PostForm Action="/inventory/count" data-enhance="false" data-keep-typed>
             <AntiforgeryToken />
             <input type="hidden" name="warehouseId" value="@_warehouse?.Id" />
             <div class="form-grid">
@@ -104,12 +104,15 @@
                     </tbody>
                 </table>
             </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <div class="actions"><button type="submit">Record the count</button></div>
         </PostForm>
     }
 </div>
 
 @code {
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
     private IReadOnlyList<Warehouse> _warehouses = [];
     private Warehouse? _warehouse;
     private List<(Item Item, decimal Held)> _rows = [];

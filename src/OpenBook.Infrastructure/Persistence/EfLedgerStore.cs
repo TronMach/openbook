@@ -68,7 +68,11 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
 
     public async Task<bool> HasBankingRecordsAsync(Guid accountId, CancellationToken ct) =>
         await db.BankTransactions.AnyAsync(t => t.AccountId == accountId || t.TransferAccountId == accountId, ct)
-        || await db.Reconciliations.AnyAsync(r => r.AccountId == accountId, ct);
+        || await db.Reconciliations.AnyAsync(r => r.AccountId == accountId, ct)
+        || await db.BillPayments.AnyAsync(p => p.PaymentAccountId == accountId, ct)
+        || await db.CustomerPayments.AnyAsync(p => p.DepositAccountId == accountId, ct)
+        || await db.SalesReceipts.AnyAsync(r => r.DepositAccountId == accountId, ct)
+        || await db.CustomerRefunds.AnyAsync(r => r.PaymentAccountId == accountId, ct);
 
     public async Task<IReadOnlyDictionary<Guid, (decimal Before, decimal Through)>> GetAccrualTotalsAsync(DateOnly splitAt, DateOnly toDate, CancellationToken ct) =>
         (await (

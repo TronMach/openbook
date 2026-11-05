@@ -53,7 +53,7 @@ Select **Review** (or **… to review**) on the account. Each pending line can b
 - **Added** as a new transaction: choose a **category** (and optionally a vendor or payee), then **Add**. Lines a bank rule recognized arrive with their category filled in and a "Rule" badge. Lines with a category and no match can all be added at once with the button above the list.
 - **Excluded**, for duplicates or lines that don't belong in your books.
 
-Done lines move to the Added, Matched and Excluded tabs. **Undo** puts a line back for review; for an added line this voids the transaction it created. Voiding a transaction a line was added as or matched to puts the line back for review too.
+A line a rule can't add, for example because its date is in a closed period, waits here for review instead of stopping the import. A file holding more than one account is refused: download each account's statement separately. Done lines move to the Added, Matched and Excluded tabs. **Undo** puts a line back for review; for an added line this voids the transaction it created. Voiding a transaction a line was added as or matched to puts the line back for review too.
 
 ## Bank rules
 

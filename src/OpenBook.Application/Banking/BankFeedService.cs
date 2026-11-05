@@ -9,12 +9,16 @@ using OpenBook.Domain.Ledger;
 namespace OpenBook.Application.Banking;
 
 /// <summary>A statement line to put in the review queue. Positive is money in.</summary>
-public sealed record FeedLine(DateOnly Date, decimal Amount, string? Payee, string? Reference, string? Memo, string? FitId = null);
+public sealed record FeedLine(DateOnly Date, decimal Amount, string? Payee, string? Reference, string? Memo, string? FitId = null, int? Occurrence = null);
 
 /// <param name="Queued">New lines now waiting for review.</param>
 /// <param name="AutoAdded">Lines a rule added to the books straight away.</param>
 /// <param name="Skipped">Lines already imported before.</param>
-public sealed record FeedImportResult(int Queued, int AutoAdded, int Skipped);
+/// <param name="Queued">Lines waiting for review.</param>
+/// <param name="AutoAdded">Lines a rule added.</param>
+/// <param name="Skipped">Lines already imported.</param>
+/// <param name="NotAdded">Why the first line a rule couldn't add was left for review, when there was one.</param>
+public sealed record FeedImportResult(int Queued, int AutoAdded, int Skipped, string? NotAdded = null);
 
 /// <summary>What a rule says to do with a line.</summary>
 public sealed record FeedSuggestion(Guid CategoryAccountId, string? Payee, Guid? VendorId, BankRule Rule);
@@ -77,8 +81,9 @@ public sealed class BankFeedService(
             {
                 if (r.Date is not { } date || r.Amount is not { } amount)
                     return r;
-                var key = BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId, Occurrence(seen, BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId)));
-                return known.Contains(key) ? r with { AlreadyImported = true } : r;
+                var occurrence = Occurrence(seen, BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId));
+                var key = BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId, occurrence);
+                return r with { AlreadyImported = known.Contains(key) || r.AlreadyImported, Occurrence = occurrence };
             }).ToList(),
         };
     }
@@ -97,11 +102,13 @@ public sealed class BankFeedService(
         var batchId = Guid.CreateVersion7();
         var rules = await ActiveRulesAsync(ct);
         int queued = 0, autoAdded = 0, skipped = 0;
+        string? notAdded = null;
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
         List<FeedMatch>? inTheBooks = null;
         foreach (var line in lines)
         {
-            var occurrence = Occurrence(seen, BankFeedItem.KeyFor(line.Date, line.Amount, line.Payee, line.Reference, line.FitId));
+            // Which repeat it is in the file, as the preview counted: the page sends only the rows chosen.
+            var occurrence = line.Occurrence ?? Occurrence(seen, BankFeedItem.KeyFor(line.Date, line.Amount, line.Payee, line.Reference, line.FitId));
             var item = BankFeedItem.Create(accountId, line.Date, line.Amount, line.Payee, line.Reference, line.Memo, line.FitId, batchId, clock.UtcNow, occurrence);
             if (!known.Add(item.DedupeKey))
             {
@@ -117,9 +124,18 @@ public sealed class BankFeedService(
             inTheBooks ??= rule is { AutoAdd: true } ? await MatchCandidatesAsync(accountId, ct) : null;
             if (rule is { AutoAdd: true } && !inTheBooks!.Any(c => c.Amount == item.Amount && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays))
             {
-                var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId)), batchId, ct);
-                item.MarkAdded(transaction.Id, rule.Id, clock.UtcNow, user.Actor);
-                autoAdded++;
+                // One line a rule can't post (a closed period, a category switched off since) waits for review and stops nothing else.
+                try
+                {
+                    var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId)), batchId, ct);
+                    item.MarkAdded(transaction.Id, rule.Id, clock.UtcNow, user.Actor);
+                    autoAdded++;
+                }
+                catch (DomainException ex) when (ex is not ConcurrencyConflictException)
+                {
+                    notAdded ??= $"Rule '{rule.Name}' couldn't add {item.Payee ?? "a line"}, so it's waiting for review: {ex.Message}";
+                    queued++;
+                }
             }
             else
             {
@@ -130,7 +146,7 @@ public sealed class BankFeedService(
         bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, "bank_feed_import", batchId, null,
             JsonSerializer.Serialize(new { AccountId = accountId, Queued = queued, AutoAdded = autoAdded, Skipped = skipped })));
         await bank.SaveChangesAsync(ct);
-        return new FeedImportResult(queued, autoAdded, skipped);
+        return new FeedImportResult(queued, autoAdded, skipped, notAdded);
     }
 
     /// <summary>The queue for an account, oldest first, with rule suggestions and possible matches.</summary>

@@ -11,6 +11,9 @@ public interface IInventoryStore
     /// <summary>Untracked; every item when <paramref name="itemId"/> is null. Includes movements added but not yet saved.</summary>
     Task<IReadOnlyList<InventoryMovement>> ListMovementsAsync(Guid? itemId, CancellationToken ct);
 
+    /// <summary>The quantities moved at a warehouse (null = the default), or one of its bins: they sum to what's there.</summary>
+    Task<IReadOnlyList<decimal>> ListQuantitiesAtAsync(Guid? warehouseId, Guid? binId, CancellationToken ct);
+
     Task<IReadOnlyList<InventoryMovement>> ListMovementsForSourceAsync(string sourceType, Guid sourceId, CancellationToken ct);
 
     /// <summary>Whether the item has ever moved stock.</summary>

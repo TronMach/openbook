@@ -232,6 +232,7 @@ public sealed class BankingService(
                 payee = vendor.DisplayName;
         }
 
+        await EnsureNotReceivablesAsync(command.Splits, await SplitAccountsAsync(transaction, ct), ct);
         var postings = BankTransaction.SplitPostings(transaction.Kind, transaction.AccountId, command.Splits);
         var amount = command.Splits.Sum(s => s.Amount);
         var feed = await BankFeedService.TiedToAsync(bank, transaction.AccountId, transaction.JournalEntryId, transaction.Id, ct);
@@ -367,6 +368,22 @@ public sealed class BankingService(
         return numbers.Count == 0 ? null : (numbers.Max()!.Value + 1).ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// A/R and A/P move only with invoices and bills, or the agings stop tying to them and a bill stays open after it's
+    /// been paid. An older line is left alone, so a correction of something else still goes through.
+    /// </summary>
+    private async Task EnsureNotReceivablesAsync(IEnumerable<BankSplit> splits, IReadOnlySet<Guid>? kept, CancellationToken ct)
+    {
+        var ids = splits.Select(s => s.AccountId).Where(id => kept is null || !kept.Contains(id)).Distinct().ToList();
+        if ((await ledger.GetAccountsAsync(ids, ct)).Values.FirstOrDefault(a => a.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable) is { } account)
+            throw new DomainException("bank.category_receivable", account.Type == AccountType.AccountsPayable
+                ? $"'{account.Name}' moves only with bills: use Pay bills to pay one."
+                : $"'{account.Name}' moves only with invoices: use Receive payment for money from a customer.");
+    }
+
+    private async Task<IReadOnlySet<Guid>> SplitAccountsAsync(BankTransaction transaction, CancellationToken ct) =>
+        (await SplitsAsync(transaction, ct)).Select(s => s.AccountId).ToHashSet();
+
     /// <summary>Adds the document and its entry without saving; imports stage many and save once.</summary>
     internal async Task<BankTransaction> StageAsync(RecordBankTransactionCommand command, Guid? importBatchId, CancellationToken ct)
     {
@@ -389,6 +406,7 @@ public sealed class BankingService(
                 payee = vendor.DisplayName;
         }
 
+        await EnsureNotReceivablesAsync(command.Splits, null, ct);
         var postings = BankTransaction.SplitPostings(command.Kind, account.Id, command.Splits);
         var id = Guid.CreateVersion7();
         var entryMemo = string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));

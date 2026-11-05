@@ -129,8 +129,7 @@ internal static partial class QbxmlJournal
         DateOnly? date = t.Date is null ? null
             : DateOnly.TryParseExact(t.Date, ["yyyy-MM-dd", "MM/dd/yyyy", "M/d/yyyy"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
         var memo = string.Join(" · ", new[] { label, t.Name, t.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)));
-        var skip = t.Lines.Count == 0 && t.Errors.Count == 0 ? "Nothing posted: every amount is zero." : null;
-        data.Transactions.Add(new SourceTransaction(t.Line, label, t.Date, date, memo, t.Lines, skip, t.Errors));
+        data.Transactions.Add(new SourceTransaction(t.Line, label, t.Date, date, memo, t.Lines, null, t.Errors));
     }
 
     /// <summary>"1000 · Checking": an account number, a middle dot, the name.</summary>

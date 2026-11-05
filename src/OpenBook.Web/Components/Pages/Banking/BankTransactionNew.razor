@@ -179,7 +179,7 @@
             BankingRules.EnsureBankingAccount(_account);
             _accountName = _chart.FullName(AccountId);
             _title = Labels.For(_kind, _account.Type);
-            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != AccountId).ToList();
+            _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
             if (IsCheck)
                 _reference ??= suggestion;
 

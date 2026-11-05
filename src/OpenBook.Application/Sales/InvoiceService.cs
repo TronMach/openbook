@@ -268,10 +268,25 @@ public sealed class InvoiceService(
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([invoice.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(invoice);
 
-        var back = await inventory.PlanReversalAsync(InventorySources.Invoice, invoice.Id, invoice.Date, $"invoice {invoice.Number}", ct);
+        // Stock received since has filled what this sold short, so it can't be reversed: a correction that leaves the stock
+        // alone keeps it as it is, and the entry repeats its cost lines.
+        var sameStock = command.Date == invoice.Date && warehouseId == invoice.WarehouseId && SalesLine.SameStock(invoice.Lines, lines);
+        InventoryPlan? back = null;
+        try
+        {
+            back = await inventory.PlanReversalAsync(InventorySources.Invoice, invoice.Id, invoice.Date, $"invoice {invoice.Number}", ct);
+        }
+        catch (DomainException ex) when (ex.Code == "inventory.shortfall_filled" && sameStock)
+        {
+        }
+
+        var keptStock = back is null
+            ? await InventoryService.KeptStockAsync(ledger, invoice.JournalEntryId, SalesLine.Postings(invoice.ReceivableAccountId, invoice.Lines, null).Count, ct)
+            : null;
         await engine.StageVoidAsync(invoice.JournalEntryId, $"Invoice changed: {command.Reason.Trim()}", fromDocument: true, ct);
-        inventory.Apply(back, InventorySources.Invoice, invoice.Id);
-        var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
+        if (back is not null)
+            inventory.Apply(back, InventorySources.Invoice, invoice.Id);
+        var stock = keptStock ?? await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
         var memo = $"Invoice {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
             new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(invoice.ReceivableAccountId, lines, memo), .. stock.Postings], memo, Invoice.Source, invoice.Id,

@@ -82,6 +82,7 @@ For items tracked by **lot** (batches, with expiry dates) or **serial number** (
 
 - **Receiving** (bills, adjustments, builds) must name them. Write lots as `A-1 x 3; B-2 x 2`, or one lot alone for the whole line; serials as `S1, S2, S3`.
 - **Selling**: name the lots or serials on the line, or leave them blank to take the oldest. The ones actually used are kept on the line and printed on the invoice.
+- A warehouse or bin with stock in it can't be made inactive: transfer the stock out first.
 - **Expiry dates** for lots are set on the item's page. Automatic picks take the soonest-expiring lot first and skip expired ones. The Inventory page lists lots expiring soon.
 - **Find a lot or serial number** on the Inventory page traces it: when it came in, where it went, and what's left.
 

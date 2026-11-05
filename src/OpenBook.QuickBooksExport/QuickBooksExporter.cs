@@ -65,7 +65,7 @@ public sealed class QuickBooksExporter(IQuickBooksSession session, TextWriter lo
         var journal = Journal(options, budget, out var lines, out var firstDate);
         log.WriteLine($"Journal lines: {lines:N0}{(firstDate is { } f ? $", from {f:yyyy-MM-dd}" : "")}");
 
-        var files = Write(options, companyName, header, Pack(lists, journal, budget));
+        var files = Write(options, companyName, header, Pack([.. lists, .. journal], budget));
         return new ExportResult(companyName, files, accountCount, customerCount, vendorCount, itemCount, lines, firstDate);
     }
 
@@ -177,12 +177,12 @@ public sealed class QuickBooksExporter(IQuickBooksSession session, TextWriter lo
     }
 
     /// <summary>Lists first, then the journal in date order, starting a new file when the next piece wouldn't fit.</summary>
-    private static List<List<string>> Pack(List<string> lists, List<string> journal, long budget)
+    private static List<List<string>> Pack(List<string> pieces, long budget)
     {
         var parts = new List<List<string>>();
-        var current = new List<string>(lists);
-        var size = lists.Sum(Bytes);
-        foreach (var piece in journal)
+        var current = new List<string>();
+        var size = 0L;
+        foreach (var piece in pieces)
         {
             var bytes = Bytes(piece);
             if (current.Count > 0 && size + bytes > budget)

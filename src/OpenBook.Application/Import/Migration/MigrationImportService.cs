@@ -142,8 +142,8 @@ public sealed class MigrationImportService(
         foreach (var t in plan.Transactions)
         {
             var lines = t.Lines.Select(l => l.Amount > 0m
-                ? JournalLineDraft.Dr(final.FindByFullName(l.Account)!.Id, l.Amount, l.Memo)
-                : JournalLineDraft.Cr(final.FindByFullName(l.Account)!.Id, -l.Amount, l.Memo)).ToList();
+                ? JournalLineDraft.Dr(final.FindByFullName(l.Account)!.Id, l.Amount, LineMemo(l.Memo))
+                : JournalLineDraft.Cr(final.FindByFullName(l.Account)!.Id, -l.Amount, LineMemo(l.Memo))).ToList();
             await engine.StageAsync(new PostJournalEntryCommand(t.Date, lines, t.Memo, JournalEntry.ImportSource, batch), ct);
         }
 
@@ -156,6 +156,8 @@ public sealed class MigrationImportService(
     private async Task<string> HomeCurrencyAsync(CancellationToken ct) => (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency.Code;
 
     private sealed record PlannedAccount(string FullName, AccountType Type, string? Number, string? Description);
+
+    private static string? LineMemo(string? memo) => memo is { Length: > 1000 } ? memo[..1000] : memo;
 
     private sealed record PlannedTransaction(DateOnly Date, string? Memo, IReadOnlyList<SourceLine> Lines);
 
@@ -177,6 +179,7 @@ public sealed class MigrationImportService(
         // Accounts: what the file adds, so later rows can refer to them.
         var plannedAccounts = new List<PlannedAccount>();
         var types = new Dictionary<string, AccountType?>(StringComparer.OrdinalIgnoreCase); // null = not part of the books
+        var renumbered = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in data.Accounts)
         {
             var name = a.FullName;
@@ -197,9 +200,20 @@ public sealed class MigrationImportService(
 
             var error = a.Type is null ? $"Unknown account type '{a.TypeLabel}'." : ValidateAccountName(name);
             var number = a.Number;
+            var note = a.Note;
             if (error is null && number is not null)
-                error = Try(() => Account.NormalizeNumber(number)) ?? (chart.All.Any(x => string.Equals(x.Number, number, StringComparison.OrdinalIgnoreCase)) || plannedAccounts.Any(p => p.Number == number)
-                    ? $"Account number {number} is already used." : null);
+                error = Try(() => Account.NormalizeNumber(number));
+            if (error is null && number is not null && (chart.All.Any(x => string.Equals(x.Number, number, StringComparison.OrdinalIgnoreCase))
+                || plannedAccounts.Any(p => string.Equals(p.Number, number, StringComparison.OrdinalIgnoreCase))))
+            {
+                // A file from another program can't be edited, and the starter chart uses the common numbers.
+                note = $"Number {number} is already used here, so it comes in without a number.";
+                renumbered[number] = name;
+                number = null;
+            }
+
+            if (error is null && a.Type is { } accountType)
+                error = Try(() => Account.Create(name[(name.LastIndexOf(Account.PathSeparator) + 1)..], accountType, null, null, a.Description));
             var cut = name.LastIndexOf(Account.PathSeparator);
             if (error is null && cut >= 0)
             {
@@ -218,11 +232,12 @@ public sealed class MigrationImportService(
             }
 
             rows.Add(new MigrationRow(MigrationKind.Account, a.Line, name, a.Type?.Describe() ?? a.TypeLabel,
-                error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? a.Note));
+                error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? note));
         }
 
         // Some sources name accounts by number ("#4000"): the chart's account with that number, or one the file adds.
         string Resolve(string name) => !name.StartsWith('#') ? name
+            : renumbered.TryGetValue(name[1..], out var kept) ? kept
             : chart.All.FirstOrDefault(a => string.Equals(a.Number, name[1..], StringComparison.OrdinalIgnoreCase)) is { } numbered ? chart.FullName(numbered.Id)
             : plannedAccounts.FirstOrDefault(p => string.Equals(p.Number, name[1..], StringComparison.OrdinalIgnoreCase))?.FullName ?? name;
         AccountType? TypeOf(string name) => types.TryGetValue(name, out var t) ? t : chart.FindByFullName(name)?.Type;
@@ -269,7 +284,7 @@ public sealed class MigrationImportService(
                 continue;
             }
 
-            var error = Try(() => Vendor.NormalizeName(name));
+            var error = Try(() => Vendor.Create(v.Details));
             if (error is null)
                 plannedVendors.Add(v.Details with { DisplayName = name.Trim() });
             rows.Add(new MigrationRow(MigrationKind.Vendor, v.Line, name, v.Details.CompanyName, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error));
@@ -304,7 +319,8 @@ public sealed class MigrationImportService(
 
             var error = Try(() => Item.NormalizeName(name))
                 ?? (!Known(income) ? $"Its income account '{income}' isn't in the file or the chart." : null)
-                ?? Try(() => SalesLine.ValidRate(i.Price));
+                ?? Try(() => SalesLine.ValidRate(i.Price))
+                ?? Try(() => Item.Create(new ItemDetails(name, i.Type.Value, Guid.NewGuid(), i.Price, i.Description)));
             if (error is null)
                 plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description), income));
             rows.Add(new MigrationRow(MigrationKind.Item, i.Line, name, i.KindLabel, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? i.Note));
@@ -328,6 +344,12 @@ public sealed class MigrationImportService(
             }
 
             var errors = (t.Errors ?? []).ToList();
+            if (errors.Count == 0 && t.Lines.All(l => l.Amount == 0m))
+            {
+                rows.Add(new MigrationRow(MigrationKind.Transaction, t.Line, t.Label, detail, MigrationRowStatus.Skipped, "Nothing posted: every amount is zero."));
+                continue;
+            }
+
             if (t.Date is not { } date)
             {
                 if (errors.Count == 0)
@@ -340,6 +362,8 @@ public sealed class MigrationImportService(
             var lines = t.Lines.Where(l => l.Amount != 0m).ToList();
             foreach (var l in lines.Where(l => !Known(l.Account)))
                 errors.Add($"no account '{l.Account}' in the file or the chart");
+            foreach (var l in lines.Where(l => chart.FindByFullName(l.Account) is { IsActive: false }))
+                errors.Add($"the account '{l.Account}' is inactive");
             if (lines.Any(l => decimal.Round(l.Amount, 2) != l.Amount))
                 errors.Add("amounts can have at most 2 decimal places");
             if (lines.Count < 2)

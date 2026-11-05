@@ -381,7 +381,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                 if (receipt.IsShortfall)
                 {
                     throw new DomainException("inventory.shortfall_filled",
-                        $"{item?.Name ?? "Some stock"} was sold here before it was on hand, and stock received since has filled that, so it can't be voided. Void that stock's bill, return or adjustment first, or enter a credit memo for the return instead.");
+                        $"{item?.Name ?? "Some stock"} was sold here before it was on hand, and stock received since has filled that, so it can't be voided, and its items, quantities and date can't change (its prices and notes can). Void that stock's bill, return or adjustment first, or enter a credit memo for the return instead.");
                 }
 
                 throw new DomainException("inventory.layer_used",
@@ -590,11 +590,29 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
 
     internal static string Describe(ItemTracking tracking) => tracking == ItemTracking.Serial ? "serial number" : "lot";
 
+    /// <summary>
+    /// The stock side of a sale being corrected without touching what was sold, when the stock can't be reversed: its
+    /// movements stay, and the new entry repeats the cost lines of the old one, which come after the sale's own lines.
+    /// </summary>
+    /// <param name="ledger">Where the entry is.</param>
+    /// <param name="entryId">The entry being replaced.</param>
+    /// <param name="saleLines">How many of its lines are the sale's own.</param>
+    /// <param name="ct">Cancels the read.</param>
+    internal static async Task<InventoryPlan> KeptStockAsync(ILedgerStore ledger, Guid entryId, int saleLines, CancellationToken ct)
+    {
+        var entry = await ledger.GetEntryAsync(entryId, ct) ?? throw new EntityNotFoundException("journal_entry", entryId);
+        var classes = (await ledger.GetLineSegmentsAsync([entryId], ct)).ToDictionary(s => s.JournalLineId, s => s.ClassId);
+        var postings = entry.Lines.OrderBy(l => l.LineNumber).Skip(saleLines)
+            .Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo, classes.GetValueOrDefault(l.Id)))
+            .ToList();
+        return new InventoryPlan(postings, []);
+    }
+
     internal static decimal UnitCostForReturn(Item item, IReadOnlyList<InventoryMovement> history)
     {
         var reversed = history.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
         var sales = history
-            .Where(m => !m.IsReceipt && m.Quantity < 0m && m.ReversalOf is null && !reversed.Contains(m.Id) && m.SourceType is InventorySources.Invoice or InventorySources.SalesReceipt)
+            .Where(m => !m.IsReceipt && m.Quantity < 0m && m.ReversalOf is null && !reversed.Contains(m.Id) && m.SourceType is InventorySources.Invoice or InventorySources.SalesReceipt or InventorySources.ChannelOrders)
             .ToList();
         // The whole sale's average: it may have taken from several layers.
         if (sales.OrderBy(m => m.Date).ThenBy(m => m.CreatedAt).LastOrDefault() is { } last)
