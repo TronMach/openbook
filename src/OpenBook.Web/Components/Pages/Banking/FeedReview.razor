@@ -26,6 +26,7 @@
     @if (_error is not null)
     {
         <div class="alert error" role="alert">@_error</div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
     }
     @if (_message is not null)
     {
@@ -151,6 +152,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private string? _closingPassword;
+    private bool _needsClosingPassword;
     private string? _message;
 
     [Parameter]
@@ -209,14 +212,14 @@
     private Task AddAsync(Row row) => RunAsync(async () =>
     {
         var command = new AddFeedItemCommand(row.CategoryId!.Value, row.Payee, row.VendorId);
-        await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command));
+        await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command), _closingPassword);
         _message = $"Added {Labels.Amount(Math.Abs(row.Item.Amount))} {(row.Item.IsMoneyIn ? "from" : "to")} {row.Payee ?? row.Item.Payee}.";
     });
 
     private Task MatchAsync(Row row) => RunAsync(async () =>
     {
         var entryId = row.MatchEntryId!.Value;
-        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.MatchAsync(row.Item.Id, entryId); return true; });
+        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.MatchAsync(row.Item.Id, entryId); return true; }, _closingPassword);
         _message = "Matched.";
     });
 
@@ -228,7 +231,7 @@
 
     private Task ReopenAsync(Row row) => RunAsync(async () =>
     {
-        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.ReopenAsync(row.Item.Id); return true; });
+        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.ReopenAsync(row.Item.Id); return true; }, _closingPassword);
         _message = "Back in the review queue.";
     });
 
@@ -238,7 +241,7 @@
         foreach (var row in _rows.Where(r => r.CategoryId is not null && r.Matches.Count == 0).ToList())
         {
             var command = new AddFeedItemCommand(row.CategoryId!.Value, row.Payee, row.VendorId);
-            await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command));
+            await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command), _closingPassword);
             added++;
         }
 
@@ -260,6 +263,7 @@
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

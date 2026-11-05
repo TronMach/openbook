@@ -146,6 +146,15 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             .Where(i => i.IsInventory)
             .SelectMany(i => new[] { i.InventoryAssetAccountId!.Value, i.CostAccountId!.Value })
             .ToHashSet();
+
+        // An item's cost account can change later; what sold before stays on the old one, and income never sits on an expense account.
+        var onSales = lines.Where(l => l.Source is Invoice.Source or CreditMemo.Source).Select(l => l.AccountId).Distinct().ToList();
+        foreach (var (id, account) in await ledger.GetAccountsAsync(onSales, ct))
+        {
+            if (Domain.Accounts.AccountTypes.ClassOf(account.Type) == Domain.Accounts.AccountClass.Expense)
+                stockAccounts.Add(id);
+        }
+
         var cash = lines.Where(l => l.Basis.AppliesTo(ReportBasis.Cash)
             && (!AccrualDocuments.Contains(l.Source) || l.Source is Invoice.Source or CreditMemo.Source && stockAccounts.Contains(l.AccountId)
                 // A bill's correction of the cost of stock sold before it came in: cost of goods sold, recognized as posted.

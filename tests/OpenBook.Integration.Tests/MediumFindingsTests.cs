@@ -589,4 +589,33 @@ public sealed class MediumFindingsTests : IAsyncLifetime
 
         Assert.Equal("channel.other_currency", refused.Code);
     }
+
+    [Fact]
+    public void Text_that_a_database_cant_hold_is_cleaned()
+    {
+        Assert.Equal("ab", TextCleaning.Clean("a" + (char)0 + "b"));
+        Assert.Equal("a" + (char)10 + "b", TextCleaning.Clean("a" + (char)10 + "b"));
+        Assert.Equal("ab", TextCleaning.Clean("a" + (char)0xD83D + "b"));
+        Assert.Equal("a" + (char)0xD83D + (char)0xDE00, TextCleaning.Clean("a" + (char)0xD83D + (char)0xDE00));
+        Assert.Equal("a", TextCleaning.Cut("a" + (char)0xD83D + (char)0xDE00, 2));
+    }
+
+    [Fact]
+    public async Task Cash_basis_keeps_past_cost_of_sales_when_an_items_cost_account_changes()
+    {
+        var income = await _db.CreateAccount("Sales", AccountType.Income, "4100");
+        var cost = await _db.CreateAccount("Cost of Sales", AccountType.CostOfGoodsSold, "5000");
+        var other = await _db.CreateAccount("Cost of Goods", AccountType.CostOfGoodsSold, "5100");
+        var stock = await _db.CreateAccount("Stock", AccountType.OtherCurrentAsset, "1400");
+        var bolt = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Bolt", ItemType.Inventory, income.Id, 10m, InventoryAssetAccountId: stock.Id, CostAccountId: cost.Id)));
+        await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_staples.Id, Mar1, [new BillLineDraft(Guid.Empty, 40m, null, bolt.Id, 8m)])));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar5, [new SalesLineDraft(bolt.Id, null, 2m, 10m)])));
+
+        var details = new ItemDetails("Bolt", ItemType.Inventory, income.Id, 10m, InventoryAssetAccountId: stock.Id, CostAccountId: other.Id);
+        await In<ItemService, Item>(s => s.UpdateAsync(bolt.Id, details));
+
+        var lines = await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Reporting.ReportLedger>().LinesAsync(ReportBasis.Cash, null, new DateOnly(2026, 12, 31)));
+        Assert.Equal(0m, lines.Sum(l => l.Amount));
+        Assert.Equal(10m, lines.Where(l => l.AccountId == cost.Id).Sum(l => l.Amount));
+    }
 }

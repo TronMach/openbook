@@ -208,6 +208,8 @@ public sealed class CaptureTests : IAsyncLifetime
     {
         var other = (await In<UserService, Domain.Companies.User>(s => s.CreateAsync("clerk", "a long password", Domain.Companies.UserRole.Standard))).Id;
         await Assert.ThrowsAsync<EntityNotFoundException>(() => In<CaptureService, IReadOnlyList<DraftOutcome>>(s => s.SyncAsync(other, _device, [])));
+        var refused = await Assert.ThrowsAsync<DomainException>(() => In<CaptureService, bool>(async s => { await s.CheckDeviceAsync(other, _device, null); return true; }));
+        Assert.Equal("capture.device_other_user", refused.Code);
         await Assert.ThrowsAsync<EntityNotFoundException>(() => In<CaptureService, bool>(async s => { await s.RevokeDeviceAsync(_device, other); return true; }));
 
         var lists = await In<CaptureService, CaptureLists>(s => s.ListsAsync());

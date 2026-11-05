@@ -87,9 +87,11 @@
 
     let lists = null;
 
-    async function refreshLists() {
-        const response = await fetch('/api/capture/lists', { credentials: 'same-origin' });
+    async function refreshLists(device) {
+        const response = await fetch('/api/capture/lists?device=' + encodeURIComponent(device), { credentials: 'same-origin' });
         if (response.status === 401) throw Object.assign(new Error('signed-out'), { signedOut: true });
+        if (response.status === 410) throw Object.assign(new Error('removed'), { removed: true });
+        if (response.status === 409) throw Object.assign(new Error('someone-else'), { someoneElse: true });
         if (!response.ok) throw new Error('lists ' + response.status);
         lists = await response.json();
         await setMeta('lists', await seal(lists));
@@ -258,15 +260,20 @@
         if (syncing || !navigator.onLine) return render();
         syncing = true;
         try {
-            const device = await deviceId();
+            let device = await deviceId();
             try {
-                await refreshLists();
+                await refreshLists(device);
             } catch (e) {
-                if (e.signedOut && await revoked(device)) return wiped();
-                throw e;
+                if (e.removed || e.signedOut && await revoked(device)) return wiped();
+                if (!e.someoneElse) throw e;
+                // Someone else signed in on this browser: they get a device of their own.
+                await setMeta('deviceId', null);
+                device = await deviceId();
+                await refreshLists(device);
             }
             fillSelects();
-            const waiting = (await loadDrafts()).filter(d => d.status === 'waiting');
+            // Each person's drafts go in under their own name; anyone else's wait for them to sign in here.
+            const waiting = (await loadDrafts()).filter(d => d.status === 'waiting' && (!d.user || d.user === lists.me));
             for (const batch of batches(waiting)) {
                 const response = await fetch('/api/capture/sync', {
                     method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
@@ -278,7 +285,10 @@
                     if (await revoked(device)) return wiped();
                     throw Object.assign(new Error('signed-out'), { signedOut: true });
                 }
-                if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'sync ' + response.status);
+                if (!response.ok) {
+                    const answer = await response.json().catch(() => ({}));
+                    throw new Error(answer.message || answer.title || 'sync ' + response.status);
+                }
                 for (const outcome of await response.json()) {
                     const draft = batch.drafts.find(d => d.id === outcome.id);
                     if (!draft) continue;
@@ -383,7 +393,7 @@
                 const payload = await payloadOf(form);
                 const problem = check(kind, payload);
                 if (problem) return show(problem, true);
-                await saveDraft({ id: crypto.randomUUID(), kind, capturedAt: new Date().toISOString(), status: 'waiting', payload });
+                await saveDraft({ id: crypto.randomUUID(), user: lists && lists.me, kind, capturedAt: new Date().toISOString(), status: 'waiting', payload });
                 form.querySelectorAll('input[name]:not([type=date]):not([type=checkbox]):not([name=billRate])').forEach(i => { i.value = ''; });
                 if (form.querySelector('.sale-line')) resetSale(form);
                 show(navigator.onLine ? 'Saved. Sending…' : 'Saved on this device. It will be sent when you\'re back online.');

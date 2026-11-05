@@ -13,6 +13,12 @@ public sealed class ReceiptTextExtractor(string? tesseractPath) : IReceiptTextEx
 {
     private static readonly HashSet<string> Images = new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".bmp" };
 
+    /// <summary>The pages read of a PDF: enough for any invoice, and a bound on the work one upload can make.</summary>
+    public const int MaxPages = 50;
+
+    /// <summary>The end of what's read from a longer PDF.</summary>
+    public const string PagesLeftOut = OpenBook.Application.Documents.DocumentTextNotes.PagesLeftOut;
+
     public bool CanReadImages => tesseractPath is not null && File.Exists(tesseractPath);
 
     public async Task<string?> ExtractAsync(string fileName, byte[] content, CancellationToken ct)
@@ -22,11 +28,14 @@ public sealed class ReceiptTextExtractor(string? tesseractPath) : IReceiptTextEx
         if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
             return Pdf(content);
         if (extension.ToLowerInvariant() is ".txt" or ".csv" or ".eml")
-            return Encoding.UTF8.GetString(content);
+            return Readable(OpenBook.Application.Import.TextFiles.Decode(content));
         if (Images.Contains(extension) && CanReadImages)
             return await OcrAsync(extension, content, ct);
         return null;
     }
+
+    /// <summary>Without what a database can't hold, or a person read: control characters and half a character.</summary>
+    private static string Readable(string text) => Domain.Common.TextCleaning.Clean(text);
 
     private static string? Pdf(byte[] content)
     {
@@ -34,14 +43,16 @@ public sealed class ReceiptTextExtractor(string? tesseractPath) : IReceiptTextEx
         {
             using var document = PdfDocument.Open(content);
             var text = new StringBuilder();
-            foreach (var page in document.GetPages().Take(5))
+            foreach (var page in document.GetPages().Take(MaxPages))
             {
                 // Lines as they sit on the page: words grouped by their baseline, left to right.
                 foreach (var line in page.GetWords().GroupBy(w => Math.Round(w.BoundingBox.Bottom)).OrderByDescending(g => g.Key))
                     text.AppendLine(string.Join(' ', line.OrderBy(w => w.BoundingBox.Left).Select(w => w.Text)));
             }
 
-            return text.Length == 0 ? null : text.ToString();
+            if (document.NumberOfPages > MaxPages)
+                text.Append(PagesLeftOut).Append(FormattableString.Invariant($" {MaxPages} of {document.NumberOfPages}]")).AppendLine();
+            return text.Length == 0 ? null : Readable(text.ToString());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

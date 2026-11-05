@@ -231,6 +231,16 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
         await db.CustomerPayments.CountAsync(ct),
         await db.BankDeposits.CountAsync(ct));
 
+    public async Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct) => new(
+        await db.Invoices.AsNoTracking().Where(i => i.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
+        await db.SalesReceipts.AsNoTracking().Where(r => r.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
+        await db.CreditMemos.AsNoTracking().Where(c => c.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
+        await db.Estimates.AsNoTracking().Where(e => e.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
+        await db.SalesOrders.AsNoTracking().Where(o => o.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct));
+
+    public async Task<IReadOnlyList<SalesReceipt>> ListReceiptsForCustomerAsync(Guid customerId, CancellationToken ct) =>
+        await db.SalesReceipts.AsNoTracking().Where(r => r.CustomerId == customerId).ToListAsync(ct);
+
     public async Task<IReadOnlyList<SalesReceipt>> ListReceiptsAsync(CancellationToken ct) =>
         (await db.SalesReceipts.AsNoTracking().ToListAsync(ct))
             .OrderByDescending(r => r.Date)

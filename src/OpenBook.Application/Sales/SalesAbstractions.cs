@@ -21,8 +21,17 @@ public sealed record ReceivableDocuments(
     IReadOnlyList<Retainer> Retainers,
     IReadOnlyCollection<Guid>? InvoicesDatedLater = null);
 
+/// <summary>The sales documents with a line for one item, for a page about that item.</summary>
+public sealed record ItemDocuments(
+    IReadOnlyList<Invoice> Invoices, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<CreditMemo> CreditMemos,
+    IReadOnlyList<Estimate> Estimates, IReadOnlyList<SalesOrder> Orders);
+
 public interface ISalesStore
 {
+    Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct);
+
+    Task<IReadOnlyList<SalesReceipt>> ListReceiptsForCustomerAsync(Guid customerId, CancellationToken ct);
+
     Task<IReadOnlyList<Customer>> ListCustomersAsync(CancellationToken ct);
     Task<Customer?> GetCustomerAsync(Guid id, CancellationToken ct);
 

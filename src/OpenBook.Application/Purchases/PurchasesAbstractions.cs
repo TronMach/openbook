@@ -81,6 +81,10 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct);
 
+    Task<IReadOnlyList<Bill>> ListBillsWithItemAsync(Guid itemId, CancellationToken ct);
+
+    Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersWithItemAsync(Guid itemId, CancellationToken ct);
+
     Task<IReadOnlyList<string>> ListPurchaseOrderNumbersAsync(CancellationToken ct);
 
     /// <summary>Tracked; null until first saved.</summary>

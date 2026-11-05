@@ -75,6 +75,7 @@ Bank Loan,9000.00</pre>
     @if (_error is not null)
     {
         <div class="alert error" role="alert">@_error</div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
     }
     @if (_done is not null)
     {
@@ -154,6 +155,8 @@ Bank Loan,9000.00</pre>
     private JournalImportResult? _entries;
     private OpeningBalanceImportResult? _balances;
     private string? _error;
+    private string? _closingPassword;
+    private bool _needsClosingPassword;
     private string? _done;
     private bool _busy;
 
@@ -215,13 +218,14 @@ Bank Loan,9000.00</pre>
             }
             else
             {
-                var entry = await Ops.RunAsync<JournalImportService, JournalEntry>(s => s.ImportBalancesAsync(_csv, _asOf));
+                var entry = await Ops.RunAsync<JournalImportService, JournalEntry>(s => s.ImportBalancesAsync(_csv, _asOf), _closingPassword);
                 _done = $"Posted opening balances as entry {entry.Number}.";
             }
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

@@ -38,18 +38,32 @@ public static class CaptureApi
             return Results.NoContent();
         });
 
-        capture.MapGet("/lists", async (ClaimsPrincipal principal, CaptureService s, CancellationToken ct) => await s.ListsAsync(MayEnter(principal), ct));
+        // "device" is the device asking, so a removed one learns it here too, whether or not it has anything to send.
+        capture.MapGet("/lists", async (Guid? device, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
+        {
+            try
+            {
+                if (device is { } id)
+                    await s.CheckDeviceAsync(UserId(principal), id, AuthService.SessionIdOf(principal), ct);
+                return Results.Ok((await s.ListsAsync(MayEnter(principal), ct)) with { Me = principal.Identity?.Name });
+            }
+            catch (DomainException ex) when (ex.Code is "capture.device_revoked" or "capture.device_other_user")
+            {
+                return DeviceRefused(ex);
+            }
+        });
 
         // A revoked device gets 410 Gone, its signal to wipe what it holds.
         capture.MapPost("/sync", async (SyncRequest r, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
         {
             try
             {
+                await s.CheckDeviceAsync(UserId(principal), r.DeviceId, AuthService.SessionIdOf(principal), ct);
                 return Results.Ok(await s.SyncAsync(UserId(principal), r.DeviceId, r.Drafts ?? [], MayEnter(principal), ct));
             }
-            catch (DomainException ex) when (ex.Code == "capture.device_revoked")
+            catch (DomainException ex) when (ex.Code is "capture.device_revoked" or "capture.device_other_user")
             {
-                return Results.Json(new { code = ex.Code, message = ex.Message }, statusCode: StatusCodes.Status410Gone);
+                return DeviceRefused(ex);
             }
         });
 
@@ -65,6 +79,9 @@ public static class CaptureApi
     }
 
     /// <summary>What a device may enter is what its person (or limited key) may enter in each area, not just "capture".</summary>
+    private static IResult DeviceRefused(DomainException ex) => Results.Json(new { code = ex.Code, message = ex.Message },
+        statusCode: ex.Code == "capture.device_revoked" ? StatusCodes.Status410Gone : StatusCodes.Status409Conflict);
+
     private static Func<OpenBook.Domain.Capture.CaptureKind, bool> MayEnter(ClaimsPrincipal principal) =>
         kind => AuthClaims.MayWrite(principal, CaptureService.AreaOf(kind));
 

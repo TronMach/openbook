@@ -59,7 +59,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
         User? user;
         try
         {
-            user = await store.FindUserAsync(User.NormalizeUsername(username), ct);
+            user = await store.FindUserAsync(User.NormalizeUsername(OpenBook.Domain.Common.TextCleaning.Clean(username ?? "")), ct);
         }
         catch (DomainException)
         {

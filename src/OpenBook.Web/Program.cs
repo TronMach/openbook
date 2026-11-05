@@ -145,6 +145,7 @@ app.UseAuthorization();
 app.UseMiddleware<AccessMiddleware>();
 // API writes with an Idempotency-Key answer a repeat with the first response (after access is decided).
 app.UseMiddleware<IdempotencyMiddleware>();
+app.UseMiddleware<ClosingPasswordMiddleware>();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

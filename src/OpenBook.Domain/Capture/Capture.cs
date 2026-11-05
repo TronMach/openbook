@@ -33,6 +33,9 @@ public sealed class CaptureDevice
 
     public void Synced(DateTimeOffset at) => LastSyncAt = at.ToUniversalTime();
 
+    /// <summary>The session in use now: a phone signs in again from day to day, and removing it has to end the live one.</summary>
+    public void SeenOn(Guid? sessionId) => SessionId = sessionId ?? SessionId;
+
     public void Revoke(DateTimeOffset at) => RevokedAt ??= at.ToUniversalTime();
 }
 

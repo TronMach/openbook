@@ -66,6 +66,12 @@ public sealed record DocumentReadingSettingsCommand(bool UseClaude, string? Mode
 /// read (on the server, or by Claude when an admin has switched that on), matched to the sender, our purchase order and
 /// items, checked by a person, and then turned into a record or dismissed.
 /// </summary>
+/// <summary>What a text extractor leaves in the text for the reader to notice.</summary>
+public static class DocumentTextNotes
+{
+    public const string PagesLeftOut = "[OpenBook read only the first pages:";
+}
+
 public sealed class DocumentCaptureService(
     IDocumentStore store,
     IPurchasesStore purchases,
@@ -304,6 +310,10 @@ public sealed class DocumentCaptureService(
             {
                 method = Images.Contains(Path.GetExtension(document.FileName)) ? DocumentReadMethods.Ocr : DocumentReadMethods.Text;
                 fields = DocumentParser.Parse(text, document.Kind, names, company.Name);
+                if (text.Contains(DocumentTextNotes.PagesLeftOut, StringComparison.Ordinal))
+                    note ??= "This file is long, so only its first pages were read. Check the lines and the total against it.";
+                else if (fields.Total is null && DocumentKinds.HasPrices(document.Kind))
+                    note ??= "No total was found, so the lines couldn't be checked against one.";
             }
         }
 

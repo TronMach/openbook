@@ -18,6 +18,7 @@
     @if (_error is not null)
     {
         <div class="alert error" role="alert">@_error</div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
     }
 
     @if (_made is { } made)
@@ -111,6 +112,8 @@
     private bool _loaded;
     private bool _busy;
     private string? _error;
+    private string? _closingPassword;
+    private bool _needsClosingPassword;
 
     private IEnumerable<Customer> Shown => _customers.Where(c => string.IsNullOrWhiteSpace(_filter)
         || c.DisplayName.Contains(_filter.Trim(), StringComparison.CurrentCultureIgnoreCase));
@@ -162,7 +165,7 @@
 
     private Task PreviewAsync() => RunAsync(async () => _preview = await Ops.RunAsync<BatchInvoiceService, IReadOnlyList<BatchInvoiceLine>>(s => s.PreviewAsync(Command())));
 
-    private Task CreateAsync() => RunAsync(async () => _made = await Ops.RunAsync<BatchInvoiceService, IReadOnlyList<BatchInvoiceLine>>(s => s.CreateAsync(Command())));
+    private Task CreateAsync() => RunAsync(async () => _made = await Ops.RunAsync<BatchInvoiceService, IReadOnlyList<BatchInvoiceLine>>(s => s.CreateAsync(Command()), _closingPassword));
 
     private async Task RunAsync(Func<Task> work)
     {
@@ -177,6 +180,7 @@
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
             _preview = null;
         }
         finally

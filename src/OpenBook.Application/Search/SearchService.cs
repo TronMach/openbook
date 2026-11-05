@@ -59,6 +59,7 @@ public sealed class SearchService(
 
     public async Task<SearchResults> SearchAsync(string? query, CancellationToken ct = default)
     {
+        query = query is null ? null : OpenBook.Domain.Common.TextCleaning.Clean(query);
         var q = query?.Trim() ?? string.Empty;
         if (q.Length < 2)
             return new SearchResults(q, [], Truncated: false);

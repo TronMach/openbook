@@ -54,7 +54,7 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
                 i.Status == DocumentStatus.Voided ? CenterState.Voided : i.IsOverdue(today) ? CenterState.Overdue : i.IsOpen ? CenterState.Open : CenterState.Paid));
         foreach (var p in await sales.ListPaymentsAsync(customerId, ct))
             rows.Add(new("payment", p.Id, p.Date, p.Reference, p.Memo, p.Amount, p.Status == DocumentStatus.Posted && p.Unapplied > 0m ? p.Unapplied : null, Posted(p.Status)));
-        foreach (var r in (await sales.ListReceiptsAsync(ct)).Where(r => r.CustomerId == customerId))
+        foreach (var r in await sales.ListReceiptsForCustomerAsync(customerId, ct))
             rows.Add(new("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Total, null, Posted(r.Status)));
         foreach (var c in await sales.ListCreditMemosAsync(customerId, ct))
             rows.Add(new("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Total, c.Status == DocumentStatus.Posted && c.Balance > 0m ? c.Balance : null, Posted(c.Status)));
@@ -111,25 +111,26 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
                 rows.Add(new(type, id, date, number, memo, mine.Sum(l => l.Amount), null, state, mine.Sum(l => l.Quantity)));
         }
 
-        foreach (var i in await sales.ListInvoicesAsync(null, ct))
+        var documents = await sales.ListDocumentsWithItemAsync(itemId, ct);
+        foreach (var i in documents.Invoices)
             Sold(InvoiceType, i.Id, i.Date, i.Number, i.Memo, i.Lines, Posted(i.Status));
-        foreach (var r in await sales.ListReceiptsAsync(ct))
+        foreach (var r in documents.Receipts)
             Sold("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Lines, Posted(r.Status));
-        foreach (var c in await sales.ListCreditMemosAsync(null, ct))
+        foreach (var c in documents.CreditMemos)
             Sold("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Lines, Posted(c.Status));
-        foreach (var e in await sales.ListEstimatesAsync(null, ct))
+        foreach (var e in documents.Estimates)
             Sold("estimate", e.Id, e.Date, e.Number, e.Memo, e.Lines, e.Status == EstimateStatus.Closed ? CenterState.Closed : CenterState.Pending);
-        foreach (var o in await sales.ListSalesOrdersAsync(null, ct))
+        foreach (var o in documents.Orders)
             Sold("sales_order", o.Id, o.Date, o.Number, o.Memo, o.Lines, Order(o.Status == SalesOrderStatus.Open, o.Status == SalesOrderStatus.Cancelled));
 
-        foreach (var b in await purchases.ListBillsAsync(null, ct))
+        foreach (var b in await purchases.ListBillsWithItemAsync(itemId, ct))
         {
             var mine = b.Lines.Where(l => l.ItemId == itemId).ToList();
             if (mine.Count > 0)
                 rows.Add(new("bill", b.Id, b.Date, b.Reference, b.Memo, mine.Sum(l => l.Amount), null, Posted(b.Status), mine.Sum(l => l.Quantity ?? 0m)));
         }
 
-        foreach (var o in await purchases.ListPurchaseOrdersAsync(null, ct))
+        foreach (var o in await purchases.ListPurchaseOrdersWithItemAsync(itemId, ct))
         {
             var mine = o.Lines.Where(l => l.ItemId == itemId).ToList();
             if (mine.Count > 0)

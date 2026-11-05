@@ -284,7 +284,7 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
     {
         var invoices = (await sales.ListInvoicesAsync(customerId, ct)).Where(i => i.Status == DocumentStatus.Posted)
             .SelectMany(i => i.Lines.Select(l => (i.Date, i.Number, i.CreatedAt, Line: l)));
-        var receipts = (await sales.ListReceiptsAsync(ct)).Where(r => r.CustomerId == customerId && r.Status == DocumentStatus.Posted)
+        var receipts = (await sales.ListReceiptsForCustomerAsync(customerId, ct)).Where(r => r.Status == DocumentStatus.Posted)
             .SelectMany(r => r.Lines.Select(l => (r.Date, r.Number, r.CreatedAt, Line: l)));
         return invoices.Concat(receipts)
             .Where(x => x.Line.Kind == SalesLineKind.Item && x.Line.ItemId is not null)

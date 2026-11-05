@@ -7,7 +7,7 @@ internal static class Text
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
-        var trimmed = value.Trim();
+        var trimmed = TextCleaning.Clean(value).Trim();
         return trimmed.Length <= max ? trimmed : throw new DomainException(code, $"{field} can be at most {max} characters.");
     }
 }

@@ -95,6 +95,7 @@
             <SimpleShortcuts User="context.User" Edition="_edition" />
         </AuthorizeView>
         <main class="page" id="main" tabindex="-1">
+            <ClosingPasswordBox />
             @Body
         </main>
     </div>
@@ -102,6 +103,7 @@
 else
 {
     <main class="page" id="main" tabindex="-1">
+        <ClosingPasswordBox />
         @Body
     </main>
 }

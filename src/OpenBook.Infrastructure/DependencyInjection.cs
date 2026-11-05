@@ -63,7 +63,8 @@ public static class DependencyInjection
         {
             connectionString = WithKey(connectionString, encryptionKey);
             services.AddSingleton(new OpenBookStorage(connectionString, backupDirectory ?? DefaultBackupDirectory(connectionString), !string.IsNullOrEmpty(encryptionKey)));
-            services.AddDbContext<OpenBookDbContext>(o => o.UseSqlite(connectionString));
+            // One JSON parameter for a list of ids: SQLite stops at 32,766 parameters, which a busy account's register passes.
+            services.AddDbContext<OpenBookDbContext>(o => o.UseSqlite(connectionString, x => x.UseParameterizedCollectionMode(ParameterTranslationMode.Parameter)));
             services.AddScoped<IBackupService, SqliteBackupService>();
         }
 

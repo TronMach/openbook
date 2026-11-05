@@ -70,9 +70,15 @@ public sealed class CustomerPortalService(
         if (await CustomerForAsync(token, ct) is not { } customer)
             return null;
         var billed = await PaymentService.BilledAsync(store, customer.Id, ct);
-        var invoices = (await store.ListInvoicesAsync(null, ct)).Where(i => billed.Contains(i.CustomerId) && i.Status == DocumentStatus.Posted).ToList();
+        var invoices = new List<Invoice>();
+        var estimates = new List<Estimate>();
+        foreach (var id in billed)
+        {
+            invoices.AddRange((await store.ListInvoicesAsync(id, ct)).Where(i => i.Status == DocumentStatus.Posted));
+            estimates.AddRange(await store.ListEstimatesAsync(id, ct));
+        }
+
         var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
-        var estimates = (await store.ListEstimatesAsync(null, ct)).Where(e => billed.Contains(e.CustomerId)).ToList();
         var statement = await receivables.StatementAsync(customer.Id, today.AddDays(-(int)StatementPeriod.TotalDays), today, ct);
         return new PortalView(
             await companies.GetRequiredCompanyAsync(ct),

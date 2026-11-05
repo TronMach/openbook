@@ -60,7 +60,8 @@ public sealed record CaptureLists(
     IReadOnlyList<CaptureChoice> Vendors,
     IReadOnlyList<CaptureChoice> Items,
     decimal MileageRate,
-    DateTimeOffset AsOf);
+    DateTimeOffset AsOf,
+    string? Me = null);
 
 /// <summary>
 /// Offline capture: devices send drafts made without a connection; each is entered through the same service the
@@ -120,6 +121,24 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     {
         var devices = (await store.ListDevicesAsync(userId, ct)).ToDictionary(d => d.Id);
         return (await store.ListDraftsAsync(devices.Keys, ct)).Where(d => d.Status == CaptureStatus.NeedsAttention).Select(d => (d, devices[d.DeviceId])).ToList();
+    }
+
+    /// <summary>
+    /// A device checking in, from a browser someone is signed in on: refused once its access is removed, and when
+    /// it belongs to someone else (<c>capture.device_other_user</c>), so a second person on one browser gets a device of their own.
+    /// </summary>
+    public async Task CheckDeviceAsync(Guid userId, Guid deviceId, Guid? sessionId, CancellationToken ct = default)
+    {
+        var device = await store.GetDeviceAsync(deviceId, ct) ?? throw new EntityNotFoundException(DeviceEntity, deviceId);
+        if (device.UserId != userId)
+            throw new DomainException("capture.device_other_user", "This device was set up by someone else.");
+        if (!device.IsActive)
+            throw new DomainException("capture.device_revoked", "This device's access was removed. What it held has been cleared; sign in again to keep capturing.");
+        if (sessionId is not null && device.SessionId != sessionId)
+        {
+            device.SeenOn(sessionId);
+            await store.SaveChangesAsync(ct);
+        }
     }
 
     /// <summary>Enters a device's drafts, in the order sent. Refused for a device that isn't the user's or is revoked (<c>capture.device_revoked</c>).</summary>

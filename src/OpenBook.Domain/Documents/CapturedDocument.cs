@@ -197,7 +197,7 @@ public sealed class CapturedDocument
     {
         ArgumentNullException.ThrowIfNull(fields);
         EnsureNew();
-        Text = string.IsNullOrWhiteSpace(text) ? null : text.Length > MaxTextLength ? text[..MaxTextLength] : text;
+        Text = string.IsNullOrWhiteSpace(text) ? null : Common.TextCleaning.Cut(text, MaxTextLength);
         ReadBy = readBy;
         ReadNote = note is null ? null : note.Length > 1000 ? note[..1000] : note;
         Apply(new DocumentReview(fields.Party, null, null, fields.Number, fields.Date, fields.DueDate, fields.OrderReference, null,

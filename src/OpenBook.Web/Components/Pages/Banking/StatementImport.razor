@@ -15,6 +15,7 @@
     @if (_error is not null)
     {
         <div class="alert error" role="alert">@_error</div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
     }
     @if (_result is { } result)
     {
@@ -144,6 +145,8 @@
     private List<RowModel> _rows = [];
     private FeedImportResult? _result;
     private string? _error;
+    private string? _closingPassword;
+    private bool _needsClosingPassword;
     private bool _busy;
 
     [Parameter]
@@ -237,13 +240,14 @@
         try
         {
             var lines = Selected.Select(r => new FeedLine(r.Row.Date!.Value, r.Row.Amount!.Value, r.Row.Payee, r.Row.Reference, r.Row.Memo, r.Row.FitId, Occurrence: r.Row.Occurrence)).ToList();
-            _result = await Ops.RunAsync<BankFeedService, FeedImportResult>(s => s.QueueAsync(AccountId, lines));
+            _result = await Ops.RunAsync<BankFeedService, FeedImportResult>(s => s.QueueAsync(AccountId, lines), _closingPassword);
             _preview = null;
             _rows = [];
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

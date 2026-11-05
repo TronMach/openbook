@@ -111,6 +111,15 @@
     document.addEventListener('change', watchChanges);
     // A form that comes back with an error loses what was typed; a long sheet (a stock count) shouldn't.
     const typedKey = form => 'ob-typed:' + location.pathname;
+    // The closing date password box on a refused page goes with whichever form is sent next.
+    document.addEventListener('submit', e => {
+        const box = document.getElementById('ob-closing-password');
+        const form = e.target;
+        if (!box || !box.value || !(form instanceof HTMLFormElement) || form.method !== 'post') return;
+        if (form.querySelector('input[name="ClosingPassword"]')?.value) return;
+        const field = form.querySelector('input[name="ClosingPassword"]') || form.appendChild(Object.assign(document.createElement('input'), { type: 'hidden', name: 'ClosingPassword' }));
+        field.value = box.value;
+    }, true);
     document.addEventListener('submit', e => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-keep-typed')) return;

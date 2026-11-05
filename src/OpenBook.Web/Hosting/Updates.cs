@@ -136,7 +136,7 @@ public sealed partial class UpdateService(
                 _ready = await DownloadAsync(client, manifest, ct);
             return Status;
         }
-        catch (Exception ex) when (ex is UpdateException or HttpRequestException or TaskCanceledException or IOException or UriFormatException && !ct.IsCancellationRequested)
+        catch (Exception ex) when (ex is UpdateException or HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or UriFormatException && !ct.IsCancellationRequested)
         {
             _error = ex is TaskCanceledException ? "The release feed didn't answer in time." : ex.Message;
             LogCheckFailed(_error);
@@ -246,8 +246,16 @@ internal sealed class UpdateCheckService(UpdateService updates, Diagnostics.JobS
             if (!updates.Enabled)
                 continue;
             var started = DateTimeOffset.UtcNow;
-            var result = await updates.CheckAsync(stoppingToken);
-            status.Record("Update check", started, DateTimeOffset.UtcNow - started, result.Error);
+            try
+            {
+                var result = await updates.CheckAsync(stoppingToken);
+                status.Record("Update check", started, DateTimeOffset.UtcNow - started, result.Error);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A check that goes wrong in any way mustn't stop the app it's checking for.
+                status.Record("Update check", started, DateTimeOffset.UtcNow - started, ex.Message);
+            }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
