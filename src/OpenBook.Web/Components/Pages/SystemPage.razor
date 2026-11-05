@@ -118,7 +118,8 @@
         }
         @if (!Install.IsDesktop && update.Available is not null)
         {
-            <pre>docker compose pull
+            <pre>git pull
+docker compose build --pull
 docker compose up -d</pre>
         }
         @if (Install.IsDesktop && update.Ready is not null && update.Available is { } ready)

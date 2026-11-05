@@ -88,6 +88,20 @@ Whatever doesn't balance goes to an equity account named "Opening Balance Equity
 
 Opening balances for many accounts can also be imported from a CSV file on **Settings → Import transactions**.
 
+## Journal entries
+
+Most entries make themselves: invoices, bills, payments and deposits each post their own. A journal entry is for what nothing else covers, such as a correction your accountant asks for. **Accounts and journal → New journal entry** (needs the accountant role):
+
+1. Enter the **date** and a line per account, each a **debit** or a **credit**. The debits and credits must come to the same total.
+2. **Reverse on** (optional) posts the opposite entry on that date, for something that undoes itself, such as an accrual at month end.
+3. **Adjusting entry** marks it as an accountant's adjustment, so it shows in its own column on the trial balance worksheet.
+
+A posted entry doesn't change: **Change** on its page voids it and posts the corrected one, keeping the reason; **Void** reverses it. Entries made by another document are changed or voided from that document.
+
+### Recurring entries
+
+**Journal → Recurring entries** holds entries that repeat, such as monthly rent or depreciation you work out yourself. Give it a name, the lines, how often and when it starts. **Automatic** ones post by themselves; **Manual** ones wait for **Post due entries**. A template stops at the first entry it can't post, and says why.
+
 ## Account registers
 
 Every account has a **Register** (link on the chart of accounts): every transaction that touched it, with a running balance. Amounts show in the account's natural direction, so a bank register shows money in and out, and a card register shows charges and payments.

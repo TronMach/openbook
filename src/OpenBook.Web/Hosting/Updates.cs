@@ -105,7 +105,7 @@ public sealed partial class UpdateService(
     private string? Note(UpdateManifest? available) => available switch
     {
         null => null,
-        _ when !installation.IsDesktop => "Update the server yourself: pull the new image and restart it (see the server guide).",
+        _ when !installation.IsDesktop => "Update the server yourself: get the new source, build it and restart (see the server guide).",
         _ when available.MinimumVersion is { } minimum && UpdateVersion.IsNewer(minimum, CurrentVersion) =>
             $"Version {available.Version} needs version {minimum} or later to update from; download its installer from the release notes instead.",
         _ => null,

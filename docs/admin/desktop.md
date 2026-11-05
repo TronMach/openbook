@@ -10,6 +10,10 @@ Starting OpenBook runs it in the background and opens it in the browser at `http
 
 Installing a newer version over it keeps everything; it stops a running OpenBook first. Uninstalling (Windows **Settings → Apps**) removes the program only.
 
+## Moving to a new computer
+
+Copy `Documents\OpenBook` and `%LOCALAPPDATA%\OpenBook\keys`. Without the keys folder the books are safe, but saved passwords, bank connections, ACH numbers and two-factor sign-in have to be set up again.
+
 ## Updates
 
 An installed OpenBook Desktop checks GitHub for a newer release a minute after starting and then once a day, sending nothing but its version. It downloads a newer installer into `%LOCALAPPDATA%\OpenBook\updates`. It only keeps it when the release key signed the release and the file's size and SHA-256 match. Then **Install OpenBook x.y.z** appears in the tray menu (with a notice) and on **Settings → System → Updates**.

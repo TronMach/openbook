@@ -92,8 +92,10 @@ The ledger's safeguards (balanced, immutable entries; the append-only audit log)
 
 A server doesn't check for new versions unless `OpenBook:Updates:Check` is `true` (for example `OpenBook__Updates__Check: "true"` in the compose file). It then shows what's available on **Settings → System → Updates**, and never installs anything itself. Back up the database (above), then update it yourself:
 
+Get the new source (`git pull`, or unpack the release's source), then:
+
 ```bash
-docker compose pull
+docker compose build --pull
 ```
 
 ```bash
@@ -129,7 +131,7 @@ Nothing is changed when a check fails; the message says what differed. `move.tar
 ## Other tasks
 
 - **A forgotten password**: `docker compose exec openbook dotnet OpenBook.Web.dll reset-password <username>` (add `--restore-admin` when nobody can administer the company any more, `--clear-two-factor` for a lost phone).
-- **Updating OpenBook**: take a backup, then `docker compose build --pull && docker compose up -d`. New database changes are applied when OpenBook starts.
+- **Updating OpenBook**: take a backup, get the new source, then `docker compose build --pull` and `docker compose up -d`. New database changes are applied when OpenBook starts.
 - **Logs**: one file per day in `/data/logs`; **Settings → System** shows background jobs and recent problems.
 - **Offering the QuickBooks export helper**: copy `OpenBook.QuickBooksExport.exe` (built by `tools/package-qb-export.ps1`, see [the desktop guide](desktop.md#the-quickbooks-export-helper)) into a `QuickBooks` folder beside `OpenBook.Web.dll` (in a container, `/app/QuickBooks`) and the import page links to it for accountants.
 - **Rate limits**: sign-in attempts (passwords, two-factor codes, single sign-on, accepting an invitation) are limited to 20 a minute per address, and the links people open without signing in (customer portal, payment pages, invitations, capture devices, Stripe's webhook) to 120. Too many answers 429 "Too many tries". Change them with `OpenBook__RateLimits__SignInPerMinute` and `OpenBook__RateLimits__LinksPerMinute` (0 turns one off). Behind a proxy the limits apply to the client's address only with forwarded headers on (`ASPNETCORE_FORWARDEDHEADERS_ENABLED`, as the compose file sets); otherwise every request comes from the proxy and shares one limit. **Settings → System** shows the limits in force.

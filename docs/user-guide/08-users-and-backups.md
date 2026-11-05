@@ -122,6 +122,12 @@ Set OpenBook to back itself up:
 
 On **OpenBook Desktop** this is already on: every day from noon to the `Backups` folder beside your company file (`Documents\OpenBook\Backups`), keeping 14. Backups only run while OpenBook is running; if the computer was off at noon, the next start makes one. Change it like any schedule, and consider a folder on another drive or one your cloud storage syncs.
 
+### Restoring on a new computer
+
+A backup holds your books. It doesn't hold the key that unlocks passwords saved in them: the email password, bank and sales channel connections, vendors' ACH numbers and two-factor sign-in. That key is in OpenBook's `keys` folder, on Desktop `%LOCALAPPDATA%\OpenBook\keys`. **Copy that folder somewhere safe too**, and put it in the same place on the new computer before starting OpenBook. Without it the books are all there, but those saved details have to be entered again.
+
+Restoring happens on the Backup page, and a new copy of OpenBook only shows that page once a company exists: set up a throwaway company first, then restore over it.
+
 ### Restoring a backup
 
 **Restore from a backup**: choose the backup file, type your password and select **Restore backup**. OpenBook checks the file first (that it's an OpenBook company file, undamaged, and balances) and refuses it otherwise. Before replacing anything it saves a safety copy of the current books in a `backups` folder next to the company file, so a restore can itself be undone. Everyone else is signed out.

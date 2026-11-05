@@ -6,7 +6,8 @@ OpenBook runs as a small web server. You start it on a computer (your own, or a 
 
 | You are… | Run it | Your data is in |
 | --- | --- | --- |
-| One person on one computer | From source with .NET, or the Docker image with SQLite | `openbook.db`, a single file |
+| One person on one Windows computer | **OpenBook Desktop**: download the installer from the [releases page](https://github.com/TronMach/openbook/releases) | `Documents\OpenBook\openbook.db`, a single file |
+| One person on another computer | From source with .NET, or the Docker image with SQLite | `openbook.db`, a single file |
 | A team sharing the books | Docker Compose with PostgreSQL, on a server | A PostgreSQL database |
 
 You can start with the single file and move to a server later.
@@ -92,7 +93,9 @@ If another administrator can sign in, they can reset your password on the **User
 dotnet run --project src/OpenBook.Web -- reset-password yourname
 ```
 
-It asks for the new password twice. Add `--clear-two-factor` to turn off their two-factor sign-in as well, for someone who has also lost their phone and recovery codes.
+On OpenBook Desktop, quit OpenBook, open a command prompt in `%LOCALAPPDATA%\Programs\OpenBook` and run `OpenBook.Web.exe reset-password yourname`.
+
+It asks for the new password twice. Add `--clear-two-factor` to turn off their two-factor sign-in as well, for someone who has also lost their phone and recovery codes. Add `--restore-admin` to make them an active administrator, when nobody else can.
 
 ### Two-factor sign-in
 
@@ -100,4 +103,6 @@ With two-factor sign-in, signing in takes your password and a 6-digit code from 
 
 ## Upgrading
 
-Stop OpenBook, get the new version, and start it again. It updates the company file or database on start-up. Take a backup first; it's one click on the **Backup** page.
+OpenBook Desktop looks for new versions by itself and offers to install them from its tray icon and **Settings → System**, backing up first.
+
+Otherwise, stop OpenBook, get the new version, and start it again. It updates the company file or database on start-up. Take a backup first; it's one click on the **Backup** page.

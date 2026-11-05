@@ -16,7 +16,7 @@ By default everything is read **on your own server**; nothing leaves it.
 - **PDFs** with text in them (most PDFs made by accounting software) and **text files** are read directly.
 - **Photos and scans** need an OCR program, Tesseract, installed on the server and configured by whoever runs it. Without it, photos are kept but not read, and you fill in the details yourself.
 
-For the document inbox, an administrator can also switch on **reading with Claude** on **Settings → Document reading**: tick **Let documents be read by Claude**, enter an Anthropic API key (stored encrypted), and keep the suggested model unless you have a reason not to. Claude reads photos, scans and unusual layouts much better than the server's own reader. Files are only sent to Anthropic when the uploader ticks **Read it with Claude** for that upload. If Claude can't read a file, OpenBook falls back to reading it on the server and says why.
+For the document inbox, an administrator can also switch on **reading with Claude** on **Settings → Document reading**: tick **Let documents be read by Claude**, enter an Anthropic API key (stored encrypted), and keep the suggested model unless you have a reason not to. Claude reads photos, scans and unusual layouts much better than the server's own reader. Once this is on, files are sent to Anthropic unless the uploader unticks **Read it with Claude** for that upload, and uploads through the API unless they say `claude=false`. If Claude can't read a file, OpenBook falls back to reading it on the server and says why.
 
 However a file is read, check the result against the document before you post it.
 

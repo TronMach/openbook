@@ -45,7 +45,7 @@ dotnet run --project src/OpenBook.ReleaseTool -- verify --manifest latest.json -
 ## What installed copies do
 
 - **OpenBook Desktop**, installed from the setup, checks a minute after starting and then once a day. It downloads a newer release into `%LOCALAPPDATA%\OpenBook\updates` and checks it. It then offers **Install** in the tray menu and on **Settings → System → Updates**. Installing backs up the books first (as Quit does), runs the installer silently, and starts OpenBook again with the same folders.
-- **OpenBook Server** doesn't check unless `OpenBook:Updates:Check` is `true`, and then only shows what's available; update it with `docker compose pull` and `docker compose up -d`.
+- **OpenBook Server** doesn't check unless `OpenBook:Updates:Check` is `true`, and then only shows what's available; update it by getting the new source, then `docker compose build --pull` and `docker compose up -d`.
 - A copy run from source never checks unless told to.
 
 Settings:
