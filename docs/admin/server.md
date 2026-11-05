@@ -137,3 +137,14 @@ Nothing is changed when a check fails; the message says what differed. `move.tar
 - **Rate limits**: sign-in attempts (passwords, two-factor codes, single sign-on, accepting an invitation) are limited to 20 a minute per address, and the links people open without signing in (customer portal, payment pages, invitations, capture devices, Stripe's webhook) to 120. Too many answers 429 "Too many tries". Change them with `OpenBook__RateLimits__SignInPerMinute` and `OpenBook__RateLimits__LinksPerMinute` (0 turns one off). Behind a proxy the limits apply to the client's address only with forwarded headers on (`ASPNETCORE_FORWARDEDHEADERS_ENABLED`, as the compose file sets); otherwise every request comes from the proxy and shares one limit. **Settings → System** shows the limits in force.
 - **More than one OpenBook container** on the same PostgreSQL database (behind a load balancer): every container serves pages, and each background job (the hourly work, scheduled emails, webhooks, bank and channel syncs, backups) runs in one container at a time, which holds a lease on it and renews it each run. If that container stops, another takes the job over once the lease lapses (within 90 minutes for the hourly work, minutes for the rest). Share the Data Protection keys folder between them, or sign-ins and stored secrets won't work across containers.
 - **SQLite on a server**: the image also runs without PostgreSQL (`docker run -p 8080:8080 -v openbook-data:/data openbook`): one company file in `/data`, with the in-app backups. PostgreSQL is better for several people.
+
+## Encrypting a SQLite company file
+
+Only for the SQLite image; PostgreSQL has its own disk encryption.
+
+1. Stop OpenBook (`docker compose stop`), and take a backup first.
+2. Run `OpenBook.Web encrypt-database` with `OpenBook__EncryptionKey` set, using the same volume. `decrypt-database` undoes it.
+3. Keep `OpenBook__EncryptionKey` set from now on, and start OpenBook. Without the key the file can't be opened.
+4. The original stays beside the file as a `.bak`. Check OpenBook works, then delete it: it isn't encrypted.
+
+The command takes the file for itself while it copies, and stops if something has it open. On Linux a server that's idle can't be noticed, so stopping it first is what keeps the copy whole.

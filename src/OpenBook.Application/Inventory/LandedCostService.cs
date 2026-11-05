@@ -179,7 +179,8 @@ public sealed class LandedCostService(
     {
         if (amount == 0m)
             return;
-        var outputs = (await store.ListMovementsForSourceAsync(InventorySources.AssemblyBuild, buildId, ct)).Where(m => m.IsReceipt).ToList();
+        var outputs = // Not a component sold short: its shortfall layer is a receipt of less than nothing.
+        (await store.ListMovementsForSourceAsync(InventorySources.AssemblyBuild, buildId, ct)).Where(m => m.IsReceipt && m.Quantity > 0m).ToList();
         var assembly = (await sales.GetItemsAsync(outputs.Select(o => o.ItemId).Distinct().ToList(), ct)).Values.Single();
         var history = await store.ListMovementsAsync(assembly.Id, ct);
         var layers = Fifo.Layers(history).ToDictionary(l => l.LayerId);

@@ -205,4 +205,19 @@ public sealed class SellingShortTests : IAsyncLifetime
         Assert.Equal("inventory.shortfall_filled", await Refused(() => Run(sp => sp.GetRequiredService<InvoiceService>().ChangeAsync(invoice.Id,
             new ChangeInvoiceCommand(Jan10, [line.ToDraft() with { Quantity = 4m }], "More")))));
     }
+
+    [Fact]
+    public async Task A_build_can_go_ahead_short_of_a_component_that_may_go_short()
+    {
+        var bench = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Bench", ItemType.Assembly, _sales.Id, 50m)));
+        await Run(sp => sp.GetRequiredService<ItemService>().SetComponentsAsync(bench.Id, [(_widget.Id, 2m)]));
+
+        var before = await Run(sp => sp.GetRequiredService<AssemblyBuildService>().PreviewAsync(bench.Id, 1m, Jan10));
+        Assert.True(before.Requirements.Single().Stops);
+
+        await AllowSellingShort(true);
+        var after = await Run(sp => sp.GetRequiredService<AssemblyBuildService>().PreviewAsync(bench.Id, 1m, Jan10));
+        Assert.True(after.Requirements.Single().IsShort);
+        Assert.False(after.Requirements.Single().Stops);
+    }
 }

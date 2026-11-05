@@ -83,7 +83,7 @@
                                 <td class="num">@Labels.Quantity(r.PerUnit)</td>
                                 <td class="num">@Labels.Quantity(r.Needed)</td>
                                 <td class="num">@Labels.Quantity(r.OnHand)</td>
-                                <td>@if (r.IsShort) { <span class="badge warn">Short</span> }</td>
+                                <td>@if (r.Stops) { <span class="badge warn">Short</span> } else if (r.IsShort) { <span class="badge">Will go short</span> }</td>
                             </tr>
                         }
                     </tbody>
@@ -121,7 +121,7 @@
                         </div>
                         <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
                         @{
-                            var shortOfStock = _preview.Requirements.Any(r => r.IsShort);
+                            var shortOfStock = _preview.Requirements.Any(r => r.Stops);
                             var now = Math.Min(_quantity, _preview.MaxBuildable);
                         }
                         <div class="actions">
@@ -142,6 +142,10 @@
                                 }
                             }
                         </div>
+                        @if (!shortOfStock && _preview.Requirements.Any(r => r.IsShort))
+                        {
+                            <p class="muted">Selling short is allowed for what's marked "Will go short": the build uses an estimated cost, corrected when the stock arrives.</p>
+                        }
                         @if (shortOfStock)
                         {
                             <p class="muted">A pending build posts nothing and doesn't hold the components; finish it from the inventory page once they arrive.</p>

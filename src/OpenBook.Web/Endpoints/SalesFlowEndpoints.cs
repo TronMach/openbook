@@ -118,7 +118,7 @@ public static class SalesFlowEndpoints
                     || !int.TryParse(form["lineNumber"], NumberStyles.None, CultureInfo.InvariantCulture, out var lineNumber))
                     throw new DomainException("billable.line_invalid", "That line can't be billed.");
                 var customerId = Id(form["customerId"]) ?? throw new DomainException("billable.customer_required", "Choose the customer to bill.");
-                await billables.MarkAsync(new MarkBillableCommand(kind, documentId, lineNumber, customerId, Amount(form["markup"]) ?? 0m,
+                await billables.MarkAsync(new MarkBillableCommand(kind, documentId, lineNumber, customerId, FormNumbers.Number(form["markup"]) ?? 0m,
                     Billable: form["billable"] == "true"), ct);
                 return Results.Redirect($"{back}#billable");
             }
@@ -157,7 +157,7 @@ public static class SalesFlowEndpoints
         switch (mode)
         {
             case "percent":
-                return new InvoiceFromSourceCommand(date, Percent: Amount(form["percent"])
+                return new InvoiceFromSourceCommand(date, Percent: FormNumbers.Number(form["percent"])
                     ?? throw new DomainException("invoice.percent_invalid", "Enter a percentage above 0 and up to 100."));
             case "lines":
                 var lines = new List<InvoiceSourceLine>();
@@ -218,8 +218,7 @@ public static class SalesFlowEndpoints
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
-    private static decimal? Amount(string? value) =>
-        StatementValues.TryParseAmount(value, out var amount) ? amount : null;
+    private static decimal? Amount(string? value) => FormNumbers.Amount(value);
 
     private static DateOnly Today() => CompanyTime.Today;
 }

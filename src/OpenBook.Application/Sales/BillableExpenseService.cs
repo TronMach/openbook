@@ -29,7 +29,7 @@ public sealed class BillableExpenseService(
     public const string IncomeAccountName = "Billable Expense Income";
 
     /// <summary>The price source on invoice lines made from billable expenses.</summary>
-    public const string PriceSource = "Billable expense";
+    public const string PriceSource = SalesLine.BillableExpensePrice;
 
     /// <summary>The bill's or expense's category lines with a cost, and which are billable already.</summary>
     public async Task<IReadOnlyList<BillableLine>> LinesAsync(BillableSource kind, Guid documentId, CancellationToken ct = default)

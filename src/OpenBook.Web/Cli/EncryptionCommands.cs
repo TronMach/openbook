@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using OpenBook.Domain.Common;
 using OpenBook.Infrastructure.Persistence;
+using OpenBook.Web.Hosting;
 
 namespace OpenBook.Web.Cli;
 
@@ -14,7 +15,7 @@ public static class EncryptionCommands
     public const string Encrypt = "encrypt-database";
     public const string Decrypt = "decrypt-database";
 
-    public static async Task<int> RunAsync(IConfiguration configuration, string connectionString, string command)
+    public static async Task<int> RunAsync(IConfiguration configuration, Installation installation, string connectionString, string command)
     {
         var path = Path.GetFullPath(new SqliteConnectionStringBuilder(connectionString).DataSource);
         var key = configuration["OpenBook:EncryptionKey"];
@@ -22,6 +23,13 @@ public static class EncryptionCommands
         if (!File.Exists(path))
         {
             Console.Error.WriteLine("No company file there. Pass --ConnectionStrings:OpenBook=\"Data Source=<path>\".");
+            return 1;
+        }
+
+        if (installation.IsDesktop && await DesktopHost.RunningUrlAsync(installation) is not null
+            && string.Equals(path, installation.CompanyFile, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("OpenBook is running. Quit it first (Settings > System > Quit OpenBook). Nothing was changed.");
             return 1;
         }
 

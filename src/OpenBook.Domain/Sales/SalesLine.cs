@@ -75,6 +75,16 @@ public sealed class SalesLine
     public string? PriceSource { get; private set; }
 
     public const string ManualPrice = "Manual price";
+    public const string BillableExpensePrice = "Billable expense";
+    public const string BillableTimePrice = "Billable time";
+    public const string BillableMileagePrice = "Billable mileage";
+
+    /// <summary>
+    /// Whether <see cref="Saved"/> is a discount: priced away from a real list price. Passing on a cost or charging time at
+    /// its own rate isn't one, nor is a line for an item with no price, such as a late fee.
+    /// </summary>
+    public bool DiscountedFromList => Kind == SalesLineKind.Item && ListRate is > 0m
+        && PriceSource is not (null or BillableExpensePrice or BillableTimePrice or BillableMileagePrice);
 
     /// <summary>What the customer saved against the list price, rounded to the cent; zero for lines without one.</summary>
     public decimal Saved => ListRate is { } list ? decimal.Round(Quantity * list, 2, MidpointRounding.AwayFromZero) - Amount : 0m;

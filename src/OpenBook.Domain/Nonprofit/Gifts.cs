@@ -49,6 +49,11 @@ public sealed class Donation
     /// <summary>Check number or other reference.</summary>
     public string? Reference { get; private set; }
 
+    /// <summary>How it was paid, for deposit slips; null when not given, and for gifts in kind.</summary>
+    public OpenBook.Domain.Sales.PaymentMethod? Method { get; private set; }
+
+    public void SetMethod(OpenBook.Domain.Sales.PaymentMethod? method) => Method = OpenBook.Domain.Sales.PaymentMethods.Valid(method);
+
     public string? Memo { get; private set; }
 
     /// <summary>In kind: what was given (the acknowledgment describes it but doesn't value it).</summary>

@@ -3048,6 +3048,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Method")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Number")
                         .HasColumnType("INTEGER");
 

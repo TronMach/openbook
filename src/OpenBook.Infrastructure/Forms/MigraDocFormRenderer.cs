@@ -648,16 +648,19 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         if (columns.Count == 0)
             columns = [FormTableColumn.For(FormColumns.Description)];
         var lots = columns.Any(c => c.Key == FormColumns.Lots);
+        // Without a description or item column, the first column of words takes the text. Where there's only figures,
+        // lines keep them and the first column shows notes and headings.
+        var words = columns.Find(c => c.Key is not (FormColumns.Number or FormColumns.Quantity or FormColumns.Rate or FormColumns.Amount))?.Key;
         var text = columns.Any(c => c.Key == FormColumns.Description) ? FormColumns.Description
             : columns.Any(c => c.Key == FormColumns.Item) ? FormColumns.Item
-            : columns[0].Key;
+            : words ?? columns[0].Key;
         var textIndex = columns.FindIndex(c => c.Key == text);
         var aligns = columns.Select(c => c.Align).ToArray();
         var number = 0;
         var rows = form.Lines.Select(line =>
         {
             int? n = line.Style == FormLineStyle.Normal && line.Quantity is not null ? ++number : null;
-            return columns.Select(c => c.Key == text ? TextOf(line, text, lots) : Value(line, c.Key, n)).ToArray();
+            return columns.Select(c => c.Key == text && (words is not null || line.Quantity is null && line.Amount is null) ? TextOf(line, text, lots) : Value(line, c.Key, n)).ToArray();
         }).ToList();
 
         var table = columns.Any(c => c.AutoWidth)

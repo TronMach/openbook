@@ -219,7 +219,7 @@
                             {
                                 <span class="muted">Check the bill of materials</span>
                             }
-                            else if (preview.Requirements.Any(r => r.IsShort))
+                            else if (preview.Requirements.Any(r => r.Stops))
                             {
                                 <span class="badge warn">Short</span>
                                 <span class="muted">@string.Join(", ", preview.Requirements.Where(r => r.IsShort).Select(r => $"{r.Component.Name}: {Labels.Quantity(r.OnHand)} of {Labels.Quantity(r.Needed)}"))</span>

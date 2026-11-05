@@ -96,7 +96,7 @@ public sealed record BuilderOptions(
 /// </summary>
 public sealed class ReportBuilder(
     ReportLedger ledger, AccountService accounts, ISalesStore sales, IPurchasesStore purchases, Segments.SegmentService segments, ICompanyStore companies,
-    CustomFields.CustomFieldService customFields)
+    CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit)
 {
     public const int MaxRows = 5000;
 
@@ -292,6 +292,21 @@ public sealed class ReportBuilder(
             Customer(Retainer.Source, r.Id, r.CustomerId);
             Customer(Retainer.ApplicationSource, r.Id, r.CustomerId);
             Customer(Retainer.RefundSource, r.Id, r.CustomerId);
+        }
+
+        foreach (var d in await nonprofit.ListDonationsAsync(ct))
+            Customer(Domain.Nonprofit.Donation.Source, d.Id, d.DonorId);
+        foreach (var p in await nonprofit.ListPledgesAsync(ct))
+        {
+            Customer(Domain.Nonprofit.Pledge.Source, p.Id, p.DonorId);
+            Customer(Domain.Nonprofit.Pledge.CancelSource, p.Id, p.DonorId);
+        }
+
+        foreach (var g in await nonprofit.ListGrantsAsync(ct))
+        {
+            Customer(Domain.Nonprofit.Grant.AwardSource, g.Id, g.FunderId);
+            Customer(Domain.Nonprofit.Grant.ReceiptSource, g.Id, g.FunderId);
+            Customer(Domain.Nonprofit.Grant.RecognitionSource, g.Id, g.FunderId);
         }
 
         foreach (var b in await purchases.ListBillsAsync(null, ct))

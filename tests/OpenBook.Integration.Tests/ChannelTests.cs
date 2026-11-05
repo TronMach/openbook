@@ -338,6 +338,11 @@ public sealed class ChannelTests : IAsyncLifetime
         Assert.Equal(2, shopify.Count);
         Assert.All(shopify, l => Assert.Equal(new DateOnly(2026, 3, 2), l.Date));
         Assert.Equal((10m, 10m, 110m), (shopify.Sum(l => l.Shipping), shopify.Sum(l => l.Tax), shopify.Sum(l => l.Sales)));
+        Assert.All(shopify, l => Assert.Equal("CA", l.Region));
+
+        var cancelled = ChannelOrderReports.Read(ChannelKind.Shopify, ShopifyOrders.Replace("-0500,paid,10.00,10.00,2,Blue mug,40.00,MUG-1,CA,", "-0500,paid,10.00,10.00,2,Blue mug,40.00,MUG-1,CA,2026-03-03", StringComparison.Ordinal));
+        Assert.Empty(cancelled.Lines);
+        Assert.DoesNotContain(cancelled.Warnings, w => w.Contains("date", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

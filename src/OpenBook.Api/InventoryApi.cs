@@ -92,7 +92,7 @@ internal static class InventoryApi
             {
                 p.Pending,
                 AssemblyName = p.Assembly.Name,
-                Ready = p.Preview is { } preview && !preview.Requirements.Any(r => r.IsShort),
+                Ready = p.Preview is { } preview && !preview.Requirements.Any(r => r.Stops),
             }));
         inventory.MapPost("/builds/pending", async (BuildAssemblyCommand c, AssemblyBuildService s, CancellationToken ct) => await s.SavePendingAsync(c, ct));
         inventory.MapPost("/builds/partial", async (BuildAssemblyCommand c, AssemblyBuildService s, CancellationToken ct) =>

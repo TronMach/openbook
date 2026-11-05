@@ -36,8 +36,10 @@ internal static class GnuCashReader
         var names = new Dictionary<string, string>();
         foreach (var node in nodes.Values.Where(n => !IsRoot(n)))
         {
+            // Stops at a loop of parents: a damaged file mustn't hold the server.
             var path = new List<string> { node.Name };
-            for (var at = Parent(node); at is not null && !IsRoot(at) && Same(at, node); at = Parent(at))
+            var seen = new HashSet<string> { node.Id };
+            for (var at = Parent(node); at is not null && !IsRoot(at) && Same(at, node) && seen.Add(at.Id); at = Parent(at))
                 path.Insert(0, at.Name);
             names[node.Id] = string.Join(Account.PathSeparator, path.TakeLast(5));
         }
@@ -71,6 +73,7 @@ internal static class GnuCashReader
                 errors.Add($"it's in {currency}; these books are in {homeCurrency}");
 
             var lines = new List<SourceLine>();
+            var trading = 0m;
             foreach (var split in trn.Child("splits")?.Children("split") ?? [])
             {
                 var account = split.Text("account");
@@ -79,9 +82,14 @@ internal static class GnuCashReader
                     errors.Add($"a split's value '{split.Text("value")}' can't be read");
                 else if (account is null || !names.TryGetValue(account, out var name))
                     errors.Add("a split's account isn't in the book");
+                else if (nodes[account].TypeCode.Equals("TRADING", StringComparison.OrdinalIgnoreCase))
+                    trading += value.Value; // Together they come to nothing in home currency, and the other lines balance alone.
                 else
                     lines.Add(new SourceLine(name, value.Value, split.Text("memo") ?? description));
             }
+
+            if (trading != 0m)
+                errors.Add("its currency trading lines don't balance, so it can't come in without them");
 
             var label = string.Join(" ", new[] { "Transaction", number }.Where(s => s is not null));
             data.Transactions.Add(new SourceTransaction(line, label, dateText?[..Math.Min(10, dateText.Length)], date, description is null ? number : $"{description}{(number is null ? "" : $" ({number})")}", lines, null, errors));

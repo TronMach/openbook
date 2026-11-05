@@ -61,6 +61,9 @@ public static class SqliteEncryption
             {
                 await connection.OpenAsync(ct);
                 await using var command = connection.CreateCommand();
+                // Holds the file from here on: anything using it refuses, and nothing can change while it's copied.
+                command.CommandText = "PRAGMA busy_timeout = 2000; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;";
+                await command.ExecuteNonQueryAsync(ct);
                 command.CommandText = """
                     ATTACH DATABASE $path AS target KEY $key;
                     SELECT sqlcipher_export('target');
@@ -79,8 +82,27 @@ public static class SqliteEncryption
 
         SqliteConnection.ClearAllPools();
         var kept = $"{full}.{keptAs}-{DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.bak";
-        File.Move(full, kept);
-        File.Move(temporary, full);
+        try
+        {
+            File.Move(full, kept);
+        }
+        catch (IOException ex)
+        {
+            File.Delete(temporary);
+            throw new DomainException("encryption.in_use", $"Something still has the company file open. Stop OpenBook and try again. ({ex.Message})");
+        }
+
+        try
+        {
+            File.Move(temporary, full);
+        }
+        catch (IOException)
+        {
+            File.Move(kept, full);
+            File.Delete(temporary);
+            throw;
+        }
+
         return kept;
     }
 }

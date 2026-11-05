@@ -15,9 +15,13 @@ public sealed record BuildAssemblyCommand(
     Guid ItemId, decimal Quantity, DateOnly Date, string? Reference = null, string? Memo = null, Guid? WarehouseId = null, string? Lots = null);
 
 /// <summary>One component a build needs, and what's on hand of it on the date.</summary>
-public sealed record BuildRequirement(Item Component, decimal PerUnit, decimal Needed, decimal OnHand)
+/// <param name="MayGoShort">Whether this component may be sold short, so a build can go ahead without enough of it.</param>
+public sealed record BuildRequirement(Item Component, decimal PerUnit, decimal Needed, decimal OnHand, bool MayGoShort = false)
 {
     public bool IsShort => OnHand < Needed;
+
+    /// <summary>Short, and that stops the build.</summary>
+    public bool Stops => IsShort && !MayGoShort;
 }
 
 /// <param name="MaxBuildable">How many assemblies the stock on hand allows (whole units).</param>
@@ -51,8 +55,9 @@ public sealed class AssemblyBuildService(
         {
             var component = components[c.ComponentItemId];
             // What the build could actually take: expired lots and stock since gone to later sales don't count.
-            var onHand = Fifo.Available(await store.ListMovementsAsync(component.Id, ct), date, await inventory.ForPickingAsync(component, StockFilter.In(key), ct));
-            requirements.Add(new BuildRequirement(component, c.Quantity, Needed(quantity, c.Quantity), onHand));
+            var history = await store.ListMovementsAsync(component.Id, ct);
+            var onHand = Fifo.Available(history, date, await inventory.ForPickingAsync(component, StockFilter.In(key), ct));
+            requirements.Add(new BuildRequirement(component, c.Quantity, Needed(quantity, c.Quantity), onHand, await inventory.ShortfallCostAsync(component, history, ct) is not null));
             var possible = Math.Floor(Math.Max(0m, onHand) / c.Quantity);
             max = max is null ? possible : Math.Min(max.Value, possible);
         }

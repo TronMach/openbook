@@ -7,8 +7,11 @@ using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Nonprofit;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
+using OpenBook.Application.SalesTax;
+using OpenBook.Application.Segments;
 using OpenBook.Application.Webhooks;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Assets;
@@ -19,6 +22,7 @@ using OpenBook.Domain.Companies;
 using OpenBook.Domain.Documents;
 using OpenBook.Domain.Email;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.Nonprofit;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
@@ -375,5 +379,157 @@ public sealed class MediumFindingsTests : IAsyncLifetime
 
         Assert.Equal([11L, 12L], Ids(Record(11, now), Record(12, now), Record(14, now)));
         Assert.Equal([11L, 14L], Ids(Record(11, now), Record(14, now - WebhookDispatcher.GapWait)));
+    }
+
+    [Fact]
+    public async Task A_rate_that_has_charged_tax_stays_with_its_agency()
+    {
+        var state = await In<SalesTaxService, TaxAgency>(s => s.CreateAgencyAsync(new TaxAgencyDetails("State")));
+        var city = await In<SalesTaxService, TaxAgency>(s => s.CreateAgencyAsync(new TaxAgencyDetails("City")));
+        var rate = await In<SalesTaxService, TaxRate>(s => s.CreateRateAsync(new TaxRateDetails("Sales tax", state.Id, 5m), createCode: false));
+        var code = await In<SalesTaxService, TaxCode>(s => s.CreateCodeAsync(new TaxCodeDetails("Sales tax", [rate.Id], null)));
+
+        await In<SalesTaxService, TaxRate>(s => s.UpdateRateAsync(rate.Id, new TaxRateDetails("Sales tax", city.Id, 5m)));
+        await In<SalesTaxService, TaxRate>(s => s.UpdateRateAsync(rate.Id, new TaxRateDetails("Sales tax", state.Id, 5m)));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(_consulting.Id, null, 1m, 100m, Taxable: true)], TaxCodeId: code.Id)));
+
+        Assert.Equal("tax.rate_charged", await Refused(() => In<SalesTaxService, TaxRate>(s => s.UpdateRateAsync(rate.Id, new TaxRateDetails("Sales tax", city.Id, 5m)))));
+        await In<SalesTaxService, TaxRate>(s => s.UpdateRateAsync(rate.Id, new TaxRateDetails("State sales tax", state.Id, 5m)));
+    }
+
+    [Fact]
+    public async Task A_grant_turns_class_tracking_on()
+    {
+        var funder = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Foundation")));
+        Assert.False((await In<SegmentService, SegmentTracking>(s => s.GetTrackingAsync())).Classes);
+
+        await In<GrantService, Grant>(s => s.CreateAsync(new GrantCommand("Literacy", funder.Id, 1000m, Mar1, Mar1, Mar5.AddYears(1))));
+
+        Assert.True((await In<SegmentService, SegmentTracking>(s => s.GetTrackingAsync())).Classes);
+    }
+
+    [Fact]
+    public async Task A_discount_waits_for_an_invoice_with_items_above_it()
+    {
+        var order = await In<SalesOrderService, SalesOrder>(s => s.CreateAsync(new SaveSalesOrderCommand(_acme.Id, Mar1,
+        [
+            new SalesLineDraft(_consulting.Id, null, 1m, 100m),
+            new SalesLineDraft(null, null, 1m, 10m, SalesLineKind.DiscountPercent),
+            new SalesLineDraft(_consulting.Id, null, 2m, 100m),
+            new SalesLineDraft(null, "Rebate", 1m, 20m, SalesLineKind.DiscountAmount),
+            new SalesLineDraft(_consulting.Id, null, 3m, 100m),
+        ])));
+
+        // The first item: both discounts have it above them, and the flat one goes whole.
+        var first = await In<SalesOrderService, Invoice>(s => s.InvoiceAsync(order.Id, new InvoiceFromSourceCommand(Mar1, [new InvoiceSourceLine(1, 1m)])));
+        Assert.Equal(70m, first.Total);
+
+        // The last item alone has no discount above it on this invoice.
+        var second = await In<SalesOrderService, Invoice>(s => s.InvoiceAsync(order.Id, new InvoiceFromSourceCommand(Mar1, [new InvoiceSourceLine(5, 3m)])));
+        Assert.Equal(300m, second.Total);
+
+        var rest = await In<SalesOrderService, Invoice>(s => s.InvoiceAsync(order.Id, new InvoiceFromSourceCommand(Mar1)));
+        Assert.Equal(200m, rest.Total); // Adds up to the order: 570
+    }
+
+    [Fact]
+    public async Task A_flat_discount_above_the_first_item_billed_waits()
+    {
+        var order = await In<SalesOrderService, SalesOrder>(s => s.CreateAsync(new SaveSalesOrderCommand(_acme.Id, Mar1,
+        [
+            new SalesLineDraft(_consulting.Id, null, 1m, 100m),
+            new SalesLineDraft(null, "Rebate", 1m, 20m, SalesLineKind.DiscountAmount),
+            new SalesLineDraft(_consulting.Id, null, 2m, 100m),
+        ])));
+
+        var first = await In<SalesOrderService, Invoice>(s => s.InvoiceAsync(order.Id, new InvoiceFromSourceCommand(Mar1, [new InvoiceSourceLine(3, 2m)])));
+        Assert.Equal(200m, first.Total);
+
+        var rest = await In<SalesOrderService, Invoice>(s => s.InvoiceAsync(order.Id, new InvoiceFromSourceCommand(Mar1)));
+        Assert.Equal(80m, rest.Total);
+        Assert.Equal(SalesOrderStatus.Closed, (await In<SalesOrderService, SalesOrder?>(s => s.GetAsync(order.Id)))!.Status);
+    }
+
+    [Fact]
+    public void A_gnucash_file_whose_accounts_are_each_others_parents_doesnt_hang()
+    {
+        var book = Gnucash(
+            """
+            <gnc:account version="2.0.0"><act:name>A</act:name><act:id type="guid">a</act:id><act:type>BANK</act:type><act:parent type="guid">b</act:parent></gnc:account>
+            <gnc:account version="2.0.0"><act:name>B</act:name><act:id type="guid">b</act:id><act:type>BANK</act:type><act:parent type="guid">a</act:parent></gnc:account>
+            """, "");
+
+        var data = OpenBook.Application.Import.Migration.MigrationReaders.Read(OpenBook.Application.Import.Migration.MigrationSource.GnuCash, book, "USD");
+
+        Assert.Equal(2, data.Accounts.Count);
+    }
+
+    [Theory]
+    [InlineData(-1000, true)]
+    [InlineData(-900, false)]
+    public void Gnucash_trading_lines_come_out_when_they_cancel(int tradingUsd, bool clean)
+    {
+        var book = Gnucash(
+            """
+            <gnc:account version="2.0.0"><act:name>Checking</act:name><act:id type="guid">c</act:id><act:type>BANK</act:type></gnc:account>
+            <gnc:account version="2.0.0"><act:name>Shares</act:name><act:id type="guid">s</act:id><act:type>ASSET</act:type></gnc:account>
+            <gnc:account version="2.0.0"><act:name>Trading</act:name><act:id type="guid">t</act:id><act:type>TRADING</act:type></gnc:account>
+            """,
+            $"""
+            <gnc:transaction version="2.0.0">
+              <trn:id type="guid">t1</trn:id>
+              <trn:currency><cmdty:space>CURRENCY</cmdty:space><cmdty:id>USD</cmdty:id></trn:currency>
+              <trn:date-posted><ts:date>2026-03-10 10:59:00 +0000</ts:date></trn:date-posted>
+              <trn:description>Shares</trn:description>
+              <trn:splits>
+                <trn:split><split:value>-1000/1</split:value><split:account type="guid">c</split:account></trn:split>
+                <trn:split><split:value>1000/1</split:value><split:account type="guid">s</split:account></trn:split>
+                <trn:split><split:value>{tradingUsd}/1</split:value><split:account type="guid">t</split:account></trn:split>
+                <trn:split><split:value>1000/1</split:value><split:account type="guid">t</split:account></trn:split>
+              </trn:splits>
+            </gnc:transaction>
+            """);
+
+        var data = OpenBook.Application.Import.Migration.MigrationReaders.Read(OpenBook.Application.Import.Migration.MigrationSource.GnuCash, book, "USD");
+
+        var transaction = Assert.Single(data.Transactions);
+        Assert.Equal(2, transaction.Lines.Count);
+        Assert.Equal(clean, (transaction.Errors ?? []).Count == 0);
+    }
+
+    private static byte[] Gnucash(string accounts, string transactions) => System.Text.Encoding.UTF8.GetBytes($"""
+        <gnc-v2 xmlns:gnc="http://www.gnucash.org/XML/gnc" xmlns:act="http://www.gnucash.org/XML/act" xmlns:book="http://www.gnucash.org/XML/book"
+                xmlns:cmdty="http://www.gnucash.org/XML/cmdty" xmlns:trn="http://www.gnucash.org/XML/trn" xmlns:split="http://www.gnucash.org/XML/split"
+                xmlns:ts="http://www.gnucash.org/XML/ts">
+        <gnc:book version="2.0.0">
+          <gnc:account version="2.0.0"><act:name>Root Account</act:name><act:id type="guid">root</act:id><act:type>ROOT</act:type></gnc:account>
+          {accounts}
+          {transactions}
+        </gnc:book>
+        </gnc-v2>
+        """);
+
+    [Fact]
+    public async Task Billable_lines_arent_savings()
+    {
+        var billed = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1,
+            [new SalesLineDraft(_consulting.Id, null, 10m, 80m, PriceSource: SalesLine.BillableTimePrice)])));
+        var priced = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1,
+            [new SalesLineDraft(_consulting.Id, null, 1m, 80m, PriceSource: "Sale")])));
+
+        Assert.Equal(0m, FormService.Savings(billed.Lines));
+        Assert.Equal(20m, FormService.Savings(priced.Lines));
+    }
+
+    [Fact]
+    public async Task A_gifts_payment_method_reaches_the_deposit()
+    {
+        var holding = await _db.CreateAccount("Undeposited Funds", AccountType.OtherCurrentAsset, "1200");
+        var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Donor")));
+
+        await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(donor.Id, Mar1, 50m, holding.Id, Reference: "1001", Method: PaymentMethod.Check)));
+
+        var item = Assert.Single(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()));
+        Assert.Equal(PaymentMethod.Check, item.Method);
     }
 }

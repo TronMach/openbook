@@ -201,6 +201,7 @@ public static class PartialInvoicing
 
         var drafts = new List<SalesLineDraft>();
         var sources = new List<InvoiceSourceLine>();
+        var itemsAbove = false; // A discount applies to the item lines above it on this invoice.
         foreach (var line in lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber))
         {
             var draft = line.ToDraft();
@@ -214,13 +215,17 @@ public static class PartialInvoicing
                         draft = draft with { Rate = decimal.Round((line.Amount - charged) / quantity, SalesLine.Precision, MidpointRounding.AwayFromZero), PriceSource = draft.PriceSource ?? "Balance of the line" };
                     drafts.Add(draft with { Quantity = quantity, Lots = quantity == line.Quantity ? draft.Lots : null });
                     sources.Add(new InvoiceSourceLine(line.LineNumber, quantity));
+                    itemsAbove = true;
                     break;
                 case SalesLineKind.DiscountAmount:
-                    if (remaining.GetValueOrDefault(line.LineNumber) == 0m)
+                    // Waits for the invoice that bills something above it.
+                    if (remaining.GetValueOrDefault(line.LineNumber) == 0m || !itemsAbove)
                         continue;
                     drafts.Add(draft);
                     sources.Add(new InvoiceSourceLine(line.LineNumber, 1m));
                     break;
+                case SalesLineKind.DiscountPercent when !itemsAbove:
+                    continue;
                 default:
                     drafts.Add(draft);
                     break;

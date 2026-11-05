@@ -121,6 +121,9 @@ public sealed class GrantService(
         {
             var created = await segments.CreateAsync(SegmentKind.Class, command.Name.Trim(), null, ct);
             await segments.SetFunctionalAreaAsync(created.Id, FunctionalArea.Program, ct);
+            // Spending counts by class, so forms have to offer one.
+            if (await segments.GetTrackingAsync(ct) is { Classes: false } tracking)
+                await segments.SetTrackingAsync(tracking with { Classes = true }, ct);
             classId = created.Id;
         }
 

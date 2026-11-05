@@ -9,6 +9,8 @@ namespace OpenBook.Application.SalesTax;
 
 public interface ISalesTaxStore
 {
+    Task<bool> RateChargedAsync(Guid rateId, CancellationToken ct);
+
     /// <summary>Tracked.</summary>
     Task<IReadOnlyList<TaxAgency>> ListAgenciesAsync(CancellationToken ct);
 
@@ -140,6 +142,9 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         ArgumentNullException.ThrowIfNull(details);
         var rate = await store.GetRateAsync(id, ct) ?? throw new EntityNotFoundException(RateEntity, id);
         await CheckRateAsync(id, details, ct);
+        // What it charged sits in the old agency's account, and reports group by the rate's agency: they'd disagree.
+        if (details.AgencyId != rate.AgencyId && await store.RateChargedAsync(id, ct))
+            throw new DomainException("tax.rate_charged", $"{rate.Name} has charged tax, so it stays with its agency. Make a new rate for the other agency.");
         var before = Snapshot(rate);
         rate.Update(details);
         store.Add(Audit(AuditAction.Updated, RateEntity, id, before, Snapshot(rate)));

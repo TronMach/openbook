@@ -164,8 +164,7 @@ public static class BankingEndpoints
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
-    private static decimal? Amount(string? value) =>
-        StatementValues.TryParseAmount(value, out var amount) ? amount : null;
+    private static decimal? Amount(string? value) => FormNumbers.Amount(value);
 
     private static DateOnly Today() => CompanyTime.Today;
 }

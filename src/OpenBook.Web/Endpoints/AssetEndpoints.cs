@@ -173,9 +173,7 @@ public static class AssetEndpoints
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
-    private static decimal? Number(string? value) =>
-        decimal.TryParse(value?.Replace(",", "", StringComparison.Ordinal).Replace("$", "", StringComparison.Ordinal).Replace("%", "", StringComparison.Ordinal).Trim(),
-            NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n) ? n : null;
+    private static decimal? Number(string? value) => FormNumbers.Number(value);
 
     private static DateOnly Today() => CompanyTime.Today;
 }

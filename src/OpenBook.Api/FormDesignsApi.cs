@@ -25,13 +25,13 @@ public sealed record FormDesignResponse(
     string? FontKey, FormPaperSize PaperSize, bool HasLogo, FormLogoPosition LogoPosition, FormLogoSize LogoSize, IReadOnlyList<FormParts> Show,
     IReadOnlyList<FormColumnRequest> Columns, bool AutoFieldColumns, bool Landscape, FormMargins Margins, FormTextSize TextSize,
     bool ShowShipTo, bool ShowTerms, bool ShowQuantityAndRate, FormColumnLabels ColumnLabels, IReadOnlyList<FormDesignTextResponse> Texts,
-    string? CompanyFontKey)
+    string? CompanyFontKey, OpenBook.Domain.Email.EmailStyle EmailStyle = OpenBook.Domain.Email.EmailStyle.Branded)
 {
     public static FormDesignResponse From(FormDesign d) => new(
         d.Id, d.Name, d.IsDefault, d.IsActive, [.. FormDesign.Each(d.DefaultFor)], d.Template, d.AccentColor, d.Footer, d.FontKey, d.PaperSize,
         d.Logo is not null, d.LogoPosition, d.LogoSize, [.. FormDesign.EachPart(d.Show)], [.. d.Columns.Select(c => new FormColumnRequest(c.Key, c.Label, c.Width, c.AutoWidth, c.Align))],
         d.AutoFieldColumns, d.Landscape, d.Margins, d.TextSize, d.ShowShipTo, d.ShowTerms, d.ShowQuantityAndRate, d.ColumnLabels,
-        [.. d.Texts.Select(t => new FormDesignTextResponse(t.Document, t.Title, t.Message))], d.CompanyFontKey);
+        [.. d.Texts.Select(t => new FormDesignTextResponse(t.Document, t.Title, t.Message))], d.CompanyFontKey, d.EmailStyle);
 }
 
 /// <param name="Show">What prints besides the lines (FormParts names); null = the usual parts, with <paramref name="ShowShipTo"/> and <paramref name="ShowTerms"/>.</param>
@@ -57,7 +57,8 @@ public sealed record FormDesignRequest(
     bool ShowQuantityAndRate = true,
     FormColumnLabels? ColumnLabels = null,
     IReadOnlyList<FormDesignTextResponse>? Texts = null,
-    string? CompanyFontKey = null)
+    string? CompanyFontKey = null,
+    OpenBook.Domain.Email.EmailStyle? EmailStyle = null)
 {
     public FormDesignDetails Details()
     {
@@ -69,7 +70,8 @@ public sealed record FormDesignRequest(
             : FormColumns.FromLegacy(ShowQuantityAndRate, ColumnLabels);
         return new FormDesignDetails(
             Name, Template, AccentColor, Footer, FontKey, PaperSize, LogoPosition, LogoSize, show, columns, AutoFieldColumns, Landscape, Margins, TextSize,
-            (Texts ?? []).ToDictionary(t => t.Document, t => (t.Title, t.Message)), CompanyFontKey);
+            (Texts ?? []).ToDictionary(t => t.Document, t => (t.Title, t.Message)), CompanyFontKey,
+            EmailStyle: EmailStyle ?? OpenBook.Domain.Email.EmailStyle.Branded);
     }
 }
 
@@ -127,7 +129,8 @@ internal static class FormDesignsApi
             return Results.Created($"/api/settings/form-designs/{d.Id}", FormDesignResponse.From(d));
         });
         designs.MapPut("/{id:guid}", async (Guid id, FormDesignRequest r, FormDesignService s, CancellationToken ct) =>
-            FormDesignResponse.From(await s.UpdateAsync(id, r.Details(), ct)));
+            // Left out, the email look stays as it is.
+            FormDesignResponse.From(await s.UpdateAsync(id, (r with { EmailStyle = r.EmailStyle ?? (await s.GetAsync(id, ct))?.EmailStyle }).Details(), ct)));
 
         // The logo is the raw request body (PNG or JPEG, at most 1 MB).
         designs.MapPut("/{id:guid}/logo", async (Guid id, HttpRequest request, FormDesignService s, CancellationToken ct) =>

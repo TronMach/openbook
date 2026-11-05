@@ -7,6 +7,11 @@ namespace OpenBook.Infrastructure.Persistence;
 
 internal sealed class EfSalesTaxStore(OpenBookDbContext db) : ISalesTaxStore
 {
+    public async Task<bool> RateChargedAsync(Guid rateId, CancellationToken ct) =>
+        await db.Invoices.AnyAsync(i => i.Lines.Any(l => l.TaxRateId == rateId), ct)
+        || await db.SalesReceipts.AnyAsync(r => r.Lines.Any(l => l.TaxRateId == rateId), ct)
+        || await db.CreditMemos.AnyAsync(c => c.Lines.Any(l => l.TaxRateId == rateId), ct);
+
     public async Task<IReadOnlyList<TaxAgency>> ListAgenciesAsync(CancellationToken ct) => await db.TaxAgencies.ToListAsync(ct);
 
     public Task<int> CountActiveCustomersOnAsync(Guid codeId, CancellationToken ct) =>

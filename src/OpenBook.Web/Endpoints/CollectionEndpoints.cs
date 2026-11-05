@@ -54,7 +54,7 @@ public static class CollectionEndpoints
             await Back("/sales/collections/settings", "#late-fees", async () =>
             {
                 await collections.SaveLateFeesAsync(new LateFeeSettingsCommand(
-                    form["enabled"] == "true", form["automatic"] == "true", Amount(form["percent"]) ?? 0m, Amount(form["amount"]) ?? 0m,
+                    form["enabled"] == "true", form["automatic"] == "true", FormNumbers.Number(form["percent"]) ?? 0m, Amount(form["amount"]) ?? 0m,
                     Int(form["graceDays"]), Int(form["repeatDays"])), ct);
                 return "done=saved";
             })).RequireAuthorization();
@@ -153,8 +153,7 @@ public static class CollectionEndpoints
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
-    private static decimal? Amount(string? value) =>
-        StatementValues.TryParseAmount(value, out var amount) ? amount : null;
+    private static decimal? Amount(string? value) => FormNumbers.Amount(value);
 
     private static DateOnly Today() => CompanyTime.Today;
 }

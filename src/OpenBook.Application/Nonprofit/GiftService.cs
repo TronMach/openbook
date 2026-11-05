@@ -31,7 +31,8 @@ public sealed record RecordGiftCommand(
     string? Memo = null,
     string? Description = null,
     decimal GoodsValue = 0m,
-    string? GoodsDescription = null);
+    string? GoodsDescription = null,
+    PaymentMethod? Method = null);
 
 /// <param name="IncomeAccountId">Null: "Contributions", created on first use.</param>
 public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null, DateOnly? DueDate = null, string? Memo = null);
@@ -155,6 +156,7 @@ public sealed class GiftService(
         var number = (await store.ListDonationsAsync(ct)).Select(d => d.Number).DefaultIfEmpty(0).Max() + 1;
         var donation = Donation.Create(id, number, donor.Id, command.Date, command.Kind, command.Amount, debit.Id, incomeId, pledge?.Id, classId,
             command.Reference, command.Memo, command.Description, command.GoodsValue, command.GoodsDescription, entry.Id, cash?.Id, clock.UtcNow);
+        donation.SetMethod(command.Kind == GiftKind.Cash ? command.Method : null);
         store.Add(donation);
         store.Add(Audit(AuditAction.Posted, donation, null));
         await store.SaveChangesAsync(ct);

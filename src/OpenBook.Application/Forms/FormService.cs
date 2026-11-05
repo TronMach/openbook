@@ -169,7 +169,7 @@ public sealed class FormService(
     /// cent; zero when nothing did.
     /// </summary>
     public static decimal Savings(IEnumerable<SalesLine> lines) =>
-        lines.Where(l => l.Kind == SalesLineKind.Item && l.PriceSource is not null && l.PriceSource != SalesLine.ManualPrice).Sum(l => l.Saved);
+        lines.Where(l => l.DiscountedFromList && l.PriceSource != SalesLine.ManualPrice).Sum(l => l.Saved);
 
     /// <summary>A "You saved" row under the totals when the customer's pricing saved them anything.</summary>
     private static void AddSavings(List<FormTotal> totals, IEnumerable<SalesLine> lines)

@@ -36,7 +36,7 @@
                         <AntiforgeryToken />
                         <strong>@Worker(t.WorkerId)</strong>
                         <span>@(t.CustomerId is { } c ? _customerNames.GetValueOrDefault(c) : "no customer")@(t.Notes is { } n ? $" · {n}" : "")</span>
-                        <span class="muted">since @t.StartedAt!.Value.InCompanyTime().ToString("t")</span>
+                        <span class="muted">since @t.StartedAt!.Value.InCompanyTime().ToString(DateOnly.FromDateTime(t.StartedAt.Value.InCompanyTime().DateTime) == CompanyTime.Today ? "t" : "g")</span>
                         <button type="submit">Stop</button>
                     </PostForm>
                 }

@@ -79,7 +79,7 @@ public sealed class PricingReports(PricingService pricing, ISalesStore sales, IC
         var receipts = (await sales.ListReceiptsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date >= from && r.Date <= to)
             .SelectMany(r => r.Lines.Select(l => (Kind: "sales_receipt", r.Id, Label: $"Sales receipt {r.Number}", r.Date, r.CustomerId, Line: l)));
         var lines = invoices.Concat(receipts)
-            .Where(x => x.Line.Kind == SalesLineKind.Item && x.Line.PriceSource is not null && x.Line.ListRate is not null)
+            .Where(x => x.Line.DiscountedFromList)
             .OrderBy(x => x.Date).ThenBy(x => x.Label, StringComparer.Ordinal)
             .ToList();
 

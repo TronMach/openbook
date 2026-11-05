@@ -23,7 +23,9 @@ internal sealed class EfWebhookStore(OpenBookDbContext db) : IWebhookStore
     public Task<WebhookDelivery?> GetDeliveryAsync(Guid id, CancellationToken ct) => db.WebhookDeliveries.SingleOrDefaultAsync(d => d.Id == id, ct);
 
     public async Task<IReadOnlyList<WebhookDelivery>> ListDueDeliveriesAsync(DateTimeOffset now, int take, CancellationToken ct) =>
-        (await db.WebhookDeliveries.Where(d => d.Status == WebhookDeliveryStatus.Pending).ToListAsync(ct))
+        // A switched-off webhook's deliveries wait without holding up the others.
+        (await db.WebhookDeliveries.Where(d => d.Status == WebhookDeliveryStatus.Pending
+                && db.WebhookSubscriptions.Any(s => s.Id == d.SubscriptionId && s.IsActive)).ToListAsync(ct))
             .Where(d => d.NextAttemptAt <= now)
             .OrderBy(d => d.NextAttemptAt)
             .Take(take)

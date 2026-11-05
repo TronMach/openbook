@@ -58,6 +58,8 @@ public static class ChannelOrderReports
         var lines = new List<ChannelOrderDraft>();
         var seenOrders = new HashSet<string>(StringComparer.Ordinal);
         var lastDate = new Dictionary<string, DateOnly>(StringComparer.Ordinal);
+        var lastRegion = new Dictionary<string, string>(StringComparer.Ordinal);
+        var cancelledOrders = new HashSet<string>(StringComparer.Ordinal);
         int skipped = 0, unreadable = 0;
         foreach (var row in rows)
         {
@@ -65,9 +67,11 @@ public static class ChannelOrderReports
             if (string.IsNullOrEmpty(id))
                 continue;
             var state = CsvColumns.Field(row, status) ?? "";
+            // Shopify gives an order's status on its first row only.
             if (state.Contains("cancel", StringComparison.OrdinalIgnoreCase) || state.Contains("voided", StringComparison.OrdinalIgnoreCase)
-                || CsvColumns.Field(row, cancelled) is not null)
+                || CsvColumns.Field(row, cancelled) is not null || cancelledOrders.Contains(id))
             {
+                cancelledOrders.Add(id);
                 skipped++;
                 continue;
             }
@@ -106,7 +110,14 @@ public static class ChannelOrderReports
                         tax += t;
             }
 
-            lines.Add(new ChannelOrderDraft(id, on, CsvColumns.Field(row, sku), CsvColumns.Field(row, title), qty, sales, ship, tax, CsvColumns.Field(row, region)));
+            // Like the date, the ship-to state is on an order's first row only.
+            var shipTo = CsvColumns.Field(row, region);
+            if (string.IsNullOrWhiteSpace(shipTo))
+                shipTo = lastRegion.GetValueOrDefault(id);
+            else
+                lastRegion[id] = shipTo;
+
+            lines.Add(new ChannelOrderDraft(id, on, CsvColumns.Field(row, sku), CsvColumns.Field(row, title), qty, sales, ship, tax, shipTo));
         }
 
         var warnings = new List<string>();

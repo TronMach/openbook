@@ -98,9 +98,10 @@ internal static partial class QbxmlJournal
                 return full;
             var parts = text.Split(':').Select(p => NumberedName().Match(p.Trim())).ToList();
             var plain = string.Join(':', parts.Select((m, i) => m.Success ? m.Groups["name"].Value.Trim() : text.Split(':')[i].Trim()));
-            if (byFull.TryGetValue(plain, out full))
-                return full;
+            // The number first: a subaccount can share its name with a top-level account.
             if (parts[^1].Success && byNumber.TryGetValue(parts[^1].Groups["number"].Value, out full))
+                return full;
+            if (byFull.TryGetValue(plain, out full))
                 return full;
             return byLeaf.TryGetValue(plain.Split(':')[^1], out full) ? full : text;
         };

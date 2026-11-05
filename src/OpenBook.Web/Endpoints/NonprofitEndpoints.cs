@@ -79,7 +79,8 @@ public static class NonprofitEndpoints
                     form["memo"],
                     form["description"],
                     Number(form["goodsValue"]) ?? 0m,
-                    form["goodsDescription"]), ct);
+                    form["goodsDescription"],
+                    Enum.TryParse<OpenBook.Domain.Sales.PaymentMethod>(form["method"], out var method) ? method : null), ct);
                 return Results.Redirect($"/nonprofit/gifts/{gift.Id}");
             }
             catch (DomainException ex)
@@ -334,7 +335,5 @@ public static class NonprofitEndpoints
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
-    private static decimal? Number(string? value) =>
-        decimal.TryParse(value?.Replace(",", "", StringComparison.Ordinal).Replace("$", "", StringComparison.Ordinal).Trim(),
-            NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n) ? n : null;
+    private static decimal? Number(string? value) => FormNumbers.Number(value);
 }

@@ -267,7 +267,8 @@ public sealed class SegmentService(
                 ? entry.Lines.ToList()
                 : entry.Lines.Where(x => group.Any(g => g.JournalLineId == x.Id)).ToList();
             var classLines = group.Select(g => g.JournalLineId).ToHashSet();
-            var document = await DocumentAsync(entry, ct);
+            // A voided entry's document has moved on to its replacement, which this line doesn't describe.
+            var document = entry.Status == JournalEntryStatus.Posted ? await DocumentAsync(entry, ct) : null;
             foreach (var line in targets)
             {
                 var row = rows.GetValueOrDefault(line.Id);

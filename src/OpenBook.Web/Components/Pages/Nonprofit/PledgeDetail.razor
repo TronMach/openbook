@@ -78,7 +78,7 @@
             </table>
         }
 
-        @if (p.Status == DocumentStatus.Posted && _pledge.Balance > 0m)
+        @if (p.Status == DocumentStatus.Posted && _pledge.Balance > 0m && p.CancelEntryId is null)
         {
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Cancel the rest</h2>

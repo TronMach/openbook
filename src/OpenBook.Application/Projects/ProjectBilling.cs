@@ -18,8 +18,8 @@ internal sealed record ProjectCharges(IReadOnlyList<TimeEntry> Time, IReadOnlyLi
 /// </summary>
 public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemService items, AccountService accounts, IClock clock, ICurrentUser user)
 {
-    public const string TimePriceSource = "Billable time";
-    public const string MileagePriceSource = "Billable mileage";
+    public const string TimePriceSource = SalesLine.BillableTimePrice;
+    public const string MileagePriceSource = SalesLine.BillableMileagePrice;
     public const string MileageItemName = "Mileage";
 
     /// <param name="billed">The invoice's customer and the sub-customers (projects) billed with it.</param>

@@ -173,6 +173,11 @@
             if (_rule is null)
                 return;
             var targets = _rule.Targets.Where(t => t.Kind != RuleTargetKind.Item).Select(t => t.TargetId).ToArray();
+            // What the rule names stays listed even if it's inactive, or saving would drop it (and a rule left with no items covers every item).
+            var chosen = _rule.TargetIds(RuleTargetKind.Item).ToHashSet();
+            _items = [.. _items, .. (await Items.ListAsync(includeInactive: true)).Where(i => !i.IsActive && chosen.Contains(i.Id))];
+            _customers = [.. _customers, .. (await Customers.ListAsync(CompanyTime.Today, includeInactive: true)).Select(c => c.Customer).Where(c => !c.IsActive && targets.Contains(c.Id))];
+            _levels = [.. _levels, .. (await Pricing.ListLevelsAsync(includeInactive: true)).Where(l => !l.IsActive && targets.Contains(l.Id))];
             Input ??= new RuleModel
             {
                 Name = _rule.Name,

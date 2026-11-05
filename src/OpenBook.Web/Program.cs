@@ -36,7 +36,7 @@ if (installation.DataFolder is not null)
 
 // Before anything opens the file: the conversion needs it to be closed.
 if (encryptionCommand is not null)
-    return await EncryptionCommands.RunAsync(builder.Configuration, connectionString, encryptionCommand);
+    return await EncryptionCommands.RunAsync(builder.Configuration, installation, connectionString, encryptionCommand);
 if (isMoveToPostgres)
     return await MoveToPostgresCommand.RunAsync(builder.Configuration, installation, connectionString, args);
 

@@ -41,5 +41,5 @@ public sealed class GiftDeposits(INonprofitStore store) : IUndepositedSource
     }
 
     private static UndepositedItem Item(Donation d, IReadOnlyDictionary<Guid, string> customers) =>
-        new(DepositedKind.Gift, d.Id, d.Date, d.DonorId, $"Gift {d.Number} · {customers.GetValueOrDefault(d.DonorId)}", d.Reference, d.DebitAccountId, d.Amount);
+        new(DepositedKind.Gift, d.Id, d.Date, d.DonorId, $"Gift {d.Number} · {customers.GetValueOrDefault(d.DonorId)}", d.Reference, d.DebitAccountId, d.Amount, d.Method);
 }
