@@ -40,13 +40,14 @@ public static class ProjectEndpoints
             foreach (var r in rowIndexes)
             {
                 var hours = new List<decimal?>();
+                var isNew = form[$"new:{r}"] == "true"; // emptying a cell of a saved row clears it; a new row's blanks say nothing
                 for (var i = 0; i < 7; i++)
                 {
                     var key = $"h:{r}:{i}";
                     if (!form.ContainsKey(key))
                         hours.Add(null);
                     else if (form[key].ToString().Trim() is { Length: 0 })
-                        hours.Add(0m);
+                        hours.Add(isNew ? null : 0m);
                     else if (decimal.TryParse(form[key], NumberStyles.Number, CultureInfo.InvariantCulture, out var h))
                         hours.Add(h);
                     else

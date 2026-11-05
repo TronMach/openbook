@@ -290,7 +290,21 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
 public sealed class FixedClock : IClock
 {
-    public DateTimeOffset UtcNow { get; set; } = new(2026, 1, 31, 9, 0, 0, TimeSpan.Zero);
+    private DateTimeOffset _now = new(2026, 1, 31, 9, 0, 0, TimeSpan.Zero);
+
+    /// <summary>Called on every read, for a test that needs something to happen part way through an operation.</summary>
+    public Action? OnRead { get; set; }
+
+    public DateTimeOffset UtcNow
+    {
+        get
+        {
+            OnRead?.Invoke();
+            return _now;
+        }
+
+        set => _now = value;
+    }
 }
 
 public sealed class TestUser : ICurrentUser

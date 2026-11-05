@@ -93,6 +93,7 @@
                             var index = _rows.Count + n;
                             <tr>
                                 <td>
+                                    <input type="hidden" name="new:@index" value="true" />
                                     <select name="c:@index" data-search aria-label="Client for a new row">
                                         <option value="">(none)</option>
                                         @foreach (var c in _customers)

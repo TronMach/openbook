@@ -14,6 +14,10 @@ internal sealed class EfCaptureStore(OpenBookDbContext db) : ICaptureStore
 
     public Task<CaptureDraft?> GetDraftAsync(Guid id, CancellationToken ct) => db.CaptureDrafts.SingleOrDefaultAsync(d => d.Id == id, ct);
 
+    public async Task<bool> TryTakeWaitingAsync(Guid id, CancellationToken ct) =>
+        await db.CaptureDrafts.Where(d => d.Id == id && d.Status == CaptureStatus.NeedsAttention)
+            .ExecuteUpdateAsync(d => d.SetProperty(x => x.Status, CaptureStatus.NeedsAttention), ct) > 0;
+
     public async Task<IReadOnlyList<CaptureDraft>> ListDraftsAsync(IReadOnlyCollection<Guid> deviceIds, CancellationToken ct) =>
         (await db.CaptureDrafts.Where(d => deviceIds.Contains(d.DeviceId)).ToListAsync(ct)).OrderByDescending(d => d.ReceivedAt).ToList();
 

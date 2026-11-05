@@ -23,6 +23,12 @@ public interface ICaptureStore
     Task<CaptureDevice?> GetDeviceAsync(Guid id, CancellationToken ct);
     Task<CaptureDraft?> GetDraftAsync(Guid id, CancellationToken ct);
 
+    /// <summary>
+    /// Takes a draft that's waiting for this transaction, which holds it until it ends; another taker then finds it
+    /// taken or changed. False when it isn't waiting.
+    /// </summary>
+    Task<bool> TryTakeWaitingAsync(Guid id, CancellationToken ct);
+
     /// <summary>Drafts from these devices, newest first.</summary>
     Task<IReadOnlyList<CaptureDraft>> ListDraftsAsync(IReadOnlyCollection<Guid> deviceIds, CancellationToken ct);
 
@@ -60,11 +66,14 @@ public sealed record CaptureLists(
 /// Offline capture: devices send drafts made without a connection; each is entered through the same service the
 /// online form uses (so every rule and the audit trail apply), in its own scope so one refusal doesn't affect the
 /// rest. Drafts that can't be entered wait as "needs attention". Repeats of a draft (same id) return its outcome.
+/// Each draft's row and what it became are one transaction, so a send cut off or made twice can't enter it twice:
+/// the row's key stops a second sender, and whatever hadn't finished rolls back and comes again.
 /// </summary>
 public sealed class CaptureService(ICaptureStore store, AuthService auth, IServiceScopeFactory scopes, IClock clock, ICurrentUser user)
 {
     public const string DeviceEntity = "capture_device";
     public const string DraftEntity = "capture_draft";
+    private const string NotWaitingCode = "capture.not_waiting";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -127,21 +136,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
 
         var outcomes = new List<DraftOutcome>();
         foreach (var incoming in drafts)
-        {
-            if (await store.GetDraftAsync(incoming.Id, ct) is { } known)
-            {
-                if (known.DeviceId != deviceId)
-                    throw new DomainException("capture.id_taken", "A draft id was used by another device.");
-                outcomes.Add(DraftOutcome.From(known));
-                continue;
-            }
-
-            var draft = CaptureDraft.Receive(incoming.Id, deviceId, incoming.Kind, incoming.Payload.GetRawText(), incoming.CapturedAt, clock.UtcNow);
-            await EnterAsync(draft, ct);
-            store.Add(draft);
-            store.Add(Audit(AuditAction.Created, draft, device));
-            outcomes.Add(DraftOutcome.From(draft));
-        }
+            outcomes.Add(await ReceiveAsync(incoming, device, ct));
 
         device.Synced(clock.UtcNow);
         await store.SaveChangesAsync(ct);
@@ -151,13 +146,32 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     /// <summary>Tries a draft that needed attention again (after fixing what stopped it, such as a closed period or an inactive customer).</summary>
     public async Task<DraftOutcome> RetryAsync(Guid draftId, Guid? ownerId, CancellationToken ct = default)
     {
-        var (draft, device) = await OwnedAsync(draftId, ownerId, ct);
-        if (draft.Status != CaptureStatus.NeedsAttention)
-            throw new DomainException("capture.not_waiting", "This draft isn't waiting.");
-        await EnterAsync(draft, ct);
-        store.Add(Audit(AuditAction.Updated, draft, device));
-        await store.SaveChangesAsync(ct);
-        return DraftOutcome.From(draft);
+        var (_, device) = await OwnedAsync(draftId, ownerId, ct);
+        for (var attempt = 1; ; attempt++)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var sp = scope.ServiceProvider;
+            var drafts = sp.GetRequiredService<ICaptureStore>();
+            try
+            {
+                await using var transaction = await sp.GetRequiredService<IUnitOfWork>().BeginAsync(ct);
+                if (!await drafts.TryTakeWaitingAsync(draftId, ct))
+                    throw new DomainException(NotWaitingCode, "This draft isn't waiting.");
+                var draft = await drafts.GetDraftAsync(draftId, ct) ?? throw new EntityNotFoundException(DraftEntity, draftId);
+                await EnterAsync(sp, draft, ct);
+                drafts.Add(Audit(AuditAction.Updated, draft, device));
+                await drafts.SaveChangesAsync(ct);
+                await transaction.CommitAsync(CancellationToken.None);
+                return DraftOutcome.From(draft);
+            }
+            catch (ConcurrencyConflictException) when (attempt < ConflictRetry.Attempts)
+            {
+            }
+            catch (DomainException ex) when (ex is not ConcurrencyConflictException && ex.Code != NotWaitingCode && ex is not EntityNotFoundException)
+            {
+                return await RefuseAgainAsync(draftId, device, ex.Message, ct);
+            }
+        }
     }
 
     public async Task DismissAsync(Guid draftId, Guid? ownerId, CancellationToken ct = default)
@@ -203,89 +217,171 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
         return (draft, device);
     }
 
-    /// <summary>Enters the draft in a scope of its own, through the service the online form uses.</summary>
-    private async Task EnterAsync(CaptureDraft draft, CancellationToken ct)
+    /// <summary>A draft as it arrives: one that's known answers with its outcome, a new one is entered.</summary>
+    private async Task<DraftOutcome> ReceiveAsync(IncomingDraft incoming, CaptureDevice device, CancellationToken ct)
     {
-        await using var scope = scopes.CreateAsyncScope();
-        var sp = scope.ServiceProvider;
-        try
+        var payload = incoming.Payload.GetRawText();
+        for (var attempt = 1; ; attempt++)
         {
-            switch (draft.Kind)
+            await using var scope = scopes.CreateAsyncScope();
+            var sp = scope.ServiceProvider;
+            var drafts = sp.GetRequiredService<ICaptureStore>();
+            if (await drafts.GetDraftAsync(incoming.Id, ct) is { } known)
             {
-                case CaptureKind.Time:
-                {
-                    var t = Read<TimePayload>(draft);
-                    var entry = await sp.GetRequiredService<TimeService>().CreateAsync(new TimeEntryDetails(
-                        t.WorkerId, t.Date, t.Hours, t.CustomerId, t.ItemId, t.Billable, t.Rate, t.Notes), ct);
-                    draft.Entered(TimeService.EntityType, entry.Id);
-                    break;
-                }
+                if (known.DeviceId != device.Id)
+                    throw new DomainException("capture.id_taken", "A draft id was used by another device.");
+                return DraftOutcome.From(known);
+            }
 
-                case CaptureKind.Mileage:
-                {
-                    var m = Read<MileagePayload>(draft);
-                    var trip = await sp.GetRequiredService<MileageService>().CreateAsync(new MileageDetails(
-                        m.Date, m.Miles, m.Purpose ?? "", m.WorkerId, m.Vehicle, m.FromPlace, m.ToPlace, m.CustomerId, m.Billable, m.BillRate ?? 0m), ct);
-                    draft.Entered(MileageService.EntityType, trip.Id);
-                    break;
-                }
+            if (payload.Length > CaptureDraft.MaxPayload)
+                return await RefuseAsync(incoming, WithoutPhoto(payload), device, "The photo is too large to send, so it wasn't kept. Enter this one again with a smaller photo, then dismiss it.", ct);
 
-                case CaptureKind.Expense:
-                {
-                    var e = Read<ExpensePayload>(draft);
-                    var photo = Photo(e.Photo);
-                    var spend = await sp.GetRequiredService<BankingService>().RecordAsync(new RecordBankTransactionCommand(
-                        BankTransactionKind.Spend, e.AccountId, e.Date, [new BankSplit(e.CategoryId, e.Amount, e.Memo)], e.Payee, null, e.Memo, e.VendorId), ct);
-                    draft.Entered(BankingService.EntityType, spend.Id);
-                    if (photo is { } file)
-                    {
-                        try
-                        {
-                            await using var stream = new MemoryStream(file.Bytes);
-                            await sp.GetRequiredService<AttachmentService>().AddAsync(BankingService.EntityType, spend.Id, file.Name, stream, ct);
-                        }
-                        catch (DomainException ex)
-                        {
-                            // The expense stands; the note says why its photo isn't attached.
-                            draft.Entered(BankingService.EntityType, spend.Id, $"Entered, but the photo wasn't attached: {ex.Message}");
-                        }
-                    }
-
-                    break;
-                }
-
-                case CaptureKind.Invoice:
-                {
-                    var s = Read<SalePayload>(draft);
-                    var invoice = await sp.GetRequiredService<InvoiceService>().CreateAsync(
-                        new CreateInvoiceCommand(s.CustomerId, s.Date, s.Drafts(), Memo: s.Memo), ct);
-                    draft.Entered("invoice", invoice.Id);
-                    break;
-                }
-
-                case CaptureKind.Estimate:
-                {
-                    var s = Read<SalePayload>(draft);
-                    var estimate = await sp.GetRequiredService<EstimateService>().CreateAsync(
-                        new SaveEstimateCommand(s.CustomerId, s.Date, s.Drafts(), Memo: s.Memo), ct);
-                    draft.Entered("estimate", estimate.Id);
-                    break;
-                }
-
-                default:
-                {
-                    var r = Read<ReceiptPayload>(draft);
-                    var file = Photo(r.Photo) ?? throw new DomainException("capture.photo_required", "A receipt needs its photo.");
-                    await using var stream = new MemoryStream(file.Bytes);
-                    var receipt = await sp.GetRequiredService<ReceiptService>().UploadAsync(file.Name, stream, ct);
-                    draft.Entered(ReceiptService.EntityType, receipt.Id);
-                    break;
-                }
+            try
+            {
+                await using var transaction = await sp.GetRequiredService<IUnitOfWork>().BeginAsync(ct);
+                var draft = CaptureDraft.Receive(incoming.Id, device.Id, incoming.Kind, payload, incoming.CapturedAt, clock.UtcNow);
+                drafts.Add(draft);
+                await drafts.SaveChangesAsync(ct); // a second sender stops here, on the row's key, until this one is done
+                await EnterAsync(sp, draft, ct);
+                drafts.Add(Audit(AuditAction.Created, draft, device));
+                await drafts.SaveChangesAsync(ct);
+                await transaction.CommitAsync(CancellationToken.None);
+                return DraftOutcome.From(draft);
+            }
+            catch (ConcurrencyConflictException) when (attempt < ConflictRetry.Attempts)
+            {
+            }
+            catch (DomainException ex) when (ex is not ConcurrencyConflictException)
+            {
+                return await RefuseAsync(incoming, payload, device, ex.Message, ct);
             }
         }
-        catch (DomainException ex)
+    }
+
+    // Everything the attempt did has rolled back; the draft itself is kept, waiting.
+    private async Task<DraftOutcome> RefuseAsync(IncomingDraft incoming, string payload, CaptureDevice device, string reason, CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var drafts = scope.ServiceProvider.GetRequiredService<ICaptureStore>();
+        var draft = CaptureDraft.Receive(incoming.Id, device.Id, incoming.Kind, payload, incoming.CapturedAt, clock.UtcNow);
+        draft.Failed(reason);
+        drafts.Add(draft);
+        drafts.Add(Audit(AuditAction.Created, draft, device));
+        try
         {
-            draft.Failed(ex.Message);
+            await drafts.SaveChangesAsync(ct);
+            return DraftOutcome.From(draft);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // Another send of the same draft got there first: its outcome stands.
+            await using var fresh = scopes.CreateAsyncScope();
+            return DraftOutcome.From(await fresh.ServiceProvider.GetRequiredService<ICaptureStore>().GetDraftAsync(incoming.Id, ct)
+                ?? throw new EntityNotFoundException(DraftEntity, incoming.Id));
+        }
+    }
+
+    private async Task<DraftOutcome> RefuseAgainAsync(Guid draftId, CaptureDevice device, string reason, CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var drafts = scope.ServiceProvider.GetRequiredService<ICaptureStore>();
+        var draft = await drafts.GetDraftAsync(draftId, ct) ?? throw new EntityNotFoundException(DraftEntity, draftId);
+        draft.Failed(reason);
+        drafts.Add(Audit(AuditAction.Updated, draft, device));
+        await drafts.SaveChangesAsync(ct);
+        return DraftOutcome.From(draft);
+    }
+
+    private static string WithoutPhoto(string payload)
+    {
+        if (System.Text.Json.Nodes.JsonNode.Parse(payload) is System.Text.Json.Nodes.JsonObject json)
+        {
+            json.Remove("photo");
+            var kept = json.ToJsonString();
+            if (kept.Length <= CaptureDraft.MaxPayload)
+                return kept;
+        }
+
+        return "{}";
+    }
+
+    /// <summary>
+    /// Enters the draft through the service the online form uses, in that scope's transaction. A refusal throws, and
+    /// the caller's transaction takes back whatever was done.
+    /// </summary>
+    private static async Task EnterAsync(IServiceProvider sp, CaptureDraft draft, CancellationToken ct)
+    {
+        switch (draft.Kind)
+        {
+            case CaptureKind.Time:
+            {
+                var t = Read<TimePayload>(draft);
+                var entry = await sp.GetRequiredService<TimeService>().CreateAsync(new TimeEntryDetails(
+                    t.WorkerId, t.Date, t.Hours, t.CustomerId, t.ItemId, t.Billable, t.Rate, t.Notes), ct);
+                draft.Entered(TimeService.EntityType, entry.Id);
+                break;
+            }
+
+            case CaptureKind.Mileage:
+            {
+                var m = Read<MileagePayload>(draft);
+                var trip = await sp.GetRequiredService<MileageService>().CreateAsync(new MileageDetails(
+                    m.Date, m.Miles, m.Purpose ?? "", m.WorkerId, m.Vehicle, m.FromPlace, m.ToPlace, m.CustomerId, m.Billable, m.BillRate ?? 0m), ct);
+                draft.Entered(MileageService.EntityType, trip.Id);
+                break;
+            }
+
+            case CaptureKind.Expense:
+            {
+                var e = Read<ExpensePayload>(draft);
+                var photo = Photo(e.Photo);
+                var spend = await sp.GetRequiredService<BankingService>().RecordAsync(new RecordBankTransactionCommand(
+                    BankTransactionKind.Spend, e.AccountId, e.Date, [new BankSplit(e.CategoryId, e.Amount, e.Memo)], e.Payee, null, e.Memo, e.VendorId), ct);
+                draft.Entered(BankingService.EntityType, spend.Id);
+                if (photo is { } file)
+                {
+                    try
+                    {
+                        await using var stream = new MemoryStream(file.Bytes);
+                        await sp.GetRequiredService<AttachmentService>().AddAsync(BankingService.EntityType, spend.Id, file.Name, stream, ct);
+                    }
+                    catch (DomainException ex)
+                    {
+                        // The expense stands; the note says why its photo isn't attached.
+                        draft.Entered(BankingService.EntityType, spend.Id, $"Entered, but the photo wasn't attached: {ex.Message}");
+                    }
+                }
+
+                break;
+            }
+
+            case CaptureKind.Invoice:
+            {
+                var s = Read<SalePayload>(draft);
+                var invoice = await sp.GetRequiredService<InvoiceService>().CreateAsync(
+                    new CreateInvoiceCommand(s.CustomerId, s.Date, s.Drafts(), Memo: s.Memo), ct);
+                draft.Entered("invoice", invoice.Id);
+                break;
+            }
+
+            case CaptureKind.Estimate:
+            {
+                var s = Read<SalePayload>(draft);
+                var estimate = await sp.GetRequiredService<EstimateService>().CreateAsync(
+                    new SaveEstimateCommand(s.CustomerId, s.Date, s.Drafts(), Memo: s.Memo), ct);
+                draft.Entered("estimate", estimate.Id);
+                break;
+            }
+
+            default:
+            {
+                var r = Read<ReceiptPayload>(draft);
+                var file = Photo(r.Photo) ?? throw new DomainException("capture.photo_required", "A receipt needs its photo.");
+                await using var stream = new MemoryStream(file.Bytes);
+                var receipt = await sp.GetRequiredService<ReceiptService>().UploadAsync(file.Name, stream, ct);
+                draft.Entered(ReceiptService.EntityType, receipt.Id);
+                break;
+            }
         }
 
         if (draft.Status == CaptureStatus.Entered && System.Text.Json.Nodes.JsonNode.Parse(draft.Payload) is System.Text.Json.Nodes.JsonObject json

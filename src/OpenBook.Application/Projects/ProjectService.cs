@@ -269,14 +269,15 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
 
     /// <summary>
     /// Saves a week's grid in one go: for each cell with hours given (null leaves it), an empty cell gets a new entry, a
-    /// cell with one entry has its hours changed (zero deletes it), and a locked cell can't change. Returns how many entries changed.
+    /// cell with one entry has its hours changed (zero deletes it), and a locked cell can't change. Rows for the same
+    /// client, service and billable setting add up, so a new row repeating a saved one adds to it. Returns how many entries changed.
     /// </summary>
     public async Task<int> SaveWeekAsync(Guid workerId, DateOnly monday, IReadOnlyList<WeekRow> rows, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(rows);
         var entries = await WeekEntriesAsync(workerId, monday, ct);
         var changed = 0;
-        foreach (var row in rows)
+        foreach (var row in Combined(rows))
         {
             for (var day = 0; day < 7 && day < row.Hours.Count; day++)
             {
@@ -320,6 +321,14 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
             await store.SaveChangesAsync(ct);
         return changed;
     }
+
+    private static IEnumerable<WeekRow> Combined(IReadOnlyList<WeekRow> rows) =>
+        rows.GroupBy(r => (r.CustomerId, r.ItemId, r.Billable)).Select(same =>
+            new WeekRow(same.Key.CustomerId, same.Key.ItemId, same.Key.Billable, Enumerable.Range(0, 7).Select(day =>
+            {
+                var given = same.Select(r => day < r.Hours.Count ? r.Hours[day] : null).OfType<decimal>().ToList();
+                return given.Count == 0 ? (decimal?)null : given.Sum();
+            }).ToList()));
 
     private async Task<List<TimeEntry>> WeekEntriesAsync(Guid workerId, DateOnly monday, CancellationToken ct) =>
         (await store.ListTimeAsync(new TimeFilter(monday, monday.AddDays(6), workerId), ct)).Where(e => !e.IsRunning).ToList();

@@ -47,6 +47,114 @@ public sealed class CaptureTests : IAsyncLifetime
     private static IncomingDraft Draft(CaptureKind kind, object payload, Guid? id = null) =>
         new(id ?? Guid.NewGuid(), kind, DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(payload, Web));
 
+    private object TimeOn(int day) => new { WorkerId = _ana.Id, Date = new DateOnly(2026, 3, 1).AddDays(day % 28), Hours = 1m };
+
+    private Task<int> TimeEntries() => _db.InDb(db => db.TimeEntries.CountAsync());
+
+    [Fact]
+    public async Task A_draft_too_large_to_keep_waits_without_its_photo_and_stops_nothing_else()
+    {
+        var time = Draft(CaptureKind.Time, TimeOn(0));
+        var huge = Draft(CaptureKind.Expense, new
+        {
+            Date = new DateOnly(2026, 3, 2), Amount = 10m, AccountId = _checking.Id, CategoryId = _supplies.Id,
+            Photo = new { FileName = "big.jpg", Base64 = new string('A', CaptureDraft.MaxPayload) },
+        });
+        var after = Draft(CaptureKind.Time, TimeOn(1));
+
+        for (var send = 0; send < 3; send++)
+        {
+            var outcomes = await Sync(time, huge, after);
+            Assert.Equal([CaptureStatus.Entered, CaptureStatus.NeedsAttention, CaptureStatus.Entered], outcomes.Select(o => o.Status));
+            Assert.Contains("too large", outcomes[1].Error, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(2, await TimeEntries());
+        var kept = await _db.InDb(db => db.CaptureDrafts.SingleAsync(d => d.Id == huge.Id));
+        Assert.DoesNotContain("base64", kept.Payload, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_send_cut_off_part_way_enters_nothing_twice()
+    {
+        var drafts = Enumerable.Range(0, 40).Select(i => Draft(CaptureKind.Time, TimeOn(i))).ToArray();
+        using var cut = new CancellationTokenSource();
+        var reads = 0;
+        _db.Clock.OnRead = () =>
+        {
+            if (++reads == 100) // the clock is read for every draft, so this falls part way through
+                cut.Cancel();
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            In<CaptureService, IReadOnlyList<DraftOutcome>>(s => s.SyncAsync(_userId, _device, drafts, cut.Token)));
+        _db.Clock.OnRead = null;
+        var entered = await TimeEntries();
+        Assert.InRange(entered, 1, 39);
+        Assert.Equal(entered, await _db.InDb(db => db.CaptureDrafts.CountAsync()));
+
+        Assert.All(await Sync(drafts), o => Assert.Equal(CaptureStatus.Entered, o.Status));
+        Assert.Equal(40, await TimeEntries());
+    }
+
+    [Fact]
+    public async Task Two_tabs_sending_at_once_enter_each_draft_once()
+    {
+        var drafts = Enumerable.Range(0, 5).Select(i => Draft(CaptureKind.Time, TimeOn(i))).ToArray();
+        async Task SendAsync()
+        {
+            try
+            {
+                await Sync(drafts);
+            }
+            catch (Exception ex) when (ex is DomainException or DbUpdateException or Microsoft.Data.Sqlite.SqliteException)
+            {
+                // A tab that loses simply sends again later, as the page does every minute.
+            }
+        }
+
+        await Task.WhenAll(SendAsync(), SendAsync());
+
+        Assert.All(await Sync(drafts), o => Assert.Equal(CaptureStatus.Entered, o.Status));
+        Assert.Equal(5, await TimeEntries());
+    }
+
+    [Fact]
+    public async Task A_draft_entered_in_part_keeps_nothing_when_it_is_refused()
+    {
+        var bad = Draft(CaptureKind.Expense, new { Date = new DateOnly(2026, 3, 2), Amount = 10m, AccountId = _checking.Id, CategoryId = _supplies.Id, Photo = new { Base64 = "not base64!" } });
+
+        var outcome = Assert.Single(await Sync(bad));
+
+        Assert.Equal(CaptureStatus.NeedsAttention, outcome.Status);
+        Assert.Equal(0, await _db.InDb(db => db.BankTransactions.CountAsync()));
+    }
+
+    [Fact]
+    public async Task Trying_a_draft_again_twice_at_once_enters_it_once()
+    {
+        var customer = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Acme")));
+        var draft = Draft(CaptureKind.Time, new { WorkerId = _ana.Id, Date = new DateOnly(2026, 3, 2), Hours = 1m, CustomerId = customer.Id, Billable = false });
+        await In<CustomerService, Customer>(s => s.SetActiveAsync(customer.Id, false));
+        Assert.Equal(CaptureStatus.NeedsAttention, Assert.Single(await Sync(draft)).Status);
+        await In<CustomerService, Customer>(s => s.SetActiveAsync(customer.Id, true));
+
+        async Task RetryAsync()
+        {
+            try
+            {
+                await In<CaptureService, DraftOutcome>(s => s.RetryAsync(draft.Id, _userId));
+            }
+            catch (Exception ex) when (ex is DomainException or DbUpdateException or Microsoft.Data.Sqlite.SqliteException)
+            {
+            }
+        }
+
+        await Task.WhenAll(RetryAsync(), RetryAsync());
+
+        Assert.Equal(1, await TimeEntries());
+    }
+
     private Task<IReadOnlyList<DraftOutcome>> Sync(params IncomingDraft[] drafts) =>
         In<CaptureService, IReadOnlyList<DraftOutcome>>(s => s.SyncAsync(_userId, _device, drafts));
 

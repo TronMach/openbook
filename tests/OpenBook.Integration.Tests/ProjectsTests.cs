@@ -45,6 +45,22 @@ public sealed class ProjectsTests : IAsyncLifetime
         In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(details ?? new ProjectDetails(), name, _acme.Id)));
 
     [Fact]
+    public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
+    {
+        var monday = new DateOnly(2026, 3, 2);
+        await In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, monday, [new WeekRow(null, null, false, [3m, 0m, 0m, 0m, 0m, 0m, 0m])]));
+
+        var saved = new WeekRow(null, null, false, [3m, 0m, 0m, 0m, 0m, 0m, 0m]);
+        var repeated = new WeekRow(null, null, false, [2m, 1m, null, null, null, null, null]);
+        var blank = new WeekRow(null, null, false, [null, null, null, null, null, null, null]);
+        Assert.Equal(2, await In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, monday, [saved, repeated, blank, blank])));
+
+        var row = Assert.Single(await In<TimeService, IReadOnlyList<WeekRow>>(s => s.WeekAsync(_ana.Id, monday)));
+        Assert.Equal(5m, row.Hours[0]);
+        Assert.Equal(1m, row.Hours[1]);
+    }
+
+    [Fact]
     public async Task A_week_grid_creates_changes_and_clears_time_in_one_save()
     {
         var monday = new DateOnly(2026, 3, 2);

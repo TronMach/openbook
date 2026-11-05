@@ -39,7 +39,7 @@ Time takes its rate when entered, and records where it came from ("Acme · Partn
 
 - **Start timer**: choose the person, customer or project, service and notes, and start it. **Stop** when done; the minutes are rounded and saved. One timer runs per person at a time.
 - **Add time**: the same fields with **hours** (to 2 decimals, up to 24 a day) and a **date**.
-- **Week grid**: a timesheet, one row per client and service, a column per day. Type hours in the cells and **Save the week**. Clearing a cell deletes its time.
+- **Week grid**: a timesheet, one row per client and service, a column per day. Type hours in the cells and **Save the week**. Clearing a cell deletes its time. The blank rows at the bottom are for new work; one that repeats a row above adds its hours to that row.
 
 Billable time needs a customer or project and a service. A **rate per hour** typed in overrides the rate card. Time posts nothing to the books by itself; it's income only once invoiced. Time can be edited or deleted until it's invoiced.
 

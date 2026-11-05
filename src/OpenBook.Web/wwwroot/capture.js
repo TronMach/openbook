@@ -6,7 +6,10 @@
     'use strict';
 
     const DB = 'openbook-capture';
-    const MAX_PHOTO = 7 * 1024 * 1024;
+    // Under the server's 8 MB per draft once base64 has added a third.
+    const MAX_PHOTO = 5.5 * 1024 * 1024;
+    // Under the server's 30 MB per request; a draft or two more waits for the next request.
+    const MAX_SEND = 20 * 1024 * 1024;
     const $ = id => document.getElementById(id);
 
     // ---- Storage: IndexedDB with an AES-GCM key that can't be read out of the browser ----
@@ -153,7 +156,7 @@
     function readPhoto(input) {
         const file = input && input.files && input.files[0];
         if (!file) return Promise.resolve(null);
-        if (file.size > MAX_PHOTO) return Promise.reject(new Error('The photo is larger than 7 MB.'));
+        if (file.size > MAX_PHOTO) return Promise.reject(new Error('The photo is larger than 5.5 MB.'));
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve({ fileName: file.name || 'receipt.jpg', base64: String(reader.result).split(',')[1] });
@@ -227,7 +230,31 @@
         show('This device\'s access was removed in OpenBook, so everything it held has been cleared. Sign in again to keep capturing.', true);
     }
 
-    async function sync() {
+    // Requests that fit: at most 200 drafts and MAX_SEND each, in the order captured.
+    function batches(drafts) {
+        const sends = [];
+        let current = null;
+        for (const draft of drafts) {
+            const wired = JSON.stringify({ id: draft.id, kind: draft.kind, capturedAt: draft.capturedAt, payload: wire(draft.payload) });
+            if (!current || current.size + wired.length > MAX_SEND || current.items.length === 200) {
+                current = { size: 0, items: [], drafts: [] };
+                sends.push(current);
+            }
+            current.size += wired.length;
+            current.items.push(wired);
+            current.drafts.push(draft);
+        }
+        return sends;
+    }
+
+    // One tab of this browser sends at a time. The server would enter a draft once anyway; this saves the work.
+    function sync() {
+        return navigator.locks
+            ? navigator.locks.request('openbook-capture-sync', { ifAvailable: true }, lock => (lock ? send() : render()))
+            : send();
+    }
+
+    async function send() {
         if (syncing || !navigator.onLine) return render();
         syncing = true;
         try {
@@ -240,10 +267,10 @@
             }
             fillSelects();
             const waiting = (await loadDrafts()).filter(d => d.status === 'waiting');
-            if (waiting.length) {
+            for (const batch of batches(waiting)) {
                 const response = await fetch('/api/capture/sync', {
                     method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId: device, drafts: waiting.map(d => ({ id: d.id, kind: d.kind, capturedAt: d.capturedAt, payload: wire(d.payload) })) }),
+                    body: `{"deviceId":${JSON.stringify(device)},"drafts":[${batch.items.join(',')}]}`,
                 });
                 if (response.status === 410) return wiped();
                 if (response.status === 401) {
@@ -253,13 +280,13 @@
                 }
                 if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'sync ' + response.status);
                 for (const outcome of await response.json()) {
-                    const draft = waiting.find(d => d.id === outcome.id);
+                    const draft = batch.drafts.find(d => d.id === outcome.id);
                     if (!draft) continue;
                     if (outcome.status === 'Entered' || outcome.status === 'Dismissed') await removeDraft(draft.id);
                     else await saveDraft({ ...draft, status: 'attention', error: outcome.error });
                 }
-                show(`Sent ${waiting.length} ${waiting.length === 1 ? 'draft' : 'drafts'}.`);
             }
+            if (waiting.length) show(`Sent ${waiting.length} ${waiting.length === 1 ? 'draft' : 'drafts'}.`);
         } catch (e) {
             if (e.signedOut) show('Sign in to send your drafts. They\'re safe on this device meanwhile.', true, '/login?returnUrl=%2Fcapture.html');
             else if (navigator.onLine) show(`Couldn't reach OpenBook (${e.message}). Your drafts are safe and will be sent later.`, true);

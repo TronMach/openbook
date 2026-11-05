@@ -8,7 +8,7 @@ It records:
 
 - **Time**: person, date, hours, customer or project, service, notes.
 - **Mileage**: date, miles, business purpose, customer or project, bill per mile.
-- **Expense**: amount, paid from, category, vendor or payee, memo, and an optional receipt photo.
+- **Expense**: amount, paid from, category, vendor or payee, memo, and an optional receipt photo (up to 5.5 MB, as for any photo here).
 - **Receipt**: just a photo; it goes to the receipts inbox ([chapter 16](16-document-inbox.md#receipts)) to be read and recorded.
 - **Invoice** or **estimate**: customer and lines (product or service, quantity, rate, description) and a message. Leave the rate blank to use the automatic price.
 
@@ -18,7 +18,7 @@ The capture page keeps a copy of your customer, service, account and vendor list
 
 ### When something can't be entered
 
-On OpenBook's **Capture** page (`/capture`), entries that need attention are listed with the reason, for example a closed period or an inactive customer. Fix the cause, then **Try again**, or **Dismiss** it.
+On OpenBook's **Capture** page (`/capture`), entries that need attention are listed with the reason, for example a closed period, an inactive customer or a photo too large to keep. Fix the cause, then **Try again**, or **Dismiss** it.
 
 ### Lost phones
 
