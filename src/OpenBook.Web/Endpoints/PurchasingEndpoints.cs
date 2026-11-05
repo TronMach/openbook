@@ -150,9 +150,19 @@ public static class PurchasingEndpoints
         {
             if (await ach.GetBatchAsync(id, ct) is not { } batch)
                 return Results.NotFound();
+            string text;
+            try
+            {
+                text = ach.FileText(batch);
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/purchases/ach?error={Uri.EscapeDataString(ex.Message)}");
+            }
+
             var name = FormattableString.Invariant($"ach-{batch.CreatedAt.InCompanyTime():yyyyMMdd}-{batch.FileIdModifier}.txt");
             http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = name }.ToString();
-            return Results.Bytes(Encoding.ASCII.GetBytes(batch.Content), "text/plain");
+            return Results.Bytes(Encoding.ASCII.GetBytes(text), "text/plain");
         }).RequireAuthorization();
 
         // Fields: routing, accountNumber, kind, action (save/remove).

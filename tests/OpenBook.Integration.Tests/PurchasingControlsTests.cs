@@ -177,6 +177,28 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
     // ---- ACH ----
 
     [Fact]
+    public async Task Ach_files_stored_in_clear_are_encrypted_and_can_still_be_read()
+    {
+        var old = AchBatch.Create(_checking.Id, Mar1, 'A', 1, 10m, "x", DateTimeOffset.UtcNow);
+        await _db.InDb(async db =>
+        {
+            db.AchBatches.Add(old);
+            await db.SaveChangesAsync();
+            await db.Database.ExecuteSqlRawAsync("UPDATE \"AchBatches\" SET \"Content\" = 'FILE 123456789', \"ProtectedContent\" = NULL");
+            return true;
+        });
+        var before = await _db.InDb(db => db.AchBatches.AsNoTracking().SingleAsync());
+        Assert.Equal("FILE 123456789", await In<AchService, string>(s => Task.FromResult(s.FileText(before))));
+
+        Assert.Equal(1, await In<AchService, int>(s => s.ProtectStoredFilesAsync()));
+
+        var after = await _db.InDb(db => db.AchBatches.AsNoTracking().SingleAsync());
+        Assert.Equal(("protected:FILE 123456789", ""), (after.ProtectedContent, after.UnprotectedContent));
+        Assert.Equal("FILE 123456789", await In<AchService, string>(s => Task.FromResult(s.FileText(after))));
+        Assert.Equal(0, await In<AchService, int>(s => s.ProtectStoredFilesAsync()));
+    }
+
+    [Fact]
     public async Task Routing_numbers_and_ach_settings_are_checked()
     {
         Assert.Equal("021000021", Ach.Routing(" 021000021 "));
@@ -211,7 +233,8 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
         Assert.Equal(payment.Id, candidate.Payment.Id);
 
         var batch = await In<AchService, AchBatch>(s => s.CreateFileAsync(_checking.Id, new DateOnly(2026, 4, 2), [payment.Id]));
-        var lines = batch.Content.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        var file = await In<AchService, string>(s => Task.FromResult(s.FileText(batch)));
+        var lines = file.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(10, lines.Length);
         Assert.All(lines, l => Assert.Equal(94, l.Length));
         Assert.StartsWith("101 0110000151234567890", lines[0], StringComparison.Ordinal);
@@ -225,7 +248,13 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
         Assert.StartsWith("9000001000001000000010002100002000000000000000000123456", lines[4], StringComparison.Ordinal);
         Assert.Equal(new string('9', 94), lines[9]);
 
-        // The file holds the vendor's full account number, so it stays out of the data export.
+        // The file holds the vendor's full account number, so it's stored encrypted...
+        var stored = await _db.InDb(db => db.AchBatches.AsNoTracking().SingleAsync(b => b.Id == batch.Id));
+        Assert.Equal(("protected:" + file, ""), (stored.ProtectedContent, stored.UnprotectedContent));
+        Assert.Equal("ach.file_unreadable", await Refused(() => In<AchService, string>(s =>
+            Task.FromResult(s.FileText(AchBatch.Create(_checking.Id, Mar1, 'A', 1, 1m, "not ours", DateTimeOffset.UtcNow))))));
+
+        // ...and is left out of the data export.
         var export = await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.IDataExporter>().ExportAsync(default));
         try
         {

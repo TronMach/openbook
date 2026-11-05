@@ -122,6 +122,20 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct) => db.AchBatches.AsNoTracking().SingleOrDefaultAsync(b => b.Id == id, ct);
 
+    public async Task<IReadOnlyList<AchBatch>> ListUnprotectedAchBatchesAsync(CancellationToken ct) =>
+        await db.AchBatches.Where(b => b.UnprotectedContent != "").ToListAsync(ct);
+
+    public async Task WipeDeletedAchFilesAsync(CancellationToken ct)
+    {
+        if (db.Database.IsSqlite())
+        {
+            await db.Database.ExecuteSqlRawAsync("VACUUM", ct);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)", ct);
+        }
+        else
+            await db.Database.ExecuteSqlRawAsync("VACUUM FULL \"AchBatches\"", ct);
+    }
+
     public async Task<IReadOnlyList<AchBatch>> ListAchBatchesAsync(Guid accountId, CancellationToken ct) =>
         (await db.AchBatches.AsNoTracking().Where(b => b.AccountId == accountId).ToListAsync(ct)).OrderByDescending(b => b.CreatedAt).ToList();
 

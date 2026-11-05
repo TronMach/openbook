@@ -101,10 +101,13 @@ public sealed class AchSettings
     }
 }
 
-/// <summary>An ACH file made for bill payments from one bank account; the file is kept so it can be downloaded again.</summary>
+/// <summary>
+/// An ACH file made for bill payments from one bank account. The file is kept so it can be downloaded again, encrypted,
+/// since it holds vendors' full bank account numbers.
+/// </summary>
 public sealed class AchBatch
 {
-    private AchBatch() => Content = string.Empty;
+    private AchBatch() => UnprotectedContent = string.Empty;
 
     public Guid Id { get; private set; }
     public Guid AccountId { get; private set; }
@@ -112,10 +115,16 @@ public sealed class AchBatch
     public char FileIdModifier { get; private set; }
     public int EntryCount { get; private set; }
     public decimal Total { get; private set; }
-    public string Content { get; private set; }
+
+    /// <summary>The file, encrypted; null on a file made before they were, until the hourly job has got to it.</summary>
+    public string? ProtectedContent { get; private set; }
+
+    /// <summary>The file in clear on one made before they were encrypted; empty on every other.</summary>
+    public string UnprotectedContent { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public static AchBatch Create(Guid accountId, DateOnly effectiveDate, char modifier, int entries, decimal total, string content, DateTimeOffset now) => new()
+    public static AchBatch Create(Guid accountId, DateOnly effectiveDate, char modifier, int entries, decimal total, string protectedContent, DateTimeOffset now) => new()
     {
         Id = Guid.CreateVersion7(),
         AccountId = accountId,
@@ -123,9 +132,13 @@ public sealed class AchBatch
         FileIdModifier = modifier,
         EntryCount = entries,
         Total = total,
-        Content = content,
+        ProtectedContent = protectedContent,
+        UnprotectedContent = string.Empty,
         CreatedAt = now.ToUniversalTime(),
     };
+
+    /// <summary>Takes the encrypted form of a file stored in clear, and drops the clear one.</summary>
+    public void Protect(string protectedContent) => (ProtectedContent, UnprotectedContent) = (protectedContent, string.Empty);
 }
 
 /// <summary>One credit to a vendor in an ACH file.</summary>

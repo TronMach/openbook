@@ -56,6 +56,12 @@ internal sealed partial class RecurringPostingService(
             return true;
         }, ct);
 
+        await StepAsync("ACH files", async services =>
+        {
+            await services.GetRequiredService<OpenBook.Application.Purchases.AchService>().ProtectStoredFilesAsync(ct);
+            return true;
+        }, ct);
+
         await StepAsync("Recurring entries", async services =>
         {
             foreach (var result in await services.GetRequiredService<RecurringEntryService>().PostDueAsync(today, autoPostOnly: true, ct))

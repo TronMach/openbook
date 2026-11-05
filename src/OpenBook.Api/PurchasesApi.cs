@@ -206,7 +206,7 @@ internal static class PurchasesApi
             return Results.Created($"/api/purchases/ach/files/{batch.Id}", AchBatchResponse.From(batch));
         });
         purchases.MapGet("/ach/files/{id:guid}", async (Guid id, AchService s, CancellationToken ct) =>
-            await s.GetBatchAsync(id, ct) is { } batch ? Results.Text(batch.Content, "text/plain") : Results.NotFound());
+            await s.GetBatchAsync(id, ct) is { } batch ? Results.Text(s.FileText(batch), "text/plain") : Results.NotFound());
 
         // ?skip=&take= pages through the newest (total in X-Total-Count); without them, everything.
         purchases.MapGet("/bills", async (Guid? vendorId, int? skip, int? take, BillService s, IPurchasesStore store, HttpResponse response, CancellationToken ct) =>

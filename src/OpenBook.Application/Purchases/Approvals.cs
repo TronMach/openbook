@@ -160,6 +160,32 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
 
     public Task<AchBatch?> GetBatchAsync(Guid id, CancellationToken ct = default) => store.GetAchBatchAsync(id, ct);
 
+    /// <summary>The file itself, to send to the bank.</summary>
+    public string FileText(AchBatch batch)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        return batch.ProtectedContent is not { } file
+            ? batch.UnprotectedContent
+            : secrets.Unprotect(file) ?? throw new DomainException("ach.file_unreadable", "This ACH file can't be read on this computer, because the keys it was encrypted with aren't here. Restore those keys, or make the file again at the bank.");
+    }
+
+    /// <summary>
+    /// Encrypts files stored in clear (from before they were encrypted, or a restored backup), then has the database
+    /// wipe what they left behind, which a backup would otherwise copy. Only their form changes, so there's nothing to audit.
+    /// </summary>
+    /// <returns>How many it encrypted.</returns>
+    public async Task<int> ProtectStoredFilesAsync(CancellationToken ct = default)
+    {
+        var files = await store.ListUnprotectedAchBatchesAsync(ct);
+        if (files.Count == 0)
+            return 0;
+        foreach (var file in files)
+            file.Protect(secrets.Protect(file.UnprotectedContent));
+        await store.SaveChangesAsync(ct);
+        await store.WipeDeletedAchFilesAsync(ct);
+        return files.Count;
+    }
+
     /// <summary>Builds the file for the chosen payments and marks them sent; the file is kept on the batch.</summary>
     public async Task<AchBatch> CreateFileAsync(Guid accountId, DateOnly effectiveDate, IReadOnlyCollection<Guid> paymentIds, CancellationToken ct = default)
     {
@@ -190,7 +216,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
             : throw new DomainException("ach.too_many_files", "A bank account can send at most 36 ACH files a day.");
         var content = Ach.Build(settings, entries, effectiveDate, now.LocalDateTime, modifier);
 
-        var batch = AchBatch.Create(accountId, effectiveDate, modifier, entries.Count, entries.Sum(e => e.Amount), content, now);
+        var batch = AchBatch.Create(accountId, effectiveDate, modifier, entries.Count, entries.Sum(e => e.Amount), secrets.Protect(content), now);
         store.Add(batch);
         // The candidates were read untracked; mark the tracked payments.
         foreach (var c in chosen)

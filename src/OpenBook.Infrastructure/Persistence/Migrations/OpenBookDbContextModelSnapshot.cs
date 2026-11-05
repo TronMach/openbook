@@ -3786,10 +3786,6 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -3804,9 +3800,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProtectedContent")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Total")
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
+
+                    b.Property<string>("UnprotectedContent")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("Content");
 
                     b.HasKey("Id");
 

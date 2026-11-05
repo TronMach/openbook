@@ -3793,10 +3793,6 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3811,9 +3807,17 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(1)
                         .HasColumnType("character varying(1)");
 
+                    b.Property<string>("ProtectedContent")
+                        .HasColumnType("text");
+
                     b.Property<long>("Total")
                         .HasColumnType("bigint")
                         .HasColumnName("TotalMinor");
+
+                    b.Property<string>("UnprotectedContent")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Content");
 
                     b.HasKey("Id");
 

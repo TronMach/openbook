@@ -97,6 +97,12 @@ public interface IPurchasesStore
 
     Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Files still stored in clear, tracked.</summary>
+    Task<IReadOnlyList<AchBatch>> ListUnprotectedAchBatchesAsync(CancellationToken ct);
+
+    /// <summary>Rewrites storage so the deleted text of files stored in clear is really gone. Not inside a transaction.</summary>
+    Task WipeDeletedAchFilesAsync(CancellationToken ct);
+
     /// <summary>Untracked, newest first, without their file content.</summary>
     Task<IReadOnlyList<AchBatch>> ListAchBatchesAsync(Guid accountId, CancellationToken ct);
 

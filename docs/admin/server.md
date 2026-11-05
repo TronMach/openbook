@@ -53,7 +53,7 @@ Once it's on HTTPS, use the public address wherever OpenBook asks for one: **Set
 OpenBook encrypts with ASP.NET Data Protection keys kept in `/data/keys` (the `OpenBook:DataProtectionKeys` setting; the image sets it). They protect:
 
 - sign-in cookies (without the keys everyone simply signs in again), and
-- secrets stored in the database: the email (SMTP) password, two-factor sign-in secrets, Stripe, bank connection, sales channel and backup storage keys, webhook signing secrets, the single sign-on client secret, the Claude API key, and vendors' bank account numbers.
+- secrets stored in the database: ACH files (they hold vendors' bank account numbers), the email (SMTP) password, two-factor sign-in secrets, Stripe, bank connection, sales channel and backup storage keys, webhook signing secrets, the single sign-on client secret, the Claude API key, and vendors' bank account numbers.
 
 If the keys are lost, the database alone can't read those secrets: everyone with two-factor sign-in needs it reset (`reset-password <user> --clear-two-factor`, below) and the connections and passwords must be entered again. So back up `/data/keys` together with the database, and keep the backups as private as the keys themselves: anyone with both can read the secrets.
 

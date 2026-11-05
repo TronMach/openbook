@@ -2072,6 +2072,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(a => a.AccountId);
             b.Property(a => a.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
             b.Property(a => a.FileIdModifier).HasConversion(c => c.ToString(), s => s[0]).HasMaxLength(1);
+            b.Property(a => a.UnprotectedContent).HasColumnName("Content");
             b.HasOne<Account>().WithMany().HasForeignKey(a => a.AccountId).OnDelete(DeleteBehavior.Restrict);
         });
 
