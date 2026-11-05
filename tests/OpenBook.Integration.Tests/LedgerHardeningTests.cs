@@ -60,6 +60,46 @@ public sealed class LedgerHardeningTests : IAsyncLifetime
 
     private static async Task<string> Refused(Func<Task> action) => (await Assert.ThrowsAsync<DomainException>(action)).Code;
 
+    private Task<JournalEntry> Reversal(JournalEntry entry) =>
+        _db.InDb(db => db.JournalEntries.AsNoTracking().Include(e => e.Lines)
+            .SingleAsync(e => e.Source == JournalEntry.AutoReversalSource && e.SourceId == entry.Id && e.Kind == JournalEntryKind.Standard));
+
+    [Fact]
+    public async Task Voiding_an_entry_voids_its_automatic_reversal()
+    {
+        var entry = await Post(new DateOnly(2025, 12, 31), reverseOn: new DateOnly(2026, 1, 1));
+
+        await Void(entry.Id);
+
+        Assert.Equal(JournalEntryStatus.Voided, (await Reversal(entry)).Status);
+        var tb = await _db.InScope(sp => sp.GetRequiredService<TrialBalanceQuery>().RunAsync(new DateOnly(2026, 1, 31)));
+        Assert.Empty(tb.Lines);
+    }
+
+    [Fact]
+    public async Task A_reversal_voided_first_is_left_alone()
+    {
+        var entry = await Post(new DateOnly(2025, 12, 31), reverseOn: new DateOnly(2026, 1, 1));
+        await Void((await Reversal(entry)).Id);
+
+        await Void(entry.Id);
+
+        Assert.Equal(JournalEntryStatus.Voided, (await Reversal(entry)).Status);
+    }
+
+    [Fact]
+    public async Task The_reversal_must_be_open_too_and_nothing_is_voided_if_it_is_not()
+    {
+        var entry = await Post(new DateOnly(2025, 12, 31), reverseOn: new DateOnly(2026, 1, 1));
+        await SetClosing(new DateOnly(2025, 12, 31), ClosingPassword);
+
+        Assert.Equal("period.password_required", await Refused(() => Void(entry.Id)));
+
+        Assert.Equal(JournalEntryStatus.Posted, (await Reversal(entry)).Status);
+        await Void(entry.Id, ClosingPassword);
+        Assert.Equal(JournalEntryStatus.Voided, (await Reversal(entry)).Status);
+    }
+
     // ---- Closing date ----
 
     [Fact]

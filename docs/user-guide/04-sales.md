@@ -82,7 +82,7 @@ How the PDF looks (layout, logo, font, footer, and which customers or documents 
 
 **Copy** at the top of an invoice starts a new one with the same customer, lines, prices, tax, location and message, dated today with the next number. Change anything before saving. Billable expenses, time and mileage aren't copied (each is billed once), nor are lots of stock (they're picked again). Estimates, sales receipts and sales orders have **Copy** too.
 
-To cancel an invoice instead, **Void this invoice** at the bottom of its page (give a reason). Voiding records an opposite entry on the same date, so your reports come out as if the invoice had never been entered, while the record of both stays. An invoice that has a payment or credit applied can't be voided until that payment is voided or the credit unapplied. To reduce what a customer owes without changing the invoice, issue a **credit memo**.
+To cancel an invoice instead, **Void this invoice** at the bottom of its page (give a reason). Voiding records an opposite entry on the same date, so your reports come out as if the invoice had never been entered, while the record of both stays. An invoice that has a payment or credit applied can't be voided until that payment is voided or the credit is removed (**Remove** beside the invoice on the credit memo's page; for credit left on a payment, change the payment). To reduce what a customer owes without changing the invoice, issue a **credit memo**.
 
 ## Batch invoicing
 

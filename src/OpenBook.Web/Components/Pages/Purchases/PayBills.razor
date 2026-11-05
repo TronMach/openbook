@@ -185,6 +185,8 @@
 
     private async Task PayAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try

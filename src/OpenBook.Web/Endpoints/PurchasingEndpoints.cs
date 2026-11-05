@@ -44,6 +44,21 @@ public static class PurchasingEndpoints
                 return "done=received";
             })).RequireAuthorization();
 
+        app.MapPost("/purchases/vendor-credits/{id:guid}/applications/{billId:guid}/remove", async (Guid id, Guid billId, IFormCollection form, VendorCreditService credits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                await credits.UnapplyAsync(id, billId, ct);
+                return Results.Redirect($"/purchases/vendor-credits/{id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                return Results.Redirect($"/purchases/vendor-credits/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/purchases/orders/{id:guid}/receipts/{number:int}/void", async (Guid id, int number, PurchaseOrderService orders, CancellationToken ct) =>
             await Back($"/purchases/orders/{id}", async () =>
             {

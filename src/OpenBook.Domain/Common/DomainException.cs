@@ -18,7 +18,7 @@ public sealed class EntityNotFoundException(string entityType, Guid id)
 /// nothing was saved. Running the operation again from the start usually succeeds; the API answers 409.
 /// </summary>
 public sealed class ConcurrencyConflictException(Exception inner)
-    : DomainException(ConflictCode, "Someone else saved a change to this at the same moment, so nothing was saved. Try again.", inner)
+    : DomainException(ConflictCode, "Something else changed this at the same moment, perhaps a second click, so this save didn't go through. Check whether it's already there before trying again.", inner)
 {
     public const string ConflictCode = "save.conflict";
 }

@@ -208,6 +208,12 @@ internal static class ReceivablesApi
             return Results.NoContent();
         });
 
+        sales.MapDelete("/credit-memos/{id:guid}/applications/{invoiceId:guid}", async (Guid id, Guid invoiceId, CreditService s, CancellationToken ct) =>
+        {
+            await s.UnapplyAsync(id, invoiceId, ct);
+            return Results.NoContent();
+        });
+
         sales.MapGet("/refunds", async (Guid? customerId, CreditService s, CancellationToken ct) =>
             (await s.ListRefundsAsync(customerId, ct)).Select(RefundResponse.From));
         sales.MapGet("/refunds/{id:guid}", async (Guid id, CreditService s, CancellationToken ct) =>

@@ -216,6 +216,8 @@
 
     private async Task SaveAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         _saved = false;
@@ -246,6 +248,8 @@
 
     private async Task ToggleActiveAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try

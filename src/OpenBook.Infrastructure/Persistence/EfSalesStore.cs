@@ -179,9 +179,10 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .ToList();
 
     public async Task<IReadOnlyDictionary<Guid, DateOnly>> LastLateFeesAsync(CancellationToken ct) =>
-        // Only fee invoices are read (two columns each); the latest per invoice is found here, not in SQL.
+        // Only fee invoices are read (two columns each); the latest per invoice is found here, not in SQL. Voided ones
+        // count: voiding is how a fee is waived, so it mustn't come straight back.
         (await db.Invoices.AsNoTracking()
-            .Where(i => i.LateFeeForInvoiceId != null && i.Status == DocumentStatus.Posted)
+            .Where(i => i.LateFeeForInvoiceId != null)
             .Select(i => new { For = i.LateFeeForInvoiceId!.Value, i.Date })
             .ToListAsync(ct))
             .GroupBy(f => f.For)

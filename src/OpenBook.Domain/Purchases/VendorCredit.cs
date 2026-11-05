@@ -136,6 +136,13 @@ public sealed class VendorCredit
             _applications.Add(new VendorCreditApplication(billId, amount, appliedOn));
     }
 
+    /// <summary>Takes the credit back off a bill; the bill's balance is the caller's to put back.</summary>
+    public void RemoveApplication(Guid billId)
+    {
+        if (_applications.RemoveAll(a => a.BillId == billId) == 0)
+            throw new DomainException("credit.not_applied", "This credit isn't applied to that bill.");
+    }
+
     public void RecordRefund(decimal amount)
     {
         EnsurePosted();

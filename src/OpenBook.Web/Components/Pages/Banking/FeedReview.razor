@@ -246,6 +246,8 @@
     /// <summary>Runs an action, then reloads the queue; a refusal shows as an error and stops there.</summary>
     private async Task RunAsync(Func<Task> action)
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         _message = null;

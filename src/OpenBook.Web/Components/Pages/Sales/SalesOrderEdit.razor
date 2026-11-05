@@ -166,6 +166,8 @@
 
     private async Task SaveAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try

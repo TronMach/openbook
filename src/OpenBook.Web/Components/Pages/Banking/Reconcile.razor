@@ -227,6 +227,8 @@
 
     private async Task Run(Func<Task> action)
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try

@@ -55,14 +55,30 @@ public sealed class PostingEngine(
 
     /// <summary>
     /// Voids a journal entry (manual, recurring, opening balance or automatic reversal). Entries posted by documents (bank transactions, invoices, ...) are voided
-    /// through the document, so the document's status stays in step.
+    /// through the document, so the document's status stays in step. An automatic reversal still standing is voided
+    /// with it, or the later period would keep the reversal of something that no longer happened.
     /// </summary>
     /// <returns>The reversing entry.</returns>
     public async Task<JournalEntry> VoidAsync(Guid entryId, string reason, CancellationToken ct = default)
     {
+        var mirror = await StandingAutoReversalAsync(entryId, ct);
+        if (mirror is not null && await store.IsInReconciliationAsync(mirror.Id, ct))
+            throw new DomainException("journal.reconciled",
+                $"This entry's automatic reversal, entry #{mirror.Number}, has been reconciled, or is ticked in a reconciliation in progress, so neither can be voided.");
+
         var reversal = await StageVoidAsync(entryId, reason, fromDocument: false, ct);
+        if (mirror is not null)
+            await StageVoidAsync(mirror.Id, reason, fromDocument: false, ct);
         await store.SaveChangesAsync(ct);
         return reversal;
+    }
+
+    /// <summary>The automatic reversal of an entry, while it stands.</summary>
+    public async Task<JournalEntry?> StandingAutoReversalAsync(Guid entryId, CancellationToken ct = default)
+    {
+        // A voided reversal's own reversing entry shares its source, so look past the newest.
+        var (entries, _) = await store.ListEntriesAsync(new JournalEntryFilter(Take: 10, Source: JournalEntry.AutoReversalSource, SourceId: entryId), ct);
+        return entries.FirstOrDefault(e => e.Status == JournalEntryStatus.Posted && e.Kind == JournalEntryKind.Standard);
     }
 
     /// <summary>
@@ -84,10 +100,9 @@ public sealed class PostingEngine(
                 "Only journal entries entered by hand can be changed. Change the transaction that posted this one, or void it and enter it again.");
         if (entry.Status != JournalEntryStatus.Posted)
             throw new DomainException("journal.already_voided", $"Entry #{entry.Number} is voided.");
-        var (reversing, _) = await store.ListEntriesAsync(new JournalEntryFilter(Take: 1, Source: JournalEntry.AutoReversalSource, SourceId: entry.Id), ct);
-        if (reversing.Any(e => e.Status == JournalEntryStatus.Posted))
+        if (await StandingAutoReversalAsync(entry.Id, ct) is not null)
             throw new DomainException("journal.change_reversing",
-                "This entry has an automatic reversal. Void it (the reversal too) and enter it again.");
+                "This entry has an automatic reversal. Void it, which voids the reversal too, and enter it again.");
 
         await StageVoidAsync(entry.Id, $"Changed: {reason.Trim()}", fromDocument: false, ct);
         var replacement = await StageAsync(command with { Source = JournalEntry.ManualSource, SourceId = null }, ct);

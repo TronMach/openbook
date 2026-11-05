@@ -193,6 +193,8 @@
         _error = null;
         _preview = null;
         _imported = null;
+        if (_busy)
+            return;
         _busy = true;
         try
         {
@@ -224,6 +226,8 @@
     private async Task ImportAsync()
     {
         if (_content is null)
+            return;
+        if (_busy)
             return;
         _busy = true;
         _error = null;

@@ -57,6 +57,11 @@ internal static class PayablesApi
         // Correct a posted vendor credit in place: its entry reversed and a new one posted.
         purchases.MapPut("/vendor-credits/{id:guid}", async (Guid id, ChangeVendorCreditCommand r, VendorCreditService s, CancellationToken ct) =>
             VendorCreditResponse.From(await s.ChangeAsync(id, r, ct)));
+        purchases.MapDelete("/vendor-credits/{id:guid}/applications/{billId:guid}", async (Guid id, Guid billId, VendorCreditService s, CancellationToken ct) =>
+        {
+            await s.UnapplyAsync(id, billId, ct);
+            return Results.NoContent();
+        });
         purchases.MapPost("/vendor-credits/{id:guid}/void", async (Guid id, VoidRequest r, VendorCreditService s, CancellationToken ct) =>
             VendorCreditResponse.From(await s.VoidAsync(id, r.Reason, ct)));
         purchases.MapPost("/vendor-credits/apply", async (ApplyVendorCreditRequest r, VendorCreditService s, CancellationToken ct) =>

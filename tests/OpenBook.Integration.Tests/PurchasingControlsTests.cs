@@ -225,6 +225,22 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
         Assert.StartsWith("9000001000001000000010002100002000000000000000000123456", lines[4], StringComparison.Ordinal);
         Assert.Equal(new string('9', 94), lines[9]);
 
+        // The file holds the vendor's full account number, so it stays out of the data export.
+        var export = await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.IDataExporter>().ExportAsync(default));
+        try
+        {
+            using var zip = System.IO.Compression.ZipFile.OpenRead(export.Path);
+            foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith(".csv", StringComparison.Ordinal) || e.Name == "README.md"))
+            {
+                using var reader = new StreamReader(entry.Open());
+                Assert.DoesNotContain(lines[2][..21], await reader.ReadToEndAsync(), StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            File.Delete(export.Path);
+        }
+
         Assert.Equal(batch.Id, (await In<BillPaymentService, BillPayment?>(s => s.GetAsync(payment.Id)))!.AchBatchId);
         Assert.Empty(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id)));
         Assert.Equal("ach.payment_not_eligible", await Refused(() => In<AchService, AchBatch>(s => s.CreateFileAsync(_checking.Id, Mar1.AddDays(31), [payment.Id]))));

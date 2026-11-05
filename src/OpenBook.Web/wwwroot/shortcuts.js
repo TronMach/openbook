@@ -96,11 +96,41 @@
         if (dialog.open) dialog.close(); else dialog.showModal();
     };
 
+    // A second submit of a form already on its way (a double click on a slow connection) would enter the document twice.
+    // Only full-page posts: interactive forms have no method="post" and guard themselves, and print forms stay on the page.
+    let posted = new WeakMap();
+    const resubmitAfter = 5000;
+    document.addEventListener('submit', e => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || form.method !== 'post' || form.target === '_blank'
+            || e.submitter?.formTarget === '_blank' || form.hasAttribute('data-print-form')) return;
+        const at = posted.get(form);
+        if (at && Date.now() - at < resubmitAfter) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return;
+        }
+        posted.set(form, Date.now());
+    }, true);
+    // The second click of a double click on a save button, for interactive pages: a quick server has finished the first
+    // by then, so the page's own busy flag is off again. "Add line" buttons aren't saves, so two quick clicks there still count.
+    window.addEventListener('click', e => {
+        if (e.detail < 2 || !(e.target instanceof Element)) return;
+        const button = e.target.closest('button');
+        if (button && (button.type === 'submit' || button.closest('.actions'))) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+    // A page that came back (Back button, enhanced navigation) starts again.
+    window.addEventListener('pageshow', () => { posted = new WeakMap(); });
+    window.Blazor?.addEventListener?.('enhancedload', () => { posted = new WeakMap(); });
+
     document.addEventListener('keydown', e => {
         // Ctrl/Cmd + Enter: submit the form you're in, from any field (quick entry everywhere).
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             const form = e.target instanceof Element ? e.target.closest('form') : null;
-            if (form) { e.preventDefault(); form.requestSubmit(); }
+            if (form) { e.preventDefault(); if (!e.repeat) form.requestSubmit(); }
             return;
         }
         if (e.altKey && (e.key === 'q' || e.key === 'Q')) {

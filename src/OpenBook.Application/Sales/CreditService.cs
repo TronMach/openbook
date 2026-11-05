@@ -215,7 +215,7 @@ public sealed class CreditService(
         if (credit.Status == DocumentStatus.Voided)
             throw new DomainException("creditmemo.already_voided", $"Credit memo {credit.Number} is already voided.");
         if (credit.AmountApplied > 0m)
-            throw new DomainException("creditmemo.applied", $"Credit memo {credit.Number} is applied to invoices, so it can't be voided.");
+            throw new DomainException("creditmemo.applied", $"Credit memo {credit.Number} is applied to invoices, so it can't be voided. Remove it from them first.");
         if (credit.AmountRefunded > 0m)
             throw new DomainException("creditmemo.refunded", $"Credit memo {credit.Number} was refunded. Void the refund first.");
 
@@ -229,7 +229,11 @@ public sealed class CreditService(
         return credit;
     }
 
-    /// <summary>Applies credit to the customer's invoices, all in one save. Applied credit can't be taken back.</summary>
+    /// <summary>
+    /// Applies credit to the customer's invoices, all in one save. Nothing posts, but the date needs to be open, since
+    /// aging as of a past date changes. On a cash-basis company the payment's date does too, because the applied amount
+    /// counts as income on that date. Credit memos can be taken back with <see cref="UnapplyAsync"/>.
+    /// </summary>
     public async Task ApplyAsync(Guid customerId, DateOnly date, IReadOnlyList<ApplyCredit> applications, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(applications);
@@ -280,6 +284,14 @@ public sealed class CreditService(
                 throw new DomainException("credit.exceeds_available", $"Only {available:N2} of that credit is available.");
         }
 
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        engine.EnsureOpen(company, date, "applying credit");
+        if (company.DefaultReportBasis == ReportBasis.Cash)
+        {
+            foreach (var paidOn in lines.Where(l => l.Kind == CreditKind.Payment).Select(l => payments[l.SourceId].Date).Distinct().Where(d => d != date).Order())
+                engine.EnsureOpen(company, paidOn, $"applying credit from a payment dated {paidOn:yyyy-MM-dd}, which counts as income on that date");
+        }
+
         var before = new Dictionary<(string, Guid), string>();
         foreach (var line in lines)
         {
@@ -309,6 +321,27 @@ public sealed class CreditService(
             store.Add(Audit(AuditAction.Updated, type, id, snapshot, after));
         }
 
+        await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Takes a credit memo back off an invoice: the invoice owes that amount again and the credit is available again.
+    /// Nothing posts. The date it was applied on needs to be open, as for applying it.
+    /// </summary>
+    public async Task UnapplyAsync(Guid creditMemoId, Guid invoiceId, CancellationToken ct = default)
+    {
+        var credit = await store.GetCreditMemoAsync(creditMemoId, ct) ?? throw new EntityNotFoundException(CreditMemoType, creditMemoId);
+        var application = credit.Applications.FirstOrDefault(a => a.InvoiceId == invoiceId)
+            ?? throw new DomainException("credit.not_applied", $"Credit memo {credit.Number} isn't applied to that invoice.");
+        var invoice = await invoices.GetAsync(invoiceId, ct) ?? throw new EntityNotFoundException("invoice", invoiceId);
+        engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), application.AppliedOn, $"removing credit memo {credit.Number} from invoice {invoice.Number}");
+
+        var creditBefore = Snapshot(credit);
+        var invoiceBefore = InvoiceService.Snapshot(invoice);
+        invoice.RemovePayment(application.Amount);
+        credit.RemoveApplication(invoiceId);
+        store.Add(Audit(AuditAction.Updated, "invoice", invoice.Id, invoiceBefore, InvoiceService.Snapshot(invoice)));
+        store.Add(Audit(AuditAction.Updated, CreditMemoType, credit.Id, creditBefore, Snapshot(credit)));
         await store.SaveChangesAsync(ct);
     }
 

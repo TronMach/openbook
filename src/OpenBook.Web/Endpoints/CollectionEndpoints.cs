@@ -85,6 +85,21 @@ public static class CollectionEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/sales/credit-memos/{id:guid}/applications/{invoiceId:guid}/remove", async (Guid id, Guid invoiceId, IFormCollection form, CreditService credits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            try
+            {
+                await credits.UnapplyAsync(id, invoiceId, ct);
+                return Results.Redirect($"/sales/credit-memos/{id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                return Results.Redirect($"/sales/credit-memos/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/sales/write-offs/{id:guid}/void", async (Guid id, IFormCollection form, WriteOffService writeOffs, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

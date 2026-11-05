@@ -142,7 +142,7 @@
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this entry</h2>
-            <p class="muted">Voiding posts a reversing entry on the same date, so both stay in the books and the effect cancels out.</p>
+            <p class="muted">Voiding posts a reversing entry on the same date, so both stay in the books and the effect cancels out.@(_autoReversal is { } mirror ? $" Its automatic reversal, entry #{mirror.Number}, is voided with it." : "")</p>
             <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
                 <DataAnnotationsValidator />
                 <div class="field">
@@ -217,8 +217,7 @@
             _reversalId = await Engine.FindReversalIdAsync(_entry.Id);
         if (_entry is not null && JournalEntry.IsJournalSource(_entry.Source) && _entry.Source != JournalEntry.AutoReversalSource)
         {
-            var (reversals, _) = await Engine.ListAsync(new JournalEntryFilter(Take: 1, Source: JournalEntry.AutoReversalSource, SourceId: _entry.Id));
-            _autoReversal = reversals.FirstOrDefault();
+            _autoReversal = await Engine.StandingAutoReversalAsync(_entry.Id);
         }
         if (_entry is { Source: JournalEntry.ImportSource, SourceId: { } batch, Status: JournalEntryStatus.Posted })
             _importStanding = (await Imports.BatchAsync(batch)).Count(e => e.Status == JournalEntryStatus.Posted && e.Kind == JournalEntryKind.Standard);

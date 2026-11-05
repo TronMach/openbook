@@ -199,6 +199,8 @@
     {
         if (_text is null)
             return;
+        if (_busy)
+            return;
         _busy = true;
         try
         {
@@ -225,6 +227,8 @@
 
     private async Task QueueAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try

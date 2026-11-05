@@ -169,6 +169,13 @@ public sealed class CreditMemo
             _applications.Add(new CreditApplication(invoiceId, amount, appliedOn));
     }
 
+    /// <summary>Takes the credit back off an invoice; the invoice's balance is the caller's to put back.</summary>
+    public void RemoveApplication(Guid invoiceId)
+    {
+        if (_applications.RemoveAll(a => a.InvoiceId == invoiceId) == 0)
+            throw new DomainException("credit.not_applied", $"Credit memo {Number} isn't applied to that invoice.");
+    }
+
     public void RecordRefund(decimal amount)
     {
         EnsurePosted();
@@ -189,7 +196,7 @@ public sealed class CreditMemo
         if (Status == DocumentStatus.Voided)
             throw new DomainException("creditmemo.already_voided", $"Credit memo {Number} is already voided.");
         if (AmountApplied > 0m)
-            throw new DomainException("creditmemo.applied", $"Credit memo {Number} is applied to invoices, so it can't be voided.");
+            throw new DomainException("creditmemo.applied", $"Credit memo {Number} is applied to invoices, so it can't be voided. Remove it from them first.");
         if (AmountRefunded > 0m)
             throw new DomainException("creditmemo.refunded", $"Credit memo {Number} was refunded. Void the refund first.");
         Status = DocumentStatus.Voided;

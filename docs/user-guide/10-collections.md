@@ -45,7 +45,7 @@ In **Collection settings → Late fees**, tick **Charge late fees on overdue inv
 - **Charge again every (days)**: 0 charges once per invoice; 30 is a monthly finance charge.
 - **Charge them automatically**, or review them on the collections page.
 
-Each fee is its own small invoice, due on receipt, for the "Late Fee" service (income goes to "Late Fee Income"). Both are created the first time a fee is charged. To waive a fee, void that invoice.
+Each fee is its own small invoice, due on receipt, for the "Late Fee" service (income goes to "Late Fee Income"). Both are created the first time a fee is charged. To waive a fee, void that invoice. OpenBook won't charge it again; with **Charge again every**, the next fee comes a full period after the one you waived.
 
 To keep a customer out of reminders or late fees, tick **Don't send automatic payment reminders** or **Don't charge late fees** on their page.
 

@@ -167,7 +167,7 @@ public sealed class VendorCreditService(
         if (credit.Status == DocumentStatus.Voided)
             throw new DomainException("vendorcredit.already_voided", "This vendor credit is already voided.");
         if (credit.AmountApplied > 0m)
-            throw new DomainException("vendorcredit.applied", "This credit is applied to bills, so it can't be voided.");
+            throw new DomainException("vendorcredit.applied", "This credit is applied to bills, so it can't be voided. Remove it from them first.");
         if (credit.AmountRefunded > 0m)
             throw new DomainException("vendorcredit.refunded", "This credit was refunded. Void the refund first.");
 
@@ -179,7 +179,10 @@ public sealed class VendorCreditService(
         return credit;
     }
 
-    /// <summary>Applies credit to the vendor's open bills, in one save. Applied credit can't be taken back.</summary>
+    /// <summary>
+    /// Applies credit to the vendor's open bills, in one save. Nothing posts, but the date needs to be open, since aging
+    /// as of a past date changes. It can be taken back with <see cref="UnapplyAsync"/>.
+    /// </summary>
     public async Task ApplyAsync(Guid vendorId, DateOnly date, IReadOnlyList<ApplyVendorCredit> applications, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(applications);
@@ -217,6 +220,8 @@ public sealed class VendorCreditService(
                 throw new DomainException("credit.exceeds_available", $"That credit has only {credit.Balance:N2} left.");
         }
 
+        engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), date, "applying vendor credit");
+
         var billsBefore = bills.Values.ToDictionary(b => b.Id, BillService.Snapshot);
         var creditsBefore = credits.Values.ToDictionary(c => c.Id, Snapshot);
         foreach (var line in lines)
@@ -229,6 +234,27 @@ public sealed class VendorCreditService(
             store.Add(Audit(AuditAction.Updated, BillService.EntityType, bill.Id, billsBefore[bill.Id], BillService.Snapshot(bill)));
         foreach (var credit in credits.Values)
             store.Add(Audit(AuditAction.Updated, EntityType, credit.Id, creditsBefore[credit.Id], Snapshot(credit)));
+        await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Takes a vendor credit back off a bill: the bill is owed again and the credit is available again. Nothing posts.
+    /// The date it was applied on needs to be open, as for applying it.
+    /// </summary>
+    public async Task UnapplyAsync(Guid vendorCreditId, Guid billId, CancellationToken ct = default)
+    {
+        var credit = await store.GetVendorCreditAsync(vendorCreditId, ct) ?? throw new EntityNotFoundException(EntityType, vendorCreditId);
+        var application = credit.Applications.FirstOrDefault(a => a.BillId == billId)
+            ?? throw new DomainException("credit.not_applied", "This credit isn't applied to that bill.");
+        var bill = await store.GetBillAsync(billId, ct) ?? throw new EntityNotFoundException(BillService.EntityType, billId);
+        engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), application.AppliedOn, "removing a vendor credit from a bill");
+
+        var creditBefore = Snapshot(credit);
+        var billBefore = BillService.Snapshot(bill);
+        bill.RemovePayment(application.Amount);
+        credit.RemoveApplication(billId);
+        store.Add(Audit(AuditAction.Updated, BillService.EntityType, bill.Id, billBefore, BillService.Snapshot(bill)));
+        store.Add(Audit(AuditAction.Updated, EntityType, credit.Id, creditBefore, Snapshot(credit)));
         await store.SaveChangesAsync(ct);
     }
 

@@ -92,6 +92,7 @@
                     </div>
                 </div>
                 <p class="@(Problem is null ? "muted" : "out-of-balance")">@(Problem ?? "Credit is used oldest first.")</p>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
                 <div class="actions">
                     <button type="button" @onclick="SaveAsync" disabled="@(Problem is not null || _invoices.Sum(r => r.Amount ?? 0m) <= 0m || _busy)">Apply credit</button>
                 </div>
@@ -108,6 +109,8 @@
     private List<InvoiceRow> _invoices = [];
     private bool _loaded;
     private bool _busy;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
     private bool _saved;
     private string? _error;
 
@@ -200,19 +203,22 @@
 
     private async Task SaveAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try
         {
             var customerId = _customerId!.Value;
             var applications = Pairings();
-            await Ops.RunAsync<CreditService, bool>(async s => { await s.ApplyAsync(customerId, _date, applications); return true; });
+            await Ops.RunAsync<CreditService, bool>(async s => { await s.ApplyAsync(customerId, _date, applications); return true; }, _closingPassword);
             await LoadAsync(customerId);
             _saved = true;
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
         }
         finally
         {

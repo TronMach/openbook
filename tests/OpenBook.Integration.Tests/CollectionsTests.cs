@@ -194,6 +194,33 @@ public sealed class CollectionsTests : IAsyncLifetime
     // ---- Late fees ----
 
     [Fact]
+    public async Task A_waived_late_fee_is_not_charged_again()
+    {
+        var invoice = await Invoice(_acme, 1000m, Mar1);
+        await In<CollectionService, CollectionSettings>(s => s.SaveLateFeesAsync(new LateFeeSettingsCommand(true, true, 0m, 25m, 0, 0)));
+        var today = invoice.DueDate.AddDays(1);
+        var fee = Assert.Single(await In<LateFeeService, IReadOnlyList<Invoice>>(s => s.ChargeAsync(today)));
+
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(fee.Id, "Waived as a courtesy"));
+
+        Assert.Empty(await In<LateFeeService, IReadOnlyList<LateFeeDue>>(s => s.DueAsync(today)));
+        Assert.Empty(await In<LateFeeService, IReadOnlyList<Invoice>>(s => s.ChargeAsync(today.AddDays(90))));
+    }
+
+    [Fact]
+    public async Task After_a_waived_fee_the_next_repeat_comes_a_full_period_later()
+    {
+        var invoice = await Invoice(_acme, 1000m, Mar1);
+        await In<CollectionService, CollectionSettings>(s => s.SaveLateFeesAsync(new LateFeeSettingsCommand(true, true, 0m, 25m, 0, 30)));
+        var today = invoice.DueDate.AddDays(1);
+        var fee = Assert.Single(await In<LateFeeService, IReadOnlyList<Invoice>>(s => s.ChargeAsync(today)));
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(fee.Id, "Waived as a courtesy"));
+
+        Assert.Empty(await In<LateFeeService, IReadOnlyList<LateFeeDue>>(s => s.DueAsync(today.AddDays(29))));
+        Assert.Single(await In<LateFeeService, IReadOnlyList<LateFeeDue>>(s => s.DueAsync(today.AddDays(30))));
+    }
+
+    [Fact]
     public async Task Late_fees_wait_out_the_grace_period_and_repeat_while_unpaid()
     {
         var exempt = await Customer("Friends & Family", noLateFees: true);

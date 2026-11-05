@@ -169,6 +169,8 @@ Bank Loan,9000.00</pre>
     private async Task LoadAsync(InputFileChangeEventArgs e)
     {
         Reset();
+        if (_busy)
+            return;
         _busy = true;
         try
         {
@@ -200,6 +202,8 @@ Bank Loan,9000.00</pre>
     private async Task ImportAsync()
     {
         if (_csv is null)
+            return;
+        if (_busy)
             return;
         _busy = true;
         _error = null;

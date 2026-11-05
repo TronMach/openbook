@@ -123,6 +123,8 @@
 
     private async Task PostAsync()
     {
+        if (_busy)
+            return;
         _busy = true;
         _error = null;
         try

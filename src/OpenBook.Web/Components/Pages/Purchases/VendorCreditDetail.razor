@@ -74,7 +74,7 @@
     {
         <h2>Applied to</h2>
         <table class="data">
-            <thead><tr><th>Bill</th><th>Applied on</th><th class="num">Amount</th></tr></thead>
+            <thead><tr><th>Bill</th><th>Applied on</th><th class="num">Amount</th><th></th></tr></thead>
             <tbody>
                 @foreach (var a in _credit.Applications)
                 {
@@ -82,6 +82,13 @@
                         <td><a href="/purchases/bills/@a.BillId">Bill @(_billRefs.GetValueOrDefault(a.BillId))</a></td>
                         <td>@Labels.Date(a.AppliedOn)</td>
                         <td class="num">@Labels.Amount(a.Amount)</td>
+                        <td>
+                            <PostForm Action="@($"/purchases/vendor-credits/{_credit.Id}/applications/{a.BillId}/remove")" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <ClosedPeriodPassword Visible="NeedsPassword" Interactive="false" />
+                                <button type="submit" class="secondary" data-confirm="Take this credit back off the bill? The bill will be owed again.">Remove</button>
+                            </PostForm>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -199,12 +206,22 @@
     [SupplyParameterFromForm(FormName = "void")]
     private VoidModel VoidInput { get; set; } = default!;
 
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? RemoveError { get; set; }
+
+    [SupplyParameterFromQuery(Name = "password")]
+    private string? RemovePassword { get; set; }
+
+    // Removing a credit from a document dated in a closed period was refused for want of the password.
+    private bool NeedsPassword => RemovePassword == "1";
+
     [SupplyParameterFromForm(FormName = "refund")]
     private RefundModel RefundInput { get; set; } = default!;
 
     protected override async Task OnInitializedAsync()
     {
         VoidInput ??= new();
+        _error = RemoveError;
         _credit = await Credits.GetAsync(Id);
         if (_credit is null)
             return;
