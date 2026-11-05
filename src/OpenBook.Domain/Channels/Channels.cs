@@ -196,6 +196,8 @@ public sealed class ChannelPayoutLine
         Region = Trim(draft.Region, 50)?.ToUpperInvariant();
     }
 
+    internal void Clear() => Type = ChannelLineType.Cleared;
+
     public int LineNumber { get; private set; }
     public DateOnly Date { get; private set; }
     public ChannelLineType Type { get; private set; }
@@ -308,6 +310,14 @@ public sealed class ChannelPayout
         }
 
         return lines;
+    }
+
+    /// <summary>Charges for payments already in the books, found at posting: they clear the holding account, and aren't sales.</summary>
+    public void ClearCharges(IReadOnlySet<string> references)
+    {
+        ArgumentNullException.ThrowIfNull(references);
+        foreach (var line in _lines.Where(l => l.Type == ChannelLineType.Sale && l.Reference is { } r && references.Contains(r)))
+            line.Clear();
     }
 
     public void Posted(Guid entryId)

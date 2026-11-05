@@ -219,7 +219,7 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
         ids.Count == 0 ? [] : await db.SalesReceipts.Where(r => ids.Contains(r.Id)).ToListAsync(ct);
 
     public async Task<UndepositedDocuments> ListUndepositedAsync(CancellationToken ct) => new(
-        await db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.DepositId == null).ToListAsync(ct),
+        await db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.DepositId == null && p.PayoutId == null).ToListAsync(ct),
         await db.SalesReceipts.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null).ToListAsync(ct),
         await db.Retainers.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null).ToListAsync(ct));
 
@@ -230,6 +230,12 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
         await db.SalesReceipts.CountAsync(ct),
         await db.CustomerPayments.CountAsync(ct),
         await db.BankDeposits.CountAsync(ct));
+
+    public async Task<IReadOnlyList<CustomerPayment>> ListPaymentsByReferenceAsync(IReadOnlyCollection<string> references, CancellationToken ct) =>
+        await db.CustomerPayments.Where(p => p.Reference != null && references.Contains(p.Reference)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<CustomerPayment>> ListPaymentsInPayoutAsync(Guid payoutId, CancellationToken ct) =>
+        await db.CustomerPayments.Where(p => p.PayoutId == payoutId).ToListAsync(ct);
 
     public async Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct) => new(
         await db.Invoices.AsNoTracking().Where(i => i.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),

@@ -5169,6 +5169,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("PayoutId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("uuid");
 

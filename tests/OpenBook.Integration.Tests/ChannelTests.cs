@@ -239,6 +239,58 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_charge_is_recognized_when_the_payout_posts_and_the_payment_stays_with_it()
+    {
+        var undeposited = await _db.CreateAccount("Undeposited Funds", AccountType.OtherCurrentAsset);
+        var income = await _db.CreateAccount("Services", AccountType.Income);
+        var item = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Work", Domain.Sales.ItemType.Service, income.Id, 50m)));
+        var customer = await In<CustomerService, Domain.Sales.Customer>(s => s.CreateAsync(new Domain.Sales.CustomerDetails("Client")));
+        var invoice = await In<InvoiceService, Domain.Sales.Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(customer.Id, new DateOnly(2026, 3, 1), [new(item.Id, null, 1m, 50m)])));
+        var stripe = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Stripe", ChannelKind.Stripe, _checking.Id, ClearingAccountId: undeposited.Id)));
+
+        // The payout comes in first, with the charge as a sale.
+        var report = string.Join(Environment.NewLine, "Date,Type,Amount,Fee,Net,Payout ID,Reference",
+            "2026-03-10,charge,50.00,-1.45,48.55,po_9,pi_invoice", "2026-03-10,charge,100.00,-2.90,97.10,po_9,pi_other");
+        var imported = await Import(stripe, report);
+        var payout = Assert.Single(imported.Saved);
+        Assert.Equal(0m, payout.Total(ChannelLineType.Cleared));
+        Assert.Contains(imported.Warnings, w => w.Contains("payment reference", StringComparison.Ordinal));
+
+        var payment = await In<PaymentService, Domain.Sales.CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(customer.Id, new DateOnly(2026, 3, 2), undeposited.Id,
+            [new ApplyToInvoice(invoice.Id, 50m)], Reference: "pi_invoice")));
+
+        var posted = await In<ChannelService, ChannelPayout>(s => s.PostAsync(payout.Id));
+
+        Assert.Equal(50m, posted.Total(ChannelLineType.Cleared));
+        Assert.Equal(100m, posted.Total(ChannelLineType.Sale));
+        Assert.Empty(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()));
+        Assert.Equal("payment.in_payout", (await Assert.ThrowsAsync<DomainException>(() => In<PaymentService, Domain.Sales.CustomerPayment>(s => s.VoidAsync(payment.Id, "Mistake")))).Code);
+
+        await In<ChannelService, ChannelPayout>(s => s.VoidAsync(payout.Id, "Wrong"));
+        Assert.Single(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()));
+    }
+
+    [Fact]
+    public async Task Pending_orders_wait_and_an_order_cancelled_since_is_called_out()
+    {
+        var shop = await Channel(ChannelKind.Shopify);
+        const string Header = "Name,Created at,Financial Status,Shipping,Taxes,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku,Shipping Province,Cancelled at";
+        var first = string.Join(Environment.NewLine, Header,
+            "#1,2026-03-02 09:00:00 -0500,paid,0,0,1,Mug,40.00,MUG,CA,",
+            "#2,2026-03-02 09:00:00 -0500,pending,0,0,1,Mug,40.00,MUG,CA,");
+        var read = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(shop.Id, Encoding.UTF8.GetBytes(first)));
+        Assert.Equal(1, read.Orders);
+        Assert.Contains(read.Warnings, w => w.Contains("pending", StringComparison.Ordinal));
+
+        var second = string.Join(Environment.NewLine, Header,
+            "#1,2026-03-02 09:00:00 -0500,paid,0,0,1,Mug,40.00,MUG,CA,2026-03-05",
+            "#2,2026-03-02 09:00:00 -0500,paid,0,0,1,Mug,40.00,MUG,CA,");
+        var again = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(shop.Id, Encoding.UTF8.GetBytes(second)));
+        Assert.Equal(1, again.Orders);
+        Assert.Contains(again.Warnings, w => w.Contains("#1", StringComparison.Ordinal) && w.Contains("cancelled since", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_stripe_connection_fetches_payouts_and_clears_invoices_already_paid_online()
     {
         // An invoice paid online was recorded as a payment into Undeposited Funds with its PaymentIntent.

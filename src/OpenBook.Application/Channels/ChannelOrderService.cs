@@ -55,7 +55,11 @@ public sealed class ChannelOrderService(
         var text = OpenBook.Application.Import.TextFiles.Decode(content);
         ChannelCurrency.Check(text, (await OpenBook.Application.Companies.CompanyStoreExtensions.GetRequiredCompanyAsync(companies, ct)).HomeCurrency.Code);
         var read = ChannelOrderReports.Read(channel.Kind, text);
-        return await AddAsync(channel, read.Lines, read.Warnings, ct);
+        var known = await store.OrderIdsAsync(channel.Id, ct);
+        var cancelled = (read.Cancelled ?? []).Where(known.Contains).ToList();
+        var warnings = cancelled.Count == 0 ? read.Warnings
+            : [.. read.Warnings, $"Already imported, and cancelled since: {string.Join(", ", cancelled.Take(10))}{(cancelled.Count > 10 ? " and more" : "")}. Its stock and sales tax stay until you record a return, or void its batch if it hasn't been posted."];
+        return await AddAsync(channel, read.Lines, warnings, ct);
     }
 
     /// <summary>Saves order lines whose orders weren't seen before, one batch per date (live connections use this too).</summary>

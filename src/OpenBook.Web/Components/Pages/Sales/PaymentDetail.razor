@@ -60,6 +60,7 @@
             @if (_payment.AmountRefunded > 0m) { <dt>Refunded</dt><dd>@Labels.Amount(_payment.AmountRefunded)</dd> }
             <dt>Received into</dt><dd>@_chart.FullName(_payment.DepositAccountId)</dd>
             @if (_payment.DepositId is { } depositId) { <dt>Bank deposit</dt><dd><a href="/banking/deposits/@depositId">View deposit</a></dd> }
+            @if (_payment.PayoutId is { } payoutId) { <dt>Payout</dt><dd><a href="/sales/channels/payouts/@payoutId">View payout</a></dd> }
             @if (_payment.Reference is not null) { <dt>Reference</dt><dd>@_payment.Reference</dd> }
             @if (_payment.Method is { } method) { <dt>Payment method</dt><dd>@PaymentMethods.Label(method)</dd> }
             @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }

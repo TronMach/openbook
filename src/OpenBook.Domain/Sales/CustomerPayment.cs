@@ -222,6 +222,17 @@ public sealed class CustomerPayment
 
     public void ClearDeposit() => DepositId = null;
 
+    /// <summary>A sales channel payout that brought this money in: it needs no deposit, and it stays while the payout stands.</summary>
+    public Guid? PayoutId { get; private set; }
+
+    public void SettleByPayout(Guid payoutId)
+    {
+        EnsurePosted();
+        PayoutId = payoutId;
+    }
+
+    public void ClearPayout() => PayoutId = null;
+
     public void Void()
     {
         if (Status == DocumentStatus.Voided)
@@ -230,6 +241,8 @@ public sealed class CustomerPayment
             throw new DomainException("payment.refunded", "Part of this payment was refunded. Void the refund first.");
         if (DepositId is not null)
             throw new DomainException("payment.deposited", "This payment is in a bank deposit. Void the deposit first.");
+        if (PayoutId is not null)
+            throw new DomainException("payment.in_payout", "A sales channel payout brought this money in. Void the payout first.");
         Status = DocumentStatus.Voided;
     }
 

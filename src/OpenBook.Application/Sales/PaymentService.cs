@@ -174,6 +174,8 @@ public sealed class PaymentService(
         var moneyChanged = amount != payment.Amount || depositId != payment.DepositAccountId;
         if (payment.DepositId is not null && moneyChanged)
             throw new DomainException("payment.deposited", "This payment is in a bank deposit, so its amount and deposit account stay. Void the deposit first to change them.");
+        if (payment.PayoutId is not null && moneyChanged)
+            throw new DomainException("payment.in_payout", "A sales channel payout brought this money in, so its amount and deposit account stay. Void the payout first to change them.");
         var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.DepositAccountId, payment.JournalEntryId, null, ct);
         if (feed.Count > 0 && moneyChanged)
             throw new DomainException("payment.feed_matched", "This payment is matched to a line from the bank feed, so its amount and deposit account stay. Undo the match first to change them.");
@@ -246,6 +248,8 @@ public sealed class PaymentService(
             throw new DomainException("payment.refunded", "Part of this payment was refunded. Void the refund first.");
         if (payment.DepositId is not null)
             throw new DomainException("payment.deposited", "This payment is in a bank deposit. Void the deposit first.");
+        if (payment.PayoutId is not null)
+            throw new DomainException("payment.in_payout", "A sales channel payout brought this money in. Void the payout first.");
 
         var before = Snapshot(payment);
         // Refuses deposits already reconciled at the bank, before anything changes.

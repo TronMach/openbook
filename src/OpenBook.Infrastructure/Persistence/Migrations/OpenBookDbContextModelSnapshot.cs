@@ -5162,6 +5162,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PayoutId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("TEXT");
 

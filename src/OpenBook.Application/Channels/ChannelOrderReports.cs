@@ -5,7 +5,8 @@ using OpenBook.Domain.Common;
 
 namespace OpenBook.Application.Channels;
 
-public sealed record OrderReadResult(IReadOnlyList<ChannelOrderDraft> Lines, IReadOnlyList<string> Warnings);
+/// <param name="Cancelled">Orders the report shows cancelled, in case one came in earlier.</param>
+public sealed record OrderReadResult(IReadOnlyList<ChannelOrderDraft> Lines, IReadOnlyList<string> Warnings, IReadOnlyList<string>? Cancelled = null);
 
 /// <summary>
 /// Reads order reports into item lines: Amazon's All Orders report (tab-separated), eBay's orders report, Etsy's sold
@@ -60,6 +61,7 @@ public static class ChannelOrderReports
         var lastDate = new Dictionary<string, DateOnly>(StringComparer.Ordinal);
         var lastRegion = new Dictionary<string, string>(StringComparer.Ordinal);
         var cancelledOrders = new HashSet<string>(StringComparer.Ordinal);
+        var pendingOrders = new HashSet<string>(StringComparer.Ordinal);
         int skipped = 0, unreadable = 0;
         foreach (var row in rows)
         {
@@ -73,6 +75,13 @@ public static class ChannelOrderReports
             {
                 cancelledOrders.Add(id);
                 skipped++;
+                continue;
+            }
+
+            // Not final yet, and an order once seen isn't read again: it waits for a later report.
+            if (state.Contains("pending", StringComparison.OrdinalIgnoreCase) || pendingOrders.Contains(id))
+            {
+                pendingOrders.Add(id);
                 continue;
             }
 
@@ -123,9 +132,11 @@ public static class ChannelOrderReports
         var warnings = new List<string>();
         if (skipped > 0)
             warnings.Add($"{skipped} cancelled order line(s) were left out.");
+        if (pendingOrders.Count > 0)
+            warnings.Add($"{pendingOrders.Count} order(s) still pending were left out. Import a later report once they've gone through.");
         if (unreadable > 0)
             warnings.Add($"{unreadable} line(s) had a date that couldn't be read and were left out.");
-        return new OrderReadResult(lines, warnings);
+        return new OrderReadResult(lines, warnings, [.. cancelledOrders]);
     }
 
     private static DomainException Missing(string column) => new("channel.column_missing", $"The orders report needs a '{column}' column.");

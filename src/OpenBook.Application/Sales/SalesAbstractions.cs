@@ -30,6 +30,10 @@ public interface ISalesStore
 {
     Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct);
 
+    Task<IReadOnlyList<CustomerPayment>> ListPaymentsByReferenceAsync(IReadOnlyCollection<string> references, CancellationToken ct);
+
+    Task<IReadOnlyList<CustomerPayment>> ListPaymentsInPayoutAsync(Guid payoutId, CancellationToken ct);
+
     Task<IReadOnlyList<SalesReceipt>> ListReceiptsForCustomerAsync(Guid customerId, CancellationToken ct);
 
     Task<IReadOnlyList<Customer>> ListCustomersAsync(CancellationToken ct);

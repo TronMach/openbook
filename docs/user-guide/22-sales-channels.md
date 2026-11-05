@@ -47,7 +47,7 @@ Shopify and Stripe channels can fetch payouts by themselves, every six hours or 
 
 The key is stored encrypted. If a fetch fails, the channel's page says why. **Disconnect** stops fetching.
 
-If you also take invoice payments through Stripe ([Getting paid online](11-online-payments.md)), those charges are recognized in the payout and cleared against the payments already recorded, so they aren't counted as sales twice. Don't deposit those invoice payments separately as well.
+If you also take invoice payments through Stripe ([Getting paid online](11-online-payments.md)), those charges are recognized when you post the payout and cleared against the payments recorded by then, so they aren't counted as sales twice. The payments leave **Make deposit** at that point, and can't be voided until the payout is. Don't deposit those invoice payments separately. If a charge shows as a sale because its payment wasn't recorded yet, record the payment before posting. A downloaded Stripe file may not carry the payment reference, so check its sales before posting.
 
 ## Posting a payout
 

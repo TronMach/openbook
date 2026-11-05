@@ -104,7 +104,10 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var text = OpenBook.Application.Import.TextFiles.Decode(content);
         ChannelCurrency.Check(text, (await OpenBook.Application.Companies.CompanyStoreExtensions.GetRequiredCompanyAsync(companies, ct)).HomeCurrency.Code);
         var read = ChannelReports.Read(channel.Kind, text, fileName);
-        return await AddAsync(channel, await SplitByOrdersAsync(channel, read.Payouts, ct), read.Warnings, save, ct);
+        var warnings = channel.Kind == ChannelKind.Stripe
+            ? (IReadOnlyList<string>)[.. read.Warnings, "Charges for invoices paid online are recognized by their payment reference, which a downloaded file may not have. Check the sales in this payout before posting, or connect the channel."]
+            : read.Warnings;
+        return await AddAsync(channel, await SplitByOrdersAsync(channel, read.Payouts, ct), warnings, save, ct);
     }
 
     /// <summary>A Shopify payout file has charges gross: the order reports already imported say what's tax and shipping.</summary>
@@ -220,14 +223,47 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
             throw new DomainException("channel.payout_unbalanced",
                 $"The transactions add up to {payout.Net:N2}, but the channel reported {payout.ReportedNet:N2}. Check the report before posting.");
         var before = PayoutSnapshot(payout, channel);
+        var recorded = await RecordedChargesAsync(channel, payout, ct);
         var postings = payout.Postings(channel);
         if (postings.Count < 2)
             throw new DomainException("channel.payout_zero", "Everything in this payout nets to zero; there's nothing to post. Dismiss it instead.");
         var entry = await engine.StageAsync(new PostJournalEntryCommand(payout.Date, postings, $"{channel.Name} payout {payout.ExternalId}", ChannelPayout.Source, payout.Id), ct);
         payout.Posted(entry.Id);
+        foreach (var payment in recorded)
+        {
+            payment.SettleByPayout(payout.Id);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "payment", payment.Id, null, JsonSerializer.Serialize(new { Payout = payout.ExternalId })));
+        }
+
         store.Add(Audit(AuditAction.Updated, PayoutEntity, payout.Id, before, PayoutSnapshot(payout, channel)));
         await store.SaveChangesAsync(ct);
         return payout;
+    }
+
+    /// <summary>
+    /// Stripe charges for payments recorded by now, marked here and not at sync, since a payment can be recorded after its
+    /// payout is fetched. The money reaches the books through the payment: as a sale too, it would count twice.
+    /// </summary>
+    private async Task<IReadOnlyList<Domain.Sales.CustomerPayment>> RecordedChargesAsync(SalesChannel channel, ChannelPayout payout, CancellationToken ct)
+    {
+        if (channel.Kind != ChannelKind.Stripe)
+            return [];
+        var references = payout.Lines.Where(l => l.Type is ChannelLineType.Sale or ChannelLineType.Cleared).Select(l => l.Reference).OfType<string>().Distinct().ToList();
+        if (references.Count == 0)
+            return [];
+        var payments = (await sales.ListPaymentsByReferenceAsync(references, ct))
+            .Where(p => p.Status == DocumentStatus.Posted && p.DepositId is null && p.PayoutId is null).ToList();
+        if (payments.Count == 0)
+            return [];
+        if (channel.ClearingAccountId is null)
+        {
+            if ((await sales.GetOnlinePaymentSettingsAsync(ct))?.DepositAccountId is not { } clearing)
+                return [];
+            channel.UseClearingAccount(clearing);
+        }
+
+        payout.ClearCharges(payments.Select(p => p.Reference!).ToHashSet(StringComparer.Ordinal));
+        return payments;
     }
 
     /// <summary>Voids the payout's entry (a reversal on the same date); the payout waits to be posted again.</summary>
@@ -240,6 +276,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var before = PayoutSnapshot(payout, channel);
         await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
         payout.Unpost();
+        foreach (var payment in await sales.ListPaymentsInPayoutAsync(payout.Id, ct))
+            payment.ClearPayout();
         store.Add(Audit(AuditAction.Voided, PayoutEntity, payout.Id, before, PayoutSnapshot(payout, channel)));
         await store.SaveChangesAsync(ct);
         return payout;
