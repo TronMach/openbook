@@ -102,6 +102,35 @@ public static partial class ReceiptParser
         ArgumentNullException.ThrowIfNull(knownVendors);
         if (string.IsNullOrWhiteSpace(text))
             return new ReceiptFields(null, null, null, null);
+        text = Bounded(text);
+        try
+        {
+            return Read(text, knownVendors);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return new ReceiptFields(null, null, null, null);
+        }
+    }
+
+    /// <summary>
+    /// As much of an uploaded file as is worth reading. Real documents fit easily, and the patterns take time by the
+    /// square of a line's length, so a crafted line could otherwise hold a processor for hours.
+    /// </summary>
+    internal static string Bounded(string text)
+    {
+        var start = text.Length <= MaxTextLength ? text : text[..MaxTextLength];
+        return start.Split('\n').Any(l => l.Length > MaxLineLength)
+            ? string.Join('\n', start.Split('\n').Select(l => l.Length > MaxLineLength ? l[..MaxLineLength] : l))
+            : start;
+    }
+
+    private const int MaxTextLength = 200_000;
+    private const int MaxLineLength = 2_000;
+    internal const int MatchTimeoutMs = 500;
+
+    private static ReceiptFields Read(string text, IEnumerable<string> knownVendors)
+    {
         var lines = text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
 
         decimal? total = null;
@@ -148,7 +177,7 @@ public static partial class ReceiptParser
         }
     }
 
-    [GeneratedRegex(@"(?<![\d.])\$?\s?(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})(?!\d)")]
+    [GeneratedRegex(@"(?<![\d.])\$?\s?(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})(?!\d)", RegexOptions.None, MatchTimeoutMs)]
     private static partial Regex AmountPattern();
 
     [GeneratedRegex(@"\b(total|amount due|balance due|grand total|amount paid)\b")]

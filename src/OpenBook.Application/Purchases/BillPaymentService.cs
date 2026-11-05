@@ -160,7 +160,8 @@ public sealed class BillPaymentService(
                 throw new DomainException("payment.wrong_vendor", $"Bill {bill.Reference} isn't {vendor.DisplayName}'s, or it's kept in a different account for money you owe than the others. Pay it separately.");
             if (bill.Status != DocumentStatus.Posted)
                 throw new DomainException("bill.voided", $"The bill {bill.Reference} is voided.");
-            if (!bill.CanBePaid && !old.ContainsKey(bill.Id))
+            // A held bill's payment can be corrected, but it can't pay more than it did.
+            if (!bill.CanBePaid && application.Amount > old.GetValueOrDefault(bill.Id))
                 throw new DomainException("bill.not_approved", $"The bill {bill.Reference} is waiting for approval or rejected, so it can't be paid.");
             if (application.Amount > bill.Balance + old.GetValueOrDefault(bill.Id))
                 throw new DomainException("payment.exceeds_balance", $"The bill {bill.Reference} has only {bill.Balance + old.GetValueOrDefault(bill.Id):N2} left to pay.");
@@ -179,7 +180,7 @@ public sealed class BillPaymentService(
 
         var before = Snapshot(payment);
         var billsBefore = bills.Values.ToDictionary(b => b.Id, BillService.Snapshot);
-        await engine.StageVoidAsync(payment.JournalEntryId, $"Payment changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        await engine.StageVoidAsync(payment.JournalEntryId, $"Payment changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var entryMemo = string.IsNullOrEmpty(reference) ? $"Bill payment to {vendor.DisplayName}" : $"Bill payment to {vendor.DisplayName} · {reference}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,

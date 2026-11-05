@@ -63,7 +63,7 @@ public static class AssetEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/assets?through={through:yyyy-MM-dd}&error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -95,9 +95,18 @@ public static class AssetEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/loans?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
+        }).RequireAuthorization();
+
+        app.MapPost("/loans/{id:guid}/details", async (Guid id, IFormCollection form, LoanService loans, CancellationToken ct) =>
+            await Back($"/loans/{id}", () => loans.DescribeAsync(id, form["name"].ToString(), form["notes"].ToString(), ct))).RequireAuthorization();
+
+        app.MapPost("/loans/{id:guid}/void", async (Guid id, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/loans/{id}", () => loans.VoidAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
         app.MapPost("/loans/{id:guid}/pay", async (Guid id, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>
@@ -149,7 +158,7 @@ public static class AssetEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}");
         }
     }

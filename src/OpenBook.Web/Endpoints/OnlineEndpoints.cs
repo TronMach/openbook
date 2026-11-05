@@ -170,7 +170,7 @@ public static class OnlineEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/purchases/receipts/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();

@@ -172,6 +172,13 @@ public sealed class WebhookDispatcher(IWebhookStore store, IWebhookSender sender
 {
     private const int Batch = 200;
 
+    /// <summary>
+    /// How long a gap in the audit ids is waited for. An id is taken when the record is inserted but shows only when its
+    /// transaction commits, so a long save can appear behind a cursor that's already moved on: on PostgreSQL events
+    /// would be lost. A gap that doesn't fill was a rolled-back save, and is passed once it's this old.
+    /// </summary>
+    public static readonly TimeSpan GapWait = TimeSpan.FromMinutes(5);
+
     public async Task<int> RunOnceAsync(CancellationToken ct = default)
     {
         await EnqueueAsync(ct);
@@ -195,7 +202,8 @@ public sealed class WebhookDispatcher(IWebhookStore store, IWebhookSender sender
             var tracked = await store.GetSubscriptionAsync(subscription.Id, ct);
             if (tracked is null)
                 continue;
-            foreach (var record in records.Where(r => r.Id > tracked.Cursor))
+            var settled = Settled(tracked.Cursor, records, now);
+            foreach (var record in settled)
             {
                 var type = EventType(record);
                 if (tracked.Matches(type))
@@ -205,10 +213,27 @@ public sealed class WebhookDispatcher(IWebhookStore store, IWebhookSender sender
                 }
             }
 
-            tracked.Advance(records[^1].Id);
+            if (settled.Count > 0)
+                tracked.Advance(settled[^1].Id);
         }
 
         await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The records after the cursor, in order, up to the first gap still young enough to fill.</summary>
+    public static List<AuditRecord> Settled(long cursor, IEnumerable<AuditRecord> records, DateTimeOffset now)
+    {
+        var settled = new List<AuditRecord>();
+        var last = cursor;
+        foreach (var record in records.Where(r => r.Id > cursor).OrderBy(r => r.Id))
+        {
+            if (record.Id != last + 1 && now - record.OccurredAt < GapWait)
+                break;
+            settled.Add(record);
+            last = record.Id;
+        }
+
+        return settled;
     }
 
     internal async Task<int> DeliverDueAsync(CancellationToken ct)

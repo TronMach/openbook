@@ -30,6 +30,18 @@ public static partial class DocumentParser
         ArgumentNullException.ThrowIfNull(knownParties);
         if (string.IsNullOrWhiteSpace(text))
             return DocumentFields.Empty;
+        try
+        {
+            return Read(ReceiptParser.Bounded(text), kind, knownParties, ownName);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return DocumentFields.Empty;
+        }
+    }
+
+    private static DocumentFields Read(string text, DocumentKind kind, IEnumerable<string> knownParties, string? ownName)
+    {
         var lines = text.Replace("\r", "", StringComparison.Ordinal).Split('\n').Select(l => Spaces().Replace(l, " ").Trim()).Where(l => l.Length > 0).ToList();
 
         var references = References(lines);
@@ -304,7 +316,7 @@ public static partial class DocumentParser
 
     private const string Labels = @"purchase\s+order|customer\s+p\.?\s?o\.?|your\s+p\.?\s?o\.?|your\s+order|p\.\s?o\.|po|invoice|inv\.?|bill|quotation|quote|estimate|proposal|packing\s+(?:slip|list)|slip|delivery\s+note|shipment|sales\s+order|order|confirmation";
 
-    [GeneratedRegex(@"\b(?<label>" + Labels + @")\s*(?:no\.?|number|num\.?|#|id)?\s*[:#.]?\s*(?<value>[A-Z0-9][A-Z0-9\-/.]*\d[A-Z0-9\-/]*)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(?<label>" + Labels + @")\s*(?:no\.?|number|num\.?|#|id)?\s*[:#.]?\s*(?<value>[A-Z0-9][A-Z0-9\-/.]*\d[A-Z0-9\-/]*)\b", RegexOptions.IgnoreCase, ReceiptParser.MatchTimeoutMs)]
     private static partial Regex ReferencePattern();
 
     [GeneratedRegex(@"^(?<label>" + Labels + @")\s*(?:no\.?|number|num\.?|#|id)?\s*[:#]?$", RegexOptions.IgnoreCase)]

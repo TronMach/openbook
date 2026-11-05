@@ -85,7 +85,7 @@
 
     private async Task SignInAsync()
     {
-        var result = await Auth.SignInAsync(Input.Username, Input.Password, HttpContext.RequestAborted);
+        var result = await Auth.SignInAsync(Input.Username, Input.Password, HttpContext.Connection.RemoteIpAddress?.ToString(), HttpContext.RequestAborted);
         switch (result.Status)
         {
             case SignInStatus.Succeeded:
@@ -106,11 +106,9 @@
             case SignInStatus.SsoRequired:
                 _error = $"Use \"{_settings?.ButtonText}\" above: only administrators sign in with a password here.";
                 break;
-            case SignInStatus.LockedOut:
-                _error = $"Too many failed attempts. Try again after {result.LockedUntil!.Value.InCompanyTime():t}.";
-                break;
             default:
-                _error = "That username and password don't match.";
+                // The same for someone shut out, or the answer would say which usernames exist.
+                _error = "That username and password don't match. After several tries, sign-in pauses here for a few minutes.";
                 break;
         }
     }

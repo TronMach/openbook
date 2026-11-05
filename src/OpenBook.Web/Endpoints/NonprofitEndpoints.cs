@@ -32,7 +32,7 @@ public static class NonprofitEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/nonprofit?asOf={date:yyyy-MM-dd}&error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -48,7 +48,7 @@ public static class NonprofitEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/nonprofit/releases/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -84,7 +84,7 @@ public static class NonprofitEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/nonprofit/gifts/new?donor={form["donorId"]}&pledge={form["pledgeId"]}&kind={form["kind"]}&error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -147,7 +147,7 @@ public static class NonprofitEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/nonprofit/pledges/new?donor={form["donorId"]}&error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -206,7 +206,7 @@ public static class NonprofitEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/nonprofit/grants/new?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -304,7 +304,7 @@ public static class NonprofitEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}");
         }
     }

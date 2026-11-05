@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -52,26 +53,98 @@ internal sealed class SqliteBackupService(
         return new BackupFile(path, $"{Slug(companyName)}-{clock.UtcNow:yyyyMMdd-HHmmss}.openbook.db");
     }
 
+    /// <summary>
+    /// The backup is brought up to date and checked as a copy, and only then replaces the live file, so a migration that
+    /// fails (or a closed browser) leaves the books as they were.
+    /// </summary>
     public async Task<string> RestoreAsync(string backupPath, string originalFileName, CancellationToken ct)
     {
         var backup = FileConnectionString(backupPath, readOnly: true);
+        IReadOnlySet<string> known;
         await using (var context = new OpenBookDbContext(dbOptions))
-            await ValidateAsync(backup, context.Database.GetMigrations().ToHashSet(StringComparer.Ordinal), storage.Encrypted, ct);
+        {
+            known = context.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
+            await ValidateAsync(backup, known, storage.Encrypted, ct);
+        }
 
         Directory.CreateDirectory(storage.BackupDirectory);
-        var safetyCopy = Path.Combine(storage.BackupDirectory, $"pre-restore-{clock.UtcNow:yyyyMMdd-HHmmss-fff}.openbook.db");
-        await CopyAsync(storage.ConnectionString, FileConnectionString(safetyCopy, readOnly: false), ct);
+        var work = Path.Combine(storage.BackupDirectory, $"restoring-{Guid.NewGuid():N}.db");
+        var workConnection = FileConnectionString(work, readOnly: false);
+        try
+        {
+            await CopyAsync(backup, workConnection, ct);
+            await using (var migrating = new OpenBookDbContext(new DbContextOptionsBuilder<OpenBookDbContext>().UseSqlite(workConnection).Options))
+                await migrating.Database.MigrateAsync(ct);
+            await ValidateAsync(workConnection, known, storage.Encrypted, ct);
 
-        await CopyAsync(backup, storage.ConnectionString, ct);
-        SqliteConnection.ClearAllPools();
+            var safetyCopy = Path.Combine(storage.BackupDirectory, $"pre-restore-{clock.UtcNow:yyyyMMdd-HHmmss-fff}.openbook.db");
+            await CopyAsync(storage.ConnectionString, FileConnectionString(safetyCopy, readOnly: false), ct);
 
-        await using var db = new OpenBookDbContext(dbOptions);
-        await db.Database.MigrateAsync(ct);
-        var company = await db.Companies.AsNoTracking().SingleAsync(ct);
-        db.AuditRecords.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Restored, "company", company.Id, null,
-            JsonSerializer.Serialize(new { Backup = Path.GetFileName(originalFileName), SafetyCopy = Path.GetFileName(safetyCopy) })));
-        await db.SaveChangesAsync(ct);
-        return safetyCopy;
+            // From here it finishes even if the browser goes away.
+            await CopyAsync(workConnection, storage.ConnectionString, CancellationToken.None);
+            SqliteConnection.ClearAllPools();
+
+            await using var db = new OpenBookDbContext(dbOptions);
+            var company = await db.Companies.AsNoTracking().SingleAsync(CancellationToken.None);
+            db.AuditRecords.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Restored, "company", company.Id, null,
+                JsonSerializer.Serialize(new { Backup = Path.GetFileName(originalFileName), SafetyCopy = Path.GetFileName(safetyCopy) })));
+            await db.SaveChangesAsync(CancellationToken.None);
+            return safetyCopy;
+        }
+        catch (Exception ex) when (ex is DbException or IOException or InvalidOperationException)
+        {
+            throw new DomainException("backup.restore_failed", $"The backup couldn't be restored: {ex.Message} Your books are as they were before.");
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var file in new[] { work, work + "-wal", work + "-shm" })
+                File.Delete(file);
+        }
+    }
+
+    private const int PreUpgradeCopiesKept = 3;
+
+    /// <summary>
+    /// Before migrating a company file at start: a lock row left by an upgrade that was killed would hang every later start,
+    /// and only one OpenBook runs on a SQLite file, so it can only be stale; and when migrations are waiting, a
+    /// <c>pre-upgrade-</c> copy beside the other backups, so an upgrade that goes wrong can be undone.
+    /// </summary>
+    internal static async Task PrepareToMigrateAsync(OpenBookDbContext db, OpenBookStorage storage, CancellationToken ct)
+    {
+        var connection = new SqliteConnectionStringBuilder(storage.ConnectionString);
+        if (string.IsNullOrEmpty(connection.DataSource) || connection.Mode == SqliteOpenMode.Memory || connection.DataSource == ":memory:" || !File.Exists(connection.DataSource))
+            return;
+
+        bool upgrading;
+        await db.Database.OpenConnectionAsync(ct);
+        try
+        {
+            var open = (SqliteConnection)db.Database.GetDbConnection();
+            var tables = await ListAsync(open, "SELECT name FROM sqlite_master WHERE type = 'table';", ct);
+            if (tables.Contains("__EFMigrationsLock"))
+            {
+                await using var clear = open.CreateCommand();
+                clear.CommandText = """DELETE FROM "__EFMigrationsLock";""";
+                await clear.ExecuteNonQueryAsync(ct);
+            }
+
+            upgrading = tables.Contains("__EFMigrationsHistory")
+                && await ScalarAsync<long>(open, """SELECT COUNT(*) FROM "__EFMigrationsHistory";""", ct) > 0
+                && (await db.Database.GetPendingMigrationsAsync(ct)).Any();
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+
+        if (!upgrading)
+            return;
+        Directory.CreateDirectory(storage.BackupDirectory);
+        var copy = Path.Combine(storage.BackupDirectory, $"pre-upgrade-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.openbook.db");
+        await CopyAsync(storage.ConnectionString, FileConnectionString(copy, readOnly: false, connection.Password), ct);
+        foreach (var old in Directory.GetFiles(storage.BackupDirectory, "pre-upgrade-*.openbook.db").OrderDescending(StringComparer.Ordinal).Skip(PreUpgradeCopiesKept))
+            File.Delete(old);
     }
 
     /// <summary>
@@ -133,12 +206,15 @@ internal sealed class SqliteBackupService(
     }
 
     // No pooling, so the file handle is released as soon as the connection closes. Same key as the company file.
-    private string FileConnectionString(string path, bool readOnly) => new SqliteConnectionStringBuilder
+    private string FileConnectionString(string path, bool readOnly) =>
+        FileConnectionString(path, readOnly, new SqliteConnectionStringBuilder(storage.ConnectionString).Password);
+
+    private static string FileConnectionString(string path, bool readOnly, string password) => new SqliteConnectionStringBuilder
     {
         DataSource = path,
         Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate,
         Pooling = false,
-        Password = new SqliteConnectionStringBuilder(storage.ConnectionString).Password,
+        Password = password,
     }.ToString();
 
     private static async Task<T?> ScalarAsync<T>(SqliteConnection connection, string sql, CancellationToken ct)

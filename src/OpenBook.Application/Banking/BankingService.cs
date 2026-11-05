@@ -248,7 +248,7 @@ public sealed class BankingService(
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([transaction.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(transaction);
 
-        await engine.StageVoidAsync(transaction.JournalEntryId, $"Transaction changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        await engine.StageVoidAsync(transaction.JournalEntryId, $"Transaction changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var entryMemo = string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
@@ -302,7 +302,7 @@ public sealed class BankingService(
                 $"This transfer stands for a line from the bank feed, so its amount ({transaction.Amount:N2}) and accounts stay. Undo the feed line first to change them.");
 
         var before = Snapshot(transaction);
-        await engine.StageVoidAsync(transaction.JournalEntryId, $"Transfer changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        await engine.StageVoidAsync(transaction.JournalEntryId, $"Transfer changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = string.IsNullOrWhiteSpace(command.Memo) ? $"Transfer from {chart.FullName(from.Id)} to {chart.FullName(to.Id)}" : command.Memo;
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, postings, memo, BankTransaction.TransferSource, transaction.Id), ct);
 

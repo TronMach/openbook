@@ -160,6 +160,12 @@ public interface ISalesStore
     /// <summary>Untracked: every reminder sent.</summary>
     Task<IReadOnlyList<InvoiceReminder>> ListRemindersAsync(CancellationToken ct);
 
+    Task MarkInvoiceEmailedAsync(Guid id, DateTimeOffset at, CancellationToken ct);
+
+    Task MarkEstimateEmailedAsync(Guid id, DateTimeOffset at, CancellationToken ct);
+
+    Task MarkReceiptEmailedAsync(Guid id, DateTimeOffset at, CancellationToken ct);
+
     /// <summary>Tracked.</summary>
     Task<ScheduledEmail?> GetScheduledEmailAsync(Guid id, CancellationToken ct);
 
@@ -236,6 +242,8 @@ public interface ISalesStore
     void Remove(BillableExpense billable);
     void Add(CollectionSettings settings);
     void Add(InvoiceReminder reminder);
+
+    void Remove(InvoiceReminder reminder);
     void Add(ScheduledEmail email);
     void Add(AuditRecord record);
 

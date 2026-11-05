@@ -398,6 +398,17 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
 
     public void Add(InvoiceReminder reminder) => db.InvoiceReminders.Add(reminder);
 
+    public void Remove(InvoiceReminder reminder) => db.InvoiceReminders.Remove(reminder);
+
+    public Task MarkInvoiceEmailedAsync(Guid id, DateTimeOffset at, CancellationToken ct) =>
+        db.Invoices.Where(i => i.Id == id).ExecuteUpdateAsync(s => s.SetProperty(i => i.LastEmailedAt, at.ToUniversalTime()), ct);
+
+    public Task MarkEstimateEmailedAsync(Guid id, DateTimeOffset at, CancellationToken ct) =>
+        db.Estimates.Where(e => e.Id == id).ExecuteUpdateAsync(s => s.SetProperty(e => e.LastEmailedAt, at.ToUniversalTime()), ct);
+
+    public Task MarkReceiptEmailedAsync(Guid id, DateTimeOffset at, CancellationToken ct) =>
+        db.SalesReceipts.Where(r => r.Id == id).ExecuteUpdateAsync(s => s.SetProperty(r => r.LastEmailedAt, at.ToUniversalTime()), ct);
+
     public void Add(ScheduledEmail email) => db.ScheduledEmails.Add(email);
 
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);

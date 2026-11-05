@@ -58,6 +58,8 @@ public sealed class OnlinePaymentService(
     {
         ArgumentNullException.ThrowIfNull(command);
         var company = await companies.GetRequiredCompanyAsync(ct);
+        if (command.Enabled)
+            EnsureCurrency(company);
         if (command.DepositAccountId is { } accountId && accountId != Guid.Empty)
             await salesAccounts.GetDepositAccountAsync(accountId, ct);
         var settings = await store.GetOnlinePaymentSettingsAsync(ct);
@@ -79,6 +81,13 @@ public sealed class OnlinePaymentService(
     public async Task<IReadOnlyList<PaymentLink>> LinksAsync(Guid invoiceId, CancellationToken ct = default) =>
         (await store.ListPaymentLinksAsync(invoiceId, ct)).OrderByDescending(l => l.CreatedAt).ToList();
 
+    /// <summary>The gateway counts in cents; a currency without them would charge the wrong amount.</summary>
+    private static void EnsureCurrency(Domain.Companies.Company company)
+    {
+        if (!company.HomeCurrency.HasCents)
+            throw new DomainException("online.currency_unsupported", $"Online payments work in currencies with two decimals, so they can't be used with {company.HomeCurrency.Code}.");
+    }
+
     /// <summary>
     /// A checkout link for the invoice's balance: the open one already made for that amount, or a new one. Refused
     /// while online payments are off or the invoice has nothing to pay.
@@ -96,6 +105,7 @@ public sealed class OnlinePaymentService(
             return existing;
 
         var company = await companies.GetRequiredCompanyAsync(ct);
+        EnsureCurrency(company);
         var customer = await store.GetCustomerAsync(invoice.CustomerId, ct);
         var session = await gateway.CreateCheckoutAsync(SecretKey(settings), new CheckoutRequest(
             invoice.Balance,

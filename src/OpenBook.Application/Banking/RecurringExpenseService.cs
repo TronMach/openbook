@@ -14,7 +14,7 @@ public sealed record RecurringExpenseResult(RecurringExpense Template, IReadOnly
 
 /// <summary>Recurring expenses: templates that record a spend from a bank or card account on a schedule.</summary>
 public sealed class RecurringExpenseService(
-    IBankingStore store, Purchases.IPurchasesStore purchases, AccountService accounts, BankingService banking, PostingEngine engine, IClock clock, ICurrentUser user)
+    IUnitOfWork unit, IBankingStore store, Purchases.IPurchasesStore purchases, AccountService accounts, BankingService banking, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "recurring_expense";
     public const int MaxCatchUp = 60;
@@ -70,10 +70,16 @@ public sealed class RecurringExpenseService(
     public async Task<IReadOnlyList<RecurringExpenseResult>> CreateDueAsync(DateOnly today, bool automaticOnly, CancellationToken ct = default)
     {
         var results = new List<RecurringExpenseResult>();
-        foreach (var template in await store.ListRecurringExpensesAsync(ct))
+        foreach (var listed in await store.ListRecurringExpensesAsync(ct))
         {
-            if (!template.IsDue(today) || (automaticOnly && !template.AutoCreate))
+            if (!listed.IsDue(today) || (automaticOnly && !listed.AutoCreate))
                 continue;
+
+            // Afresh: a refused occurrence below forgets everything this scope was tracking.
+            var template = await store.GetRecurringExpenseAsync(listed.Id, ct);
+            if (template is null)
+                continue;
+
 
             var created = new List<BankTransaction>();
             string? error = null;
@@ -81,16 +87,20 @@ public sealed class RecurringExpenseService(
             {
                 try
                 {
+                    // The document and the template's count in one transaction, so a failure in between can't make it twice.
+                    await using var transaction = await unit.BeginAsync(ct);
                     var spend = await banking.RecordAsync(new RecordBankTransactionCommand(
                         BankTransactionKind.Spend, template.AccountId, template.NextDate!.Value,
                         template.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToSplit()).ToList(),
                         template.Payee, Memo: template.Memo ?? template.Name, VendorId: template.VendorId, LocationId: template.LocationId, TagIds: template.TagIds), ct);
                     template.RecordCreated(spend.Id);
                     await store.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
                     created.Add(spend);
                 }
                 catch (DomainException ex)
                 {
+                    unit.DiscardPending();
                     error = ex.Message;
                     break;
                 }

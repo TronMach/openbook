@@ -186,7 +186,7 @@ public sealed class DepositService(
                 $"This deposit is matched to a line from the bank feed, so it stays {deposit.Total:N2} in the same account. Undo the match first to change that.");
 
         var before = Snapshot(deposit);
-        await engine.StageVoidAsync(deposit.JournalEntryId, $"Changed: {reason.Trim()}", fromDocument: true, ct);
+        await engine.StageVoidAsync(deposit.JournalEntryId, $"Changed: {reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = command.Memo?.Trim() is { Length: > 0 } m ? m : $"Deposit · {items.Count} {(items.Count == 1 ? "item" : "items")}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date, BankDeposit.Postings(account.Id, items, memo), memo, BankDeposit.Source, deposit.Id), ct);

@@ -11,7 +11,7 @@ namespace OpenBook.Application.Purchases;
 public sealed record RecurringBillResult(RecurringBill Template, IReadOnlyList<Bill> Created, string? Error);
 
 /// <summary>Recurring bills: templates that enter a bill on a schedule, such as rent.</summary>
-public sealed class RecurringBillService(IPurchasesStore store, BillService bills, PostingEngine engine, IClock clock, ICurrentUser user)
+public sealed class RecurringBillService(IUnitOfWork unit, IPurchasesStore store, BillService bills, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "recurring_bill";
     public const int MaxCatchUp = 60;
@@ -69,10 +69,16 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
     public async Task<IReadOnlyList<RecurringBillResult>> CreateDueAsync(DateOnly today, bool automaticOnly, CancellationToken ct = default)
     {
         var results = new List<RecurringBillResult>();
-        foreach (var template in await store.ListRecurringBillsAsync(ct))
+        foreach (var listed in await store.ListRecurringBillsAsync(ct))
         {
-            if (!template.IsDue(today) || (automaticOnly && !template.AutoCreate))
+            if (!listed.IsDue(today) || (automaticOnly && !listed.AutoCreate))
                 continue;
+
+            // Afresh: a refused occurrence below forgets everything this scope was tracking.
+            var template = await store.GetRecurringBillAsync(listed.Id, ct);
+            if (template is null)
+                continue;
+
 
             var created = new List<Bill>();
             string? error = null;
@@ -80,15 +86,19 @@ public sealed class RecurringBillService(IPurchasesStore store, BillService bill
             {
                 try
                 {
+                    // The document and the template's count in one transaction, so a failure in between can't make it twice.
+                    await using var transaction = await unit.BeginAsync(ct);
                     var bill = await bills.CreateAsync(new CreateBillCommand(
                         template.VendorId, template.NextDate!.Value, template.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList(),
                         Memo: template.Memo ?? template.Name, LocationId: template.LocationId, TagIds: template.TagIds), template.Id, ct);
                     template.RecordCreated(bill.Id);
                     await store.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
                     created.Add(bill);
                 }
                 catch (DomainException ex)
                 {
+                    unit.DiscardPending();
                     error = ex.Message;
                     break;
                 }

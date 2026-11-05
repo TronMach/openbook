@@ -177,7 +177,7 @@ public sealed class InvoiceService(
         invoice.SetLocation(command.LocationId);
         invoice.SetWarehouse(warehouseId);
         if (lateFeeFor is { } overdue)
-            invoice.MarkLateFeeFor(overdue);
+            invoice.MarkLateFeeFor(overdue, command.Date);
         if (source is not null)
             invoice.SetSource(source.SalesOrderId, source.Lines);
         store.Add(invoice);

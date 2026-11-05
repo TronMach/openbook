@@ -77,7 +77,13 @@ public sealed class Invoice
     /// <summary>For a late fee invoice: the overdue invoice it charges the fee on.</summary>
     public Guid? LateFeeForInvoiceId { get; private set; }
 
-    public void MarkLateFeeFor(Guid invoiceId) => LateFeeForInvoiceId = invoiceId;
+    /// <summary>
+    /// The day a fee was charged, with <see cref="LateFeeForInvoiceId"/> unique, so two runs can't both charge it.
+    /// Null on fees from before this was kept (and on every other invoice).
+    /// </summary>
+    public DateOnly? LateFeeOn { get; private set; }
+
+    public void MarkLateFeeFor(Guid invoiceId, DateOnly chargedOn) => (LateFeeForInvoiceId, LateFeeOn) = (invoiceId, chargedOn);
 
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }

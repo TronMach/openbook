@@ -343,7 +343,7 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
     public const string EntityType = "loan";
 
     public async Task<IReadOnlyList<Loan>> ListAsync(CancellationToken ct = default) =>
-        (await store.ListLoansAsync(ct)).OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        (await store.ListLoansAsync(ct)).Where(l => !l.IsVoided).OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
     public Task<Loan?> GetAsync(Guid id, CancellationToken ct = default) => store.GetLoanAsync(id, ct);
 
@@ -387,6 +387,33 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         var before = Snapshot(loan);
         loan.Update(details);
         store.Add(Audit(AuditAction.Updated, loan, before));
+        await store.SaveChangesAsync(ct);
+        return loan;
+    }
+
+    /// <summary>The name and notes, which stay changeable after payments.</summary>
+    public async Task<Loan> DescribeAsync(Guid id, string name, string? notes, CancellationToken ct = default)
+    {
+        var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(loan);
+        loan.Update(new LoanDetails(name, loan.LiabilityAccountId, loan.InterestAccountId, loan.Principal, loan.AnnualRatePercent, loan.Payments,
+            loan.FirstPaymentDate, loan.PaymentAmount, loan.LenderVendorId, notes));
+        store.Add(Audit(AuditAction.Updated, loan, before));
+        await store.SaveChangesAsync(ct);
+        return loan;
+    }
+
+    /// <summary>Takes back a loan entered by mistake, with the entry recording its money; its payments must be voided first.</summary>
+    public async Task<Loan> VoidAsync(Guid id, string reason, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("void.reason_required", "Say why.");
+        var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(loan);
+        loan.Void(clock.UtcNow);
+        if (loan.ProceedsEntryId is { } entry)
+            await engine.StageVoidAsync(entry, reason.Trim(), fromDocument: true, ct);
+        store.Add(Audit(AuditAction.Voided, loan, before));
         await store.SaveChangesAsync(ct);
         return loan;
     }

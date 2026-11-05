@@ -253,6 +253,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("ProceedsEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InterestAccountId");
@@ -4047,6 +4050,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("VendorId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AchBatchId");
@@ -5348,6 +5355,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("LateFeeForInvoiceId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateOnly?>("LateFeeOn")
+                        .HasColumnType("date");
+
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("uuid");
 
@@ -5399,8 +5409,6 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
 
-                    b.HasIndex("LateFeeForInvoiceId");
-
                     b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
@@ -5417,6 +5425,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("WarehouseId");
 
                     b.HasIndex("CustomerId", "Date");
+
+                    b.HasIndex("LateFeeForInvoiceId", "LateFeeOn")
+                        .IsUnique();
 
                     b.ToTable("Invoices", (string)null);
                 });

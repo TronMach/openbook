@@ -79,7 +79,7 @@ public static class CollectionEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 var join = back.Contains('?', StringComparison.Ordinal) ? "&" : "?";
                 return Results.Redirect($"{back}{join}error={Uri.EscapeDataString(ex.Message)}{password}");
             }
@@ -95,7 +95,7 @@ public static class CollectionEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/sales/credit-memos/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -125,7 +125,7 @@ public static class CollectionEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}{anchor}");
         }
     }

@@ -63,7 +63,7 @@
                 <div class="field">
                     <label for="security">Security</label>
                     <InputSelect id="security" @bind-Value="Input.Security">
-                        <option value="@SmtpSecurity.Auto">Automatic</option>
+                        <option value="@SmtpSecurity.Auto">Automatic (encrypted when there's a password)</option>
                         <option value="@SmtpSecurity.StartTls">STARTTLS (port 587)</option>
                         <option value="@SmtpSecurity.SslOnConnect">SSL/TLS (port 465)</option>
                         <option value="@SmtpSecurity.None">None (not recommended)</option>

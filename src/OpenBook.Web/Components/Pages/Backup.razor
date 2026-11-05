@@ -253,6 +253,7 @@ else
     private static string Message(string code) => code switch
     {
         "backup.file_required" => "Choose a backup file to restore.",
+        "backup.restore_failed" => "The backup couldn't be restored. Your books are as they were before. The log on the System page says why.",
         "backup.confirm_required" => "Tick the box to confirm you want to replace the current data.",
         "auth.wrong_password" => "That password is incorrect. Repeated failures lock the account for a few minutes.",
         "backup.invalid_file" => "That file isn't an OpenBook backup, or it's encrypted with a different key.",

@@ -58,7 +58,7 @@ public static class TaxCalculator
         {
             var share = i == components.Count - 1
                 ? remaining
-                : decimal.Round(total * components[i].Percent / combined, 2, MidpointRounding.AwayFromZero);
+                : combined == 0m ? 0m : decimal.Round(total * components[i].Percent / combined, 2, MidpointRounding.AwayFromZero);
             shares.Add(share);
             remaining -= share;
         }

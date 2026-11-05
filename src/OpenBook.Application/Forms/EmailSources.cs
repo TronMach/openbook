@@ -35,7 +35,7 @@ internal sealed class SalesEmailSource(
                 {
                     ["number"] = i.Number, ["date"] = D(i.Date), ["due"] = D(i.DueDate), ["total"] = M(i.Total), ["balance"] = M(i.Balance),
                     ["terms"] = terms.Label,
-                }, payOnline: i.IsOpen && (await online.GetSettingsAsync(ct)).IsReady);
+                }, payOnline: i.IsOpen && (await online.GetSettingsAsync(ct)).IsReady) with { Refusal = Voided(i.Status) };
             }
 
             case EmailKind.Estimate:
@@ -53,7 +53,7 @@ internal sealed class SalesEmailSource(
                 return Document(company, "credit_memo", c.Id, "Credit memo", c.Number, await CustomerAsync(c.CustomerId, ct), FormDocuments.CreditMemo, new()
                 {
                     ["number"] = c.Number, ["date"] = D(c.Date), ["total"] = M(c.Total),
-                });
+                }) with { Refusal = Voided(c.Status) };
             }
 
             case EmailKind.SalesReceipt:
@@ -63,7 +63,7 @@ internal sealed class SalesEmailSource(
                 return Document(company, "sales_receipt", r.Id, "Sales receipt", r.Number, customer, FormDocuments.SalesReceipt, new()
                 {
                     ["number"] = r.Number, ["date"] = D(r.Date), ["total"] = M(r.Total),
-                });
+                }) with { Refusal = Voided(r.Status) };
             }
 
             case EmailKind.PaymentReceipt:
@@ -135,17 +135,19 @@ internal sealed class SalesEmailSource(
 
     public async Task<AuditRecord?> SentAsync(EmailSource source, string recipients, string title, CancellationToken ct)
     {
+        // Straight in the database, past the document's version: the email has gone, so a change made to the document
+        // meanwhile mustn't turn into a conflict, which would lose the record of it or send it again.
         var now = clock.UtcNow;
         switch (source.Kind)
         {
             case EmailKind.Invoice or EmailKind.Reminder:
-                (await sales.GetInvoiceAsync(source.Id, ct))!.MarkEmailed(now);
+                await sales.MarkInvoiceEmailedAsync(source.Id, now, ct);
                 break;
             case EmailKind.Estimate:
-                (await sales.GetEstimateAsync(source.Id, ct))!.MarkEmailed(now);
+                await sales.MarkEstimateEmailedAsync(source.Id, now, ct);
                 break;
             case EmailKind.SalesReceipt:
-                (await sales.GetReceiptAsync(source.Id, ct))!.MarkEmailed(now);
+                await sales.MarkReceiptEmailedAsync(source.Id, now, ct);
                 break;
         }
 
@@ -169,6 +171,9 @@ internal sealed class SalesEmailSource(
         var all = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         return all[CustomerTree.BillTo(id, all)];
     }
+
+    private static (string Code, string Message)? Voided(DocumentStatus status) =>
+        status == DocumentStatus.Voided ? ("document.voided", "This document is voided, so it can't be emailed.") : null;
 
     private static EmailContext Document(
         Company company, string entityType, Guid id, string title, string number, Customer? customer, FormDocuments document,

@@ -36,7 +36,7 @@ Many banks protect business accounts from check fraud with *positive pay*: you s
 2. Under **Issue file**, fill in the **account number at the bank**, the **date format** your bank wants, and whether to **include a header row**. OpenBook remembers these for the account.
 3. **Download CSV** and upload it to your bank.
 
-The file has the account number, check number, issue date, amount, payee and void flag on each line.
+The file has the account number, check number, issue date, amount, payee and void flag on each line. Spending that came from a statement or bank feed isn't listed, whatever its reference says: that money has already left. The first file for an account goes back 90 days, because older checks have long cleared; use the dates to send older ones.
 
 ## Petty cash
 

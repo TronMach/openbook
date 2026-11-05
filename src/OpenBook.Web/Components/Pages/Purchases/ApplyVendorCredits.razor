@@ -137,7 +137,7 @@
             await sp.GetRequiredService<VendorCreditService>().AvailableAsync(id),
             await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync(id)));
         _credits = credits;
-        _bills = bills.Select(b => new BillRow(b)).ToList();
+        _bills = bills.Where(b => b.CanBePaid).Select(b => new BillRow(b)).ToList();
 
         // Oldest bills first, up to the credit available.
         var remaining = _credits.Sum(c => c.Balance);

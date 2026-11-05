@@ -64,7 +64,13 @@
                     @foreach (var row in _rows)
                     {
                         <tr @key="row.Bill.Id">
-                            <td><a href="/purchases/bills/@row.Bill.Id" target="_blank">@(row.Bill.Reference ?? "(no number)")</a></td>
+                            <td>
+                                <a href="/purchases/bills/@row.Bill.Id" target="_blank">@(row.Bill.Reference ?? "(no number)")</a>
+                                @if (!row.Bill.CanBePaid)
+                                {
+                                    <span class="muted">Waiting for approval: this payment can't go up.</span>
+                                }
+                            </td>
                             <td>@Labels.Date(row.Bill.Date)</td>
                             <td>@Labels.Date(row.Bill.DueDate)</td>
                             <td class="num">@Labels.Amount(row.Open)</td>

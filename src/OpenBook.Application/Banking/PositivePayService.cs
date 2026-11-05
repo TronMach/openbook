@@ -46,16 +46,27 @@ public sealed class PositivePayService(
             ? throw new DomainException("positive_pay.range_invalid", "The end date is before the start date.")
             : ChecksAsync(accountId, (date, _) => date >= from && date <= to, ct);
 
-    /// <summary>What the bank hasn't been told yet, whatever its date: new checks, and voids of ones it knows of.</summary>
-    public Task<IReadOnlyList<PositivePayCheck>> UnsentAsync(Guid accountId, CancellationToken ct = default) =>
-        ChecksAsync(accountId, (_, needsSending) => needsSending, ct);
+    /// <summary>
+    /// What the bank hasn't been told yet, whatever its date: new checks, and voids of ones it knows of. The first file for
+    /// an account goes back <see cref="FirstFileDays"/> days, because older checks have long cleared; a range sends those.
+    /// </summary>
+    public async Task<IReadOnlyList<PositivePayCheck>> UnsentAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var sentBefore = (await bank.GetPositivePaySettingsAsync(accountId, ct))?.LastExportedAt is not null;
+        var from = sentBefore ? DateOnly.MinValue : CompanyTime.Today.AddDays(-FirstFileDays);
+        return await ChecksAsync(accountId, (date, needsSending) => needsSending && date >= from, ct);
+    }
+
+    /// <summary>How far back the first file for an account looks.</summary>
+    public const int FirstFileDays = 90;
 
     private async Task<IReadOnlyList<PositivePayCheck>> ChecksAsync(Guid accountId, Func<DateOnly, bool, bool> wanted, CancellationToken ct)
     {
         EnsureBank((await accounts.GetChartAsync(ct)).Get(accountId));
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
+        // Spends from statement or feed lines are money that has already left, and their reference is the bank's own.
         var expenses = (await bank.ListAllTransactionsAsync(ct))
-            .Where(t => t.AccountId == accountId && t.Kind == BankTransactionKind.Spend && IsCheckNumber(t.Reference)
+            .Where(t => t.AccountId == accountId && t.Kind == BankTransactionKind.Spend && t.ImportBatchId is null && IsCheckNumber(t.Reference)
                 && wanted(t.Date, t.NeedsSendingToBank(t.Status == BankTransactionStatus.Voided)))
             .Select(t => new PositivePayCheck(CheckKind.Expense, t.Id, t.Date, t.Reference!.Trim(), t.Amount,
                 t.Payee ?? (t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null) ?? string.Empty, t.Status == BankTransactionStatus.Voided));

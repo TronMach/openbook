@@ -79,7 +79,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
             var displayName = F(name);
             try
             {
-                var termsText = F(terms);
+                var parsedTerms = F(terms) is { } termsText ? ParseTerms(termsText) : new PaymentTerms(30);
                 var details = new CustomerDetails(
                     displayName ?? string.Empty,
                     F(company),
@@ -87,8 +87,10 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
                     F(phone),
                     F(billing) ?? Address(F(street), F(street2), F(city), F(state), F(zip), F(country)),
                     F(shipping),
-                    termsText is null ? 30 : ParseTerms(termsText),
-                    F(notes));
+                    parsedTerms.DueDays,
+                    F(notes),
+                    EarlyPaymentDiscountPercent: parsedTerms.DiscountPercent,
+                    EarlyPaymentDiscountDays: parsedTerms.DiscountDays);
 
                 var custom = fieldColumns.Read(r);
                 if (displayName is not null && existing.Contains(displayName.Trim()))
@@ -114,15 +116,28 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
         return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
     }
 
-    internal static int ParseTerms(string text)
+    /// <summary>
+    /// "Net 30", "2% 10 Net 30", "Due on receipt", or a plain number of days. QuickBooks' stock "Consignment" says nothing
+    /// about a date, so it takes the usual 30 days rather than stop the file.
+    /// </summary>
+    internal static PaymentTerms ParseTerms(string text)
     {
         var normalized = Csv.Normalize(text);
         if (normalized is "dueonreceipt" or "receipt" or "cod" or "immediate" or "0")
-            return 0;
-        var match = DaysPattern().Match(text);
-        if (match.Success && int.TryParse(match.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var days) && days <= Customer.MaxTermsDays)
-            return days;
-        throw new DomainException("import.terms_invalid", $"Couldn't read the terms '{text}'. Use e.g. \"Net 30\" or \"Due on receipt\".");
+            return new PaymentTerms(0);
+
+        if (normalized == "consignment")
+            return new PaymentTerms(30);
+
+        var discount = DiscountPattern().Match(text);
+        var net = NetPattern().Match(text);
+        var digits = net.Success ? net.Groups[1].Value : discount.Success ? string.Empty : DaysPattern().Match(text).Value;
+        if (!int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var days) || days > Customer.MaxTermsDays)
+            throw new DomainException("import.terms_invalid", $"Couldn't read the terms '{text}'. Use e.g. \"Net 30\" or \"Due on receipt\".");
+
+        return discount.Success
+            ? new PaymentTerms(days, decimal.Parse(discount.Groups[1].Value, CultureInfo.InvariantCulture), int.Parse(discount.Groups[2].Value, CultureInfo.InvariantCulture))
+            : new PaymentTerms(days);
     }
 
     internal static string? Address(string? street, string? street2, string? city, string? state, string? zip, string? country)
@@ -131,6 +146,12 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
         var lines = new[] { street, street2, cityLine, country }.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
         return lines.Count == 0 ? null : string.Join('\n', lines);
     }
+
+    [GeneratedRegex(@"net\s*(\d+)", RegexOptions.IgnoreCase)]
+    private static partial Regex NetPattern();
+
+    [GeneratedRegex(@"(\d+(?:\.\d+)?)\s*%\s*(\d+)")]
+    private static partial Regex DiscountPattern();
 
     [GeneratedRegex(@"\d+")]
     private static partial Regex DaysPattern();

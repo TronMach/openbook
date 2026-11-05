@@ -174,7 +174,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     [
         typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
         typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
-        typeof(Bill), typeof(VendorCredit), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
+        typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
         typeof(BankFeedItem), typeof(RecurringEntry),
         typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
@@ -244,8 +244,41 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             entry.Property(VersionProperty).IsModified = true;
     }
 
+    /// <summary>
+    /// A change to an owned row is a change to its owner: what's used of a credit is summed from its applications, so
+    /// applying it leaves the owner's own row as it was, and two people could spend one credit without this.
+    /// </summary>
+    private void TouchOwners()
+    {
+        var entries = ChangeTracker.Entries().ToList();
+        var owners = new HashSet<(Type, object)>();
+        foreach (var entry in entries)
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted
+                && entry.Metadata.FindOwnership() is { } ownership
+                && ownership.PrincipalEntityType.FindProperty(VersionProperty) is not null
+                && entry.Property(ownership.Properties[0].Name).CurrentValue is { } ownerId)
+            {
+                owners.Add((ownership.PrincipalEntityType.ClrType, ownerId));
+            }
+        }
+
+        if (owners.Count == 0)
+            return;
+        foreach (var entry in entries)
+        {
+            if (entry.State is EntityState.Unchanged or EntityState.Modified
+                && entry.Metadata.FindProperty(VersionProperty) is not null
+                && owners.Contains((entry.Metadata.ClrType, entry.Property("Id").CurrentValue!)))
+            {
+                entry.Property(VersionProperty).IsModified = true;
+            }
+        }
+    }
+
     private void BumpVersions()
     {
+        TouchOwners();
         foreach (var entry in ChangeTracker.Entries())
         {
             if (entry.State == EntityState.Modified && entry.Metadata.FindProperty(VersionProperty) is not null)
@@ -902,6 +935,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Ignore(l => l.MonthlyRate);
             b.Ignore(l => l.Balance);
             b.Ignore(l => l.IsPaidOff);
+            b.Ignore(l => l.IsVoided);
             b.Ignore(l => l.NextPayment);
             b.Ignore(l => l.LatestPayment);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.LiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -1584,6 +1618,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Estimate>().WithMany().HasForeignKey(i => i.EstimateId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<RecurringInvoice>().WithMany().HasForeignKey(i => i.RecurringInvoiceId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Invoice>().WithMany().HasForeignKey(i => i.LateFeeForInvoiceId).OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(i => new { i.LateFeeForInvoiceId, i.LateFeeOn }).IsUnique();
             b.HasOne<SalesOrder>().WithMany().HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Restrict);
             b.OwnsMany(i => i.SourceLines, l =>
             {

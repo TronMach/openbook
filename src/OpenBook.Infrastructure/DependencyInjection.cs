@@ -119,7 +119,10 @@ public static class DependencyInjection
     public static async Task MigrateOpenBookDatabaseAsync(this IServiceProvider services, CancellationToken ct = default)
     {
         await using var scope = services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<OpenBookDbContext>().Database.MigrateAsync(ct);
+        var db = scope.ServiceProvider.GetRequiredService<OpenBookDbContext>();
+        if (scope.ServiceProvider.GetService<OpenBookStorage>() is { Provider: DatabaseProvider.Sqlite } storage)
+            await SqliteBackupService.PrepareToMigrateAsync(db, storage, ct);
+        await db.Database.MigrateAsync(ct);
     }
 
     /// <summary>The key goes in as the connection's Password, which Microsoft.Data.Sqlite applies with PRAGMA key on open.</summary>

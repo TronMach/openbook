@@ -135,6 +135,7 @@ public static class DependencyInjection
         services.AddScoped<ViewModeService>();
         services.AddScoped<HomeWorkflowService>();
         services.AddScoped<Centers.CenterService>();
+        services.AddSingleton<SignInThrottle>();
         services.AddScoped<AuthService>();
         services.AddScoped<UserService>();
         services.AddScoped<TwoFactorService>();

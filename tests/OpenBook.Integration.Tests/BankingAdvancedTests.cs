@@ -74,7 +74,7 @@ public sealed class BankingAdvancedTests : BankingFixture
     [Fact]
     public async Task The_bank_hears_of_a_void_and_a_late_check_whatever_their_dates()
     {
-        var march = new DateOnly(2026, 3, 5);
+        var march = OpenBook.Application.CompanyTime.Today.AddDays(-30);
         var check = await Check("1001", march, 50m);
         Assert.Equal("1001", Assert.Single(await PositivePay(s => s.UnsentAsync(Checking.Id))).Number);
         await PositivePay(s => s.ExportAsync(Checking.Id, null, null, BankFile));

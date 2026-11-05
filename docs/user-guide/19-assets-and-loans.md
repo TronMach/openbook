@@ -50,7 +50,9 @@ OpenBook posts the depreciation due up to that date, takes the asset's cost and 
 
 On the loan's page, **Record a payment**: date, amount and **paid from**. OpenBook splits it: a month's interest on the balance owed goes to "Interest Expense", and the rest pays down the loan account. **What's left** shows the remaining schedule.
 
-Payments must be in date order; only the latest can be voided. Once a payment is recorded, the loan's terms are fixed.
+Payments must be in date order; only the latest can be voided. Once a payment is recorded, the loan's terms are fixed, though its **name and notes** can still be changed on its page.
+
+A loan entered by mistake: void its payments, latest first, then **Void this loan** on its page, saying why. That reverses the entry recording the money received, and the loan leaves the list, the Loans report and the forecast. To change the terms of a loan, void it and enter it again.
 
 If you also download bank statements, match the payment in the bank review list to the one recorded here rather than adding it again.
 

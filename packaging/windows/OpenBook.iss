@@ -55,9 +55,9 @@ Name: "desktopicon"; Description: "Put an OpenBook icon on the desktop"; Flags: 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-[InstallDelete]
-; Files of an older version that this one no longer has.
-Type: filesandordirs; Name: "{app}\*"
+; No [InstallDelete] of "{app}\*": it runs before [Files] and a failed install can't bring those files back, which would
+; leave no program at all. Old files a new version no longer has stay; .NET loads only what the new version lists.
+; A file that must go gets its own named line under [InstallDelete].
 
 #ifndef TestBuild
 [Icons]

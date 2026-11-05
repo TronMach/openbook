@@ -62,6 +62,9 @@ public interface IBankingStore
     /// <summary>One line an import queued (untracked), or null when it queued none.</summary>
     Task<BankFeedItem?> FindFeedItemInBatchAsync(Guid importBatchId, CancellationToken ct);
 
+    /// <summary>Feed lines matched to the entry, or added as the bank transaction it posts. Tracked.</summary>
+    Task<IReadOnlyList<BankFeedItem>> ListFeedItemsTiedToEntryAsync(Guid entryId, CancellationToken ct);
+
     /// <summary>Every bank rule, tracked.</summary>
     Task<IReadOnlyList<BankRule>> ListRulesAsync(CancellationToken ct);
 

@@ -8,7 +8,7 @@ namespace OpenBook.Web.Security;
 /// Limits per address on the requests anyone can make without being signed in, so passwords, codes and link tokens
 /// can't be tried at speed: signing in (password, two-factor code, single sign-on, accepting an invitation) and the
 /// anonymous links (customer portal, payment pages, invitations, a capture device's status, Stripe's webhook).
-/// Everything else is unlimited. Lockout after wrong passwords (<c>User.RecordFailedLogin</c>) still applies per user;
+/// Everything else is unlimited. Lockout after wrong passwords (<c>SignInThrottle</c>) still applies per user and address;
 /// this slows trying one password across many users. Behind a reverse proxy the address is the client's when
 /// forwarded headers are enabled (ASPNETCORE_FORWARDEDHEADERS_ENABLED), as the compose file does.
 /// </summary>

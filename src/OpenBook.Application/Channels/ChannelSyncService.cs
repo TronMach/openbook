@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Channels;
@@ -26,7 +27,7 @@ public sealed record ChannelSyncResult(bool Succeeded, int Imported, string? Err
 /// kept on the channel, not thrown.
 /// </summary>
 public sealed class ChannelSyncService(
-    IChannelStore store, ChannelService channels, ChannelOrderService orders, IChannelClient client, ISecretProtector secrets, ISalesStore sales, IClock clock)
+    IChannelStore store, ChannelService channels, ChannelOrderService orders, IChannelClient client, ISecretProtector secrets, ISalesStore sales, ICompanyStore companies, IClock clock)
 {
     public static readonly TimeSpan SyncEvery = TimeSpan.FromHours(6);
     private const int OverlapDays = 7;
@@ -40,6 +41,8 @@ public sealed class ChannelSyncService(
             throw new DomainException("channel.credential_required", channel.Kind == ChannelKind.Shopify
                 ? "Enter the Admin API access token from the store's custom app."
                 : "Enter a Stripe secret or restricted key.");
+        if (channel.Kind == ChannelKind.Stripe && !(await companies.GetRequiredCompanyAsync(ct)).HomeCurrency.HasCents)
+            throw new DomainException("online.currency_unsupported", "A Stripe connection needs a home currency with two decimals: its amounts would be read wrongly.");
         var before = ChannelService.SnapshotOf(channel);
         channel.Connect(channel.Kind == ChannelKind.Shopify ? ShopDomain(shopDomain) : null, secrets.Protect(key));
         await channels.SaveConnectionAsync(channel, before, ct);

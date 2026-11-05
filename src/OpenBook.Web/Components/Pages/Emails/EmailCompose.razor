@@ -17,10 +17,10 @@
     {
         <div class="alert error" role="alert">@_error</div>
     }
-    @if (_sentTo is not null)
+    @if (Sent is not null)
     {
         <div class="alert notice" role="status">
-            @(_scheduledFor is { } at ? $"Scheduled to go to {_sentTo} on {at:g}." : $"Sent to {_sentTo}.") <a href="@_backLink">Back</a>
+            @(Sent == "scheduled" ? "The email is scheduled." : "The email has gone.") <a href="@_backLink">Back</a>
         </div>
     }
 
@@ -32,7 +32,7 @@
             <p><a href="@_pdfLink" target="_blank">Download the PDF</a> to send it yourself instead.</p>
         }
     }
-    else if (_sentTo is null && _source is not null && _preview is not null)
+    else if (Sent is null && _source is not null && _preview is not null)
     {
         <div class="email-editor">
             <EditForm Model="Input" FormName="email" OnValidSubmit="SendAsync" method="post" class="card email-form"
@@ -126,6 +126,7 @@
     private string _what = "";
     private string _recipient = "they";
     private string _backLink = "/";
+    private string? _done;
     private string? _pdfLink = "";
     private string _path = "";
     private string _query = "";
@@ -133,8 +134,6 @@
     private bool _known;
     private bool _canLink;
     private bool _showCopies;
-    private string? _sentTo;
-    private DateTime? _scheduledFor;
     private string? _error;
 
     [Parameter]
@@ -147,6 +146,10 @@
     public int? Year { get; set; }
 
     [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+
+    /// <summary>Set after sending: the page comes back by a redirect, so a refresh can't send it again.</summary>
+    [SupplyParameterFromQuery] private string? Sent { get; set; }
+
     [SupplyParameterFromQuery] private DateOnly? To { get; set; }
 
     [SupplyParameterFromForm(FormName = "email")]
@@ -268,20 +271,21 @@
 
                 var offset = CompanyTime.Zone.GetUtcOffset(local);
                 await Scheduled.ScheduleAsync(Id, message, new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset));
-                _scheduledFor = local;
-                _sentTo = EmailAddresses.Normalize(message.To, "To");
+                _done = "scheduled";
             }
             else
             {
-                _sentTo = (await Email.SendAsync(_source, message)).To;
+                await Email.SendAsync(_source, message);
+                _done = "sent";
             }
-
-            _error = null;
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            return;
         }
+
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("sent", _done));
     }
 
     private sealed class EmailModel

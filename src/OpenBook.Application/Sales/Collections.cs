@@ -221,7 +221,7 @@ public sealed record LateFeeDue(Invoice Invoice, Customer Customer, int DaysPast
 /// receipt, once or every so many days while it stays unpaid. Customers marked "no late fees" are skipped.
 /// </summary>
 public sealed class LateFeeService(
-    ISalesStore store, ICompanyStore companies, CollectionService collections, InvoiceService invoices, ItemService items, AccountService accounts,
+    IUnitOfWork unit, ISalesStore store, ICompanyStore companies, CollectionService collections, InvoiceService invoices, ItemService items, AccountService accounts,
     IClock clock, ICurrentUser user)
 {
     public const string ItemName = "Late Fee";
@@ -264,10 +264,18 @@ public sealed class LateFeeService(
         foreach (var fee in due)
         {
             var description = $"Late fee: invoice {fee.Invoice.Number}, {fee.Invoice.Balance:N2} overdue since {fee.Invoice.DueDate:d}";
-            created.Add(await invoices.CreateAsync(
-                new CreateInvoiceCommand(fee.Customer.Id, today, [new SalesLineDraft(itemId, description, 1m, fee.Fee, Taxable: false)],
-                    DueDate: today, Memo: $"Late fee on invoice {fee.Invoice.Number}", TaxCodeId: Guid.Empty),
-                recurringInvoiceId: null, ct, lateFeeFor: fee.Invoice.Id));
+            try
+            {
+                created.Add(await invoices.CreateAsync(
+                    new CreateInvoiceCommand(fee.Customer.Id, today, [new SalesLineDraft(itemId, description, 1m, fee.Fee, Taxable: false)],
+                        DueDate: today, Memo: $"Late fee on invoice {fee.Invoice.Number}", TaxCodeId: Guid.Empty),
+                    recurringInvoiceId: null, ct, lateFeeFor: fee.Invoice.Id));
+            }
+            catch (ConcurrencyConflictException)
+            {
+                // Another run has charged this one (the fee is unique per invoice and day), or took its number: the next run looks again.
+                unit.DiscardPending();
+            }
         }
 
         return created;
@@ -311,7 +319,7 @@ public sealed record ReminderResult(Invoice Invoice, int Step, string? Error);
 /// emailed once with the invoice attached, skipping steps already passed by a later one. Customers marked "no
 /// reminders" or without an email address are skipped.
 /// </summary>
-public sealed class ReminderService(ISalesStore store, ICompanyStore companies, CollectionService collections, EmailService email, IClock clock)
+public sealed class ReminderService(IUnitOfWork unit, ISalesStore store, ICompanyStore companies, CollectionService collections, EmailService email, IClock clock)
 {
     /// <summary>Reminders due on <paramref name="today"/> (whether or not sending is switched on).</summary>
     public async Task<IReadOnlyList<ReminderDue>> DueAsync(DateOnly today, CancellationToken ct = default)
@@ -352,16 +360,30 @@ public sealed class ReminderService(ISalesStore store, ICompanyStore companies, 
         {
             var i = reminder.Invoice;
             string Fill(string template) => CollectionSettings.Fill(template, reminder.Customer.DisplayName, i.Number, i.Balance, i.DueDate, today, company);
+
+            // The row first (it's unique per invoice and step), so a run overlapping this one can't send it too.
+            var reserved = InvoiceReminder.Create(i.Id, reminder.Step, clock.UtcNow, reminder.To);
+            store.Add(reserved);
+            try
+            {
+                await store.SaveChangesAsync(ct);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                unit.DiscardPending();
+                continue;
+            }
+
             try
             {
                 await email.SendAsync(new EmailSource(Domain.Email.EmailKind.Reminder, i.Id),
                     new EmailDraft(reminder.To, Fill(settings.ReminderSubject), Fill(settings.ReminderBody), reminder.Customer.EmailCc), ct);
-                store.Add(InvoiceReminder.Create(i.Id, reminder.Step, clock.UtcNow, reminder.To));
-                await store.SaveChangesAsync(ct);
                 results.Add(new ReminderResult(i, reminder.Step, null));
             }
             catch (DomainException ex)
             {
+                store.Remove(reserved);
+                await store.SaveChangesAsync(ct);
                 results.Add(new ReminderResult(i, reminder.Step, ex.Message));
                 if (ex.Code is "email.not_configured" or "email.password_unreadable")
                     break;

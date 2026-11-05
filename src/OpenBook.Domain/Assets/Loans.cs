@@ -53,11 +53,16 @@ public sealed class Loan
     public DateOnly? ProceedsDate { get; private set; }
     public Guid? ProceedsEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>Set when the loan was entered by mistake and voided; it then leaves the lists, reports and forecast.</summary>
+    public DateTimeOffset? VoidedAt { get; private set; }
+
+    public bool IsVoided => VoidedAt is not null;
     public IReadOnlyList<LoanPayment> PaymentsMade => _payments;
 
     public decimal MonthlyRate => AnnualRatePercent / 1200m;
 
-    public decimal Balance => Principal - _payments.Where(p => !p.IsVoided).Sum(p => p.Principal);
+    public decimal Balance => IsVoided ? 0m : Principal - _payments.Where(p => !p.IsVoided).Sum(p => p.Principal);
 
     public bool IsPaidOff => Balance == 0m;
 
@@ -71,7 +76,12 @@ public sealed class Loan
     public void Update(LoanDetails details)
     {
         ArgumentNullException.ThrowIfNull(details);
-        if (_payments.Any(p => !p.IsVoided))
+        if (IsVoided)
+            throw new DomainException("loan.voided", "This loan is voided.");
+        var termsChange = details.LiabilityAccountId != LiabilityAccountId || details.InterestAccountId != InterestAccountId || details.Principal != Principal
+            || details.AnnualRatePercent != AnnualRatePercent || details.Payments != Payments || details.FirstPaymentDate != FirstPaymentDate
+            || (details.PaymentAmount is { } amount && amount != PaymentAmount);
+        if (termsChange && _payments.Any(p => !p.IsVoided))
             throw new DomainException("loan.has_payments", "The terms can't change once payments are recorded.");
         Money.EnsureCents(details.Principal);
         if (details.Principal <= 0m)
@@ -94,6 +104,15 @@ public sealed class Loan
         PaymentAmount = payment;
         LenderVendorId = details.LenderVendorId;
         Notes = Text.Optional(details.Notes, 1000, "loan.notes_too_long", "Notes");
+    }
+
+    public void Void(DateTimeOffset at)
+    {
+        if (IsVoided)
+            throw new DomainException("loan.voided", "This loan is voided.");
+        if (_payments.Any(p => !p.IsVoided))
+            throw new DomainException("loan.has_payments", "Void its payments first, latest first.");
+        VoidedAt = at.ToUniversalTime();
     }
 
     public void RecordProceeds(Guid accountId, DateOnly date, Guid entryId)

@@ -248,6 +248,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ProceedsEntryId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("VoidedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InterestAccountId");
@@ -4040,6 +4043,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("VendorId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AchBatchId");
@@ -5341,6 +5348,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LateFeeForInvoiceId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("LateFeeOn")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("TEXT");
 
@@ -5392,8 +5402,6 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("JournalEntryId")
                         .IsUnique();
 
-                    b.HasIndex("LateFeeForInvoiceId");
-
                     b.HasIndex("LocationId");
 
                     b.HasIndex("Number")
@@ -5410,6 +5418,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasIndex("WarehouseId");
 
                     b.HasIndex("CustomerId", "Date");
+
+                    b.HasIndex("LateFeeForInvoiceId", "LateFeeOn")
+                        .IsUnique();
 
                     b.ToTable("Invoices", (string)null);
                 });

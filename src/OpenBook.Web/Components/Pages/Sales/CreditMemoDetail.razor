@@ -29,7 +29,10 @@
         <ActionLink Class="button secondary" Href="/sales?show=credits">Back to credit memos</ActionLink>
         <a class="button secondary" href="/api/sales/credit-memos/@_credit.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.CreditMemo" Id="_credit.Id" PdfUrl="@($"/api/sales/credit-memos/{_credit.Id}/pdf")" />
-        <ActionLink Class="button secondary" Href="@($"/sales/email/credit-memos/{_credit.Id}")">Email</ActionLink>
+        @if (_credit.Status == DocumentStatus.Posted)
+        {
+            <ActionLink Class="button secondary" Href="@($"/sales/email/credit-memos/{_credit.Id}")">Email</ActionLink>
+        }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_credit.Id}")">History</ActionLink>
         @if (_credit.Status == DocumentStatus.Posted)
         {
@@ -157,7 +160,7 @@
     private string? RemovePassword { get; set; }
 
     // Removing a credit from a document dated in a closed period was refused for want of the password.
-    private bool NeedsPassword => RemovePassword == "1";
+    private bool NeedsPassword => RemovePassword == "true";
 
     private List<(string, string)> Facts => [("Credit memo", _credit!.Number), ("Date", Labels.Date(_credit.Date))];
 

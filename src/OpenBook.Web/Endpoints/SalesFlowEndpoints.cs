@@ -49,7 +49,7 @@ public static class SalesFlowEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/sales/retainers/new?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -149,7 +149,12 @@ public static class SalesFlowEndpoints
     private static InvoiceFromSourceCommand InvoiceCommand(IFormCollection form)
     {
         var date = Date(form["date"]) ?? Today();
-        switch (form["mode"].ToString())
+        // What was typed is the choice, whichever button is left on: "everything" is only the starting point.
+        var mode = form["mode"].ToString();
+        if (mode is "rest" or "")
+            mode = form.Any(f => f.Key.StartsWith("qty:", StringComparison.Ordinal) && f.Value.ToString().Trim().Length > 0) ? "lines"
+                : form["percent"].ToString().Trim().Length > 0 ? "percent" : mode;
+        switch (mode)
         {
             case "percent":
                 return new InvoiceFromSourceCommand(date, Percent: Amount(form["percent"])
@@ -179,7 +184,7 @@ public static class SalesFlowEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}#invoice");
         }
     }
@@ -192,7 +197,7 @@ public static class SalesFlowEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}");
         }
     }

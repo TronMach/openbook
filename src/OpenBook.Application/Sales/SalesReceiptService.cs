@@ -166,7 +166,7 @@ public sealed class SalesReceiptService(
         var before = Snapshot(receipt);
 
         var back = await inventory.PlanReversalAsync(InventorySources.SalesReceipt, receipt.Id, receipt.Date, $"sales receipt {receipt.Number}", ct);
-        await engine.StageVoidAsync(receipt.JournalEntryId, $"Sales receipt changed: {command.Reason.Trim()}", fromDocument: true, ct);
+        await engine.StageVoidAsync(receipt.JournalEntryId, $"Sales receipt changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         inventory.Apply(back, InventorySources.SalesReceipt, receipt.Id);
         var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";

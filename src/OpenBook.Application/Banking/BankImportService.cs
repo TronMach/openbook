@@ -74,7 +74,8 @@ public sealed class BankImportService(IBankingStore bank, AccountService account
             throw new DomainException("import.too_many_rows", $"Import at most {MaxRows} transactions at a time.");
 
         var header = records[0].Fields.Select(Csv.Normalize).ToList();
-        int? Col(string[] names) => header.FindIndex(names.Contains) is var i and >= 0 ? i : null;
+        // In the order of the names, not the file: Chase has "Details" (DEBIT or CREDIT) before "Description".
+        int? Col(string[] names) => names.Select(n => header.IndexOf(n)).Where(i => i >= 0).Cast<int?>().FirstOrDefault();
 
         var dateCol = Col(DateHeaders) ?? throw new DomainException("import.no_date_column", "The file needs a date column (\"Date\").");
         var amountCol = Col(AmountHeaders);
@@ -91,7 +92,9 @@ public sealed class BankImportService(IBankingStore bank, AccountService account
 
         // With both a payee and a description column, the description becomes the memo.
         var payeeSource = payeeCol ?? descriptionCol;
-        var memoSource = memoCol ?? (payeeCol is not null ? descriptionCol : null);
+        // With a payee column the description is the memo; without one, a second description-like column is.
+        var secondDescription = DescriptionHeaders.Select(n => header.IndexOf(n)).Where(i => i >= 0 && i != descriptionCol).Cast<int?>().FirstOrDefault();
+        var memoSource = memoCol ?? (payeeCol is not null ? descriptionCol : secondDescription);
 
         static string? Field(CsvRecord r, int? column) =>
             column is { } c && c < r.Fields.Count && r.Fields[c].Length > 0 ? r.Fields[c] : null;

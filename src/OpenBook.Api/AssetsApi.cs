@@ -100,6 +100,8 @@ public static class AssetsApi
             await s.PayAsync(id, r, ct);
             return LoanResponse.From((await s.GetAsync(id, ct))!);
         });
+        assets.MapPost("/loans/{id:guid}/void", async (Guid id, VoidRequest r, LoanService s, CancellationToken ct) =>
+            LoanResponse.From(await s.VoidAsync(id, r.Reason, ct)));
         assets.MapPost("/loans/{id:guid}/payments/{paymentId:guid}/void", async (Guid id, Guid paymentId, VoidRequest r, LoanService s, CancellationToken ct) =>
             LoanResponse.From(await s.VoidPaymentAsync(id, paymentId, r.Reason, ct)));
     }

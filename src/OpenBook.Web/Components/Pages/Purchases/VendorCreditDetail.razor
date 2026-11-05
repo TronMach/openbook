@@ -213,7 +213,7 @@
     private string? RemovePassword { get; set; }
 
     // Removing a credit from a document dated in a closed period was refused for want of the password.
-    private bool NeedsPassword => RemovePassword == "1";
+    private bool NeedsPassword => RemovePassword == "true";
 
     [SupplyParameterFromForm(FormName = "refund")]
     private RefundModel RefundInput { get; set; } = default!;

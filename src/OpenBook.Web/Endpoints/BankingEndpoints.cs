@@ -106,7 +106,7 @@ public static class BankingEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/banking/petty-cash?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -152,7 +152,7 @@ public static class BankingEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}");
         }
     }

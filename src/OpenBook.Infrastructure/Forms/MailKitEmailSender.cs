@@ -33,6 +33,15 @@ internal sealed class MailKitEmailSender(OpenBookStorage storage) : IEmailSender
             _ => SecureSocketOptions.Auto,
         };
         await client.ConnectAsync(settings.Host ?? throw new InvalidOperationException("No SMTP server is set."), settings.Port, security, ct);
+        // Automatic takes a plain connection when the server offers no encryption: never send a password over one
+        // unless the admin chose None.
+        if (!string.IsNullOrEmpty(settings.Username) && !client.IsSecure && settings.Security != SmtpSecurity.None)
+        {
+            await client.DisconnectAsync(quit: true, ct);
+            throw new OpenBook.Domain.Common.DomainException("email.not_encrypted",
+                "The mail server didn't offer an encrypted connection, so the password wasn't sent. Check the server and port, or choose None under Security if you're sure.");
+        }
+
         if (!string.IsNullOrEmpty(settings.Username))
             await client.AuthenticateAsync(settings.Username, password ?? "", ct);
         await client.SendAsync(mime, ct);

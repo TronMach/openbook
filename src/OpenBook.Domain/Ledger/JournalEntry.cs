@@ -120,6 +120,8 @@ public sealed class JournalEntry
             throw new DomainException("journal.number_invalid", "Entry numbers start at 1.");
         if (date == default)
             throw new DomainException("journal.date_required", "A journal entry needs a date.");
+        if (date.Year < MinYear)
+            throw new DomainException("journal.date_too_early", $"{date:yyyy-MM-dd} is too long ago. Check the year: type all four digits.");
         if (!Enum.IsDefined(basis))
             throw new DomainException("journal.basis_invalid", $"Unknown entry basis {basis}.");
         if (string.IsNullOrWhiteSpace(source))
@@ -161,6 +163,9 @@ public sealed class JournalEntry
     /// Marks this entry voided and returns the reversing entry that cancels it. The reversal is dated
     /// the same day so the original period's figures are corrected, as QuickBooks does.
     /// </summary>
+    /// <summary>The earliest year the books take: a year typed with two digits arrives as 0026, far before every report's range.</summary>
+    public const int MinYear = 1900;
+
     public JournalEntry Void(long reversalNumber, string reason, DateTimeOffset voidedAt)
     {
         if (Kind == JournalEntryKind.Reversal)

@@ -57,9 +57,19 @@ internal static class Program
 
         // Running (it wrote its address) or handed over to a running copy (it exited cleanly): either way, it's up.
         var ours = false;
+        var told = false;
         var watch = Stopwatch.StartNew();
-        while (watch.Elapsed < StartLimit)
+        while (true)
         {
+            // An upgrade of a large company takes a while: say so, and go on waiting so the tray icon still comes.
+            if (!told && watch.Elapsed >= StartLimit)
+            {
+                told = true;
+                _ = Task.Run(() => MessageBox.Show(
+                    "OpenBook is still starting, which can take a few minutes after an update. It opens in your browser when it's ready.",
+                    "OpenBook", MessageBoxButtons.OK, MessageBoxIcon.Information));
+            }
+
             if (process.WaitForExit(500))
             {
                 if (process.ExitCode != 0)

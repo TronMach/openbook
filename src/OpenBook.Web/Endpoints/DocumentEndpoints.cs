@@ -143,7 +143,7 @@ public static class DocumentEndpoints
         }
         catch (DomainException ex)
         {
-            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
             return Results.Redirect($"/documents/{id}?error={Uri.EscapeDataString(ex.Message)}{password}#make");
         }
     }

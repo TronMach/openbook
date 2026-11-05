@@ -207,6 +207,8 @@ public sealed class VendorCreditService(
             var credit = credits[line.VendorCreditId];
             if (bill.VendorId != vendorId || bill.Status != DocumentStatus.Posted || credit.VendorId != vendorId)
                 throw new DomainException("credit.wrong_vendor", "That credit and bill must both be this vendor's.");
+            if (!bill.CanBePaid)
+                throw new DomainException("bill.not_approved", $"The bill {bill.Reference} is waiting for approval or rejected, so credit can't settle it.");
             if (bill.PayableAccountId != credit.PayableAccountId)
                 throw new DomainException("credit.mixed_payables", "That credit and that bill are kept in different accounts for money you owe, so the credit can't go on that bill.");
             if (date < credit.Date)

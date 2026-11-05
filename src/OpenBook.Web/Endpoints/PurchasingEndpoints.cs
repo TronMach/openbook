@@ -54,7 +54,7 @@ public static class PurchasingEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/purchases/vendor-credits/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
             }
         }).RequireAuthorization();
@@ -73,7 +73,9 @@ public static class PurchasingEndpoints
             try
             {
                 var quantities = Numbered(form, "qty:").ToDictionary(x => x.Line, x => x.Value);
+                // An item line's quantity left blank means it isn't on this bill.
                 var lines = Numbered(form, "cost:")
+                    .Where(x => !form.ContainsKey($"qty:{x.Line}") || quantities.ContainsKey(x.Line))
                     .Select(x => new BillOrderLine(x.Line, quantities.TryGetValue(x.Line, out var q) ? q : 1m, x.Value, form[$"lots:{x.Line}"].ToString() is { Length: > 0 } lots ? lots : null))
                     .Where(l => l.Quantity != 0m && (quantities.ContainsKey(l.LineNumber) || l.UnitCost != 0m))
                     .ToList();
@@ -82,7 +84,7 @@ public static class PurchasingEndpoints
             }
             catch (DomainException ex)
             {
-                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=1" : "";
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/purchases/orders/{id}?error={Uri.EscapeDataString(ex.Message)}{password}#bill");
             }
         }).RequireAuthorization();
@@ -107,6 +109,8 @@ public static class PurchasingEndpoints
                     return "done=rejected";
                 }
 
+                if (form["decision"] != "approve")
+                    throw new DomainException("approval.decision_required", "Press Approve or Reject.");
                 await approvals.ApproveAsync(billId, form["note"], ct);
                 return "done=approved";
             })).RequireAuthorization();

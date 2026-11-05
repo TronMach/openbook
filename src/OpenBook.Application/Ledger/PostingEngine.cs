@@ -42,7 +42,8 @@ public sealed class PostingEngine(
     IClock clock,
     ICurrentUser user,
     Attachments.AttachmentService attachments,
-    Notes.NoteService notes)
+    Notes.NoteService notes,
+    Banking.IBankingStore bank)
 {
     private const string EntityType = "journal_entry";
 
@@ -104,8 +105,17 @@ public sealed class PostingEngine(
             throw new DomainException("journal.change_reversing",
                 "This entry has an automatic reversal. Void it, which voids the reversal too, and enter it again.");
 
-        await StageVoidAsync(entry.Id, $"Changed: {reason.Trim()}", fromDocument: false, ct);
+        // A line from the bank follows the entry while the money in its account is the same; otherwise it's looked at again.
+        var feedLines = await bank.ListFeedItemsTiedToEntryAsync(entry.Id, ct);
+        var sameMoney = feedLines.All(i => command.Lines.Where(l => l.AccountId == i.AccountId).Sum(l => l.Debit - l.Credit) == i.Amount);
+        await StageVoidAsync(entry.Id, $"Changed: {reason.Trim()}", fromDocument: false, keepFeedLines: sameMoney, ct);
         var replacement = await StageAsync(command with { Source = JournalEntry.ManualSource, SourceId = null }, ct);
+        if (sameMoney)
+        {
+            foreach (var line in feedLines)
+                line.FollowEntry(replacement.Id);
+        }
+
         // The entry's files and notes go on with it (the voided one keeps its own).
         await attachments.StageCopiesAsync(EntityType, entry.Id, replacement.Id, ct);
         await notes.StageCopiesAsync(EntityType, entry.Id, replacement.Id, ct);
@@ -188,7 +198,15 @@ public sealed class PostingEngine(
         return entry;
     }
 
-    internal async Task<JournalEntry> StageVoidAsync(Guid entryId, string reason, bool fromDocument, CancellationToken ct)
+    internal Task<JournalEntry> StageVoidAsync(Guid entryId, string reason, bool fromDocument, CancellationToken ct) =>
+        StageVoidAsync(entryId, reason, fromDocument, keepFeedLines: false, ct);
+
+    /// <summary>
+    /// Bank feed lines standing for the entry go back to the queue, or they'd sit on a dead entry where no re-import or
+    /// review would find them. A correction that posts a replacement passes <paramref name="keepFeedLines"/>: its
+    /// lines stay, and matched ones follow the new entry.
+    /// </summary>
+    internal async Task<JournalEntry> StageVoidAsync(Guid entryId, string reason, bool fromDocument, bool keepFeedLines, CancellationToken ct)
     {
         var entry = await store.GetEntryAsync(entryId, ct) ?? throw new EntityNotFoundException(EntityType, entryId);
         if (!fromDocument && !JournalEntry.IsJournalSource(entry.Source))
@@ -215,6 +233,16 @@ public sealed class PostingEngine(
 
         store.Add(Audit(AuditAction.Voided, entry.Id, before, Snapshot(entry)));
         store.Add(Audit(AuditAction.Posted, reversal.Id, before: null, after: Snapshot(reversal)));
+        if (!keepFeedLines)
+        {
+            foreach (var line in await bank.ListFeedItemsTiedToEntryAsync(entry.Id, ct))
+            {
+                var lineBefore = Banking.BankFeedService.Snapshot(line);
+                line.Reopen();
+                store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, Banking.BankFeedService.EntityType, line.Id, lineBefore, Banking.BankFeedService.Snapshot(line)));
+            }
+        }
+
         return reversal;
     }
 

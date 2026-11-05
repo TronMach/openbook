@@ -29,6 +29,9 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
         if (Domain.Email.EmailAddresses.Parse(message.To, "To").Count == 0)
             throw new DomainException("email.to_required", "Enter the customer's email address.");
 
+        if ((await store.ListScheduledEmailsAsync(invoiceId, ct)).Any(e => e.Status == ScheduledEmailStatus.Scheduled && (e.SendAt - sendAt).Duration() < TimeSpan.FromSeconds(1)))
+            throw new DomainException("scheduled_email.duplicate", "This invoice already has an email waiting to go at that time.");
+
         var scheduled = ScheduledEmail.Create(invoiceId, message.To, message.Subject, message.Body, sendAt, clock.UtcNow, user.Actor,
             message.Cc, message.Bcc, message.DesignId);
         store.Add(scheduled);

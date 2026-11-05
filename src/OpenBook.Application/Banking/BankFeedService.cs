@@ -40,7 +40,7 @@ public sealed class BankFeedService(
     IClock clock,
     ICurrentUser user)
 {
-    private const string EntityType = "bank_feed_item";
+    internal const string EntityType = "bank_feed_item";
     public const int MatchWindowDays = 7;
 
     /// <summary>Reads a CSV or OFX/QFX/QBO statement and flags lines already imported or already in the books.</summary>
@@ -212,6 +212,10 @@ public sealed class BankFeedService(
             && await bank.GetTransactionAsync(transactionId, ct) is { Status: BankTransactionStatus.Posted })
             await banking.VoidAsync(transactionId, "Sent back to the bank feed for review", ct);
 
+        // Voiding has already put the line back.
+        if (item.Status == BankFeedStatus.Pending)
+            return;
+
         var before = Snapshot(item);
         item.Reopen();
         bank.Add(Audit(item, before));
@@ -286,7 +290,7 @@ public sealed class BankFeedService(
     private AuditRecord Audit(BankFeedItem item, string before) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, item.Id, before, Snapshot(item));
 
-    private static string Snapshot(BankFeedItem i) => JsonSerializer.Serialize(new
+    internal static string Snapshot(BankFeedItem i) => JsonSerializer.Serialize(new
     {
         i.AccountId,
         i.Date,

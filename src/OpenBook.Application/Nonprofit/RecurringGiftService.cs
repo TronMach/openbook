@@ -10,7 +10,7 @@ namespace OpenBook.Application.Nonprofit;
 public sealed record RecurringGiftResult(RecurringGift Template, IReadOnlyList<Donation> Created, string? Error);
 
 /// <summary>Regular gifts: templates, and recording what's due (each occurrence saved on its own; a template stops at its first error).</summary>
-public sealed class RecurringGiftService(INonprofitStore store, ISalesStore sales, GiftService gifts, IClock clock, ICurrentUser user)
+public sealed class RecurringGiftService(IUnitOfWork unit, INonprofitStore store, ISalesStore sales, GiftService gifts, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "recurring_gift";
     private const int MaxCatchUp = 60;
@@ -63,25 +63,35 @@ public sealed class RecurringGiftService(INonprofitStore store, ISalesStore sale
     public async Task<IReadOnlyList<RecurringGiftResult>> CreateDueAsync(DateOnly today, bool automaticOnly, Guid? onlyId = null, CancellationToken ct = default)
     {
         var results = new List<RecurringGiftResult>();
-        foreach (var template in await store.ListRecurringGiftsAsync(ct))
+        foreach (var listed in await store.ListRecurringGiftsAsync(ct))
         {
-            if ((onlyId is { } only && template.Id != only) || !template.IsDue(today) || (automaticOnly && !template.AutoCreate))
+            if ((onlyId is { } only && listed.Id != only) || !listed.IsDue(today) || (automaticOnly && !listed.AutoCreate))
                 continue;
+
+            // Afresh: a refused occurrence below forgets everything this scope was tracking.
+            var template = await store.GetRecurringGiftAsync(listed.Id, ct);
+            if (template is null)
+                continue;
+
             var created = new List<Donation>();
             string? error = null;
             while (template.IsDue(today) && created.Count < MaxCatchUp)
             {
                 try
                 {
+                    // The document and the template's count in one transaction, so a failure in between can't make it twice.
+                    await using var transaction = await unit.BeginAsync(ct);
                     var gift = await gifts.RecordAsync(new RecordGiftCommand(template.DonorId, template.NextDate!.Value, template.Amount, template.DepositAccountId,
                         IncomeAccountId: template.IncomeAccountId, PledgeId: template.PledgeId, ClassId: template.ClassId, Reference: "Recurring",
                         Memo: template.Memo), ct);
                     template.RecordCreated(gift.Id);
                     await store.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
                     created.Add(gift);
                 }
                 catch (DomainException ex)
                 {
+                    unit.DiscardPending();
                     error = ex.Message;
                     break;
                 }

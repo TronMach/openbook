@@ -27,6 +27,9 @@ public sealed class User
     public const int MinPasswordLength = 8;
     public const int MaxPasswordLength = 128;
     public const int MaxFailedLogins = 5;
+
+    /// <summary>Wrong passwords from all addresses together before anyone is shut out. One address stops at <see cref="MaxFailedLogins"/>.</summary>
+    public const int MaxFailedLoginsEverywhere = 100;
     public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(5);
 
     private User()
@@ -173,10 +176,10 @@ public sealed class User
 
     public bool IsLockedOut(DateTimeOffset now) => LockedUntil is { } until && until > now;
 
-    public void RecordFailedLogin(DateTimeOffset now)
+    public void RecordFailedLogin(DateTimeOffset now, int limit = MaxFailedLogins)
     {
         FailedLoginCount++;
-        if (FailedLoginCount >= MaxFailedLogins)
+        if (FailedLoginCount >= limit)
         {
             LockedUntil = now.ToUniversalTime() + LockoutDuration;
             FailedLoginCount = 0;

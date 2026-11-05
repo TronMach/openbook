@@ -130,11 +130,16 @@ public sealed class FormService(
         var credit = await store.GetCreditMemoAsync(id, ct) ?? throw new EntityNotFoundException("credit_memo", id);
         var (customer, job) = await BilledAsync(credit.CustomerId, ct);
         var totals = TaxTotals(credit.Lines, credit.TaxCodeId, credit.TaxExemption);
-        totals.Add(new FormTotal("Total credit", credit.Total));
-        if (credit.Total != credit.Balance)
-            totals.Add(new FormTotal("Used", credit.Balance - credit.Total));
-        totals.Add(new FormTotal("Credit remaining", credit.Balance, Emphasis: true));
-        return (Form(company, customer, "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo, job), customer.Id);
+        var voided = credit.Status == DocumentStatus.Voided;
+        totals.Add(new FormTotal("Total credit", credit.Total, Emphasis: voided));
+        if (!voided)
+        {
+            if (credit.Total != credit.Balance)
+                totals.Add(new FormTotal("Used", credit.Balance - credit.Total));
+            totals.Add(new FormTotal("Credit remaining", credit.Balance, Emphasis: true));
+        }
+
+        return (Form(company, customer, voided ? "Credit memo (void)" : "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo, job), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> ReceiptAsync(Company company, Guid id, CancellationToken ct)
@@ -147,7 +152,7 @@ public sealed class FormService(
         var party = customer is null ? new FormParty("Cash sale") : CustomerParty(customer);
         List<FormTotal> totals = [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)];
         AddSavings(totals, receipt.Lines);
-        var form = new SalesForm("Sales receipt", receipt.Number, CompanyParty(company), party, facts, await LinesAsync(receipt.Lines, receipt.TaxCodeId, ct),
+        var form = new SalesForm(receipt.Status == DocumentStatus.Voided ? "Sales receipt (void)" : "Sales receipt", receipt.Number, CompanyParty(company), party, facts, await LinesAsync(receipt.Lines, receipt.TaxCodeId, ct),
             totals, receipt.Memo, company.HomeCurrency.Code, Unstyled, ShipTo: customer is null ? null : ShipToParty(customer));
         return (form, customer?.Id ?? Guid.Empty);
     }

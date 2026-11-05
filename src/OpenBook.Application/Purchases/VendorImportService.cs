@@ -90,7 +90,7 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
                     F(phone),
                     F(address) ?? CustomerImportService.Address(F(street), F(street2), F(city), F(state), F(zip), F(country)),
                     F(accountNumber),
-                    F(terms) is { } t ? CustomerImportService.ParseTerms(t) : 30,
+                    F(terms) is { } t ? CustomerImportService.ParseTerms(t).DueDays : 30,
                     expenseAccount?.Id,
                     F(notes));
                 var accountName = expenseAccount is null ? null : chart.FullName(expenseAccount.Id);

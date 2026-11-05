@@ -20,6 +20,10 @@
         {
             <div class="alert error" role="alert">@Error</div>
         }
+        @if (_loan.VoidedAt is { } voided)
+        {
+            <div class="alert notice" role="status">This loan was voided on @voided.InCompanyTime().ToString("d"). It stays here for the record.</div>
+        }
         <dl class="facts">
             <dt>Borrowed</dt><dd>@Labels.Amount(_loan.Principal) in @_chart.FullName(_loan.LiabilityAccountId)</dd>
             <dt>Rate</dt><dd>@Labels.Percent(_loan.AnnualRatePercent) a year</dd>
@@ -85,6 +89,36 @@
                     }
                 </tbody>
             </table>
+        }
+
+        @if (!_loan.IsVoided)
+        {
+            <div class="card">
+                <h2>Name and notes</h2>
+                <PostForm Action="@($"/loans/{_loan.Id}/details")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><label for="name">Name</label><input id="name" name="name" maxlength="200" value="@_loan.Name" /></div>
+                    <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" maxlength="1000">@_loan.Notes</textarea></div>
+                    <div class="actions"><button type="submit" class="secondary">Save</button></div>
+                </PostForm>
+            </div>
+            <div class="card">
+                <h2>Void this loan</h2>
+                @if (_loan.PaymentsMade.Any(p => !p.IsVoided))
+                {
+                    <p class="hint">Its payments come first: void them, latest first.</p>
+                }
+                else
+                {
+                    <p class="hint">For a loan entered by mistake. @(_loan.ProceedsEntryId is null ? "" : "The entry recording the money is reversed too. ")To change the terms, void it and enter it again.</p>
+                    <PostForm Action="@($"/loans/{_loan.Id}/void")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <div class="field"><label for="reason">Why</label><input id="reason" name="reason" required maxlength="200" /></div>
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <div class="actions"><button type="submit" class="secondary">Void loan</button></div>
+                    </PostForm>
+                }
+            </div>
         }
 
         @if (_remaining.Count > 0)

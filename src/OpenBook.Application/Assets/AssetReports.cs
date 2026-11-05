@@ -110,7 +110,7 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
     public async Task<ReportTable> LoansAsync(CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var loans = (await store.ListLoansAsync(ct)).OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var loans = (await store.ListLoansAsync(ct)).Where(l => !l.IsVoided).OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
         var rows = loans.Select(l =>
         {
             var next = LoanService.RemainingSchedule(l);

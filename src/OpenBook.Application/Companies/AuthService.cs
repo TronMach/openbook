@@ -42,12 +42,19 @@ public sealed record SignInResult(
     int RecoveryCodesLeft = 0);
 
 /// <summary>Local username/password sign-in with lockout after repeated failures.</summary>
-public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, IClock clock)
+public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, SignInThrottle throttle, IClock clock)
 {
     // Verified against when the username doesn't exist, so response time doesn't reveal valid usernames.
     private readonly Lazy<string> _dummyHash = new(() => hasher.Hash(Guid.NewGuid().ToString()));
 
-    public async Task<SignInResult> SignInAsync(string username, string password, CancellationToken ct = default)
+    public Task<SignInResult> SignInAsync(string username, string password, CancellationToken ct = default) =>
+        SignInAsync(username, password, null, ct);
+
+    /// <param name="username">Who's signing in.</param>
+    /// <param name="password">Their password.</param>
+    /// <param name="address">Where from: wrong passwords shut out that address, not the person (see <see cref="SignInThrottle"/>).</param>
+    /// <param name="ct">Cancels the sign-in.</param>
+    public async Task<SignInResult> SignInAsync(string username, string password, string? address, CancellationToken ct = default)
     {
         User? user;
         try
@@ -72,12 +79,14 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
             return new SignInResult(SignInStatus.InvalidCredentials);
         }
 
-        if (!await CheckPasswordAsync(user, password, ct))
+        if (!await CheckPasswordAsync(user, password, address, ct))
         {
-            return user.IsLockedOut(clock.UtcNow)
-                ? new SignInResult(SignInStatus.LockedOut, LockedUntil: user.LockedUntil)
-                : new SignInResult(SignInStatus.InvalidCredentials);
+            var now = clock.UtcNow;
+            var until = user.IsLockedOut(now) ? user.LockedUntil : throttle.BlockedUntil(user.Id, address, now);
+            return until is null ? new SignInResult(SignInStatus.InvalidCredentials) : new SignInResult(SignInStatus.LockedOut, LockedUntil: until);
         }
+
+        throttle.Clear(user.Id, address);
 
         var settings = await store.GetSignInSettingsAsync(ct);
         if (settings is { SsoOnly: true, IsSsoReady: true } && user.Role != UserRole.Admin)
@@ -101,7 +110,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
     public async Task<bool> VerifyPasswordAsync(Guid userId, string password, CancellationToken ct = default)
     {
         var user = await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId);
-        return await CheckPasswordAsync(user, password, ct);
+        return await CheckPasswordAsync(user, password, null, ct);
     }
 
     /// <summary>The claim on the sign-in cookie naming its <see cref="UserSession"/>.</summary>
@@ -189,7 +198,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
     public async Task<AuthenticatedUser> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken ct = default)
     {
         var user = await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId);
-        if (!await CheckPasswordAsync(user, currentPassword, ct))
+        if (!await CheckPasswordAsync(user, currentPassword, null, ct))
             throw new DomainException("auth.wrong_password", "The current password is incorrect.");
 
         User.ValidatePassword(newPassword);
@@ -254,19 +263,32 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, ICl
                 JsonSerializer.Serialize(new { Changed = "two-factor sign-in turned off", Via = "reset" })));
         }
         await store.SaveChangesAsync(ct);
+        throttle.Clear(user.Id);
         return user.Username;
     }
 
-    private async Task<bool> CheckPasswordAsync(User user, string? password, CancellationToken ct)
+    private async Task<bool> CheckPasswordAsync(User user, string? password, string? address, CancellationToken ct)
     {
         var now = clock.UtcNow;
-        if (user.IsLockedOut(now))
+        if (user.IsLockedOut(now) || throttle.BlockedUntil(user.Id, address, now) is not null)
+        {
+            // The same work as a wrong password, and a right one is refused too.
+            hasher.Verify(_dummyHash.Value, password ?? string.Empty);
             return false;
+        }
 
         var check = hasher.Verify(user.PasswordHash, password ?? string.Empty);
         if (check == PasswordCheck.Failed)
         {
-            user.RecordFailedLogin(now);
+            throttle.RecordFailure(user.Id, address, now);
+            user.RecordFailedLogin(now, User.MaxFailedLoginsEverywhere);
+            if (user.IsLockedOut(now))
+            {
+                // Guessing from many addresses at once: someone should know why nobody can sign in.
+                store.Add(AuditRecord.Create(now, "system", AuditAction.Updated, "user", user.Id, null,
+                    JsonSerializer.Serialize(new { Note = $"Too many wrong passwords: sign-in stopped until {user.LockedUntil:u}" })));
+            }
+
             await store.SaveChangesAsync(ct);
             return false;
         }

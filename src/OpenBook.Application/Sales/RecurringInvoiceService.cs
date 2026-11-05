@@ -13,7 +13,7 @@ namespace OpenBook.Application.Sales;
 public sealed record RecurringInvoiceResult(RecurringInvoice Template, IReadOnlyList<Invoice> Created, string? Error, int Emailed = 0, string? EmailError = null);
 
 /// <summary>Recurring invoices: templates that create an invoice on a schedule, optionally emailing it.</summary>
-public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService invoices, EmailService email, PostingEngine engine, IClock clock, ICurrentUser user)
+public sealed class RecurringInvoiceService(IUnitOfWork unit, ISalesStore store, InvoiceService invoices, EmailService email, PostingEngine engine, IClock clock, ICurrentUser user)
 {
     private const string EntityType = "recurring_invoice";
     public const int MaxCatchUp = 60;
@@ -71,10 +71,16 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
     public async Task<IReadOnlyList<RecurringInvoiceResult>> CreateDueAsync(DateOnly today, bool automaticOnly, CancellationToken ct = default)
     {
         var results = new List<RecurringInvoiceResult>();
-        foreach (var template in await store.ListRecurringInvoicesAsync(ct))
+        foreach (var listed in await store.ListRecurringInvoicesAsync(ct))
         {
-            if (!template.IsDue(today) || (automaticOnly && !template.AutoCreate))
+            if (!listed.IsDue(today) || (automaticOnly && !listed.AutoCreate))
                 continue;
+
+            // Afresh: a refused occurrence below forgets everything this scope was tracking.
+            var template = await store.GetRecurringInvoiceAsync(listed.Id, ct);
+            if (template is null)
+                continue;
+
 
             var created = new List<Invoice>();
             string? error = null;
@@ -82,6 +88,8 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
             {
                 try
                 {
+                    // The document and the template's count in one transaction, so a failure in between can't make it twice.
+                    await using var transaction = await unit.BeginAsync(ct);
                     var date = template.NextDate!.Value;
                     var invoice = await invoices.CreateAsync(new CreateInvoiceCommand(
                         template.CustomerId, date, template.Lines.OrderBy(l => l.LineNumber).Select(l => l.ToDraft()).ToList(), Memo: template.Memo,
@@ -89,10 +97,12 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
                         template.Id, ct);
                     template.RecordCreated(invoice.Id);
                     await store.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
                     created.Add(invoice);
                 }
                 catch (DomainException ex)
                 {
+                    unit.DiscardPending();
                     error = ex.Message;
                     break;
                 }

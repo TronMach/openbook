@@ -16,6 +16,8 @@ An installed OpenBook Desktop checks GitHub for a newer release a minute after s
 
 Installing backs up the books first, as Quit does; if that backup fails, you're asked whether to go on anyway. Then the installer runs silently (its `install.log` is beside the download), and OpenBook starts again with the same folders and port.
 
+If an update stops partway and OpenBook won't start, your books are safe in Documents: run the installer in `%LOCALAPPDATA%\OpenBook\updates` again, or download the latest one from the releases page. When an update changes the company file, a `pre-upgrade-…` copy goes into the `Backups` folder first (the last three are kept).
+
 **Settings → System → Updates** also has **Check now**, and turns the daily check off or on; the choice is kept in `%LOCALAPPDATA%\OpenBook\updates.json`. `OpenBook:Updates:Check` and `OpenBook:Updates:Feed` do the same in configuration. Publishing releases is described in [releasing.md](releasing.md).
 
 ## Where things are

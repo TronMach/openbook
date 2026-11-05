@@ -25,7 +25,7 @@
         <ActionLink Class="button secondary" Href="/sales?show=receipts">Back to sales receipts</ActionLink>
         <a class="button secondary" href="/api/sales/receipts/@_receipt.Id/pdf" target="_blank">PDF</a>
         <PrintButtons Document="OpenBook.Domain.Companies.FormDocuments.SalesReceipt" Id="_receipt.Id" PdfUrl="@($"/api/sales/receipts/{_receipt.Id}/pdf")" />
-        @if (_receipt.CustomerId is not null)
+        @if (_receipt.CustomerId is not null && _receipt.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/sales/email/receipts/{_receipt.Id}")">Email</ActionLink>
         }

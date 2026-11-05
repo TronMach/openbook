@@ -391,7 +391,12 @@ public sealed class EmailService(
         var composed = EmailFormatter.Compose(Look(design, company), subject, body, button is null ? [] : [button]);
         var address = EmailSettings.Address(to, "To") ?? throw new DomainException("email.to_required", "Enter the address to send to.");
         await TransportAsync(Message([address], [], [], composed, attachments), ct);
-        store.Add(SentEmail.Create(kind, entityType, entityId, clock.UtcNow, user.Actor, address, null, null, subject, body,
+
+        // An invitation's link signs someone up: it goes in the email and nowhere else (the history is in backups and exports).
+        var kept = kind == EmailKind.Invitation
+            ? EmailTemplates.Fill(wording.Body, new Dictionary<string, string>(values) { ["link"] = "(link removed)" })
+            : body;
+        store.Add(SentEmail.Create(kind, entityType, entityId, clock.UtcNow, user.Actor, address, null, null, subject, kept,
             attachments.Count == 0 ? null : string.Join(", ", attachments.Select(a => a.FileName)), null, design.Id));
     }
 
