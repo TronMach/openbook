@@ -160,8 +160,15 @@ internal sealed class SalesEmailSource(
         _ => FormKind.SalesReceipt,
     };
 
-    private async Task<Customer> CustomerAsync(Guid id, CancellationToken ct) =>
-        await sales.GetCustomerAsync(id, ct) ?? throw new EntityNotFoundException("customer", id);
+    /// <summary>Who the email goes to: a customer billed with its parent is reached through the parent, as reminders and statements are.</summary>
+    private async Task<Customer> CustomerAsync(Guid id, CancellationToken ct)
+    {
+        var customer = await sales.GetCustomerAsync(id, ct) ?? throw new EntityNotFoundException("customer", id);
+        if (!customer.BillWithParent)
+            return customer;
+        var all = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        return all[CustomerTree.BillTo(id, all)];
+    }
 
     private static EmailContext Document(
         Company company, string entityType, Guid id, string title, string number, Customer? customer, FormDocuments document,

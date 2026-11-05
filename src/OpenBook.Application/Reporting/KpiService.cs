@@ -80,11 +80,16 @@ public sealed class KpiService(ReportLedger ledger, AccountService accounts, Rec
             return (-range.Where(d => IsIncome(d.Type)).Sum(d => d.Amount), range.Where(d => IsExpense(d.Type)).Sum(d => d.Amount));
         }
 
+        var aging = await receivables.AgingAsync(asOf, ct);
+        var apAging = await payables.AgingAsync(asOf, ct);
+
+        // On the cash basis invoices and bills aren't in the lines, so what's owed comes from the agings, like the overdue amounts.
+        var cashBasis = basis == ReportBasis.Cash;
         var cash = Balance(t => t == AccountType.Bank, asOf);
-        var ar = Balance(t => t == AccountType.AccountsReceivable, asOf);
-        var ap = -Balance(t => t == AccountType.AccountsPayable, asOf);
+        var ar = cashBasis ? aging.Totals.Total : Balance(t => t == AccountType.AccountsReceivable, asOf);
+        var ap = cashBasis ? apAging.Totals.Total : -Balance(t => t == AccountType.AccountsPayable, asOf);
         var otherCurrent = Balance(t => t == AccountType.OtherCurrentAsset, asOf);
-        var currentLiabilities = -Balance(t => t is AccountType.AccountsPayable or AccountType.CreditCard or AccountType.OtherCurrentLiability, asOf);
+        var currentLiabilities = ap - Balance(t => t is AccountType.CreditCard or AccountType.OtherCurrentLiability, asOf);
 
         var month = Activity(monthStart, asOf);
         var year = Activity(yearStart, asOf);
@@ -110,8 +115,6 @@ public sealed class KpiService(ReportLedger ledger, AccountService accounts, Rec
             .Where(r => r.Amount > 0m)
             .OrderByDescending(r => r.Amount).Take(5).ToList();
 
-        var aging = await receivables.AgingAsync(asOf, ct);
-        var apAging = await payables.AgingAsync(asOf, ct);
         static decimal Overdue(AgingBuckets b) => b.Total - b.Current;
 
         return new KpiSnapshot(

@@ -103,7 +103,11 @@
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@L["Save"]</button>
                 @if (Id is not null)
                 {
-                    <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>
+                    <button type="button" class="secondary" @onclick="() => ToggleActiveAsync(false)" disabled="@_busy" title="@(_active ? null : "Dates it missed while inactive are passed over")">@(_active ? "Make inactive" : "Make active")</button>
+                    @if (!_active)
+                    {
+                        <button type="button" class="secondary" @onclick="() => ToggleActiveAsync(true)" disabled="@_busy">Make active and catch up</button>
+                    }
                 }
                 @if (_created > 0)
                 {
@@ -219,7 +223,7 @@
         }
     }
 
-    private async Task ToggleActiveAsync()
+    private async Task ToggleActiveAsync(bool catchUp)
     {
         if (_busy)
             return;
@@ -227,7 +231,7 @@
         _error = null;
         try
         {
-            _active = (await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.SetActiveAsync(Id!.Value, !_active))).IsActive;
+            _active = (await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.SetActiveAsync(Id!.Value, !_active, catchUp))).IsActive;
         }
         catch (DomainException ex)
         {

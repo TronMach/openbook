@@ -334,8 +334,8 @@ internal static class ReceivablesApi
         });
         sales.MapPut("/recurring-invoices/{id:guid}", async (Guid id, RecurringInvoiceDetails r, RecurringInvoiceService s, CancellationToken ct) =>
             RecurringInvoiceResponse.From(await s.UpdateAsync(id, r, ct)));
-        sales.MapPut("/recurring-invoices/{id:guid}/active", async (Guid id, SetActiveRequest r, RecurringInvoiceService s, CancellationToken ct) =>
-            RecurringInvoiceResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
+        sales.MapPut("/recurring-invoices/{id:guid}/active", async (Guid id, SetActiveRequest r, bool? catchUp, RecurringInvoiceService s, CancellationToken ct) =>
+            RecurringInvoiceResponse.From(await s.SetActiveAsync(id, r.Active, catchUp == true, ct)));
         sales.MapPost("/recurring-invoices/create-due", async (RecurringInvoiceService s, CancellationToken ct) =>
             (await s.CreateDueAsync(Today(), automaticOnly: false, ct)).Select(x => new
             {

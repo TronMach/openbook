@@ -43,7 +43,7 @@ A sale whose shortfall has since been filled can't be voided directly, because t
 
 - **On a bill**: add an *item line* with the item and quantity; the line's amount is the cost. See [Vendors and purchases](05-purchases.md#bills).
 - **Received on a purchase order**, if your company receives goods into stock before the bill arrives (see [Purchase orders](15-purchase-orders.md)).
-- **Starting stock**: when you begin, use **Adjust quantities** with the adjustment account "Opening Balance Equity" and each item's unit cost.
+- **Starting stock**: when you begin, use **Adjust quantities** with the adjustment account "Opening Balance Equity" (it's offered, and added for you, if you don't have it yet) and each item's unit cost.
 
 ## Counting and adjusting
 

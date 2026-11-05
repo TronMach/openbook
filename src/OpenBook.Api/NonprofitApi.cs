@@ -130,7 +130,7 @@ internal static class NonprofitApi
             return Results.Created($"/api/nonprofit/recurring-gifts/{template.Id}", template);
         });
         nonprofit.MapPut("/recurring-gifts/{id:guid}", (Guid id, RecurringGiftDetails r, RecurringGiftService s, CancellationToken ct) => s.UpdateAsync(id, r, ct));
-        nonprofit.MapPut("/recurring-gifts/{id:guid}/active", (Guid id, SetActiveRequest r, RecurringGiftService s, CancellationToken ct) => s.SetActiveAsync(id, r.Active, ct));
+        nonprofit.MapPut("/recurring-gifts/{id:guid}/active", (Guid id, SetActiveRequest r, bool? catchUp, RecurringGiftService s, CancellationToken ct) => s.SetActiveAsync(id, r.Active, catchUp == true, ct));
         nonprofit.MapPost("/recurring-gifts/record", async (RecurringGiftService s, CancellationToken ct) =>
             (await s.CreateDueAsync(CompanyTime.Today, automaticOnly: false, ct: ct))
                 .Select(r => new { TemplateId = r.Template.Id, Created = r.Created.Select(g => g.Id), r.Error }));

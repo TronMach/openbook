@@ -23,6 +23,23 @@ public sealed class MigrationFlowTests : IAsyncLifetime
 
     public Task DisposeAsync() => _db.DisposeAsync();
 
+    [Fact]
+    public async Task An_item_that_posts_elsewhere_is_left_out_and_stops_nothing()
+    {
+        const string iif = "!ACCNT\tNAME\tACCNTTYPE\n"
+            + "ACCNT\tRetainage\tOCASSET\n"
+            + "ACCNT\tSales\tINC\n"
+            + "!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\n"
+            + "INVITEM\tRetainer\tSERV\tRetainage\t0\n"
+            + "INVITEM\tConsulting\tSERV\tSales\t100\n";
+
+        var preview = await Preview(MigrationSource.QuickBooksIif, iif);
+
+        Assert.Equal(0, preview.ErrorCount);
+        Assert.Equal(MigrationRowStatus.Skipped, preview.Rows.Single(r => r.Name == "Retainer").Status);
+        Assert.Equal(MigrationRowStatus.New, preview.Rows.Single(r => r.Name == "Consulting").Status);
+    }
+
     private Task<MigrationResult> Preview(MigrationSource source, string content) =>
         _db.InScope(sp => sp.GetRequiredService<MigrationImportService>().PreviewAsync(source, Encoding.UTF8.GetBytes(content)));
 

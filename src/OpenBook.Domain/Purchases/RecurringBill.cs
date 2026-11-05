@@ -43,6 +43,9 @@ public sealed class RecurringBill
     public int? MaxOccurrences { get; private set; }
     public int OccurrencesPosted { get; private set; }
 
+    /// <summary>Added to the count to find the place in the schedule: a schedule change or a pause moves it (<see cref="Recurrence.Rebase"/>).</summary>
+    public int IndexOffset { get; private set; }
+
     /// <summary>Enter bills automatically when due; otherwise wait for "Enter due bills".</summary>
     public bool AutoCreate { get; private set; }
 
@@ -60,7 +63,7 @@ public sealed class RecurringBill
 
     public IReadOnlyList<RecurringBillLine> Lines => _lines;
 
-    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted);
+    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted, IndexOffset);
 
     public bool IsDue(DateOnly today) => IsActive && NextDate is { } next && next <= today;
 
@@ -77,6 +80,7 @@ public sealed class RecurringBill
         Name = Text.Optional(details.Name, 100, "recurring.name_too_long", "Name")
             ?? throw new DomainException("recurring.name_required", "Give the recurring bill a name.");
         Memo = Text.Optional(details.Memo, 1000, "bill.memo_too_long", "Memo");
+        var schedule = Recurrence.Rebase(Frequency, Interval, StartDate, IndexOffset, OccurrencesPosted, details.Frequency, details.Interval, details.StartDate);
         Frequency = Enum.IsDefined(details.Frequency) ? details.Frequency : throw new DomainException("recurring.frequency_invalid", "Unknown frequency.");
         Recurrence.Validate(details.Interval, details.StartDate, details.EndDate, details.MaxOccurrences);
         if ((details.Lines ?? []).Any(l => l.ItemId is not null))
@@ -85,7 +89,7 @@ public sealed class RecurringBill
 
         VendorId = details.VendorId;
         Interval = details.Interval;
-        StartDate = details.StartDate;
+        (StartDate, IndexOffset) = schedule;
         EndDate = details.EndDate;
         MaxOccurrences = details.MaxOccurrences;
         AutoCreate = details.AutoCreate;
@@ -105,7 +109,13 @@ public sealed class RecurringBill
 
     public void Deactivate() => IsActive = false;
 
-    public void Reactivate() => IsActive = true;
+    /// <summary>Turns it back on; dates before <paramref name="skipBefore"/>, if given, are passed over rather than made.</summary>
+    public void Reactivate(DateOnly? skipBefore = null)
+    {
+        if (!IsActive && skipBefore is { } today)
+            IndexOffset += Recurrence.Missed(Frequency, Interval, StartDate, OccurrencesPosted + IndexOffset, today);
+        IsActive = true;
+    }
 }
 
 public sealed record RecurringBillDetails(

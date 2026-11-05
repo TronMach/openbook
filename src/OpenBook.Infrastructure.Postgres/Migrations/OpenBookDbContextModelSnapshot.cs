@@ -827,6 +827,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Interval")
                         .HasColumnType("integer");
 
@@ -2934,6 +2937,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Interval")
                         .HasColumnType("integer");
 
@@ -3303,6 +3309,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid?>("IncomeAccountId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Interval")
                         .HasColumnType("integer");
@@ -4205,6 +4214,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Interval")
                         .HasColumnType("integer");
@@ -5688,6 +5700,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Interval")
                         .HasColumnType("integer");

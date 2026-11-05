@@ -65,8 +65,9 @@ internal sealed partial class DesktopControlService(
             {
                 return;
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Whatever one command does, the tray keeps working: an exception here would stop the whole app.
                 LogFailed(ex);
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             }

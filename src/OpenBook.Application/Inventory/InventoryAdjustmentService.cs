@@ -49,9 +49,13 @@ public sealed class InventoryAdjustmentService(
         ArgumentNullException.ThrowIfNull(command);
         InventoryAdjustment.Validate(command.Lines);
 
-        var adjustmentAccount = command.AdjustmentAccountId is { } accountId
-            ? (await accounts.GetChartAsync(ct)).Get(accountId)
-            : await inventoryAccounts.GetOrCreateShrinkageAsync(ct);
+        // Guid.Empty is the starting stock choice: Opening Balance Equity, which a new company doesn't have yet.
+        var adjustmentAccount = command.AdjustmentAccountId switch
+        {
+            null => await inventoryAccounts.GetOrCreateShrinkageAsync(ct),
+            { } none when none == Guid.Empty => await inventoryAccounts.GetOrCreateOpeningEquityAsync(ct),
+            { } accountId => (await accounts.GetChartAsync(ct)).Get(accountId),
+        };
         if (adjustmentAccount.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable or AccountType.Bank or AccountType.CreditCard)
             throw new DomainException("inventory.adjustment_account_type", $"Adjustments can't post to '{adjustmentAccount.Name}'. Choose an expense, cost of goods sold or equity account.");
         if (!adjustmentAccount.IsActive)

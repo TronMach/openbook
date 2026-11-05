@@ -32,12 +32,15 @@ public sealed class RecurringGift
     public DateOnly? EndDate { get; private set; }
     public int? MaxOccurrences { get; private set; }
     public int OccurrencesPosted { get; private set; }
+
+    /// <summary>Added to the count to find the place in the schedule: a schedule change or a pause moves it (<see cref="Recurrence.Rebase"/>).</summary>
+    public int IndexOffset { get; private set; }
     public bool AutoCreate { get; private set; }
     public bool IsActive { get; private set; }
     public Guid? LastGiftId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted);
+    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted, IndexOffset);
 
     public bool IsDue(DateOnly today) => IsActive && NextDate is { } next && next <= today;
 
@@ -53,6 +56,7 @@ public sealed class RecurringGift
         ArgumentNullException.ThrowIfNull(details);
         if (details.Amount <= 0m || decimal.Round(details.Amount, 2) != details.Amount)
             throw new DomainException("donation.amount", "Enter an amount above zero, in cents.");
+        var schedule = Recurrence.Rebase(Frequency, Interval, StartDate, IndexOffset, OccurrencesPosted, details.Frequency, details.Interval, details.StartDate);
         Frequency = Enum.IsDefined(details.Frequency) ? details.Frequency : throw new DomainException("recurring.frequency_invalid", "Unknown frequency.");
         Recurrence.Validate(details.Interval, details.StartDate, details.EndDate, details.MaxOccurrences);
         DonorId = details.DonorId;
@@ -63,7 +67,7 @@ public sealed class RecurringGift
         PledgeId = details.PledgeId == Guid.Empty ? null : details.PledgeId;
         Memo = Text.Optional(details.Memo, Donation.MaxTextLength, "donation.memo_too_long", "Memo");
         Interval = details.Interval;
-        StartDate = details.StartDate;
+        (StartDate, IndexOffset) = schedule;
         EndDate = details.EndDate;
         MaxOccurrences = details.MaxOccurrences;
         AutoCreate = details.AutoCreate;
@@ -77,7 +81,13 @@ public sealed class RecurringGift
 
     public void Deactivate() => IsActive = false;
 
-    public void Reactivate() => IsActive = true;
+    /// <summary>Turns it back on; dates before <paramref name="skipBefore"/>, if given, are passed over rather than made.</summary>
+    public void Reactivate(DateOnly? skipBefore = null)
+    {
+        if (!IsActive && skipBefore is { } today)
+            IndexOffset += Recurrence.Missed(Frequency, Interval, StartDate, OccurrencesPosted + IndexOffset, today);
+        IsActive = true;
+    }
 }
 
 public sealed record RecurringGiftDetails(

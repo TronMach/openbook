@@ -99,7 +99,12 @@ builder.Services
     .AddOpenBookApi()
     .AddOpenBookWebSecurity(installation.KeysFolder ?? builder.Configuration["OpenBook:DataProtectionKeys"]);
 builder.Services.AddOpenBookRateLimits(builder.Configuration);
-builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes);
+builder.Services.Configure<FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = AccountEndpoints.MaxBackupUploadBytes;
+    // Grids post a field per cell: budgets, counts, reorder lists. The default of 1,024 stops them at a few hundred rows.
+    o.ValueCountLimit = 100_000;
+});
 builder.Services.AddScoped<OpenBook.Web.Components.LineFieldCache>();
 builder.Services.AddScoped<OpenBook.Web.Components.RenderTurn>();
 

@@ -66,6 +66,17 @@ public sealed class BankingAdvancedTests : BankingFixture
     }
 
     [Fact]
+    public async Task The_first_sync_goes_back_to_the_chosen_start_date_however_far()
+    {
+        var connection = await Connected();
+        await Connections(s => s.LinkAsync(connection.Id, "ACT-1", Checking.Id, new DateOnly(2025, 1, 1)));
+
+        var account = (await Connections(s => s.GetAsync(connection.Id)))!.Accounts.Single(a => a.RemoteId == "ACT-1");
+
+        Assert.Equal(new DateOnly(2025, 1, 1), BankConnectionService.Start(account, new DateOnly(2026, 6, 1)));
+    }
+
+    [Fact]
     public async Task Syncing_queues_posted_lines_for_linked_accounts_and_never_twice()
     {
         var connection = await Connected();

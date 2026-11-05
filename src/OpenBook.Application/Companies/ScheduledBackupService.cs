@@ -148,8 +148,9 @@ public sealed class ScheduledBackupService(
             await store.SaveChangesAsync(ct);
             return new BackupRunResult(true, name, null, old.Count);
         }
-        catch (Exception ex) when (ex is DomainException or IOException or UnauthorizedAccessException or HttpRequestException or InvalidOperationException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            // Anything at all: a run that isn't recorded leaves the page showing the last good file as if it were today's.
             schedule.Failed(ex.Message);
             await store.SaveChangesAsync(CancellationToken.None);
             return new BackupRunResult(false, null, ex.Message, 0);

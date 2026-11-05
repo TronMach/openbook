@@ -159,7 +159,7 @@ public sealed class Item
     }
 
     /// <summary>Volume pricing on automatically priced lines, by the item's total quantity on the document; lowest first.</summary>
-    public IReadOnlyList<QuantityBreak> QuantityBreaks => _quantityBreaks;
+    public IReadOnlyList<QuantityBreak> QuantityBreaks => _quantityBreaks.OrderBy(b => b.FromQuantity).ToList();
 
     public void SetQuantityBreaks(IEnumerable<(decimal FromQuantity, QuantityBreakKind Kind, decimal Value)> breaks)
     {

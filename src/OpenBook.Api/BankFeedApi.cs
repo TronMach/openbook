@@ -167,8 +167,8 @@ internal static class BankingProApi
         });
         banking.MapPut("/recurring-expenses/{id:guid}", async (Guid id, RecurringExpenseDetails r, RecurringExpenseService s, CancellationToken ct) =>
             RecurringExpenseResponse.From(await s.UpdateAsync(id, r, ct)));
-        banking.MapPut("/recurring-expenses/{id:guid}/active", async (Guid id, SetActiveRequest r, RecurringExpenseService s, CancellationToken ct) =>
-            RecurringExpenseResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
+        banking.MapPut("/recurring-expenses/{id:guid}/active", async (Guid id, SetActiveRequest r, bool? catchUp, RecurringExpenseService s, CancellationToken ct) =>
+            RecurringExpenseResponse.From(await s.SetActiveAsync(id, r.Active, catchUp == true, ct)));
         // Records every recurring expense due today (automatic or not).
         banking.MapPost("/recurring-expenses/record-due", async (RecurringExpenseService s, CancellationToken ct) =>
             (await s.CreateDueAsync(CompanyTime.Today, automaticOnly: false, ct)).Select(r => new { TemplateId = r.Template.Id, Created = r.Created.Select(t => t.Id).ToList(), r.Error }));

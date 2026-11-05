@@ -65,7 +65,7 @@ Instead of printing checks, you can pay vendors by direct deposit using an ACH f
 1. **The bank's details** (once per bank account): on **Purchases → ACH payments**, choose the bank account and fill in **Your bank's ACH details**: routing number, bank name, immediate origin, origin name, company ID, company name and entry description. Your bank gives you these.
 2. **Each vendor's details**: on the vendor's page, under **Bank details for ACH payments**, enter their routing number, account number and type (checking or savings). The account number is stored encrypted and only its last four digits are shown again.
 3. **Pay the bills** as usual with **Pay bills**, from that bank account.
-4. Back on **ACH payments**, the payments to vendors with bank details are listed under **Payments ready to send**. Choose **Pay on** (the effective date, a banking day; most banks need the file a day or two ahead), tick them, and **Make ACH file**.
+4. Back on **ACH payments**, the payments to vendors with bank details are listed under **Payments ready to send**, unticked and with their reference, so a check you've written isn't sent again; tick the ones to send. Payments already matched to a bank line or reconciled aren't listed. Choose **Pay on** (the effective date, a banking day; most banks need the file a day or two ahead), tick them, and **Make ACH file**.
 5. Download the file from **Files made** and upload it to your bank.
 
 A payment goes in one file only, and payments printed as checks are left out.

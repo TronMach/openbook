@@ -57,7 +57,7 @@
                         @foreach (var c in _checks)
                         {
                             <tr>
-                                <td class="check"><input type="checkbox" name="check" value="@($"{c.Kind}:{c.Id}")" checked="@(c.PrintedAt is null)" aria-label="Print check to @c.Payee" /></td>
+                                <td class="check"><input type="checkbox" name="check" value="@($"{c.Kind}:{c.Id}")" checked="@(c.PrintedAt is null && PositivePayService.IsCheckNumber(c.Number))" aria-label="Print check to @c.Payee" /></td>
                                 <td>@Labels.Date(c.Date)</td>
                                 <td>@c.Number</td>
                                 <td>

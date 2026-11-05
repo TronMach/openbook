@@ -87,7 +87,7 @@ public sealed record AchCandidate(BillPayment Payment, Vendor Vendor, VendorBank
 /// ACH (NACHA) files for paying vendors: vendors' bank details (account numbers encrypted, shown as last four), the
 /// bank's settings per bank account, and files of chosen bill payments, each payment sent once.
 /// </summary>
-public sealed class AchService(IPurchasesStore store, Accounts.AccountService accounts, ISecretProtector secrets, IClock clock, ICurrentUser user)
+public sealed class AchService(IPurchasesStore store, Accounts.AccountService accounts, ILedgerStore ledger, Banking.IBankingStore bank, ISecretProtector secrets, IClock clock, ICurrentUser user)
 {
     public const string BatchEntity = "ach_batch";
     public const string SettingsEntity = "ach_settings";
@@ -144,16 +144,28 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
         return settings;
     }
 
-    /// <summary>Posted bill payments from the account to vendors with bank details, not yet sent by ACH or printed as checks.</summary>
+    /// <summary>
+    /// Posted bill payments from the account to vendors with bank details, not yet sent by ACH or printed as checks, and
+    /// not already through the bank (matched to a bank line, or reconciled): sending those would pay them twice.
+    /// </summary>
     public async Task<IReadOnlyList<AchCandidate>> CandidatesAsync(Guid accountId, CancellationToken ct = default)
     {
         var banks = (await store.ListVendorBankAccountsAsync(ct)).ToDictionary(b => b.VendorId);
         var vendors = (await store.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
-        return (await store.ListPaymentsAsync(null, ct))
-            .Where(p => p.PaymentAccountId == accountId && p.Status == DocumentStatus.Posted && p.AchBatchId is null && p.PrintedAt is null && banks.ContainsKey(p.VendorId))
+        var cleared = (await bank.ListFeedItemsAsync(accountId, ct)).Where(i => i.MatchedJournalEntryId is not null).Select(i => i.MatchedJournalEntryId!.Value).ToHashSet();
+        var ready = (await store.ListPaymentsAsync(null, ct))
+            .Where(p => p.PaymentAccountId == accountId && p.Status == DocumentStatus.Posted && p.AchBatchId is null && p.PrintedAt is null
+                && banks.ContainsKey(p.VendorId) && !cleared.Contains(p.JournalEntryId))
             .OrderBy(p => p.Date).ThenBy(p => vendors[p.VendorId].DisplayName, StringComparer.CurrentCultureIgnoreCase)
-            .Select(p => new AchCandidate(p, vendors[p.VendorId], banks[p.VendorId]))
             .ToList();
+        var candidates = new List<AchCandidate>();
+        foreach (var payment in ready)
+        {
+            if (!await ledger.IsInReconciliationAsync(payment.JournalEntryId, ct))
+                candidates.Add(new AchCandidate(payment, vendors[payment.VendorId], banks[payment.VendorId]));
+        }
+
+        return candidates;
     }
 
     public Task<IReadOnlyList<AchBatch>> ListBatchesAsync(Guid accountId, CancellationToken ct = default) => store.ListAchBatchesAsync(accountId, ct);

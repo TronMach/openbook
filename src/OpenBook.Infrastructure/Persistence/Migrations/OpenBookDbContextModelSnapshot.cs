@@ -820,6 +820,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Interval")
                         .HasColumnType("INTEGER");
 
@@ -2927,6 +2930,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Interval")
                         .HasColumnType("INTEGER");
 
@@ -3296,6 +3302,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("IncomeAccountId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Interval")
                         .HasColumnType("INTEGER");
@@ -4198,6 +4207,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Interval")
                         .HasColumnType("INTEGER");
@@ -5681,6 +5693,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("IndexOffset")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Interval")
                         .HasColumnType("INTEGER");

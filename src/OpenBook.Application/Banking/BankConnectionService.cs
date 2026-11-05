@@ -197,7 +197,8 @@ public sealed class BankConnectionService(
     public static DateOnly Start(BankConnectionAccount account, DateOnly today)
     {
         ArgumentNullException.ThrowIfNull(account);
-        var start = account.FetchedThrough is { } through ? through.AddDays(-OverlapDays) : today.AddDays(-DefaultHistoryDays);
+        // The first sync goes back to the start date chosen, however far; later ones never fetch before it.
+        var start = account.FetchedThrough is { } through ? through.AddDays(-OverlapDays) : account.ImportFrom ?? today.AddDays(-DefaultHistoryDays);
         return account.ImportFrom is { } floor && floor > start ? floor : start;
     }
 

@@ -81,6 +81,10 @@ public sealed class InventoryAccounts(AccountService accounts)
     public Task<Account> GetOrCreateShrinkageAsync(CancellationToken ct = default) =>
         GetOrCreateAsync(ShrinkageName, AccountType.CostOfGoodsSold, "Inventory lost, damaged or found in counts.", ct);
 
+    public Task<Account> GetOrCreateOpeningEquityAsync(CancellationToken ct = default) =>
+        GetOrCreateAsync(Ledger.OpeningBalanceService.EquityAccountName, AccountType.Equity,
+            "Balances brought in when the books were started; move them to owner's equity once confirmed.", ct);
+
     public Task<Account> GetOrCreateLandedCostAsync(CancellationToken ct = default) =>
         GetOrCreateAsync(LandedCostName, AccountType.OtherCurrentAsset, "Freight, duty and other costs of bringing stock in, until they're spread over the stock.", ct);
 

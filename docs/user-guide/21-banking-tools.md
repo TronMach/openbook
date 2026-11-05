@@ -18,7 +18,7 @@ OpenBook then fetches posted transactions every six hours (or **Sync now**) into
 
 Payments from bank accounts (bill payments and checks written as expenses) can be printed on standard **voucher check stock**: the check at the top and two stubs below, with the bank details, MICR line and signature line already printed on the stock.
 
-**Banking → Print checks**: choose the **account** (or all), show checks **not printed yet** or all, tick the ones to print and **Print selected**. The PDF opens in a new tab.
+**Banking → Print checks**: choose the **account** (or all), show checks **not printed yet** or all, tick the ones to print and **Print selected**. The PDF opens in a new tab. Payments with a check number start ticked. Payments sent by ACH aren't listed, nor are spends that came from your bank's lines, because that money has already left.
 
 - Load the stock face up.
 - Print at **100% ("actual size")**, not "fit to page".

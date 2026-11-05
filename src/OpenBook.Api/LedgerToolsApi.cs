@@ -45,8 +45,8 @@ internal static class LedgerToolsApi
         });
         api.MapPut("/recurring-entries/{id:guid}", async (Guid id, RecurringEntryDetails r, RecurringEntryService s, CancellationToken ct) =>
             RecurringEntryResponse.From(await s.UpdateAsync(id, r, ct)));
-        api.MapPut("/recurring-entries/{id:guid}/active", async (Guid id, SetActiveRequest r, RecurringEntryService s, CancellationToken ct) =>
-            RecurringEntryResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
+        api.MapPut("/recurring-entries/{id:guid}/active", async (Guid id, SetActiveRequest r, bool? catchUp, RecurringEntryService s, CancellationToken ct) =>
+            RecurringEntryResponse.From(await s.SetActiveAsync(id, r.Active, catchUp == true, ct)));
         api.MapPost("/recurring-entries/post-due", async (RecurringEntryService s, CancellationToken ct) =>
             (await s.PostDueAsync(CompanyTime.Today, autoPostOnly: false, ct))
                 .Select(x => new { x.Template.Id, x.Template.Name, Posted = x.Posted.Select(e => new { e.Id, e.Number, e.Date }), x.Error }));

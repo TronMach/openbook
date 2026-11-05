@@ -369,7 +369,7 @@ public static class Prices
             }
         }
 
-        if (item.QuantityBreaks.LastOrDefault(b => quantity >= b.FromQuantity) is { } tier)
+        if (item.QuantityBreaks.Where(b => quantity >= b.FromQuantity).MaxBy(b => b.FromQuantity) is { } tier)
         {
             // A break never raises the price: a per-unit break price above the level price is ignored.
             var broken = tier.Kind == QuantityBreakKind.PercentOff ? price * (100m - tier.Value) / 100m : Math.Min(price, tier.Value);

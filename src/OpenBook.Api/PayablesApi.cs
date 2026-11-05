@@ -93,8 +93,8 @@ internal static class PayablesApi
         });
         purchases.MapPut("/recurring-bills/{id:guid}", async (Guid id, RecurringBillDetails r, RecurringBillService s, CancellationToken ct) =>
             RecurringBillResponse.From(await s.UpdateAsync(id, r, ct)));
-        purchases.MapPut("/recurring-bills/{id:guid}/active", async (Guid id, SetActiveRequest r, RecurringBillService s, CancellationToken ct) =>
-            RecurringBillResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
+        purchases.MapPut("/recurring-bills/{id:guid}/active", async (Guid id, SetActiveRequest r, bool? catchUp, RecurringBillService s, CancellationToken ct) =>
+            RecurringBillResponse.From(await s.SetActiveAsync(id, r.Active, catchUp == true, ct)));
         purchases.MapPost("/recurring-bills/create-due", async (RecurringBillService s, CancellationToken ct) =>
             (await s.CreateDueAsync(Today(), automaticOnly: false, ct)).Select(x => new
             {

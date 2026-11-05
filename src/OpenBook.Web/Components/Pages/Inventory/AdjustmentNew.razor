@@ -42,6 +42,10 @@
                 <label for="account">Adjustment account</label>
                 <InputSelect id="account" @bind-Value="Input.AccountId" data-search>
                     <option value="">Inventory Shrinkage (default)</option>
+                    @if (_chart.FindByFullName(OpeningBalanceService.EquityAccountName) is null)
+                    {
+                        <option value="@Guid.Empty">Opening Balance Equity, for starting stock (added now)</option>
+                    }
                     @foreach (var account in _accounts)
                     {
                         <option value="@account.Id">@_chart.FullName(account.Id) (@Labels.For(account.Type))</option>

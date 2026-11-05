@@ -52,7 +52,7 @@ public sealed class PositivePayService(
             .Select(t => new PositivePayCheck(CheckKind.Expense, t.Id, t.Date, t.Reference!.Trim(), t.Amount,
                 t.Payee ?? (t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null) ?? string.Empty, t.Status == BankTransactionStatus.Voided));
         var payments = (await purchases.ListPaymentsAsync(null, ct))
-            .Where(p => p.PaymentAccountId == accountId && p.Date >= from && p.Date <= to && IsCheckNumber(p.Reference))
+            .Where(p => p.PaymentAccountId == accountId && p.AchBatchId is null && p.Date >= from && p.Date <= to && IsCheckNumber(p.Reference))
             .Select(p => new PositivePayCheck(CheckKind.BillPayment, p.Id, p.Date, p.Reference!.Trim(), p.Amount,
                 vendors.GetValueOrDefault(p.VendorId) ?? string.Empty, p.Status == DocumentStatus.Voided));
         return expenses.Concat(payments)

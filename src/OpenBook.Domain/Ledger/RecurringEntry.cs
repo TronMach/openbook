@@ -57,6 +57,9 @@ public sealed class RecurringEntry
     public int? MaxOccurrences { get; private set; }
     public int OccurrencesPosted { get; private set; }
 
+    /// <summary>Added to the count to find the place in the schedule: a schedule change or a pause moves it (<see cref="Recurrence.Rebase"/>).</summary>
+    public int IndexOffset { get; private set; }
+
     /// <summary>Post automatically when due; otherwise wait for "Post due entries".</summary>
     public bool AutoPost { get; private set; }
 
@@ -75,7 +78,7 @@ public sealed class RecurringEntry
     public IReadOnlyList<RecurringEntryLine> Lines => _lines;
 
     /// <summary>The next date to post, or null once the schedule has ended.</summary>
-    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted);
+    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted, IndexOffset);
 
     public bool IsDue(DateOnly today) => IsActive && NextDate is { } next && next <= today;
 
@@ -94,6 +97,7 @@ public sealed class RecurringEntry
             ?? throw new DomainException("recurring.name_required", "Give the recurring entry a name.");
         Memo = Text.Optional(details.Memo, 1000, "recurring.memo_too_long", "Memo");
         Basis = Enum.IsDefined(details.Basis) ? details.Basis : throw new DomainException("journal.basis_invalid", "Unknown entry basis.");
+        var schedule = Recurrence.Rebase(Frequency, Interval, StartDate, IndexOffset, OccurrencesPosted, details.Frequency, details.Interval, details.StartDate);
         Frequency = Enum.IsDefined(details.Frequency) ? details.Frequency : throw new DomainException("recurring.frequency_invalid", "Unknown frequency.");
         Recurrence.Validate(details.Interval, details.StartDate, details.EndDate, details.MaxOccurrences);
 
@@ -101,7 +105,7 @@ public sealed class RecurringEntry
         JournalEntry.Post(1, details.StartDate, Currency.Usd, details.Lines, DateTimeOffset.UnixEpoch);
 
         Interval = details.Interval;
-        StartDate = details.StartDate;
+        (StartDate, IndexOffset) = schedule;
         EndDate = details.EndDate;
         MaxOccurrences = details.MaxOccurrences;
         AutoPost = details.AutoPost;
@@ -121,7 +125,13 @@ public sealed class RecurringEntry
 
     public void Deactivate() => IsActive = false;
 
-    public void Reactivate() => IsActive = true;
+    /// <summary>Turns it back on; dates before <paramref name="skipBefore"/>, if given, are passed over rather than made.</summary>
+    public void Reactivate(DateOnly? skipBefore = null)
+    {
+        if (!IsActive && skipBefore is { } today)
+            IndexOffset += Recurrence.Missed(Frequency, Interval, StartDate, OccurrencesPosted + IndexOffset, today);
+        IsActive = true;
+    }
 }
 
 public sealed record RecurringEntryDetails(
@@ -154,12 +164,43 @@ public static class Recurrence
     };
 
     /// <summary>The next date after <paramref name="posted"/> occurrences, or null once the schedule has ended.</summary>
-    public static DateOnly? NextDate(RecurrenceFrequency frequency, int interval, DateOnly start, DateOnly? end, int? max, int posted)
+    /// <param name="offset">Added to the count to find the place in the schedule, which a change or a pause can move away from it.</param>
+    public static DateOnly? NextDate(RecurrenceFrequency frequency, int interval, DateOnly start, DateOnly? end, int? max, int posted, int offset = 0)
     {
         if (max is { } m && posted >= m)
             return null;
-        var next = OccurrenceDate(frequency, interval, start, posted);
+        var next = OccurrenceDate(frequency, interval, start, posted + offset);
         return end is { } e && next > e ? null : next;
+    }
+
+    /// <summary>
+    /// A template's schedule after an edit. Only the future changes: with occurrences made, the new schedule starts at
+    /// the date that was next, or at the new first date if that was changed, and what's been made stays counted against
+    /// any maximum. Nothing changes for an edit that leaves the schedule alone.
+    /// </summary>
+    public static (DateOnly Start, int Offset) Rebase(
+        RecurrenceFrequency oldFrequency, int oldInterval, DateOnly oldStart, int oldOffset, int posted,
+        RecurrenceFrequency frequency, int interval, DateOnly start)
+    {
+        if (oldFrequency == frequency && oldInterval == interval && oldStart == start)
+            return (oldStart, oldOffset);
+        if (posted == 0)
+            return (start, 0);
+        if (start == oldStart)
+            return (OccurrenceDate(oldFrequency, oldInterval, oldStart, posted + oldOffset), -posted);
+        var last = OccurrenceDate(oldFrequency, oldInterval, oldStart, posted + oldOffset - 1);
+        if (start <= last)
+            throw new DomainException("recurring.start_before_last", $"This schedule has reached {last:yyyy-MM-dd}, so choose a first date after that.");
+        return (start, -posted);
+    }
+
+    /// <summary>How many dates of the schedule from place <paramref name="index"/> fall before <paramref name="today"/>.</summary>
+    public static int Missed(RecurrenceFrequency frequency, int interval, DateOnly start, int index, DateOnly today)
+    {
+        var missed = 0;
+        while (missed < 100_000 && OccurrenceDate(frequency, interval, start, index + missed) < today)
+            missed++;
+        return missed;
     }
 
     public const int MaxTags = 20;

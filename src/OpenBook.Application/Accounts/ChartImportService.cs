@@ -13,6 +13,9 @@ public enum ImportRowStatus
     /// <summary>An account with this full name already exists; the row is skipped.</summary>
     Exists,
 
+    /// <summary>Not something OpenBook keeps, such as QuickBooks' non-posting accounts; the row is left out.</summary>
+    Skipped,
+
     Error,
 }
 
@@ -129,6 +132,12 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
                 continue;
             }
 
+            if (typeText is not null && Csv.Normalize(typeText) == "nonposting")
+            {
+                results.Add(Row(ImportRowStatus.Skipped, "Non-posting accounts hold estimates and orders, not money, so it's left out."));
+                continue;
+            }
+
             if (type is null)
             {
                 results.Add(Row(ImportRowStatus.Error, typeText is null ? "Account type is missing." : $"'{typeText}' isn't a known account type."));
@@ -163,7 +172,9 @@ public sealed class ChartImportService(ILedgerStore store, AccountService accoun
                 chart.EnsureCanAdd(name, type.Value, number, parentId);
                 var account = Account.Create(name, type.Value, number, parentId, description);
                 account.SetDonorRestricted(Restricted(Field(record, restrictedColumn)));
-                account.SetTaxLine(Field(record, taxLineColumn));
+                // QuickBooks' export has a column of this name with its own values, such as "<Unassigned>": those aren't ours.
+                if (Field(record, taxLineColumn) is { } taxLine && TaxLines.Find(taxLine.Trim()) is not null && !type.Value.IsBalanceSheet())
+                    account.SetTaxLine(taxLine);
                 created.Add(account);
                 results.Add(Row(ImportRowStatus.New));
             }

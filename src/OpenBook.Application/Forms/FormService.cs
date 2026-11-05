@@ -95,7 +95,7 @@ public sealed class FormService(
     private async Task<(SalesForm Form, Guid CustomerId)> InvoiceAsync(Company company, Guid id, CancellationToken ct)
     {
         var invoice = await store.GetInvoiceAsync(id, ct) ?? throw new EntityNotFoundException("invoice", id);
-        var customer = await RequiredCustomerAsync(invoice.CustomerId, ct);
+        var (customer, job) = await BilledAsync(invoice.CustomerId, ct);
         var facts = new List<(string, string)>
         {
             ("Date", D(invoice.Date)),
@@ -110,31 +110,31 @@ public sealed class FormService(
         totals.Add(new FormTotal("Balance due", invoice.Balance, Emphasis: true));
         AddSavings(totals, invoice.Lines);
         var title = invoice.Status == DocumentStatus.Voided ? "Invoice (void)" : "Invoice";
-        return (Form(company, customer, title, invoice.Number, facts, await LinesAsync(invoice.Lines, invoice.TaxCodeId, ct), totals, invoice.Memo), customer.Id);
+        return (Form(company, customer, title, invoice.Number, facts, await LinesAsync(invoice.Lines, invoice.TaxCodeId, ct), totals, invoice.Memo, job), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> EstimateAsync(Company company, Guid id, CancellationToken ct)
     {
         var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException("estimate", id);
-        var customer = await RequiredCustomerAsync(estimate.CustomerId, ct);
+        var (customer, job) = await BilledAsync(estimate.CustomerId, ct);
         var facts = new List<(string, string)> { ("Date", D(estimate.Date)) };
         if (estimate.ExpirationDate is { } expires)
             facts.Add(("Valid until", D(expires)));
         List<FormTotal> totals = [.. TaxTotals(estimate.Lines, estimate.TaxCodeId, estimate.TaxExemption), new FormTotal("Total", estimate.Total, Emphasis: true)];
         AddSavings(totals, estimate.Lines);
-        return (Form(company, customer, "Estimate", estimate.Number, facts, await LinesAsync(estimate.Lines, estimate.TaxCodeId, ct), totals, estimate.Memo), customer.Id);
+        return (Form(company, customer, "Estimate", estimate.Number, facts, await LinesAsync(estimate.Lines, estimate.TaxCodeId, ct), totals, estimate.Memo, job), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> CreditMemoAsync(Company company, Guid id, CancellationToken ct)
     {
         var credit = await store.GetCreditMemoAsync(id, ct) ?? throw new EntityNotFoundException("credit_memo", id);
-        var customer = await RequiredCustomerAsync(credit.CustomerId, ct);
+        var (customer, job) = await BilledAsync(credit.CustomerId, ct);
         var totals = TaxTotals(credit.Lines, credit.TaxCodeId, credit.TaxExemption);
         totals.Add(new FormTotal("Total credit", credit.Total));
         if (credit.Total != credit.Balance)
             totals.Add(new FormTotal("Used", credit.Balance - credit.Total));
         totals.Add(new FormTotal("Credit remaining", credit.Balance, Emphasis: true));
-        return (Form(company, customer, "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo), customer.Id);
+        return (Form(company, customer, "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo, job), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> ReceiptAsync(Company company, Guid id, CancellationToken ct)
@@ -152,11 +152,12 @@ public sealed class FormService(
         return (form, customer?.Id ?? Guid.Empty);
     }
 
+    /// <param name="job">The record the document is for, when <paramref name="customer"/> is billed for it: a project or job of theirs.</param>
     private static SalesForm Form(
         Company company, Customer customer, string title, string number, IReadOnlyList<(string, string)> facts,
-        IReadOnlyList<FormLine> lines, IReadOnlyList<FormTotal> totals, string? message) =>
-        new(title, number, CompanyParty(company), CustomerParty(customer), facts, lines, totals, message, company.HomeCurrency.Code, Unstyled,
-            ShipTo: ShipToParty(customer));
+        IReadOnlyList<FormLine> lines, IReadOnlyList<FormTotal> totals, string? message, Customer? job = null) =>
+        new(title, number, CompanyParty(company), CustomerParty(customer), job is null || job.Id == customer.Id ? facts : [.. facts, ("For", job.DisplayName)],
+            lines, totals, message, company.HomeCurrency.Code, Unstyled, ShipTo: ShipToParty(job ?? customer) ?? ShipToParty(customer));
 
     /// <summary>
     /// What price levels, quantity breaks and rules took off the list prices (manual prices don't count), rounded to the
@@ -228,6 +229,16 @@ public sealed class FormService(
         if (taxable is { } taxed)
             cells[FormColumns.Taxable] = taxed ? "Yes" : "No";
         return cells;
+    }
+
+    /// <summary>Who a document for this customer is addressed to, and the customer itself: they differ when it's billed with its parent.</summary>
+    private async Task<(Customer Billed, Customer Job)> BilledAsync(Guid id, CancellationToken ct)
+    {
+        var job = await RequiredCustomerAsync(id, ct);
+        if (!job.BillWithParent)
+            return (job, job);
+        var all = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        return (all[CustomerTree.BillTo(id, all)], job);
     }
 
     private async Task<Customer> RequiredCustomerAsync(Guid id, CancellationToken ct) =>

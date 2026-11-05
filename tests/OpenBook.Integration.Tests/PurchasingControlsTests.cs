@@ -272,6 +272,20 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
 
         Assert.Equal(batch.Id, (await In<BillPaymentService, BillPayment?>(s => s.GetAsync(payment.Id)))!.AchBatchId);
         Assert.Empty(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id)));
+
+        // Sent by ACH, so never a check as well.
+        Assert.DoesNotContain(await In<OpenBook.Application.Banking.CheckService, IReadOnlyList<OpenBook.Application.Banking.PrintableCheck>>(s => s.ListAsync()), c => c.Id == payment.Id);
+        Assert.Equal("check.sent_by_ach", await Refused(() => In<OpenBook.Application.Banking.CheckService, OpenBook.Application.Banking.PrintedChecks>(s =>
+            s.PrintAsync([(OpenBook.Application.Banking.CheckKind.BillPayment, payment.Id)]))));
+
+        // A payment already through the bank isn't one to send.
+        var cleared = Assert.Single(await Pay(await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_supplier.Id, Mar1, [new BillLineDraft(_freight.Id, 75m)], Reference: "Z")))));
+        Assert.Single(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id)));
+        await In<OpenBook.Application.Banking.BankFeedService, OpenBook.Application.Banking.FeedImportResult>(s => s.QueueAsync(_checking.Id,
+            [new OpenBook.Application.Banking.FeedLine(Mar1, -75m, "PARTS SUPPLY", null, null, "ACH-1")]));
+        var line = Assert.Single(await In<OpenBook.Application.Banking.BankFeedService, IReadOnlyList<OpenBook.Application.Banking.FeedReviewItem>>(s => s.ReviewAsync(_checking.Id)));
+        await _db.InScope(async sp => { await sp.GetRequiredService<OpenBook.Application.Banking.BankFeedService>().MatchAsync(line.Item.Id, cleared.JournalEntryId); return true; });
+        Assert.Empty(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id)));
         Assert.Equal("ach.payment_not_eligible", await Refused(() => In<AchService, AchBatch>(s => s.CreateFileAsync(_checking.Id, Mar1.AddDays(31), [payment.Id]))));
     }
 }

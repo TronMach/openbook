@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using System.Text.Json;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Ledger;
@@ -46,12 +47,15 @@ public sealed class RecurringInvoiceService(ISalesStore store, InvoiceService in
         return template;
     }
 
-    public async Task<RecurringInvoice> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)
+    public Task<RecurringInvoice> SetActiveAsync(Guid id, bool active, CancellationToken ct = default) => SetActiveAsync(id, active, false, ct);
+
+    /// <param name="catchUp">Turning it back on makes every date it missed; otherwise those are passed over.</param>
+    public async Task<RecurringInvoice> SetActiveAsync(Guid id, bool active, bool catchUp, CancellationToken ct = default)
     {
         var template = await store.GetRecurringInvoiceAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(template);
         if (active)
-            template.Reactivate();
+            template.Reactivate(catchUp ? null : CompanyTime.Today);
         else
             template.Deactivate();
         store.Add(Audit(AuditAction.Updated, template, before));

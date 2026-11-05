@@ -293,10 +293,17 @@ public sealed class MigrationImportService(
                 continue;
             }
 
+            // No transaction depends on an item, so one OpenBook can't use is left out rather than stopping the move-in.
             var income = Resolve(i.IncomeAccount ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(i.IncomeAccount) || (Known(income) && TypeOf(income)?.ClassOf() != AccountClass.Income))
+            {
+                rows.Add(new MigrationRow(MigrationKind.Item, i.Line, name, i.KindLabel, MigrationRowStatus.Skipped,
+                    string.IsNullOrWhiteSpace(i.IncomeAccount) ? "It has no income account. Add it by hand if you sell it." : $"'{income}' isn't an income account. Add it by hand if you sell it."));
+                continue;
+            }
+
             var error = Try(() => Item.NormalizeName(name))
-                ?? (!Known(income) ? $"Its income account '{income}' isn't in the file or the chart."
-                    : TypeOf(income)?.ClassOf() != AccountClass.Income ? $"'{income}' isn't an income account." : null)
+                ?? (!Known(income) ? $"Its income account '{income}' isn't in the file or the chart." : null)
                 ?? Try(() => SalesLine.ValidRate(i.Price));
             if (error is null)
                 plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description), income));

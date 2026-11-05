@@ -31,7 +31,10 @@ public sealed class CheckService(
     IClock clock,
     ICurrentUser user)
 {
-    /// <summary>Posted payments from bank accounts (not cards), newest first.</summary>
+    /// <summary>
+    /// Posted payments from bank accounts (not cards), newest first. Not payments sent by ACH, nor spends brought in from
+    /// the bank's own lines: that money has already left, so a check would pay it again.
+    /// </summary>
     public async Task<IReadOnlyList<PrintableCheck>> ListAsync(Guid? accountId = null, bool unprintedOnly = false, CancellationToken ct = default)
     {
         var chart = await accounts.GetChartAsync(ct);
@@ -39,11 +42,11 @@ public sealed class CheckService(
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
 
         var expenses = (await bank.ListAllTransactionsAsync(ct))
-            .Where(t => t.Kind == BankTransactionKind.Spend && t.Status == BankTransactionStatus.Posted && IsBank(t.AccountId))
+            .Where(t => t.Kind == BankTransactionKind.Spend && t.Status == BankTransactionStatus.Posted && t.ImportBatchId is null && IsBank(t.AccountId))
             .Select(t => new PrintableCheck(CheckKind.Expense, t.Id, t.AccountId, t.Date, t.Reference,
                 t.Payee ?? (t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null) ?? "(no payee)", t.Amount, t.PrintedAt));
         var payments = (await purchases.ListPaymentsAsync(null, ct))
-            .Where(p => p.Status == DocumentStatus.Posted && IsBank(p.PaymentAccountId))
+            .Where(p => p.Status == DocumentStatus.Posted && p.AchBatchId is null && IsBank(p.PaymentAccountId))
             .Select(p => new PrintableCheck(CheckKind.BillPayment, p.Id, p.PaymentAccountId, p.Date, p.Reference,
                 vendors.GetValueOrDefault(p.VendorId) ?? "(unknown vendor)", p.Amount, p.PrintedAt));
 
@@ -87,6 +90,8 @@ public sealed class CheckService(
                 var p = await purchases.GetPaymentAsync(id, ct) ?? throw new EntityNotFoundException("bill_payment", id);
                 if (p.Status != DocumentStatus.Posted || chart.Get(p.PaymentAccountId).Type != AccountType.Bank)
                     throw new DomainException("check.not_printable", "Only posted payments from a bank account can be printed as checks.");
+                if (p.AchBatchId is not null)
+                    throw new DomainException("check.sent_by_ach", "This payment went out in an ACH file, so a check would pay it twice.");
                 var vendor = vendors.GetValueOrDefault(p.VendorId);
                 var bills = (await purchases.GetBillsAsync(p.Applications.Select(a => a.BillId).ToList(), ct)).ToDictionary(b => b.Id);
                 var lines = p.Applications

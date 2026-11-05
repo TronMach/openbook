@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using System.Text.Json;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -43,14 +44,17 @@ public sealed class RecurringEntryService(ILedgerStore store, PostingEngine engi
         return entry;
     }
 
-    public async Task<RecurringEntry> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)
+    public Task<RecurringEntry> SetActiveAsync(Guid id, bool active, CancellationToken ct = default) => SetActiveAsync(id, active, false, ct);
+
+    /// <param name="catchUp">Turning it back on makes every date it missed; otherwise those are passed over.</param>
+    public async Task<RecurringEntry> SetActiveAsync(Guid id, bool active, bool catchUp, CancellationToken ct = default)
     {
         var entry = await store.GetRecurringAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (entry.IsActive == active)
             return entry;
         var before = Snapshot(entry);
         if (active)
-            entry.Reactivate();
+            entry.Reactivate(catchUp ? null : CompanyTime.Today);
         else
             entry.Deactivate();
         store.Add(Audit(AuditAction.Updated, entry, before));

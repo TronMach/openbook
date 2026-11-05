@@ -104,6 +104,24 @@ public sealed class ChartImportTests : IAsyncLifetime
     private Task<ChartImportResult> Import(string csv) =>
         _db.InScope(sp => sp.GetRequiredService<ChartImportService>().ImportAsync(csv));
 
+    [Fact]
+    public async Task A_quickbooks_chart_export_comes_in_as_it_is()
+    {
+        const string export = "Account,Type,Balance Total,Description,Accnt. #,Tax Line\n"
+            + "Checking,Bank,100.00,,1000,<Unassigned>\n"
+            + "Estimates,Non-Posting,,,,\n"
+            + "Rent,Expense,,,6000,<Unassigned>\n";
+
+        var preview = await Preview(export);
+
+        Assert.True(preview.CanImport);
+        Assert.Equal(ImportRowStatus.Skipped, preview.Rows.Single(r => r.FullName == "Estimates").Status);
+        await Import(export);
+        var chart = await Chart();
+        Assert.NotNull(chart.FindByFullName("Rent"));
+        Assert.Null(chart.FindByFullName("Estimates"));
+    }
+
     private Task<ChartOfAccounts> Chart() =>
         _db.InScope(sp => sp.GetRequiredService<AccountService>().GetChartAsync());
 

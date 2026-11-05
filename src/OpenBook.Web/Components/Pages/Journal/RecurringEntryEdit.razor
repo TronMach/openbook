@@ -106,7 +106,11 @@
                 <button type="button" @onclick="SaveAsync" disabled="@(!JournalLines.IsComplete(_lines) || _busy)">@L["Save"]</button>
                 @if (Id is not null)
                 {
-                    <button type="button" class="secondary" @onclick="ToggleActiveAsync" disabled="@_busy">@(_active ? "Make inactive" : "Make active")</button>
+                    <button type="button" class="secondary" @onclick="() => ToggleActiveAsync(false)" disabled="@_busy" title="@(_active ? null : "Dates it missed while inactive are passed over")">@(_active ? "Make inactive" : "Make active")</button>
+                    @if (!_active)
+                    {
+                        <button type="button" class="secondary" @onclick="() => ToggleActiveAsync(true)" disabled="@_busy">Make active and catch up</button>
+                    }
                 }
                 @if (_occurrencesPosted > 0)
                 {
@@ -246,7 +250,7 @@
         }
     }
 
-    private async Task ToggleActiveAsync()
+    private async Task ToggleActiveAsync(bool catchUp)
     {
         if (_busy)
             return;
@@ -254,7 +258,7 @@
         _error = null;
         try
         {
-            var template = await Ops.RunAsync<RecurringEntryService, RecurringEntry>(s => s.SetActiveAsync(Id!.Value, !_active));
+            var template = await Ops.RunAsync<RecurringEntryService, RecurringEntry>(s => s.SetActiveAsync(Id!.Value, !_active, catchUp));
             _active = template.IsActive;
         }
         catch (DomainException ex)

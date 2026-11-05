@@ -47,10 +47,12 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
 
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCounterpartAccountsAsync(Guid accountId, CancellationToken ct)
     {
-        var entryIds = db.Set<JournalLine>().Where(l => l.AccountId == accountId).Select(l => EF.Property<Guid>(l, "JournalEntryId"));
-        var rows = await db.Set<JournalLine>()
-            .Where(l => l.AccountId != accountId && entryIds.Contains(EF.Property<Guid>(l, "JournalEntryId")))
-            .Select(l => new { EntryId = EF.Property<Guid>(l, "JournalEntryId"), l.AccountId })
+        // A join, from the account's own lines: as a Contains it checked every line of the books against them, 90 seconds on three years.
+        var rows = await (
+            from mine in db.Set<JournalLine>()
+            join other in db.Set<JournalLine>() on EF.Property<Guid>(mine, "JournalEntryId") equals EF.Property<Guid>(other, "JournalEntryId")
+            where mine.AccountId == accountId && other.AccountId != accountId
+            select new { EntryId = EF.Property<Guid>(other, "JournalEntryId"), other.AccountId })
             .ToListAsync(ct);
         return rows.GroupBy(r => r.EntryId).ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(r => r.AccountId).Distinct().ToList());
     }
@@ -58,10 +60,18 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
     public Task<BankTransaction?> GetTransactionAsync(Guid id, CancellationToken ct) =>
         db.BankTransactions.SingleOrDefaultAsync(t => t.Id == id, ct);
 
-    public async Task<IReadOnlyDictionary<Guid, BankTransaction>> GetTransactionsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
-        ids.Count == 0
-            ? new Dictionary<Guid, BankTransaction>()
-            : await db.BankTransactions.AsNoTracking().Where(t => ids.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
+    public async Task<IReadOnlyDictionary<Guid, BankTransaction>> GetTransactionsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        // In pieces: one query naming thousands of ids takes minutes.
+        var found = new Dictionary<Guid, BankTransaction>();
+        foreach (var part in ids.Chunk(500))
+        {
+            foreach (var transaction in await db.BankTransactions.AsNoTracking().Where(t => part.Contains(t.Id)).ToListAsync(ct))
+                found[transaction.Id] = transaction;
+        }
+
+        return found;
+    }
 
     public async Task<IReadOnlyList<BankTransaction>> ListTransactionsAsync(Guid accountId, DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
         await db.BankTransactions.AsNoTracking()

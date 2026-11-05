@@ -115,7 +115,8 @@ public sealed class BankingService(
         var account = chart.Get(accountId);
         var lines = await bank.GetAccountLinesAsync(accountId, ct);
         var counterparts = await bank.GetCounterpartAccountsAsync(accountId, ct);
-        var documents = await bank.GetTransactionsAsync(lines.Where(l => l.SourceId is not null).Select(l => l.SourceId!.Value).Distinct().ToList(), ct);
+        // Only the lines shown need their documents; the balances run over all of them.
+        var documents = await bank.GetTransactionsAsync(lines.TakeLast(take).Where(l => l.SourceId is not null).Select(l => l.SourceId!.Value).Distinct().ToList(), ct);
         var reconciliations = await bank.ListReconciliationsAsync(accountId, ct);
         var reconciled = reconciliations.Where(r => r.Status == ReconciliationStatus.Completed).SelectMany(r => r.ClearedLineIds).ToHashSet();
         var cleared = reconciliations.Where(r => r.Status == ReconciliationStatus.InProgress).SelectMany(r => r.ClearedLineIds).ToHashSet();

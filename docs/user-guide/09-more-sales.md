@@ -86,7 +86,7 @@ For invoices that repeat, such as a monthly retainer fee, a subscription or rent
 - **Create invoices automatically when due**: OpenBook creates each invoice on its date in the background. Leave it off to have due invoices wait for you on the Recurring page (**Create due invoices**), so you can check them first.
 - **Email each invoice to the customer when it's created** (automatic templates).
 
-Month-end dates stay at month end: a template that starts on 31 January bills on 28 or 29 February, then 31 March. Each invoice is taxed with the customer's tax code on its own date. Make a template inactive to stop it.
+Month-end dates stay at month end: a template that starts on 31 January bills on 28 or 29 February, then 31 March. Each invoice is taxed with the customer's tax code on its own date. Make a template inactive to stop it. **Make active** passes over the dates it missed; **Make active and catch up** makes them. Changing the schedule only affects what's still to come.
 
 ## Billable expenses
 

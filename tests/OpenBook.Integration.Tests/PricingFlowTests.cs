@@ -73,6 +73,19 @@ public sealed class PricingFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_highest_quantity_break_reached_wins_however_the_rows_come_back()
+    {
+        await Pricing(s => s.SetQuantityBreaksAsync(_widget.Id, [(50m, QuantityBreakKind.PercentOff, 5m), (200m, QuantityBreakKind.PercentOff, 20m)]));
+        await Pricing(s => s.SetQuantityBreaksAsync(_widget.Id, [(50m, QuantityBreakKind.PercentOff, 5m), (100m, QuantityBreakKind.PercentOff, 10m), (200m, QuantityBreakKind.PercentOff, 20m)]));
+
+        var quote = await In<PricingService, PriceQuote>(s => s.QuoteAsync(null, _widget.Id, 250m, new DateOnly(2026, 3, 1)));
+
+        Assert.Equal(_widget.Rate * 0.8m, quote.Price);
+        var item = await In<ItemService, Item?>(s => s.GetAsync(_widget.Id));
+        Assert.Equal([50m, 100m, 200m], item!.QuantityBreaks.Select(b => b.FromQuantity));
+    }
+
+    [Fact]
     public async Task Quantity_breaks_count_the_items_total_across_lines()
     {
         await Pricing(s => s.SetQuantityBreaksAsync(_widget.Id, [(10m, QuantityBreakKind.PercentOff, 5m)]));

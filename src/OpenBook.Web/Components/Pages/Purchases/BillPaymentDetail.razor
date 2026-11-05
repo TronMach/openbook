@@ -28,7 +28,7 @@
         {
             <ActionLink Class="button secondary" Href="@($"/purchases/payments/{_payment.Id}/edit")">Change</ActionLink>
         }
-        @if (_payment.Status == DocumentStatus.Posted && _chart.Find(_payment.PaymentAccountId)?.Type == AccountType.Bank)
+        @if (_payment.Status == DocumentStatus.Posted && _payment.AchBatchId is null && _chart.Find(_payment.PaymentAccountId)?.Type == AccountType.Bank)
         {
             <PrintCheckButton Kind="CheckKind.BillPayment" Id="_payment.Id" PrintedAt="_payment.PrintedAt" />
         }

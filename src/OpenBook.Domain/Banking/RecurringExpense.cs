@@ -54,6 +54,9 @@ public sealed class RecurringExpense
     public int? MaxOccurrences { get; private set; }
     public int OccurrencesPosted { get; private set; }
 
+    /// <summary>Added to the count to find the place in the schedule: a schedule change or a pause moves it (<see cref="Recurrence.Rebase"/>).</summary>
+    public int IndexOffset { get; private set; }
+
     /// <summary>Record expenses automatically when due; otherwise wait for "Record due expenses".</summary>
     public bool AutoCreate { get; private set; }
 
@@ -71,7 +74,7 @@ public sealed class RecurringExpense
 
     public decimal Total => _lines.Sum(l => l.Amount);
 
-    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted);
+    public DateOnly? NextDate => Recurrence.NextDate(Frequency, Interval, StartDate, EndDate, MaxOccurrences, OccurrencesPosted, IndexOffset);
 
     public bool IsDue(DateOnly today) => IsActive && NextDate is { } next && next <= today;
 
@@ -89,6 +92,7 @@ public sealed class RecurringExpense
             ?? throw new DomainException("recurring.name_required", "Give the recurring expense a name.");
         Memo = Text.Optional(details.Memo, 1000, "banking.memo_too_long", "Memo");
         Payee = Text.Optional(details.Payee, 100, "banking.payee_too_long", "Payee");
+        var schedule = Recurrence.Rebase(Frequency, Interval, StartDate, IndexOffset, OccurrencesPosted, details.Frequency, details.Interval, details.StartDate);
         Frequency = Enum.IsDefined(details.Frequency) ? details.Frequency : throw new DomainException("recurring.frequency_invalid", "Unknown frequency.");
         Recurrence.Validate(details.Interval, details.StartDate, details.EndDate, details.MaxOccurrences);
         var splits = (details.Lines ?? []).Where(l => l.Amount != 0m).ToList();
@@ -104,7 +108,7 @@ public sealed class RecurringExpense
         AccountId = details.AccountId;
         VendorId = details.VendorId == Guid.Empty ? null : details.VendorId;
         Interval = details.Interval;
-        StartDate = details.StartDate;
+        (StartDate, IndexOffset) = schedule;
         EndDate = details.EndDate;
         MaxOccurrences = details.MaxOccurrences;
         AutoCreate = details.AutoCreate;
@@ -122,7 +126,13 @@ public sealed class RecurringExpense
 
     public void Deactivate() => IsActive = false;
 
-    public void Reactivate() => IsActive = true;
+    /// <summary>Turns it back on; dates before <paramref name="skipBefore"/>, if given, are passed over rather than made.</summary>
+    public void Reactivate(DateOnly? skipBefore = null)
+    {
+        if (!IsActive && skipBefore is { } today)
+            IndexOffset += Recurrence.Missed(Frequency, Interval, StartDate, OccurrencesPosted + IndexOffset, today);
+        IsActive = true;
+    }
 }
 
 /// <param name="AccountId">The bank or credit card account it's paid from.</param>

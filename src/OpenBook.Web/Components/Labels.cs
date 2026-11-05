@@ -67,6 +67,7 @@ public static class Labels
     {
         ImportRowStatus.New => "New",
         ImportRowStatus.Exists => "Already exists",
+        ImportRowStatus.Skipped => "Left out",
         _ => "Error",
     };
 
