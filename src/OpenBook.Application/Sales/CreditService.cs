@@ -182,7 +182,7 @@ public sealed class CreditService(
                 engine.EnsureOpen(company, refundedOn, $"changing the lines of credit memo {credit.Number}, refunded on {refundedOn:yyyy-MM-dd}");
         }
 
-        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var warehouseId = command.WarehouseId == credit.WarehouseId ? credit.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([credit.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(credit);
 

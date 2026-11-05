@@ -47,6 +47,12 @@ public sealed class PostingEngine(
 {
     private const string EntityType = "journal_entry";
 
+    /// <summary>
+    /// What entries voided in this scope carried. A correction voids an entry and posts its replacement: what the
+    /// document already had stays allowed though it's been deactivated since, or a memo fix would be refused over it.
+    /// </summary>
+    private readonly HashSet<Guid> _carried = [];
+
     public async Task<JournalEntry> PostAsync(PostJournalEntryCommand command, CancellationToken ct = default)
     {
         var entry = await StageAsync(command, ct);
@@ -218,6 +224,11 @@ public sealed class PostingEngine(
         // The reversal is dated the same day as the entry, so voiding changes that period.
         EnsureOpen(await companies.GetRequiredCompanyAsync(ct), entry.Date, $"voiding entry #{entry.Number}");
 
+        _carried.UnionWith(entry.Lines.Select(l => l.AccountId));
+        foreach (var segment in await store.GetLineSegmentsAsync([entry.Id], ct))
+            _carried.UnionWith(new[] { segment.ClassId, segment.LocationId }.OfType<Guid>());
+        _carried.UnionWith((await store.GetEntryTagsAsync([entry.Id], ct)).Select(t => t.TagId));
+
         var before = Snapshot(entry);
         var reversal = entry.Void(await store.NextEntryNumberAsync(ct), reason, clock.UtcNow);
 
@@ -263,7 +274,7 @@ public sealed class PostingEngine(
             var segment = segments.GetValueOrDefault(id) ?? throw new EntityNotFoundException("segment", id);
             if (segment.Kind != kind)
                 throw new DomainException("segment.kind_mismatch", $"'{segment.Name}' isn't a {kind.ToString().ToLowerInvariant()}.");
-            if (!segment.IsActive)
+            if (!segment.IsActive && !_carried.Contains(id))
                 throw new DomainException("segment.inactive", $"'{segment.Name}' is inactive.");
         }
     }
@@ -339,7 +350,7 @@ public sealed class PostingEngine(
         {
             if (!accounts.TryGetValue(id, out var account))
                 throw new EntityNotFoundException("account", id);
-            if (!account.IsActive)
+            if (!account.IsActive && !_carried.Contains(id))
                 throw new DomainException("journal.account_inactive", $"Account '{account.Name}' is inactive.");
         }
     }

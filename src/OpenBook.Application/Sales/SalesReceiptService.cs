@@ -161,7 +161,7 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.feed_matched",
                 $"Sales receipt {receipt.Number} is matched to a line from the bank feed, so its total and deposit account stay. Undo the match first to change them.");
 
-        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var warehouseId = command.WarehouseId == receipt.WarehouseId ? receipt.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([receipt.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(receipt);
 

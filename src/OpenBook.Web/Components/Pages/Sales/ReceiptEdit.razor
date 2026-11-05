@@ -130,16 +130,16 @@
         _receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt?>(s => s.GetAsync(Id));
         if (_receipt is not null)
         {
-            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_receipt.LocationId, .. _receipt.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_receipt.TaxCodeId, _receipt.Lines));
             (_customers, _items, _chart) = await Ops.RunAsync(async sp => (
                 (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_receipt.Date)).Select(s => s.Customer)
                     .Where(c => c.IsActive || c.Id == _receipt.CustomerId).ToList(),
-                await sp.GetRequiredService<ItemService>().ListAsync(),
+                await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_receipt.Lines.Select(l => l.ItemId)),
                 await sp.GetRequiredService<AccountService>().GetChartAsync()));
-            _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
-                .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset || a.Id == _receipt.DepositAccountId)
+            _depositAccounts = _chart.Ordered(includeInactive: true).Select(x => x.Account)
+                .Where(a => a.Id == _receipt.DepositAccountId || a.IsActive && a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
                 .OrderBy(a => a.Type != AccountType.Bank)
                 .ToList();
 

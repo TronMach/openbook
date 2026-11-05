@@ -167,8 +167,8 @@
                 await sp.GetRequiredService<AccountService>().GetChartAsync(),
                 await sp.GetRequiredService<PaymentService>().OpenInvoicesAsync(_payment.CustomerId),
                 await AppliedAsync(sp.GetRequiredService<InvoiceService>(), _payment)));
-            _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
-                .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset || a.Id == _payment.DepositAccountId)
+            _depositAccounts = _chart.Ordered(includeInactive: true).Select(x => x.Account)
+                .Where(a => a.Id == _payment.DepositAccountId || a.IsActive && a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
                 .OrderBy(a => a.Type != AccountType.Bank)
                 .ToList();
 

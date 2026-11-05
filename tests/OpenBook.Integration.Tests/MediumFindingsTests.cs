@@ -618,4 +618,29 @@ public sealed class MediumFindingsTests : IAsyncLifetime
         Assert.Equal(0m, lines.Sum(l => l.Amount));
         Assert.Equal(10m, lines.Where(l => l.AccountId == cost.Id).Sum(l => l.Amount));
     }
+
+    [Fact]
+    public async Task A_correction_keeps_what_has_been_deactivated_since()
+    {
+        var tracking = await In<SegmentService, SegmentTracking>(s => s.GetTrackingAsync());
+        await In<SegmentService, SegmentTracking>(async s => { await s.SetTrackingAsync(tracking with { Classes = true }); return tracking; });
+        var west = await In<SegmentService, OpenBook.Domain.Segments.Segment>(s => s.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Class, "West"));
+        var stationery = await _db.CreateAccount("Stationery", AccountType.Expense, "6310");
+
+        var line = new SalesLineDraft(_consulting.Id, null, 1m, 100m, ClassId: west.Id);
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [line])));
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_staples.Id, Mar1, [new BillLineDraft(stationery.Id, 40m, null)])));
+        var spend = await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(stationery.Id, 20m)])));
+
+        await In<ItemService, Item>(s => s.SetActiveAsync(_consulting.Id, false));
+        await In<SegmentService, OpenBook.Domain.Segments.Segment>(s => s.SetActiveAsync(west.Id, false));
+        await In<OpenBook.Application.Accounts.AccountService, Account>(s => s.DeactivateAsync(stationery.Id));
+
+        await In<InvoiceService, Invoice>(s => s.ChangeAsync(invoice.Id, new ChangeInvoiceCommand(Mar5, [line], "Date was wrong")));
+        await In<BillService, Bill>(s => s.ChangeAsync(bill.Id, new ChangeBillCommand(Mar5, [new BillLineDraft(stationery.Id, 40m, null)], "Date was wrong")));
+        await In<BankingService, BankTransaction>(s => s.ChangeAsync(spend.Id, new ChangeBankTransactionCommand(Mar5, [new BankSplit(stationery.Id, 20m)], "Date was wrong")));
+
+        // Something new is still refused.
+        Assert.Equal("bill.category_inactive", await Refused(() => In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_staples.Id, Mar5, [new BillLineDraft(stationery.Id, 1m, null)])))));
+    }
 }

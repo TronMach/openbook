@@ -97,12 +97,14 @@
         _credit = await Ops.RunAsync<VendorCreditService, VendorCredit?>(s => s.GetAsync(Id));
         if (_credit is not null)
         {
-            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_credit.LocationId, .. _credit.Lines.Select(l => l.ClassId)]));
             (_vendor, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<VendorService>().GetAsync(_credit.VendorId),
                 await sp.GetRequiredService<AccountService>().GetChartAsync(),
                 (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
             _categories = BillLineModel.Categories(_chart);
+            foreach (var used in _credit.Lines.Select(l => l.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
+                _categories.Add(_chart.Get(used));
 
             _reference = _credit.Reference;
             _date = _credit.Date;

@@ -195,12 +195,14 @@ public sealed class Bill
     public bool IsOverdue(DateOnly today) => IsOpen && DueDate < today;
 
     /// <summary>Bills can be categorized to anything but receivables and payables.</summary>
-    public static void EnsureCategoryAccount(Account account)
+    /// <param name="account">The category.</param>
+    /// <param name="carried">It's already on the document being corrected, so it may have been deactivated since.</param>
+    public static void EnsureCategoryAccount(Account account, bool carried = false)
     {
         ArgumentNullException.ThrowIfNull(account);
         if (account.Type is AccountType.AccountsPayable or AccountType.AccountsReceivable)
             throw new DomainException("bill.category_type", $"Bills can't be categorized to '{account.Name}'.");
-        if (!account.IsActive)
+        if (!account.IsActive && !carried)
             throw new DomainException("bill.category_inactive", $"'{account.Name}' is inactive.");
     }
 

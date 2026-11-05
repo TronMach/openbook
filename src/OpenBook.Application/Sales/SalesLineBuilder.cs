@@ -16,19 +16,22 @@ public sealed record TaxAsCharged(Guid? TaxCodeId, string? TaxExemption, Guid? C
 /// Turns line drafts into validated sales lines: prices automatically priced lines for the customer, looks up the
 /// items and, when needed, the discounts account; then adds the sales tax lines.
 /// </summary>
-public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccounts, ISalesTaxStore taxes, PricingService pricing, ILedgerStore ledger)
+public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccounts, ISalesTaxStore taxes, PricingService pricing)
 {
     /// <summary>Lines without sales tax.</summary>
+    /// <summary>The items on the document being corrected, in this scope; they may have been deactivated since.</summary>
+    private HashSet<Guid>? _carried;
+
     public async Task<IReadOnlyList<SalesLine>> BuildAsync(IReadOnlyList<SalesLineDraft> drafts, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(drafts);
         var items = await store.GetItemsAsync(drafts.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value).Distinct().ToList(), ct);
         // Only look for (and possibly create) the discounts account once the rest of the lines are known to be valid.
         if (!drafts.Any(d => d.IsDiscount))
-            return SalesLine.FromDrafts(drafts, items);
-        SalesLine.FromDrafts(drafts.Where(d => !d.IsDiscount).ToList(), items);
+            return SalesLine.FromDrafts(drafts, items, carried: _carried);
+        SalesLine.FromDrafts(drafts.Where(d => !d.IsDiscount).ToList(), items, carried: _carried);
         var discounts = await salesAccounts.GetOrCreateDiscountsAsync(ct);
-        return SalesLine.FromDrafts(drafts, items, discounts.Id);
+        return SalesLine.FromDrafts(drafts, items, discounts.Id, _carried);
     }
 
     /// <summary>
@@ -54,16 +57,15 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
     /// A line that goes on being the same item keeps the income account and list price it was sold under: a change
     /// to the item since doesn't reach back into a document being corrected.
     /// </summary>
-    private async Task KeepOriginalsAsync(IReadOnlyList<SalesLine> lines, TaxAsCharged charged, CancellationToken ct)
+    private static void KeepOriginals(IReadOnlyList<SalesLine> lines, TaxAsCharged charged)
     {
         var old = charged.Lines.Where(l => l.Kind != SalesLineKind.Tax).ToDictionary(l => l.LineNumber);
-        var active = await ledger.GetAccountsAsync(old.Values.Select(l => l.IncomeAccountId).OfType<Guid>().Distinct().ToList(), ct);
         var current = lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).ToList();
         for (var i = 0; i < current.Count; i++)
         {
             var from = charged.FromLines is { } map ? (i < map.Count ? map[i] : null) : current[i].LineNumber;
             if (from is { } number && old.TryGetValue(number, out var original) && original.ItemId is not null && original.ItemId == current[i].ItemId)
-                current[i].KeepFrom(original, original.IncomeAccountId is { } account && active.TryGetValue(account, out var a) && a.IsActive);
+                current[i].KeepFrom(original, original.IncomeAccountId is not null);
         }
     }
 
@@ -77,17 +79,18 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, TaxAsCharged charged, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(charged);
+        _carried = charged.Lines.Select(l => l.ItemId).OfType<Guid>().ToHashSet();
         var codeId = taxCodeId ?? charged.TaxCodeId ?? Guid.Empty;
         var components = TaxCalculator.Charged(charged.Lines);
         if (codeId != charged.TaxCodeId || customer?.Id != charged.CustomerId || components.Count == 0)
         {
             var built = await BuildAsync(drafts, customer, codeId, date, ct);
-            await KeepOriginalsAsync(built.Lines, charged, ct);
+            KeepOriginals(built.Lines, charged);
             return built;
         }
 
         var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
-        await KeepOriginalsAsync(lines, charged, ct);
+        KeepOriginals(lines, charged);
         return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, charged.TaxExemption is not null)], codeId, charged.TaxExemption);
     }
 

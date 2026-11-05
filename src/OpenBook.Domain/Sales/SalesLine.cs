@@ -108,7 +108,7 @@ public sealed class SalesLine
     public void RecordLots(string? lots) => Lots = string.IsNullOrWhiteSpace(lots) ? null : lots.Length > 1000 ? lots[..1000] : lots;
 
     /// <param name="item">The draft's item, already looked up; null for a note line.</param>
-    public static SalesLine Create(int lineNumber, SalesLineDraft draft, Item? item)
+    public static SalesLine Create(int lineNumber, SalesLineDraft draft, Item? item, IReadOnlySet<Guid>? carried = null)
     {
         ArgumentNullException.ThrowIfNull(draft);
         if (draft.IsDiscount)
@@ -129,7 +129,7 @@ public sealed class SalesLine
             if (description is null)
                 throw new DomainException("sales.line_empty", $"Line {lineNumber} is empty.");
         }
-        else if (!item.IsActive)
+        else if (!item.IsActive && carried?.Contains(item.Id) != true)
         {
             throw new DomainException("sales.item_inactive", $"Line {lineNumber}: '{item.Name}' is inactive.");
         }
@@ -205,8 +205,9 @@ public sealed class SalesLine
 
     /// <summary>Validates drafts against their items and numbers the lines.</summary>
     /// <param name="discountAccountId">Where discount lines post; required when there are any.</param>
+    /// <param name="carried">Items already on the document being corrected, allowed though they've been deactivated since.</param>
     public static IReadOnlyList<SalesLine> FromDrafts(
-        IReadOnlyList<SalesLineDraft> drafts, IReadOnlyDictionary<Guid, Item> items, Guid? discountAccountId = null)
+        IReadOnlyList<SalesLineDraft> drafts, IReadOnlyDictionary<Guid, Item> items, Guid? discountAccountId = null, IReadOnlySet<Guid>? carried = null)
     {
         ArgumentNullException.ThrowIfNull(drafts);
         ArgumentNullException.ThrowIfNull(items);
@@ -219,7 +220,7 @@ public sealed class SalesLine
             var number = lines.Count + 1;
             if (!draft.IsDiscount)
             {
-                lines.Add(Create(number, draft, draft.ItemId is { } id ? items.GetValueOrDefault(id) : null));
+                lines.Add(Create(number, draft, draft.ItemId is { } id ? items.GetValueOrDefault(id) : null, carried));
                 continue;
             }
 

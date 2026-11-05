@@ -125,7 +125,7 @@
         _bill = await Ops.RunAsync<BillService, Bill?>(s => s.GetAsync(Id));
         if (_bill is not null)
         {
-            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_bill.LocationId, .. _bill.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             (_vendor, _chart, _useNumbers, _marked) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<VendorService>().GetAsync(_bill.VendorId),
@@ -133,8 +133,10 @@
                 (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
                 (IReadOnlyList<BillableLine>)(await sp.GetRequiredService<BillableExpenseService>().LinesAsync(BillableSource.Bill, Id)).Where(l => l.Billable is not null).ToList()));
             _categories = BillLineModel.Categories(_chart);
+            foreach (var used in _bill.Lines.Where(l => l.ItemId is null).Select(l => l.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
+                _categories.Add(_chart.Get(used));
             _stockItems = await Ops.RunAsync(async sp =>
-                (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory).ToList());
+                (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_bill.Lines.Select(l => l.ItemId))).Where(i => i.IsInventory).ToList());
 
             _reference = _bill.Reference;
             _date = _bill.Date;

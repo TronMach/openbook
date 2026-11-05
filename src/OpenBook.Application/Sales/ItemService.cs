@@ -12,6 +12,13 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
 {
     private const string EntityType = "item";
 
+    /// <summary>Active items and those a document being corrected already has, which it can keep though they've been deactivated.</summary>
+    public async Task<IReadOnlyList<Item>> ListForDocumentAsync(IEnumerable<Guid?> onDocument, CancellationToken ct = default)
+    {
+        var kept = onDocument.OfType<Guid>().ToHashSet();
+        return (await ListAsync(includeInactive: true, ct)).Where(i => i.IsActive || kept.Contains(i.Id)).ToList();
+    }
+
     public async Task<IReadOnlyList<Item>> ListAsync(bool includeInactive = false, CancellationToken ct = default) =>
         (await store.ListItemsAsync(ct))
             .Where(i => includeInactive || i.IsActive)

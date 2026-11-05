@@ -264,7 +264,7 @@ public sealed class InvoiceService(
                 engine.EnsureOpen(company, paidOn, $"changing the income lines of invoice {invoice.Number}, paid on {paidOn:yyyy-MM-dd}");
         }
 
-        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var warehouseId = command.WarehouseId == invoice.WarehouseId ? invoice.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([invoice.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(invoice);
 

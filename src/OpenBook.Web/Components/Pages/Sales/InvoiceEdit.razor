@@ -137,12 +137,12 @@
         _invoice = await Ops.RunAsync<InvoiceService, Invoice?>(s => s.GetAsync(Id));
         if (_invoice is not null)
         {
-            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_invoice.LocationId, .. _invoice.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_invoice.TaxCodeId, _invoice.Lines));
             (_customer, _items) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<CustomerService>().GetAsync(_invoice.CustomerId),
-                await sp.GetRequiredService<ItemService>().ListAsync()));
+                await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_invoice.Lines.Select(l => l.ItemId))));
 
             _number = _invoice.Number;
             _date = _invoice.Date;

@@ -141,6 +141,11 @@
             if (draft is not null && entry is not null)
             {
                 _lines = draft.Lines.Select(JournalLineModel.From).ToList();
+                // What the entry has stays on offer, though it may be inactive now.
+                foreach (var used in draft.Lines.Select(l => l.AccountId).Where(a => _accounts.All(c => c.Id != a)).Distinct())
+                    _accounts.Add(_chart.Get(used));
+                var change = draft;
+                _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [change.LocationId, .. change.Lines.Select(l => l.ClassId), .. (change.TagIds ?? []).Select(t => (Guid?)t)]));
                 _memo = draft.Memo;
                 _basis = draft.Basis;
                 _locationId = draft.LocationId;

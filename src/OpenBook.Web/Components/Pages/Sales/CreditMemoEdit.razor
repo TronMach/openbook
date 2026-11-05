@@ -107,12 +107,12 @@
         _credit = await Ops.RunAsync<CreditService, CreditMemo?>(s => s.GetCreditMemoAsync(Id));
         if (_credit is not null)
         {
-            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_credit.LocationId, .. _credit.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_credit.TaxCodeId, _credit.Lines));
             (_customer, _items) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<CustomerService>().GetAsync(_credit.CustomerId),
-                await sp.GetRequiredService<ItemService>().ListAsync()));
+                await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_credit.Lines.Select(l => l.ItemId))));
 
             _number = _credit.Number;
             _date = _credit.Date;

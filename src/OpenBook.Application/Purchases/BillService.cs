@@ -186,7 +186,7 @@ public sealed class BillService(
             await EnsureDeliveriesCoveredAsync(fromOrder, bill, source.Lines, ct);
 
         var oldLines = bill.Lines.ToList();
-        var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var warehouseId = command.WarehouseId == bill.WarehouseId ? bill.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([bill.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(bill);
 
@@ -198,7 +198,7 @@ public sealed class BillService(
         var lines = Bill.LinesFrom(drafts);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
-            Bill.EnsureCategoryAccount(chart.Get(accountId));
+            Bill.EnsureCategoryAccount(chart.Get(accountId), oldLines.Any(l => l.AccountId == accountId));
         await EnsureMarkedLinesKeptAsync(bill, oldLines, lines, ct);
         if (lines.Sum(l => l.Amount) < bill.AmountPaid)
             throw new DomainException("bill.total_below_paid", $"This bill has {bill.AmountPaid:N2} paid or credited, so its total can't go below that.");
