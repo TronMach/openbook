@@ -7,6 +7,22 @@ namespace OpenBook.Infrastructure.Persistence;
 
 internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
 {
+    public async Task CountFailedLoginAsync(User user, CancellationToken ct)
+    {
+        await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.FailedLoginCount, u => u.FailedLoginCount + 1), ct);
+        await db.Entry(user).ReloadAsync(ct);
+    }
+
+    public async Task<bool> ClaimSignInCodeAsync(User user, CancellationToken ct)
+    {
+        var entry = db.Entry(user);
+        var step = entry.Property(u => u.LastTwoFactorStep).OriginalValue;
+        var codes = entry.Property(u => u.RecoveryCodeHashes).OriginalValue;
+        var (newStep, newCodes) = (user.LastTwoFactorStep, user.RecoveryCodeHashes);
+        return await db.Users.Where(u => u.Id == user.Id && u.LastTwoFactorStep == step && u.RecoveryCodeHashes == codes)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastTwoFactorStep, newStep).SetProperty(u => u.RecoveryCodeHashes, newCodes), ct) == 1;
+    }
+
     public Task<Company?> GetCompanyAsync(CancellationToken ct) => db.Companies.SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<User>> ListUsersAsync(CancellationToken ct) =>

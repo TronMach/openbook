@@ -43,8 +43,7 @@ internal static class BankFeedApi
         banking.MapPost("/accounts/{id:guid}/feed/preview", async (Guid id, HttpRequest request, DateOrder? dateOrder, AmountSign? amountSign,
             BankFeedService s, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
-            return await s.PreviewAsync(id, await reader.ReadToEndAsync(ct), new BankImportOptions(dateOrder, amountSign ?? AmountSign.PositiveIsMoneyIn), ct);
+            return await s.PreviewAsync(id, await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct), new BankImportOptions(dateOrder, amountSign ?? AmountSign.PositiveIsMoneyIn), ct);
         }).Accepts<string>("text/plain");
         banking.MapPost("/accounts/{id:guid}/feed", async (Guid id, QueueFeedRequest r, BankFeedService s, CancellationToken ct) =>
             await s.QueueAsync(id, r.Lines ?? [], ct));

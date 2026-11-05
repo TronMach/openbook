@@ -52,7 +52,9 @@ public sealed class ChannelOrderService(
     {
         ArgumentNullException.ThrowIfNull(content);
         var channel = await RequiredChannelAsync(channelId, ct);
-        var read = ChannelOrderReports.Read(channel.Kind, Encoding.UTF8.GetString(content));
+        var text = OpenBook.Application.Import.TextFiles.Decode(content);
+        ChannelCurrency.Check(text, (await OpenBook.Application.Companies.CompanyStoreExtensions.GetRequiredCompanyAsync(companies, ct)).HomeCurrency.Code);
+        var read = ChannelOrderReports.Read(channel.Kind, text);
         return await AddAsync(channel, read.Lines, read.Warnings, ct);
     }
 

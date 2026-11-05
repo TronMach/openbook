@@ -105,7 +105,6 @@ public sealed class LandedCostService(
                 .GroupBy(m => m.SourceId)
                 .Select(g => (BuildId: g.Key, Quantity: -g.Sum(m => m.Quantity)))
                 .ToList();
-            var toStock = Portion(share, Math.Max(0m, layer.RemainingQuantity), receipt.Quantity);
             var intoBuilds = 0m;
             foreach (var (buildId, quantity) in built)
             {
@@ -114,6 +113,8 @@ public sealed class LandedCostService(
                 await CarryIntoBuildAsync(buildId, part, receipt.SourceId, command.Date, lines, postings, movements, ct);
             }
 
+            // Each part rounds on its own; whatever comes last can't take more than is left of the share.
+            var toStock = Math.Min(Portion(share, Math.Max(0m, layer.RemainingQuantity), receipt.Quantity), share - intoBuilds);
             lines.Add((receipt.SourceId, receipt.Id, item.Id, share - intoBuilds, toStock));
             if (toStock != 0m)
             {

@@ -88,8 +88,7 @@ internal static class PortabilityApi
     {
         if (request.ContentLength > MaxBytes)
             throw new Domain.Common.DomainException("import.too_large", "Files can be at most 5 MB. Split it into smaller files.");
-        using var reader = new StreamReader(request.Body);
-        return await reader.ReadToEndAsync(ct);
+        return await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
     }
 }
 

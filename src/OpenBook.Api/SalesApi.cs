@@ -244,8 +244,7 @@ internal static class SalesApi
 
     private static async Task<string> Body(HttpRequest request, CancellationToken ct)
     {
-        using var reader = new StreamReader(request.Body);
-        return await reader.ReadToEndAsync(ct);
+        return await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
     }
 
     private static ChangeInvoiceCommand Kept(ChangeInvoiceCommand r, Invoice? e) => e is null ? r : r with { Memo = r.Memo ?? e.Memo, LocationId = ApiKeep.Id(r.LocationId, e.LocationId), WarehouseId = ApiKeep.Id(r.WarehouseId, e.WarehouseId) };

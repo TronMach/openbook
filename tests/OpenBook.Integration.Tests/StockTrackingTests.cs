@@ -50,6 +50,20 @@ public sealed class StockTrackingTests : IAsyncLifetime
             _customer.Id, date, [new SalesLineDraft(item.Id, null, quantity, item.Rate, Lots: lots)], WarehouseId: warehouseId)));
 
     [Fact]
+    public async Task Stock_isnt_at_a_warehouse_before_its_transfer_arrives()
+    {
+        var item = await NewItem("Bracket");
+        var east = await Run(sp => sp.GetRequiredService<WarehouseService>().CreateAsync("East"));
+        await Buy(new DateOnly(2026, 1, 10), item, 10m, 100m);
+        await Move(item, 10m, new StockPlace(null, null), new StockPlace(east.Id, null), date: new DateOnly(2026, 3, 1));
+
+        Assert.Equal("inventory.insufficient", await Refused(() => Sell(new DateOnly(2026, 2, 1), item, 4m, warehouseId: east.Id)));
+
+        var sold = await Sell(new DateOnly(2026, 3, 1), item, 4m, warehouseId: east.Id);
+        Assert.Equal(40m, sold.Total);
+    }
+
+    [Fact]
     public async Task Transfers_and_their_voids_respect_the_closing_date()
     {
         var east = await Run(sp => sp.GetRequiredService<WarehouseService>().CreateAsync("East"));

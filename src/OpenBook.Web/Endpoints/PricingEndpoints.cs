@@ -35,8 +35,7 @@ public static class PricingEndpoints
             var csv = form["csv"].ToString();
             if (form.Files.GetFile("file") is { Length: > 0 } file)
             {
-                using var reader = new StreamReader(file.OpenReadStream());
-                csv = await reader.ReadToEndAsync(ct);
+                csv = await OpenBook.Application.Import.TextFiles.ReadAsync(file.OpenReadStream(), ct);
             }
 
             var result = await service.ImportLevelPricesAsync(id, csv, ct);

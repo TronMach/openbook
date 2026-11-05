@@ -133,12 +133,14 @@ public sealed class ScheduledBackupService(
                 ?? throw new DomainException("backup.destination_unavailable", "That backup destination isn't available on this server.");
             var secret = schedule.ProtectedSecretKey is { } protectedKey ? secrets.Unprotect(protectedKey) : null;
             file = await backups.CreateAsync(ct);
-            var name = $"{prefix}{now.UtcDateTime.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.openbook.db";
+            // The company in the name: two companies, or a trial restore, can share a destination without deleting each other's.
+            var own = $"{prefix}{(await store.GetRequiredCompanyAsync(ct)).Id.ToString("N")[..8]}-";
+            var name = $"{own}{now.UtcDateTime.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.openbook.db";
             await target.UploadAsync(schedule, secret, file.Path, name, ct);
 
-            // Only this kind's own backups (the timestamp follows the prefix), newest first by their names.
-            var existing = (await target.ListAsync(schedule, secret, prefix, ct))
-                .Where(n => n.Length > prefix.Length && char.IsAsciiDigit(n[prefix.Length]))
+            // Only this company's own backups of this kind (the timestamp follows the prefix), newest first by their names.
+            var existing = (await target.ListAsync(schedule, secret, own, ct))
+                .Where(n => n.Length > own.Length && char.IsAsciiDigit(n[own.Length]))
                 .Order(StringComparer.Ordinal).Reverse().ToList();
             var old = existing.Skip(keep ?? schedule.Keep).ToList();
             foreach (var stale in old)

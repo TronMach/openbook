@@ -182,8 +182,7 @@ Bank Loan,9000.00</pre>
 
             _fileName = e.File.Name;
             await using var stream = e.File.OpenReadStream(MaxFileBytes);
-            using var reader = new StreamReader(stream);
-            _csv = await reader.ReadToEndAsync();
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
             if (_mode == "entries")
                 _entries = await Ops.RunAsync<JournalImportService, JournalImportResult>(s => s.PreviewEntriesAsync(_csv));
             else

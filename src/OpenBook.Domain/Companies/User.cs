@@ -179,6 +179,12 @@ public sealed class User
     public void RecordFailedLogin(DateTimeOffset now, int limit = MaxFailedLogins)
     {
         FailedLoginCount++;
+        LockIfOverLimit(now, limit);
+    }
+
+    /// <summary>After the count was raised in the database, where guesses made at once can't overwrite each other's.</summary>
+    public void LockIfOverLimit(DateTimeOffset now, int limit)
+    {
         if (FailedLoginCount >= limit)
         {
             LockedUntil = now.ToUniversalTime() + LockoutDuration;

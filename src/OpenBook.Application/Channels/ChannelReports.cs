@@ -7,7 +7,8 @@ namespace OpenBook.Application.Channels;
 
 /// <summary>A payout read from a channel's report, before it's saved.</summary>
 public sealed record PayoutData(
-    string ExternalId, DateOnly Date, IReadOnlyList<ChannelLineDraft> Lines, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null, decimal? ReportedNet = null)
+    string ExternalId, DateOnly Date, IReadOnlyList<ChannelLineDraft> Lines, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null, decimal? ReportedNet = null,
+    string? Currency = null)
 {
     public decimal Net => Lines.Sum(l => l.Amount);
 }

@@ -31,7 +31,7 @@ public static class MigrationReaders
             throw new DomainException("import.too_large", "The file is larger than 20 MB. Export in smaller parts.");
         return source switch
         {
-            MigrationSource.QuickBooksIif => IifImportService.Read(Decode(content, Encoding.Latin1)),
+            MigrationSource.QuickBooksIif => IifImportService.Read(Decode(content, TextFiles.Windows1252)),
             MigrationSource.QuickBooksQbxml => QbxmlReader.Read(LoadXml(content)),
             MigrationSource.QuickBooksOnline => QuickBooksOnlineReader.Read(Decode(content)),
             MigrationSource.GnuCash => GnuCashReader.Read(LoadXml(Decompress(content)), homeCurrency),
@@ -64,19 +64,7 @@ public static class MigrationReaders
         return company is null || company.IsEmpty ? null : company;
     }
 
-    /// <summary>UTF-8 (or the BOM's encoding); <paramref name="fallback"/> when it isn't valid UTF-8.</summary>
-    internal static string Decode(byte[] content, Encoding? fallback = null)
-    {
-        using var reader = new StreamReader(new MemoryStream(content), new UTF8Encoding(false, throwOnInvalidBytes: true), detectEncodingFromByteOrderMarks: true);
-        try
-        {
-            return reader.ReadToEnd();
-        }
-        catch (DecoderFallbackException)
-        {
-            return (fallback ?? Encoding.Latin1).GetString(content);
-        }
-    }
+    internal static string Decode(byte[] content, Encoding? fallback = null) => TextFiles.Decode(content, fallback);
 
     /// <summary>GnuCash saves gzip-compressed XML by default; plain files pass through.</summary>
     internal static byte[] Decompress(byte[] content)

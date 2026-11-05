@@ -180,8 +180,7 @@
         }
 
         await using var stream = e.File.OpenReadStream(MaxFileBytes);
-        using var reader = new StreamReader(stream);
-        _text = await reader.ReadToEndAsync();
+        _text = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
         _isOfx = Ofx.LooksLikeOfx(_text);
         _options = new BankImportOptions();
         await PreviewAsync();

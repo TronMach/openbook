@@ -78,8 +78,7 @@
         try
         {
             await using var stream = e.File.OpenReadStream(5 * 1024 * 1024);
-            using var reader = new StreamReader(stream);
-            _csv = await reader.ReadToEndAsync();
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
             _preview = await Ops.RunAsync<CustomerImportService, ImportResult<CustomerImportRow>>(s => s.PreviewAsync(_csv));
         }
         catch (Exception ex) when (ex is DomainException or IOException)

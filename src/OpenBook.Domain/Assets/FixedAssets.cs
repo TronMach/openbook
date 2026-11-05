@@ -274,6 +274,10 @@ public static class Depreciation
             if (date <= prior)
                 return asset.PriorDepreciation;
             total = asset.PriorDepreciation + schedule.Where(p => p.PeriodEnd > prior && p.PeriodEnd <= date).Sum(p => p.Amount);
+
+            // What was brought in rarely matches the schedule: the last month takes the difference, so the asset still ends at its base.
+            if (schedule.Count > 0 && date >= schedule[^1].PeriodEnd)
+                total = asset.Base;
         }
         else
         {

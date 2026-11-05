@@ -220,4 +220,19 @@ public sealed class SellingShortTests : IAsyncLifetime
         Assert.True(after.Requirements.Single().IsShort);
         Assert.False(after.Requirements.Single().Stops);
     }
+
+    [Fact]
+    public async Task An_average_cost_sale_isnt_cheapened_by_a_shortfall_at_another_warehouse()
+    {
+        await AllowSellingShort(true);
+        var east = await Run(sp => sp.GetRequiredService<WarehouseService>().CreateAsync("East"));
+        var bolt = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Bolt", ItemType.Inventory, _sales.Id, 10m, PurchaseCost: 1m, CostMethod: InventoryCostMethod.Average)));
+        await Run(sp => sp.GetRequiredService<BillService>().CreateAsync(new CreateBillCommand(_vendor.Id, Jan10, [new BillLineDraft(Guid.Empty, 10m, null, bolt.Id, 10m)], WarehouseId: east.Id)));
+        await Run(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(_customer.Id, Jan20, [new SalesLineDraft(bolt.Id, null, 8m, 10m)])));
+
+        await Run(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(_customer.Id, Jan20, [new SalesLineDraft(bolt.Id, null, 5m, 10m)], WarehouseId: east.Id)));
+
+        var cost = bolt.CostAccountId!.Value;
+        Assert.Equal(8m + 5m, await Balance(cost));
+    }
 }

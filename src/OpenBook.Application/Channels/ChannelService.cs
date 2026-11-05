@@ -37,7 +37,7 @@ public sealed record PayoutImportResult(IReadOnlyList<PayoutData> New, IReadOnly
 /// Sales channels and their payouts. A report is read by <see cref="ChannelReports"/>; payouts not seen before (by the
 /// channel's id for them) wait as Pending until posted, each as one journal entry (<see cref="ChannelPayout.Source"/>).
 /// </summary>
-public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user)
+public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies)
 {
     public const string ChannelEntity = "sales_channel";
     public const string PayoutEntity = "channel_payout";
@@ -101,7 +101,9 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var channel = await store.GetChannelAsync(channelId, ct) ?? throw new EntityNotFoundException(ChannelEntity, channelId);
         if (!channel.IsActive)
             throw new DomainException("channel.inactive", $"{channel.Name} is inactive.");
-        var read = ChannelReports.Read(channel.Kind, Encoding.UTF8.GetString(content), fileName);
+        var text = OpenBook.Application.Import.TextFiles.Decode(content);
+        ChannelCurrency.Check(text, (await OpenBook.Application.Companies.CompanyStoreExtensions.GetRequiredCompanyAsync(companies, ct)).HomeCurrency.Code);
+        var read = ChannelReports.Read(channel.Kind, text, fileName);
         return await AddAsync(channel, await SplitByOrdersAsync(channel, read.Payouts, ct), read.Warnings, save, ct);
     }
 

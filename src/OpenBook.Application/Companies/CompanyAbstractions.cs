@@ -19,6 +19,15 @@ public interface IPasswordHasher
 
 public interface ICompanyStore
 {
+    /// <summary>Adds one to the user's failed sign-ins in the database and reloads them, so guesses at the same moment all count.</summary>
+    Task CountFailedLoginAsync(User user, CancellationToken ct);
+
+    /// <summary>
+    /// Writes the two-factor step or recovery codes just used, only if the row still holds what was read. False means
+    /// another sign-in used them first, so one code can't get two people in.
+    /// </summary>
+    Task<bool> ClaimSignInCodeAsync(User user, CancellationToken ct);
+
     /// <summary>Null until the setup wizard has run.</summary>
     Task<Company?> GetCompanyAsync(CancellationToken ct);
 

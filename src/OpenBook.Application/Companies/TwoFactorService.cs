@@ -107,9 +107,10 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
             return new SignInResult(SignInStatus.LockedOut, LockedUntil: user.LockedUntil);
 
         var usedRecovery = false;
-        if (!CodeMatches(user, code, now, out usedRecovery))
+        if (!CodeMatches(user, code, now, out usedRecovery) || !await store.ClaimSignInCodeAsync(user, ct))
         {
-            user.RecordFailedLogin(now);
+            await store.CountFailedLoginAsync(user, ct);
+            user.LockIfOverLimit(now, User.MaxFailedLogins);
             await store.SaveChangesAsync(ct);
             return user.IsLockedOut(now)
                 ? new SignInResult(SignInStatus.LockedOut, LockedUntil: user.LockedUntil)
@@ -185,9 +186,10 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
     {
         if (!await auth.VerifyPasswordAsync(user.Id, password, ct))
             throw new DomainException("auth.wrong_password", "The password is incorrect.");
-        if (!CodeMatches(user, code, clock.UtcNow, out _))
+        if (!CodeMatches(user, code, clock.UtcNow, out _) || !await store.ClaimSignInCodeAsync(user, ct))
         {
-            user.RecordFailedLogin(clock.UtcNow);
+            await store.CountFailedLoginAsync(user, ct);
+            user.LockIfOverLimit(clock.UtcNow, User.MaxFailedLogins);
             await store.SaveChangesAsync(ct);
             throw new DomainException("twofactor.wrong_code", "That code doesn't match. Use the newest code from your app, or a recovery code.");
         }

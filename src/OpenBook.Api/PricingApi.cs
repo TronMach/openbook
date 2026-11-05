@@ -53,8 +53,7 @@ internal static class PricingApi
             PriceLevelResponse.From(await s.SetLevelPricesAsync(id, r.Select(p => (p.ItemId, p.Price)).ToList(), ct)));
         pricing.MapPost("/levels/{id:guid}/import", async (Guid id, HttpRequest request, PricingService s, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
-            var result = await s.ImportLevelPricesAsync(id, await reader.ReadToEndAsync(ct), ct);
+            var result = await s.ImportLevelPricesAsync(id, await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct), ct);
             return result.Errors.Count == 0 ? Results.Ok(result) : Results.BadRequest(result);
         }).Accepts<string>("text/csv");
         pricing.MapGet("/levels/{id:guid}/export", async (Guid id, DateOnly? date, PricingService s, CancellationToken ct) =>

@@ -105,8 +105,7 @@ public static class OpenBookApi
         // Body is the CSV itself (text/csv). With dryRun=true nothing is saved.
         api.MapPost("/accounts/import", async (HttpRequest request, bool? dryRun, ChartImportService import, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
-            var csv = await reader.ReadToEndAsync(ct);
+            var csv = await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
             return dryRun == true
                 ? ChartImportResponse.From(await import.PreviewAsync(csv, ct), imported: false)
                 : ChartImportResponse.From(await import.ImportAsync(csv, ct), imported: true);

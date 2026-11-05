@@ -323,6 +323,9 @@ public sealed class EmailService(
         return me;
     }
 
+    private const string SendFailedCode = "email.send_failed";
+    private const int MaxFailuresInARow = 2;
+
     /// <summary>
     /// Sends each record its usual email, in the order given, each send kept on its own. Records without an address
     /// are skipped and listed; a failed send is listed and the rest go on. Stops before sending anything when email isn't set up.
@@ -334,6 +337,7 @@ public sealed class EmailService(
         var sent = new List<string>();
         var noEmail = new List<string>();
         var failed = new List<(string, string)>();
+        var inARow = 0;
         foreach (var source in each)
         {
             var context = await Source(source.Kind).ContextAsync(source, ct);
@@ -343,14 +347,24 @@ public sealed class EmailService(
                 continue;
             }
 
+            // A mail server that's stopped answering would otherwise hold this request for half a minute per person.
+            if (inARow >= MaxFailuresInARow)
+            {
+                failed.Add((context.Name, "Not tried: sending had stopped working."));
+                continue;
+            }
+
             try
             {
                 await SendAsync(source, await DraftAsync(source, ct), ct);
                 sent.Add(context.Name);
+                inARow = 0;
             }
             catch (DomainException ex)
             {
                 failed.Add((context.Name, ex.Message));
+                if (ex.Code == SendFailedCode)
+                    inARow++;
             }
         }
 
@@ -523,7 +537,7 @@ public sealed class EmailService(
         }
         catch (Exception ex) when (ex is not DomainException and not OperationCanceledException)
         {
-            throw new DomainException("email.send_failed", $"The email wasn't sent: {ex.Message}");
+            throw new DomainException(SendFailedCode, $"The email wasn't sent: {ex.Message}");
         }
     }
 

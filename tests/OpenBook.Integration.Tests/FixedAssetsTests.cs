@@ -166,4 +166,13 @@ public sealed class FixedAssetsTests : IAsyncLifetime
 
         await In<FixedAssetService, FixedAsset>(s => s.DisposeAsync(van.Id, new DisposeAssetCommand(new DateOnly(2027, 1, 31), 0m, null)));
     }
+
+    [Fact]
+    public async Task Depreciation_brought_in_that_differs_from_the_schedule_still_ends_at_the_base()
+    {
+        var van = await Van(prior: 200m, priorThrough: new DateOnly(2026, 6, 30));
+
+        Assert.Equal(200m + 100m, Depreciation.ScheduledThrough(van, new DateOnly(2026, 7, 31)));
+        Assert.Equal(3_600m, Depreciation.ScheduledThrough(van, new DateOnly(2028, 12, 31)));
+    }
 }

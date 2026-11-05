@@ -117,7 +117,7 @@ public sealed class ChannelClient : IChannelClient, IDisposable
             }
 
             if (lines.Count > 0)
-                payouts.Add(new PayoutData(id, arrival, lines, lines.Min(l => l.Date), lines.Max(l => l.Date), Cents(payout, "amount")));
+                payouts.Add(new PayoutData(id, arrival, lines, lines.Min(l => l.Date), lines.Max(l => l.Date), Cents(payout, "amount"), payout.TryGetProperty("currency", out var currency) ? currency.GetString() : null));
         }
 
         return payouts;
@@ -207,7 +207,7 @@ public sealed class ChannelClient : IChannelClient, IDisposable
             }
 
             if (lines.Count > 0)
-                payouts.Add(new PayoutData(id, paidOn, lines, lines.Min(l => l.Date), lines.Max(l => l.Date), Money(payout, "amount")));
+                payouts.Add(new PayoutData(id, paidOn, lines, lines.Min(l => l.Date), lines.Max(l => l.Date), Money(payout, "amount"), payout.TryGetProperty("currency", out var currency) ? currency.GetString() : null));
         }
 
         return payouts;

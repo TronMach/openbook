@@ -70,6 +70,11 @@ public sealed class ChannelSyncService(
             var key = secrets.Unprotect(credential)
                 ?? throw new DomainException("channel.credential_unreadable", "The saved key can't be read on this computer. Connect the channel again.");
             var payouts = await client.FetchPayoutsAsync(channel.Kind, channel.ShopDomain, key, since, ct);
+
+            // Payouts in another currency stay out, and say so: the books hold one.
+            var home = (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency.Code;
+            var other = payouts.Where(p => p.Currency is { } c && !c.Equals(home, StringComparison.OrdinalIgnoreCase)).ToList();
+            payouts = [.. payouts.Except(other)];
             if (channel.Kind == ChannelKind.Stripe)
                 payouts = await ClearInvoicePaymentsAsync(channel, payouts, ct);
 
@@ -88,6 +93,9 @@ public sealed class ChannelSyncService(
                     ordersError = $"Payouts were fetched, but not orders (give the app the read_orders scope): {ex.Message}";
                 }
             }
+
+            if (other.Count > 0)
+                ordersError = $"{other.Count} payout(s) in {other[0].Currency!.ToUpperInvariant()} were left out: these books are in {home}.{(ordersError is null ? "" : " " + ordersError)}";
 
             var result = await channels.AddAsync(channel, payouts, [], save: true, ct);
             var newOrders = fetched.Count > 0 ? (await orders.AddAsync(channel, fetched, [], ct)).Orders : 0;

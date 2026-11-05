@@ -130,8 +130,7 @@
 
             _fileName = e.File.Name;
             await using var stream = e.File.OpenReadStream(MaxFileBytes);
-            using var reader = new StreamReader(stream);
-            _csv = await reader.ReadToEndAsync();
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
             _preview = await Ops.RunAsync<ChartImportService, ChartImportResult>(s => s.PreviewAsync(_csv));
         }
         catch (DomainException ex)

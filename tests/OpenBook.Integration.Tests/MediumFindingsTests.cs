@@ -568,4 +568,25 @@ public sealed class MediumFindingsTests : IAsyncLifetime
             Assert.Equal("online.provider_unreachable", await Refused(() => gateway.GetCheckoutAsync("sk_test", "cs_1", default)));
         }
     }
+
+    [Fact]
+    public void Files_from_windows_keep_their_characters()
+    {
+        byte[] windows = [0x43, 0x61, 0x66, 0xE9, 0x92, 0x73];
+        Assert.Equal("Café’s", OpenBook.Application.Import.TextFiles.Decode(windows));
+        Assert.Equal("Café", OpenBook.Application.Import.TextFiles.Decode(System.Text.Encoding.UTF8.GetBytes("Café")));
+        Assert.Equal("Café", OpenBook.Application.Import.TextFiles.Decode(System.Text.Encoding.Unicode.GetPreamble().Concat(System.Text.Encoding.Unicode.GetBytes("Café")).ToArray()));
+    }
+
+    [Fact]
+    public void A_report_in_another_currency_is_refused()
+    {
+        static string Report(params string[] lines) => string.Join(Environment.NewLine, lines);
+        OpenBook.Application.Channels.ChannelCurrency.Check(Report("Date,Currency,Amount", "2026-03-01,USD,10"), "USD");
+        OpenBook.Application.Channels.ChannelCurrency.Check(Report("Date,Amount", "2026-03-01,10"), "USD");
+
+        var refused = Assert.Throws<DomainException>(() => OpenBook.Application.Channels.ChannelCurrency.Check(Report("Some report", "", "Date,Transaction currency,Amount", "2026-03-01,CAD,10"), "USD"));
+
+        Assert.Equal("channel.other_currency", refused.Code);
+    }
 }

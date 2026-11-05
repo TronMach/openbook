@@ -157,8 +157,7 @@ internal static class BankingApi
         // Preview: POST the CSV as text/csv. Import: POST the chosen rows as JSON to /import/commit.
         banking.MapPost("/accounts/{id:guid}/import/preview", async (Guid id, HttpRequest request, DateOrder? dateOrder, AmountSign? amountSign, BankImportService s, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
-            return await s.PreviewAsync(id, await reader.ReadToEndAsync(ct), new BankImportOptions(dateOrder, amountSign ?? AmountSign.PositiveIsMoneyIn), ct);
+            return await s.PreviewAsync(id, await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct), new BankImportOptions(dateOrder, amountSign ?? AmountSign.PositiveIsMoneyIn), ct);
         }).Accepts<string>("text/csv");
 
         banking.MapPost("/accounts/{id:guid}/import/commit", async (Guid id, ImportBankRowsRequest r, BankImportService s, CancellationToken ct) =>

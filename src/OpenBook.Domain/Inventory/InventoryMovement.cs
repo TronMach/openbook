@@ -298,6 +298,14 @@ public static class Fifo
     {
         ArgumentNullException.ThrowIfNull(filter);
         var open = Slices(movements).Where(s => s.Quantity > 0m && s.Date <= date && filter.Matches(s)).ToList();
+
+        // A place has what had reached it by the date: stock transferred there later wasn't there yet.
+        if (!filter.AnyWarehouse)
+        {
+            var there = movements.Where(m => m.Date <= date).GroupBy(m => (m.LayerId, m.Place)).ToDictionary(g => g.Key, g => g.Sum(m => m.Quantity));
+            open = open.Select(s => s with { Quantity = Math.Min(s.Quantity, there.GetValueOrDefault((s.LayerId, s.Place))) }).Where(s => s.Quantity > 0m).ToList();
+        }
+
         expired = 0m;
         if (filter.Lot is null && filter.Expiries is not null)
         {
@@ -368,7 +376,9 @@ public static class Costing
         var takes = Fifo.Take(movements, quantity, date, item.Name, filter).ToList();
         if (item.CostMethod == Sales.InventoryCostMethod.Average && takes.Count > 0)
         {
-            var asOf = movements.Where(m => m.Date <= date).ToList();
+            // What's really there: stock another warehouse sold short isn't less of what's here.
+            var shortfalls = movements.Where(m => m.IsShortfall).Select(m => m.Id).ToHashSet();
+            var asOf = movements.Where(m => m.Date <= date && !shortfalls.Contains(m.LayerId)).ToList();
             var onHand = asOf.Sum(m => m.Quantity);
             var value = Math.Max(0m, asOf.Sum(m => m.Cost));
             var total = quantity >= onHand ? value : decimal.Round(value * quantity / onHand, 2, MidpointRounding.AwayFromZero);

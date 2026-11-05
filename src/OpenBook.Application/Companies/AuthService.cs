@@ -291,7 +291,8 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
         if (check == PasswordCheck.Failed)
         {
             throttle.RecordFailure(user.Id, address, now);
-            user.RecordFailedLogin(now, User.MaxFailedLoginsEverywhere);
+            await store.CountFailedLoginAsync(user, ct);
+            user.LockIfOverLimit(now, User.MaxFailedLoginsEverywhere);
             if (user.IsLockedOut(now))
             {
                 // Guessing from many addresses at once: someone should know why nobody can sign in.

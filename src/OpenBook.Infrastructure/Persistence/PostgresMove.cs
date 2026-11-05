@@ -209,7 +209,8 @@ public sealed class PostgresMove(IClock clock, string actor)
 
             foreach (var i in secretColumns)
             {
-                if (values[i] is not string protectedText)
+                // Disconnecting something leaves an empty value, with nothing to read.
+                if (values[i] is not string { Length: > 0 } protectedText)
                     continue;
                 var plain = sourceSecrets.Unprotect(protectedText) ?? throw new DomainException("move.secret_unreadable",
                     $"A stored secret ({to.Name}.{columns[i].Name}) can't be read with the source keys. Give the keys folder the company was used with. Nothing was moved.");

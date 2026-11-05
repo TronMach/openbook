@@ -38,7 +38,8 @@ public static class PrintEndpoints
                 var customers = form["customer"].OfType<string>().Select(c => Id(c)).ToList();
                 if (customers.Count == 0)
                     throw new DomainException("print.no_customers", "Tick the customers whose statements to send.");
-                var run = await email.SendStatementsAsync(customers, Date(form["from"], "start"), Date(form["to"], "end"), ct);
+                // Not the request's token: leaving the page mustn't stop it halfway, with no word of who has theirs.
+                var run = await email.SendStatementsAsync(customers, Date(form["from"], "start"), Date(form["to"], "end"), CancellationToken.None);
                 // Counts only: the page's list marks who has no email address, and names don't belong in an address bar.
                 var query = $"emailed={run.Sent.Count}&noEmail={run.NoEmail.Count}"
                     + (run.Failed.Count == 0 ? "" : $"&printError={Uri.EscapeDataString($"{run.Failed.Count} couldn't be sent: {run.Failed[0].Reason}")}");

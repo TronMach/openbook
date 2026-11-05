@@ -116,8 +116,7 @@ internal static class PurchasesApi
             VendorResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         api.MapPost("/vendors/import", async (HttpRequest request, bool? dryRun, VendorImportService s, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
-            var csv = await reader.ReadToEndAsync(ct);
+            var csv = await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
             return dryRun == true ? await s.PreviewAsync(csv, ct) : await s.ImportAsync(csv, ct);
         }).Accepts<string>("text/csv");
 
