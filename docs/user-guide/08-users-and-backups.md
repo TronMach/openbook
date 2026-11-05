@@ -56,6 +56,8 @@ When the four roles are too coarse (a front-desk clerk who should enter sales bu
 
 The areas are accounts and journal (including company settings and the audit log), customers, items and sales, vendors and purchases, the document inbox, banking, inventory, projects, time and mileage, sales channels, fixed assets and loans, nonprofit, reports (including the dashboard), offline capture, and imports, exports, notes and custom field values. Pages outside every area (home, search, your own password, two-factor and API keys) are open to everyone; search only lists what a person can open. The notes, custom field and "print later" boxes on record pages belong to the imports, exports, notes and custom field values area: give it standard for someone who should add notes or fill in custom fields.
 
+A set gives a record's files with the record, so someone with sales sees the files on invoices. Batch printing belongs with sales, and purchase orders in a batch need vendors and purchases too. What offline capture enters needs that area as well: an invoice from a phone needs sales. Item and customer Centers leave out documents from areas the set doesn't cover.
+
 To give someone a set, choose it in their **Role** list on the Users page (under **Permission sets**) and select **Change**; choose a role there to take it away. Admin things (users, backups, data export, webhooks, add-ins, system settings) always need the admin role, so no set reaches them. A set counts as its highest level where OpenBook asks for a role, for example when two-factor sign-in is required "for accountants and admins".
 
 Changing a set signs out everyone who has it, so their next sign-in uses the new levels. A set can be switched off once nobody active uses it. API keys of someone with a set reach only the set's areas (and a limited key narrows that further).
@@ -73,7 +75,7 @@ The sign-in page then has a **Sign in with …** button (change its text with **
 - a user whose **Email** (on their user page) is the email the provider vouches for; their account is linked from then on;
 - someone with a waiting invitation for that email: signing in accepts it and creates their user (they have no OpenBook password).
 
-Anyone else is told to ask an admin for an invitation. Users can also link their account themselves: select their username in the top bar, then **Password and sessions**, then **link your account** under **Single sign-on**. An administrator can **Unlink** an account on the user's page.
+Anyone else is told to ask an admin for an invitation. Users can also link their account themselves: select their username in the top bar, then **Password and sessions**, then enter your password (and code, with two-factor on) and select **link your account** under **Single sign-on**. An administrator can **Unlink** an account on the user's page.
 
 Microsoft vouches for emails only with a named directory (not "organizations" or "common"); Google always does. With another provider, people may need to link their account themselves the first time.
 

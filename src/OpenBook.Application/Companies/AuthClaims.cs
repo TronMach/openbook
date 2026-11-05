@@ -13,6 +13,18 @@ public static class AuthClaims
     public const string PermissionSet = "openbook:permission-set";
     public const string Area = "openbook:area";
 
+    /// <summary>On a principal signed in with a key limited to some areas; the areas are <see cref="Scope"/>s.</summary>
+    public const string Scoped = "obk:scoped";
+    public const string Scope = "obk:scope";
+
+    /// <summary>
+    /// Whether the user may enter records in an area, for an endpoint that reaches several: their level, and a limited
+    /// key's scope. Paths are checked by AccessRules; this is for what crosses areas behind one path.
+    /// </summary>
+    public static bool MayWrite(ClaimsPrincipal user, string area) =>
+        LevelIn(user, area) >= UserRole.Standard
+        && (!user.HasClaim(Scoped, "true") || user.HasClaim(Scope, $"{area}:write"));
+
     public static bool HasPermissionSet(ClaimsPrincipal user) => user?.HasClaim(c => c.Type == PermissionSet) == true;
 
     /// <summary>A permission set's level in an area (null: none); for users with a built-in role, their role.</summary>

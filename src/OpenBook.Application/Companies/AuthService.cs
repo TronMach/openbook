@@ -231,7 +231,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
     /// </summary>
     /// <param name="clearTwoFactor">Also turns two-factor sign-in off, for someone who lost their phone and recovery codes.</param>
     /// <returns>The username whose password was reset.</returns>
-    public async Task<string> ResetPasswordAsync(string? username, string newPassword, string actor, bool clearTwoFactor = false, CancellationToken ct = default)
+    public async Task<string> ResetPasswordAsync(string? username, string newPassword, string actor, bool clearTwoFactor = false, bool restoreAdmin = false, CancellationToken ct = default)
     {
         var users = await store.ListUsersAsync(ct);
         if (users.Count == 0)
@@ -262,6 +262,16 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
             store.Add(AuditRecord.Create(clock.UtcNow, actor, AuditAction.Updated, "user", user.Id, null,
                 JsonSerializer.Serialize(new { Changed = "two-factor sign-in turned off", Via = "reset" })));
         }
+        // The way back when nobody can administer the company any more.
+        if (restoreAdmin)
+        {
+            user.Reactivate();
+            user.SetAccessEnd(null, CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone));
+            user.ChangeRole(UserRole.Admin);
+            store.Add(AuditRecord.Create(clock.UtcNow, actor, AuditAction.Updated, "user", user.Id, null,
+                JsonSerializer.Serialize(new { Changed = "made an active admin", Via = "reset" })));
+        }
+
         await store.SaveChangesAsync(ct);
         throttle.Clear(user.Id);
         return user.Username;

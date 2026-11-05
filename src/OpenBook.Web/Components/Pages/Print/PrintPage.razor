@@ -195,6 +195,9 @@
     private IReadOnlyList<PrintQueueEntry> _queue = [];
     private IReadOnlyList<PrintQueueEntry> _printed = [];
     private IReadOnlyList<PrintableDocument> _documents = [];
+    [CascadingParameter]
+    private HttpContext? Http { get; set; }
+
     private IReadOnlyList<CustomerSummary> _balances = [];
     private FormDocuments _kind = FormDocuments.Invoice;
     private DateOnly _today;
@@ -219,7 +222,9 @@
         _from = From ?? _today.AddDays(-7);
         _queue = await Print.QueueAsync();
         _printed = await Print.PrintedAsync();
-        _documents = await Print.DocumentsAsync(_kind, _from, _to);
+        // Printing belongs with sales; purchase orders need that area too.
+        var orders = OpenBook.Application.Companies.AuthClaims.LevelIn(Http!.User, "purchases") is not null;
+        _documents = _kind == FormDocuments.PurchaseOrder && !orders ? [] : await Print.DocumentsAsync(_kind, _from, _to);
         _balances = await Customers.StatementListAsync(_today);
     }
 

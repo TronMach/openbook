@@ -218,7 +218,7 @@ public static class AccessRules
         ("/merge", "data"),
         ("/export", "data"),
         ("/backup", "data"),
-        ("/print", "data"),
+        ("/print", "sales"),
         ("/notes", "data"),
         ("/attachments", "data"),
         ("/custom-fields", "data"),
@@ -263,6 +263,9 @@ public static class AccessRules
             return role >= needed;
         if (needed == UserRole.Admin)
             return false;
+        // Reading a file follows the record it's on, which the endpoint checks.
+        if (HttpMethods.IsGet(method) && path.StartsWithSegments("/attachments"))
+            return true;
         return AreaOf(path) is { } area
             ? LevelIn(user, area) is { } level && level >= needed
             : needed == UserRole.ViewOnly;
@@ -316,8 +319,9 @@ public static class AccessRules
     }
 
     /// <summary>A path on this site (starts with one slash), or null: never another site.</summary>
+    /// <remarks>Browsers drop tabs and newlines and read a backslash as a slash, so "/&lt;tab&gt;/evil" and "/\\evil" lead away too.</remarks>
     public static string? LocalPath(string? url) =>
-        url is { Length: > 0 } && url[0] == '/' && !url.StartsWith("//", StringComparison.Ordinal) && !url.StartsWith("/\\", StringComparison.Ordinal)
+        url is { Length: > 0 } && url[0] == '/' && !url.StartsWith("//", StringComparison.Ordinal) && !url.Any(c => c == '\\' || char.IsControl(c))
             ? url
             : null;
 
@@ -408,8 +412,8 @@ public sealed class ApiKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSc
     public const string SchemeName = "ApiKey";
 
     /// <summary>On a principal signed in with a key limited to some areas; the areas are <see cref="ScopeClaim"/>s.</summary>
-    public const string ScopedClaim = "obk:scoped";
-    public const string ScopeClaim = "obk:scope";
+    public const string ScopedClaim = AuthClaims.Scoped;
+    public const string ScopeClaim = AuthClaims.Scope;
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {

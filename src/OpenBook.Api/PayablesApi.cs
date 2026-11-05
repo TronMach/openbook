@@ -143,8 +143,10 @@ internal static class PayablesApi
         });
 
         // Uploads go through the web app's form endpoint, which checks the antiforgery token.
-        api.MapGet("/attachments", async (string entityType, Guid entityId, AttachmentService s, CancellationToken ct) =>
-            (await s.ListAsync(entityType, entityId, ct)).Select(a => new { a.Id, a.FileName, a.ContentType, a.Size, a.AddedAt, a.AddedBy }));
+        api.MapGet("/attachments", async (string entityType, Guid entityId, System.Security.Claims.ClaimsPrincipal user, AttachmentService s, CancellationToken ct) =>
+            Application.Companies.AuthClaims.LevelIn(user, Application.Companies.RecordAreas.Of(entityType)) is null
+                ? Results.Forbid()
+                : Results.Ok((await s.ListAsync(entityType, entityId, ct)).Select(a => new { a.Id, a.FileName, a.ContentType, a.Size, a.AddedAt, a.AddedBy })));
         api.MapDelete("/attachments/{id:guid}", async (Guid id, AttachmentService s, CancellationToken ct) =>
         {
             await s.RemoveAsync(id, ct);

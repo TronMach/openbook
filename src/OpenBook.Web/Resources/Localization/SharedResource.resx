@@ -1334,6 +1334,9 @@
   <data name="Not in the menu for this edition:" xml:space="preserve">
     <value>Not in the menu for this edition:</value>
   </data>
+  <data name="not linked." xml:space="preserve">
+    <value>not linked.</value>
+  </data>
   <data name="Not linked. They're linked at their first single sign-on with this email, or from their own account page." xml:space="preserve">
     <value>Not linked. They're linked at their first single sign-on with this email, or from their own account page.</value>
   </data>
@@ -2150,6 +2153,9 @@
   <data name="That account already signs in as someone else." xml:space="preserve">
     <value>That account already signs in as someone else.</value>
   </data>
+  <data name="That password or code isn't right." xml:space="preserve">
+    <value>That password or code isn't right.</value>
+  </data>
   <data name="That session is signed out." xml:space="preserve">
     <value>That session is signed out.</value>
   </data>
@@ -2507,6 +2513,9 @@
   <data name="Your access ends on {0}." xml:space="preserve">
     <value>Your access ends on {0}.</value>
   </data>
+  <data name="Your account is linked to another sign-in. Ask an admin to unlink it first." xml:space="preserve">
+    <value>Your account is linked to another sign-in. Ask an admin to unlink it first.</value>
+  </data>
   <data name="Your account is linked: you can sign in with &quot;{0}&quot;." xml:space="preserve">
     <value>Your account is linked: you can sign in with "{0}".</value>
   </data>
@@ -2536,6 +2545,9 @@
   </data>
   <data name="Your language and region" xml:space="preserve">
     <value>Your language and region</value>
+  </data>
+  <data name="Your password" xml:space="preserve">
+    <value>Your password</value>
   </data>
   <data name="Your password and sessions" xml:space="preserve">
     <value>Your password and sessions</value>

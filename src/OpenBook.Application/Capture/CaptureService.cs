@@ -123,7 +123,15 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     }
 
     /// <summary>Enters a device's drafts, in the order sent. Refused for a device that isn't the user's or is revoked (<c>capture.device_revoked</c>).</summary>
-    public async Task<IReadOnlyList<DraftOutcome>> SyncAsync(Guid userId, Guid deviceId, IReadOnlyList<IncomingDraft> drafts, CancellationToken ct = default)
+    public async Task<IReadOnlyList<DraftOutcome>> SyncAsync(Guid userId, Guid deviceId, IReadOnlyList<IncomingDraft> drafts, CancellationToken ct = default) =>
+        await SyncAsync(userId, deviceId, drafts, null, ct);
+
+    /// <param name="userId">Whose device it is.</param>
+    /// <param name="deviceId">The device.</param>
+    /// <param name="drafts">What it sends.</param>
+    /// <param name="mayEnter">What this person may enter: a draft of another kind waits for attention. Null for everything.</param>
+    /// <param name="ct">Cancels the sync.</param>
+    public async Task<IReadOnlyList<DraftOutcome>> SyncAsync(Guid userId, Guid deviceId, IReadOnlyList<IncomingDraft> drafts, Func<CaptureKind, bool>? mayEnter, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(drafts);
         var device = await store.GetDeviceAsync(deviceId, ct);
@@ -136,7 +144,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
 
         var outcomes = new List<DraftOutcome>();
         foreach (var incoming in drafts)
-            outcomes.Add(await ReceiveAsync(incoming, device, ct));
+            outcomes.Add(await ReceiveAsync(incoming, device, mayEnter, ct));
 
         device.Synced(clock.UtcNow);
         await store.SaveChangesAsync(ct);
@@ -144,7 +152,10 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     }
 
     /// <summary>Tries a draft that needed attention again (after fixing what stopped it, such as a closed period or an inactive customer).</summary>
-    public async Task<DraftOutcome> RetryAsync(Guid draftId, Guid? ownerId, CancellationToken ct = default)
+    public Task<DraftOutcome> RetryAsync(Guid draftId, Guid? ownerId, CancellationToken ct = default) => RetryAsync(draftId, ownerId, null, ct);
+
+    /// <summary>The same, for someone who may enter only some kinds.</summary>
+    public async Task<DraftOutcome> RetryAsync(Guid draftId, Guid? ownerId, Func<CaptureKind, bool>? mayEnter, CancellationToken ct = default)
     {
         var (_, device) = await OwnedAsync(draftId, ownerId, ct);
         for (var attempt = 1; ; attempt++)
@@ -158,6 +169,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
                 if (!await drafts.TryTakeWaitingAsync(draftId, ct))
                     throw new DomainException(NotWaitingCode, "This draft isn't waiting.");
                 var draft = await drafts.GetDraftAsync(draftId, ct) ?? throw new EntityNotFoundException(DraftEntity, draftId);
+                EnsureMayEnter(draft.Kind, mayEnter);
                 await EnterAsync(sp, draft, ct);
                 drafts.Add(Audit(AuditAction.Updated, draft, device));
                 await drafts.SaveChangesAsync(ct);
@@ -182,8 +194,13 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
         await store.SaveChangesAsync(ct);
     }
 
-    public async Task<CaptureLists> ListsAsync(CancellationToken ct = default)
+    public Task<CaptureLists> ListsAsync(CancellationToken ct = default) => ListsAsync(null, ct);
+
+    /// <param name="mayEnter">What this person may enter: the lists leave out what only other kinds need.</param>
+    /// <param name="ct">Cancels the read.</param>
+    public async Task<CaptureLists> ListsAsync(Func<CaptureKind, bool>? mayEnter, CancellationToken ct = default)
     {
+        bool May(params CaptureKind[] kinds) => mayEnter is null || kinds.Any(mayEnter);
         await using var scope = scopes.CreateAsyncScope();
         var sp = scope.ServiceProvider;
         var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
@@ -197,13 +214,13 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
         var rates = await sp.GetRequiredService<MileageService>().RatesAsync(ct);
         return new CaptureLists(
             me?.Id,
-            workers.Select(w => new CaptureChoice(w.Id, w.Name)).ToList(),
-            customers.Select(c => new CaptureChoice(c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList(),
-            items.Where(i => i.Type is ItemType.Service or ItemType.NonInventory).Select(i => new CaptureChoice(i.Id, i.Name)).ToList(),
-            active.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList(),
-            active.Where(a => a.Type.ClassOf() == AccountClass.Expense).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList(),
-            vendors.Select(v => new CaptureChoice(v.Vendor.Id, v.Vendor.DisplayName)).ToList(),
-            items.Select(i => new CaptureChoice(i.Id, i.Name)).ToList(),
+            May(CaptureKind.Time, CaptureKind.Mileage) ? workers.Select(w => new CaptureChoice(w.Id, w.Name)).ToList() : [],
+            May(CaptureKind.Time, CaptureKind.Mileage, CaptureKind.Invoice, CaptureKind.Estimate) ? customers.Select(c => new CaptureChoice(c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList() : [],
+            May(CaptureKind.Time) ? items.Where(i => i.Type is ItemType.Service or ItemType.NonInventory).Select(i => new CaptureChoice(i.Id, i.Name)).ToList() : [],
+            May(CaptureKind.Expense) ? active.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList() : [],
+            May(CaptureKind.Expense) ? active.Where(a => a.Type.ClassOf() == AccountClass.Expense).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList() : [],
+            May(CaptureKind.Expense, CaptureKind.Receipt) ? vendors.Select(v => new CaptureChoice(v.Vendor.Id, v.Vendor.DisplayName)).ToList() : [],
+            May(CaptureKind.Invoice, CaptureKind.Estimate) ? items.Select(i => new CaptureChoice(i.Id, i.Name)).ToList() : [],
             rates.GetValueOrDefault(today.Year),
             clock.UtcNow);
     }
@@ -218,7 +235,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     }
 
     /// <summary>A draft as it arrives: one that's known answers with its outcome, a new one is entered.</summary>
-    private async Task<DraftOutcome> ReceiveAsync(IncomingDraft incoming, CaptureDevice device, CancellationToken ct)
+    private async Task<DraftOutcome> ReceiveAsync(IncomingDraft incoming, CaptureDevice device, Func<CaptureKind, bool>? mayEnter, CancellationToken ct)
     {
         var payload = incoming.Payload.GetRawText();
         for (var attempt = 1; ; attempt++)
@@ -242,6 +259,7 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
                 var draft = CaptureDraft.Receive(incoming.Id, device.Id, incoming.Kind, payload, incoming.CapturedAt, clock.UtcNow);
                 drafts.Add(draft);
                 await drafts.SaveChangesAsync(ct); // a second sender stops here, on the row's key, until this one is done
+                EnsureMayEnter(draft.Kind, mayEnter);
                 await EnterAsync(sp, draft, ct);
                 drafts.Add(Audit(AuditAction.Created, draft, device));
                 await drafts.SaveChangesAsync(ct);
@@ -309,6 +327,21 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
     /// Enters the draft through the service the online form uses, in that scope's transaction. A refusal throws, and
     /// the caller's transaction takes back whatever was done.
     /// </summary>
+    /// <summary>The access area of what a draft becomes: the device reaches them all through one path.</summary>
+    public static string AreaOf(CaptureKind kind) => kind switch
+    {
+        CaptureKind.Time or CaptureKind.Mileage => "projects",
+        CaptureKind.Expense => "banking",
+        CaptureKind.Receipt => "purchases",
+        _ => "sales",
+    };
+
+    private static void EnsureMayEnter(CaptureKind kind, Func<CaptureKind, bool>? mayEnter)
+    {
+        if (mayEnter?.Invoke(kind) == false)
+            throw new DomainException("capture.no_access", $"Your access doesn't cover this ({AreaOf(kind)}). Ask an admin, or dismiss it.");
+    }
+
     private static async Task EnterAsync(IServiceProvider sp, CaptureDraft draft, CancellationToken ct)
     {
         switch (draft.Kind)

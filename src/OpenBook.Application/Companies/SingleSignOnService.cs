@@ -115,6 +115,8 @@ public sealed class SingleSignOnService(
             throw new DomainException("sso.linked_elsewhere", $"That account already signs in as {other.Username}.");
         if (user.ExternalLogin == login)
             return;
+        if (user.ExternalLogin is not null)
+            throw new DomainException("sso.already_linked", "Your account is linked to another sign-in. Ask an admin to unlink it first.");
         user.LinkExternalLogin(login);
         store.Add(Audit(user, currentUser.Actor, "single sign-on linked"));
         await store.SaveChangesAsync(ct);
@@ -147,6 +149,8 @@ public sealed class SingleSignOnService(
 
     private async Task<User> AcceptInviteAsync(UserInvite invite, string login, DateTimeOffset now, CancellationToken ct)
     {
+        if (invite.AccessEndsOn is { } ended && ended <= CompanyTime.TodayAt(now, CompanyTime.Zone))
+            throw new DomainException("invite.access_ended", "The access this invitation gives has already ended. Ask for a new one.");
         var username = await FreeUsernameAsync(invite.Email, ct);
         // The password is random and never shown: this person signs in through the provider (an admin can reset it).
         var user = User.Create(username, hasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))), now, invite.Role);

@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using System.Globalization;
 using OpenBook.Application.Forms;
 using OpenBook.Domain.Common;
@@ -51,7 +52,7 @@ public static class PrintEndpoints
 
         // Fields: doc (each "Document:id", in print order), customer (each customer whose statement to print), from, to.
         // Answers with the PDF to show or print; refusals as a short page.
-        app.MapPost("/print/pdf", async (IFormCollection form, PrintService print, CancellationToken ct) =>
+        app.MapPost("/print/pdf", async (IFormCollection form, HttpContext http, PrintService print, CancellationToken ct) =>
         {
             try
             {
@@ -59,6 +60,8 @@ public static class PrintEndpoints
                     .Select(p => (Document(p[0]), Id(p.Length > 1 ? p[1] : null))).ToList();
                 var customers = form["customer"].OfType<string>().Select(c => Id(c)).ToList();
                 StatementRun? statements = customers.Count == 0 ? null : new StatementRun(customers, Date(form["from"], "start"), Date(form["to"], "end"));
+                if (documents.Any(d => d.Item1 == FormDocuments.PurchaseOrder) && AuthClaims.LevelIn(http.User, "purchases") is null)
+                    throw new DomainException("print.no_access", "Your access doesn't cover purchase orders.");
                 var rendered = await print.PrintAsync(documents, statements, ct);
                 return Results.File(rendered.Pdf, "application/pdf");
             }

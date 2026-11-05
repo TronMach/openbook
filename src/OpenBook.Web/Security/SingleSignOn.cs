@@ -44,18 +44,41 @@ public static class SingleSignOn
         public void SettingsChanged() => cache.TryRemove(Scheme);
     }
 
+    private const string LinkItem = "openbook.link";
+
     public static IEndpointRouteBuilder MapSingleSignOn(this IEndpointRouteBuilder app)
     {
-        // Sends the browser to the provider; "link" connects the provider account to the signed-in user instead.
-        app.MapGet("/login/sso", async (HttpContext http, SingleSignOnService sso, string? returnUrl, bool? link) =>
+        // Sends the browser to the provider.
+        app.MapGet("/login/sso", async (HttpContext http, SingleSignOnService sso, string? returnUrl) =>
         {
             if (await sso.ClientAsync(http.RequestAborted) is null)
                 return Results.Redirect("/login?sso=off");
-            var done = $"/login/sso/done?returnUrl={Uri.EscapeDataString(WebSecurity.SafeReturnUrl(returnUrl))}" + (link == true ? "&link=true" : "");
+            var done = $"/login/sso/done?returnUrl={Uri.EscapeDataString(WebSecurity.SafeReturnUrl(returnUrl))}";
             return Results.Challenge(new AuthenticationProperties { RedirectUri = done }, [Scheme]);
         }).AllowAnonymous();
 
-        app.MapGet("/login/sso/done", async (HttpContext http, SingleSignOnService sso, string? returnUrl, bool? link) =>
+        // Links a provider account to the signed-in user, who proves it's them first: a link signs in with no password
+        // or code from then on, so a borrowed browser mustn't be able to add one. The request is carried through the provider
+        // inside the signed ticket, not in the address, which anyone can edit.
+        app.MapPost("/account/sso/link", async (IFormCollection form, HttpContext http, SingleSignOnService sso, TwoFactorService twoFactor, CancellationToken ct) =>
+        {
+            if (await sso.ClientAsync(ct) is null)
+                return Results.Redirect("/login?sso=off");
+            try
+            {
+                await twoFactor.CheckIdentityAsync(http.User.GetUserId(), form["password"].ToString(), form["code"].ToString(), ct);
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/account/password?sso={Uri.EscapeDataString(ex.Code)}");
+            }
+
+            var properties = new AuthenticationProperties { RedirectUri = "/login/sso/done?returnUrl=%2Faccount%2Fpassword" };
+            properties.Items[LinkItem] = http.User.GetUserId().ToString();
+            return Results.Challenge(properties, [Scheme]);
+        }).RequireAuthorization();
+
+        app.MapGet("/login/sso/done", async (HttpContext http, SingleSignOnService sso, string? returnUrl) =>
         {
             var external = await http.AuthenticateAsync(ExternalScheme);
             await http.SignOutAsync(ExternalScheme);
@@ -64,11 +87,12 @@ public static class SingleSignOn
 
             var settings = await sso.SettingsAsync(http.RequestAborted);
             var identity = Identity(principal, settings);
+            var link = external.Properties?.Items.TryGetValue(LinkItem, out _) == true;
             try
             {
-                if (link == true)
+                if (link)
                 {
-                    if (http.User.Identity?.IsAuthenticated != true)
+                    if (http.User.Identity?.IsAuthenticated != true || external.Properties!.Items[LinkItem] != http.User.GetUserId().ToString())
                         return Results.Redirect("/login?sso=failed");
                     await sso.LinkAsync(http.User.GetUserId(), identity, http.RequestAborted);
                     return Results.Redirect("/account/password?sso=linked");
@@ -84,7 +108,7 @@ public static class SingleSignOn
             }
             catch (DomainException ex)
             {
-                return Results.Redirect((link == true ? "/account/password?sso=" : "/login?sso=") + Uri.EscapeDataString(ex.Code));
+                return Results.Redirect((link ? "/account/password?sso=" : "/login?sso=") + Uri.EscapeDataString(ex.Code));
             }
         }).AllowAnonymous();
 

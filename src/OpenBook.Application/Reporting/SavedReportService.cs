@@ -24,6 +24,7 @@ public sealed class SavedReportService(IReportingStore store, ReportCatalog cata
             if (existing.ReportKey != reportKey)
                 throw new DomainException("report.name_taken", $"\"{existing.Name}\" is already saved for another report. Choose another name.");
             var report = await store.GetSavedReportAsync(existing.Id, ct) ?? throw new EntityNotFoundException(EntityType, existing.Id);
+            await EnsureNotScheduledAsync(report, ct);
             var before = Snapshot(report);
             report.SetQuery(query);
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, report.Id, before, Snapshot(report)));
@@ -41,9 +42,22 @@ public sealed class SavedReportService(IReportingStore store, ReportCatalog cata
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var report = await store.GetSavedReportAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        await EnsureNotScheduledAsync(report, ct);
+        foreach (var schedule in (await store.ListSubscriptionsAsync(ct)).Where(s => s.SavedReportId == report.Id))
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, ReportSubscriptionService.EntityType, schedule.Id, null, null));
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, EntityType, report.Id, Snapshot(report), null));
         store.Remove(report);
         await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// A saved report on a schedule goes out to its recipients, and anyone may save reports, even view-only: only whoever
+    /// saved it can change what's sent or stop it.
+    /// </summary>
+    private async Task EnsureNotScheduledAsync(SavedReport report, CancellationToken ct)
+    {
+        if (!string.Equals(report.CreatedBy, user.Actor, StringComparison.Ordinal) && (await store.ListSubscriptionsAsync(ct)).Any(s => s.SavedReportId == report.Id))
+            throw new DomainException("report.scheduled", $"\"{report.Name}\" is sent on a schedule, so only {report.CreatedBy} can change it. Save yours under another name.");
     }
 
     private static string Snapshot(SavedReport r) => JsonSerializer.Serialize(new { r.Name, Report = r.ReportKey, r.Query });

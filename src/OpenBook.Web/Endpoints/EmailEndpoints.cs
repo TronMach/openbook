@@ -1,3 +1,4 @@
+using OpenBook.Web.Security;
 using Microsoft.Net.Http.Headers;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Sales;
@@ -177,6 +178,5 @@ public static class EmailEndpoints
         buttons = p.Buttons, notes = p.Notes, usualDesign = p.UsualDesign,
     };
 
-    private static string Local(string? url) =>
-        url is { Length: > 1 } u && u[0] == '/' && u[1] != '/' && u[1] != '\\' ? u : "/";
+    private static string Local(string? url) => AccessRules.LocalPath(url) ?? "/";
 }

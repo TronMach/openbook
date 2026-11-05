@@ -66,7 +66,7 @@ else
                         <td>
                             @if (href is not null)
                             {
-                                <a href="@href">@TypeLabel(row.EntityType)</a>
+                                <ActionLink Href="@href">@TypeLabel(row.EntityType)</ActionLink>
                             }
                             else
                             {
@@ -115,8 +115,12 @@ else
     [Parameter]
     public bool ShowQuantity { get; set; }
 
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
     private List<CenterRow> Shown =>
-        Rows.Where(r => string.IsNullOrEmpty(Type) || r.EntityType == Type)
+        Rows.Where(r => HttpContext is null || OpenBook.Application.Companies.AuthClaims.LevelIn(HttpContext.User, OpenBook.Application.Companies.RecordAreas.Of(r.EntityType)) is not null)
+            .Where(r => string.IsNullOrEmpty(Type) || r.EntityType == Type)
             .Where(r => !int.TryParse(Dates, out var days) || r.Date > CompanyTime.Today.AddDays(-days))
             .ToList();
 

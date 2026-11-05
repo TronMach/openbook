@@ -86,7 +86,7 @@ public static class ApiScopes
     public static readonly IReadOnlyDictionary<string, (string Label, string[] Paths)> Areas = new Dictionary<string, (string, string[])>(StringComparer.Ordinal)
     {
         ["ledger"] = ("Accounts and journal", ["/api/accounts", "/api/journal-entries", "/api/recurring-entries", "/api/opening-balances", "/api/closing", "/api/segments", "/api/chart-templates", "/api/company", "/api/settings"]),
-        ["sales"] = ("Customers, items and sales", ["/api/sales", "/api/customers", "/api/items", "/api/pricing", "/api/sales-tax"]),
+        ["sales"] = ("Customers, items, sales and printing", ["/api/sales", "/api/customers", "/api/items", "/api/pricing", "/api/sales-tax", "/api/print"]),
         ["purchases"] = ("Vendors and purchases", ["/api/purchases", "/api/vendors"]),
         ["documents"] = ("Document inbox (vendor invoices, customer POs, packing slips, quotes)", ["/api/documents"]),
         ["banking"] = ("Banking", ["/api/banking"]),
@@ -96,8 +96,8 @@ public static class ApiScopes
         ["assets"] = ("Fixed assets and loans", ["/api/assets"]),
         ["nonprofit"] = ("Nonprofit: gifts, pledges, grants and donor restrictions", ["/api/nonprofit"]),
         ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),
-        ["capture"] = ("Offline capture (time, mileage, expenses, receipts)", ["/api/capture"]),
-        ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields", "/api/settings/custom-fields", "/api/print", "/api/merge"]),
+        ["capture"] = ("Offline capture (what a device enters also needs that area)", ["/api/capture"]),
+        ["data"] = ("Imports, exports, backups, notes and custom field values", ["/api/import", "/api/export", "/api/backup", "/api/notes", "/api/search", "/api/custom-fields", "/api/settings/custom-fields", "/api/merge"]),
     };
 
     /// <summary>Checks and orders scopes; "area:write" makes "area:read" redundant.</summary>

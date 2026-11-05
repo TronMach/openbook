@@ -1,3 +1,4 @@
+using OpenBook.Web.Security;
 using OpenBook.Application.Segments;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Segments;
@@ -60,9 +61,7 @@ public static class SegmentEndpoints
 
     /// <summary>Only paths on this site, so a form can't redirect elsewhere.</summary>
     private static string LocalPath(string back) =>
-        back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) && !back.StartsWith("/\\", StringComparison.Ordinal) ? back
-        : back.Length > 0 && !back.Contains(':', StringComparison.Ordinal) && !back.StartsWith('/') ? "/" + back
-        : "/";
+        AccessRules.LocalPath(back.StartsWith('/') || back.Contains(':', StringComparison.Ordinal) ? back : "/" + back) ?? "/";
 
     private static async Task<IResult> Run<T>(string back, Func<Task<T>> action)
     {

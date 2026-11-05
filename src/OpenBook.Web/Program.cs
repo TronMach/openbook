@@ -20,7 +20,8 @@ var isMoveToPostgres = args is [MoveToPostgresCommand.Name, ..];
 // "--safe-mode" starts without add-ins (for one that stops OpenBook starting); it isn't a configuration key.
 var safeModeArgument = args.Contains("--safe-mode", StringComparer.OrdinalIgnoreCase);
 var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)
-    && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)).ToArray());
+    && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)
+    && !string.Equals(a, ResetPasswordCommand.RestoreAdmin, StringComparison.OrdinalIgnoreCase)).ToArray());
 if (isResetPassword || isRestoreBackup || isMakeDemo || encryptionCommand is not null || isMoveToPostgres)
     builder.Logging.ClearProviders();
 
@@ -174,7 +175,7 @@ app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async
     try
     {
         if (action == "retry")
-            await capture.RetryAsync(id, http.User.GetUserId(), ct);
+            await capture.RetryAsync(id, http.User.GetUserId(), kind => OpenBook.Application.Companies.AuthClaims.MayWrite(http.User, OpenBook.Application.Capture.CaptureService.AreaOf(kind)), ct);
         else
             await capture.DismissAsync(id, http.User.GetUserId(), ct);
         return Results.Redirect("/capture");
@@ -202,7 +203,7 @@ app.MapPost("/account/sessions/end-others", async (IFormCollection form, HttpCon
     // The stamp changes, so this browser's cookie is issued again to keep it signed in.
     await WebSecurity.SignInAsync(http, await auth.EndOtherSessionsAsync(http.User.GetUserId(), ct));
     var back = form["back"].ToString();
-    return Results.Redirect((back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) ? back : "/account/password") + "?signedOut=true");
+    return Results.Redirect((OpenBook.Web.Security.AccessRules.LocalPath(back) ?? "/account/password") + "?signedOut=true");
 }).RequireAuthorization();
 app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
 {
@@ -210,7 +211,7 @@ app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
         http.Response.Cookies.Append(Microsoft.AspNetCore.Localization.CookieRequestCultureProvider.DefaultCookieName, value,
             new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1), HttpOnly = true, SameSite = SameSiteMode.Lax, IsEssential = true, Secure = http.Request.IsHttps });
     var back = form["back"].ToString();
-    return Results.Redirect(back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal) ? back : "/account/region");
+    return Results.Redirect(OpenBook.Web.Security.AccessRules.LocalPath(back) ?? "/account/region");
 }).RequireAuthorization();
 // OpenBook Desktop runs in the background; this backs it up and stops it (Settings > System; the tray icon does the
 // same through its pipe). A server is stopped by whoever runs it.

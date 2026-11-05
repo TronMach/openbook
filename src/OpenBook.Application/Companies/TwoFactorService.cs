@@ -63,6 +63,20 @@ public sealed class TwoFactorService(ICompanyStore store, IClock clock, ICurrent
         await store.SaveChangesAsync(ct);
     }
 
+    /// <summary>Asks for the password, and the code when two-factor is on, before something a borrowed browser mustn't do.</summary>
+    public async Task CheckIdentityAsync(Guid userId, string password, string code, CancellationToken ct = default)
+    {
+        var user = await GetUserAsync(userId, ct);
+        if (user.HasTwoFactor)
+        {
+            await CheckPasswordAndCodeAsync(user, password, code, ct);
+        }
+        else if (!await auth.VerifyPasswordAsync(userId, password, ct))
+        {
+            throw new DomainException("auth.wrong_password", "That password isn't right.");
+        }
+    }
+
     /// <summary>Replaces every recovery code; the old ones stop working.</summary>
     public async Task<IReadOnlyList<string>> NewRecoveryCodesAsync(Guid userId, string password, string code, CancellationToken ct = default)
     {

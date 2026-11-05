@@ -135,10 +135,7 @@ public static class WebSecurity
             : throw new InvalidOperationException("The request has no signed-in user.");
 
     /// <summary>Only same-site paths, so a crafted link can't bounce the user to another site after sign-in.</summary>
-    public static string SafeReturnUrl(string? returnUrl) =>
-        returnUrl is { Length: > 0 } && returnUrl[0] == '/' && !returnUrl.StartsWith("//", StringComparison.Ordinal) && !returnUrl.StartsWith("/\\", StringComparison.Ordinal)
-            ? returnUrl
-            : "/";
+    public static string SafeReturnUrl(string? returnUrl) => AccessRules.LocalPath(returnUrl) ?? "/";
 
     /// <summary>
     /// Whether a signed-in person's cookie still counts. A cookie from before roles or sessions existed has no role or

@@ -38,14 +38,14 @@ public static class CaptureApi
             return Results.NoContent();
         });
 
-        capture.MapGet("/lists", async (CaptureService s, CancellationToken ct) => await s.ListsAsync(ct));
+        capture.MapGet("/lists", async (ClaimsPrincipal principal, CaptureService s, CancellationToken ct) => await s.ListsAsync(MayEnter(principal), ct));
 
         // A revoked device gets 410 Gone, its signal to wipe what it holds.
         capture.MapPost("/sync", async (SyncRequest r, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
         {
             try
             {
-                return Results.Ok(await s.SyncAsync(UserId(principal), r.DeviceId, r.Drafts ?? [], ct));
+                return Results.Ok(await s.SyncAsync(UserId(principal), r.DeviceId, r.Drafts ?? [], MayEnter(principal), ct));
             }
             catch (DomainException ex) when (ex.Code == "capture.device_revoked")
             {
@@ -56,13 +56,18 @@ public static class CaptureApi
         capture.MapGet("/drafts", async (ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
             (await s.NeedingAttentionAsync(UserId(principal), ct)).Select(x => new { x.Draft.Id, x.Draft.Kind, x.Draft.CapturedAt, x.Draft.Error, Device = x.Device.Name }));
         capture.MapPost("/drafts/{id:guid}/retry", async (Guid id, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
-            await s.RetryAsync(id, UserId(principal), ct));
+            await s.RetryAsync(id, UserId(principal), MayEnter(principal), ct));
         capture.MapPost("/drafts/{id:guid}/dismiss", async (Guid id, ClaimsPrincipal principal, CaptureService s, CancellationToken ct) =>
         {
             await s.DismissAsync(id, UserId(principal), ct);
             return Results.NoContent();
         });
     }
+
+    /// <summary>What a device may enter is what its person (or limited key) may enter in each area, not just "capture".</summary>
+    private static Func<OpenBook.Domain.Capture.CaptureKind, bool> MayEnter(ClaimsPrincipal principal) =>
+        kind => AuthClaims.MayWrite(principal, CaptureService.AreaOf(kind));
+
 
     private static Guid UserId(ClaimsPrincipal principal) =>
         Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : throw new UnauthorizedAccessException();

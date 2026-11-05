@@ -19,11 +19,15 @@ public static class ResetPasswordCommand
     /// <summary>Also turns the user's two-factor sign-in off (lost phone and recovery codes). Not a configuration key.</summary>
     public const string ClearTwoFactor = "--clear-two-factor";
 
+    /// <summary>Also makes them an active admin with no end date, for a company left with none.</summary>
+    public const string RestoreAdmin = "--restore-admin";
+
     public static async Task<int> RunAsync(IServiceProvider services, string[] args)
     {
         // The username is the first bare word after the command; "--key=value" arguments are configuration.
         var username = args.Skip(1).FirstOrDefault(a => !a.StartsWith('-'));
         var clearTwoFactor = args.Contains(ClearTwoFactor, StringComparer.OrdinalIgnoreCase);
+        var restoreAdmin = args.Contains(RestoreAdmin, StringComparer.OrdinalIgnoreCase);
 
         var storage = services.GetRequiredService<OpenBookStorage>();
         Console.WriteLine("OpenBook password reset");
@@ -50,9 +54,11 @@ public static class ResetPasswordCommand
 
             await using var scope = services.CreateAsyncScope();
             var reset = await scope.ServiceProvider.GetRequiredService<AuthService>()
-                .ResetPasswordAsync(username, password, $"console:{Environment.UserName}", clearTwoFactor);
+                .ResetPasswordAsync(username, password, $"console:{Environment.UserName}", clearTwoFactor, restoreAdmin: restoreAdmin);
 
             Console.WriteLine($"Password reset for '{reset}'. Any signed-in sessions have been signed out.");
+            if (restoreAdmin)
+                Console.WriteLine("They're an active admin now.");
             if (clearTwoFactor)
                 Console.WriteLine("Two-factor sign-in is off for them; they can set it up again after signing in.");
             return 0;

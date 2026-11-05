@@ -186,4 +186,23 @@ public sealed class SellingShortTests : IAsyncLifetime
         Assert.Equal((-2m, -1m), (stock.Quantity, stock.Value));
         Assert.Equal(4m, await Balance(average.CostAccountId!.Value));
     }
+
+    [Fact]
+    public async Task A_filled_shortfall_still_lets_a_price_be_corrected_but_not_the_stock()
+    {
+        await AllowSellingShort(true);
+        var invoice = await Sell(Jan10, 3m);
+        await Buy(Jan10.AddDays(5), 5m, 50m);
+        var line = invoice.Lines.Single();
+        var stock = await Stock();
+
+        var changed = await Run(sp => sp.GetRequiredService<InvoiceService>().ChangeAsync(invoice.Id,
+            new ChangeInvoiceCommand(Jan10, [line.ToDraft() with { Rate = 12m }], "Wrong price")));
+
+        Assert.Equal(36m, changed.Total);
+        var after = await Stock();
+        Assert.Equal((stock.Quantity, stock.Value), (after.Quantity, after.Value));
+        Assert.Equal("inventory.shortfall_filled", await Refused(() => Run(sp => sp.GetRequiredService<InvoiceService>().ChangeAsync(invoice.Id,
+            new ChangeInvoiceCommand(Jan10, [line.ToDraft() with { Quantity = 4m }], "More")))));
+    }
 }

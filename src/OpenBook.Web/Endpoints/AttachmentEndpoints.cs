@@ -1,3 +1,5 @@
+using OpenBook.Application.Companies;
+using OpenBook.Web.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using OpenBook.Application.Attachments;
@@ -57,6 +59,9 @@ public static class AttachmentEndpoints
             var content = attachment is null ? null : await attachments.GetContentAsync(id, ct);
             if (attachment is null || content is null)
                 return Results.NotFound();
+            // A file is read with its record: AccessRules lets this request through for that.
+            if (AuthClaims.LevelIn(http.User, RecordAreas.Of(attachment.EntityType)) is null)
+                return Results.Forbid();
 
             // The type comes from the stored extension, never sniffed; anything but images and PDFs downloads,
             // and inline files can't run scripts.
@@ -74,8 +79,7 @@ public static class AttachmentEndpoints
     }
 
     /// <summary>Only paths on this site, so a crafted form can't redirect elsewhere.</summary>
-    private static string LocalUrl(string? url) =>
-        url is { Length: > 1 } && url[0] == '/' && url[1] is not ('/' or '\\') ? url.Split('#')[0] : "/";
+    private static string LocalUrl(string? url) => (AccessRules.LocalPath(url) ?? "/").Split('#')[0];
 
     private static string WithError(string url, string code) =>
         url + (url.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "attachError=" + Uri.EscapeDataString(code) + "#attachments";

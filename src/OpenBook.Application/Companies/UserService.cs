@@ -156,7 +156,11 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
     /// <returns>Their usernames.</returns>
     public async Task<IReadOnlyList<string>> EndExpiredAccessAsync(DateOnly today, CancellationToken ct = default)
     {
-        var ended = (await store.ListUsersAsync(ct)).Where(u => u.IsActive && u.AccessEnded(today)).ToList();
+        var users = await store.ListUsersAsync(ct);
+        var ended = users.Where(u => u.IsActive && u.AccessEnded(today)).ToList();
+        // Someone has to be able to run the place: the last admin stays, whatever the date says.
+        if (!users.Any(u => u.IsActive && u.Role == UserRole.Admin && !u.AccessEnded(today)))
+            ended = ended.Where(u => u.Role != UserRole.Admin).ToList();
         foreach (var user in ended)
         {
             var before = Snapshot(user);
@@ -180,8 +184,8 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
 
     private async Task EnsureAnotherAdminAsync(User user, CancellationToken ct)
     {
-        if (!(await store.ListUsersAsync(ct)).Any(u => u.Id != user.Id && u.IsActive && u.Role == UserRole.Admin))
-            throw new DomainException("user.last_admin", "There must always be an active admin. Make someone else an admin first.");
+        if (!(await store.ListUsersAsync(ct)).Any(u => u.Id != user.Id && u.IsActive && u.Role == UserRole.Admin && u.AccessEndsOn is null))
+            throw new DomainException("user.last_admin", "There must always be an admin whose access doesn't end. Make someone else an admin first.");
     }
 
     private AuditRecord Audit(AuditAction action, User u, string? before) =>
