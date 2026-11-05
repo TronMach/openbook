@@ -33,6 +33,8 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
         ("PriceRuleTargets", "TargetId", ["PriceRuleId", "Kind"]),
         ("DocumentItemCodes", "PartyId", ["Code"]),
         ("ItemComponents", "ComponentItemId", ["ItemId"]),
+        ("PriceLevelItems", "ItemId", ["PriceLevelId"]),
+        ("VendorBankAccounts", "VendorId", []),
     ];
 
     public async Task<int> MoveReferencesAsync(MergeKind kind, Guid mergeId, Guid keepId, CancellationToken ct)
@@ -75,9 +77,9 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
             var mapping = property.GetRelationalTypeMapping();
             if (KeepTheOthers.FirstOrDefault(k => k.Table == table && k.Column == column) is { Match: { } match })
             {
-                var same = string.Join(" AND ", match.Select(m => $"o.{Quote(m)} = {Quote(table)}.{Quote(m)}"));
+                var same = string.Concat(match.Select(m => $" AND o.{Quote(m)} = {Quote(table)}.{Quote(m)}"));
                 await RunAsync(transaction, mapping, $"DELETE FROM {Quote(table)} WHERE {Quote(column)} = @from AND EXISTS " +
-                    $"(SELECT 1 FROM {Quote(table)} o WHERE o.{Quote(column)} = @to AND {same})", mergeId, keepId, table, ct);
+                    $"(SELECT 1 FROM {Quote(table)} o WHERE o.{Quote(column)} = @to{same})", mergeId, keepId, table, ct);
             }
 
             moved += await RunAsync(transaction, mapping, $"UPDATE {Quote(table)} SET {Quote(column)} = @to WHERE {Quote(column)} = @from", mergeId, keepId, table, ct);
@@ -85,6 +87,8 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
 
         return moved;
     }
+
+    public Task<bool> HasProjectAsync(Guid customerId, CancellationToken ct) => db.Projects.AnyAsync(p => p.CustomerId == customerId, ct);
 
     private static async Task<int> RunAsync(DbTransaction transaction, RelationalTypeMapping mapping, string sql, Guid from, Guid to, string table, CancellationToken ct)
     {

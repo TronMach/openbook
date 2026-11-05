@@ -90,6 +90,15 @@ public sealed class MigrationImportService(
     public MigrationData Read(string source, byte[] content, string currency)
     {
         ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(source);
+        // The short names the guide and the command line use.
+        source = source.ToUpperInvariant() switch
+        {
+            "IIF" => nameof(MigrationSource.QuickBooksIif),
+            "QBXML" => nameof(MigrationSource.QuickBooksQbxml),
+            "QBO" => nameof(MigrationSource.QuickBooksOnline),
+            _ => source,
+        };
         if (Enum.TryParse<MigrationSource>(source, ignoreCase: true, out var builtIn) && Enum.IsDefined(builtIn))
             return MigrationReaders.Read(builtIn, content, currency);
         var importer = plugins.Importer(source)

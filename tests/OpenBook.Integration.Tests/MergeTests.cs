@@ -110,4 +110,29 @@ public sealed class MergeTests : IAsyncLifetime
         var stocked = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Widget", ItemType.Inventory, _sales.Id, 10m)));
         Assert.Equal("merge.item_stock", (await Assert.ThrowsAsync<DomainException>(() => In<MergeService, MergeResult>(s => s.MergeItemsAsync(stocked.Id, _service.Id)))).Code);
     }
+
+    [Fact]
+    public async Task Merging_vendors_keeps_their_1099_details()
+    {
+        var merged = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Old name", Track1099: true, TaxId: "12-3456789")));
+        var kept = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("New name")));
+
+        await In<MergeService, MergeResult>(s => s.MergeVendorsAsync(merged.Id, kept.Id));
+
+        var after = await In<VendorService, Vendor?>(s => s.GetAsync(kept.Id));
+        Assert.True(after!.Track1099);
+        Assert.Equal("12-3456789", after.TaxId);
+    }
+
+    [Fact]
+    public async Task A_project_cant_be_merged_into_its_client()
+    {
+        var client = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Client")));
+        var job = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Job", ParentId: client.Id, BillWithParent: true)));
+        await In<OpenBook.Application.Projects.ProjectService, OpenBook.Domain.Projects.Project>(s => s.CreateAsync(new OpenBook.Application.Projects.CreateProjectCommand(new OpenBook.Domain.Projects.ProjectDetails(), CustomerId: job.Id)));
+
+        var refused = await Assert.ThrowsAsync<DomainException>(() => In<MergeService, MergeResult>(s => s.MergeCustomersAsync(job.Id, client.Id)));
+
+        Assert.Equal("merge.has_project", refused.Code);
+    }
 }

@@ -59,6 +59,15 @@ public sealed class Vendor
     public Form1099Box Form1099Box { get; private set; }
 
     /// <summary>"•••••6789": what screens show instead of the full tax ID.</summary>
+    /// <summary>On a merge: payments move here, so what they're reported with has to come too, or they'd drop off the 1099s.</summary>
+    public void Take1099DetailsFrom(Vendor other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        TaxId ??= other.TaxId;
+        if (!Track1099 && other.Track1099)
+            (Track1099, Form1099Box) = (true, other.Form1099Box);
+    }
+
     public string? MaskedTaxId => TaxId is { Length: >= 4 } id ? $"•••••{id[^4..]}" : null;
 
     public static Vendor Create(VendorDetails details)
@@ -86,7 +95,8 @@ public sealed class Vendor
         DefaultExpenseAccountId = details.DefaultExpenseAccountId;
         Track1099 = details.Track1099;
         // Screens and the API only ever show it masked, so null keeps the saved ID and "" clears it.
-        if (details.TaxId is not null)
+        // The API shows the mask, so a form or program sending back what it read keeps the number.
+        if (details.TaxId is not null && details.TaxId != MaskedTaxId)
             TaxId = NormalizeTaxId(details.TaxId);
         Form1099Box = Enum.IsDefined(details.Form1099Box) ? details.Form1099Box
             : throw new DomainException("vendor.1099_box_invalid", "Unknown 1099 box.");

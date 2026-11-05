@@ -200,8 +200,27 @@ internal static class ReportsApi
         return Results.File(pdf, "application/pdf");
     }
 
-    private static ReportParameters Parameters(HttpContext http) =>
-        new(http.Request.Query.Select(q => new KeyValuePair<string, string?>(q.Key, q.Value.ToString())));
+    private static readonly string[] DateParameters = ["from", "to", "asOf"];
+    private static readonly string[] NumberParameters = ["year", "weeks", "fromMonth", "toMonth"];
+
+    /// <summary>A date or number that can't be read is refused: left out, the report would answer for a different period.</summary>
+    private static ReportParameters Parameters(HttpContext http)
+    {
+        var query = http.Request.Query;
+        foreach (var name in DateParameters)
+        {
+            if (query[name].ToString() is { Length: > 0 } text && !DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _))
+                throw new OpenBook.Domain.Common.DomainException("report.parameter_invalid", $"{name} must be a date written yyyy-MM-dd.");
+        }
+
+        foreach (var name in NumberParameters)
+        {
+            if (query[name].ToString() is { Length: > 0 } text && !int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))
+                throw new OpenBook.Domain.Common.DomainException("report.parameter_invalid", $"{name} must be a whole number.");
+        }
+
+        return new(query.Select(q => new KeyValuePair<string, string?>(q.Key, q.Value.ToString())));
+    }
 
     private static async Task<DateRange> Range(DatePreset preset, DateOnly? from, DateOnly? to, CompanySettingsService settings, CancellationToken ct)
     {

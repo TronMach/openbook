@@ -11,7 +11,13 @@ namespace OpenBook.Cli;
 /// </summary>
 public sealed class CliApp(TextWriter output, TextWriter error, string settingsPath, Func<CliSettings, HttpClient>? clientFactory = null)
 {
-    private static readonly HashSet<string> Flags = new(StringComparer.Ordinal) { "json", "dry-run", "help" };
+    private static readonly HashSet<string> Flags = new(StringComparer.OrdinalIgnoreCase) { "json", "dry-run", "help" };
+
+    /// <summary>Options that take a value. Anything else is a typing mistake, and a mistyped --dry-run mustn't import for real.</summary>
+    private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "url", "key", "closing-password", "idempotency-key", "format", "out", "query", "data",
+    };
 
     /// <summary>Resources <c>list</c> knows, by API path.</summary>
     public static readonly IReadOnlyDictionary<string, string> Lists = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -62,6 +68,14 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
     {
         ArgumentNullException.ThrowIfNull(args);
         var (words, options) = Parse(args);
+        foreach (var (name, value) in options)
+        {
+            if (!Flags.Contains(name) && !ValueOptions.Contains(name))
+                return await Mistake($"Unknown option --{name}. Try `openbook help`.");
+            if (ValueOptions.Contains(name) && value == "true" && args.Contains($"--{name}", StringComparer.OrdinalIgnoreCase) && args[^1].Equals($"--{name}", StringComparison.OrdinalIgnoreCase))
+                return await Mistake($"--{name} needs a value.");
+        }
+
         if (words.Count == 0 || options.ContainsKey("help") || words[0] is "help" or "-h" or "--help")
         {
             await output.WriteLineAsync(Usage);
@@ -101,6 +115,11 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
         catch (HttpRequestException ex)
         {
             await error.WriteLineAsync($"Can't reach the server at {settings.Url}: {ex.Message}");
+            return 1;
+        }
+        catch (OperationCanceledException)
+        {
+            await error.WriteLineAsync("Stopped.");
             return 1;
         }
     }
@@ -225,7 +244,8 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
         if (!options.ContainsKey("out"))
             return await Mistake("Say where to save it: --out FILE");
         using var client = Client(settings, options);
-        using var response = await client.GetAsync(path, ct);
+        // A backup can be larger than memory: it goes to the file as it arrives.
+        using var response = await client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, ct);
         return await SaveAsync(response, options, ct);
     }
 
@@ -257,8 +277,11 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
         if (!response.IsSuccessStatusCode)
             await Checked(response, ct);
         var name = options.GetValueOrDefault("out") ?? response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "download";
-        await using (var file = File.Create(name))
+        // Under another name until it's all here, so a stopped download can't pass for a whole backup.
+        var partial = name + ".part";
+        await using (var file = File.Create(partial))
             await response.Content.CopyToAsync(file, ct);
+        File.Move(partial, name, overwrite: true);
         await output.WriteLineAsync($"Saved {Path.GetFullPath(name)} ({new FileInfo(name).Length:N0} bytes).");
         return 0;
     }
@@ -269,7 +292,7 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
             throw new CliException("No server set. Run `openbook config --url https://… --key obk_…` (or set OPENBOOK_URL).", 2);
         if (settings.ApiKey is null)
             throw new CliException("No API key set. Make one under Settings › API keys, then `openbook config --key obk_…` (or set OPENBOOK_API_KEY).", 2);
-        var client = clientFactory?.Invoke(settings) ?? new HttpClient { BaseAddress = new Uri(settings.Url!) };
+        var client = clientFactory?.Invoke(settings) ?? new HttpClient { BaseAddress = new Uri(settings.Url!), Timeout = Timeout.InfiniteTimeSpan };
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         if (options.GetValueOrDefault("closing-password") is { } password)
             client.DefaultRequestHeaders.Add("X-Closing-Password", password);

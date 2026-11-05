@@ -18,6 +18,8 @@ public interface IRecordMerger
 {
     /// <returns>How many rows now point at <paramref name="keepId"/> instead.</returns>
     Task<int> MoveReferencesAsync(MergeKind kind, Guid mergeId, Guid keepId, CancellationToken ct);
+
+    Task<bool> HasProjectAsync(Guid customerId, CancellationToken ct);
 }
 
 /// <param name="Moved">Rows (documents, lines, notes, files…) that now belong to the record kept.</param>
@@ -41,6 +43,10 @@ public sealed class MergeService(ISalesStore sales, IPurchasesStore purchases, I
         if (!kept.IsActive)
             throw new DomainException("merge.kept_inactive", $"{kept.DisplayName} is inactive. Make it active first, or keep the other one.");
 
+        // A project counts everything of its customer: moved to a client, it would take in the client's whole history.
+        if (await merger.HasProjectAsync(merged.Id, ct) && !await merger.HasProjectAsync(kept.Id, ct))
+            throw new DomainException("merge.has_project", $"{merged.DisplayName} is a project, and {kept.DisplayName} isn't. Close the project instead, or merge it into another project.");
+
         return await MergeAsync(MergeKind.Customer, "customer", merged.Id, kept.Id, merged.DisplayName, kept.DisplayName, () =>
         {
             merged.Deactivate();
@@ -56,9 +62,12 @@ public sealed class MergeService(ISalesStore sales, IPurchasesStore purchases, I
         if (!kept.IsActive)
             throw new DomainException("merge.kept_inactive", $"{kept.DisplayName} is inactive. Make it active first, or keep the other one.");
         var vendors = await purchases.ListVendorsAsync(ct);
+        if (merged.TaxId is not null && kept.TaxId is not null && merged.TaxId != kept.TaxId)
+            throw new DomainException("merge.tax_id_differs", $"{merged.DisplayName} and {kept.DisplayName} have different tax IDs, so they may not be the same vendor. Correct one first.");
 
         return await MergeAsync(MergeKind.Vendor, "vendor", merged.Id, kept.Id, merged.DisplayName, kept.DisplayName, () =>
         {
+            kept.Take1099DetailsFrom(merged);
             merged.Deactivate();
             merged.Rename(Merged(merged.DisplayName, vendors.Select(v => v.DisplayName)));
         }, ct);

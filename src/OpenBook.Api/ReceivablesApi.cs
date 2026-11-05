@@ -398,7 +398,6 @@ internal static class ReceivablesApi
         // Fields left out take the usual draft's (the customer's address and copies, the template's wording).
         sales.MapPost("/{kind}/{id:guid}/email", async (string kind, Guid id, EmailRequest r, EmailService s, CancellationToken ct) =>
         {
-            ParseKind(kind);
             var sent = await EmailApi.SendAsync(s, EmailApi.SalesSource(kind, id, null, null), r, ct);
             return Results.Ok(new { sent.To, sent.Cc, sent.Subject, sent.Id });
         });
