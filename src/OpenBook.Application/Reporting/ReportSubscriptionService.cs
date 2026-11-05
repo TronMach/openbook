@@ -91,19 +91,30 @@ public sealed class ReportSubscriptionService(
         var saved = await store.GetSavedReportAsync(subscription.SavedReportId, ct);
         var reportName = saved?.Name ?? "(deleted report)";
         string? error = null;
+        var recipients = subscription.RecipientsDue;
+        var notReached = new List<string>();
         try
         {
             if (saved is null)
                 throw new DomainException("subscription.report_missing", "The saved report no longer exists.");
             var file = await RenderAsync(saved, subscription.Format, ct);
             var company = (await companies.GetRequiredCompanyAsync(ct)).Name;
-            foreach (var to in subscription.RecipientList)
+            foreach (var to in recipients)
             {
-                await email.SendWordedAsync(Domain.Email.EmailKind.Report, to, new Dictionary<string, string>
+                // One bad address doesn't stop the others; whoever it didn't reach is tried again.
+                try
                 {
-                    ["report"] = saved.Name, ["as_of"] = CompanyTime.Today.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
-                    ["scheduled_by"] = subscription.CreatedBy, ["company"] = company,
-                }, [file], null, EntityType, subscription.Id, ct);
+                    await email.SendWordedAsync(Domain.Email.EmailKind.Report, to, new Dictionary<string, string>
+                    {
+                        ["report"] = saved.Name, ["as_of"] = CompanyTime.Today.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+                        ["scheduled_by"] = subscription.CreatedBy, ["company"] = company,
+                    }, [file], null, EntityType, subscription.Id, ct);
+                }
+                catch (DomainException ex)
+                {
+                    notReached.Add(to);
+                    error = $"{to}: {ex.Message}";
+                }
             }
         }
         catch (DomainException ex)
@@ -111,9 +122,9 @@ public sealed class ReportSubscriptionService(
             error = ex.Message;
         }
 
-        subscription.RecordRun(clock.UtcNow, error);
+        subscription.RecordRun(clock.UtcNow, error, notReached);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Emailed, EntityType, subscription.Id, null,
-            JsonSerializer.Serialize(new { To = subscription.Recipients, Report = reportName, Error = error })));
+            JsonSerializer.Serialize(new { To = string.Join(", ", recipients.Except(notReached)), NotReached = notReached, Report = reportName, Error = error })));
         await store.SaveChangesAsync(ct);
         return new SubscriptionRun(subscription, reportName, error);
     }

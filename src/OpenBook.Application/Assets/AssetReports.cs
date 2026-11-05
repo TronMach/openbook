@@ -107,10 +107,14 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
     }
 
     /// <summary>Every loan's balance, rate, payment and next scheduled payment.</summary>
-    public async Task<ReportTable> LoansAsync(CancellationToken ct = default)
+    /// <param name="asOf">The day balances and interest are worked out to: payments dated by then.</param>
+    /// <param name="ct">Cancels the report.</param>
+    public async Task<ReportTable> LoansAsync(DateOnly asOf, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var loans = (await store.ListLoansAsync(ct)).Where(l => !l.IsVoided).OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var loans = (await store.ListLoansAsync(ct)).Where(l => !l.IsVoided && (l.ProceedsDate is null || l.ProceedsDate <= asOf))
+            .OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        IEnumerable<LoanPayment> Paid(Loan l) => l.PaymentsMade.Where(p => !p.IsVoided && p.Date <= asOf);
         var rows = loans.Select(l =>
         {
             var next = LoanService.RemainingSchedule(l);
@@ -121,14 +125,14 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
                 l.PaymentAmount,
                 next.Count > 0 ? new ReportCell(next[0].Date) : ReportCell.Empty,
                 new ReportCell(next.Count),
-                l.PaymentsMade.Where(p => !p.IsVoided).Sum(p => p.Interest),
-                l.Balance,
+                Paid(l).Sum(p => p.Interest),
+                l.Principal - Paid(l).Sum(p => p.Principal),
             ]);
         }).ToList();
-        rows.Add(new ReportTableRow(["Total", null, null, null, null, loans.Sum(l => l.PaymentsMade.Where(p => !p.IsVoided).Sum(p => p.Interest)), loans.Sum(l => l.Balance)], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", null, null, null, null, loans.Sum(l => Paid(l).Sum(p => p.Interest)), loans.Sum(l => l.Principal - Paid(l).Sum(p => p.Principal))], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Loans",
-            [company.Name, "Balances from the payments recorded"],
+            [company.Name, $"As of {asOf:MMM d, yyyy}"],
             [
                 new("Loan"), new("Rate", ColumnFormat.Percent), new("Payment", ColumnFormat.Money), new("Next payment", ColumnFormat.Date),
                 new("Payments left", ColumnFormat.Number), new("Interest paid", ColumnFormat.Money), new("Balance", ColumnFormat.Money),

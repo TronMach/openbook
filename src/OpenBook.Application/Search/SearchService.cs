@@ -63,7 +63,8 @@ public sealed class SearchService(
         if (q.Length < 2)
             return new SearchResults(q, [], Truncated: false);
 
-        decimal? amount = StatementValues.TryParseAmount(q, out var parsed) && parsed != 0m ? Math.Abs(parsed) : null;
+        // Beyond what cents can hold, it's no amount: a long reference number, say.
+        decimal? amount = StatementValues.TryParseAmount(q, out var parsed) && parsed != 0m && Math.Abs(parsed) < 1_000_000_000_000_000m ? Math.Abs(parsed) : null;
         long? entryNumber = long.TryParse(q.TrimStart('#'), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : null;
         bool Text(params string?[] fields) => fields.Any(f => f is not null && f.Contains(q, StringComparison.OrdinalIgnoreCase));
         bool Money(decimal value) => amount is { } a && Math.Abs(value) == a;

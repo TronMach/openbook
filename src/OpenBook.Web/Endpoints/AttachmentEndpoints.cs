@@ -37,7 +37,8 @@ public static class AttachmentEndpoints
             }
         })
         .RequireAuthorization()
-        .WithMetadata(new RequestSizeLimitAttribute(Attachment.MaxBytes + (64 * 1024)));
+        // Twice the file limit, so an oversized file reaches the check that says why.
+        .WithMetadata(new RequestSizeLimitAttribute(Attachment.MaxBytes * 2));
 
         app.MapPost("/attachments/{id:guid}/remove", async (Guid id, [FromForm] string? returnUrl, AttachmentService attachments, CancellationToken ct) =>
         {

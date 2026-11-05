@@ -103,9 +103,15 @@ internal sealed class ReportExporter : IReportExporter
         return stream.ToArray();
     }
 
+    /// <summary>A PDF table this long takes minutes and gigabytes on one request; a spreadsheet does it in moments.</summary>
+    public const int MaxPdfRows = 5_000;
+
     public byte[] ToPdf(ReportTable table)
     {
         ArgumentNullException.ThrowIfNull(table);
+        if (table.Rows.Count > MaxPdfRows)
+            throw new OpenBook.Domain.Common.DomainException("report.too_large_for_pdf",
+                $"This report has {table.Rows.Count:N0} rows, too many for a PDF. Export it to Excel or CSV, or narrow the dates.");
         var document = new Document();
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = SystemFontResolver.FamilyName;

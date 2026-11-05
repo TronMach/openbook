@@ -108,6 +108,11 @@
         input.setAttribute('aria-label', select.getAttribute('aria-label') ?? label?.textContent.trim() ?? '');
         input.placeholder = none?.label ?? 'Type to search…';
         input.value = current();
+        // The hidden select can't show the browser's "fill this in": the box asks instead, or Save does nothing and says nothing.
+        if (select.required) {
+            input.required = true;
+            select.required = false;
+        }
         const list = document.createElement('ul');
         list.id = `search-${key}`;
         list.className = 'search-list';

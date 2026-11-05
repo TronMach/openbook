@@ -18,6 +18,7 @@ public sealed class SavedReportService(IReportingStore store, ReportCatalog cata
         if (catalog.Find(reportKey) is null)
             throw new DomainException("report.unknown", "Unknown report.");
         var normalized = SavedReport.NormalizeName(name);
+        query = WithoutToday(query);
         var existing = (await store.ListSavedReportsAsync(ct)).FirstOrDefault(r => string.Equals(r.Name, normalized, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
@@ -59,6 +60,13 @@ public sealed class SavedReportService(IReportingStore store, ReportCatalog cata
         if (!string.Equals(report.CreatedBy, user.Actor, StringComparison.Ordinal) && (await store.ListSubscriptionsAsync(ct)).Any(s => s.SavedReportId == report.Id))
             throw new DomainException("report.scheduled", $"\"{report.Name}\" is sent on a schedule, so only {report.CreatedBy} can change it. Save yours under another name.");
     }
+
+    /// <summary>
+    /// "As of today" stays today: a date equal to today's is left out of what's saved, or a report sent every week would be
+    /// the one from the day it was saved.
+    /// </summary>
+    private static string? WithoutToday(string? query) =>
+        query is null ? null : string.Join('&', query.Split('&').Where(p => p != $"asOf={CompanyTime.Today:yyyy-MM-dd}"));
 
     private static string Snapshot(SavedReport r) => JsonSerializer.Serialize(new { r.Name, Report = r.ReportKey, r.Query });
 }

@@ -12,7 +12,7 @@ namespace OpenBook.Web.Security;
 /// audit records name the right person. A circuit also outlives the request whose cookie was checked, so each
 /// operation checks the session itself: sign-outs, deactivation, role changes and ended access bite here too.
 /// </summary>
-internal sealed class Operations(IServiceScopeFactory scopes, CircuitUser circuitUser)
+internal sealed partial class Operations(IServiceScopeFactory scopes, CircuitUser circuitUser, ILogger<Operations> logger)
 {
     public const string SignedOutCode = "auth.session_ended";
 
@@ -36,8 +36,17 @@ internal sealed class Operations(IServiceScopeFactory scopes, CircuitUser circui
             catch (ConcurrencyConflictException ex) when (ConflictRetry.ShouldRetry(ex, attempt, scope.ServiceProvider.GetRequiredService<IUnitOfWork>()))
             {
             }
+            catch (Exception ex) when (ex is Microsoft.EntityFrameworkCore.DbUpdateException or System.Data.Common.DbException or TimeoutException or IOException)
+            {
+                // A locked or full disk, or a dropped connection: the page says so and keeps what was typed, instead of the circuit dying.
+                LogSaveFailed(ex);
+                throw new DomainException("save.failed", "That couldn't be saved just now, and nothing was changed. Try again in a moment.");
+            }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "An interactive page's save failed.")]
+    private partial void LogSaveFailed(Exception exception);
 
     public Task<T> RunAsync<TService, T>(Func<TService, Task<T>> work, string? closingPassword = null) where TService : notnull =>
         RunAsync(sp => work(sp.GetRequiredService<TService>()), closingPassword);

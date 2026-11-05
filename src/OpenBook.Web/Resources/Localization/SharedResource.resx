@@ -1949,6 +1949,9 @@
   <data name="Scheduled reports" xml:space="preserve">
     <value>Scheduled reports</value>
   </data>
+  <data name="Scheduled reports that failed" xml:space="preserve">
+    <value>Scheduled reports that failed</value>
+  </data>
   <data name="Search" xml:space="preserve">
     <value>Search</value>
   </data>

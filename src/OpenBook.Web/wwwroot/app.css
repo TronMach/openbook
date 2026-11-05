@@ -331,7 +331,9 @@ table.data tr.cleared td { background: color-mix(in srgb, var(--accent) 8%, tran
 @media (max-width: 860px) { .split-grid { grid-template-columns: 1fr; } }
 
 @media print {
-    .topbar, .toolbar a, .toolbar form, .toolbar button, .no-print { display: none !important; }
+    .topbar, .menubar, .shortcuts, .toolbar a, .toolbar form, .toolbar button, .no-print { display: none !important; }
+    .simple-shell { display: block; }
+    :root, :root[data-theme="dark"] { --text: #000; --muted: #444; --border: #ccc; --surface: #fff; }
     body { background: #fff; color: #000; }
     .card, table.data { background: #fff; border-color: #ccc; }
     .page:has(> .wide) { max-width: none; }

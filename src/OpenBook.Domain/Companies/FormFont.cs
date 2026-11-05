@@ -91,5 +91,30 @@ public sealed class FormFont
             throw new DomainException("font.collection", "That's a font collection (.ttc). Upload a single .ttf file.");
         if (!(content.Length >= 12 && ((content[0] == 0 && content[1] == 1 && content[2] == 0 && content[3] == 0) || tag == "true")))
             throw new DomainException("font.not_truetype", $"The {face} file isn't a TrueType font (.ttf).");
+
+        // A good start says nothing about the rest, and a damaged font would stop every document using it from printing.
+        if (!TablesFit(content))
+            throw new DomainException("font.damaged", $"The {face} file is damaged or incomplete. Download it again.");
+    }
+
+    private static readonly string[] RequiredTables = ["cmap", "glyf", "head", "hhea", "hmtx", "loca", "maxp"];
+
+    private static bool TablesFit(byte[] content)
+    {
+        var count = (content[4] << 8) | content[5];
+        if (12 + (16 * count) > content.Length)
+            return false;
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < count; i++)
+        {
+            var record = 12 + (16 * i);
+            var offset = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(content.AsSpan(record + 8));
+            var length = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(content.AsSpan(record + 12));
+            if ((long)offset + length > content.Length)
+                return false;
+            found.Add(Encoding.ASCII.GetString(content, record, 4));
+        }
+
+        return RequiredTables.All(found.Contains);
     }
 }

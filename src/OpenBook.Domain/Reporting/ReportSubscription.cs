@@ -109,14 +109,28 @@ public sealed class ReportSubscription
     {
         if (!IsActive)
             return false;
+        if (RetryRecipients is not null && LastRunAt is { } last && now - last < RetryFor)
+            return true;
         zone ??= TimeZoneInfo.Local;
         var since = TimeZoneInfo.ConvertTime(LastRunAt ?? CreatedAt, zone).DateTime;
         return LatestSlot(TimeZoneInfo.ConvertTime(now, zone).DateTime) > since;
     }
 
-    public void RecordRun(DateTimeOffset at, string? error)
+    /// <summary>How long a send that reached only some recipients keeps trying the rest.</summary>
+    public static readonly TimeSpan RetryFor = TimeSpan.FromDays(1);
+
+    /// <summary>Who a send didn't reach: they're tried again on the next run, for <see cref="RetryFor"/>.</summary>
+    public string? RetryRecipients { get; private set; }
+
+    /// <summary>Who this run goes to: those left over from a failed one, while that's being retried; else everyone.</summary>
+    public IReadOnlyList<string> RecipientsDue => RetryRecipients is null ? RecipientList : Split(RetryRecipients);
+
+    public void RecordRun(DateTimeOffset at, string? error, IReadOnlyCollection<string>? notReached = null)
     {
-        LastRunAt = at.ToUniversalTime();
+        // A retry keeps the time of the run it's finishing, so the next scheduled one still comes.
+        if (RetryRecipients is null)
+            LastRunAt = at.ToUniversalTime();
+        RetryRecipients = notReached is { Count: > 0 } ? string.Join(", ", notReached) : null;
         LastRunFailed = error is not null;
         LastError = error is null ? null : (error.Length > 500 ? error[..500] : error);
     }

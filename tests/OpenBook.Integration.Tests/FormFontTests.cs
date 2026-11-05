@@ -136,4 +136,14 @@ public sealed class FormFontTests : IAsyncLifetime
         Assert.Matches("/BaseFont\\s*/[A-Z]{6}\\+Roboto", pdf);
         Assert.DoesNotMatch("Roboto-Bold", pdf);
     }
+
+    [Fact]
+    public void A_damaged_font_is_refused_when_it_comes_in()
+    {
+        var whole = ShippedFile("lato", "Regular.ttf");
+
+        OpenBook.Domain.Companies.FormFont.Check(whole, "regular");
+        var cut = Assert.Throws<OpenBook.Domain.Common.DomainException>(() => OpenBook.Domain.Companies.FormFont.Check(whole[..(whole.Length / 2)], "regular"));
+        Assert.Equal("font.damaged", cut.Code);
+    }
 }

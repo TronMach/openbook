@@ -87,6 +87,8 @@
         Add(figures.PaymentsToDeposit, L["Payments to deposit"], "/banking/deposits/new", L["{0} waiting to go into the bank", Labels.Amount(figures.ToDeposit)]);
         Add(figures.BillsDueSoon, L["Bills due within a week"], "/purchases/pay-bills", L["Including any overdue"], urgent: bills.Any(b => b.CanBePaid && b.IsOverdue(today)));
         Add(bills.Count(b => b.Approval == OpenBook.Domain.Purchases.BillApproval.Pending), L["Bills waiting for approval"], "/purchases/approvals");
+        Add((await Get<OpenBook.Application.Reporting.ReportSubscriptionService>().ListAsync()).Count(r => r.IsActive && r.LastRunFailed),
+            L["Scheduled reports that failed"], "/reports/schedules", urgent: true);
         Add((await Get<OpenBook.Application.Sales.ScheduledEmailService>().ListAsync()).Count(e => e.Status == OpenBook.Domain.Sales.ScheduledEmailStatus.Failed),
             L["Invoice emails that failed"], "/sales/scheduled-emails", urgent: true);
         foreach (var account in banking)

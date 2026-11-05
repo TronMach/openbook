@@ -4658,6 +4658,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RetryRecipients")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("SavedReportId")
                         .HasColumnType("TEXT");
 

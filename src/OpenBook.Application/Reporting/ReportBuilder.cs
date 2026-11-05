@@ -155,6 +155,8 @@ public sealed class ReportBuilder(
             .OrderBy(l => l.Date).ThenBy(l => l.EntryNumber)
             .ToList();
         var truncated = lines.Count > MaxRows;
+        // Totals count every line found, shown or not, or they'd look like the whole answer and fall short.
+        var everyLine = lines;
         if (truncated)
             lines = lines.Take(MaxRows).ToList();
 
@@ -230,11 +232,12 @@ public sealed class ReportBuilder(
                 var label = group.Key.Length == 0 ? "(none)" : group.Key;
                 rows.Add(new ReportTableRow([label, .. Enumerable.Repeat<ReportCell?>(null, columns.Count - 1)], 0, ReportRowStyle.Section));
                 AddLines(list, 1);
-                rows.Add(new ReportTableRow(columns.Select((c, i) => Total(c, list, $"Total for {label}", i)).ToList(), 0, ReportRowStyle.Subtotal));
+                var whole = truncated ? everyLine.Where(l => Group(l) == group.Key).ToList() : list;
+                rows.Add(new ReportTableRow(columns.Select((c, i) => Total(c, whole, $"Total for {label}", i)).ToList(), 0, ReportRowStyle.Subtotal));
             }
         }
 
-        rows.Add(new ReportTableRow(columns.Select((c, i) => Total(c, lines, "Total", i)).ToList(), 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(columns.Select((c, i) => Total(c, everyLine, "Total", i)).ToList(), 0, ReportRowStyle.Total));
         var subtitle = $"{(from == DateRanges.Beginning ? $"All dates to {to:MMM d, yyyy}" : Comparisons.Describe(from, to))} · {StatementReports.Describe(basis)}";
         return new ReportTable(
             options.Title is { Length: > 0 } title ? title : "Transaction report",
@@ -248,7 +251,7 @@ public sealed class ReportBuilder(
             })).ToList(),
             rows,
             basis,
-            truncated ? $"Only the first {MaxRows:N0} lines are shown; narrow the dates or filters." : "Amounts are debits positive, credits negative.");
+            truncated ? $"Only the first {MaxRows:N0} of {everyLine.Count:N0} lines are shown (the oldest), though the totals count them all; narrow the dates or filters." : "Amounts are debits positive, credits negative.");
     }
 
     private static string? Name(LedgerLine line, IReadOnlyDictionary<(string, Guid), (string Name, Guid? PartyId)> names) =>

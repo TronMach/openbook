@@ -100,6 +100,12 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
             var response = await browser.GetAsync(path, patience.Token);
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
             var page = await response.Content.ReadAsStringAsync(patience.Token);
+            if (path.StartsWith("/api", StringComparison.Ordinal))
+            {
+                Assert.Contains("http.404", page, StringComparison.Ordinal); // programs get JSON, not a page
+                continue;
+            }
+
             Assert.Contains("Not Found", page, StringComparison.Ordinal);
             Assert.Contains("href=\"/sales\"", page, StringComparison.Ordinal); // the menu, for someone signed in
         }

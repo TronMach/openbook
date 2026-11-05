@@ -46,6 +46,8 @@ public sealed class ActivityReports(
             owners[(CustomerPayment.Source, p.Id)] = p.CustomerId;
         foreach (var r in await sales.ListRefundsAsync(null, ct))
             owners[(CustomerRefund.Source, r.Id)] = r.CustomerId;
+        foreach (var r in await sales.ListRetainersAsync(null, ct))
+            owners[(Retainer.ApplicationSource, r.Id)] = r.CustomerId;
 
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var byCustomer = new Dictionary<Guid, decimal>();

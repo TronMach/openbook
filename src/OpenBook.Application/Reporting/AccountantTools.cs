@@ -352,21 +352,23 @@ public sealed class AccountantPackageService(
             throw new DomainException("package.dates_invalid", "The end date can't be before the start.");
         var company = await companies.GetRequiredCompanyAsync(ct);
         var query = string.Create(CultureInfo.InvariantCulture, $"preset=Custom&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&asOf={to:yyyy-MM-dd}&year={to.Year}&detail=true");
+        // 1099s go by calendar year: the latest one finished by the end of the period, never part of a year as if it were all.
+        var taxYear = to.Month == 12 && to.Day == 31 ? to.Year : to.Year - 1;
         var path = Path.Combine(Path.GetTempPath(), $"openbook-package-{Guid.NewGuid():N}.zip");
         await using (var file = File.Create(path))
         using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
         {
             foreach (var (key, name) in Reports)
             {
-                var table = await catalog.RunAsync(key, ReportParameters.Parse(query), ct);
+                var table = await catalog.RunAsync(key, ReportParameters.Parse(key == "1099" ? query.Replace($"year={to.Year}", $"year={taxYear}", StringComparison.Ordinal) : query), ct);
                 var entry = zip.CreateEntry($"{name}.xlsx", CompressionLevel.Optimal);
                 await using var stream = entry.Open();
                 await stream.WriteAsync(exporter.ToXlsx(table), ct);
             }
 
-            var filing = zip.CreateEntry($"16 1099 filing data {to.Year}.csv", CompressionLevel.Optimal);
+            var filing = zip.CreateEntry($"16 1099 filing data {taxYear}.csv", CompressionLevel.Optimal);
             await using (var stream = filing.Open())
-                await stream.WriteAsync(await Filing1099CsvAsync(to.Year, ct: ct), ct);
+                await stream.WriteAsync(await Filing1099CsvAsync(taxYear, ct: ct), ct);
 
             var readme = zip.CreateEntry("README.txt");
             await using (var stream = readme.Open())

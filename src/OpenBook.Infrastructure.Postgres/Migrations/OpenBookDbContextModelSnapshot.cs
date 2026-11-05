@@ -4665,6 +4665,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("RetryRecipients")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("SavedReportId")
                         .HasColumnType("uuid");
 

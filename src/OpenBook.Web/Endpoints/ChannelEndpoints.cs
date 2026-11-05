@@ -54,7 +54,7 @@ public static class ChannelEndpoints
             {
                 return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString(ex.Message)}");
             }
-        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes));
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes * 2));
 
         app.MapPost("/sales/channels/connections/{id:guid}", async (Guid id, IFormCollection form, ChannelSyncService sync, CancellationToken ct) =>
             await Back($"/sales/channels/{id}", () => sync.ConnectAsync(id, form["shopDomain"].ToString(), form["credential"].ToString(), ct))).RequireAuthorization();
@@ -96,7 +96,7 @@ public static class ChannelEndpoints
             {
                 return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString(ex.Message)}");
             }
-        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes));
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes * 2));
 
         app.MapPost("/sales/channels/{id:guid}/skus", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
         {
