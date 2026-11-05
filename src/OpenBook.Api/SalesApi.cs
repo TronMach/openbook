@@ -45,11 +45,11 @@ public sealed record ItemResponse(
     Guid? InventoryAssetAccountId = null, Guid? CostAccountId = null, decimal? ReorderPoint = null, decimal PurchaseCost = 0m,
     IReadOnlyList<QuantityBreakDto>? QuantityBreaks = null, InventoryCostMethod CostMethod = InventoryCostMethod.Fifo, IReadOnlyList<ItemComponent>? Components = null,
     OpenBook.Domain.Inventory.ItemTracking Tracking = OpenBook.Domain.Inventory.ItemTracking.None, string? Barcode = null, bool AutoBuild = false,
-    ShortStock SellShort = ShortStock.Company)
+    ShortStock SellShort = ShortStock.Company, Guid? PreferredVendorId = null, decimal? ReorderQuantity = null)
 {
     public static ItemResponse From(Item i) => new(
         i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost,
-        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild, i.SellShort);
+        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild, i.SellShort) { PreferredVendorId = i.PreferredVendorId, ReorderQuantity = i.ReorderQuantity };
 }
 
 /// <param name="Rate">For a tax line, the percentage charged.</param>
@@ -204,7 +204,7 @@ internal static class SalesApi
         });
         // Correct a posted invoice in place: its entry reversed and a new one posted, same id and number.
         sales.MapPut("/invoices/{id:guid}", async (Guid id, ChangeInvoiceCommand r, InvoiceService s, CancellationToken ct) =>
-            InvoiceResponse.From(await s.ChangeAsync(id, r, ct)));
+            InvoiceResponse.From(await s.ChangeAsync(id, Kept(r, await s.GetAsync(id, ct)), ct)));
         sales.MapPost("/invoices/{id:guid}/void", async (Guid id, VoidRequest r, InvoiceService s, CancellationToken ct) =>
             InvoiceResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
@@ -237,7 +237,7 @@ internal static class SalesApi
         });
         // Correct a posted sales receipt in place: its entry reversed and a new one posted.
         sales.MapPut("/receipts/{id:guid}", async (Guid id, ChangeSalesReceiptCommand r, SalesReceiptService s, CancellationToken ct) =>
-            SalesReceiptResponse.From(await s.ChangeAsync(id, r, ct)));
+            SalesReceiptResponse.From(await s.ChangeAsync(id, Kept(r, await s.GetAsync(id, ct)), ct)));
         sales.MapPost("/receipts/{id:guid}/void", async (Guid id, VoidRequest r, SalesReceiptService s, CancellationToken ct) =>
             SalesReceiptResponse.From(await s.VoidAsync(id, r.Reason, ct)));
     }
@@ -247,4 +247,9 @@ internal static class SalesApi
         using var reader = new StreamReader(request.Body);
         return await reader.ReadToEndAsync(ct);
     }
+
+    private static ChangeInvoiceCommand Kept(ChangeInvoiceCommand r, Invoice? e) => e is null ? r : r with { Memo = r.Memo ?? e.Memo, LocationId = ApiKeep.Id(r.LocationId, e.LocationId), WarehouseId = ApiKeep.Id(r.WarehouseId, e.WarehouseId) };
+
+
+    private static ChangeSalesReceiptCommand Kept(ChangeSalesReceiptCommand r, SalesReceipt? e) => e is null ? r : r with { Memo = r.Memo ?? e.Memo, LocationId = ApiKeep.Id(r.LocationId, e.LocationId), WarehouseId = ApiKeep.Id(r.WarehouseId, e.WarehouseId) };
 }

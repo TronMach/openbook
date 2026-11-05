@@ -13,11 +13,11 @@ public sealed record SetClosingRequest(DateOnly? ClosingDate, string? NewPasswor
 
 public sealed record RecurringEntryResponse(
     Guid Id, string Name, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
-    int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoPost, bool IsActive, IReadOnlyList<JournalLineDraft> Lines)
+    int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoPost, bool IsActive, IReadOnlyList<JournalLineDraft> Lines, EntryBasis Basis = EntryBasis.Both, Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null)
 {
     public static RecurringEntryResponse From(RecurringEntry r) => new(
         r.Id, r.Name, r.Memo, r.Frequency, r.Interval, r.StartDate, r.EndDate, r.MaxOccurrences, r.OccurrencesPosted, r.NextDate,
-        r.AutoPost, r.IsActive, r.Lines.Select(l => l.ToDraft()).ToList());
+        r.AutoPost, r.IsActive, r.Lines.Select(l => l.ToDraft()).ToList()) { Basis = r.Basis, LocationId = r.LocationId, TagIds = r.TagIds };
 }
 
 public sealed record OpeningBalancesRequest(DateOnly AsOf, IReadOnlyList<OpeningBalance> Balances);

@@ -114,11 +114,11 @@ public sealed record PaymentLinkResponse(Guid Id, Guid InvoiceId, PaymentProvide
 
 public sealed record RecurringInvoiceResponse(
     Guid Id, string Name, Guid CustomerId, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
-    int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool AutoEmail, bool IsActive, IReadOnlyList<SalesLineDraft> Lines)
+    int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool AutoEmail, bool IsActive, IReadOnlyList<SalesLineDraft> Lines, Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null)
 {
     public static RecurringInvoiceResponse From(RecurringInvoice r) => new(
         r.Id, r.Name, r.CustomerId, r.Memo, r.Frequency, r.Interval, r.StartDate, r.EndDate, r.MaxOccurrences, r.OccurrencesPosted, r.NextDate,
-        r.AutoCreate, r.AutoEmail, r.IsActive, r.Lines.Select(l => l.ToDraft()).ToList());
+        r.AutoCreate, r.AutoEmail, r.IsActive, r.Lines.Select(l => l.ToDraft()).ToList()) { LocationId = r.LocationId, TagIds = r.TagIds };
 }
 
 public sealed record DepositResponse(Guid Id, Guid BankAccountId, DateOnly Date, string? Memo, decimal Total, DocumentStatus Status, Guid JournalEntryId,
@@ -197,7 +197,7 @@ internal static class ReceivablesApi
         });
         // Correct a posted credit memo in place: its entry reversed and a new one posted.
         sales.MapPut("/credit-memos/{id:guid}", async (Guid id, ChangeCreditMemoCommand r, CreditService s, CancellationToken ct) =>
-            CreditMemoResponse.From(await s.ChangeCreditMemoAsync(id, r, ct)));
+            CreditMemoResponse.From(await s.ChangeCreditMemoAsync(id, Kept(r, await s.GetCreditMemoAsync(id, ct)), ct)));
         sales.MapPost("/credit-memos/{id:guid}/void", async (Guid id, VoidRequest r, CreditService s, CancellationToken ct) =>
             CreditMemoResponse.From(await s.VoidCreditMemoAsync(id, r.Reason, ct)));
 
@@ -475,4 +475,7 @@ internal static class ReceivablesApi
         "receipts" => FormKind.SalesReceipt,
         _ => throw new DomainException("form.unknown", $"'{kind}' isn't a printable form."),
     };
+
+
+    private static ChangeCreditMemoCommand Kept(ChangeCreditMemoCommand r, CreditMemo? e) => e is null ? r : r with { Memo = r.Memo ?? e.Memo, LocationId = ApiKeep.Id(r.LocationId, e.LocationId), WarehouseId = ApiKeep.Id(r.WarehouseId, e.WarehouseId) };
 }

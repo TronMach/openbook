@@ -10,13 +10,13 @@ namespace OpenBook.Api;
 public sealed record FixedAssetResponse(
     Guid Id, string Name, string? Number, Guid AssetAccountId, Guid AccumulatedAccountId, Guid ExpenseAccountId, DateOnly InServiceDate, decimal Cost,
     decimal Salvage, DepreciationMethod Method, int LifeMonths, decimal DecliningPercent, MacrsClass? MacrsClass, decimal PriorDepreciation,
-    DateOnly? PriorThrough, FixedAssetStatus Status, DateOnly? DisposedOn, decimal Proceeds, decimal Accumulated, decimal BookValue)
+    DateOnly? PriorThrough, FixedAssetStatus Status, DateOnly? DisposedOn, decimal Proceeds, decimal Accumulated, decimal BookValue, string? Description = null)
 {
     public static FixedAssetResponse From(AssetPosition p)
     {
         var a = p.Asset;
         return new(a.Id, a.Name, a.Number, a.AssetAccountId, a.AccumulatedAccountId, a.ExpenseAccountId, a.InServiceDate, a.Cost, a.Salvage, a.Method,
-            a.LifeMonths, a.DecliningPercent, a.MacrsClass, a.PriorDepreciation, a.PriorThrough, a.Status, a.DisposedOn, a.Proceeds, p.Accumulated, p.BookValue);
+            a.LifeMonths, a.DecliningPercent, a.MacrsClass, a.PriorDepreciation, a.PriorThrough, a.Status, a.DisposedOn, a.Proceeds, p.Accumulated, p.BookValue, a.Description);
     }
 }
 
@@ -30,11 +30,11 @@ public sealed record DepreciationLineResponse(Guid AssetId, decimal Amount);
 
 public sealed record LoanResponse(
     Guid Id, string Name, Guid LiabilityAccountId, Guid InterestAccountId, decimal Principal, decimal AnnualRatePercent, int Payments,
-    DateOnly FirstPaymentDate, decimal PaymentAmount, decimal Balance, IReadOnlyList<LoanPaymentResponse> PaymentsMade)
+    DateOnly FirstPaymentDate, decimal PaymentAmount, decimal Balance, IReadOnlyList<LoanPaymentResponse> PaymentsMade, Guid? LenderVendorId = null, string? Notes = null, bool IsVoided = false)
 {
     public static LoanResponse From(Loan l) => new(
         l.Id, l.Name, l.LiabilityAccountId, l.InterestAccountId, l.Principal, l.AnnualRatePercent, l.Payments, l.FirstPaymentDate, l.PaymentAmount, l.Balance,
-        l.PaymentsMade.Select(p => new LoanPaymentResponse(p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.PaymentAccountId, p.JournalEntryId, p.IsVoided)).ToList());
+        l.PaymentsMade.Select(p => new LoanPaymentResponse(p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.PaymentAccountId, p.JournalEntryId, p.IsVoided)).ToList()) { LenderVendorId = l.LenderVendorId, Notes = l.Notes, IsVoided = l.IsVoided };
 }
 
 public sealed record LoanPaymentResponse(Guid Id, DateOnly Date, decimal Amount, decimal Interest, decimal Principal, Guid PaymentAccountId, Guid JournalEntryId, bool IsVoided);

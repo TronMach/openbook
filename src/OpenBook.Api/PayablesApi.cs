@@ -29,11 +29,11 @@ public sealed record VendorRefundResponse(
 
 public sealed record RecurringBillResponse(
     Guid Id, string Name, Guid VendorId, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
-    int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool IsActive, IReadOnlyList<BillLineDraft> Lines)
+    int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool IsActive, IReadOnlyList<BillLineDraft> Lines, Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null)
 {
     public static RecurringBillResponse From(RecurringBill r) => new(
         r.Id, r.Name, r.VendorId, r.Memo, r.Frequency, r.Interval, r.StartDate, r.EndDate, r.MaxOccurrences, r.OccurrencesPosted, r.NextDate,
-        r.AutoCreate, r.IsActive, r.Lines.Select(l => l.ToDraft()).ToList());
+        r.AutoCreate, r.IsActive, r.Lines.Select(l => l.ToDraft()).ToList()) { LocationId = r.LocationId, TagIds = r.TagIds };
 }
 
 public sealed record ApplyVendorCreditRequest(Guid VendorId, DateOnly Date, IReadOnlyList<ApplyVendorCredit> Applications);

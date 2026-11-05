@@ -148,7 +148,7 @@ internal static class BankingApi
 
         // Correct a posted spend or receive in place: its entry reversed and a new one posted.
         banking.MapPut("/transactions/{id:guid}", async (Guid id, ChangeBankTransactionCommand r, BankingService s, CancellationToken ct) =>
-            BankTransactionResponse.From(await s.ChangeAsync(id, r, ct)));
+            BankTransactionResponse.From(await s.ChangeAsync(id, Kept(r, await s.GetAsync(id, ct)), ct)));
         banking.MapPut("/transfers/{id:guid}", async (Guid id, ChangeTransferCommand r, BankingService s, CancellationToken ct) =>
             BankTransactionResponse.From(await s.ChangeTransferAsync(id, r, ct)));
         banking.MapPost("/transactions/{id:guid}/void", async (Guid id, VoidRequest r, BankingService s, CancellationToken ct) =>
@@ -197,4 +197,7 @@ internal static class BankingApi
         banking.MapGet("/reconciliations/{id:guid}/report", async (Guid id, ReconciliationService s, CancellationToken ct) =>
             ReconciliationReportResponse.From(await s.GetReportAsync(id, ct)));
     }
+
+
+    private static ChangeBankTransactionCommand Kept(ChangeBankTransactionCommand r, BankTransaction? e) => e is null ? r : r with { LocationId = ApiKeep.Id(r.LocationId, e.LocationId) };
 }

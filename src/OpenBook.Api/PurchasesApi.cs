@@ -233,7 +233,7 @@ internal static class PurchasesApi
             BillResponse.From(await s.ChangeBillAsync(id, r, ct)));
         // Correct a posted bill in place: its entry reversed and a new one posted, the approval rules run again.
         purchases.MapPut("/bills/{id:guid}", async (Guid id, ChangeBillCommand r, BillService s, CancellationToken ct) =>
-            BillResponse.From(await s.ChangeAsync(id, r, ct)));
+            BillResponse.From(await s.ChangeAsync(id, Kept(r, await s.GetAsync(id, ct)), ct)));
         purchases.MapPost("/bills/{id:guid}/void", async (Guid id, VoidRequest r, BillService s, CancellationToken ct) =>
             BillResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
@@ -251,6 +251,9 @@ internal static class PurchasesApi
         purchases.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, BillPaymentService s, CancellationToken ct) =>
             BillPaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
     }
+
+
+    private static ChangeBillCommand Kept(ChangeBillCommand r, Bill? e) => e is null ? r : r with { Memo = r.Memo ?? e.Memo, LocationId = ApiKeep.Id(r.LocationId, e.LocationId), WarehouseId = ApiKeep.Id(r.WarehouseId, e.WarehouseId) };
 }
 
 public sealed record ReorderResponse(

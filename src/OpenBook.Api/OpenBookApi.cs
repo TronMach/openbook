@@ -134,10 +134,13 @@ public static class OpenBookApi
         api.MapPut("/journal-entries/{id:guid}", async (Guid id, ChangeJournalEntryRequest request, PostingEngine engine,
             OpenBook.Application.Reporting.AdjustingEntryService adjusting, CancellationToken ct) =>
         {
-            var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo, l.ClassId)).ToList();
+            // What's left out keeps its value: a line's class by its account and amount, Guid.Empty clears.
+            var old = await engine.DraftOfAsync(id, ct);
+            var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo,
+                l.ClassId ?? old?.Lines.FirstOrDefault(o => o.AccountId == l.AccountId && o.Debit == l.Debit && o.Credit == l.Credit)?.ClassId)).ToList();
             var wasAdjusting = (await adjusting.MarkedAsync(ct)).Contains(id);
             var changed = await engine.ChangeAsync(id, new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis,
-                LocationId: request.LocationId, TagIds: request.TagIds), request.Reason, ct);
+                LocationId: ApiKeep.Id(request.LocationId, old?.LocationId), TagIds: request.TagIds ?? old?.TagIds), request.Reason, ct);
             // The replacement stays an adjusting entry, as the change page keeps it.
             if (wasAdjusting)
                 await adjusting.SetAsync(changed.Id, true, ct);

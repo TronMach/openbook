@@ -29,10 +29,10 @@ public sealed record ProjectFiguresResponse(
 }
 
 /// <param name="CostRate">What an hour costs; null below the accountant level.</param>
-public sealed record WorkerResponse(Guid Id, string Name, decimal? CostRate, decimal? BillRate, string? Username, Guid? VendorId, bool IsActive)
+public sealed record WorkerResponse(Guid Id, string Name, decimal? CostRate, decimal? BillRate, string? Username, Guid? VendorId, bool IsActive, string? Role = null, decimal? WeeklyHours = null)
 {
     public static WorkerResponse From(Worker w, ClaimsPrincipal user) =>
-        new(w.Id, w.Name, ProjectsApi.SeesCosts(user) ? w.CostRate : null, w.BillRate, w.Username, w.VendorId, w.IsActive);
+        new(w.Id, w.Name, ProjectsApi.SeesCosts(user) ? w.CostRate : null, w.BillRate, w.Username, w.VendorId, w.IsActive) { Role = w.Role, WeeklyHours = w.WeeklyHours };
 }
 
 public sealed record TimeEntryResponse(
