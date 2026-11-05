@@ -232,6 +232,35 @@ public sealed class BankingProTests : IAsyncLifetime
 
     // ---- Rules ----
 
+    private Task<FeedImportResult> Line(DateOnly date, decimal amount, string fitId) =>
+        In<BankFeedService, FeedImportResult>(s => s.QueueAsync(_checking.Id, [new FeedLine(date, amount, "CITY POWER", null, null, fitId)]));
+
+    private Task<BankRule> PowerRule() =>
+        In<BankRuleService, BankRule>(s => s.CreateAsync(new BankRuleDetails("Power", "city power", _office.Id, RuleDirection.MoneyOut, AutoAdd: true)));
+
+    [Fact]
+    public async Task An_automatic_rule_leaves_a_line_already_in_the_books_for_review()
+    {
+        await PowerRule();
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(
+            BankTransactionKind.Spend, _checking.Id, new DateOnly(2026, 10, 1), [new BankSplit(_office.Id, 120m)], Payee: "City Power")));
+
+        Assert.Equal(new FeedImportResult(1, 0, 0), await Line(new DateOnly(2026, 10, 3), -120m, "P1"));
+
+        var waiting = Assert.Single(await Review(_checking.Id));
+        Assert.Single(waiting.Matches);
+        Assert.NotNull(waiting.Suggestion);
+    }
+
+    [Fact]
+    public async Task An_automatic_rule_still_adds_the_same_bill_a_week_after_the_last_it_added()
+    {
+        await PowerRule();
+
+        Assert.Equal(new FeedImportResult(0, 1, 0), await Line(new DateOnly(2026, 10, 3), -120m, "P1"));
+        Assert.Equal(new FeedImportResult(0, 1, 0), await Line(new DateOnly(2026, 10, 10), -120m, "P2"));
+    }
+
     [Fact]
     public async Task Rules_suggest_or_add_automatically()
     {

@@ -4,6 +4,7 @@
 @inject AccountService AccountService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>@(_account is null ? "New account" : _account.Name) · OpenBook</PageTitle>
 
@@ -98,6 +99,7 @@
                 <span class="hint">Nonprofits: restricted gifts and grants, or restricted net assets. The nonprofit statements show this account in the "with donor restrictions" column. Income, other income and equity accounts only.</span>
             </div>
         }
+        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
         <div class="actions">
             <button type="submit">@(_account is null ? "Create account" : "Save changes")</button>
             <a href="/accounts">Cancel</a>
@@ -179,6 +181,7 @@
                 return;
             }
 
+            ClosingOverride.Password = Input.ClosingPassword;
             var restricted = Input.DonorRestricted && Account.CanBeRestricted(Input.Type);
             var saved = _account is null
                 ? await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted))
@@ -190,8 +193,11 @@
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
+
+    private bool _needsClosingPassword;
 
     private async Task ToggleActiveAsync()
     {
@@ -232,5 +238,7 @@
         public string? TaxLine { get; set; }
 
         public bool DonorRestricted { get; set; }
+
+        public string? ClosingPassword { get; set; }
     }
 }

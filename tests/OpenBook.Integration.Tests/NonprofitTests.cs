@@ -148,7 +148,8 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal("donation.description_required", (await Assert.ThrowsAsync<DomainException>(() =>
             Give(new RecordGiftCommand(pat.Id, Jan1, 10m, Account("Equipment"), GiftKind.InKind)))).Code);
         Assert.Equal("donation.goods_value", (await Assert.ThrowsAsync<DomainException>(() =>
-            Give(new RecordGiftCommand(pat.Id, Jan1, 10m, checking, GoodsValue: 20m, GoodsDescription: "Mug")))).Code);
+            Give(new RecordGiftCommand(pat.Id, Jan1, 10m, checking, GoodsValue: -1m, GoodsDescription: "Mug")))).Code);
+        Assert.Equal(0m, (await Give(new RecordGiftCommand(pat.Id, Jan1, 10m, checking, GoodsValue: 20m, GoodsDescription: "Auction lot"))).Deductible);
         Assert.Equal("donation.in_kind_account", (await Assert.ThrowsAsync<DomainException>(() =>
             Give(new RecordGiftCommand(pat.Id, Jan1, 10m, Account("Accounts Payable"), GiftKind.InKind, Description: "?")))).Code);
 
@@ -417,6 +418,42 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal(200m, table.Find("16 Occupancy", 3));
         Assert.Equal(50m, table.Find("13 Office expenses", 5));
         Assert.Equal(550m, table.Find("25 Total functional expenses", 1));
+    }
+
+    [Fact]
+    public async Task Functional_expenses_work_on_the_cash_basis()
+    {
+        var vendor = await In<OpenBook.Application.Purchases.VendorService, Domain.Purchases.Vendor>(s => s.CreateAsync(new Domain.Purchases.VendorDetails("Paper Co")));
+        foreach (var (account, amount, category) in new[] { ("Program Supplies", 300m, _scholarships), ("Rent and Occupancy", 200m, _management) })
+        {
+            var bill = await In<OpenBook.Application.Purchases.BillService, Domain.Purchases.Bill>(s => s.CreateAsync(new OpenBook.Application.Purchases.CreateBillCommand(
+                vendor.Id, new DateOnly(2026, 2, 1), [new Domain.Purchases.BillLineDraft(Account(account), amount, ClassId: category)])));
+            await In<OpenBook.Application.Purchases.BillPaymentService, IReadOnlyList<Domain.Purchases.BillPayment>>(s => s.PayAsync(new OpenBook.Application.Purchases.PayBillsCommand(
+                new DateOnly(2026, 2, 10), Account("Checking"), [new OpenBook.Application.Purchases.ApplyToBill(bill.Id, amount)])));
+        }
+
+        var table = await Report("functional-expenses", $"preset=Custom&from={Jan1:yyyy-MM-dd}&to={Dec31:yyyy-MM-dd}&basis=Cash");
+
+        Assert.Equal(300m, table.Find("Total expenses", 1));
+        Assert.Equal(200m, table.Find("Total expenses", 2));
+        Assert.Equal(500m, table.Find("Total expenses", table.Columns.Count - 1));
+    }
+
+    [Fact]
+    public async Task Changing_the_restricted_flag_needs_a_closed_period_opened()
+    {
+        await GiveAndSpendAsync();
+        var gifts = _chart.FindByFullName("Contributions:Restricted")!;
+        var untouched = _chart.FindByFullName("Contributions:Unrestricted")!;
+        await _db.InScope(sp => sp.GetRequiredService<CloseBooksService>().SetAsync(Dec31, null, false));
+        var change = new UpdateAccountCommand(gifts.Id, gifts.Name, gifts.Type, gifts.Number, gifts.ParentId, null, false);
+
+        Assert.Equal("period.closed", (await Assert.ThrowsAsync<DomainException>(() => In<AccountService, Account>(s => s.UpdateAsync(change)))).Code);
+
+        // Anything else about the account can still change.
+        var renamed = await In<AccountService, Account>(s => s.UpdateAsync(change with { Name = "Restricted gifts", DonorRestricted = null }));
+        Assert.True(renamed.DonorRestricted);
+        Assert.False(untouched.DonorRestricted);
     }
 
     [Fact]

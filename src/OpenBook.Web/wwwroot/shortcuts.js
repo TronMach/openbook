@@ -100,8 +100,23 @@
     // Only full-page posts: interactive forms have no method="post" and guard themselves, and print forms stay on the page.
     let posted = new WeakMap();
     const resubmitAfter = 5000;
+    // A form with data-unsaved-watch has changes of its own; one with data-needs-saved works from what's saved.
+    let unsaved = false;
+    const watchChanges = e => {
+        if (!(e.target instanceof Element) || !e.target.closest('form[data-unsaved-watch]')) return;
+        unsaved = true;
+        document.querySelectorAll('[data-unsaved-note]').forEach(note => { note.hidden = false; });
+    };
+    document.addEventListener('input', watchChanges);
+    document.addEventListener('change', watchChanges);
     document.addEventListener('submit', e => {
         const form = e.target;
+        if (form instanceof HTMLFormElement && form.hasAttribute('data-needs-saved') && unsaved
+            && !confirm('You have changes above that aren\'t saved. Go on without them?')) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return;
+        }
         if (!(form instanceof HTMLFormElement) || form.method !== 'post' || form.target === '_blank'
             || e.submitter?.formTarget === '_blank' || form.hasAttribute('data-print-form')) return;
         const at = posted.get(form);
@@ -123,8 +138,9 @@
         }
     }, true);
     // A page that came back (Back button, enhanced navigation) starts again.
-    window.addEventListener('pageshow', () => { posted = new WeakMap(); });
-    window.Blazor?.addEventListener?.('enhancedload', () => { posted = new WeakMap(); });
+    const startAgain = () => { posted = new WeakMap(); unsaved = false; };
+    window.addEventListener('pageshow', startAgain);
+    window.Blazor?.addEventListener?.('enhancedload', startAgain);
 
     document.addEventListener('keydown', e => {
         // Ctrl/Cmd + Enter: submit the form you're in, from any field (quick entry everywhere).

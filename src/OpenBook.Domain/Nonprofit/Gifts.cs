@@ -109,8 +109,9 @@ public sealed class Donation
             throw new DomainException("donation.amount", "Enter an amount above zero.");
         if (decimal.Round(amount, 2) != amount || decimal.Round(goodsValue, 2) != goodsValue)
             throw new DomainException("donation.amount_cents", "Amounts are in cents.");
-        if (goodsValue < 0m || goodsValue > amount)
-            throw new DomainException("donation.goods_value", "What the donor received can't be more than the gift.");
+        // Worth more than the payment is allowed (an auction buyer's bargain): nothing is deductible then, and the letter says what it was worth.
+        if (goodsValue < 0m)
+            throw new DomainException("donation.goods_value", "What the donor received can't be worth less than nothing.");
         if (goodsValue > 0m && string.IsNullOrWhiteSpace(goodsDescription))
             throw new DomainException("donation.goods_description", "Say what the donor received in return.");
         if (kind == GiftKind.InKind && string.IsNullOrWhiteSpace(description))

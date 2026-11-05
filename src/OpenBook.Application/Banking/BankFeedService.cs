@@ -98,6 +98,7 @@ public sealed class BankFeedService(
         var rules = await ActiveRulesAsync(ct);
         int queued = 0, autoAdded = 0, skipped = 0;
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        List<FeedMatch>? inTheBooks = null;
         foreach (var line in lines)
         {
             var occurrence = Occurrence(seen, BankFeedItem.KeyFor(line.Date, line.Amount, line.Payee, line.Reference, line.FitId));
@@ -111,7 +112,10 @@ public sealed class BankFeedService(
             bank.Add(item);
             var rule = rules.FirstOrDefault(r => r.Fits(item));
             item.SuggestedBy(rule?.Id);
-            if (rule is { AutoAdd: true })
+            // A line that looks like something already entered waits for review, as the page's bulk Add holds it back:
+            // added, it would be in the books twice.
+            inTheBooks ??= rule is { AutoAdd: true } ? await MatchCandidatesAsync(accountId, ct) : null;
+            if (rule is { AutoAdd: true } && !inTheBooks!.Any(c => c.Amount == item.Amount && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays))
             {
                 var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId)), batchId, ct);
                 item.MarkAdded(transaction.Id, rule.Id, clock.UtcNow, user.Actor);

@@ -93,14 +93,16 @@ public sealed class NonprofitReports(
         var classes = choices.ToDictionary(c => c.Segment.Id, c => c.Segment);
         var names = choices.ToDictionary(c => c.Segment.Id, c => c.FullName);
 
-        var deciding = lines.ToDictionary(l => l.JournalLineId, l => FunctionalAreas.Deciding(l.ClassId, classes));
-        IReadOnlyDictionary<Guid, decimal> Of(Func<Segment?, bool> keep) => FinancialReports.Sum(lines.Where(l => keep(deciding[l.JournalLineId])));
-        var program = lines.Where(l => deciding[l.JournalLineId]?.FunctionalArea == FunctionalArea.Program)
-            .ToDictionary(l => l.JournalLineId, l => ProgramOf(l.ClassId!.Value, deciding[l.JournalLineId]!.Id, classes));
-        var programs = program.Values.Distinct().OrderBy(id => names.GetValueOrDefault(id), StringComparer.CurrentCultureIgnoreCase).ToList();
+        // Per line, not by line id: cash-basis lines derived from payments have no journal line of their own.
+        var rows = lines.Select(l => (Line: l, Deciding: FunctionalAreas.Deciding(l.ClassId, classes))).ToList();
+        IReadOnlyDictionary<Guid, decimal> Of(Func<Segment?, bool> keep) => FinancialReports.Sum(rows.Where(r => keep(r.Deciding)).Select(r => r.Line));
+        var byProgram = rows.Where(r => r.Deciding?.FunctionalArea == FunctionalArea.Program)
+            .GroupBy(r => ProgramOf(r.Line.ClassId!.Value, r.Deciding!.Id, classes), r => r.Line)
+            .OrderBy(g => names.GetValueOrDefault(g.Key), StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var programs = byProgram.Select(g => g.Key).ToList();
 
-        var parts = programs.Select(p => (names.GetValueOrDefault(p) ?? "?",
-            (IReadOnlyDictionary<Guid, decimal>)FinancialReports.Sum(lines.Where(l => program.GetValueOrDefault(l.JournalLineId) == p)))).ToList();
+        var parts = byProgram.Select(g => (names.GetValueOrDefault(g.Key) ?? "?", (IReadOnlyDictionary<Guid, decimal>)FinancialReports.Sum(g))).ToList();
         if (programs.Count != 1)
             parts.Add(("Total program services", Of(s => s?.FunctionalArea == FunctionalArea.Program)));
         parts.Add((FunctionalAreas.Label(FunctionalArea.ManagementAndGeneral), Of(s => s?.FunctionalArea == FunctionalArea.ManagementAndGeneral)));

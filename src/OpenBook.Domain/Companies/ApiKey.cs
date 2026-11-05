@@ -130,11 +130,30 @@ public static class ApiScopes
     }
 
     /// <summary>
+    /// The area of what an inbox document is turned into (a bill, an order, a delivery), for those paths, on pages
+    /// (/documents/{id}/bill) and the API alike: the inbox is no way round the areas of the books. Null for any other path.
+    /// </summary>
+    public static string? DocumentConversionArea(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var at = parts.Length > 0 && parts[0].Equals("api", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        if (parts.Length != at + 3 || !parts[at].Equals("documents", StringComparison.OrdinalIgnoreCase))
+            return null;
+        return parts[at + 2].ToUpperInvariant() switch
+        {
+            "BILL" or "RECEIVE" or "PURCHASE-ORDER" => "purchases",
+            "SALES-ORDER" => "sales",
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// The area an API path belongs to, by its longest matching prefix; null for paths outside every area (users,
     /// keys, webhooks, …).
     /// </summary>
     public static string? AreaOf(string path) =>
-        Areas.SelectMany(a => a.Value.Paths.Select(p => (Area: a.Key, Prefix: p)))
+        DocumentConversionArea(path) ?? Areas.SelectMany(a => a.Value.Paths.Select(p => (Area: a.Key, Prefix: p)))
             .Where(a => path.Equals(a.Prefix, StringComparison.OrdinalIgnoreCase) || path.StartsWith(a.Prefix + "/", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(a => a.Prefix.Length)
             .Select(a => a.Area)

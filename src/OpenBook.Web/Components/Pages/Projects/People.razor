@@ -25,14 +25,17 @@
     @if (_workers.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>Name</th><th>Role</th><th class="num">Cost rate</th><th class="num">Bill rate</th><th class="num">Hours a week</th><th>User</th><th>Vendor</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Role</th>@if (_seesCosts) { <th class="num">Cost rate</th> }<th class="num">Bill rate</th><th class="num">Hours a week</th><th>User</th><th>Vendor</th><th></th></tr></thead>
             <tbody>
                 @foreach (var w in _workers)
                 {
                     <tr class="@(w.IsActive ? "" : "muted")">
                         <td>@w.Name@(w.IsActive ? "" : " (inactive)")</td>
                         <td>@w.Role</td>
-                        <td class="num">@Labels.Price(w.CostRate)</td>
+                        @if (_seesCosts)
+                        {
+                            <td class="num">@Labels.Price(w.CostRate)</td>
+                        }
                         <td class="num">@(w.BillRate is { } b ? Labels.Price(b) : "")</td>
                         <td class="num">@w.WeeklyHours?.ToString("0.##")</td>
                         <td>@w.Username</td>
@@ -46,17 +49,20 @@
 
     <div class="card" id="edit" style="margin-top: 1.5rem">
         <h2>@(_editing is null ? "Add a person" : $"Edit {_editing.Name}")</h2>
-        <form method="post" action="@(_editing is null ? "/time/people" : $"/time/people/{_editing.Id}")" data-enhance="false">
+        <PostForm Action="@(_editing is null ? "/time/people" : $"/time/people/{_editing.Id}")" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
                     <label for="name">Name</label>
                     <input id="name" name="name" maxlength="100" required value="@_editing?.Name" />
                 </div>
-                <div class="field">
-                    <label for="cost">Cost rate per hour</label>
-                    <input id="cost" name="costRate" class="amount" inputmode="decimal" value="@_editing?.CostRate.ToString("0.00##")" />
-                </div>
+                @if (_seesCosts)
+                {
+                    <div class="field">
+                        <label for="cost">Cost rate per hour</label>
+                        <input id="cost" name="costRate" class="amount" inputmode="decimal" value="@_editing?.CostRate.ToString("0.00##")" />
+                    </div>
+                }
                 <div class="field">
                     <label for="bill">Bill rate per hour <span class="muted">(optional)</span></label>
                     <input id="bill" name="billRate" class="amount" inputmode="decimal" value="@_editing?.BillRate?.ToString("0.00##")" />
@@ -107,7 +113,7 @@
                 }
             </div>
             <div class="actions"><button type="submit">@(_editing is null ? "Add" : "Save")</button></div>
-        </form>
+        </PostForm>
     </div>
 </div>
 
@@ -120,8 +126,13 @@
     [SupplyParameterFromQuery] private Guid? Edit { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
+    private bool _seesCosts;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
+        _seesCosts = AuthState is not null && (await AuthState).User.CanPost("/time/people");
         _workers = await WorkerService.ListAsync(includeInactive: true);
         _editing = _workers.FirstOrDefault(w => w.Id == Edit);
         _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).Select(v => v.Vendor).ToList();

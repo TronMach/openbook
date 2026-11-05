@@ -117,7 +117,7 @@
     {
         <div class="card">
             <h2>Check what was read</h2>
-            <PostForm Action="@($"/documents/{_document.Id}/review")" data-enhance="false">
+            <PostForm Action="@($"/documents/{_document.Id}/review")" data-enhance="false" data-unsaved-watch="true">
                 <AntiforgeryToken />
                 <div class="row">
                     <div class="field">
@@ -270,9 +270,10 @@
                 })
                 It uses the saved fields: save any changes above first. The file is attached to it.
             </p>
+            <div class="alert notice" role="status" data-unsaved-note hidden>You've changed the fields above without saving. Save them first, or this uses the saved ones.</div>
             @if (_document.Kind is DocumentKind.VendorInvoice or DocumentKind.VendorQuote)
             {
-                <form method="post" action="/documents/@_document.Id/@(_document.Kind == DocumentKind.VendorInvoice ? "bill" : "purchase-order")" data-enhance="false">
+                <PostForm Action="@($"/documents/{_document.Id}/{(_document.Kind == DocumentKind.VendorInvoice ? "bill" : "purchase-order")}")" data-enhance="false" data-needs-saved="true">
                     <AntiforgeryToken />
                     @foreach (var line in _document.Lines.Where(NeedsCategory))
                     {
@@ -327,18 +328,18 @@
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">@(_document.Kind == DocumentKind.VendorInvoice ? "Enter the bill" : "Make the purchase order")</button></div>
-                </form>
+                </PostForm>
             }
             else if (_document.Kind == DocumentKind.CustomerOrder)
             {
-                <PostForm Action="@($"/documents/{_document.Id}/sales-order")" data-enhance="false">
+                <PostForm Action="@($"/documents/{_document.Id}/sales-order")" data-enhance="false" data-needs-saved="true">
                     <AntiforgeryToken />
                     <div class="actions"><button type="submit">Make the sales order</button></div>
                 </PostForm>
             }
             else
             {
-                <PostForm Action="@($"/documents/{_document.Id}/receive")" data-enhance="false">
+                <PostForm Action="@($"/documents/{_document.Id}/receive")" data-enhance="false" data-needs-saved="true">
                     <AntiforgeryToken />
                     <div class="field">
                         <label for="received">Received on</label>

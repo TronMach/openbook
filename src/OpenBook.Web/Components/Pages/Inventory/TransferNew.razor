@@ -5,6 +5,7 @@
 @inject WarehouseService WarehouseService
 @inject ItemService Items
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Transfer stock · OpenBook</PageTitle>
 
@@ -79,6 +80,7 @@
             <label for="memo">Memo <span class="muted">(optional)</span></label>
             <InputText id="memo" @bind-Value="Input.Memo" />
         </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
         <div class="actions">
             <button type="submit">Transfer</button>
             <a href="/inventory">Cancel</a>
@@ -114,6 +116,7 @@
     {
         try
         {
+            ClosingOverride.Password = Input.ClosingPassword;
             var lines = Input.Lines
                 .Where(l => l.ItemId is not null || l.Quantity is not null)
                 .Select(l => new StockTransferLineDraft(l.ItemId ?? Guid.Empty, l.Quantity ?? 0m, _places.Parse(l.From), _places.Parse(l.To), l.Lots))
@@ -124,11 +127,15 @@
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
+    private bool _needsClosingPassword;
+
     private sealed class TransferModel
     {
+        public string? ClosingPassword { get; set; }
         public DateOnly Date { get; set; }
         public string? Reference { get; set; }
         public string? Memo { get; set; }

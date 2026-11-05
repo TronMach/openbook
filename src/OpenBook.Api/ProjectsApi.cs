@@ -1,3 +1,6 @@
+using OpenBook.Application.Companies;
+using OpenBook.Domain.Companies;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -25,17 +28,23 @@ public sealed record ProjectFiguresResponse(
         f.Project.Project.Id, f.Income, f.ExpenseCost, f.LaborCost, f.MileageCost, f.Cost, f.Profit, f.Margin, f.Hours, f.UnbilledTime, f.UnbilledExpenses, f.UnbilledMileage);
 }
 
-public sealed record WorkerResponse(Guid Id, string Name, decimal CostRate, decimal? BillRate, string? Username, Guid? VendorId, bool IsActive)
+/// <param name="CostRate">What an hour costs; null below the accountant level.</param>
+public sealed record WorkerResponse(Guid Id, string Name, decimal? CostRate, decimal? BillRate, string? Username, Guid? VendorId, bool IsActive)
 {
-    public static WorkerResponse From(Worker w) => new(w.Id, w.Name, w.CostRate, w.BillRate, w.Username, w.VendorId, w.IsActive);
+    public static WorkerResponse From(Worker w, ClaimsPrincipal user) =>
+        new(w.Id, w.Name, ProjectsApi.SeesCosts(user) ? w.CostRate : null, w.BillRate, w.Username, w.VendorId, w.IsActive);
 }
 
 public sealed record TimeEntryResponse(
-    Guid Id, Guid WorkerId, DateOnly Date, decimal Hours, Guid? CustomerId, Guid? ItemId, bool Billable, decimal BillRate, decimal CostRate,
-    decimal Amount, decimal Cost, string? Notes, DateTimeOffset? StartedAt, Guid? InvoiceId)
+    Guid Id, Guid WorkerId, DateOnly Date, decimal Hours, Guid? CustomerId, Guid? ItemId, bool Billable, decimal BillRate, decimal? CostRate,
+    decimal Amount, decimal? Cost, string? Notes, DateTimeOffset? StartedAt, Guid? InvoiceId)
 {
-    public static TimeEntryResponse From(TimeEntry t) => new(
-        t.Id, t.WorkerId, t.Date, t.Hours, t.CustomerId, t.ItemId, t.Billable, t.BillRate, t.CostRate, t.Amount, t.Cost, t.Notes, t.StartedAt, t.InvoiceId);
+    public static TimeEntryResponse From(TimeEntry t, ClaimsPrincipal user)
+    {
+        var costs = ProjectsApi.SeesCosts(user);
+        return new(t.Id, t.WorkerId, t.Date, t.Hours, t.CustomerId, t.ItemId, t.Billable, t.BillRate, costs ? t.CostRate : null, t.Amount, costs ? t.Cost : null,
+            t.Notes, t.StartedAt, t.InvoiceId);
+    }
 }
 
 public sealed record MileageTripResponse(
@@ -50,6 +59,9 @@ public sealed record MileageRateRequest(int Year, decimal Rate);
 
 public static class ProjectsApi
 {
+    /// <summary>Whether this caller sees what people cost: those who may change the rates.</summary>
+    internal static bool SeesCosts(ClaimsPrincipal user) => AuthClaims.LevelIn(user, "projects") >= UserRole.Accountant;
+
     public static void MapProjectsApi(this RouteGroupBuilder api)
     {
         var projects = api.MapGroup("/projects");
@@ -73,36 +85,36 @@ public static class ProjectsApi
             return ProjectResponse.From((await s.GetAsync(id, ct))!);
         });
 
-        projects.MapGet("/workers", async (bool? includeInactive, WorkerService s, CancellationToken ct) =>
-            (await s.ListAsync(includeInactive ?? false, ct)).Select(WorkerResponse.From));
-        projects.MapPost("/workers", async (WorkerDetails r, WorkerService s, CancellationToken ct) =>
+        projects.MapGet("/workers", async (bool? includeInactive, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
+            (await s.ListAsync(includeInactive ?? false, ct)).Select(w => WorkerResponse.From(w, user)));
+        projects.MapPost("/workers", async (WorkerDetails r, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
         {
             var worker = await s.CreateAsync(r, ct);
-            return Results.Created($"/api/projects/workers/{worker.Id}", WorkerResponse.From(worker));
+            return Results.Created($"/api/projects/workers/{worker.Id}", WorkerResponse.From(worker, user));
         });
-        projects.MapPut("/workers/{id:guid}", async (Guid id, WorkerDetails r, WorkerService s, CancellationToken ct) =>
-            WorkerResponse.From(await s.UpdateAsync(id, r, ct)));
-        projects.MapPost("/workers/{id:guid}/active", async (Guid id, bool active, WorkerService s, CancellationToken ct) =>
-            WorkerResponse.From(await s.SetActiveAsync(id, active, ct)));
+        projects.MapPut("/workers/{id:guid}", async (Guid id, WorkerDetails r, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
+            WorkerResponse.From(await s.UpdateAsync(id, r, ct), user));
+        projects.MapPost("/workers/{id:guid}/active", async (Guid id, bool active, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
+            WorkerResponse.From(await s.SetActiveAsync(id, active, ct), user));
 
-        projects.MapGet("/time", async (DateOnly? from, DateOnly? to, Guid? workerId, Guid? customerId, TimeService s, CancellationToken ct) =>
-            (await s.ListAsync(new TimeFilter(from, to, workerId, customerId), ct)).Select(TimeEntryResponse.From));
-        projects.MapPost("/time", async (TimeEntryDetails r, TimeService s, CancellationToken ct) =>
+        projects.MapGet("/time", async (DateOnly? from, DateOnly? to, Guid? workerId, Guid? customerId, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>
+            (await s.ListAsync(new TimeFilter(from, to, workerId, customerId), ct)).Select(t => TimeEntryResponse.From(t, user)));
+        projects.MapPost("/time", async (TimeEntryDetails r, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>
         {
             var entry = await s.CreateAsync(r, ct);
-            return Results.Created($"/api/projects/time/{entry.Id}", TimeEntryResponse.From(entry));
+            return Results.Created($"/api/projects/time/{entry.Id}", TimeEntryResponse.From(entry, user));
         });
-        projects.MapPut("/time/{id:guid}", async (Guid id, TimeEntryDetails r, TimeService s, CancellationToken ct) =>
-            TimeEntryResponse.From(await s.UpdateAsync(id, r, ct)));
+        projects.MapPut("/time/{id:guid}", async (Guid id, TimeEntryDetails r, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>
+            TimeEntryResponse.From(await s.UpdateAsync(id, r, ct), user));
         projects.MapDelete("/time/{id:guid}", async (Guid id, TimeService s, CancellationToken ct) =>
         {
             await s.DeleteAsync(id, ct);
             return Results.NoContent();
         });
-        projects.MapPost("/time/start", async (TimeEntryDetails r, TimeService s, CancellationToken ct) =>
-            TimeEntryResponse.From(await s.StartAsync(r, ct)));
-        projects.MapPost("/time/{id:guid}/stop", async (Guid id, TimeService s, CancellationToken ct) =>
-            TimeEntryResponse.From(await s.StopAsync(id, ct)));
+        projects.MapPost("/time/start", async (TimeEntryDetails r, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>
+            TimeEntryResponse.From(await s.StartAsync(r, ct), user));
+        projects.MapPost("/time/{id:guid}/stop", async (Guid id, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>
+            TimeEntryResponse.From(await s.StopAsync(id, ct), user));
 
         projects.MapGet("/mileage", async (DateOnly? from, DateOnly? to, Guid? customerId, MileageService s, CancellationToken ct) =>
             (await s.ListAsync(from, to, customerId, ct)).Select(MileageTripResponse.From));

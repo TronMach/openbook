@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Inventory;
+using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
@@ -47,6 +48,21 @@ public sealed class StockTrackingTests : IAsyncLifetime
     private Task<Invoice> Sell(DateOnly date, Item item, decimal quantity, string? lots = null, Guid? warehouseId = null) =>
         Run(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(
             _customer.Id, date, [new SalesLineDraft(item.Id, null, quantity, item.Rate, Lots: lots)], WarehouseId: warehouseId)));
+
+    [Fact]
+    public async Task Transfers_and_their_voids_respect_the_closing_date()
+    {
+        var east = await Run(sp => sp.GetRequiredService<WarehouseService>().CreateAsync("East"));
+        var widget = await NewItem("Widget");
+        await Buy(Jan10, widget, 10m, 50m);
+        var transfer = await Move(widget, 4m, StockPlace.Default, new StockPlace(east.Id, null));
+        await Run(sp => sp.GetRequiredService<CloseBooksService>().SetAsync(Jan20, null, false));
+
+        Assert.Equal("period.closed", await Refused(() => Move(widget, 1m, StockPlace.Default, new StockPlace(east.Id, null))));
+        Assert.Equal("period.closed", await Refused(() => Run(sp => sp.GetRequiredService<StockTransferService>().VoidAsync(transfer.Id, "Wrong"))));
+
+        await Move(widget, 1m, StockPlace.Default, new StockPlace(east.Id, null), date: Feb1);
+    }
 
     private Task<IReadOnlyList<StockAt>> Places(Item item) => Run(sp => sp.GetRequiredService<InventoryService>().StockByPlaceAsync(item.Id));
 

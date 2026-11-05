@@ -6,6 +6,7 @@
 @inject WarehouseService WarehouseService
 @inject ItemService Items
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>Stock transfer · OpenBook</PageTitle>
 
@@ -69,6 +70,7 @@
                     <InputText id="reason" @bind-Value="VoidInput.Reason" />
                     <ValidationMessage For="() => VoidInput.Reason" />
                 </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void transfer</button>
             </EditForm>
         </div>
@@ -98,17 +100,23 @@
     {
         try
         {
+            ClosingOverride.Password = VoidInput.ClosingPassword;
             await Transfers.VoidAsync(Id, VoidInput.Reason);
             Navigation.NavigateTo($"/inventory/transfers/{Id}");
         }
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
+    private bool _needsClosingPassword;
+
     private sealed class VoidModel
     {
+        public string? ClosingPassword { get; set; }
+
         [Required(ErrorMessage = "Say why it's being voided.")]
         public string Reason { get; set; } = string.Empty;
     }

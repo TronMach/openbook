@@ -1,4 +1,6 @@
 using System.Text.Json;
+using OpenBook.Application.Ledger;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -9,12 +11,17 @@ namespace OpenBook.Application.Inventory;
 
 public sealed record CreateStockTransferCommand(DateOnly Date, IReadOnlyList<StockTransferLineDraft> Lines, string? Reference = null, string? Memo = null);
 
-/// <summary>Moves stock between warehouses and bins. Nothing posts: the stock keeps its cost layers and accounts.</summary>
+/// <summary>
+/// Moves stock between warehouses and bins. Nothing posts: the stock keeps its cost layers and accounts. The date still
+/// has to be open, because stock by warehouse on a past date would change.
+/// </summary>
 public sealed class StockTransferService(
     IInventoryStore store,
     ISalesStore sales,
     WarehouseService warehouses,
     InventoryService inventory,
+    PostingEngine engine,
+    ICompanyStore companies,
     IClock clock,
     ICurrentUser user)
 {
@@ -58,6 +65,8 @@ public sealed class StockTransferService(
                 moves.Add((at, id) => InventoryMovement.Transfer(take with { Cost = 0m }, to, item.Id, command.Date, EntityType, id, at));
         }
 
+        engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), command.Date, "a stock transfer");
+
         var transferId = Guid.CreateVersion7();
         var now = clock.UtcNow;
         foreach (var make in moves)
@@ -97,6 +106,8 @@ public sealed class StockTransferService(
                     $"Some of the {item?.Name ?? "stock"} this transfer moved has been sold, used or moved on since, so it can't be moved back. Transfer it back instead.");
             }
         }
+
+        engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), transfer.Date, "voiding a stock transfer");
 
         var before = Snapshot(transfer);
         var now = clock.UtcNow;

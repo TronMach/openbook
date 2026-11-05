@@ -123,7 +123,7 @@
 
         <div class="actions">
             <button type="button" @onclick="QueueAsync" disabled="@(!Selected.Any() || _busy)">Send @Selected.Count() to review</button>
-            <span class="muted">Nothing is posted until you review each line.</span>
+            <span class="muted">Nothing is posted until you review it, except lines an automatic rule adds.</span>
         </div>
     }
 </div>

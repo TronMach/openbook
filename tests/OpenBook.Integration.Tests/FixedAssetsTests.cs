@@ -115,6 +115,17 @@ public sealed class FixedAssetsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_loan_uses_the_starter_charts_interest_account()
+    {
+        var interest = await _db.CreateAccount("Interest Expense", AccountType.OtherExpense, "8000");
+
+        var loan = await In<LoanService, Loan>(s => s.CreateAsync(new CreateLoanCommand(
+            new LoanDetails("Van loan", _bankLoan.Id, Guid.Empty, 10_000m, 6m, 12, new DateOnly(2026, 2, 1)), null, null)));
+
+        Assert.Equal(interest.Id, loan.InterestAccountId);
+    }
+
+    [Fact]
     public async Task Loans_record_the_money_received_and_split_payments()
     {
         var loan = await In<LoanService, Loan>(s => s.CreateAsync(new CreateLoanCommand(

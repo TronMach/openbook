@@ -22,6 +22,11 @@
         <div class="alert error" role="alert">@_error</div>
     }
 
+    @if (_status.ClosingDate is { } far && far > CompanyTime.Today.AddYears(1))
+    {
+        <div class="alert notice" role="status">The closing date is more than a year from now, so almost anything entered today counts as closed. Check the year.</div>
+    }
+
     <div class="card">
         <h2>Closing date</h2>
         <p class="muted">

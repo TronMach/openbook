@@ -83,7 +83,7 @@ public static class AssetEndpoints
                     new LoanDetails(
                         form["name"].ToString(),
                         Id(form["liabilityAccountId"]) ?? throw new DomainException("loan.account_required", "Choose the loan account."),
-                        Guid.Empty,
+                        Id(form["interestAccountId"]) ?? Guid.Empty,
                         Number(form["principal"]) ?? throw new DomainException("loan.principal_not_positive", "Enter the amount borrowed."),
                         Number(form["rate"]) ?? throw new DomainException("loan.rate_invalid", "Enter the interest rate."),
                         int.TryParse(form["payments"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0,

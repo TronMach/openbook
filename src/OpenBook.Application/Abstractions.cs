@@ -79,6 +79,9 @@ public interface ILedgerStore
 
     Task<IReadOnlyDictionary<Guid, Account>> GetAccountsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
     Task<bool> HasPostingsAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>The date of the account's earliest journal line, if it has any.</summary>
+    Task<DateOnly?> FirstPostingDateAsync(Guid accountId, CancellationToken ct);
     Task<JournalEntry?> GetEntryAsync(Guid id, CancellationToken ct);
     Task<Guid?> FindReversalIdAsync(Guid originalEntryId, CancellationToken ct);
 

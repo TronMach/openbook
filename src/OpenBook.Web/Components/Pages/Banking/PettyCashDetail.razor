@@ -74,7 +74,7 @@
                         <input id="note" name="note" maxlength="500" />
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
-                    <div class="actions"><button type="submit">Record count</button></div>
+                    <div class="actions"><button type="submit" data-confirm="@(_counts.Count == 0 && _summary.Balance == 0m ? "The books show nothing in this box, so the whole count would be booked as cash over, which lowers your expenses. If the money came from a bank account, record that first. Record the count anyway?" : null)">Record count</button></div>
                 </PostForm>
             </div>
 

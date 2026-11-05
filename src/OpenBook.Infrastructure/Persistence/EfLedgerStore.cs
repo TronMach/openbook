@@ -19,6 +19,9 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     public Task<bool> HasPostingsAsync(Guid accountId, CancellationToken ct) =>
         db.Set<JournalLine>().AnyAsync(l => l.AccountId == accountId, ct);
 
+    public Task<DateOnly?> FirstPostingDateAsync(Guid accountId, CancellationToken ct) =>
+        db.JournalEntries.Where(e => e.Lines.Any(l => l.AccountId == accountId)).OrderBy(e => e.Date).Select(e => (DateOnly?)e.Date).FirstOrDefaultAsync(ct);
+
     public Task<JournalEntry?> GetEntryAsync(Guid id, CancellationToken ct) =>
         db.JournalEntries.Include(e => e.Lines).SingleOrDefaultAsync(e => e.Id == id, ct);
 

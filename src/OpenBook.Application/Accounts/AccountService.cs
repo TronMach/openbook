@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using System.Text.Json;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
@@ -11,7 +12,7 @@ public sealed record CreateAccountCommand(string Name, AccountType Type, string?
 public sealed record UpdateAccountCommand(Guid Id, string Name, AccountType Type, string? Number, Guid? ParentId, string? Description, bool? DonorRestricted = null);
 
 /// <summary>Chart-of-accounts maintenance. Accounts are never deleted; they're made inactive.</summary>
-public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUser user)
+public sealed class AccountService(ILedgerStore store, ICompanyStore companies, Ledger.PostingEngine engine, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "account";
 
@@ -49,6 +50,10 @@ public sealed class AccountService(ILedgerStore store, IClock clock, ICurrentUse
 
         var hasPostings = command.Type != account.Type && await store.HasPostingsAsync(account.Id, ct);
         chart.EnsureCanUpdate(account, command.Name, command.Number, command.Type, command.ParentId, hasPostings);
+
+        // Net assets read the flag as it is now, so changing it restates every past statement.
+        if (command.DonorRestricted is { } flag && flag != account.DonorRestricted && await store.FirstPostingDateAsync(account.Id, ct) is { } first)
+            engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), first, $"changing whether {account.Name} holds donor-restricted amounts");
 
         var before = Snapshot(account);
         account.Update(command.Name, command.Number, command.Description);

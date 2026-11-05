@@ -63,6 +63,16 @@
                     <div class="field"><label for="first">First payment</label><input id="first" name="firstPaymentDate" type="date" required /></div>
                     <div class="field"><label for="payment">Payment <span class="muted">(blank: worked out)</span></label><input id="payment" name="paymentAmount" class="amount" inputmode="decimal" /></div>
                 </div>
+                <div class="field">
+                    <label for="interest">Interest goes to</label>
+                    <select id="interest" name="interestAccountId">
+                        <option value="">Interest Expense (added if you don't have it)</option>
+                        @foreach (var a in _interestAccounts)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
                 <div class="row">
                     <div class="field">
                         <label for="proceeds">Record the money received in <span class="muted">(blank if it's already in the books)</span></label>
@@ -88,6 +98,7 @@
     private ChartOfAccounts _chart = new([]);
     private List<Account> _liabilities = [];
     private List<Account> _proceedsAccounts = [];
+    private List<Account> _interestAccounts = [];
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private bool Password { get; set; }
@@ -98,6 +109,7 @@
         _chart = await AccountService.GetChartAsync();
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _liabilities = active.Where(a => a.Type is AccountType.LongTermLiability or AccountType.OtherCurrentLiability).ToList();
+        _interestAccounts = active.Where(a => a.Type is AccountType.Expense or AccountType.OtherExpense).ToList();
         _proceedsAccounts = active.Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset or AccountType.FixedAsset or AccountType.OtherAsset).ToList();
     }
 }

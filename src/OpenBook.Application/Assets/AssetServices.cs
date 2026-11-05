@@ -52,8 +52,11 @@ public sealed class AssetAccounts(AccountService accounts)
     public Task<Account> GainLossAsync(CancellationToken ct) =>
         GetOrCreateAsync(GainLossName, AccountType.OtherIncome, "What was made or lost selling or scrapping fixed assets.", ct);
 
-    public Task<Account> InterestAsync(CancellationToken ct) =>
-        GetOrCreateAsync(InterestName, AccountType.Expense, "Interest paid on loans.", ct);
+    /// <summary>The chart's interest account, an expense or other expense (the starter charts' is the latter), else a new one.</summary>
+    public async Task<Account> InterestAsync(CancellationToken ct) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.OtherExpense && string.Equals(a.Name, InterestName, StringComparison.OrdinalIgnoreCase))
+        ?? await GetOrCreateAsync(InterestName, AccountType.Expense, "Interest paid on loans.", ct);
 
     /// <summary>An active account of one of the given types, or refused.</summary>
     public async Task<Account> CheckAsync(Guid id, string role, CancellationToken ct, params AccountType[] types)

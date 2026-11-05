@@ -62,7 +62,7 @@ Most lines repeat: the same utility company every month, the same software subsc
 - **When a line** has this text in its payee or memo, is money in or out, optionally on one account and within an amount range,
 - **Then** give it this category, and optionally a payee and vendor (vendors only on money-out rules).
 - **Order**: lower numbers are tried first; the first matching rule wins.
-- **Add matching lines to the books automatically (no review)**: tick this only for rules you trust completely. Matching lines are then posted as they're imported. Otherwise the rule just pre-fills the line on the review list.
+- **Add matching lines to the books automatically (no review)**: tick this only for rules you trust completely. Matching lines are then posted as they're imported, unless the books already have something for the same amount within a week: those wait for you to match or add them. Otherwise the rule just pre-fills the line on the review list.
 
 ## Reconciling
 

@@ -191,6 +191,11 @@ else
         Replaces <strong>all</strong> current data with the backup. A safety copy of the current data is saved
         to the backups folder first. You'll be signed out and must sign in with an account from the backup.
     </p>
+    <div class="alert notice" role="status">
+        OpenBook carries on from the backup's state straight away. Scheduled emails already sent since the backup go out again within a minute,
+        and reminders, late fees and automatic recurring work catch up within the hour. To stop the emails, cancel them under
+        <strong>Sales → Scheduled emails</strong> as soon as you've signed in.
+    </div>
 
     @if (Error is not null)
     {

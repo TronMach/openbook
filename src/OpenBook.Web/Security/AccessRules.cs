@@ -100,6 +100,7 @@ public static class AccessRules
         ("/api/import", UserRole.Accountant, UserRole.Accountant),
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/time/people", UserRole.ViewOnly, UserRole.Accountant),
         ("/sales/channels/connections", UserRole.Accountant, UserRole.Accountant),
         ("/api/channels/connections", UserRole.Accountant, UserRole.Accountant),
         ("/reports/schedules", UserRole.Accountant, UserRole.Accountant),
@@ -124,6 +125,7 @@ public static class AccessRules
         ("/loans", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/projects/mileage-rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/projects/rates", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/projects/workers", UserRole.ViewOnly, UserRole.Accountant),
     ];
 
     /// <summary>Path segments of pages that exist to change something (forms, imports, interactive editors).</summary>
@@ -236,6 +238,8 @@ public static class AccessRules
             return null;
         if (path.StartsWithSegments("/api") && ApiScopes.AreaOf(path.Value ?? "/") is { } apiArea)
             return apiArea;
+        if (ApiScopes.DocumentConversionArea(path.Value ?? "/") is { } conversion)
+            return conversion;
         foreach (var (prefix, area) in PageAreas)
         {
             if (path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase))
