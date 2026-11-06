@@ -207,16 +207,22 @@ public sealed record StockFilter(bool AnyWarehouse = true, Guid? WarehouseId = n
 
 public static class Fifo
 {
-    /// <summary>Every layer the movements describe, oldest first (by receipt date, then entry order).</summary>
+    /// <summary>
+    /// Every layer the movements describe, oldest first (by receipt date, then entry order). On a past date a late sale
+    /// may have used stock whose receipt comes later: that layer stands at what's been taken, so past stock still adds up.
+    /// </summary>
     public static IReadOnlyList<InventoryLayer> Layers(IEnumerable<InventoryMovement> movements)
     {
         ArgumentNullException.ThrowIfNull(movements);
         return movements
             .GroupBy(m => m.LayerId)
-            .Select(g => g.SingleOrDefault(m => m.Id == g.Key) is { } receipt
-                ? new InventoryLayer(g.Key, receipt.ItemId, receipt.Date, receipt.CreatedAt, receipt.Quantity, receipt.Cost, g.Sum(m => m.Quantity), g.Sum(m => m.Cost), receipt.Lot)
-                : null)
-            .OfType<InventoryLayer>()
+            .Select(g =>
+            {
+                var first = g.First();
+                return g.SingleOrDefault(m => m.Id == g.Key) is { } receipt
+                    ? new InventoryLayer(g.Key, receipt.ItemId, receipt.Date, receipt.CreatedAt, receipt.Quantity, receipt.Cost, g.Sum(m => m.Quantity), g.Sum(m => m.Cost), receipt.Lot)
+                    : new InventoryLayer(g.Key, first.ItemId, first.Date, first.CreatedAt, 0m, 0m, g.Sum(m => m.Quantity), g.Sum(m => m.Cost), first.Lot);
+            })
             .OrderBy(l => l.Date)
             .ThenBy(l => l.CreatedAt)
             // Receipts of one document share a date and time: their lots go in name order, so "oldest first" is predictable.
@@ -232,11 +238,11 @@ public static class Fifo
         var list = movements.ToList();
         var receipts = list.Where(m => m.IsReceipt).ToDictionary(m => m.Id);
         return list
-            .Where(m => receipts.ContainsKey(m.LayerId))
             .GroupBy(m => (m.LayerId, m.Place))
             .Select(g =>
             {
-                var receipt = receipts[g.Key.LayerId];
+                // No receipt: taken from stock dated after the movements given (see Layers).
+                var receipt = receipts.GetValueOrDefault(g.Key.LayerId) ?? g.First();
                 return new StockSlice(g.Key.LayerId, receipt.ItemId, receipt.Date, receipt.CreatedAt, g.Key.Place, receipt.Lot, g.Sum(m => m.Quantity));
             })
             .Where(s => s.Quantity != 0m)
@@ -360,8 +366,10 @@ public static class Costing
     /// FIFO: <see cref="Fifo.Take"/>. Weighted average: quantity still comes out of the oldest layers (so stock and
     /// voids are checked the same way), but the cost is the average of everything on hand on the date, rounded to the
     /// cent once and spread over the layers in proportion; taking everything on hand takes its whole value.
-    /// With <paramref name="shortfallUnitCost"/> (the item may be sold short), what's beyond the stock available becomes
-    /// one shortfall take at that estimated unit cost instead of a refusal.
+    /// With <paramref name="shortfallUnitCost"/> (the item may be sold short), a sale short on its date first uses stock
+    /// already in the books with a later date, at what it cost: it's the same units, entered in another order, and
+    /// nothing else would ever fill the shortfall from them. What's beyond all the stock becomes one shortfall take at
+    /// that estimated unit cost instead of a refusal.
     /// </summary>
     public static IReadOnlyList<FifoTake> Take(
         Sales.Item item, IReadOnlyList<InventoryMovement> movements, decimal quantity, DateOnly date, StockFilter? filter = null, decimal? shortfallUnitCost = null)
@@ -370,18 +378,21 @@ public static class Costing
         ArgumentNullException.ThrowIfNull(movements);
         filter ??= StockFilter.Anywhere;
         var shortfall = 0m;
+        var reach = date;
         if (shortfallUnitCost is not null && quantity > 0m)
         {
-            shortfall = Math.Max(0m, quantity - Math.Max(0m, Fifo.Available(movements, date, filter)));
+            if (Fifo.Available(movements, date, filter) < quantity)
+                reach = DateOnly.MaxValue;
+            shortfall = Math.Max(0m, quantity - Math.Max(0m, Fifo.Available(movements, reach, filter)));
             quantity -= shortfall;
         }
 
-        var takes = Fifo.Take(movements, quantity, date, item.Name, filter).ToList();
+        var takes = Fifo.Take(movements, quantity, reach, item.Name, filter).ToList();
         if (item.CostMethod == Sales.InventoryCostMethod.Average && takes.Count > 0)
         {
             // What's really there: stock another warehouse sold short isn't less of what's here.
             var shortfalls = movements.Where(m => m.IsShortfall).Select(m => m.Id).ToHashSet();
-            var asOf = movements.Where(m => m.Date <= date && !shortfalls.Contains(m.LayerId)).ToList();
+            var asOf = movements.Where(m => m.Date <= reach && !shortfalls.Contains(m.LayerId)).ToList();
             var onHand = asOf.Sum(m => m.Quantity);
             var value = Math.Max(0m, asOf.Sum(m => m.Cost));
             var total = quantity >= onHand ? value : decimal.Round(value * quantity / onHand, 2, MidpointRounding.AwayFromZero);

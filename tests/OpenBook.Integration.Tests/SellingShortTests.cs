@@ -84,6 +84,64 @@ public sealed class SellingShortTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_late_sale_uses_stock_already_in_the_books_with_a_later_date()
+    {
+        await AllowSellingShort(true);
+        var march = new DateOnly(2026, 3, 1);
+        await Buy(march, 10m, 30m);
+
+        // Entered after the bill, dated before it: the same units, at what they cost, not an estimate of 5.00.
+        var late = await Sell(new DateOnly(2026, 2, 20), 3m);
+        Assert.Equal((7m, 21m), (await Stock()) is var after ? (after.Quantity, after.Value) : default);
+        Assert.Equal(9m, await Balance(_widget.CostAccountId!.Value));
+
+        await Sell(new DateOnly(2026, 3, 5), 7m);
+        var stock = await Stock();
+        Assert.Equal((0m, 0m), (stock.Quantity, stock.Value));
+        Assert.Equal(30m, await Balance(_widget.CostAccountId!.Value));
+        Assert.Equal(0m, await Balance(_widget.InventoryAssetAccountId!.Value));
+
+        // Past stock adds up, in total and by place.
+        var asOf = new DateOnly(2026, 2, 25);
+        var past = await Run(async sp => (await sp.GetRequiredService<InventoryService>().StockAsync(asOf)).Single(s => s.Item.Id == _widget.Id));
+        var places = await Run(async sp => (await sp.GetRequiredService<InventoryService>().StockByPlaceAsync(_widget.Id, asOf)).Sum(s => s.Quantity));
+        Assert.Equal((-3m, -9m, -3m), (past.Quantity, past.Value, places));
+
+        // Taken back, the units are free again.
+        await Run(sp => sp.GetRequiredService<InvoiceService>().VoidAsync(late.Id, "Entered twice"));
+        Assert.Equal(3m, (await Stock()).Quantity);
+    }
+
+    [Fact]
+    public async Task What_later_stock_can_t_cover_is_still_a_shortfall()
+    {
+        await AllowSellingShort(true);
+        await Buy(new DateOnly(2026, 3, 1), 2m, 8m);
+
+        await Sell(new DateOnly(2026, 2, 20), 3m);
+
+        var stock = await Stock();
+        // Two at 4.00 from the bill, one estimated at 5.00.
+        Assert.Equal((-1m, -5m), (stock.Quantity, stock.Value));
+        Assert.Equal(13m, await Balance(_widget.CostAccountId!.Value));
+    }
+
+    [Fact]
+    public async Task A_late_sale_of_an_average_cost_item_costs_the_stock_it_uses()
+    {
+        await AllowSellingShort(true);
+        var average = await Run(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Gadget", ItemType.Inventory, _sales.Id, 10m,
+            PurchaseCost: 5m, CostMethod: InventoryCostMethod.Average)));
+        await Run(sp => sp.GetRequiredService<BillService>().CreateAsync(new CreateBillCommand(
+            _vendor.Id, new DateOnly(2026, 3, 1), [new BillLineDraft(Guid.Empty, 30m, null, average.Id, 10m)])));
+
+        await Sell(new DateOnly(2026, 2, 20), 4m, average);
+
+        var stock = await Run(async sp => (await sp.GetRequiredService<InventoryService>().StockForAsync(average.Id))!);
+        Assert.Equal((6m, 18m), (stock.Quantity, stock.Value));
+    }
+
+    [Fact]
     public async Task Sales_beyond_the_stock_are_refused_until_the_company_allows_them()
     {
         Assert.Equal("inventory.insufficient", await Refused(() => Sell(Jan10, 3m)));

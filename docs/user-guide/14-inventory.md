@@ -35,6 +35,8 @@ When a sale (or an assembly build) needs more than you have:
 - The missing units are costed at the item's **purchase cost** (or, without one, what its latest stock cost, else its average), so the sale still shows its cost of goods sold.
 - The next stock that comes in (a bill, a return on a credit memo, a quantity adjustment or a build) fills the shortfall first. If the real cost differs from the estimate, the difference goes to cost of goods sold on that document's date, and the line says "Sold before it was in stock". On cash basis these corrections count as posted, like the cost lines of sales.
 
+If the stock is already in the books with a later date (a sale entered late, dated before the bill), the sale uses it, at what it cost: there's no estimate to correct. On hand can show below zero on a past date until that bill's date.
+
 So on hand, the inventory value and the inventory asset account always agree, and cost of goods sold ends up at what the stock really cost.
 
 A sale whose shortfall has since been filled can't be voided directly, because the stock that came in afterwards is tied to it. Void that bill, return or adjustment first, or enter a credit memo for the return instead. Voiding the bill reopens the shortfall.
