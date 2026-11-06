@@ -26,12 +26,14 @@ public static class Csv
         var recordLine = 1;
         var inQuotes = false;
         var fieldWasQuoted = false;
+        var fieldHasText = false;
 
         void EndField()
         {
             fields.Add(fieldWasQuoted ? field.ToString() : field.ToString().Trim());
             field.Clear();
             fieldWasQuoted = false;
+            fieldHasText = false;
         }
 
         void EndRecord()
@@ -63,7 +65,7 @@ public static class Csv
                     field.Append(c);
                 }
             }
-            else if (c == '"' && field.ToString().Trim().Length == 0)
+            else if (c == '"' && !fieldHasText)
             {
                 inQuotes = true;
                 fieldWasQuoted = true;
@@ -83,6 +85,7 @@ public static class Csv
             }
             else if (!fieldWasQuoted)
             {
+                fieldHasText |= !char.IsWhiteSpace(c);
                 field.Append(c);
             }
         }

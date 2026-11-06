@@ -111,6 +111,12 @@ public static class ExportCommand
             error.WriteLine($"The files couldn't be saved: {ex.Message}");
             return 1;
         }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or InvalidCastException or MissingMethodException)
+        {
+            // Run from a window that closes: a stack trace would be gone before anyone read it.
+            error.WriteLine($"QuickBooks couldn't be reached: {ex.Message}");
+            return 1;
+        }
     }
 
     private static DateOnly? Date(string text) =>

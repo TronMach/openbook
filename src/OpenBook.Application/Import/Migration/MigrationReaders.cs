@@ -29,7 +29,7 @@ public static class MigrationReaders
             throw new DomainException("import.empty", "The file is empty.");
         if (content.Length > MigrationImportService.MaxBytes)
             throw new DomainException("import.too_large", "The file is larger than 20 MB. Export in smaller parts.");
-        return source switch
+        return Readable(() => source switch
         {
             MigrationSource.QuickBooksIif => IifImportService.Read(Decode(content, TextFiles.Windows1252)),
             MigrationSource.QuickBooksQbxml => QbxmlReader.Read(LoadXml(content)),
@@ -39,8 +39,31 @@ public static class MigrationReaders
             MigrationSource.Wave => WaveReader.Read(Csv.Parse(Decode(content))),
             MigrationSource.FreshBooks => FreshBooksReader.Read(Csv.Parse(Decode(content))),
             _ => throw new DomainException("import.source_unknown", "Unknown source."),
-        };
+        });
     }
+
+    /// <summary>A damaged download, or a file assembled by hand, is the file's fault: said so, rather than failing the page.</summary>
+    private static T Readable<T>(Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or ArgumentException or InvalidOperationException or FormatException
+            or KeyNotFoundException or OverflowException or System.Text.Json.JsonException)
+        {
+            throw new DomainException("import.unreadable", $"The file can't be read, and may be damaged: {ex.Message}");
+        }
+    }
+
+    /// <summary>An item's price: to 4 decimals as prices are kept, a dollar sign and commas allowed. Null when it can't be read.</summary>
+    internal static decimal? Price(string? text) =>
+        decimal.TryParse(text?.Trim().TrimStart('$').Replace(",", "", StringComparison.Ordinal), NumberStyles.Number, CultureInfo.InvariantCulture, out var price)
+            ? decimal.Round(price, 4, MidpointRounding.AwayFromZero)
+            : null;
+
+    /// <summary>Why an item with a negative price stays out.</summary>
+    internal const string NegativePrice = "It has a negative price, which an item here can't have. Enter it as a discount line where it's used.";
 
     /// <summary>
     /// The company's details in an export, for setting up a company from it: QuickBooks Desktop qbXML (a CompanyQueryRs),
@@ -54,13 +77,13 @@ public static class MigrationReaders
             throw new DomainException("import.empty", "The file is empty.");
         if (content.Length > MigrationImportService.MaxBytes)
             throw new DomainException("import.too_large", "The file is larger than 20 MB. Export in smaller parts.");
-        var company = source switch
+        var company = Readable(() => source switch
         {
             MigrationSource.QuickBooksQbxml => QbxmlReader.Company(LoadXml(content)),
             MigrationSource.QuickBooksOnline => QuickBooksOnlineReader.Company(Decode(content)),
             MigrationSource.GnuCash => GnuCashReader.Company(LoadXml(Decompress(content))),
             _ => null,
-        };
+        });
         return company is null || company.IsEmpty ? null : company;
     }
 

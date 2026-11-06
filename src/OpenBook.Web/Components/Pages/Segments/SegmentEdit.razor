@@ -109,7 +109,8 @@
         _segment = await Segments.GetAsync(Id);
         if (_segment is null)
             return;
-        _siblings = await Segments.ListAsync(_segment.Kind, includeInactive: false);
+        // Its own parent stays on offer though inactive: missing from the list, it would save as top level.
+        _siblings = (await Segments.ListAsync(_segment.Kind)).Where(s => s.Segment.IsActive || s.Segment.Id == _segment.ParentId).ToList();
         _label = (await Segments.GetTrackingAsync()).LocationLabel;
         Input ??= new SegmentModel { Name = _segment.Name, ParentId = _segment.ParentId };
     }

@@ -81,10 +81,16 @@ public sealed class RecurringGiftService(IUnitOfWork unit, INonprofitStore store
                 {
                     // The document and the template's count in one transaction, so a failure in between can't make it twice.
                     await using var transaction = await unit.BeginAsync(ct);
-                    var gift = await gifts.RecordAsync(new RecordGiftCommand(template.DonorId, template.NextDate!.Value, template.Amount, template.DepositAccountId,
+
+                    // The last installment of a pledge that doesn't divide evenly is what's left, and the template ends with it.
+                    var left = template.PledgeId is { } pledgeId ? (await gifts.ListPledgesAsync(ct: ct)).FirstOrDefault(p => p.Pledge.Id == pledgeId)?.Balance : null;
+                    var amount = left is > 0m ? Math.Min(left.Value, template.Amount) : template.Amount;
+                    var gift = await gifts.RecordAsync(new RecordGiftCommand(template.DonorId, template.NextDate!.Value, amount, template.DepositAccountId,
                         IncomeAccountId: template.IncomeAccountId, PledgeId: template.PledgeId, ClassId: template.ClassId, Reference: "Recurring",
                         Memo: template.Memo), ct);
                     template.RecordCreated(gift.Id);
+                    if (left == amount)
+                        template.Deactivate();
                     await store.SaveChangesAsync(ct);
                     await transaction.CommitAsync(ct);
                     created.Add(gift);

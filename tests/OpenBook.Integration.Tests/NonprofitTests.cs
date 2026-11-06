@@ -293,14 +293,27 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Null(run.Error);
         Assert.Equal(0m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
 
-        // The pledge is paid, so the next one stops the template with the reason.
-        var stopped = Assert.Single(await In<RecurringGiftService, IReadOnlyList<RecurringGiftResult>>(s => s.CreateDueAsync(new DateOnly(2026, 4, 30), automaticOnly: true)));
-        Assert.Empty(stopped.Created);
-        Assert.NotNull(stopped.Error);
+        // Paying off the pledge ended the template, so nothing is due and nothing fails hour after hour.
+        Assert.Empty(await In<RecurringGiftService, IReadOnlyList<RecurringGiftResult>>(s => s.CreateDueAsync(new DateOnly(2026, 4, 30), automaticOnly: true)));
 
         var other = await Donor("Someone Else");
         Assert.Equal("donation.pledge_donor", (await Assert.ThrowsAsync<DomainException>(() => In<RecurringGiftService, RecurringGift>(s =>
             s.CreateAsync(new RecurringGiftDetails(other.Id, 10m, Account("Checking"), Domain.Ledger.RecurrenceFrequency.Monthly, Jan1, PledgeId: pledge.Id))))).Code);
+    }
+
+    [Fact]
+    public async Task A_pledge_that_doesnt_divide_evenly_ends_on_what_is_left()
+    {
+        var sam = await Donor("Sam Uneven");
+        var pledge = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, new DateOnly(2026, 1, 1), 1000m)));
+        await In<RecurringGiftService, RecurringGift>(s => s.CreateAsync(new RecurringGiftDetails(sam.Id, 300m, Account("Checking"),
+            Domain.Ledger.RecurrenceFrequency.Monthly, new DateOnly(2026, 1, 31), PledgeId: pledge.Id, AutoCreate: true)));
+
+        var run = Assert.Single(await In<RecurringGiftService, IReadOnlyList<RecurringGiftResult>>(s => s.CreateDueAsync(new DateOnly(2026, 6, 30), automaticOnly: true)));
+
+        Assert.Equal([300m, 300m, 300m, 100m], run.Created.Select(g => g.Amount));
+        Assert.Null(run.Error);
+        Assert.Equal(0m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
     }
 
     [Fact]

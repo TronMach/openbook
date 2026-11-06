@@ -18,6 +18,10 @@ internal static class GnuCashReader
         ["STOCK"] = AccountType.OtherAsset, ["MUTUAL"] = AccountType.OtherAsset, ["RECEIVABLE"] = AccountType.AccountsReceivable,
         ["CREDIT"] = AccountType.CreditCard, ["LIABILITY"] = AccountType.OtherCurrentLiability, ["PAYABLE"] = AccountType.AccountsPayable,
         ["EQUITY"] = AccountType.Equity, ["INCOME"] = AccountType.Income, ["EXPENSE"] = AccountType.Expense,
+
+        // From older books.
+        ["CHECKING"] = AccountType.Bank, ["SAVINGS"] = AccountType.Bank, ["MONEYMRKT"] = AccountType.Bank,
+        ["CREDITLINE"] = AccountType.OtherCurrentLiability, ["CURRENCY"] = AccountType.OtherAsset,
     };
 
     private sealed record Node(string Id, string Name, string TypeCode, string? ParentId, string? Code, string? Description, int Line);
@@ -30,6 +34,7 @@ internal static class GnuCashReader
 
         var nodes = book.Children("account")
             .Select(a => new Node(a.Text("id") ?? "", a.Text("name") ?? "", a.Text("type") ?? "", a.Text("parent"), a.Text("code"), a.Text("description"), MigrationReaders.LineOf(a)))
+            .DistinctBy(n => n.Id)
             .ToDictionary(n => n.Id);
 
         // Full names: the chain of ancestors sharing the account's type (roots and other types cut it), at most 5 levels.
@@ -74,6 +79,7 @@ internal static class GnuCashReader
 
             var lines = new List<SourceLine>();
             var trading = 0m;
+            var exact = 0m;
             foreach (var split in trn.Child("splits")?.Children("split") ?? [])
             {
                 var account = split.Text("account");
@@ -85,7 +91,17 @@ internal static class GnuCashReader
                 else if (nodes[account].TypeCode.Equals("TRADING", StringComparison.OrdinalIgnoreCase))
                     trading += value.Value; // Together they come to nothing in home currency, and the other lines balance alone.
                 else
+                {
+                    exact += Fraction(split.Text("value"), 8) ?? 0m;
                     lines.Add(new SourceLine(name, value.Value, split.Text("memo") ?? description));
+                }
+            }
+
+            // Balanced to the fraction, but each split rounded to the cent on its own: the largest takes the difference.
+            if (exact == 0m && lines.Sum(l => l.Amount) is not 0m and var off)
+            {
+                var largest = lines.IndexOf(lines.MaxBy(l => Math.Abs(l.Amount))!);
+                lines[largest] = lines[largest] with { Amount = lines[largest].Amount - off };
             }
 
             if (trading != 0m)
@@ -132,7 +148,7 @@ internal static class GnuCashReader
     }
 
     /// <summary>GnuCash amounts are fractions: "4250/100" is 42.50.</summary>
-    internal static decimal? Fraction(string? text)
+    internal static decimal? Fraction(string? text, int decimals = 2)
     {
         if (text is null)
             return null;
@@ -142,7 +158,7 @@ internal static class GnuCashReader
         if (parts.Length == 1)
             return numerator;
         return decimal.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var denominator) && denominator != 0m
-            ? decimal.Round(numerator / denominator, 2, MidpointRounding.AwayFromZero)
+            ? decimal.Round(numerator / denominator, decimals, MidpointRounding.AwayFromZero)
             : null;
     }
 }

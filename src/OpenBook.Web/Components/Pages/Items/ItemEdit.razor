@@ -277,7 +277,7 @@
             }
             @if (_stock.NeedsReorder)
             {
-                <span class="badge warn">Reorder</span>
+                <span class="badge warn">Low</span>
             }
         </p>
         @if (_byPlace.Count > 0 && (_byPlace.Count > 1 || _byPlace[0].Lot is not null || _byPlace[0].Place != OpenBook.Domain.Inventory.StockPlace.Default))

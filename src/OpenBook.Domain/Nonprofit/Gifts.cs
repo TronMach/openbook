@@ -54,6 +54,9 @@ public sealed class Donation
 
     public void SetMethod(OpenBook.Domain.Sales.PaymentMethod? method) => Method = OpenBook.Domain.Sales.PaymentMethods.Valid(method);
 
+    /// <summary>Reclassifying the income line: the letter names the new purpose.</summary>
+    public void SetClass(Guid? classId) => ClassId = classId == Guid.Empty ? null : classId;
+
     public string? Memo { get; private set; }
 
     /// <summary>In kind: what was given (the acknowledgment describes it but doesn't value it).</summary>
@@ -219,6 +222,9 @@ public sealed class Pledge
     }
 
     /// <param name="unpaid">What's left after posted payments.</param>
+    /// <summary>Reclassifying the income line: payments from here on post their cash-basis income to the new purpose.</summary>
+    public void SetClass(Guid? classId) => ClassId = classId == Guid.Empty ? null : classId;
+
     public void Cancel(decimal unpaid, DateOnly on, Guid entryId)
     {
         if (Status != DocumentStatus.Posted)

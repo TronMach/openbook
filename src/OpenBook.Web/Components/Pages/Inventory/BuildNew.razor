@@ -97,6 +97,7 @@
                     }
                     <EditForm Model="Input" FormName="build" OnValidSubmit="BuildAsync" method="post">
                         <DataAnnotationsValidator />
+                        <ValidationSummary />
                         <input type="hidden" name="Input.ItemId" value="@_itemId" />
                         <input type="hidden" name="Input.Quantity" value="@_quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                         <input type="hidden" name="Input.Date" value="@_date.ToString("yyyy-MM-dd")" />

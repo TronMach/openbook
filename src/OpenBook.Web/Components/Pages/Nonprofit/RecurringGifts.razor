@@ -180,7 +180,8 @@
                                      || (a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, "Undeposited Funds", StringComparison.OrdinalIgnoreCase))).ToList();
         _income = active.Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
         _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
-        _pledges = (await Gifts.ListPledgesAsync()).Where(p => p.Balance > 0m).ToList();
+        // Its own pledge stays on offer though paid or cancelled: missing from the list, it would save as none.
+        _pledges = (await Gifts.ListPledgesAsync()).Where(p => p.Balance > 0m || p.Pledge.Id == _editing?.PledgeId).ToList();
     }
 
     private static string Unit(RecurrenceFrequency f) => f switch

@@ -3,11 +3,11 @@
 @using OpenBook.Domain.Segments
 @inject SegmentService Segments
 
-<PageTitle>Classes, @_tracking.LocationLabel.ToLowerInvariant()s and tags · OpenBook</PageTitle>
+<PageTitle>Classes, @Labels.Plural(_tracking.LocationLabel.ToLowerInvariant()) and tags · OpenBook</PageTitle>
 
 <div class="wide">
     <div class="toolbar">
-        <h1>Classes, @(_tracking.LocationLabel.ToLowerInvariant())s and tags</h1>
+        <h1>Classes, @Labels.Plural(_tracking.LocationLabel.ToLowerInvariant()) and tags</h1>
         <ActionLink Class="button secondary" Href="/reports/profit-and-loss-by-class">P&amp;L by class</ActionLink>
         <ActionLink Class="button secondary" Href="/reports/profit-and-loss-by-location">P&amp;L by @_tracking.LocationLabel.ToLowerInvariant()</ActionLink>
         <ActionLink Class="button" Href="/segments/reclassify">Reclassify transactions</ActionLink>

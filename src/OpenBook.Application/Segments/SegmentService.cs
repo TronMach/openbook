@@ -39,6 +39,7 @@ public sealed class SegmentService(
     ISalesStore sales,
     IPurchasesStore purchases,
     IBankingStore banking,
+    Nonprofit.INonprofitStore nonprofit,
     PostingEngine engine,
     IClock clock,
     ICurrentUser user)
@@ -77,7 +78,9 @@ public sealed class SegmentService(
     public async Task<Segment> CreateAsync(SegmentKind kind, string name, Guid? parentId = null, CancellationToken ct = default)
     {
         var segment = Segment.Create(kind, name, parentId);
-        SegmentRules.Validate(segment, await ledger.ListSegmentsAsync(ct));
+        var all = await ledger.ListSegmentsAsync(ct);
+        EnsureParentActive(all, parentId);
+        SegmentRules.Validate(segment, all);
         ledger.Add(segment);
         ledger.Add(Audit(AuditAction.Created, EntityType, segment.Id, null, Snapshot(segment)));
         await ledger.SaveChangesAsync(ct);
@@ -89,12 +92,20 @@ public sealed class SegmentService(
         var all = await ledger.ListSegmentsAsync(ct);
         var segment = all.FirstOrDefault(s => s.Id == id) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(segment);
+        if (parentId != segment.ParentId)
+            EnsureParentActive(all, parentId);
         segment.Rename(name);
         segment.Move(parentId);
         SegmentRules.Validate(segment, all);
         ledger.Add(Audit(AuditAction.Updated, EntityType, id, before, Snapshot(segment)));
         await ledger.SaveChangesAsync(ct);
         return segment;
+    }
+
+    private static void EnsureParentActive(IEnumerable<Segment> all, Guid? parentId)
+    {
+        if (parentId is { } id && all.FirstOrDefault(s => s.Id == id) is { IsActive: false } parent)
+            throw new DomainException("segment.parent_inactive", $"'{parent.Name}' is inactive, so nothing new can go under it.");
     }
 
     /// <summary>Nonprofits: what a class's expenses count as (program, management and general, fundraising); null takes the parent's.</summary>
@@ -185,6 +196,8 @@ public sealed class SegmentService(
         var entryIds = new List<Guid> { entryId };
         if (await ledger.FindReversalIdAsync(entryId, ct) is { } reversalId)
             entryIds.Add(reversalId);
+        if (await engine.StandingAutoReversalAsync(entryId, ct) is { } mirror)
+            entryIds.Add(mirror.Id);
         foreach (var id in entryIds)
         {
             foreach (var tag in await ledger.GetEntryTagsAsync([id], ct))
@@ -259,8 +272,16 @@ public sealed class SegmentService(
 
             var reversalId = await ledger.FindReversalIdAsync(entry.Id, ct);
             var reversal = reversalId is { } rid ? await ledger.GetEntryAsync(rid, ct) : null;
+
+            // An automatic reversal is the entry undone on a later date: it follows too, or the two would land in different classes.
+            if (await engine.StandingAutoReversalAsync(entry.Id, ct) is { } standing)
+            {
+                engine.EnsureOpen(company, standing.Date, $"reclassifying entry #{standing.Number}");
+                reversal = await ledger.GetEntryAsync(standing.Id, ct);
+            }
+
             var rows = (await ledger.GetLineSegmentsAsync(reversal is null ? [entry.Id] : [entry.Id, reversal.Id], ct)).ToDictionary(r => r.JournalLineId);
-            var before = Describe(entry, rows);
+            var before = Describe(entry, rows, segments);
 
             // A document's location is the whole transaction's.
             var targets = command.SetLocation && entry.Source != JournalEntry.ManualSource && !JournalEntry.IsJournalSource(entry.Source)
@@ -288,7 +309,7 @@ public sealed class SegmentService(
 
             if (command.SetLocation)
                 document?.SetLocation(locationId);
-            ledger.Add(Audit(AuditAction.Updated, EntryEntity, entry.Id, before, Describe(entry, rows)));
+            ledger.Add(Audit(AuditAction.Updated, EntryEntity, entry.Id, before, Describe(entry, rows, segments)));
         }
 
         await ledger.SaveChangesAsync(ct);
@@ -323,15 +344,14 @@ public sealed class SegmentService(
             throw new DomainException("segment.inactive", $"'{segment.Name}' is inactive.");
     }
 
-    private static string Describe(JournalEntry entry, Dictionary<Guid, LineSegment> rows) => JsonSerializer.Serialize(new
+    /// <summary>One field per line, by name: the audit log shows the fields that changed, so only the lines moved show.</summary>
+    private static string Describe(JournalEntry entry, Dictionary<Guid, LineSegment> rows, Dictionary<Guid, Segment> segments)
     {
-        Segments = entry.Lines.OrderBy(l => l.LineNumber).Select(l => new
-        {
-            l.LineNumber,
-            ClassId = rows.GetValueOrDefault(l.Id)?.ClassId,
-            LocationId = rows.GetValueOrDefault(l.Id)?.LocationId,
-        }).ToList(),
-    });
+        string Name(Guid? id) => id is { } known && segments.TryGetValue(known, out var segment) ? segment.Name : "none";
+        return JsonSerializer.Serialize(entry.Lines.OrderBy(l => l.LineNumber).ToDictionary(
+            l => $"Line {l.LineNumber}",
+            l => rows.GetValueOrDefault(l.Id) is { } row ? $"Class {Name(row.ClassId)}, location {Name(row.LocationId)}" : "Class none, location none"));
+    }
 
     /// <summary>The document that posted the entry, when its lines or location record segments too.</summary>
     private async Task<DocumentSegments?> DocumentAsync(JournalEntry entry, CancellationToken ct)
@@ -350,6 +370,18 @@ public sealed class SegmentService(
                 return DocumentSegments.ForBill(bill.Lines, bill.SetLocation);
             case VendorCredit.Source when await purchases.GetVendorCreditAsync(id, ct) is { } vendorCredit:
                 return DocumentSegments.ForBill(vendorCredit.Lines, vendorCredit.SetLocation);
+            case Domain.Nonprofit.Donation.Source when await nonprofit.GetDonationAsync(id, ct) is { } gift:
+                return new DocumentSegments((line, _, newClass) =>
+                {
+                    if (line.AccountId == gift.IncomeAccountId)
+                        gift.SetClass(newClass);
+                }, _ => { });
+            case Domain.Nonprofit.Pledge.Source when await nonprofit.GetPledgeAsync(id, ct) is { } pledge:
+                return new DocumentSegments((line, _, newClass) =>
+                {
+                    if (line.AccountId == pledge.IncomeAccountId)
+                        pledge.SetClass(newClass);
+                }, _ => { });
             default:
                 if (entry.Source.StartsWith("bank.", StringComparison.Ordinal) && await banking.GetTransactionAsync(id, ct) is { } transaction)
                     return new DocumentSegments((_, _, _) => { }, transaction.SetLocation);
@@ -366,7 +398,7 @@ public sealed class SegmentService(
         public static DocumentSegments ForSales(IReadOnlyList<SalesLine> lines, Action<Guid?> setLocation) => new(
             (line, oldClass, newClass) =>
             {
-                foreach (var l in lines.Where(l => l.IncomeAccountId == line.AccountId && l.ClassId == oldClass && l.Kind != SalesLineKind.Tax))
+                foreach (var l in lines.Where(l => l.IncomeAccountId == line.AccountId && l.ClassId == oldClass))
                     l.SetClass(newClass);
             },
             setLocation);

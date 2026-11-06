@@ -93,6 +93,9 @@ public sealed class StockTransferService(
             throw new DomainException("transfer.reason_required", "Say why it's being voided.");
 
         var own = await store.ListMovementsForSourceAsync(EntityType, id, ct);
+
+        // Tracked before their movements are read: the item's token is what stops a sale from the same stock passing this.
+        await sales.GetItemsAsync(own.Select(m => m.ItemId).Distinct().ToList(), ct);
         var reversed = own.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
         var open = own.Where(m => m.ReversalOf is null && !reversed.Contains(m.Id)).ToList();
         foreach (var arrival in open.Where(m => m.Quantity > 0m).GroupBy(m => (m.ItemId, m.LayerId, m.Place)))

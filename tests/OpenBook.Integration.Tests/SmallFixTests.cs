@@ -7,6 +7,7 @@ using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Import;
+using OpenBook.Application.Import.Migration;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Nonprofit;
@@ -17,6 +18,7 @@ using OpenBook.Application.Segments;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
@@ -215,6 +217,111 @@ public sealed class SmallFixTests : IAsyncLifetime
         Assert.Equal(10, rows.Count);
         Assert.Equal(140m, rows.Sum(r => r.Amount));
         Assert.Equal("5 more bills", rows[^1].Description);
+    }
+
+    [Fact]
+    public async Task A_closing_password_needs_a_closing_date_to_protect()
+    {
+        Assert.Equal("period.password_needs_date", await Refused(() => In<CloseBooksService, ClosingStatus>(s => s.SetAsync(null, "secret-word", removePassword: false))));
+    }
+
+    [Theory]
+    [InlineData("Property", "Properties")]
+    [InlineData("Store", "Stores")]
+    [InlineData("Branch", "Branches")]
+    [InlineData("Bay", "Bays")]
+    public void Names_people_choose_get_a_proper_plural(string word, string plural) =>
+        Assert.Equal(plural, OpenBook.Web.Components.Labels.Plural(word));
+
+    [Fact]
+    public void A_lot_name_may_hold_the_separator_when_no_quantity_follows_it()
+    {
+        Assert.Equal([("A x B", 5m)], LotText.Parse("A x B", ItemTracking.Lot, 5m, "Widget"));
+        Assert.Equal([("A x B", 3m), ("C", 2m)], LotText.Parse("A x B x 3; C*2", ItemTracking.Lot, 5m, "Widget"));
+    }
+
+    [Fact]
+    public void A_list_cut_to_fit_a_line_stands_for_what_was_recorded()
+    {
+        var cut = new string('S', 997) + "...";
+        Assert.Empty(LotText.Parse(cut, ItemTracking.Serial, 150m, "Widget"));
+    }
+
+    [Fact]
+    public void A_damaged_compressed_file_is_reported_as_unreadable()
+    {
+        byte[] damaged = [0x1F, 0x8B, 0x08, 0x00, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        Assert.Equal("import.unreadable", Assert.Throws<DomainException>(() => MigrationReaders.Read(MigrationSource.GnuCash, damaged, "USD")).Code);
+    }
+
+    [Fact]
+    public void Item_prices_keep_four_decimals_and_a_negative_price_stays_out()
+    {
+        const string iif = "!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\nINVITEM\tBolt\tSERV\tSales\t0.125\nINVITEM\tCredit\tSERV\tSales\t-10.00\n";
+        var data = MigrationReaders.Read(MigrationSource.QuickBooksIif, System.Text.Encoding.UTF8.GetBytes(iif), "USD");
+        Assert.Equal(0.125m, data.Items.Single(i => i.Name == "Bolt").Price);
+        Assert.Null(data.Items.Single(i => i.Name == "Credit").Type);
+    }
+
+    [Fact]
+    public void Iif_dates_can_be_day_first_and_children_can_come_before_parents()
+    {
+        const string iif = "!ACCNT\tNAME\tACCNTTYPE\nACCNT\tBank:Sub\tBANK\nACCNT\tBank\tBANK\n"
+            + "!TRNS\tTRNSTYPE\tDATE\tACCNT\tAMOUNT\n!SPL\tTRNSTYPE\tDATE\tACCNT\tAMOUNT\n!ENDTRNS\n"
+            + "TRNS\tGENERAL JOURNAL\t25/01/2026\tBank\t10\nSPL\tGENERAL JOURNAL\t25/01/2026\tBank:Sub\t-10\nENDTRNS\n";
+        var data = MigrationReaders.Read(MigrationSource.QuickBooksIif, System.Text.Encoding.UTF8.GetBytes(iif), "USD");
+        Assert.Equal(new DateOnly(2026, 1, 25), Assert.Single(data.Transactions).Date);
+        Assert.Equal(["Bank", "Bank:Sub"], data.Accounts.Select(a => a.FullName));
+    }
+
+    [Fact]
+    public void A_field_full_of_quotes_reads_in_linear_time()
+    {
+        var text = "a,b\n" + string.Concat(Enumerable.Repeat("a\"", 1_000_000)) + ",2\n";
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(2, Csv.Parse(text).Count);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(20), $"{clock.Elapsed} to read it.");
+    }
+
+    [Fact]
+    public async Task Voided_opening_balances_leave_nothing_listed()
+    {
+        var entry = await In<OpeningBalanceService, JournalEntry>(s => s.PostAsync(new DateOnly(2025, 12, 31), [new OpeningBalance(_checking.Id, 100m)]));
+        await In<PostingEngine, JournalEntry>(s => s.VoidAsync(entry.Id, "Wrong figures"));
+        Assert.Empty(await In<OpeningBalanceService, IReadOnlyList<JournalEntry>>(s => s.ExistingAsync()));
+    }
+
+    [Fact]
+    public async Task An_automatic_reversal_follows_a_reclassify_and_new_tags()
+    {
+        var retail = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Retail"));
+        var online = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Online"));
+        var tag = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Tag, "Accrual"));
+        var entry = await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Jan5,
+            [JournalLineDraft.Dr(_expense.Id, 40m, null, retail.Id), JournalLineDraft.Cr(_checking.Id, 40m)], "Accrual", ReverseOn: new DateOnly(2026, 2, 1))));
+        var mirror = (await In<PostingEngine, JournalEntry?>(s => s.StandingAutoReversalAsync(entry.Id)))!;
+
+        var expenseLine = entry.Lines.Single(l => l.AccountId == _expense.Id).Id;
+        await In<SegmentService, int>(s => s.ReclassifyAsync(new ReclassifyCommand([expenseLine], true, online.Id, false, null)));
+        await In<SegmentService, IReadOnlyList<Guid>>(s => s.SetTagsAsync(entry.Id, [tag.Id]));
+
+        var rows = await _db.InScope(sp => sp.GetRequiredService<ILedgerStore>().GetLineSegmentsAsync([mirror.Id], default));
+        Assert.Equal(online.Id, Assert.Single(rows).ClassId);
+        var tags = await _db.InScope(sp => sp.GetRequiredService<ILedgerStore>().GetEntryTagsAsync([mirror.Id], default));
+        Assert.Equal(tag.Id, Assert.Single(tags).TagId);
+    }
+
+    [Fact]
+    public async Task Nothing_new_goes_under_an_inactive_parent_but_a_child_keeps_the_one_it_has()
+    {
+        var parent = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Retired"));
+        var child = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "East", parent.Id));
+        await In<SegmentService, Segment>(s => s.SetActiveAsync(child.Id, false));
+        await In<SegmentService, Segment>(s => s.SetActiveAsync(parent.Id, false));
+
+        Assert.Equal("segment.parent_inactive", await Refused(() => In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "West", parent.Id))));
+        var renamed = await In<SegmentService, Segment>(s => s.UpdateAsync(child.Id, "East side", parent.Id));
+        Assert.Equal(parent.Id, renamed.ParentId);
     }
 
     [SqliteFact]

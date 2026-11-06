@@ -408,7 +408,8 @@ public static class Costing
         if (item.PurchaseCost > 0m)
             return item.PurchaseCost;
         var list = movements.ToList();
-        var latest = list.Where(m => m.IsReceipt && m.Quantity > 0m).OrderByDescending(m => m.Date).ThenByDescending(m => m.CreatedAt).FirstOrDefault();
+        var reversed = list.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
+        var latest = list.Where(m => m.IsReceipt && m.Quantity > 0m && !reversed.Contains(m.Id)).OrderByDescending(m => m.Date).ThenByDescending(m => m.CreatedAt).FirstOrDefault();
         if (latest is not null)
             return latest.Cost / latest.Quantity;
         return AverageCost(list, DateOnly.MaxValue) is { } average && average > 0m ? average : 0m;

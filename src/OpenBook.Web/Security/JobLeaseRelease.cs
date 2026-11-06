@@ -6,7 +6,7 @@ namespace OpenBook.Web.Security;
 /// Gives up this process's job leases when it stops. Registered before the jobs, so it stops after them. A restart
 /// then runs the jobs at once, instead of finding the old process's lease and waiting up to an hour and a half.
 /// </summary>
-internal sealed partial class JobLeaseRelease(IJobLeases leases, ILogger<JobLeaseRelease> logger) : IHostedService
+internal sealed class JobLeaseRelease(IJobLeases leases) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -16,13 +16,9 @@ internal sealed partial class JobLeaseRelease(IJobLeases leases, ILogger<JobLeas
         {
             await leases.ReleaseAllAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is ObjectDisposedException or OperationCanceledException or InvalidOperationException or IOException or System.Data.Common.DbException)
         {
-            // A database already gone: the leases lapse by themselves.
-            LogFailed(ex);
+            // Stopping mustn't fail for this, nor log it: the logger may be gone too, and the leases lapse by themselves.
         }
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Job leases weren't released at stop; they'll lapse by themselves.")]
-    private partial void LogFailed(Exception ex);
 }

@@ -38,9 +38,9 @@ public sealed class RequestProcessorSession : IQuickBooksSession
     {
         var type = Type.GetTypeFromProgID("QBXMLRP2.RequestProcessor")
             ?? throw new QuickBooksException("QuickBooks Desktop isn't installed on this computer (its request processor, QBXMLRP2, isn't registered). Run this on the PC where QuickBooks is.");
-        _processor = Activator.CreateInstance(type)!;
         try
         {
+            _processor = Activator.CreateInstance(type)!;
             _processor.OpenConnection2("", AppName, LocalQuickBooks);
         }
         catch (COMException ex)

@@ -201,6 +201,17 @@ public static class Labels
 
     public static string Date(DateOnly date) => date.ToString("d", CultureInfo.CurrentCulture);
 
+    /// <summary>An English plural of a word people chose themselves, such as the name for locations: properties, branches, stores.</summary>
+    public static string Plural(string word)
+    {
+        ArgumentNullException.ThrowIfNull(word);
+        if (word.Length > 1 && word[^1] is 'y' && !"aeiou".Contains(word[^2], StringComparison.Ordinal))
+            return word[..^1] + "ies";
+        return word.EndsWith('s') || word.EndsWith('x') || word.EndsWith("ch", StringComparison.Ordinal) || word.EndsWith("sh", StringComparison.Ordinal)
+            ? word + "es"
+            : word + "s";
+    }
+
     /// <summary>"6.25%".</summary>
     public static string Percent(decimal percent) => percent.ToString("0.####", CultureInfo.CurrentCulture) + "%";
 

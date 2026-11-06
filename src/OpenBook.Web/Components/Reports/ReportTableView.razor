@@ -1,4 +1,5 @@
 @using OpenBook.Application.Reporting
+@inject NavigationManager Navigation
 @* Any report table: heading, rows with drill-down links, note. Exports render the same table. *@
 
 <div class="report-heading">
@@ -32,7 +33,7 @@
                         var cell = i < row.Cells.Count ? row.Cells[i] : ReportCell.Empty;
                         var column = Table.Columns[i];
                         var text = ReportLinks.Cell(cell.Value, column.Format);
-                        var href = text.Length > 0 ? ReportLinks.Href(cell.Link, Table.Basis) : null;
+                        var href = text.Length > 0 ? ReportLinks.Href(cell.Link, Table.Basis, ReportLinks.SegmentsOf(Navigation.Uri)) : null;
                         <td class="@CellClass(i, row.Depth, column)">
                             @if (href is not null)
                             {

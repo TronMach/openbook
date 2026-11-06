@@ -155,7 +155,8 @@
 
         // Active accounts, excluding this one and its subaccounts (an account can't move under itself).
         var excluded = _account is null ? [] : Subtree(_account.Id).ToHashSet();
-        _parents = _chart.Ordered(includeInactive: false).Where(x => !excluded.Contains(x.Account.Id)).ToList();
+        // Its own parent stays on offer though inactive: missing from the list, it would save as top level.
+        _parents = _chart.Ordered(includeInactive: true).Where(x => (x.Account.IsActive || x.Account.Id == _account?.ParentId) && !excluded.Contains(x.Account.Id)).ToList();
 
         Input ??= _account is null
             ? new AccountModel()

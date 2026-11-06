@@ -32,7 +32,7 @@ public sealed class OpeningBalanceService(AccountService accounts, ILedgerStore 
     {
         var (entries, _) = await ledger.ListEntriesAsync(new JournalEntryFilter(Take: int.MaxValue, Source: JournalEntry.OpeningBalanceSource), ct);
         return entries
-            .Where(e => e.Status == JournalEntryStatus.Posted)
+            .Where(e => e.Status == JournalEntryStatus.Posted && e.Kind == JournalEntryKind.Standard)
             .OrderBy(e => e.Date)
             .ToList();
     }

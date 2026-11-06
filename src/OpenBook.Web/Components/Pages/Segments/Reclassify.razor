@@ -10,7 +10,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Reclassify transactions</h1>
-        <ActionLink Class="button secondary" Href="/segments">Classes and @(_label.ToLowerInvariant())s</ActionLink>
+        <ActionLink Class="button secondary" Href="/segments">Classes and @Labels.Plural(_label.ToLowerInvariant())</ActionLink>
     </div>
     <p class="muted">
         Change the class or @_label.ToLowerInvariant() of posted lines in bulk. Amounts and accounts never change, so nothing is reposted; the

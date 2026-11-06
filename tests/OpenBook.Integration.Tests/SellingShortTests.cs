@@ -69,6 +69,21 @@ public sealed class SellingShortTests : IAsyncLifetime
     private static async Task<string> Refused(Func<Task> work) => (await Assert.ThrowsAsync<DomainException>(work)).Code;
 
     [Fact]
+    public async Task A_bill_dated_before_the_sale_it_fills_leaves_past_stock_agreeing()
+    {
+        await AllowSellingShort(true);
+        await Sell(new DateOnly(2026, 1, 20), 3m);
+        await Buy(new DateOnly(2026, 1, 10), 10m, 60m);
+        var asOf = new DateOnly(2026, 1, 15);
+
+        var summary = await Run(async sp => (await sp.GetRequiredService<InventoryService>().StockAsync(asOf)).Single(s => s.Item.Id == _widget.Id).Quantity);
+        var places = await Run(async sp => (await sp.GetRequiredService<InventoryService>().StockByPlaceAsync(_widget.Id, asOf)).Sum(s => s.Quantity));
+
+        Assert.Equal(10m, summary);
+        Assert.Equal(10m, places);
+    }
+
+    [Fact]
     public async Task Sales_beyond_the_stock_are_refused_until_the_company_allows_them()
     {
         Assert.Equal("inventory.insufficient", await Refused(() => Sell(Jan10, 3m)));

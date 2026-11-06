@@ -385,8 +385,14 @@ public sealed class GiftService(
         var paragraphs = new List<string>();
         var withGoods = gifts.Where(g => g.GoodsValue > 0m).ToList();
         foreach (var g in withGoods)
-            paragraphs.Add($"In return for your gift of {Money(g.Amount)} on {g.Date.ToString("d", CultureInfo.CurrentCulture)}, you received {g.GoodsDescription}, " +
-                           $"with an estimated fair market value of {Money(g.GoodsValue)}. The part of that gift you may deduct is limited to {Money(g.Deductible)}.");
+        {
+            // An in-kind gift isn't valued here: only what the donor received is.
+            paragraphs.Add(g.Kind == GiftKind.InKind
+                ? $"In return for your gift on {g.Date.ToString("d", CultureInfo.CurrentCulture)}, you received {g.GoodsDescription}, with an estimated fair market value of {Money(g.GoodsValue)}."
+                : $"In return for your gift of {Money(g.Amount)} on {g.Date.ToString("d", CultureInfo.CurrentCulture)}, you received {g.GoodsDescription}, " +
+                  $"with an estimated fair market value of {Money(g.GoodsValue)}. The part of that gift you may deduct is limited to {Money(g.Deductible)}.");
+        }
+
         if (withGoods.Count == 0)
             paragraphs.Add(gifts.Count == 1 ? "No goods or services were provided in exchange for this contribution." : "No goods or services were provided in exchange for these contributions.");
         else if (withGoods.Count < gifts.Count)

@@ -63,7 +63,8 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
                 throw new DomainException("item.tracking_locked", $"{item.Name} has stock history, so its lot or serial tracking can't change.");
         }
 
-        if (item.Type != details.Type && (await store.ListItemsAsync(ct)).FirstOrDefault(i => i.Components.Any(c => c.ComponentItemId == id)) is { } parent)
+        var parents = item.Type == details.Type ? [] : (await store.ListItemsAsync(ct)).Where(i => i.Components.Any(c => c.ComponentItemId == id)).ToList();
+        foreach (var parent in parents)
         {
             if (details.Type == ItemType.Bundle)
                 throw new DomainException("item.component_bundle", $"{item.Name} is a component of {parent.Name}, so it can't become a bundle.");
@@ -105,7 +106,8 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         foreach (var (componentId, _) in components)
         {
             var component = all.GetValueOrDefault(componentId) ?? throw new EntityNotFoundException(EntityType, componentId);
-            if (!component.IsActive)
+            // One already on the item stays: retiring a part mustn't stop the other lines being changed.
+            if (!component.IsActive && item.Components.All(c => c.ComponentItemId != componentId))
                 throw new DomainException("item.component_inactive", $"{component.Name} is inactive.");
             if (component.IsBundle)
                 throw new DomainException("item.component_bundle", $"{component.Name} is a bundle; bundles can't go inside other items. Add its components instead.");

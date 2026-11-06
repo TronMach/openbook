@@ -271,6 +271,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             var history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
             var unitCost = UnitCostForReturn(item, history);
             var receipts = new List<(decimal Quantity, string? Lot)>();
+            var serialsOnMemo = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var part in group)
             {
                 if (item.Tracking == ItemTracking.None)
@@ -283,6 +284,8 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                     throw new DomainException("lot.required", $"{item.Name} is tracked by {Describe(item.Tracking)}; return it on its own line with the numbers.");
                 var lots = Required(LotText.Parse(part.Line.Lots, item.Tracking, part.Quantity, item.Name), item);
                 EnsureNewSerials(item, lots, history);
+                if (item.Tracking == ItemTracking.Serial && lots.Any(l => !serialsOnMemo.Add(l.Lot)))
+                    throw new DomainException("lot.duplicate", $"{item.Name}: a serial number appears twice on this credit memo.");
                 part.Line.RecordLots(LotText.Format(lots, item.Tracking));
                 receipts.AddRange(lots.Select(l => (l.Quantity, (string?)l.Lot)));
             }
@@ -372,6 +375,8 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         if (own.Count == 0)
             return InventoryPlan.None;
 
+        // Tracked before their movements are read: the item's token is what stops a sale from the same stock passing this.
+        await sales.GetItemsAsync(own.Select(m => m.ItemId).Distinct().ToList(), ct);
         var reversed = own.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
         var open = own.Where(m => m.ReversalOf is null && !reversed.Contains(m.Id)).ToList();
         var ownIds = own.Select(m => m.Id).ToHashSet();
@@ -538,11 +543,13 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                     : decimal.Round(from.RemainingCost * quantity / from.RemainingQuantity, 2, MidpointRounding.AwayFromZero);
                 var place = places[gap.LayerId];
                 var take = new FifoTake(receipt.Id, quantity, actual, receipt.Place, receipt.Lot);
-                history.Add(InventoryMovement.Cover(gap.LayerId, item.Id, date, quantity, estimated, place, Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
-                history.Add(InventoryMovement.Issue(take, item.Id, date, Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
+                // Not before the sale it fills: until then that stock was still on the shelf.
+                var filledOn = date > into.Date ? date : into.Date;
+                history.Add(InventoryMovement.Cover(gap.LayerId, item.Id, filledOn, quantity, estimated, place, Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
+                history.Add(InventoryMovement.Issue(take, item.Id, filledOn, Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
                 var layerId = gap.LayerId;
-                movements.Add((type, id, at) => InventoryMovement.Cover(layerId, item.Id, date, quantity, estimated, place, type, id, at));
-                movements.Add((type, id, at) => InventoryMovement.Issue(take, item.Id, date, type, id, at));
+                movements.Add((type, id, at) => InventoryMovement.Cover(layerId, item.Id, filledOn, quantity, estimated, place, type, id, at));
+                movements.Add((type, id, at) => InventoryMovement.Issue(take, item.Id, filledOn, type, id, at));
                 difference += actual - estimated;
             }
         }

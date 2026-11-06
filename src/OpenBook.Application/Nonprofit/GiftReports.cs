@@ -87,11 +87,12 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
             var cancelled = p.Pledge.CancelledOn <= asOf ? p.Pledge.CancelledAmount : 0m;
             if (paidBy + cancelled >= p.Pledge.Amount)
                 continue;
-            promised += p.Pledge.Amount;
+            var standing = p.Pledge.Amount - cancelled;
+            promised += standing;
             paid += paidBy;
             rows.Add(new ReportTableRow([new ReportCell($"{p.Pledge.Number} · {p.Donor}", new ReportLink("pledge", p.Pledge.Id)),
                 p.Pledge.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
-                p.Pledge.DueDate?.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Pledge.Amount, paidBy, p.Pledge.Amount - paidBy]));
+                p.Pledge.DueDate?.ToString("d", System.Globalization.CultureInfo.CurrentCulture), standing, paidBy, standing - paidBy]));
         }
 
         rows.Add(new ReportTableRow(["Total", null, null, promised, paid, promised - paid], 0, ReportRowStyle.Total));

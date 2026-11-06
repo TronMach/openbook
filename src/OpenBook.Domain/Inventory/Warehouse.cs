@@ -97,10 +97,16 @@ public static class LotText
 {
     public const int MaxLotLength = 50;
 
+    private static readonly string[] QuantitySeparators = [" x ", " X ", " × ", "*"];
+
+    /// <summary>The longest list a line's text holds; a longer one is cut, ending "...".</summary>
+    private const int MaxListLength = 1000;
+
     /// <summary>The lots and quantities on the line, checked against its quantity; empty when nothing was typed.</summary>
     public static IReadOnlyList<(string Lot, decimal Quantity)> Parse(string? text, ItemTracking tracking, decimal quantity, string itemName)
     {
-        if (tracking == ItemTracking.None || string.IsNullOrWhiteSpace(text))
+        // A list cut to fit the line (Format) can't be read back: stands for "the ones already recorded".
+        if (tracking == ItemTracking.None || string.IsNullOrWhiteSpace(text) || (text.Length == MaxListLength && text.EndsWith("...", StringComparison.Ordinal)))
             return [];
         var parts = text.Split([';', '\n', '\r', tracking == ItemTracking.Serial ? ',' : ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var result = new List<(string Lot, decimal Quantity)>();
@@ -117,19 +123,22 @@ public static class LotText
         {
             foreach (var part in parts)
             {
-                var bits = part.Split([" x ", " X ", " × ", "*"], 2, StringSplitOptions.TrimEntries);
-                if (bits.Length == 1)
+                // The quantity comes after the last separator; with no number there, it's all the lot's name ("A x B").
+                var at = QuantitySeparators.Select(s => (Index: part.LastIndexOf(s, StringComparison.Ordinal), s.Length)).MaxBy(s => s.Index);
+                var named = at.Index > 0 ? part[..at.Index].TrimEnd() : part;
+                var count = at.Index > 0 ? part[(at.Index + at.Length)..].TrimStart() : null;
+                var isNumber = decimal.TryParse(count, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q);
+                if (!isNumber)
                 {
                     if (parts.Length > 1)
                         throw new DomainException("lot.quantity_required", $"{itemName}: give each lot a quantity, e.g. \"A-100 x 3; B-200 x 2\".");
-                    result.Add((Check(bits[0], itemName), quantity));
+                    result.Add((Check(part, itemName), quantity));
                     continue;
                 }
 
-                if (!decimal.TryParse(bits[1], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q)
-                    || q <= 0m || decimal.Round(q, 4) != q)
-                    throw new DomainException("lot.quantity_invalid", $"{itemName}: \"{bits[1]}\" isn't a quantity for lot {bits[0]}.");
-                result.Add((Check(bits[0], itemName), q));
+                if (q <= 0m || decimal.Round(q, 4) != q)
+                    throw new DomainException("lot.quantity_invalid", $"{itemName}: \"{count}\" isn't a quantity for lot {named}.");
+                result.Add((Check(named, itemName), q));
             }
 
             if (result.Sum(r => r.Quantity) != quantity)
@@ -151,7 +160,7 @@ public static class LotText
         var text = tracking == ItemTracking.Serial
             ? string.Join(", ", merged.Select(l => l.Lot))
             : string.Join("; ", merged.Select(l => FormattableString.Invariant($"{l.Lot} x {l.Quantity:0.####}")));
-        return text.Length > 1000 ? text[..997] + "..." : text;
+        return text.Length > MaxListLength ? text[..(MaxListLength - 3)] + "..." : text;
     }
 
     private static string Check(string lot, string itemName)

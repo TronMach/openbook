@@ -292,6 +292,11 @@
             (data.Transactions.Count(t => t.SkipReason is null), "transaction", "transactions"),
         }.Where(c => c.Count > 0).Select(c => $"{c.Count} {(c.Count == 1 ? c.One : c.Many)}").ToList();
         var found = counts.Count == 0 ? "It has nothing to import." : $"It has {string.Join(", ", counts)}.";
+        var left = data.Accounts.Count(a => a.SkipReason is not null) + data.Items.Count(i => i.Type is null) + data.Transactions.Count(t => t.SkipReason is not null);
+        if (left > 0)
+            found += $" {left} other row(s) won't come in.";
+        if (data.Warnings.Count > 0)
+            found += $" {string.Join(" ", data.Warnings.Take(5))}";
         var details = company is null
             ? "It doesn't include the company's details, so fill them in below."
             : "The company details below come from it; check them.";

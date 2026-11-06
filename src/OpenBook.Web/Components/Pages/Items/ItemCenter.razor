@@ -172,9 +172,9 @@
         if (item.IsInventory)
         {
             yield return ($"/purchases/orders/new?item={item.Id}", L["Create Purchase Orders"]);
-            yield return ("/inventory/adjustments/new", L["Adjust Quantity on Hand"]);
+            yield return ($"/inventory/adjustments/new?item={item.Id}", L["Adjust Quantity on Hand"]);
         }
         if (item.IsAssembly)
-            yield return ("/inventory/builds/new", L["Build Assemblies"]);
+            yield return ($"/inventory/builds/new?item={item.Id}", L["Build Assemblies"]);
     }
 }

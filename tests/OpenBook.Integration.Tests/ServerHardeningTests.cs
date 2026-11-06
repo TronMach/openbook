@@ -22,6 +22,16 @@ namespace OpenBook.Integration.Tests;
 public sealed class ServerHardeningTests
 {
     [Fact]
+    public async Task Stopping_gives_up_the_leases_held()
+    {
+        await using var db = new LedgerDatabase();
+        await db.InitializeAsync();
+        await db.InScope(sp => sp.GetRequiredService<IJobLeases>().TryAcquireAsync("hourly", TimeSpan.FromMinutes(90), default));
+        await db.InScope(sp => sp.GetRequiredService<IJobLeases>().ReleaseAllAsync(default));
+        Assert.Equal(0L, await db.InDb(c => c.JobLeases.Where(l => l.Name == "hourly").Select(l => l.UntilUnixMs).SingleAsync()));
+    }
+
+    [Fact]
     public async Task A_job_lease_is_held_by_one_server_until_it_lapses()
     {
         await using var db = new LedgerDatabase();

@@ -65,10 +65,16 @@ public sealed class IifImportService(MigrationImportService migration)
             };
             var note = type is null ? "Discounts, subtotals, groups, payments and tax items aren't imported."
                 : kind.StartsWith("INVENTORY", StringComparison.Ordinal) ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
-            var rate = StatementValues.TryParseAmount(r.Get("PRICE") ?? "0", out var price) ? Math.Abs(price) : 0m;
-            data.Items.Add(new SourceItem(r.Line, r.Get("NAME") ?? string.Empty, kind, type, r.Get("ACCNT"), rate, r.Get("DESC"), note));
+            var rate = MigrationReaders.Price(r.Get("PRICE") ?? "0") ?? 0m;
+            data.Items.Add(new SourceItem(r.Line, r.Get("NAME") ?? string.Empty, kind, rate < 0m ? null : type, r.Get("ACCNT"), Math.Max(rate, 0m), r.Get("DESC"), rate < 0m ? MigrationReaders.NegativePrice : note));
         }
 
+        // A child before its parent would be refused for a parent that isn't there yet.
+        var parentsFirst = data.Accounts.OrderBy(a => a.FullName.Count(c => c == Domain.Accounts.Account.PathSeparator)).ToList();
+        data.Accounts.Clear();
+        data.Accounts.AddRange(parentsFirst);
+
+        var dates = MigrationReaders.DateReader(transactions.Select(t => t.Trns.Get("DATE")), data.Warnings, "transaction");
         foreach (var t in transactions)
         {
             var type = t.Trns.Get("TRNSTYPE") ?? "GENERAL JOURNAL";
@@ -85,15 +91,12 @@ public sealed class IifImportService(MigrationImportService migration)
             }
 
             var memo = string.Join(" · ", new[] { label, t.Trns.Get("NAME"), t.Trns.Get("MEMO") }.Where(s => !string.IsNullOrWhiteSpace(s)));
-            data.Transactions.Add(new SourceTransaction(t.Line, label, dateText, TryParseDate(dateText, out var date) ? date : null, memo, lines,
+            data.Transactions.Add(new SourceTransaction(t.Line, label, dateText, dates(dateText), memo, lines,
                 NonPostingTransactions.Contains(type) ? "Estimates and orders don't post to the books." : null, errors));
         }
 
         return data;
     }
-
-    private static bool TryParseDate(string? text, out DateOnly date) =>
-        DateOnly.TryParseExact(text?.Trim(), ["M/d/yyyy", "M/d/yy", "yyyy-MM-dd", "MM/dd/yyyy"], CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
 
     internal sealed record IifRecord(int Line, string Type, IReadOnlyDictionary<string, string> Values)
     {

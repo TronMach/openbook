@@ -241,10 +241,10 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
         using var response = await client.GetAsync($"/api/reports/{escaped}/table{(query is { Length: > 0 } ? "?" + query : "")}", ct);
         var body = await Checked(response, ct);
         var text = format == "json" ? Pretty(body) + Environment.NewLine : RenderReport(body);
-        if (options.GetValueOrDefault("out") is { } file)
+        if (options.GetValueOrDefault("out") is { } saveTo)
         {
-            await File.WriteAllTextAsync(file, text, ct);
-            await output.WriteLineAsync($"Saved {Path.GetFullPath(file)}.");
+            await File.WriteAllTextAsync(saveTo, text, ct);
+            await output.WriteLineAsync($"Saved {Path.GetFullPath(saveTo)}.");
             return 0;
         }
 

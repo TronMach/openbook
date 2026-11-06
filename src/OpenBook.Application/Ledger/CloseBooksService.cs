@@ -55,6 +55,9 @@ public sealed class CloseBooksService(
         string? hash = null;
         if (!string.IsNullOrEmpty(newPassword))
         {
+            // A password protects a closing date: with none it would be dropped as it's saved.
+            if (closingDate is null)
+                throw new DomainException("period.password_needs_date", "Choose a closing date for the password to protect.");
             if (newPassword.Length < 6)
                 throw new DomainException("period.password_too_short", "The closing date password needs at least 6 characters.");
             hash = hasher.Hash(newPassword);

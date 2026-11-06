@@ -55,7 +55,7 @@ public sealed record ReleaseCommand(DateOnly Date, Guid? ClassId, decimal Amount
 /// gifts, grants and opening balances need nothing new to record it.
 /// </summary>
 public sealed class NonprofitService(
-    INonprofitStore store, AccountService accounts, SegmentService segments, ReportLedger ledger, PostingEngine engine,
+    INonprofitStore store, ILedgerStore ledgerStore, AccountService accounts, SegmentService segments, ReportLedger ledger, PostingEngine engine,
     IClock clock, ICurrentUser user)
 {
     public const string EntityType = "restriction_release";
@@ -76,6 +76,9 @@ public sealed class NonprofitService(
         var names = await segments.NamesAsync(ct);
         var lines = await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct);
 
+        // A gift voided since never was one: it doesn't start the count of spending against the purpose.
+        var undone = (await ledgerStore.ListEntryHeadersAsync(ct))
+            .Where(e => e.Status == JournalEntryStatus.Voided || e.Kind == JournalEntryKind.Reversal).Select(e => e.Id).ToHashSet();
         var held = new List<(Guid? ClassId, decimal Received, decimal Released, DateOnly? FirstGift)>();
         foreach (var group in lines.GroupBy(l => l.ClassId))
         {
@@ -89,7 +92,7 @@ public sealed class NonprofitService(
                 else if (account.DonorRestricted)
                 {
                     received -= line.Amount;
-                    if (line.Amount < 0m && (firstGift is null || line.Date < firstGift))
+                    if (line.Amount < 0m && !undone.Contains(line.JournalEntryId) && (firstGift is null || line.Date < firstGift))
                         firstGift = line.Date;
                 }
             }

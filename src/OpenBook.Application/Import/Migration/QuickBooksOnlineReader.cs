@@ -45,7 +45,7 @@ internal static class QuickBooksOnlineReader
             var index = 0;
 
             var accounts = Get(lists, "Account");
-            var accountNames = accounts.Where(a => Str(a, "Id") is not null).ToDictionary(a => Str(a, "Id")!, a => Str(a, "FullyQualifiedName") ?? Str(a, "Name") ?? "");
+            var accountNames = accounts.Where(a => Str(a, "Id") is not null).DistinctBy(a => Str(a, "Id")).ToDictionary(a => Str(a, "Id")!, a => Str(a, "FullyQualifiedName") ?? Str(a, "Name") ?? "");
             foreach (var a in accounts.OrderBy(a => (Str(a, "FullyQualifiedName") ?? "").Count(c => c == ':')))
             {
                 var typeLabel = Str(a, "AccountType") ?? "";
@@ -81,8 +81,9 @@ internal static class QuickBooksOnlineReader
                 var income = Str(i, "IncomeAccountRef", "value") is { } id && accountNames.TryGetValue(id, out var n) ? n : Str(i, "IncomeAccountRef", "name");
                 var note = type is null ? "Categories, bundles and other item kinds aren't imported."
                     : kind == "Inventory" ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
-                data.Items.Add(new SourceItem(++index, Str(i, "FullyQualifiedName") ?? Str(i, "Name") ?? "", kind, type, income,
-                    Math.Abs(Number(i, "UnitPrice") ?? 0m), Str(i, "Description"), note));
+                var price = decimal.Round(Number(i, "UnitPrice") ?? 0m, 4, MidpointRounding.AwayFromZero);
+                data.Items.Add(new SourceItem(++index, Str(i, "FullyQualifiedName") ?? Str(i, "Name") ?? "", kind, price < 0m ? null : type, income,
+                    Math.Max(price, 0m), Str(i, "Description"), price < 0m ? MigrationReaders.NegativePrice : note));
             }
 
             foreach (var e in Get(lists, "JournalEntry"))
