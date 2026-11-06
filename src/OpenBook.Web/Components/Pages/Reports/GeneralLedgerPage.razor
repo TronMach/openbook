@@ -37,8 +37,14 @@
         <div class="card"><p>No activity in this period.</p></div>
     }
 
+    @{
+        var room = _limit;
+        var lineCount = _report.Accounts.Sum(a => a.Lines.Count);
+    }
     @foreach (var account in _report.Accounts)
     {
+        var shown = account.Lines.Take(room).ToList();
+        room -= shown.Count;
         <h2 style="margin-top: 1.5rem">@Labels.AccountName(_chart, account.Account.Id, _useNumbers)</h2>
         <div class="table-wrap">
             <table class="data">
@@ -50,7 +56,7 @@
                     {
                         <tr class="muted"><td>@Labels.Date(from)</td><td colspan="5">Opening balance</td><td class="num">@Labels.Amount(account.OpeningBalance)</td></tr>
                     }
-                    @foreach (var line in account.Lines)
+                    @foreach (var line in shown)
                     {
                         <tr>
                             <td>@Labels.Date(line.Line.Date)</td>
@@ -61,6 +67,10 @@
                             <td class="num">@Labels.AmountOrBlank(line.Credit)</td>
                             <td class="num">@Labels.Amount(line.Balance)</td>
                         </tr>
+                    }
+                    @if (shown.Count < account.Lines.Count)
+                    {
+                        <tr class="muted"><td colspan="7">@((account.Lines.Count - shown.Count).ToString("N0")) more lines aren't shown here. The totals below count them.</td></tr>
                     }
                 </tbody>
                 <tfoot>
@@ -74,10 +84,21 @@
             </table>
         </div>
     }
+    @if (lineCount > _limit)
+    {
+        <p class="muted show-more">
+            Showing @_limit.ToString("N0") of @lineCount.ToString("N0") lines. Choose one account above, or export the report for all of them.
+            <a href="@MoreHref">Show @PageLines.ToString("N0") more</a>
+        </p>
+    }
     <p class="muted">Balances are shown in each account's normal direction: debits for assets and expenses, credits for the rest.</p>
 </div>
 
 @code {
+    /// <summary>Lines drawn at a time: a long ledger as one page runs to many megabytes.</summary>
+    private const int PageLines = 2000;
+
+    private int _limit = PageLines;
     private GeneralLedger _report = null!;
     private ReportQuery _query = null!;
     private ChartOfAccounts _chart = new([]);
@@ -92,10 +113,15 @@
     [SupplyParameterFromQuery] private string? ClassId { get; set; }
     [SupplyParameterFromQuery] private string? LocationId { get; set; }
     [SupplyParameterFromQuery] private string? TagId { get; set; }
+    [SupplyParameterFromQuery] private int? Count { get; set; }
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
     private string? _segments;
+
+    private string MoreHref => Navigation.GetUriWithQueryParameter("count", _limit + PageLines);
 
     protected override async Task OnInitializedAsync()
     {
+        _limit = Math.Max(PageLines, Count ?? PageLines);
         var company = await Settings.GetAsync();
         _companyName = company.Name;
         _useNumbers = company.UseAccountNumbers;

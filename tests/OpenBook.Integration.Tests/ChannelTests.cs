@@ -271,6 +271,28 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Orders_waiting_to_be_posted_follow_a_later_report()
+    {
+        var shop = await Channel(ChannelKind.Shopify, "Waiting");
+        const string Header = "Name,Created at,Financial Status,Shipping,Taxes,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku,Shipping Province,Cancelled at";
+        var first = string.Join(Environment.NewLine, Header,
+            "#1,2026-03-02 09:00:00 -0500,paid,0,0,1,Mug,40.00,MUG,CA,",
+            "#2,2026-03-02 09:00:00 -0500,paid,0,0,1,Cup,10.00,CUP,CA,");
+        await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(shop.Id, Encoding.UTF8.GetBytes(first)));
+
+        var second = string.Join(Environment.NewLine, Header,
+            "#1,2026-03-02 09:00:00 -0500,paid,0,0,2,Mug,40.00,MUG,CA,",
+            "#2,2026-03-02 09:00:00 -0500,paid,0,0,1,Cup,10.00,CUP,CA,2026-03-05");
+        var again = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(shop.Id, Encoding.UTF8.GetBytes(second)));
+
+        Assert.Equal(0, again.Orders);
+        Assert.Contains(again.Warnings, w => w.Contains("2 order(s) waiting to be posted were updated", StringComparison.Ordinal));
+        var batch = Assert.Single(await In<ChannelOrderService, IReadOnlyList<ChannelOrderBatch>>(s => s.BatchesAsync(shop.Id)));
+        var line = Assert.Single(batch.Lines);
+        Assert.Equal(("#1", 2m, 80m), (line.OrderId, line.Quantity, line.Sales));
+    }
+
+    [Fact]
     public async Task Pending_orders_wait_and_an_order_cancelled_since_is_called_out()
     {
         var shop = await Channel(ChannelKind.Shopify);

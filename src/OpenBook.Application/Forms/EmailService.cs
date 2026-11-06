@@ -326,6 +326,9 @@ public sealed class EmailService(
     private const string SendFailedCode = "email.send_failed";
     private const int MaxFailuresInARow = 2;
 
+    /// <summary>A bulk send run again within this long leaves out who already has theirs: that's a second press, or a run picked up after a failure.</summary>
+    private static readonly TimeSpan RepeatWindow = TimeSpan.FromHours(1);
+
     /// <summary>
     /// Sends each record its usual email, in the order given, each send kept on its own. Records without an address
     /// are skipped and listed; a failed send is listed and the rest go on. Stops before sending anything when email isn't set up.
@@ -337,6 +340,7 @@ public sealed class EmailService(
         var sent = new List<string>();
         var noEmail = new List<string>();
         var failed = new List<(string, string)>();
+        var already = new List<string>();
         var inARow = 0;
         foreach (var source in each)
         {
@@ -344,6 +348,12 @@ public sealed class EmailService(
             if (string.IsNullOrWhiteSpace(context.To))
             {
                 noEmail.Add(context.Name);
+                continue;
+            }
+
+            if ((await store.ListSentAsync(context.EntityType, context.EntityId, ct)).Any(e => e.Kind == source.Kind && clock.UtcNow - e.SentAt < RepeatWindow))
+            {
+                already.Add(context.Name);
                 continue;
             }
 
@@ -368,7 +378,7 @@ public sealed class EmailService(
             }
         }
 
-        return new EmailRun(sent, noEmail, failed);
+        return new EmailRun(sent, noEmail, failed, already);
     }
 
     /// <summary>

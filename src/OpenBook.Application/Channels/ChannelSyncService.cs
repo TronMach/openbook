@@ -15,7 +15,7 @@ public interface IChannelClient
     Task<IReadOnlyList<PayoutData>> FetchPayoutsAsync(ChannelKind kind, string? shopDomain, string credential, DateOnly since, CancellationToken ct);
 
     /// <summary>Shopify orders created since the date (not cancelled), as item lines with the order's id.</summary>
-    Task<IReadOnlyList<ChannelOrderDraft>> FetchOrdersAsync(string shopDomain, string token, DateOnly since, CancellationToken ct);
+    Task<FetchedOrders> FetchOrdersAsync(string shopDomain, string token, DateOnly since, CancellationToken ct);
 }
 
 public sealed record ChannelSyncResult(bool Succeeded, int Imported, string? Error, int Orders = 0);
@@ -80,12 +80,18 @@ public sealed class ChannelSyncService(
 
             // Shopify: the orders behind the charges split them into sales, shipping and tax, and move stock.
             IReadOnlyList<ChannelOrderDraft> fetched = [];
+            IReadOnlyList<string> gone = [];
             string? ordersError = null;
             if (channel.Kind == ChannelKind.Shopify)
             {
                 try
                 {
-                    fetched = await client.FetchOrdersAsync(channel.ShopDomain!, key, since.AddDays(-30), ct);
+                    var read = await client.FetchOrdersAsync(channel.ShopDomain!, key, since.AddDays(-30), ct);
+                    var elsewhere = read.Currencies.Where(c => !c.Currency.Equals(home, StringComparison.OrdinalIgnoreCase)).Select(c => c.OrderId).ToHashSet(StringComparer.Ordinal);
+                    fetched = [.. read.Lines.Where(l => !elsewhere.Contains(l.OrderId))];
+                    gone = read.Cancelled;
+                    if (elsewhere.Count > 0)
+                        ordersError = $"{elsewhere.Count} order(s) in another currency were left out: these books are in {home}.";
                     payouts = SplitCharges(payouts, fetched);
                 }
                 catch (DomainException ex)
@@ -98,7 +104,10 @@ public sealed class ChannelSyncService(
                 ordersError = $"{other.Count} payout(s) in {other[0].Currency!.ToUpperInvariant()} were left out: these books are in {home}.{(ordersError is null ? "" : " " + ordersError)}";
 
             var result = await channels.AddAsync(channel, payouts, [], save: true, ct);
-            var newOrders = fetched.Count > 0 ? (await orders.AddAsync(channel, fetched, [], ct)).Orders : 0;
+            var added = fetched.Count > 0 || gone.Count > 0 ? await orders.AddAsync(channel, fetched, [], ct, gone) : null;
+            var newOrders = added?.Orders ?? 0;
+            if (added?.Warnings.FirstOrDefault(w => w.StartsWith("Already posted", StringComparison.Ordinal)) is { } posted)
+                ordersError = ordersError is null ? posted : $"{ordersError} {posted}";
             channel.RecordSync(clock.UtcNow, payouts.Count > 0 ? payouts.Max(p => p.Date) : null, ordersError);
             await store.SaveChangesAsync(ct);
             return new ChannelSyncResult(ordersError is null, result.Saved.Count, ordersError, newOrders);

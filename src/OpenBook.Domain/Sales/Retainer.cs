@@ -35,6 +35,12 @@ public sealed class Retainer
 
     public string? Reference { get; private set; }
     public string? Memo { get; private set; }
+
+    /// <summary>How it was paid, for deposit slips; null when not given.</summary>
+    public PaymentMethod? Method { get; private set; }
+
+    public void SetMethod(PaymentMethod? method) => Method = PaymentMethods.Valid(method);
+
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }

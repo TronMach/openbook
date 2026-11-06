@@ -21,6 +21,9 @@ public interface IInventoryStore
 
     Task<IReadOnlyList<InventoryAdjustment>> ListAdjustmentsAsync(CancellationToken ct);
 
+    /// <summary>Each movement's item, quantity and cost, unsaved ones included, for totals without reading whole movements.</summary>
+    Task<IReadOnlyList<(Guid ItemId, decimal Quantity, decimal Cost)>> ListStockRowsAsync(DateOnly? asOf, CancellationToken ct);
+
     /// <summary>Tracked, with lines.</summary>
     Task<InventoryAdjustment?> GetAdjustmentAsync(Guid id, CancellationToken ct);
 

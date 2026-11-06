@@ -70,6 +70,9 @@ public interface IPurchasesStore
 
     Task<BillPayment?> GetPaymentAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid? vendorId, CancellationToken ct);
+
+    /// <summary>Posted bill payments not sent by ACH: what can be a check.</summary>
+    Task<IReadOnlyList<BillPayment>> ListCheckPaymentsAsync(CancellationToken ct);
     Task<IReadOnlyList<BillPayment>> ListPaymentsForBillAsync(Guid billId, CancellationToken ct);
 
     /// <summary>Spend bank transactions (checks, payments, card charges), optionally for one vendor; newest first.</summary>

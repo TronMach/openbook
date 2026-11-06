@@ -241,5 +241,15 @@ public sealed class EverydayDepthTests : IAsyncLifetime
         var message = Assert.Single(_db.Mail.Sent).Message;
         Assert.Equal("ap@acme.test", message.To);
         Assert.Equal("application/pdf", Assert.Single(message.Attachments).ContentType);
+
+        // A second press doesn't send it twice.
+        var again = await In<EmailService, EmailRun>(s => s.SendStatementsAsync([_acme.Id], Jan5, Jan10));
+        Assert.Empty(again.Sent);
+        Assert.Equal(["Acme"], again.AlreadySent);
+        Assert.Single(_db.Mail.Sent);
+
+        // Later on it's a new run.
+        _db.Clock.UtcNow = _db.Clock.UtcNow.AddHours(2);
+        Assert.Equal(["Acme"], (await In<EmailService, EmailRun>(s => s.SendStatementsAsync([_acme.Id], Jan5, Jan10))).Sent);
     }
 }

@@ -13,6 +13,13 @@ internal sealed class EfInventoryStore(OpenBookDbContext db) : IInventoryStore
         return [.. saved, .. Pending().Where(m => itemId == null || m.ItemId == itemId)];
     }
 
+    public async Task<IReadOnlyList<(Guid ItemId, decimal Quantity, decimal Cost)>> ListStockRowsAsync(DateOnly? asOf, CancellationToken ct)
+    {
+        var saved = await db.InventoryMovements.AsNoTracking().Where(m => asOf == null || m.Date <= asOf)
+            .Select(m => new { m.ItemId, m.Quantity, m.Cost }).ToListAsync(ct);
+        return [.. saved.Select(m => (m.ItemId, m.Quantity, m.Cost)), .. Pending().Where(m => asOf is null || m.Date <= asOf).Select(m => (m.ItemId, m.Quantity, m.Cost))];
+    }
+
     public async Task<IReadOnlyList<decimal>> ListQuantitiesAtAsync(Guid? warehouseId, Guid? binId, CancellationToken ct) =>
         await db.InventoryMovements.Where(m => m.WarehouseId == warehouseId && (binId == null || m.BinId == binId)).Select(m => m.Quantity).ToListAsync(ct);
 

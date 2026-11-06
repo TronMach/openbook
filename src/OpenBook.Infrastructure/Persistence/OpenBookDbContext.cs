@@ -2145,6 +2145,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("Retainers");
             b.HasKey(r => r.Id);
+            b.Property(r => r.Method).HasConversion<string>().HasMaxLength(20);
             b.Property(r => r.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             b.Property(r => r.Reference).HasMaxLength(30);
             b.Property(r => r.Memo).HasMaxLength(1000);

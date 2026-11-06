@@ -38,16 +38,27 @@ public sealed class ChannelClient : IChannelClient, IDisposable
 
     public void Dispose() => _client.Dispose();
 
-    public async Task<IReadOnlyList<ChannelOrderDraft>> FetchOrdersAsync(string shopDomain, string token, DateOnly since, CancellationToken ct)
+    public async Task<FetchedOrders> FetchOrdersAsync(string shopDomain, string token, DateOnly since, CancellationToken ct)
     {
         var url = $"https://{shopDomain}/admin/api/{ShopifyVersion}/orders.json?status=any&limit=250&created_at_min={since:yyyy-MM-dd}T00:00:00Z"
-            + "&fields=id,name,created_at,cancelled_at,line_items,shipping_lines,shipping_address";
+            + "&fields=id,name,created_at,cancelled_at,financial_status,currency,line_items,shipping_lines,shipping_address";
         var lines = new List<ChannelOrderDraft>();
+        var cancelled = new List<string>();
+        var currencies = new List<(string, string)>();
         await foreach (var order in ShopifyListAsync(url, "orders", token, ct))
         {
-            if (Text(order, "cancelled_at").Length > 0)
-                continue;
             var id = Text(order, "id");
+            if (Text(order, "cancelled_at").Length > 0)
+            {
+                cancelled.Add(id);
+                continue;
+            }
+
+            // Not paid yet: a later sync brings it, since orders are fetched again for a while.
+            if (Text(order, "financial_status").Equals("pending", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (Text(order, "currency") is { Length: > 0 } currency)
+                currencies.Add((id, currency));
             var name = Text(order, "name");
             var date = DateTimeOffset.TryParse(Text(order, "created_at"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var at)
                 ? DateOnly.FromDateTime(at.UtcDateTime) : DateOnly.FromDateTime(DateTime.UtcNow);
@@ -66,7 +77,7 @@ public sealed class ChannelClient : IChannelClient, IDisposable
             }
         }
 
-        return lines;
+        return new FetchedOrders(lines, cancelled, currencies);
 
         static decimal TaxOf(JsonElement line) =>
             line.TryGetProperty("tax_lines", out var taxes) && taxes.ValueKind == JsonValueKind.Array ? taxes.EnumerateArray().Sum(t => Money(t, "price")) : 0m;

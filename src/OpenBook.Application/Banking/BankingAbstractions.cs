@@ -57,6 +57,11 @@ public interface IBankingStore
     /// <summary>Every feed line for the account, any status, tracked.</summary>
     Task<IReadOnlyList<BankFeedItem>> ListFeedItemsAsync(Guid accountId, CancellationToken ct);
 
+    Task<IReadOnlyList<string>> ListFeedKeysAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>Posted spends not brought in from a statement or feed: what can be a check.</summary>
+    Task<IReadOnlyList<BankTransaction>> ListCheckSpendsAsync(CancellationToken ct);
+
     Task<BankFeedItem?> GetFeedItemAsync(Guid id, CancellationToken ct);
 
     /// <summary>One line an import queued (untracked), or null when it queued none.</summary>

@@ -59,6 +59,16 @@
                         </select>
                     </div>
                     <div class="field">
+                        <label for="method">Payment method <span class="muted">(optional)</span></label>
+                        <select id="method" name="method">
+                            <option value="">Not given</option>
+                            @foreach (var method in Enum.GetValues<PaymentMethod>())
+                            {
+                                <option value="@method">@PaymentMethods.Label(method)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
                         <label for="reference">Reference <span class="muted">(optional)</span></label>
                         <input id="reference" name="reference" maxlength="30" placeholder="Check or wire number" />
                     </div>

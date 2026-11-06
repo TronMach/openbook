@@ -43,7 +43,11 @@ public sealed record EmailPreview(
     IReadOnlyList<string> Notes, string? UsualDesign = null);
 
 /// <summary>What happened when the same kind of email went to several people.</summary>
-public sealed record EmailRun(IReadOnlyList<string> Sent, IReadOnlyList<string> NoEmail, IReadOnlyList<(string Name, string Reason)> Failed);
+/// <param name="Sent">Who got theirs.</param>
+/// <param name="NoEmail">Who has no address.</param>
+/// <param name="Failed">Who couldn't be reached, and why.</param>
+/// <param name="AlreadySent">Who got this kind of email in the last hour, and was left out so a second press doesn't send it twice.</param>
+public sealed record EmailRun(IReadOnlyList<string> Sent, IReadOnlyList<string> NoEmail, IReadOnlyList<(string Name, string Reason)> Failed, IReadOnlyList<string>? AlreadySent = null);
 
 /// <summary>An email from the history, with its link when one was sent.</summary>
 public sealed record SentEmailEntry(SentEmail Email, DocumentLink? Link);

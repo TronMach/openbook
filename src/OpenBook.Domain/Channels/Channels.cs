@@ -443,6 +443,22 @@ public sealed class ChannelOrderBatch
         return batch;
     }
 
+    /// <summary>
+    /// An order waiting to be posted, replaced by what a later report says of it, or taken out when it was cancelled
+    /// (no <paramref name="drafts"/>). What's left is dismissed when nothing is: there's nothing to post.
+    /// </summary>
+    public void ReplaceOrder(string orderId, IReadOnlyList<ChannelOrderDraft> drafts)
+    {
+        ArgumentNullException.ThrowIfNull(drafts);
+        if (Status != PayoutStatus.Pending)
+            throw new DomainException("channel.batch_not_pending", "Only orders waiting to be posted can change.");
+        _lines.RemoveAll(l => l.OrderId == orderId);
+        var next = _lines.Count == 0 ? 0 : _lines.Max(l => l.LineNumber);
+        _lines.AddRange(drafts.Select((l, i) => new ChannelOrderLine(next + i + 1, l)));
+        if (_lines.Count == 0)
+            Status = PayoutStatus.Dismissed;
+    }
+
     public void Posted(Guid? entryId)
     {
         if (Status != PayoutStatus.Pending)

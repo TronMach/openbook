@@ -710,4 +710,62 @@ public sealed class MediumFindingsTests : IAsyncLifetime
         Assert.Equal(60m, await CashBalance(_office.Id));
         Assert.Equal(200.01m, await CashBalance(other.Id));
     }
+
+    [Fact]
+    public async Task A_retainers_payment_method_reaches_the_deposit()
+    {
+        var holding = await _db.CreateAccount("Undeposited Funds", AccountType.OtherCurrentAsset, "1200");
+
+        await In<RetainerService, Retainer>(s => s.ReceiveAsync(new ReceiveRetainerCommand(_acme.Id, Mar1, holding.Id, 50m, "1001", Method: PaymentMethod.Check)));
+
+        var item = Assert.Single(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()));
+        Assert.Equal(PaymentMethod.Check, item.Method);
+    }
+
+    [Fact]
+    public async Task A_correction_keeps_a_stock_item_that_has_been_deactivated_since()
+    {
+        var bolt = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Bolt", ItemType.Inventory, _consulting.IncomeAccountId, 10m)));
+        var line = new BillLineDraft(Guid.Empty, 40m, null, bolt.Id, 8m);
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_staples.Id, Mar1, [line])));
+        await In<ItemService, Item>(s => s.SetActiveAsync(bolt.Id, false));
+
+        var changed = await In<BillService, Bill>(s => s.ChangeAsync(bill.Id, new ChangeBillCommand(Mar5, [line], "Date was wrong")));
+
+        Assert.Equal(Mar5, changed.Date);
+    }
+
+    [Fact]
+    public void A_journal_report_name_a_subaccount_shares_is_called_out()
+    {
+        const string File = """
+            <QBXML><QBXMLMsgsRs>
+              <AccountQueryRs>
+                <AccountRet><Name>Phone</Name><FullName>Phone</FullName><AccountType>Expense</AccountType></AccountRet>
+                <AccountRet><Name>Utilities</Name><FullName>Utilities</FullName><AccountType>Expense</AccountType></AccountRet>
+                <AccountRet><Name>Phone</Name><FullName>Utilities:Phone</FullName><AccountType>Expense</AccountType></AccountRet>
+                <AccountRet><Name>Checking</Name><FullName>Checking</FullName><AccountType>Bank</AccountType></AccountRet>
+              </AccountQueryRs>
+              <GeneralDetailReportQueryRs>
+                <ReportRet>
+                  <ReportTitle>Journal</ReportTitle>
+                  <ColDesc colID="1"><ColType>TxnID</ColType></ColDesc>
+                  <ColDesc colID="2"><ColType>Date</ColType></ColDesc>
+                  <ColDesc colID="3"><ColType>Account</ColType></ColDesc>
+                  <ColDesc colID="4"><ColType>Debit</ColType></ColDesc>
+                  <ColDesc colID="5"><ColType>Credit</ColType></ColDesc>
+                  <ReportData>
+                    <DataRow rowNumber="1"><ColData colID="1" value="T1"/><ColData colID="2" value="2026-03-01"/><ColData colID="3" value="Phone"/><ColData colID="4" value="10.00"/></DataRow>
+                    <DataRow rowNumber="2"><ColData colID="1" value="T1"/><ColData colID="3" value="Checking"/><ColData colID="5" value="10.00"/></DataRow>
+                    <SubtotalRow rowNumber="3"><ColData colID="4" value="10.00"/></SubtotalRow>
+                  </ReportData>
+                </ReportRet>
+              </GeneralDetailReportQueryRs>
+            </QBXMLMsgsRs></QBXML>
+            """;
+
+        var data = OpenBook.Application.Import.Migration.MigrationReaders.Read(OpenBook.Application.Import.Migration.MigrationSource.QuickBooksQbxml, System.Text.Encoding.UTF8.GetBytes(File), "USD");
+
+        Assert.Contains(data.Warnings, w => w.Contains("'Phone'", StringComparison.Ordinal));
+    }
 }

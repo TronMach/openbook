@@ -5841,6 +5841,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Method")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Reference")
                         .HasMaxLength(30)
                         .HasColumnType("TEXT");

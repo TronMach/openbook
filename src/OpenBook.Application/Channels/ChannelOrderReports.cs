@@ -5,6 +5,9 @@ using OpenBook.Domain.Common;
 
 namespace OpenBook.Application.Channels;
 
+/// <summary>Orders fetched from a channel: their lines, those cancelled, and the currency of each.</summary>
+public sealed record FetchedOrders(IReadOnlyList<ChannelOrderDraft> Lines, IReadOnlyList<string> Cancelled, IReadOnlyList<(string OrderId, string Currency)> Currencies);
+
 /// <param name="Cancelled">Orders the report shows cancelled, in case one came in earlier.</param>
 public sealed record OrderReadResult(IReadOnlyList<ChannelOrderDraft> Lines, IReadOnlyList<string> Warnings, IReadOnlyList<string>? Cancelled = null);
 

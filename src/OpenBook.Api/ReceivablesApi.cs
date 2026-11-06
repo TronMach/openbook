@@ -438,7 +438,7 @@ internal static class ReceivablesApi
         {
             var end = r.To ?? Today();
             var run = await s.SendStatementsAsync(r.CustomerIds ?? [], r.From ?? end.AddMonths(-1).AddDays(1), end, ct);
-            return new { run.Sent, run.NoEmail, Failed = run.Failed.Select(f => new { Customer = f.Name, f.Reason }) };
+            return new { run.Sent, run.NoEmail, Failed = run.Failed.Select(f => new { Customer = f.Name, f.Reason }), run.AlreadySent };
         });
 
         api.MapGet("/settings/email", async (EmailService s, CancellationToken ct) => EmailSettingsResponse.From(await s.GetSettingsAsync(ct)));

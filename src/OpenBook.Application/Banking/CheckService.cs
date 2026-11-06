@@ -41,12 +41,12 @@ public sealed class CheckService(
         bool IsBank(Guid id) => chart.Find(id)?.Type == AccountType.Bank && (accountId is null || accountId == id);
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
 
-        var expenses = (await bank.ListAllTransactionsAsync(ct))
-            .Where(t => t.Kind == BankTransactionKind.Spend && t.Status == BankTransactionStatus.Posted && t.ImportBatchId is null && IsBank(t.AccountId))
+        var expenses = (await bank.ListCheckSpendsAsync(ct))
+            .Where(t => IsBank(t.AccountId))
             .Select(t => new PrintableCheck(CheckKind.Expense, t.Id, t.AccountId, t.Date, t.Reference,
                 t.Payee ?? (t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null) ?? "(no payee)", t.Amount, t.PrintedAt));
-        var payments = (await purchases.ListPaymentsAsync(null, ct))
-            .Where(p => p.Status == DocumentStatus.Posted && p.AchBatchId is null && IsBank(p.PaymentAccountId))
+        var payments = (await purchases.ListCheckPaymentsAsync(ct))
+            .Where(p => IsBank(p.PaymentAccountId))
             .Select(p => new PrintableCheck(CheckKind.BillPayment, p.Id, p.PaymentAccountId, p.Date, p.Reference,
                 vendors.GetValueOrDefault(p.VendorId) ?? "(unknown vendor)", p.Amount, p.PrintedAt));
 

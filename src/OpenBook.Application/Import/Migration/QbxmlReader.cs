@@ -79,9 +79,12 @@ internal static class QbxmlReader
         var journals = document.Named("ReportRet").Where(QbxmlJournal.IsJournal).ToList();
         if (journals.Count > 0)
         {
-            var accounts = QbxmlJournal.AccountNames(document.Named("AccountRet"));
+            var unsure = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            var accounts = QbxmlJournal.AccountNames(document.Named("AccountRet"), unsure);
             foreach (var report in journals)
                 QbxmlJournal.Read(report, accounts, data);
+            foreach (var name in unsure)
+                data.Warnings.Add($"The Journal report says '{name}', and there's a top-level account and a subaccount by that name. It went to the top-level account: check it after importing, or turn account numbers on in QuickBooks and export again.");
             if (document.Named("JournalEntryRet").Any())
                 data.Warnings.Add("The journal entries listed on their own were left out: the Journal report already has them.");
             return data;

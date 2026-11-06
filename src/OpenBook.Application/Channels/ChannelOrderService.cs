@@ -55,17 +55,47 @@ public sealed class ChannelOrderService(
         var text = OpenBook.Application.Import.TextFiles.Decode(content);
         ChannelCurrency.Check(text, (await OpenBook.Application.Companies.CompanyStoreExtensions.GetRequiredCompanyAsync(companies, ct)).HomeCurrency.Code);
         var read = ChannelOrderReports.Read(channel.Kind, text);
-        var known = await store.OrderIdsAsync(channel.Id, ct);
-        var cancelled = (read.Cancelled ?? []).Where(known.Contains).ToList();
-        var warnings = cancelled.Count == 0 ? read.Warnings
-            : [.. read.Warnings, $"Already imported, and cancelled since: {string.Join(", ", cancelled.Take(10))}{(cancelled.Count > 10 ? " and more" : "")}. Its stock and sales tax stay until you record a return, or void its batch if it hasn't been posted."];
-        return await AddAsync(channel, read.Lines, warnings, ct);
+        return await AddAsync(channel, read.Lines, read.Warnings, ct, read.Cancelled);
     }
 
     /// <summary>Saves order lines whose orders weren't seen before, one batch per date (live connections use this too).</summary>
-    internal async Task<OrderImportResult> AddAsync(SalesChannel channel, IReadOnlyList<ChannelOrderDraft> lines, IReadOnlyList<string> warnings, CancellationToken ct)
+    /// <param name="channel">The channel.</param>
+    /// <param name="lines">What the report or sync says.</param>
+    /// <param name="warnings">What reading it found.</param>
+    /// <param name="ct">Cancels it.</param>
+    /// <param name="cancelled">Orders it shows cancelled.</param>
+    internal async Task<OrderImportResult> AddAsync(
+        SalesChannel channel, IReadOnlyList<ChannelOrderDraft> lines, IReadOnlyList<string> warnings, CancellationToken ct, IReadOnlyList<string>? cancelled = null)
     {
+        // Orders waiting to be posted follow what the channel says now; posted ones can only be pointed out.
+        var waiting = (await store.ListBatchesAsync(channel.Id, ct)).Where(b => b.Status == PayoutStatus.Pending).ToList();
+        var batches = new Dictionary<Guid, ChannelOrderBatch>();
+        async Task<ChannelOrderBatch> TrackedAsync(Guid id) => batches.TryGetValue(id, out var found) ? found : batches[id] = (await store.GetBatchAsync(id, ct))!;
+        var updated = 0;
+        foreach (var batch in waiting)
+        {
+            foreach (var order in batch.Lines.GroupBy(l => l.OrderId).ToList())
+            {
+                var now = lines.Where(l => l.OrderId == order.Key).ToList();
+                var gone = cancelled?.Contains(order.Key) == true;
+                if (!gone && (now.Count == 0 || Same(order, now)))
+                    continue;
+                (await TrackedAsync(batch.Id)).ReplaceOrder(order.Key, gone ? [] : now);
+                updated++;
+            }
+        }
+
+        foreach (var tracked in batches.Values)
+            store.Add(Audit(AuditAction.Updated, tracked, channel, null));
+        var unposted = waiting.SelectMany(b => b.Lines).Select(l => l.OrderId).ToHashSet(StringComparer.Ordinal);
         var known = await store.OrderIdsAsync(channel.Id, ct);
+        var taken = (cancelled ?? []).Where(id => known.Contains(id) && !unposted.Contains(id)).ToList();
+        warnings =
+        [
+            .. warnings,
+            .. updated == 0 ? [] : new[] { $"{updated} order(s) waiting to be posted were updated from this report." },
+            .. taken.Count == 0 ? [] : new[] { $"Already posted, and cancelled since: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? " and more" : "")}. Their stock and sales tax stay until you record a return." },
+        ];
         var fresh = lines.Where(l => !known.Contains(l.OrderId)).ToList();
         var old = lines.Where(l => known.Contains(l.OrderId)).Select(l => l.OrderId).Distinct().Count();
         var saved = new List<ChannelOrderBatch>();
@@ -77,9 +107,17 @@ public sealed class ChannelOrderService(
             saved.Add(batch);
         }
 
-        if (saved.Count > 0)
+        if (saved.Count > 0 || updated > 0)
             await store.SaveChangesAsync(ct);
         return new OrderImportResult(fresh.Select(l => l.OrderId).Distinct().Count(), old, saved, warnings);
+    }
+
+    private static bool Same(IEnumerable<ChannelOrderLine> held, IReadOnlyList<ChannelOrderDraft> now)
+    {
+        static string Key(string? sku, decimal quantity, decimal sales, decimal shipping, decimal tax, DateOnly date) =>
+            FormattableString.Invariant($"{sku}|{quantity}|{sales}|{shipping}|{tax}|{date}");
+        return held.Select(l => Key(l.Sku, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Date)).Order(StringComparer.Ordinal)
+            .SequenceEqual(now.Select(l => Key(l.Sku, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Date)).Order(StringComparer.Ordinal));
     }
 
     /// <summary>Every SKU in the channel's orders, with its mapping: chosen, automatic (an item's barcode or name), or none yet.</summary>

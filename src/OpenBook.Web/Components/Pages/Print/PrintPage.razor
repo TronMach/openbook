@@ -28,6 +28,10 @@
             {
                 <span>@NoEmail without an email address weren't sent (marked below): add one on the customer, or print theirs.</span>
             }
+            @if (Already > 0)
+            {
+                <span>@Already already had one in the last hour, so they were left out. To send one again, use <strong>Email</strong> on that customer's statement.</span>
+            }
         </div>
     }
 
@@ -209,6 +213,7 @@
     /// <summary>After emailing statements: how many went, and who has no email address.</summary>
     [SupplyParameterFromQuery] private int? Emailed { get; set; }
     [SupplyParameterFromQuery] private int? NoEmail { get; set; }
+    [SupplyParameterFromQuery] private int? Already { get; set; }
     [SupplyParameterFromQuery(Name = "kind")] private string? KindText { get; set; }
     [SupplyParameterFromQuery(Name = "from")] private DateOnly? From { get; set; }
     [SupplyParameterFromQuery(Name = "to")] private DateOnly? To { get; set; }

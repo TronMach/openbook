@@ -86,16 +86,24 @@ internal static partial class QbxmlJournal
     /// write "1000 · Checking" when account numbers are on (and "6000 · Utilities:6010 · Phone" for subaccounts), and
     /// may show only the subaccount's own name. Anything not found is left as written, for the import to report.
     /// </summary>
-    public static Func<string, string> AccountNames(IEnumerable<XElement> accounts)
+    /// <param name="accounts">The file's accounts.</param>
+    /// <param name="unsure">Gets each name that could be a top-level account or a subaccount, which it takes as the top-level one.</param>
+    public static Func<string, string> AccountNames(IEnumerable<XElement> accounts, ISet<string>? unsure = null)
     {
         var list = accounts.Select(a => (full: a.Text("FullName") ?? a.Text("Name") ?? "", number: a.Text("AccountNumber"))).Where(a => a.full.Length > 0).ToList();
         var byFull = list.GroupBy(a => a.full, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().full, StringComparer.OrdinalIgnoreCase);
         var byNumber = Unique(list.Where(a => a.number is not null), a => a.number!);
         var byLeaf = Unique(list, a => a.full.Split(':')[^1]);
+        var subaccounts = list.Where(a => a.full.Contains(':', StringComparison.Ordinal)).Select(a => a.full.Split(':')[^1]).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return text =>
         {
             if (byFull.TryGetValue(text, out var full))
+            {
+                if (subaccounts.Contains(text))
+                    unsure?.Add(text);
                 return full;
+            }
+
             var parts = text.Split(':').Select(p => NumberedName().Match(p.Trim())).ToList();
             var plain = string.Join(':', parts.Select((m, i) => m.Success ? m.Groups["name"].Value.Trim() : text.Split(':')[i].Trim()));
             // The number first: a subaccount can share its name with a top-level account.

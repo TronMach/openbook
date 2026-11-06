@@ -41,7 +41,7 @@ public static class PrintEndpoints
                 // Not the request's token: leaving the page mustn't stop it halfway, with no word of who has theirs.
                 var run = await email.SendStatementsAsync(customers, Date(form["from"], "start"), Date(form["to"], "end"), CancellationToken.None);
                 // Counts only: the page's list marks who has no email address, and names don't belong in an address bar.
-                var query = $"emailed={run.Sent.Count}&noEmail={run.NoEmail.Count}"
+                var query = $"emailed={run.Sent.Count}&noEmail={run.NoEmail.Count}&already={run.AlreadySent?.Count ?? 0}"
                     + (run.Failed.Count == 0 ? "" : $"&printError={Uri.EscapeDataString($"{run.Failed.Count} couldn't be sent: {run.Failed[0].Reason}")}");
                 return Results.Redirect($"/print?{query}");
             }

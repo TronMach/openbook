@@ -255,7 +255,7 @@ public sealed class BankFeedService(
     }
 
     private async Task<HashSet<string>> KnownKeysAsync(Guid accountId, CancellationToken ct) =>
-        (await bank.ListFeedItemsAsync(accountId, ct)).Select(i => i.DedupeKey).ToHashSet(StringComparer.Ordinal);
+        (await bank.ListFeedKeysAsync(accountId, ct)).ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// The account's feed lines standing for a document about to be corrected: matched to its entry, or added as the

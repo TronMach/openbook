@@ -9,7 +9,7 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
 
-public sealed record ReceiveRetainerCommand(Guid CustomerId, DateOnly Date, Guid DepositAccountId, decimal Amount, string? Reference = null, string? Memo = null);
+public sealed record ReceiveRetainerCommand(Guid CustomerId, DateOnly Date, Guid DepositAccountId, decimal Amount, string? Reference = null, string? Memo = null, PaymentMethod? Method = null);
 
 /// <param name="Amount">Null applies as much as both the retainer and the invoice allow.</param>
 public sealed record ApplyRetainerCommand(Guid InvoiceId, DateOnly Date, decimal? Amount = null);
@@ -57,6 +57,7 @@ public sealed class RetainerService(ISalesStore store, SalesAccounts salesAccoun
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date, [JournalLineDraft.Dr(bank.Id, command.Amount), JournalLineDraft.Cr(liability.Id, command.Amount)], memo, Retainer.Source, id), ct);
         var retainer = Retainer.Create(id, customer.Id, command.Date, command.Amount, bank.Id, liability.Id, entry.Id, clock.UtcNow, command.Reference, command.Memo);
+        retainer.SetMethod(command.Method);
         store.Add(retainer);
         store.Add(Audit(AuditAction.Created, retainer, null));
         await store.SaveChangesAsync(ct);

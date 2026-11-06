@@ -44,7 +44,8 @@ public static class SalesFlowEndpoints
                     Date(form["date"]) ?? Today(),
                     Id(form["accountId"]) ?? throw new DomainException("retainer.deposit_account", "Choose the bank account it went into."),
                     Amount(form["amount"]) ?? throw new DomainException("retainer.amount_not_positive", "Enter an amount above zero."),
-                    form["reference"], form["memo"]), ct);
+                    form["reference"], form["memo"],
+                    Enum.TryParse<OpenBook.Domain.Sales.PaymentMethod>(form["method"], out var method) ? method : null), ct);
                 return Results.Redirect($"/sales/retainers/{retainer.Id}");
             }
             catch (DomainException ex)

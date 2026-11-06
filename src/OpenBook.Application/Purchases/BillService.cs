@@ -194,7 +194,7 @@ public sealed class BillService(
         var back = await inventory.PlanReversalAsync(InventorySources.Bill, bill.Id, bill.Date, "this bill", ct);
         await engine.StageVoidAsync(bill.JournalEntryId, $"Bill changed: {command.Reason.Trim()}", fromDocument: true, ct);
         inventory.Apply(back, InventorySources.Bill, bill.Id);
-        var (drafts, stock) = await inventory.PlanPurchaseAsync(command.Lines, command.Date, warehouseId, ct);
+        var (drafts, stock) = await inventory.PlanPurchaseAsync(command.Lines, command.Date, warehouseId, ct, oldLines.Select(l => l.ItemId).OfType<Guid>().ToHashSet());
         var lines = Bill.LinesFrom(drafts);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())

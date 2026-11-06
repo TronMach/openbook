@@ -121,7 +121,8 @@ public static class NonprofitEndpoints
                 var donors = await gifts.DonorsInYearAsync(year, ct);
                 var run = await email.SendEachAsync([.. donors.Select(d => new EmailSource(OpenBook.Domain.Email.EmailKind.GivingStatement, d, Year: year))], ct);
                 var notSent = run.NoEmail.Select(n => $"{n}: no email address").Concat(run.Failed.Select(f => $"{f.Name}: {f.Reason}")).ToList();
-                var done = $"{run.Sent.Count} statement(s) sent." + (notSent.Count > 0 ? $" Not sent: {string.Join("; ", notSent)}." : "");
+                var done = $"{run.Sent.Count} statement(s) sent." + (notSent.Count > 0 ? $" Not sent: {string.Join("; ", notSent)}." : "")
+                    + (run.AlreadySent is { Count: > 0 } had ? $" {had.Count} already had theirs in the last hour." : "");
                 return Results.Redirect($"/nonprofit/thanks?year={year}&done={Uri.EscapeDataString(done)}");
             }
             catch (DomainException ex)

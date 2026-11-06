@@ -75,7 +75,7 @@ public sealed class DepositService(
         var retainers = undeposited.Retainers
             .Where(r => Holding(r.DepositAccountId))
             .Select(r => new UndepositedItem(DepositedKind.Retainer, r.Id, r.Date, r.CustomerId,
-                $"Retainer from {customers.GetValueOrDefault(r.CustomerId)}", r.Reference, r.DepositAccountId, r.Amount));
+                $"Retainer from {customers.GetValueOrDefault(r.CustomerId)}", r.Reference, r.DepositAccountId, r.Amount, r.Method));
         var others = new List<UndepositedItem>();
         foreach (var source in sources)
             others.AddRange(await source.WaitingAsync(Holding, customers, ct));

@@ -60,15 +60,21 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     public async Task<IReadOnlyList<StockLevel>> StockAsync(DateOnly? asOf = null, CancellationToken ct = default)
     {
         var items = (await sales.ListItemsAsync(ct)).Where(i => i.IsInventory).ToList();
-        var movements = (await store.ListMovementsAsync(null, ct)).Where(m => asOf is null || m.Date <= asOf).ToLookup(m => m.ItemId);
+        var movements = (await store.ListStockRowsAsync(asOf, ct)).ToLookup(m => m.ItemId);
         return items
             .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(i => new StockLevel(i, movements[i.Id].Sum(m => m.Quantity), movements[i.Id].Sum(m => m.Cost)))
             .ToList();
     }
 
-    public async Task<StockLevel?> StockForAsync(Guid itemId, CancellationToken ct = default) =>
-        (await StockAsync(null, ct)).FirstOrDefault(s => s.Item.Id == itemId);
+    public async Task<StockLevel?> StockForAsync(Guid itemId, CancellationToken ct = default)
+    {
+        var item = (await sales.GetItemsAsync([itemId], ct)).GetValueOrDefault(itemId);
+        if (item is not { IsInventory: true })
+            return null;
+        var movements = await store.ListMovementsAsync(itemId, ct);
+        return new StockLevel(item, movements.Sum(m => m.Quantity), movements.Sum(m => m.Cost));
+    }
 
     /// <summary>Stock on hand by place and lot: every tracked item, or one. Value is each slice's share of its layer's remaining cost.</summary>
     public async Task<IReadOnlyList<StockAt>> StockByPlaceAsync(Guid? itemId = null, DateOnly? asOf = null, CancellationToken ct = default)
@@ -304,7 +310,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     /// layer (one per lot or serial) at its amount in the warehouse. Returns the drafts to post with.
     /// </summary>
     internal async Task<(IReadOnlyList<BillLineDraft> Drafts, InventoryPlan Plan)> PlanPurchaseAsync(
-        IReadOnlyList<BillLineDraft> drafts, DateOnly date, Guid? warehouseId, CancellationToken ct)
+        IReadOnlyList<BillLineDraft> drafts, DateOnly date, Guid? warehouseId, CancellationToken ct, IReadOnlySet<Guid>? carried = null)
     {
         ArgumentNullException.ThrowIfNull(drafts);
         var ids = drafts.Where(d => d.ItemId is not null).Select(d => d.ItemId!.Value).Distinct().ToList();
@@ -326,7 +332,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
                 continue;
             }
 
-            var item = InventoryItem(items, itemId);
+            var item = InventoryItem(items, itemId, carried);
             var lots = item.Tracking == ItemTracking.None || draft.Quantity is not > 0m
                 ? []
                 : Required(LotText.Parse(draft.Lots, item.Tracking, draft.Quantity.Value, item.Name), item);
@@ -412,7 +418,7 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             if (component.Tracking == ItemTracking.Serial && needed != decimal.Truncate(needed))
                 throw new DomainException("lot.serial_whole", $"{component.Name} is tracked by serial number, so builds must use whole units of it.");
             var history = await SharedHistoryAsync(histories ?? [], component.Id, ct);
-            var takes = TakeAndSimulate(component, history, needed, date, await ForPickingAsync(component, StockFilter.In(warehouseId), ct),
+            var takes = TakeAndSimulate(component, history, needed, date, await ForPickingAsync(component, StockFilter.In(warehouseId), ct) with { LotsCanBeNamed = false },
                 await ShortfallCostAsync(component, history, ct));
             var cost = takes.Sum(t => t.Cost);
             lines.Add((component.Id, needed, cost, LotText.Format(takes.Where(t => t.Lot is not null).Select(t => (t.Lot!, t.Quantity)), component.Tracking)));
@@ -683,12 +689,12 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
         return parts;
     }
 
-    internal static Item InventoryItem(IReadOnlyDictionary<Guid, Item> items, Guid itemId)
+    internal static Item InventoryItem(IReadOnlyDictionary<Guid, Item> items, Guid itemId, IReadOnlySet<Guid>? carried = null)
     {
         var item = items.GetValueOrDefault(itemId) ?? throw new EntityNotFoundException("item", itemId);
         if (!item.IsInventory)
             throw new DomainException("inventory.not_inventory", $"{item.Name} isn't an inventory item, so its stock isn't tracked.");
-        if (!item.IsActive)
+        if (!item.IsActive && carried?.Contains(itemId) != true)
             throw new DomainException("inventory.item_inactive", $"{item.Name} is inactive.");
         return item;
     }
