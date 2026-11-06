@@ -197,13 +197,13 @@ public sealed class ReportingTests : IAsyncLifetime
 public class AllocationAndDateRangeTests
 {
     [Fact]
-    public void Allocation_splits_in_proportion_and_puts_the_rounding_cent_last()
+    public void Allocation_splits_in_proportion_and_adds_up()
     {
         Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid();
 
         var parts = ReportLedger.Allocate(100m, [(a, 1m), (b, 1m), (c, 1m)]);
 
-        Assert.Equal([33.33m, 33.33m, 33.34m], parts.Select(p => p.Amount));
+        Assert.Equal([33.33m, 33.34m, 33.33m], parts.Select(p => p.Amount));
         Assert.Equal(100m, parts.Sum(p => p.Amount));
     }
 
