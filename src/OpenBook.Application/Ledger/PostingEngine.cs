@@ -155,6 +155,12 @@ public sealed class PostingEngine(
         return (location, (await store.GetEntryTagsAsync([entryId], ct)).Select(t => t.TagId).ToList());
     }
 
+    /// <summary>Wrong closing passwords per person: every call dated in the closed period is a guess otherwise.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTimeOffset Since)> Guesses = new(StringComparer.OrdinalIgnoreCase);
+
+    private const int MaxGuesses = 10;
+    private static readonly TimeSpan GuessWindow = TimeSpan.FromMinutes(15);
+
     /// <summary>Saves everything staged, for callers that stage several entries without a document of their own.</summary>
     internal Task SaveAsync(CancellationToken ct) => store.SaveChangesAsync(ct);
 
@@ -343,9 +349,16 @@ public sealed class PostingEngine(
         if (string.IsNullOrEmpty(closedPeriod.Password))
             throw new DomainException("period.password_required",
                 $"{date:yyyy-MM-dd} is on or before the closing date ({closing:yyyy-MM-dd}). Enter the closing date password to save it anyway.");
+        var now = clock.UtcNow;
+        if (Guesses.TryGetValue(user.Actor, out var tries) && tries.Count >= MaxGuesses && now - tries.Since < GuessWindow)
+            throw new DomainException("period.too_many_tries", "Too many wrong closing date passwords. Try again in a few minutes.");
         if (hasher.Verify(company.ClosingPasswordHash, closedPeriod.Password) == PasswordCheck.Failed)
+        {
+            Guesses[user.Actor] = tries.Count > 0 && now - tries.Since < GuessWindow ? (tries.Count + 1, tries.Since) : (1, now);
             throw new DomainException("period.wrong_password", "That closing date password is incorrect.");
+        }
 
+        Guesses.TryRemove(user.Actor, out _);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.ClosedPeriodOverride, "company", company.Id, null,
             JsonSerializer.Serialize(new { ClosingDate = closing, Date = date, Change = what })));
     }

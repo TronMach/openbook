@@ -1,10 +1,10 @@
 @* A one-line void form (reason and button) for a row in a table. *@
-<form method="post" action="@Action" data-enhance="false" class="inline">
+<PostForm Action="@Action" data-enhance="false" class="inline">
     <AntiforgeryToken />
     <input name="reason" required maxlength="500" placeholder="Reason" aria-label="Reason for voiding" size="12" />
     <ClosedPeriodPassword Visible="Password" Interactive="false" />
     <button type="submit" class="secondary">Void</button>
-</form>
+</PostForm>
 
 @code {
     [Parameter, EditorRequired] public string Action { get; set; } = "";

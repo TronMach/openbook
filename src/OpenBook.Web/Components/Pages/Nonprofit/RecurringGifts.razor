@@ -65,7 +65,7 @@
 
     <div class="card" style="margin-top: 1.5rem">
         <h2>@(_editing is null ? "Add a recurring gift" : "Edit the recurring gift")</h2>
-        <form method="post" action="@(_editing is null ? "/nonprofit/recurring" : $"/nonprofit/recurring/{_editing.Id}")" data-enhance="false">
+        <PostForm Action="@(_editing is null ? "/nonprofit/recurring" : $"/nonprofit/recurring/{_editing.Id}")" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -147,7 +147,7 @@
                     <a href="/nonprofit/recurring">Cancel</a>
                 }
             </div>
-        </form>
+        </PostForm>
     </div>
 </div>
 

@@ -115,7 +115,7 @@ internal sealed class ReportExporter : IReportExporter
         var document = new Document();
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = SystemFontResolver.FamilyName;
-        normal.Font.Size = table.Columns.Count > 6 ? 7.5 : 9;
+        normal.Font.Size = table.Columns.Count > 18 ? 4.5 : table.Columns.Count > 12 ? 6 : table.Columns.Count > 6 ? 7.5 : 9;
         normal.Font.Color = Ink;
 
         var section = document.AddSection();

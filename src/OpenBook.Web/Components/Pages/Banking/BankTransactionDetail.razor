@@ -26,7 +26,7 @@
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_transaction.Id}")">History</ActionLink>
         @if (_transaction.Status == BankTransactionStatus.Posted)
         {
-            <a class="button secondary" href="@(_transaction.Kind == BankTransactionKind.Transfer ? $"/banking/transfers/{_transaction.Id}/edit" : $"/banking/transactions/{_transaction.Id}/edit")">Change</a>
+            <ActionLink Class="button secondary" Href="@(_transaction.Kind == BankTransactionKind.Transfer ? $"/banking/transfers/{_transaction.Id}/edit" : $"/banking/transactions/{_transaction.Id}/edit")">Change</ActionLink>
         }
         @if (_transaction is { Kind: BankTransactionKind.Spend, Status: BankTransactionStatus.Posted } && _chart.Find(_transaction.AccountId)?.Type == AccountType.Bank)
         {

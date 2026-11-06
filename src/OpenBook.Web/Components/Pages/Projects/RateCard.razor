@@ -55,7 +55,7 @@
 
     <div class="card" id="edit" style="margin-top: 1.5rem">
         <h2>@(_editing is null ? L["Add a rate"] : L["Change a rate"])</h2>
-        <form method="post" action="@(_editing is null ? "/time/rates" : $"/time/rates/{_editing.Id}")" data-enhance="false">
+        <PostForm Action="@(_editing is null ? "/time/rates" : $"/time/rates/{_editing.Id}")" data-enhance="false">
             <AntiforgeryToken />
             <div class="row">
                 <div class="field">
@@ -112,7 +112,7 @@
                     <a href="/time/rates">@L["Cancel"]</a>
                 }
             </div>
-        </form>
+        </PostForm>
     </div>
 
     <div class="card" style="margin-top: 1.5rem">

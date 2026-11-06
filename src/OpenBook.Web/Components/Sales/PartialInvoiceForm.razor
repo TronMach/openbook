@@ -27,7 +27,7 @@
             </tbody>
         </table>
     </div>
-    <form id="@FormId" method="post" action="@Action" data-enhance="false">
+    <PostForm id="@FormId" Action="@Action" data-enhance="false">
         <AntiforgeryToken />
         <fieldset>
             <legend>Invoice</legend>
@@ -50,7 +50,7 @@
         <ClosedPeriodPassword Visible="Password" Interactive="false" />
         <p class="hint">@Hint</p>
         <div class="actions"><button type="submit">Create invoice</button></div>
-    </form>
+    </PostForm>
 </div>
 
 @code {
