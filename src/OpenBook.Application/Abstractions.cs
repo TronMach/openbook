@@ -17,6 +17,9 @@ public interface ICurrentUser
 }
 
 /// <summary>One sealed ledger line with its entry's details. <see cref="Amount"/> is debit-positive.</summary>
+/// <summary>What one payment settled of one document, read as a row: reports need this of thousands, not the payments.</summary>
+public sealed record DocumentSettlement(Guid DocumentId, Guid SourceId, DateOnly Date, decimal Amount);
+
 public sealed record LedgerLine(
     Guid JournalLineId,
     Guid JournalEntryId,

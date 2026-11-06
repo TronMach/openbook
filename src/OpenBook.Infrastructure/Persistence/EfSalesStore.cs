@@ -237,13 +237,19 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public async Task<IReadOnlyList<CustomerPayment>> ListPaymentsInPayoutAsync(Guid payoutId, CancellationToken ct) =>
         await db.CustomerPayments.Where(p => p.PayoutId == payoutId).ToListAsync(ct);
 
-    public async Task<IReadOnlyList<CustomerPayment>> ListPostedPaymentsOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct) =>
-        invoiceIds.Count == 0 ? [] : await db.CustomerPayments.AsNoTracking()
-            .Where(p => p.Status == DocumentStatus.Posted && p.Applications.Any(a => invoiceIds.Contains(a.InvoiceId))).ToListAsync(ct);
+    public async Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? invoiceIds, CancellationToken ct)
+    {
+        var rows = db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted)
+            .SelectMany(p => p.Applications, (p, a) => new { p.Id, p.Date, a.InvoiceId, a.Amount, a.Discount });
+        if (invoiceIds is not null)
+            rows = rows.Where(r => invoiceIds.Contains(r.InvoiceId));
+        return (await rows.ToListAsync(ct)).Select(r => new DocumentSettlement(r.InvoiceId, r.Id, r.Date, r.Amount + r.Discount)).ToList();
+    }
 
-    public async Task<IReadOnlyList<CreditMemo>> ListPostedCreditMemosOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct) =>
-        invoiceIds.Count == 0 ? [] : await db.CreditMemos.AsNoTracking()
-            .Where(c => c.Status == DocumentStatus.Posted && c.Applications.Any(a => invoiceIds.Contains(a.InvoiceId))).ToListAsync(ct);
+    public async Task<IReadOnlyList<Guid>> ListCreditMemoIdsOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct) =>
+        invoiceIds.Count == 0 ? [] : await db.CreditMemos.AsNoTracking().Where(c => c.Status == DocumentStatus.Posted)
+            .SelectMany(c => c.Applications, (c, a) => new { c.Id, a.InvoiceId })
+            .Where(r => invoiceIds.Contains(r.InvoiceId)).Select(r => r.Id).Distinct().ToListAsync(ct);
 
     public async Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsOfCreditMemosAsync(IReadOnlyCollection<Guid> creditMemoIds, CancellationToken ct) =>
         creditMemoIds.Count == 0 ? [] : await db.CustomerRefunds.AsNoTracking()

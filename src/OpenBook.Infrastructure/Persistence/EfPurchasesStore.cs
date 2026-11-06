@@ -101,13 +101,19 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct) => db.PurchaseOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
 
-    public async Task<IReadOnlyList<BillPayment>> ListPostedPaymentsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct) =>
-        billIds.Count == 0 ? [] : await db.BillPayments.AsNoTracking()
-            .Where(p => p.Status == DocumentStatus.Posted && p.Applications.Any(a => billIds.Contains(a.BillId))).ToListAsync(ct);
+    public async Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? billIds, CancellationToken ct)
+    {
+        var rows = db.BillPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted)
+            .SelectMany(p => p.Applications, (p, a) => new { p.Id, p.Date, a.BillId, a.Amount });
+        if (billIds is not null)
+            rows = rows.Where(r => billIds.Contains(r.BillId));
+        return (await rows.ToListAsync(ct)).Select(r => new DocumentSettlement(r.BillId, r.Id, r.Date, r.Amount)).ToList();
+    }
 
-    public async Task<IReadOnlyList<VendorCredit>> ListPostedVendorCreditsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct) =>
-        billIds.Count == 0 ? [] : await db.VendorCredits.AsNoTracking()
-            .Where(c => c.Status == DocumentStatus.Posted && c.Applications.Any(a => billIds.Contains(a.BillId))).ToListAsync(ct);
+    public async Task<IReadOnlyList<Guid>> ListVendorCreditIdsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct) =>
+        billIds.Count == 0 ? [] : await db.VendorCredits.AsNoTracking().Where(c => c.Status == DocumentStatus.Posted)
+            .SelectMany(c => c.Applications, (c, a) => new { c.Id, a.BillId })
+            .Where(r => billIds.Contains(r.BillId)).Select(r => r.Id).Distinct().ToListAsync(ct);
 
     public async Task<IReadOnlyList<VendorRefund>> ListPostedRefundsOfVendorCreditsAsync(IReadOnlyCollection<Guid> vendorCreditIds, CancellationToken ct) =>
         vendorCreditIds.Count == 0 ? [] : await db.VendorRefunds.AsNoTracking()

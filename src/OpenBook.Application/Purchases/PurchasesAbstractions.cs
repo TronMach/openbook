@@ -83,10 +83,10 @@ public interface IPurchasesStore
 
     Task<IReadOnlyList<Bill>> ListBillsWithItemAsync(Guid itemId, CancellationToken ct);
 
-    /// <summary>Everything posted that settles these bills, whatever its date, for splitting each settlement in turn.</summary>
-    Task<IReadOnlyList<BillPayment>> ListPostedPaymentsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct);
+    /// <summary>What posted payments settled of these bills (null: of every bill), whatever their dates, for splitting each in turn.</summary>
+    Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? billIds, CancellationToken ct);
 
-    Task<IReadOnlyList<VendorCredit>> ListPostedVendorCreditsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> ListVendorCreditIdsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct);
 
     Task<IReadOnlyList<VendorRefund>> ListPostedRefundsOfVendorCreditsAsync(IReadOnlyCollection<Guid> vendorCreditIds, CancellationToken ct);
 

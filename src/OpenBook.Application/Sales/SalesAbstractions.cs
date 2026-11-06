@@ -30,10 +30,10 @@ public interface ISalesStore
 {
     Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct);
 
-    /// <summary>Everything posted that settles these invoices, whatever its date, for splitting each settlement in turn.</summary>
-    Task<IReadOnlyList<CustomerPayment>> ListPostedPaymentsOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct);
+    /// <summary>What posted payments settled of these invoices (null: of every invoice), whatever their dates, for splitting each in turn.</summary>
+    Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? invoiceIds, CancellationToken ct);
 
-    Task<IReadOnlyList<CreditMemo>> ListPostedCreditMemosOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> ListCreditMemoIdsOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct);
 
     Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsOfCreditMemosAsync(IReadOnlyCollection<Guid> creditMemoIds, CancellationToken ct);
 
