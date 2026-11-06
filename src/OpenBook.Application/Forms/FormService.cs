@@ -34,16 +34,20 @@ public sealed class FormService(
     public async Task<RenderedForm> RenderAsync(FormKind kind, Guid id, Guid? designId, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var form = await BuildAsync(company, kind, id, designId, ct);
         return new RenderedForm(FileName(company, form.Form.Title, form.Form.Number), renderer.Render(form.Form), form.CustomerId, $"{form.Form.Title} {form.Form.Number}");
     }
 
     /// <summary>The form's content, as <see cref="RenderAsync(FormKind, Guid, Guid?, CancellationToken)"/> prints it.</summary>
-    public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, CancellationToken ct = default) =>
-        (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, null, ct)).Form;
+    public Task<SalesForm> BuildAsync(FormKind kind, Guid id, CancellationToken ct = default) => BuildAsync(kind, id, null, ct);
 
-    public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, Guid? designId, CancellationToken ct = default) =>
-        (await BuildAsync(await companies.GetRequiredCompanyAsync(ct), kind, id, designId, ct)).Form;
+    public async Task<SalesForm> BuildAsync(FormKind kind, Guid id, Guid? designId, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
+        return (await BuildAsync(company, kind, id, designId, ct)).Form;
+    }
 
     private async Task<(SalesForm Form, Guid CustomerId)> BuildAsync(Company company, FormKind kind, Guid id, Guid? designId, CancellationToken ct)
     {
@@ -74,6 +78,7 @@ public sealed class FormService(
     public async Task<RenderedForm> RenderStatementAsync(Guid customerId, DateOnly from, DateOnly to, Guid? designId, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var statement = await receivables.StatementAsync(customerId, from, to, ct);
         var aging = statement.Aging;
         var form = new StatementForm(

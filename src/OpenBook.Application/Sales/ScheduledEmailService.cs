@@ -14,7 +14,8 @@ public sealed record ScheduledEmailResult(ScheduledEmail Email, string? Error);
 /// Invoice emails scheduled for later. The message is fixed when scheduled; the PDF is rendered when it goes, so
 /// it shows the invoice as it stands then. <see cref="SendDueAsync"/> (run every minute by the host) sends what's
 /// due, each on its own: a failure is kept on the email (try again or cancel) and the rest still go; an invoice
-/// voided since is cancelled rather than sent.
+/// voided, paid or written off since is cancelled rather than sent, so nobody is asked for money they've paid.
+/// That's decided when it's due, so a payment taken back before then leaves the email to go.
 /// </summary>
 public sealed class ScheduledEmailService(ISalesStore store, EmailService email, IClock clock, ICurrentUser user)
 {
@@ -26,6 +27,8 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
         var invoice = await store.GetInvoiceAsync(invoiceId, ct) ?? throw new EntityNotFoundException("invoice", invoiceId);
         if (invoice.Status == DocumentStatus.Voided)
             throw new DomainException("scheduled_email.invoice_voided", "A voided invoice can't be emailed.");
+        if (!invoice.IsOpen)
+            throw new DomainException("scheduled_email.invoice_settled", "This invoice has nothing left to pay, and a scheduled email stops once it's paid. Send it now instead.");
         if (Domain.Email.EmailAddresses.Parse(message.To, "To").Count == 0)
             throw new DomainException("email.to_required", "Enter the customer's email address.");
 
@@ -89,6 +92,11 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
             if (invoice is null || invoice.Status == DocumentStatus.Voided)
             {
                 scheduled.Cancel("The invoice was voided.");
+                results.Add(new ScheduledEmailResult(scheduled, scheduled.Error));
+            }
+            else if (!invoice.IsOpen)
+            {
+                scheduled.Cancel(invoice.WrittenOff > 0m ? "The invoice was written off." : "The invoice was paid.");
                 results.Add(new ScheduledEmailResult(scheduled, scheduled.Error));
             }
             else

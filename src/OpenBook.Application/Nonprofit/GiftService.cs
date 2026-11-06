@@ -316,6 +316,7 @@ public sealed class GiftService(
         if (donation.Status != DocumentStatus.Posted)
             throw new DomainException("donation.voided", "This gift is voided.");
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var donor = await DonorAsync(donation.DonorId, ct, activeOnly: false);
         var letter = await LetterAsync(company, donor, "Thank you", donation.Date, [donation], year: null, ct);
         return new RenderedForm(FormService.FileName(company, "Gift acknowledgment", donation.Number.ToString(CultureInfo.InvariantCulture)),
@@ -328,6 +329,7 @@ public sealed class GiftService(
         var giver = (await GiversAsync(year, ct)).FirstOrDefault(g => g.Donor.Id == donorId)
                     ?? throw new DomainException("donation.none_in_year", $"No gifts from this donor in {year}.");
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var letter = await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct);
         return new RenderedForm(FormService.FileName(company, $"Giving statement {year}", giver.Donor.DisplayName), renderer.Render([letter]), donorId,
             $"Giving statement {year}");
@@ -340,6 +342,7 @@ public sealed class GiftService(
         if (givers.Count == 0)
             throw new DomainException("donation.none_in_year", $"No gifts were recorded in {year}.");
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var letters = new List<DonorLetter>();
         foreach (var giver in givers)
             letters.Add(await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct));

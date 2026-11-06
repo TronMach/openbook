@@ -24,7 +24,7 @@ public static class AppCulture
 {
     public const string DefaultRegion = "en-US";
 
-    public static readonly IReadOnlyList<string> Regions = ["en-US", "en-GB", "en-CA", "en-AU", "en-NZ", "en-IE"];
+    public static readonly IReadOnlyList<string> Regions = OpenBook.Domain.Companies.Company.Regions;
 
     public static readonly IReadOnlyList<string> Languages = ["en"];
 

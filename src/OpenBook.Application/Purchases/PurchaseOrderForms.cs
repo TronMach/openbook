@@ -21,6 +21,7 @@ public sealed class PurchaseOrderForms(
         var order = await store.GetPurchaseOrderAsync(id, ct) ?? throw new EntityNotFoundException(PurchaseOrderService.EntityType, id);
         var vendor = await store.GetVendorAsync(order.VendorId, ct) ?? throw new EntityNotFoundException("vendor", order.VendorId);
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
 
         var facts = new List<(string, string)> { ("Date", D(order.Date)) };
         if (order.ExpectedDate is { } expected)

@@ -65,6 +65,7 @@ public sealed class CheckService(
             throw new DomainException("check.none", "Choose at least one check to print.");
 
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var chart = await accounts.GetChartAsync(ct);
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
         var forms = new List<CheckForm>();

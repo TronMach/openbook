@@ -40,6 +40,9 @@ internal sealed partial class ScheduledEmailHostedService(
             foreach (var result in await scope.ServiceProvider.GetRequiredService<ScheduledEmailService>()
                          .SendDueAsync(token => leases.TryAcquireAsync("scheduled-emails", TimeSpan.FromMinutes(3), token), ct))
             {
+                // Stopped because the invoice was voided, paid or written off: nothing went wrong.
+                if (result.Email.Status == OpenBook.Domain.Sales.ScheduledEmailStatus.Cancelled)
+                    continue;
                 if (result.Error is null)
                     LogSent(result.Email.To);
                 else

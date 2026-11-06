@@ -441,6 +441,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.Edition).HasConversion<string>().HasMaxLength(30);
             b.Property(c => c.DefaultViewMode).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.TimeZoneId).HasMaxLength(64);
+            b.Property(c => c.Region).HasMaxLength(10);
             b.Ignore(c => c.TimeZone);
             b.Property(c => c.ClosingPasswordHash).HasMaxLength(500);
             b.Property(c => c.PriceRounding).HasConversion<string>().HasMaxLength(20);

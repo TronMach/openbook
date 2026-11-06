@@ -12,7 +12,7 @@ Open the document and select **Email**. The page has the message on the left and
 - **Subject** and **Message**: filled in from the wording for that kind of email (below). Change them as you like; the changes are for this email only.
 - **Design**: shown when you have more than one design. It changes the email's look and the PDF together, for this email only.
 - **Send the invoice**: for customers, **With the PDF attached**, **As a link to view it, nothing attached**, or **Both**. It starts at what the customer is set to get.
-- **When** (invoices only): **Send now** or **Send later, on** a date and time in the company's time zone.
+- **When** (invoices only): **Send now** or **Send later, on** a date and time in the company's time zone. An invoice voided, paid in full or written off by then isn't sent: the email is cancelled and the list says why.
 
 The preview shows the **From**, **To**, **Cc** and **Subject** lines, the attachment's name, and the message as it will arrive. It changes as you type. **Attachment** (or the attachment's name) shows the PDF that goes with it, in the design chosen. Things to fix before sending (an address that isn't one, a link that can't be made) are listed under the preview.
 

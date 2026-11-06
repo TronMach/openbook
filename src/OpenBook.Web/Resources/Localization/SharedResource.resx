@@ -878,6 +878,9 @@
   <data name="For whoever keeps the books." xml:space="preserve">
     <value>For whoever keeps the books.</value>
   </data>
+  <data name="For your screens. Printed documents and emails use the region in the company's details." xml:space="preserve">
+    <value>For your screens. Printed documents and emails use the region in the company's details.</value>
+  </data>
   <data name="Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one." xml:space="preserve">
     <value>Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one.</value>
   </data>
@@ -940,6 +943,9 @@
   </data>
   <data name="How dates and numbers look for you, and the language of the screens that are translated." xml:space="preserve">
     <value>How dates and numbers look for you, and the language of the screens that are translated.</value>
+  </data>
+  <data name="How dates look on invoices, statements and emails, whoever opens them, and in what OpenBook sends on its own. Screens follow each person's region." xml:space="preserve">
+    <value>How dates look on invoices, statements and emails, whoever opens them, and in what OpenBook sends on its own. Screens follow each person's region.</value>
   </data>
   <data name="How invoices look, how they're sent and paid, and what you charge." xml:space="preserve">
     <value>How invoices look, how they're sent and paid, and what you charge.</value>
@@ -1330,6 +1336,9 @@
   </data>
   <data name="Not allowed" xml:space="preserve">
     <value>Not allowed</value>
+  </data>
+  <data name="Not chosen yet: each person's own" xml:space="preserve">
+    <value>Not chosen yet: each person's own</value>
   </data>
   <data name="Not closed: every date is open" xml:space="preserve">
     <value>Not closed: every date is open</value>
@@ -1804,6 +1813,9 @@
   </data>
   <data name="Region" xml:space="preserve">
     <value>Region</value>
+  </data>
+  <data name="Region for documents" xml:space="preserve">
+    <value>Region for documents</value>
   </data>
   <data name="Register OpenBook with the provider as a web application with this redirect address:" xml:space="preserve">
     <value>Register OpenBook with the provider as a web application with this redirect address:</value>

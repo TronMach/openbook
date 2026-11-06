@@ -145,7 +145,9 @@ public sealed class InviteService(ICompanyStore store, IPasswordHasher hasher, I
         if (!(await email.GetSettingsAsync(ct)).IsConfigured)
             return new SentInvite(invite, link, false, "Email isn't set up, so nothing was sent. Copy the link and send it yourself.");
 
-        var company = (await store.GetRequiredCompanyAsync(ct)).Name;
+        var books = await store.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(books);
+        var company = books.Name;
         var access = await AccessAsync(invite, ct);
         var values = new Dictionary<string, string>
         {

@@ -197,6 +197,15 @@ public sealed class Company
     /// </summary>
     public string? TimeZoneId { get; private set; }
 
+    /// <summary>The regions on offer: all write numbers "1,234.56", which is how amount fields are read.</summary>
+    public static readonly IReadOnlyList<string> Regions = ["en-US", "en-GB", "en-CA", "en-AU", "en-NZ", "en-IE"];
+
+    /// <summary>How dates look on printed documents and emails, whoever opens them, and in what the jobs send. Null until chosen: each person's own, and the server's for jobs.</summary>
+    public string? Region { get; private set; }
+
+    public void SetRegion(string region) =>
+        Region = Regions.Contains(region) ? region : throw new DomainException("company.region_invalid", $"Unknown region '{region}'.");
+
     /// <summary>Null or blank for the server's time zone. Windows ids are stored as their IANA equivalent, so the file moves between systems.</summary>
     public void SetTimeZone(string? timeZoneId)
     {

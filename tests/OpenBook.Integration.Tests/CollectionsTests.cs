@@ -331,6 +331,80 @@ public sealed class CollectionsTests : IAsyncLifetime
         Assert.True(await _db.InDb(db => db.AuditRecords.CountAsync(a => a.EntityType == ScheduledEmailService.EntityType)) >= 8);
     }
 
+    [Fact]
+    public async Task A_scheduled_email_stops_once_its_invoice_is_paid_or_written_off()
+    {
+        await UseEmail();
+        var paid = await Invoice(_acme, 2m);
+        var writtenOff = await Invoice(_acme, 1m);
+        var partlyPaid = await Invoice(_acme, 3m);
+        var paidThenRefused = await Invoice(_acme, 4m);
+        var now = _db.Clock.UtcNow;
+        Task<ScheduledEmail> Schedule(Invoice i) => In<ScheduledEmailService, ScheduledEmail>(s =>
+            s.ScheduleAsync(i.Id, new EmailDraft("ap@acme.test", $"Invoice {i.Number}", "Please pay."), now.AddHours(1)));
+
+        var one = await Schedule(paid);
+        var two = await Schedule(writtenOff);
+        var three = await Schedule(partlyPaid);
+        var four = await Schedule(paidThenRefused);
+        await Receive(_acme, Mar31, new ApplyToInvoice(paid.Id, 200m));
+        await Receive(_acme, Mar31, new ApplyToInvoice(partlyPaid.Id, 100m));
+        var refused = await Receive(_acme, Mar31, new ApplyToInvoice(paidThenRefused.Id, 400m));
+        await In<PaymentService, CustomerPayment>(s => s.VoidAsync(refused.Id, "The check bounced"));
+        await In<WriteOffService, IReadOnlyList<BadDebtWriteOff>>(s => s.WriteOffAsync(new WriteOffCommand(Mar31, [new WriteOffLine(writtenOff.Id)])));
+
+        // One already settled can't be scheduled, or it would quietly never go.
+        Assert.Equal("scheduled_email.invoice_settled", await Refused(() => Schedule(paid)));
+
+        _db.Clock.UtcNow = now.AddHours(2);
+        await In<ScheduledEmailService, IReadOnlyList<ScheduledEmailResult>>(s => s.SendDueAsync());
+
+        var after = (await In<ScheduledEmailService, IReadOnlyList<ScheduledEmail>>(s => s.ListAsync())).ToDictionary(e => e.Id);
+        Assert.Equal((ScheduledEmailStatus.Cancelled, "The invoice was paid."), (after[one.Id].Status, after[one.Id].Error));
+        Assert.Equal((ScheduledEmailStatus.Cancelled, "The invoice was written off."), (after[two.Id].Status, after[two.Id].Error));
+        Assert.Equal(ScheduledEmailStatus.Sent, after[three.Id].Status);
+        Assert.Equal(ScheduledEmailStatus.Sent, after[four.Id].Status);
+        Assert.Equal(2, _db.Mail.Sent.Count);
+    }
+
+    [Fact]
+    public async Task Documents_and_emails_use_the_companys_region_whoever_opens_them()
+    {
+        var invoice = await Invoice(_acme, 2m, new DateOnly(2026, 3, 15));
+        Task<SalesForm> Form() => In<FormService, SalesForm>(s => s.BuildAsync(FormKind.Invoice, invoice.Id));
+        Task<EmailDraft> Draft() => In<EmailService, EmailDraft>(s => s.DraftAsync(FormKind.Invoice, invoice.Id));
+        Task<Company> Choose(string region) => _db.InScope(async sp =>
+        {
+            var settings = sp.GetRequiredService<OpenBook.Application.Companies.CompanySettingsService>();
+            var c = await settings.GetAsync();
+            return await settings.UpdateAsync(new OpenBook.Application.Companies.UpdateCompanySettingsCommand(
+                c.Name, c.BusinessType, c.LegalName, c.Email, c.Phone, c.Address, c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, Region: region));
+        });
+
+        var before = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            // Not chosen: the person's own.
+            Assert.Contains((await Form()).Facts, f => f.Value == "3/15/2026");
+
+            Assert.Equal("company.region_invalid", await Refused(() => Choose("de-DE")));
+            Assert.Equal("en-GB", (await Choose("en-GB")).Region);
+            Assert.Equal("en-GB", (await Choose("")).Region);
+
+            Assert.Contains((await Form()).Facts, f => f.Value == "15/03/2026");
+            var due = invoice.DueDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Contains(due, (await Draft()).Body, StringComparison.Ordinal);
+
+            // A screen in the same request stays in the person's region.
+            Assert.Equal("en-US", System.Globalization.CultureInfo.CurrentCulture.Name);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = before;
+        }
+    }
+
     // ---- Reminders ----
 
     [Fact]

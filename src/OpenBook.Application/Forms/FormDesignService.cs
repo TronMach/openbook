@@ -287,6 +287,7 @@ public sealed class FormDesignService(
         if (logoFrom is { } id && (await GetAsync(id, ct))?.Logo is { } logo)
             design.SetLogo(logo);
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var placed = await PlacedFieldsAsync(details, ct);
         var from = FormService.CompanyParty(company);
         var customer = new FormParty("Sample Customer Ltd", "100 Main Street\nSpringfield, IL 62701", "accounts@example.com", "(555) 010-0100");

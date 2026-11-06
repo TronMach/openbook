@@ -1,6 +1,7 @@
 @page "/settings/company"
 @using System.ComponentModel.DataAnnotations
 @using OpenBook.Domain.Companies
+@using OpenBook.Web.Localization
 @inject CompanySettingsService SettingsService
 
 <PageTitle>@L["Company details"] · OpenBook</PageTitle>
@@ -152,6 +153,20 @@
                 </InputSelect>
                 <span class="hint">@L["Decides which day it is here: new documents' dates, what's overdue and when the scheduled jobs run."]</span>
             </div>
+            <div class="field">
+                <label for="region">@L["Region for documents"]</label>
+                <InputSelect id="region" @bind-Value="Input.Region">
+                    @if (!_regionChosen)
+                    {
+                        <option value="">@L["Not chosen yet: each person's own"]</option>
+                    }
+                    @foreach (var region in AppCulture.Regions)
+                    {
+                        <option value="@region">@AppCulture.RegionName(region): @CompanyTime.Today.ToString("d", System.Globalization.CultureInfo.GetCultureInfo(region))</option>
+                    }
+                </InputSelect>
+                <span class="hint">@L["How dates look on invoices, statements and emails, whoever opens them, and in what OpenBook sends on its own. Screens follow each person's region."]</span>
+            </div>
             <label class="check">
                 <InputCheckbox @bind-Value="Input.UseAccountNumbers" />
                 <span>@L["Use account numbers"]</span>
@@ -179,6 +194,7 @@
     {
         var company = await SettingsService.GetAsync();
         _currency = company.HomeCurrency.Code;
+        _regionChosen = company.Region is not null;
         Input ??= new SettingsModel
         {
             Name = company.Name,
@@ -192,10 +208,13 @@
             DefaultReportBasis = company.DefaultReportBasis,
             Edition = company.Edition,
             TimeZoneId = company.TimeZoneId,
+            Region = company.Region,
             DefaultViewMode = company.DefaultViewMode,
             AllowSellingShort = company.AllowSellingShort,
         };
     }
+
+    private bool _regionChosen;
 
     private async Task SaveAsync()
     {
@@ -203,8 +222,9 @@
         {
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region));
             _saved = true;
+            _regionChosen = !string.IsNullOrEmpty(Input.Region);
         }
         catch (DomainException ex)
         {
@@ -244,6 +264,8 @@
 
         /// <summary>IANA id; empty for the server's.</summary>
         public string? TimeZoneId { get; set; }
+
+        public string? Region { get; set; }
 
         public ViewMode DefaultViewMode { get; set; }
 

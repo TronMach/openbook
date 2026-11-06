@@ -88,6 +88,7 @@ public sealed class ReportSubscriptionService(
 
     private async Task<SubscriptionRun> SendAsync(ReportSubscription subscription, CancellationToken ct)
     {
+        using var region = CompanyRegion.Use(await companies.GetRequiredCompanyAsync(ct));
         var saved = await store.GetSavedReportAsync(subscription.SavedReportId, ct);
         var reportName = saved?.Name ?? "(deleted report)";
         string? error = null;

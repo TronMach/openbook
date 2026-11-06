@@ -59,6 +59,7 @@ The first time you open OpenBook it shows **Set up your company**. Fill in three
 - **Which menu suits your work?** picks an *edition*: General, Professional services, E-commerce or Nonprofit. It only changes the order of the menu and the home page shortcuts; every feature stays available. You can change it later in **Settings → Company details**.
 - **How should OpenBook look?** picks the view people start with: the *simple view* (a short menu bar by task and a home page that walks through each step, suggested when one person runs the business) or the *full view* (every area in the menu). Both work on the same books, and anyone can switch at any time. See [The simple view](28-simple-view.md).
 - **What do you sell?** (services, products or both), **I keep products in stock** and **I charge sales tax**: in the simple view these set up your chart of accounts for you (see below). In the full view you choose a starter chart on the next page instead.
+- **Region** sets how dates look on invoices, statements and emails. It starts at your browser's region.
 - **Email, phone and address** are optional; the address is printed on invoices.
 
 **2. Books**

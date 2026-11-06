@@ -107,7 +107,8 @@ public sealed record CompanySettingsRequest(
     Edition? Edition = null,
     string? TimeZoneId = null,
     ViewMode? DefaultViewMode = null,
-    bool? AllowSellingShort = null);
+    bool? AllowSellingShort = null,
+    string? Region = null);
 
 public sealed record CompanyResponse(
     Guid Id,
@@ -124,9 +125,10 @@ public sealed record CompanyResponse(
     Edition Edition,
     string? TimeZoneId,
     ViewMode DefaultViewMode,
-    bool AllowSellingShort)
+    bool AllowSellingShort,
+    string? Region)
 {
     public static CompanyResponse From(Company c) => new(
         c.Id, c.Name, c.BusinessType, c.LegalName, c.Email, c.Phone, c.Address, c.HomeCurrency.Code,
-        c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, c.Edition, c.TimeZoneId, c.DefaultViewMode, c.AllowSellingShort);
+        c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, c.Edition, c.TimeZoneId, c.DefaultViewMode, c.AllowSellingShort, c.Region);
 }

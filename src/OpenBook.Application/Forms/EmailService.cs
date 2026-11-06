@@ -131,6 +131,7 @@ public sealed class EmailService(
     public async Task<EmailPreview> PreviewTemplateAsync(EmailKind kind, string? subject, string? body, Guid? designId = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
         var values = new Dictionary<string, string>(EmailTemplates.Samples(kind)) { ["company"] = company.Name };
         var notes = new List<string>();
         try
@@ -163,6 +164,7 @@ public sealed class EmailService(
     public async Task<EmailDraft> DraftAsync(EmailSource source, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(source);
+        using var region = CompanyRegion.Use(await companies.GetRequiredCompanyAsync(ct));
         var context = await Source(source.Kind).ContextAsync(source, ct);
         var wording = await TemplateAsync(source.Kind, ct);
         return new EmailDraft(context.To ?? "", EmailTemplates.Fill(wording.Subject, context.Values), EmailTemplates.Fill(wording.Body, context.Values),
@@ -174,6 +176,7 @@ public sealed class EmailService(
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(draft);
+        using var region = CompanyRegion.Use(await companies.GetRequiredCompanyAsync(ct));
         var context = await Source(source.Kind).ContextAsync(source, ct);
         var settings = await GetSettingsAsync(ct);
         var company = await companies.GetRequiredCompanyAsync(ct);
@@ -234,6 +237,7 @@ public sealed class EmailService(
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(draft);
+        using var region = CompanyRegion.Use(await companies.GetRequiredCompanyAsync(ct));
         var provider = Source(source.Kind);
         var context = await provider.ContextAsync(source, ct);
         if (context.Refusal is { } refusal)
@@ -298,6 +302,7 @@ public sealed class EmailService(
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(draft);
+        using var region = CompanyRegion.Use(await companies.GetRequiredCompanyAsync(ct));
         var settings = await ConfiguredAsync(ct);
         var provider = Source(source.Kind);
         var context = await provider.ContextAsync(source, ct);

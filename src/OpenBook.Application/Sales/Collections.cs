@@ -260,6 +260,8 @@ public sealed class LateFeeService(
         var due = (await DueAsync(today, ct)).Where(d => invoiceIds is null || invoiceIds.Contains(d.Invoice.Id)).ToList();
         if (due.Count == 0)
             return [];
+        // The fee's description is printed on its invoice.
+        using var region = CompanyRegion.Use(await companies.GetRequiredCompanyAsync(ct));
         var itemId = await ItemAsync(ct);
         var created = new List<Invoice>();
         foreach (var fee in due)
@@ -357,7 +359,9 @@ public sealed class ReminderService(IUnitOfWork unit, ISalesStore store, ICompan
         if (due.Count == 0)
             return [];
         var settings = await collections.GetAsync(ct);
-        var company = (await companies.GetRequiredCompanyAsync(ct)).Name;
+        var books = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(books);
+        var company = books.Name;
         var results = new List<ReminderResult>();
         foreach (var reminder in due)
         {

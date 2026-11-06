@@ -21,6 +21,7 @@
                         <option value="@region" selected="@(region == CultureInfo.CurrentCulture.Name)">@AppCulture.RegionName(region): @Today.ToString("d", culture), @(1234.56m.ToString("N2", culture))</option>
                     }
                 </select>
+                <span class="hint">@L["For your screens. Printed documents and emails use the region in the company's details."]</span>
             </div>
             <div class="field">
                 <label for="language">@L["Language"]</label>

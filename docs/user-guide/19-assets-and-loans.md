@@ -18,7 +18,7 @@ Record the purchase as usual: a bill, an expense or a journal entry, to a **Fixe
 - **Depreciation** method:
   - **Straight-line**: the same amount every month over the **useful life in years**, down to the **salvage value**.
   - **Declining balance**: a **declining rate %** of what's left each year, so more early on.
-  - **MACRS (US tax)**: the IRS tables for the **MACRS class** (3 to 20 years with the half-year convention, 27.5 and 39 years for real estate with mid-month). Salvage is ignored, as the IRS does.
+  - **MACRS (US tax)**: the IRS tables for the **MACRS class** (3 to 20 years with the half-year convention, 27.5 and 39 years for real estate with mid-month; 39-year buildings use the published percentages of Table A-7a, so the yearly figures match a preparer working from the table). Salvage is ignored, as the IRS does.
   - **Not depreciated (land)**.
 - **Accumulated depreciation account** and **depreciation expense account**: leave them on the defaults ("Accumulated Depreciation" and "Depreciation Expense", created when first needed) unless your chart has its own.
 - **Depreciation already recorded** **through** a date, for an asset bought before you started with OpenBook. Depreciation carries on from the schedule after that date, and if what you enter differs from the schedule, the last month takes the difference, so the asset still ends at its full depreciable amount.

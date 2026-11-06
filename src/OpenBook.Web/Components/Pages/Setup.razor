@@ -115,6 +115,16 @@
                 <span class="hint">Sets the menu and home page to suit. You can change it later in Settings; everything stays available either way.</span>
             </div>
             <div class="field">
+                <label for="region">Region</label>
+                <InputSelect id="region" @bind-Value="Input.Region">
+                    @foreach (var region in OpenBook.Web.Localization.AppCulture.Regions)
+                    {
+                        <option value="@region">@OpenBook.Web.Localization.AppCulture.RegionName(region): @CompanyTime.Today.ToString("d", System.Globalization.CultureInfo.GetCultureInfo(region))</option>
+                    }
+                </InputSelect>
+                <span class="hint">How dates look on invoices, statements and emails. You can change it later in Settings.</span>
+            </div>
+            <div class="field">
                 <label for="view">How should OpenBook look?</label>
                 <InputSelect id="view" @bind-Value="Input.DefaultViewMode">
                     <option value="@ViewMode.Simple">Simple view: a short menu and a home page that walks through each step (suggested when one person runs the business)</option>
@@ -224,7 +234,12 @@
 
     private SetupUpload? Upload => State.Held(Input.ImportToken);
 
-    protected override void OnInitialized() => Input ??= new();
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+        Input.Region ??= Company.Regions.Contains(System.Globalization.CultureInfo.CurrentCulture.Name)
+            ? System.Globalization.CultureInfo.CurrentCulture.Name : Company.Regions[0];
+    }
 
     private async Task ReadAsync()
     {
@@ -325,7 +340,8 @@
             Input.Phone,
             Input.Address,
             Input.Edition,
-            Input.DefaultViewMode ?? ViewMode.Simple);
+            Input.DefaultViewMode ?? ViewMode.Simple,
+            Input.Region);
         try
         {
             User owner;
@@ -398,6 +414,8 @@
         public BusinessType BusinessType { get; set; } = BusinessType.SoleProprietorship;
 
         public Edition Edition { get; set; }
+
+        public string? Region { get; set; }
 
         // Nullable because the form binder leaves an enum it isn't sent at its zero value (Full); not given means the suggested simple view.
         public ViewMode? DefaultViewMode { get; set; }

@@ -80,7 +80,7 @@ public static class OpenBookApi
 
         api.MapPut("/company", async (CompanySettingsRequest r, CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.UpdateAsync(new UpdateCompanySettingsCommand(
-                r.Name, r.BusinessType, r.LegalName, r.Email, r.Phone, r.Address, r.FiscalYearStartMonth, r.UseAccountNumbers, r.DefaultReportBasis, r.Edition, r.TimeZoneId, r.DefaultViewMode, r.AllowSellingShort), ct)));
+                r.Name, r.BusinessType, r.LegalName, r.Email, r.Phone, r.Address, r.FiscalYearStartMonth, r.UseAccountNumbers, r.DefaultReportBasis, r.Edition, r.TimeZoneId, r.DefaultViewMode, r.AllowSellingShort, r.Region), ct)));
 
         api.MapGet("/accounts", async (AccountService accounts, CancellationToken ct) =>
         {

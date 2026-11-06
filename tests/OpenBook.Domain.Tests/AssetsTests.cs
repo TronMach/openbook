@@ -53,6 +53,25 @@ public class AssetsTests
     }
 
     [Fact]
+    public void Thirty_nine_year_property_follows_table_a_7a()
+    {
+        decimal[] firstYear = [2.461m, 2.247m, 2.033m, 1.819m, 1.605m, 1.391m, 1.177m, 0.963m, 0.749m, 0.535m, 0.321m, 0.107m];
+        for (var month = 1; month <= 12; month++)
+        {
+            var percents = Depreciation.MacrsPercents(MacrsClass.Nonresidential, month);
+            Assert.Equal(40, percents.Count);
+            Assert.Equal(firstYear[month - 1], percents[0]);
+            Assert.All(percents.Skip(1).Take(38), p => Assert.Equal(2.564m, p));
+            Assert.Equal(firstYear[12 - month], percents[39]);
+            Assert.Equal(100m, percents.Sum());
+        }
+
+        var building = Asset(DepreciationMethod.Macrs, 1_000_000m, new DateOnly(2026, 1, 10), macrs: MacrsClass.Nonresidential);
+        Assert.Equal(24_610m, Depreciation.ScheduledThrough(building, new DateOnly(2026, 12, 31)));
+        Assert.Equal(1_000_000m, Depreciation.Schedule(building).Sum(p => p.Amount));
+    }
+
+    [Fact]
     public void Real_property_uses_the_mid_month_convention()
     {
         var percents = Depreciation.MacrsPercents(MacrsClass.Residential, 1);

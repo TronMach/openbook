@@ -217,6 +217,13 @@ public static class Depreciation
         ],
     };
 
+    /// <summary>Year 1 of Pub 946 Table A-7a by month placed in service: not quite the exact fraction, so it's held rather than worked out.</summary>
+    private static readonly decimal[] Nonresidential =
+        [2.461m, 2.247m, 2.033m, 1.819m, 1.605m, 1.391m, 1.177m, 0.963m, 0.749m, 0.535m, 0.321m, 0.107m];
+
+    private const decimal NonresidentialYear = 2.564m;
+    private const int NonresidentialFullYears = 38;
+
     public static string Label(MacrsClass c) => c switch
     {
         MacrsClass.Year3 => "3-year",
@@ -234,9 +241,16 @@ public static class Depreciation
     {
         if (HalfYear.TryGetValue(c, out var table))
             return table;
-        // Mid-month convention: the first year counts from the middle of the month placed in service.
-        var years = c == MacrsClass.Residential ? 27.5m : 39m;
-        var full = 100m / years;
+        // Table A-7a, the figures a tax preparer works from: years 2-39 at one rate, year 40 whatever is left.
+        if (c == MacrsClass.Nonresidential)
+        {
+            var first = Nonresidential[monthPlacedInService - 1];
+            return [first, .. Enumerable.Repeat(NonresidentialYear, NonresidentialFullYears), 100m - first - NonresidentialFullYears * NonresidentialYear];
+        }
+
+        // Mid-month convention: the first year counts from the middle of the month placed in service. To three
+        // places this is Table A-6.
+        var full = 100m / 27.5m;
         var percents = new List<decimal> { full * (12.5m - monthPlacedInService) / 12m };
         while (percents.Sum() + full < 100m)
             percents.Add(full);

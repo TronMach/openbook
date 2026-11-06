@@ -33,7 +33,7 @@ The simple view has its own home page; see [The simple view](28-simple-view.md#t
 
 **Settings** in the top bar opens a list of everything you can set up, grouped by what it's for: **Company** (company details, closing date, custom fields, your language), **Sales and getting paid** (form designs, email, online card payments, sales tax, pricing, late fees and reminders), **Purchases and stock**, **Banking**, **Accounting**, **People and security**, **Your data** (backups, moving in, imports, the audit log) and **Connections** (document reading, API keys, webhooks, add-ins, system). Each line says what the setting does and how it's set now, for example "Sending through smtp.gmail.com" or "Every day at 12:00 · last 2 Nov 2026"; lines in red are worth a look ("Off: nothing can be emailed yet", "No automatic backups"). Type in **Find a setting** to narrow the list. Everyone can open the list; settings you can't change are greyed out and say whom to ask.
 
-**Company details** holds the company's name and contact details, legal structure, fiscal year, time zone, report basis, account numbers, the menu (edition) and view new people start with, and whether you sell more stock than is on hand.
+**Company details** holds the company's name and contact details, legal structure, fiscal year, time zone, region for documents, report basis, account numbers, the menu (edition) and view new people start with, and whether you sell more stock than is on hand.
 
 ## Help inside OpenBook
 
@@ -85,7 +85,7 @@ Select your username, then **Theme**, to cycle through *auto* (follow your compu
 
 ## Language and region
 
-Select your username, then **Language and region**. **Region** sets how dates and numbers are shown; **language** sets the text. Until you choose, OpenBook follows your browser's language. OpenBook is in English so far, so the language setting only matters once a translation is added; regions already work.
+Select your username, then **Language and region**. **Region** sets how dates and numbers are shown on your screens; **language** sets the text. Printed documents and emails use the company's **Region for documents** instead (**Settings → Company details**), so they read the same whoever opens them and when OpenBook sends them on its own; until a company chooses one, they follow the person's region, and the server's for what goes out on its own. Until you choose, OpenBook follows your browser's language. OpenBook is in English so far, so the language setting only matters once a translation is added; regions already work.
 
 ## Record pages
 
