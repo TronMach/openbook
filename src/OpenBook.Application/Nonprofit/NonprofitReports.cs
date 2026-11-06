@@ -223,7 +223,7 @@ public sealed class NonprofitReports(
                 new("Spent on it", ColumnFormat.Money), new("Ready to release", ColumnFormat.Money)],
             rows,
             ReportBasis.Accrual,
-            "Received is the restricted income (and restricted opening balances) on each class. Spent counts the class's expenses since its first restricted gift; ready to release is what's been spent and not released, up to what's still restricted.");
+            "Received is the restricted income (and restricted opening balances) on each class. Spent counts the expenses on the class and its subclasses (those not holding restricted money of their own) since its first restricted gift; ready to release is what's been spent and not released, up to what's still restricted.");
     }
 
     /// <summary>Net assets from every line through a date: equity plus all income less expenses, split by the accounts' restriction.</summary>

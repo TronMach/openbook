@@ -101,6 +101,18 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct) => db.PurchaseOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
 
+    public async Task<IReadOnlyList<BillPayment>> ListPostedPaymentsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct) =>
+        billIds.Count == 0 ? [] : await db.BillPayments.AsNoTracking()
+            .Where(p => p.Status == DocumentStatus.Posted && p.Applications.Any(a => billIds.Contains(a.BillId))).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<VendorCredit>> ListPostedVendorCreditsOnBillsAsync(IReadOnlyCollection<Guid> billIds, CancellationToken ct) =>
+        billIds.Count == 0 ? [] : await db.VendorCredits.AsNoTracking()
+            .Where(c => c.Status == DocumentStatus.Posted && c.Applications.Any(a => billIds.Contains(a.BillId))).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<VendorRefund>> ListPostedRefundsOfVendorCreditsAsync(IReadOnlyCollection<Guid> vendorCreditIds, CancellationToken ct) =>
+        vendorCreditIds.Count == 0 ? [] : await db.VendorRefunds.AsNoTracking()
+            .Where(r => r.Status == DocumentStatus.Posted && vendorCreditIds.Contains(r.VendorCreditId)).ToListAsync(ct);
+
     public async Task<IReadOnlyList<Bill>> ListBillsWithItemAsync(Guid itemId, CancellationToken ct) =>
         await db.Bills.AsNoTracking().Where(b => b.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct);
 

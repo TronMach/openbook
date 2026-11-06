@@ -237,6 +237,18 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public async Task<IReadOnlyList<CustomerPayment>> ListPaymentsInPayoutAsync(Guid payoutId, CancellationToken ct) =>
         await db.CustomerPayments.Where(p => p.PayoutId == payoutId).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<CustomerPayment>> ListPostedPaymentsOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct) =>
+        invoiceIds.Count == 0 ? [] : await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Status == DocumentStatus.Posted && p.Applications.Any(a => invoiceIds.Contains(a.InvoiceId))).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<CreditMemo>> ListPostedCreditMemosOnInvoicesAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken ct) =>
+        invoiceIds.Count == 0 ? [] : await db.CreditMemos.AsNoTracking()
+            .Where(c => c.Status == DocumentStatus.Posted && c.Applications.Any(a => invoiceIds.Contains(a.InvoiceId))).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsOfCreditMemosAsync(IReadOnlyCollection<Guid> creditMemoIds, CancellationToken ct) =>
+        creditMemoIds.Count == 0 ? [] : await db.CustomerRefunds.AsNoTracking()
+            .Where(r => r.Status == DocumentStatus.Posted && r.CreditMemoId != null && creditMemoIds.Contains(r.CreditMemoId.Value)).ToListAsync(ct);
+
     public async Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct) => new(
         await db.Invoices.AsNoTracking().Where(i => i.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
         await db.SalesReceipts.AsNoTracking().Where(r => r.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),

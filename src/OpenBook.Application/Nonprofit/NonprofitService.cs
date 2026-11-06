@@ -76,7 +76,7 @@ public sealed class NonprofitService(
         var names = await segments.NamesAsync(ct);
         var lines = await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct);
 
-        var purposes = new List<RestrictedPurpose>();
+        var held = new List<(Guid? ClassId, decimal Received, decimal Released, DateOnly? FirstGift)>();
         foreach (var group in lines.GroupBy(l => l.ClassId))
         {
             decimal received = 0m, released = 0m;
@@ -94,15 +94,39 @@ public sealed class NonprofitService(
                 }
             }
 
-            if (received == 0m && released == 0m)
-                continue;
-            var spent = firstGift is { } since
-                ? group.Where(l => l.Date >= since && chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense).Sum(l => l.Amount)
-                : 0m;
+            if (received != 0m || released != 0m)
+                held.Add((group.Key, received, released, firstGift));
+        }
+
+        // Spending on a class counts for the nearest class up its tree that holds restricted money, so nothing counts twice.
+        var parents = (await segments.ListAsync(SegmentKind.Class, includeInactive: true, ct)).ToDictionary(c => c.Segment.Id, c => c.Segment.ParentId);
+        var since = held.Where(h => h.FirstGift is not null).ToDictionary(h => h.ClassId ?? Guid.Empty, h => h.FirstGift!.Value);
+        Guid? PurposeOf(Guid? classId)
+        {
+            for (var at = classId; at is { } id; at = parents.GetValueOrDefault(id))
+            {
+                if (since.ContainsKey(id))
+                    return id;
+            }
+
+            return null;
+        }
+
+        var spentOn = lines
+            .Where(l => chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense)
+            .Select(l => (Line: l, Purpose: l.ClassId is null ? (since.ContainsKey(Guid.Empty) ? Guid.Empty : (Guid?)null) : PurposeOf(l.ClassId)))
+            .Where(x => x.Purpose is { } p && x.Line.Date >= since[p])
+            .GroupBy(x => x.Purpose!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Line.Amount));
+
+        var purposes = new List<RestrictedPurpose>();
+        foreach (var (classId, received, released, _) in held)
+        {
+            var spent = spentOn.GetValueOrDefault(classId ?? Guid.Empty);
             var balance = received - released;
-            var suggested = group.Key is null ? 0m : Math.Max(0m, Math.Min(balance, spent - released));
-            var name = group.Key is { } id ? names.GetValueOrDefault(id) ?? "?" : SegmentRules.NotSpecified;
-            purposes.Add(new RestrictedPurpose(group.Key, name, received, released, balance, spent, suggested));
+            var suggested = classId is null ? 0m : Math.Max(0m, Math.Min(balance, spent - released));
+            var name = classId is { } id ? names.GetValueOrDefault(id) ?? "?" : SegmentRules.NotSpecified;
+            purposes.Add(new RestrictedPurpose(classId, name, received, released, balance, spent, suggested));
         }
 
         return purposes.OrderBy(p => p.ClassId is null).ThenBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();

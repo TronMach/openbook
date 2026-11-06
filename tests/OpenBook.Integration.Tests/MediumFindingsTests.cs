@@ -643,4 +643,71 @@ public sealed class MediumFindingsTests : IAsyncLifetime
         // Something new is still refused.
         Assert.Equal("bill.category_inactive", await Refused(() => In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_staples.Id, Mar5, [new BillLineDraft(stationery.Id, 1m, null)])))));
     }
+
+    private Task<decimal> CashBalance(Guid accountId, DateOnly? from = null, DateOnly? to = null) =>
+        _db.InScope(async sp => (await sp.GetRequiredService<OpenBook.Application.Reporting.ReportLedger>().LinesAsync(ReportBasis.Cash, from, to ?? new DateOnly(2026, 12, 31)))
+            .Where(l => l.AccountId == accountId).Sum(l => l.Amount));
+
+    private async Task<(Guid Income, Guid Tax, Guid Code)> TaxedAsync()
+    {
+        var income = _consulting.IncomeAccountId;
+        var agency = await In<SalesTaxService, TaxAgency>(s => s.CreateAgencyAsync(new TaxAgencyDetails("State")));
+        var rate = await In<SalesTaxService, TaxRate>(s => s.CreateRateAsync(new TaxRateDetails("State tax", agency.Id, 8.25m), createCode: false));
+        var code = await In<SalesTaxService, TaxCode>(s => s.CreateCodeAsync(new TaxCodeDetails("Taxed", [rate.Id], null)));
+        return (income, agency.LiabilityAccountId, code.Id);
+    }
+
+    private Task<CustomerPayment> Paid(Invoice invoice, DateOnly date, decimal amount) =>
+        In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, date, _checking.Id, [new ApplyToInvoice(invoice.Id, amount)])));
+
+    [Fact]
+    public async Task A_fully_paid_invoice_lands_on_its_own_figures_on_cash_basis_however_it_was_paid()
+    {
+        var (income, tax, code) = await TaxedAsync();
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(_consulting.Id, null, 1m, 100m, Taxable: true)], TaxCodeId: code)));
+        Assert.Equal(108.25m, invoice.Total);
+
+        for (var month = 1; month <= 11; month++)
+            await Paid(invoice, new DateOnly(2026, month, 15), 9.02m);
+        await Paid(invoice, new DateOnly(2026, 12, 15), 9.03m);
+
+        Assert.Equal(-100m, await CashBalance(income));
+        Assert.Equal(-8.25m, await CashBalance(tax));
+
+        // Any ranges add up to the whole, and each payment still comes to its own amount.
+        var first = await CashBalance(income, null, new DateOnly(2026, 6, 30)) + await CashBalance(tax, null, new DateOnly(2026, 6, 30));
+        var rest = await CashBalance(income, new DateOnly(2026, 7, 1)) + await CashBalance(tax, new DateOnly(2026, 7, 1));
+        Assert.Equal(-108.25m, first + rest);
+        Assert.Equal(-9.02m * 6m, first);
+    }
+
+    [Fact]
+    public async Task Credit_applied_comes_off_the_lines_before_the_payment_is_split()
+    {
+        var (income, tax, code) = await TaxedAsync();
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(_consulting.Id, null, 1m, 100m, Taxable: true)], TaxCodeId: code)));
+        var credit = await In<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(new CreateCreditMemoCommand(_acme.Id, Mar1, [new SalesLineDraft(_consulting.Id, null, 1m, 50m, Taxable: false)])));
+        await _db.InScope(sp => sp.GetRequiredService<CreditService>().ApplyAsync(_acme.Id, Mar1, [new ApplyCredit(CreditKind.CreditMemo, credit.Id, invoice.Id, 50m)]));
+
+        await Paid(invoice, Mar5, 58.25m);
+
+        Assert.Equal(-50m, await CashBalance(income));
+        Assert.Equal(-8.25m, await CashBalance(tax));
+    }
+
+    [Fact]
+    public async Task A_bill_paid_in_parts_lands_on_its_own_figures_net_of_vendor_credit_on_cash_basis()
+    {
+        var other = await _db.CreateAccount("Postage", AccountType.Expense, "6400");
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_staples.Id, Mar1,
+            [new BillLineDraft(_office.Id, 100m, null), new BillLineDraft(other.Id, 200.01m, null)])));
+        var credit = await In<VendorCreditService, VendorCredit>(s => s.CreateAsync(new CreateVendorCreditCommand(_staples.Id, Mar1, [new BillLineDraft(_office.Id, 40m, null)])));
+        await _db.InScope(sp => sp.GetRequiredService<VendorCreditService>().ApplyAsync(_staples.Id, Mar1, [new ApplyVendorCredit(credit.Id, bill.Id, 40m)]));
+
+        foreach (var (day, amount) in new[] { (5, 87.01m), (6, 87.01m), (7, 85.99m) })
+            await In<BillPaymentService, IReadOnlyList<BillPayment>>(s => s.PayAsync(new PayBillsCommand(new DateOnly(2026, 3, day), _checking.Id, [new ApplyToBill(bill.Id, amount)])));
+
+        Assert.Equal(60m, await CashBalance(_office.Id));
+        Assert.Equal(200.01m, await CashBalance(other.Id));
+    }
 }

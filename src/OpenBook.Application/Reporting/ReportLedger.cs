@@ -164,13 +164,20 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         var byEntry = lines.ToLookup(l => l.JournalEntryId);
         bool InRange(DateOnly d) => d <= to && (from is null || d >= from);
 
-        // Only the payments dated in the range, and the documents they pay.
+        // Only what's dated in the range, the documents it settles, and whatever else settles those.
         var customerPayments = await sales.ListPostedPaymentsAsync(from, to, ct);
+        var retainers = (await sales.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted).ToList();
+        var applications = retainers
+            .SelectMany(r => r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)).Select(a => (Retainer: r, Application: a))).ToList();
+        var refunds = await sales.ListPostedRefundsAsync(from, to, ct);
+        var invoices = (from is null
+            ? await sales.ListInvoicesAsync(null, ct)
+            : await sales.FindInvoicesAsync(customerPayments.SelectMany(p => p.Applications.Select(a => a.InvoiceId)).Concat(applications.Select(a => a.Application.InvoiceId)).ToHashSet(), ct))
+            .ToDictionary(i => i.Id);
+        var credits = await SalesCreditsAsync(invoices, refunds, from is null, ct);
+        var salesPlan = await SalesPlanAsync(invoices, credits, retainers, ct);
         if (customerPayments.Count > 0)
         {
-            var invoices = (from is null
-                ? await sales.ListInvoicesAsync(null, ct)
-                : await sales.FindInvoicesAsync(customerPayments.SelectMany(p => p.Applications.Select(a => a.InvoiceId)).ToHashSet(), ct)).ToDictionary(i => i.Id);
             foreach (var payment in customerPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
@@ -183,7 +190,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 foreach (var application in payment.Applications)
                 {
                     var invoice = invoices[application.InvoiceId];
-                    foreach (var (accountId, classId, share) in AllocateByClass(application.Settled, IncomeLines(invoice.Lines)))
+                    foreach (var (accountId, classId, share) in salesPlan.Of(invoice.Id, payment.Id))
                         cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, -share, memo, CustomerPayment.Source, payment.Id, classId, invoice.LocationId));
                 }
 
@@ -196,13 +203,8 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 
         // A retainer applied to an invoice is the invoice being paid: the deposit liability goes down by the amount
         // applied, and the invoice's income is recognized on the date it's applied.
-        var applications = (await sales.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted)
-            .SelectMany(r => r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)).Select(a => (Retainer: r, Application: a))).ToList();
         if (applications.Count > 0)
         {
-            var invoices = (from is null
-                ? await sales.ListInvoicesAsync(null, ct)
-                : await sales.FindInvoicesAsync(applications.Select(a => a.Application.InvoiceId).ToHashSet(), ct)).ToDictionary(i => i.Id);
             foreach (var (retainer, application) in applications)
             {
                 var number = entryNumbers.GetValueOrDefault(application.JournalEntryId);
@@ -210,18 +212,14 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 cash.Add(Derived(application.JournalEntryId, number, application.AppliedOn, retainer.LiabilityAccountId, application.Amount, memo,
                     Retainer.ApplicationSource, retainer.Id));
                 var invoice = invoices[application.InvoiceId];
-                foreach (var (accountId, classId, share) in AllocateByClass(application.Amount, IncomeLines(invoice.Lines)))
+                foreach (var (accountId, classId, share) in salesPlan.Of(invoice.Id, application.Id))
                     cash.Add(Derived(application.JournalEntryId, number, application.AppliedOn, accountId, -share, memo, Retainer.ApplicationSource, retainer.Id,
                         classId, invoice.LocationId));
             }
         }
 
-        var refunds = await sales.ListPostedRefundsAsync(from, to, ct);
         if (refunds.Count > 0)
         {
-            var credits = (from is null
-                ? await sales.ListCreditMemosAsync(null, ct)
-                : await sales.FindCreditMemosAsync(refunds.Where(r => r.CreditMemoId is not null).Select(r => r.CreditMemoId!.Value).ToHashSet(), ct)).ToDictionary(c => c.Id);
             foreach (var refund in refunds)
             {
                 if (refund.CreditMemoId is not { } creditId)
@@ -235,17 +233,20 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 var memo = byEntry[refund.JournalEntryId].FirstOrDefault()?.EntryMemo;
                 cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.PaymentAccountId, -refund.Amount, memo, CustomerRefund.Source, refund.Id));
                 var credit = credits[creditId];
-                foreach (var (accountId, classId, share) in AllocateByClass(refund.Amount, IncomeLines(credit.Lines)))
+                foreach (var (accountId, classId, share) in salesPlan.Of(credit.Id, refund.Id))
                     cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, share, memo, CustomerRefund.Source, refund.Id, classId, credit.LocationId));
             }
         }
 
         var billPayments = await purchases.ListPostedPaymentsAsync(from, to, ct);
+        var vendorRefunds = await purchases.ListPostedVendorRefundsAsync(from, to, ct);
+        var bills = (from is null
+            ? await purchases.ListBillsAsync(null, ct)
+            : await purchases.FindBillsAsync(billPayments.SelectMany(p => p.Applications.Select(a => a.BillId)).ToHashSet(), ct)).ToDictionary(b => b.Id);
+        var vendorCredits = await VendorCreditsAsync(bills, vendorRefunds, from is null, ct);
+        var billPlan = await BillPlanAsync(bills, vendorCredits, ct);
         if (billPayments.Count > 0)
         {
-            var bills = (from is null
-                ? await purchases.ListBillsAsync(null, ct)
-                : await purchases.FindBillsAsync(billPayments.SelectMany(p => p.Applications.Select(a => a.BillId)).ToHashSet(), ct)).ToDictionary(b => b.Id);
             foreach (var payment in billPayments)
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
@@ -254,33 +255,100 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 foreach (var application in payment.Applications)
                 {
                     var bill = bills[application.BillId];
-                    var billLines = bill.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount)).ToList();
-                    foreach (var (accountId, classId, share) in AllocateByClass(application.Amount, billLines))
+                    foreach (var (accountId, classId, share) in billPlan.Of(bill.Id, payment.Id))
                         cash.Add(Derived(payment.JournalEntryId, number, payment.Date, accountId, share, memo, BillPayment.Source, payment.Id, classId, bill.LocationId));
                 }
             }
         }
 
         // A vendor refund of a credit reduces expense on the refund date, split like the credit's lines.
-        var vendorRefunds = await purchases.ListPostedVendorRefundsAsync(from, to, ct);
         if (vendorRefunds.Count > 0)
         {
-            var vendorCredits = (from is null
-                ? await purchases.ListVendorCreditsAsync(null, ct)
-                : await purchases.FindVendorCreditsAsync(vendorRefunds.Select(r => r.VendorCreditId).ToHashSet(), ct)).ToDictionary(c => c.Id);
             foreach (var refund in vendorRefunds)
             {
                 var number = entryNumbers.GetValueOrDefault(refund.JournalEntryId);
                 var memo = byEntry[refund.JournalEntryId].FirstOrDefault()?.EntryMemo;
                 cash.Add(Derived(refund.JournalEntryId, number, refund.Date, refund.DepositAccountId, refund.Amount, memo, VendorRefund.Source, refund.Id));
                 var vendorCredit = vendorCredits[refund.VendorCreditId];
-                var creditLines = vendorCredit.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount)).ToList();
-                foreach (var (accountId, classId, share) in AllocateByClass(refund.Amount, creditLines))
+                foreach (var (accountId, classId, share) in billPlan.Of(vendorCredit.Id, refund.Id))
                     cash.Add(Derived(refund.JournalEntryId, number, refund.Date, accountId, -share, memo, VendorRefund.Source, refund.Id, classId, vendorCredit.LocationId));
             }
         }
 
         return cash.OrderBy(l => l.Date).ThenBy(l => l.EntryNumber).ToList();
+    }
+
+    /// <summary>The credit memos applied to these invoices or refunded in the range.</summary>
+    private async Task<Dictionary<Guid, CreditMemo>> SalesCreditsAsync(
+        IReadOnlyDictionary<Guid, Invoice> invoices, IReadOnlyList<CustomerRefund> refunds, bool everything, CancellationToken ct)
+    {
+        if (everything)
+            return (await sales.ListCreditMemosAsync(null, ct)).ToDictionary(c => c.Id);
+        var found = (await sales.ListPostedCreditMemosOnInvoicesAsync([.. invoices.Keys], ct)).ToDictionary(c => c.Id);
+        var more = refunds.Select(r => r.CreditMemoId).OfType<Guid>().Where(id => !found.ContainsKey(id)).ToHashSet();
+        foreach (var credit in await sales.FindCreditMemosAsync(more, ct))
+            found[credit.Id] = credit;
+        return found;
+    }
+
+    private async Task<SettlementPlan> SalesPlanAsync(
+        IReadOnlyDictionary<Guid, Invoice> invoices, IReadOnlyDictionary<Guid, CreditMemo> credits, IReadOnlyList<Retainer> retainers, CancellationToken ct)
+    {
+        var plan = new SettlementPlan();
+        var refunds = (await sales.ListPostedRefundsOfCreditMemosAsync([.. credits.Keys], ct)).ToLookup(r => r.CreditMemoId!.Value);
+        var posted = credits.Values.Where(c => c.Status == DocumentStatus.Posted).ToList();
+        foreach (var credit in posted)
+        {
+            plan.Add(credit.Id, IncomeLines(credit.Lines),
+                credit.Applications.Select(a => new SettlementPlan.Turn(a.InvoiceId, a.AppliedOn, a.Amount))
+                    .Concat(refunds[credit.Id].Select(r => new SettlementPlan.Turn(r.Id, r.Date, r.Amount))));
+        }
+
+        var taken = posted.SelectMany(c => c.Applications.Select(a => (a.InvoiceId, Credit: c.Id))).ToLookup(x => x.InvoiceId, x => x.Credit);
+        var paid = (await sales.ListPostedPaymentsOnInvoicesAsync([.. invoices.Keys], ct))
+            .SelectMany(p => p.Applications.Select(a => (a.InvoiceId, Turn: new SettlementPlan.Turn(p.Id, p.Date, a.Settled))))
+            .Concat(retainers.SelectMany(r => r.Applications.Where(a => !a.IsVoided).Select(a => (a.InvoiceId, Turn: new SettlementPlan.Turn(a.Id, a.AppliedOn, a.Amount)))))
+            .ToLookup(x => x.InvoiceId, x => x.Turn);
+        foreach (var invoice in invoices.Values)
+            plan.Add(invoice.Id, SettlementPlan.Less(IncomeLines(invoice.Lines), [.. taken[invoice.Id].SelectMany(c => plan.Of(c, invoice.Id))]), paid[invoice.Id]);
+        return plan;
+    }
+
+    /// <summary>The vendor credits applied to these bills or refunded in the range.</summary>
+    private async Task<Dictionary<Guid, VendorCredit>> VendorCreditsAsync(
+        IReadOnlyDictionary<Guid, Bill> bills, IReadOnlyList<VendorRefund> refunds, bool everything, CancellationToken ct)
+    {
+        if (everything)
+            return (await purchases.ListVendorCreditsAsync(null, ct)).ToDictionary(c => c.Id);
+        var found = (await purchases.ListPostedVendorCreditsOnBillsAsync([.. bills.Keys], ct)).ToDictionary(c => c.Id);
+        var more = refunds.Select(r => r.VendorCreditId).Where(id => !found.ContainsKey(id)).ToHashSet();
+        foreach (var credit in await purchases.FindVendorCreditsAsync(more, ct))
+            found[credit.Id] = credit;
+        return found;
+    }
+
+    private async Task<SettlementPlan> BillPlanAsync(IReadOnlyDictionary<Guid, Bill> bills, IReadOnlyDictionary<Guid, VendorCredit> credits, CancellationToken ct)
+    {
+        var plan = new SettlementPlan();
+        var refunds = (await purchases.ListPostedRefundsOfVendorCreditsAsync([.. credits.Keys], ct)).ToLookup(r => r.VendorCreditId);
+        var posted = credits.Values.Where(c => c.Status == DocumentStatus.Posted).ToList();
+        foreach (var credit in posted)
+        {
+            plan.Add(credit.Id, [.. credit.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount))],
+                credit.Applications.Select(a => new SettlementPlan.Turn(a.BillId, a.AppliedOn, a.Amount))
+                    .Concat(refunds[credit.Id].Select(r => new SettlementPlan.Turn(r.Id, r.Date, r.Amount))));
+        }
+
+        var taken = posted.SelectMany(c => c.Applications.Select(a => (a.BillId, Credit: c.Id))).ToLookup(x => x.BillId, x => x.Credit);
+        var paid = (await purchases.ListPostedPaymentsOnBillsAsync([.. bills.Keys], ct))
+            .SelectMany(p => p.Applications.Select(a => (a.BillId, Turn: new SettlementPlan.Turn(p.Id, p.Date, a.Amount))))
+            .ToLookup(x => x.BillId, x => x.Turn);
+        foreach (var bill in bills.Values)
+        {
+            plan.Add(bill.Id, SettlementPlan.Less([.. bill.Lines.Select(l => (l.AccountId, l.ClassId, l.Amount))], [.. taken[bill.Id].SelectMany(c => plan.Of(c, bill.Id))]), paid[bill.Id]);
+        }
+
+        return plan;
     }
 
     private static List<(Guid AccountId, Guid? ClassId, decimal Amount)> IncomeLines(IEnumerable<SalesLine> lines) => lines

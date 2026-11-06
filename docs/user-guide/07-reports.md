@@ -45,7 +45,7 @@ Reports that show a moment in time, such as the balance sheet and aging, take an
 - **Accrual**: income counts when you invoice, expenses when the bill arrives. This shows what you earned and owed in a period, whether or not money changed hands. Most accountants prefer it.
 - **Cash**: income counts when the customer pays, expenses when you pay. This matches the money in your bank, and many small businesses file taxes this way.
 
-Each report has its own basis choice; the default comes from **Settings**. Switching basis never changes your books, only how the report reads them. On cash basis, a payment that covers several invoice lines is split across their income accounts in proportion, so the profit and loss by account still adds up.
+Each report has its own basis choice; the default comes from **Settings**. Switching basis never changes your books, only how the report reads them. On cash basis, an invoice or bill that's been fully paid, in one payment or several, ends on its own figures for each account, after any credit applied. On cash basis, a payment that covers several invoice lines is split across their income accounts in proportion, so the profit and loss by account still adds up.
 
 ## Comparing periods
 

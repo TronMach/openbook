@@ -15,7 +15,7 @@ So a restricted gift is income on a restricted account, with the purpose as its 
 
 ### Releasing restrictions
 
-When you spend money on a purpose, the restriction is met and that much moves to unrestricted. **Nonprofit** (`/nonprofit`) lists each purpose, **as of** a date: **received**, **released**, **still restricted**, **spent on it**, and a suggested release (what's been spent but not yet released). Enter an amount and **Release**.
+When you spend money on a purpose, the restriction is met and that much moves to unrestricted. Spending on a subclass counts for the nearest class above it that holds restricted money. **Nonprofit** (`/nonprofit`) lists each purpose, **as of** a date: **received**, **released**, **still restricted**, **spent on it**, and a suggested release (what's been spent but not yet released). Enter an amount and **Release**.
 
 A release posts between "Released From Restricted" and "Released To Unrestricted" on the purpose's class. Total net assets don't change. You can't release more than the purpose holds. Void a release from its page.
 

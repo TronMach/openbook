@@ -50,6 +50,25 @@ public sealed class NonprofitTests : IAsyncLifetime
     private Task<ReportTable> Report(string key, string query) =>
         _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync(key, ReportParameters.Parse(query)));
 
+    [Fact]
+    public async Task Spending_on_a_subclass_counts_for_the_nearest_purpose_up_the_tree()
+    {
+        var checking = Account("Checking");
+        var books = (await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Books", _scholarships))).Id;
+        var fees = (await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Fees", _scholarships))).Id;
+        await Post(new DateOnly(2026, 1, 10), Dr(checking, 1000m), Cr(Account("Contributions:Restricted"), 1000m, classId: _scholarships));
+        await Post(new DateOnly(2026, 1, 11), Dr(checking, 100m), Cr(Account("Contributions:Restricted"), 100m, classId: fees));
+        await Post(new DateOnly(2026, 2, 1), Dr(Account("Program Supplies"), 400m, classId: books), Cr(checking, 400m));
+        await Post(new DateOnly(2026, 2, 2), Dr(Account("Program Supplies"), 30m, classId: fees), Cr(checking, 30m));
+
+        var purposes = await In<NonprofitService, IReadOnlyList<RestrictedPurpose>>(s => s.PurposesAsync(new DateOnly(2026, 3, 1)));
+
+        var scholarships = purposes.Single(p => p.ClassId == _scholarships);
+        Assert.Equal((400m, 400m), (scholarships.Spent, scholarships.Suggested));
+        var own = purposes.Single(p => p.ClassId == fees);
+        Assert.Equal((30m, 30m), (own.Spent, own.Suggested));
+    }
+
     /// <summary>A restricted gift for scholarships, an unrestricted gift, and spending on scholarships, administration and nothing in particular.</summary>
     private async Task GiveAndSpendAsync()
     {
