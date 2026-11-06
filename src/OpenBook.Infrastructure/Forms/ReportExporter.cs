@@ -153,7 +153,11 @@ internal sealed class ReportExporter : IReportExporter
 
         var grid = section.AddTable();
         var width = section.PageSetup.PageWidth - section.PageSetup.LeftMargin - section.PageSetup.RightMargin;
-        var weights = table.Columns.Select((c, i) => i == 0 ? (table.Columns.Count > 4 ? 2.4 : 3.0) : c.Format == ColumnFormat.Text ? 1.4 : 1.0).ToList();
+        // On a very wide report the name gives way, and the last column, usually the total, has the largest figures.
+        var veryWide = table.Columns.Count > 18;
+        var weights = table.Columns.Select((c, i) => i == 0 ? (veryWide ? 1.7 : table.Columns.Count > 4 ? 2.4 : 3.0)
+            : veryWide && i == table.Columns.Count - 1 ? 1.5
+            : c.Format == ColumnFormat.Text ? 1.4 : 1.0).ToList();
         foreach (var weight in weights)
             grid.AddColumn(width * (weight / weights.Sum()));
         (grid.TopPadding, grid.BottomPadding, grid.LeftPadding, grid.RightPadding) = (Unit.FromPoint(2), Unit.FromPoint(2), Unit.FromPoint(3), Unit.FromPoint(3));

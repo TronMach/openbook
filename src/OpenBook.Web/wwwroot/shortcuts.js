@@ -186,13 +186,20 @@
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             const form = e.target instanceof Element ? e.target.closest('form') : null;
             if (form) { e.preventDefault(); if (!e.repeat) form.requestSubmit(); return; }
-            // An interactive form has no form element, just its save button. Leaving the field first sends what was typed.
-            const save = document.querySelector('.actions button:not([disabled]):not(.secondary):not(.link)');
-            if (save) {
+            // An interactive form has no form element, just its save button, which may be waiting for the field
+            // being typed in: leaving the field sends its value, and the button comes alive once that's back.
+            const save = () => document.querySelector('.actions button:not(.secondary):not(.link)');
+            if (save()) {
                 e.preventDefault();
                 if (e.repeat) return;
                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-                setTimeout(() => save.click(), 50);
+                let tries = 0;
+                const press = () => {
+                    const button = save();
+                    if (button && !button.disabled) button.click();
+                    else if (button && ++tries < 30) setTimeout(press, 50);
+                };
+                setTimeout(press, 50);
             }
             return;
         }

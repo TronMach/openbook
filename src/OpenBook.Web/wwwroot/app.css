@@ -790,6 +790,7 @@ details.company-facts[open] > summary { margin-bottom: 0.75rem; }
     .page { margin: 1rem auto; }
     .page table { display: block; max-width: 100%; overflow-x: auto; }
     .page table:has(.search-list:not([hidden])) { overflow: visible; }
+    .page:has(table .search-list:not([hidden])) { overflow-x: clip; }
     .summary-bar { flex-wrap: wrap; }
     .toolbar h1 { flex-basis: 100%; }
     .card { padding: 1rem; }
