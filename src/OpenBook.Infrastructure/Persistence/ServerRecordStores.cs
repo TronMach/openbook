@@ -36,10 +36,18 @@ internal sealed class EfJobLeases(IServiceScopeFactory scopes, IClock clock) : I
             await db.SaveChangesAsync(ct);
             return true;
         }
-        catch (DbUpdateException)
+        catch (Domain.Common.ConcurrencyConflictException)
         {
             return false;
         }
+    }
+
+    public async Task ReleaseAllAsync(CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<OpenBookDbContext>().JobLeases
+            .Where(l => l.Holder == Holder)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.UntilUnixMs, 0L), ct);
     }
 }
 
@@ -63,7 +71,7 @@ internal sealed class EfIdempotencyStore(IServiceScopeFactory scopes, IClock clo
             await db.SaveChangesAsync(ct);
             return (true, null);
         }
-        catch (DbUpdateException)
+        catch (Domain.Common.ConcurrencyConflictException)
         {
             // The same key arrived twice at once: the other one reserved it.
             await using var again = scopes.CreateAsyncScope();

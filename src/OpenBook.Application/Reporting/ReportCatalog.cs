@@ -90,12 +90,18 @@ public sealed class ReportParameters
 
     public string? Get(string name) => _values.GetValueOrDefault(name);
 
+    /// <summary>A date, held inside what reports can step back and forward from (9999-12-31 can mean "everything").</summary>
     public DateOnly? GetDate(string name) =>
-        DateOnly.TryParseExact(Get(name), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+        DateOnly.TryParseExact(Get(name), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? DateRanges.Within(d) : null;
 
     public Guid? GetId(string name) => System.Guid.TryParse(Get(name), out var g) ? g : null;
 
     public int? GetNumber(string name) => int.TryParse(Get(name), NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : null;
+
+    /// <summary>A year a report can work with; anything else is refused.</summary>
+    public int? GetYear(string name) => GetNumber(name) is { } year
+        ? year is >= DateRanges.FirstYear and <= DateRanges.LastYear ? year : throw new DomainException("report.year_range", $"Choose a year from {DateRanges.FirstYear} to {DateRanges.LastYear}.")
+        : null;
 
     public decimal? GetAmount(string name) => decimal.TryParse(Get(name), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
 
@@ -307,8 +313,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "inventory-valuation" => await Get<InventoryReports>().ValuationAsync(asOf, p.GetFlag("detail"), p.GetId("warehouseId"), ct),
             "inventory-stock" => await Get<InventoryReports>().StockStatusAsync(p.GetId("warehouseId"), ct),
             "physical-inventory-worksheet" => await Get<InventoryReports>().CountSheetAsync(p.GetId("warehouseId"), ct),
-            "1099" => Summary1099(company, await Get<PayablesService>().Report1099Async(p.GetNumber("year") ?? today.Year - 1, p.GetAmount("threshold"), ct)),
-            "1099-detail" => await Get<ActivityReports>().Detail1099Async(p.GetNumber("year") ?? today.Year - 1, ct),
+            "1099" => Summary1099(company, await Get<PayablesService>().Report1099Async(p.GetYear("year") ?? today.Year - 1, p.GetAmount("threshold"), ct)),
+            "1099-detail" => await Get<ActivityReports>().Detail1099Async(p.GetYear("year") ?? today.Year - 1, ct),
             "sales-tax" => SalesTax(company, await Get<SalesTaxReports>().LiabilityAsync(from, range.To, ct)),
             "tax-summary" => await Get<StatementReports>().TaxSummaryTableAsync(from, range.To, basis, ct),
             "budget-vs-actual" => await BudgetVsActualAsync(p, basis, ct),
@@ -318,18 +324,18 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "trial-balance-worksheet" => await Get<AdjustingEntryService>().WorksheetTableAsync(asOf, basis, ct),
             "adjusting-entries" => await Get<AdjustingEntryService>().EntriesTableAsync(range.From, range.To, ct),
             "fixed-assets" => await Get<Assets.AssetReports>().RegisterAsync(asOf, ct),
-            "depreciation-schedule" => await Get<Assets.AssetReports>().ScheduleAsync(p.GetNumber("year") ?? today.Year, ct),
+            "depreciation-schedule" => await Get<Assets.AssetReports>().ScheduleAsync(p.GetYear("year") ?? today.Year, ct),
             "loans" => await Get<Assets.AssetReports>().LoansAsync(asOf, ct),
             "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, ct),
             "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
-            "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetNumber("year") ?? today.Year, ct),
+            "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetYear("year") ?? today.Year, ct),
             "channel-sales" => await Get<Channels.ChannelSalesReport>().TableAsync(from, range.To, ct),
             "statement-of-activities" => await Get<Nonprofit.NonprofitReports>().ActivitiesAsync(from, range.To, basis, ct),
             "statement-of-financial-position" => await Get<Nonprofit.NonprofitReports>().FinancialPositionAsync(asOf, basis, ct),
             "functional-expenses" => await Get<Nonprofit.NonprofitReports>().FunctionalExpensesAsync(from, range.To, basis, ct),
             "restricted-net-assets" => await Get<Nonprofit.NonprofitReports>().RestrictedNetAssetsAsync(asOf, ct),
             "giving-by-donor" => await Get<Nonprofit.GiftReports>().GivingByDonorAsync(from, range.To, p.GetFlag("detail"), ct),
-            "lapsed-donors" => await Get<Nonprofit.GiftReports>().LapsedDonorsAsync(p.GetNumber("year") ?? today.Year, ct),
+            "lapsed-donors" => await Get<Nonprofit.GiftReports>().LapsedDonorsAsync(p.GetYear("year") ?? today.Year, ct),
             "open-pledges" => await Get<Nonprofit.GiftReports>().PledgesAsync(asOf, ct),
             "grants" => await Get<Nonprofit.NonprofitReports>().GrantsAsync(asOf, ct),
             "form-990-expenses" => await Get<Nonprofit.NonprofitReports>().Form990ExpensesAsync(from, range.To, basis, ct),
@@ -526,7 +532,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             [
                 new ReportCell(v.Vendor.DisplayName, new ReportLink("vendor", v.Vendor.Id)),
                 v.Vendor.MaskedTaxId ?? "Missing",
-                v.Vendor.Form1099Box.ToString(),
+                AccountantPackageService.BoxLabel(v.Vendor.Form1099Box),
                 v.Total,
                 new ReportCell(v.CardPayments == 0m ? null : v.CardPayments),
                 new ReportCell(v.Refunds == 0m ? null : v.Refunds),
@@ -604,6 +610,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Assets.FixedAsset.DisposalSource => "Asset disposal",
         Domain.Assets.Loan.Source => "Loan",
         Domain.Assets.Loan.PaymentSource => "Loan payment",
+        Purchases.PurchaseOrderService.ReceiptSource => "Goods received",
         _ => "Journal entry",
     };
 }

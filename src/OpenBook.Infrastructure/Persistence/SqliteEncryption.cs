@@ -67,6 +67,7 @@ public static class SqliteEncryption
                 command.CommandText = """
                     ATTACH DATABASE $path AS target KEY $key;
                     SELECT sqlcipher_export('target');
+                    PRAGMA target.journal_mode = WAL;
                     DETACH DATABASE target;
                     """;
                 command.Parameters.AddWithValue("$path", temporary);

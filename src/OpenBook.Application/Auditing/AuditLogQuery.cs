@@ -30,8 +30,8 @@ public sealed class AuditLogQuery(ILedgerStore store)
             .Where(r => filter.EntityType is null || r.EntityType == filter.EntityType)
             .Where(r => filter.EntityId is null || r.EntityId == filter.EntityId)
             .Where(r => filter.Actor is null || r.Actor == filter.Actor)
-            .Where(r => filter.From is null || DateOnly.FromDateTime(r.OccurredAt.LocalDateTime) >= filter.From)
-            .Where(r => filter.To is null || DateOnly.FromDateTime(r.OccurredAt.LocalDateTime) <= filter.To)
+            .Where(r => filter.From is null || CompanyTime.TodayAt(r.OccurredAt, CompanyTime.Zone) >= filter.From)
+            .Where(r => filter.To is null || CompanyTime.TodayAt(r.OccurredAt, CompanyTime.Zone) <= filter.To)
             .ToList();
 
         var page = matching.Skip(filter.Skip).Take(Math.Clamp(filter.Take, 1, 500))

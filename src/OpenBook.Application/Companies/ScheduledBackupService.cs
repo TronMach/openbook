@@ -103,7 +103,7 @@ public sealed class ScheduledBackupService(
     public async Task<BackupRunResult?> RunDueAsync(TimeZoneInfo zone, CancellationToken ct = default)
     {
         var schedule = await store.GetBackupScheduleAsync(ct);
-        return schedule is not null && schedule.IsDue(clock.UtcNow, zone) ? await RunAsync(schedule, ct) : null;
+        return backups.Supported && schedule is not null && schedule.IsDue(clock.UtcNow, zone) ? await RunAsync(schedule, ct) : null;
     }
 
     public async Task<BackupRunResult> RunNowAsync(CancellationToken ct = default)

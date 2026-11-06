@@ -27,7 +27,7 @@ public static class SalesFlowEndpoints
             return await ToInvoice($"/sales/estimates/{id}", () => estimates.ProgressInvoiceAsync(id, InvoiceCommand(form), ct));
         }).RequireAuthorization();
 
-        app.MapPost("/sales/orders/{id:guid}/cancel", async (Guid id, SalesOrderService orders, CancellationToken ct) =>
+        app.MapPost("/sales/orders/{id:guid}/cancel", async (IFormCollection _, Guid id, SalesOrderService orders, CancellationToken ct) =>
             await Back($"/sales/orders/{id}", async () =>
             {
                 await orders.CancelAsync(id, ct);

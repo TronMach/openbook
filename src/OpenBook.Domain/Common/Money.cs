@@ -6,10 +6,14 @@ namespace OpenBook.Domain.Common;
 /// </summary>
 public readonly record struct Money : IComparable<Money>
 {
+    /// <summary>The largest amount a document or line can hold, well inside the database's whole cents with room for totals.</summary>
+    public const decimal MaxAmount = 99_999_999_999_999.99m;
+
     public Money(decimal amount, Currency currency)
     {
         if (currency.Code is null)
             throw new DomainException("money.currency_missing", "Money requires a currency.");
+        EnsureInRange(amount);
         if (decimal.Round(amount, currency.MinorUnits) != amount)
             throw new DomainException("money.precision", $"{amount} has more than {currency.MinorUnits} decimal places.");
         Amount = amount;
@@ -27,8 +31,15 @@ public readonly record struct Money : IComparable<Money>
     /// <summary>Rejects amounts with fractions of a cent, for documents that keep plain decimals.</summary>
     public static void EnsureCents(decimal amount)
     {
+        EnsureInRange(amount);
         if (decimal.Round(amount, 2) != amount)
             throw new DomainException("money.precision", "Amounts can have at most 2 decimal places.");
+    }
+
+    private static void EnsureInRange(decimal amount)
+    {
+        if (Math.Abs(amount) > MaxAmount)
+            throw new DomainException("money.too_large", "That amount is too large. Check it for a typing mistake.");
     }
 
     /// <summary>Rounds half away from zero, the usual convention for invoices and tax.</summary>

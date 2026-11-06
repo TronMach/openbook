@@ -22,6 +22,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
         new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
     private readonly ConcurrentQueue<LoggedProblem> _problems = new();
     private readonly Task _writer;
+    private DateTime _lostOn;
 
     public FileLoggerProvider(string directory)
     {
@@ -59,36 +60,57 @@ public sealed class FileLoggerProvider : ILoggerProvider
     {
         string? path = null;
         StreamWriter? writer = null;
-        try
+        await foreach (var (at, line) in _queue.Reader.ReadAllAsync())
         {
-            await foreach (var (at, line) in _queue.Reader.ReadAllAsync())
+            var name = Path.Combine(Directory, $"openbook-{at.UtcDateTime:yyyyMMdd}.log");
+            try
             {
-                var name = Path.Combine(Directory, $"openbook-{at.UtcDateTime:yyyyMMdd}.log");
-                if (name != path)
+                if (name != path || writer is null)
                 {
                     if (writer is not null)
                         await writer.DisposeAsync();
+                    writer = null;
                     System.IO.Directory.CreateDirectory(Directory);
                     writer = new StreamWriter(new FileStream(name, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete)) { AutoFlush = true };
                     path = name;
                     DeleteOld();
                 }
 
-                await writer!.WriteLineAsync(line);
+                await writer.WriteLineAsync(line);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A log that can't be written mustn't take the app down, and the next line tries again.
+                // The in-memory problems still work, and say a line went missing.
+                await DropAsync(writer);
+                writer = null;
+                NoteLost(at, ex);
             }
         }
-        catch (IOException)
-        {
-            // A log that can't be written mustn't take the app down; the in-memory problems still work.
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-        finally
+
+        await DropAsync(writer);
+    }
+
+    private static async Task DropAsync(StreamWriter? writer)
+    {
+        try
         {
             if (writer is not null)
                 await writer.DisposeAsync();
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Closing a file that can't be written fails as well; it's already given up on.
+        }
+    }
+
+    /// <summary>Once a day at most, so a full disk doesn't push real problems out of the list.</summary>
+    private void NoteLost(DateTimeOffset at, Exception ex)
+    {
+        if (at.UtcDateTime.Date == _lostOn)
+            return;
+        _lostOn = at.UtcDateTime.Date;
+        _problems.Enqueue(new LoggedProblem(at, LogLevel.Warning, nameof(FileLoggerProvider), "The log file couldn't be written, so lines are missing from it.", $"{ex.GetType().Name}: {ex.Message}"));
     }
 
     private void DeleteOld()
@@ -102,8 +124,9 @@ public sealed class FileLoggerProvider : ILoggerProvider
                 {
                     File.Delete(file);
                 }
-                catch (IOException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
+                    // Kept for now; the next day tries again.
                 }
             }
         }

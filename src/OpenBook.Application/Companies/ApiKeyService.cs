@@ -19,6 +19,13 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
 {
     private const string EntityType = "api_key";
 
+    /// <summary>The moment the company's clocks reach the day after: a key works through the day it's set to expire on.</summary>
+    private static DateTimeOffset EndOf(DateOnly day)
+    {
+        var next = day.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(next, CompanyTime.Zone.GetUtcOffset(next));
+    }
+
     /// <param name="userId">Null for every user's keys (admins).</param>
     public Task<IReadOnlyList<ApiKey>> ListAsync(Guid? userId, CancellationToken ct = default) => store.ListApiKeysAsync(userId, ct);
 
@@ -27,7 +34,7 @@ public sealed class ApiKeyService(ICompanyStore store, IClock clock, ICurrentUse
     {
         var user = await store.GetUserAsync(userId, ct) ?? throw new EntityNotFoundException("user", userId);
         var now = clock.UtcNow;
-        DateTimeOffset? expires = expiresOn is { } d ? new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) : null;
+        DateTimeOffset? expires = expiresOn is { } d ? EndOf(d) : null;
         var (key, token) = ApiKey.Create(user.Id, name, now, expires, scopes);
         store.Add(key);
         store.Add(AuditRecord.Create(now, currentUser.Actor, AuditAction.Created, EntityType, key.Id, null, Snapshot(key, user)));

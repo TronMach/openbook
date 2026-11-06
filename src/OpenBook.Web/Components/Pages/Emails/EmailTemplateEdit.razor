@@ -97,6 +97,7 @@
             return;
         if (kind == EmailKind.Reminder)
         {
+            _kind = null;
             Navigation.NavigateTo("/sales/collections/settings");
             return;
         }

@@ -76,7 +76,7 @@
                                     <td>@entry.Document?.Party</td>
                                     <td>@(entry.Document is { } dated ? Labels.Date(dated.Date) : "")</td>
                                     <td class="num">@(entry.Document is { } totalled ? Labels.Amount(totalled.Total) : "")</td>
-                                    <td class="muted">@entry.Item.AddedBy · @entry.Item.AddedAt.LocalDateTime.ToString("g", CultureInfo.CurrentCulture)</td>
+                                    <td class="muted">@entry.Item.AddedBy · @entry.Item.AddedAt.InCompanyTime().ToString("g", CultureInfo.CurrentCulture)</td>
                                     <td><button type="submit" class="link" formaction="/print/queue/remove" formtarget="_self" name="item" value="@entry.Item.Id">Take out</button></td>
                                 </tr>
                             }
@@ -177,7 +177,7 @@
                             <tr>
                                 <td>@(entry.Document is { } d ? d.Title : "A document that no longer exists")</td>
                                 <td>@entry.Document?.Party</td>
-                                <td class="muted">@entry.Item.PrintedBy · @entry.Item.PrintedAt?.LocalDateTime.ToString("g", CultureInfo.CurrentCulture)</td>
+                                <td class="muted">@entry.Item.PrintedBy · @entry.Item.PrintedAt?.InCompanyTime().ToString("g", CultureInfo.CurrentCulture)</td>
                                 <td>
                                     <PostForm Action="/print/put-back" class="inline-form" data-enhance="false">
                                         <AntiforgeryToken />

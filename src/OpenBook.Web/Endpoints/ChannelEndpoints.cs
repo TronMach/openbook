@@ -59,10 +59,10 @@ public static class ChannelEndpoints
         app.MapPost("/sales/channels/connections/{id:guid}", async (Guid id, IFormCollection form, ChannelSyncService sync, CancellationToken ct) =>
             await Back($"/sales/channels/{id}", () => sync.ConnectAsync(id, form["shopDomain"].ToString(), form["credential"].ToString(), ct))).RequireAuthorization();
 
-        app.MapPost("/sales/channels/connections/{id:guid}/disconnect", async (Guid id, ChannelSyncService sync, CancellationToken ct) =>
+        app.MapPost("/sales/channels/connections/{id:guid}/disconnect", async (IFormCollection _, Guid id, ChannelSyncService sync, CancellationToken ct) =>
             await Back($"/sales/channels/{id}", () => sync.DisconnectAsync(id, ct))).RequireAuthorization();
 
-        app.MapPost("/sales/channels/connections/{id:guid}/sync", async (Guid id, ChannelSyncService sync, CancellationToken ct) =>
+        app.MapPost("/sales/channels/connections/{id:guid}/sync", async (IFormCollection _, Guid id, ChannelSyncService sync, CancellationToken ct) =>
         {
             try
             {
@@ -106,7 +106,7 @@ public static class ChannelEndpoints
             return await Back($"/sales/channels/{id}/skus", () => orders.MapSkuAsync(id, form["sku"].ToString(), Guid.TryParse(choice, out var item) ? item : null, ct));
         }).RequireAuthorization();
 
-        app.MapPost("/sales/channels/orders/{id:guid}/post", async (Guid id, ChannelOrderService orders, CancellationToken ct) =>
+        app.MapPost("/sales/channels/orders/{id:guid}/post", async (IFormCollection _, Guid id, ChannelOrderService orders, CancellationToken ct) =>
             await Back($"/sales/channels/orders/{id}", () => orders.PostAsync(id, ct))).RequireAuthorization();
 
         app.MapPost("/sales/channels/orders/{id:guid}/void", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
@@ -135,7 +135,7 @@ public static class ChannelEndpoints
         app.MapPost("/sales/channels/orders/{id:guid}/dismiss", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
             await Back($"/sales/channels/orders/{id}", () => orders.SetDismissedAsync(id, form["restore"] != "true", ct))).RequireAuthorization();
 
-        app.MapPost("/sales/channels/payouts/{id:guid}/post", async (Guid id, ChannelService channels, CancellationToken ct) =>
+        app.MapPost("/sales/channels/payouts/{id:guid}/post", async (IFormCollection _, Guid id, ChannelService channels, CancellationToken ct) =>
             await Back($"/sales/channels/payouts/{id}", () => channels.PostAsync(id, ct))).RequireAuthorization();
 
         app.MapPost("/sales/channels/payouts/{id:guid}/void", async (Guid id, IFormCollection form, ChannelService channels, CancellationToken ct) =>

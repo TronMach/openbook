@@ -95,10 +95,10 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/time/{id:guid}/stop", async (Guid id, TimeService time, CancellationToken ct) =>
+        app.MapPost("/time/{id:guid}/stop", async (IFormCollection _, Guid id, TimeService time, CancellationToken ct) =>
             await Back("/time", async () => await time.StopAsync(id, ct))).RequireAuthorization();
 
-        app.MapPost("/time/{id:guid}/delete", async (Guid id, TimeService time, CancellationToken ct) =>
+        app.MapPost("/time/{id:guid}/delete", async (IFormCollection _, Guid id, TimeService time, CancellationToken ct) =>
             await Back("/time", () => time.DeleteAsync(id, ct))).RequireAuthorization();
 
         app.MapPost("/time/people", async (IFormCollection form, WorkerService workers, CancellationToken ct) =>
@@ -131,7 +131,7 @@ public static class ProjectEndpoints
                 form["billable"] == "true",
                 Number(form["billRate"]) ?? 0m), ct))).RequireAuthorization();
 
-        app.MapPost("/mileage/{id:guid}/delete", async (Guid id, MileageService mileage, CancellationToken ct) =>
+        app.MapPost("/mileage/{id:guid}/delete", async (IFormCollection _, Guid id, MileageService mileage, CancellationToken ct) =>
             await Back("/mileage", () => mileage.DeleteAsync(id, ct))).RequireAuthorization();
 
         app.MapPost("/time/rates", async (IFormCollection form, BillingRateService rates, CancellationToken ct) =>
@@ -140,7 +140,7 @@ public static class ProjectEndpoints
         app.MapPost("/time/rates/{id:guid}", async (Guid id, IFormCollection form, BillingRateService rates, CancellationToken ct) =>
             await Back("/time/rates", async () => await rates.UpdateAsync(id, RateDetails(form), ct))).RequireAuthorization();
 
-        app.MapPost("/time/rates/{id:guid}/delete", async (Guid id, BillingRateService rates, CancellationToken ct) =>
+        app.MapPost("/time/rates/{id:guid}/delete", async (IFormCollection _, Guid id, BillingRateService rates, CancellationToken ct) =>
             await Back("/time/rates", () => rates.DeleteAsync(id, ct))).RequireAuthorization();
 
         app.MapPost("/mileage/rates", async (IFormCollection form, MileageService mileage, CancellationToken ct) =>

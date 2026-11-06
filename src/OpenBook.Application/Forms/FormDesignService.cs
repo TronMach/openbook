@@ -82,7 +82,12 @@ public sealed class FormDesignService(
     }
 
     public Task<FormDesign> SetLogoAsync(Guid id, byte[] content, CancellationToken ct = default) =>
-        ChangeAsync(id, (design, _) => design.SetLogo(content), ct);
+        ChangeAsync(id, (design, _) =>
+        {
+            design.SetLogo(content);
+            if (!renderer.CanPrint(content))
+                throw new DomainException("formdesign.logo_unreadable", "That image is damaged, in a form that can't be printed, or more than 5,000 pixels on a side.");
+        }, ct);
 
     public Task<FormDesign> RemoveLogoAsync(Guid id, CancellationToken ct = default) =>
         ChangeAsync(id, (design, _) => design.RemoveLogo(), ct);
@@ -285,7 +290,7 @@ public sealed class FormDesignService(
         var placed = await PlacedFieldsAsync(details, ct);
         var from = FormService.CompanyParty(company);
         var customer = new FormParty("Sample Customer Ltd", "100 Main Street\nSpringfield, IL 62701", "accounts@example.com", "(555) 010-0100");
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         string D(DateOnly d) => d.ToString("d", System.Globalization.CultureInfo.CurrentCulture);
 
         if (document == FormDocuments.Statement)

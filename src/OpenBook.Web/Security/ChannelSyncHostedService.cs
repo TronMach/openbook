@@ -19,9 +19,13 @@ internal sealed partial class ChannelSyncHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Once at start too: a desktop open for a short while still fetches what's due.
         using var timer = new PeriodicTimer(Period);
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        do
+        {
             await SyncDueAsync(stoppingToken);
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     private async Task SyncDueAsync(CancellationToken ct)

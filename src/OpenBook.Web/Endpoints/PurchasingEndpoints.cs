@@ -59,7 +59,7 @@ public static class PurchasingEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/purchases/orders/{id:guid}/receipts/{number:int}/void", async (Guid id, int number, PurchaseOrderService orders, CancellationToken ct) =>
+        app.MapPost("/purchases/orders/{id:guid}/receipts/{number:int}/void", async (IFormCollection _, Guid id, int number, PurchaseOrderService orders, CancellationToken ct) =>
             await Back($"/purchases/orders/{id}", async () =>
             {
                 await orders.VoidReceiptAsync(id, number, ct);
@@ -89,10 +89,14 @@ public static class PurchasingEndpoints
             }
         }).RequireAuthorization();
 
+        // Ledger lines and stock rows name a delivery by its stock id; the page is its order's.
+        app.MapGet("/purchases/deliveries/{id:guid}", async (Guid id, IPurchasesStore store, CancellationToken ct) =>
+            await store.FindOrderOfDeliveryAsync(id, ct) is { } order ? Results.Redirect($"/purchases/orders/{order}") : Results.NotFound()).RequireAuthorization();
+
         app.MapGet("/purchases/orders/{id:guid}/pdf", async (Guid id, Guid? design, PurchaseOrderForms forms, CancellationToken ct) =>
             Results.File((await forms.RenderAsync(id, design, ct)).Pdf, "application/pdf")).RequireAuthorization();
 
-        app.MapPost("/purchases/orders/{id:guid}/cancel", async (Guid id, PurchaseOrderService orders, CancellationToken ct) =>
+        app.MapPost("/purchases/orders/{id:guid}/cancel", async (IFormCollection _, Guid id, PurchaseOrderService orders, CancellationToken ct) =>
             await Back($"/purchases/orders/{id}", async () =>
             {
                 await orders.CancelAsync(id, ct);

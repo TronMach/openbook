@@ -81,6 +81,9 @@ public interface IPurchasesStore
     /// <summary>Tracked, with lines and receipts.</summary>
     Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct);
 
+    /// <summary>The order a delivery into stock belongs to, by the delivery's stock id.</summary>
+    Task<Guid?> FindOrderOfDeliveryAsync(Guid stockSourceId, CancellationToken ct);
+
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct);
 

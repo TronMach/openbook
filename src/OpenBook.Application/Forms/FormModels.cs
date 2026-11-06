@@ -164,6 +164,9 @@ public interface IFormRenderer
 
     /// <summary>Several PDFs as one, their pages in order.</summary>
     byte[] Combine(IReadOnlyList<byte[]> pdfs);
+
+    /// <summary>Whether an image can be printed: it decodes and isn't absurdly large.</summary>
+    bool CanPrint(byte[] image);
 }
 
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);

@@ -45,7 +45,10 @@ public sealed record SignInResult(
 public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, SignInThrottle throttle, IClock clock)
 {
     // Verified against when the username doesn't exist, so response time doesn't reveal valid usernames.
-    private readonly Lazy<string> _dummyHash = new(() => hasher.Hash(Guid.NewGuid().ToString()));
+    // Static: made once, so an unknown name then costs one hash check, like a known one.
+    private static string? s_dummyHash;
+
+    private string DummyHash => s_dummyHash ??= hasher.Hash(Guid.NewGuid().ToString());
 
     public Task<SignInResult> SignInAsync(string username, string password, CancellationToken ct = default) =>
         SignInAsync(username, password, null, ct);
@@ -68,14 +71,14 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
 
         if (user is null)
         {
-            hasher.Verify(_dummyHash.Value, password ?? string.Empty);
+            hasher.Verify(DummyHash, password ?? string.Empty);
             return new SignInResult(SignInStatus.InvalidCredentials);
         }
 
         // An inactive user, or one whose access has ended, gets the same answer as a wrong password, after the same work.
         if (!user.IsActive || user.AccessEnded(Today))
         {
-            hasher.Verify(_dummyHash.Value, password ?? string.Empty);
+            hasher.Verify(DummyHash, password ?? string.Empty);
             return new SignInResult(SignInStatus.InvalidCredentials);
         }
 
@@ -283,7 +286,7 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
         if (user.IsLockedOut(now) || throttle.BlockedUntil(user.Id, address, now) is not null)
         {
             // The same work as a wrong password, and a right one is refused too.
-            hasher.Verify(_dummyHash.Value, password ?? string.Empty);
+            hasher.Verify(DummyHash, password ?? string.Empty);
             return false;
         }
 

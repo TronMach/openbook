@@ -160,7 +160,10 @@
     private IReadOnlyList<Bill> _duplicates = [];
 
     /// <summary>The total and vendor the duplicate warning was given for: saving again with them unchanged goes ahead.</summary>
+    private static readonly TimeSpan ReadTheWarning = TimeSpan.FromSeconds(1.5);
+
     private (Guid Vendor, decimal Total, DateOnly Date)? _warnedFor;
+    private DateTimeOffset _warnedAt;
 
     private async Task SaveAsync()
     {
@@ -176,8 +179,14 @@
             {
                 _duplicates = await Ops.RunAsync<BillService, IReadOnlyList<Bill>>(s => s.PossibleDuplicatesAsync(check.Item1, check.Item3, check.Item2));
                 _warnedFor = check;
+                _warnedAt = DateTimeOffset.UtcNow;
                 if (_duplicates.Count > 0)
                     return;
+            }
+            else if (_duplicates.Count > 0 && DateTimeOffset.UtcNow - _warnedAt < ReadTheWarning)
+            {
+                // The second click of a double click, before anyone could have read the list.
+                return;
             }
 
             var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo, LocationId: _locationId, WarehouseId: _warehouseId);

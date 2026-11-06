@@ -50,7 +50,7 @@ public sealed record GrantPosition(Grant Grant, string Funder, string ClassName,
 /// <summary>Grants: awards, their budgets, spending against them (by class), money from funders and, for conditional grants, income as it's earned.</summary>
 public sealed class GrantService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, ReportLedger ledger, PostingEngine engine,
-    IClock clock, ICurrentUser user)
+    IUnitOfWork unitOfWork, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "grant";
     public const string GrantsIncomeName = "Grants";
@@ -104,6 +104,9 @@ public sealed class GrantService(
         ArgumentNullException.ThrowIfNull(command);
         Grant.Check(command.Name, command.Amount, command.StartsOn, command.EndsOn);
         var funder = await sales.GetCustomerAsync(command.FunderId, ct) ?? throw new DomainException("grant.funder_required", "Choose the funder.");
+
+        // One transaction: an award refused for a closed date leaves no class or accounts behind.
+        await using var transaction = await unitOfWork.BeginAsync(ct);
         var chart = await accounts.GetChartAsync(ct);
         var income = await IncomeAccountAsync(chart, command.IncomeAccountId, ct);
         var receivable = await ReceivableAsync(chart, ct);
@@ -142,6 +145,7 @@ public sealed class GrantService(
         store.Add(grant);
         store.Add(Audit(AuditAction.Created, grant, null));
         await store.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return grant;
     }
 

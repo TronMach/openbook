@@ -39,12 +39,10 @@ internal sealed partial class RecurringPostingService(
         {
             if (!await setup.CheckAsync(services.GetRequiredService<CompanySetupService>(), ct))
                 return false;
-            // With several servers on one database, one of them runs the hourly work; the lease outlasts an hour's gap.
-            if (!await leases.TryAcquireAsync("hourly", TimeSpan.FromMinutes(90), ct))
-                return false;
-            // A restored file, or another server instance, may have changed the company's time zone.
+            // A restored file, or another server instance, may have changed the company's time zone: every instance reads it.
             CompanyTime.Use(await services.GetRequiredService<ICompanyStore>().GetCompanyAsync(ct));
-            return true;
+            // With several servers on one database, one of them runs the hourly work; the lease outlasts an hour's gap.
+            return await leases.TryAcquireAsync("hourly", TimeSpan.FromMinutes(90), ct);
         }, ct))
             return;
 

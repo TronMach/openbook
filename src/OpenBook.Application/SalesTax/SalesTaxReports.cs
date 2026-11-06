@@ -103,7 +103,7 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
     /// <summary>Customers with an exemption certificate, expired and soon-to-expire ones first.</summary>
     public async Task<IReadOnlyList<ExemptCustomer>> ExemptCustomersAsync(CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         return (await sales.ListCustomersAsync(ct))
             .Where(c => c.ExemptionCertificate is not null)
             .Select(c => new ExemptCustomer(c, c.ExemptionExpired(today),

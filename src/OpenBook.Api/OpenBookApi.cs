@@ -194,6 +194,14 @@ public static class OpenBookApi
                     },
                     extensions: new Dictionary<string, object?> { ["code"] = ex.Code });
             }
+            catch (Exception ex) when (ex is OverflowException or ArgumentOutOfRangeException && !context.HttpContext.Response.HasStarted)
+            {
+                // A number too large to store, or a date or count past what a date can hold: the caller's mistake too.
+                return Results.Problem(
+                    title: "A number or date in the request is out of range.",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    extensions: new Dictionary<string, object?> { ["code"] = "request.value_out_of_range" });
+            }
             catch (ArgumentNullException ex) when (ex.ParamName is { } name && !context.HttpContext.Response.HasStarted)
             {
                 // A body without a list the service needs ("lines", "applications"): the caller's mistake, not the server's.

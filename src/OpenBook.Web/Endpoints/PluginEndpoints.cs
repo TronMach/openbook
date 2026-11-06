@@ -12,7 +12,7 @@ public static class PluginEndpoints
 {
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/settings/plugins/{folder}/{action:regex(^(enable|disable)$)}", async (string folder, string action, PluginRegistry plugins,
+        app.MapPost("/settings/plugins/{folder}/{action:regex(^(enable|disable)$)}", async (IFormCollection _, string folder, string action, PluginRegistry plugins,
             ICompanyStore companies, IClock clock, ICurrentUser user, CancellationToken ct) =>
         {
             var root = plugins.Folder;

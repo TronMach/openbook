@@ -100,6 +100,9 @@ public sealed record BackupFile(string Path, string FileName);
 /// <summary>Whole-company backup and restore. Implemented per database provider.</summary>
 public interface IBackupService
 {
+    /// <summary>False where the database has its own tools for this (PostgreSQL), so a schedule that came along in a move doesn't fail every day.</summary>
+    bool Supported => true;
+
     /// <summary>Writes a consistent snapshot to a temporary file. The caller deletes it.</summary>
     Task<BackupFile> CreateAsync(CancellationToken ct);
 

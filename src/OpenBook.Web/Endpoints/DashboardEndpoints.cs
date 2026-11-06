@@ -33,14 +33,14 @@ public static class DashboardEndpoints
                 return "Scheduled.";
             })).RequireAuthorization();
 
-        app.MapPost("/reports/schedules/{id:guid}/send", async (Guid id, ReportSubscriptionService subscriptions, CancellationToken ct) =>
+        app.MapPost("/reports/schedules/{id:guid}/send", async (IFormCollection _, Guid id, ReportSubscriptionService subscriptions, CancellationToken ct) =>
             await Back(async () =>
             {
                 var run = await subscriptions.SendNowAsync(id, ct);
                 return run.Error is { } error ? throw new DomainException("subscription.send_failed", error) : $"Sent to {run.Subscription.Recipients}.";
             })).RequireAuthorization();
 
-        app.MapPost("/reports/schedules/{id:guid}/delete", async (Guid id, ReportSubscriptionService subscriptions, CancellationToken ct) =>
+        app.MapPost("/reports/schedules/{id:guid}/delete", async (IFormCollection _, Guid id, ReportSubscriptionService subscriptions, CancellationToken ct) =>
             await Back(async () =>
             {
                 await subscriptions.DeleteAsync(id, ct);
@@ -62,10 +62,10 @@ public static class DashboardEndpoints
                 Enum.TryParse<ScenarioRecurrence>(form["recurrence"], out var recurrence) ? recurrence : ScenarioRecurrence.Once,
                 Date(form["endDate"])), ct)).Id)).RequireAuthorization();
 
-        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/items/{itemId:guid}/remove", async (Guid id, Guid itemId, ForecastService forecasts, CancellationToken ct) =>
+        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/items/{itemId:guid}/remove", async (IFormCollection _, Guid id, Guid itemId, ForecastService forecasts, CancellationToken ct) =>
             await Forecast(async () => (await forecasts.RemoveItemAsync(id, itemId, ct)).Id)).RequireAuthorization();
 
-        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/delete", async (Guid id, ForecastService forecasts, CancellationToken ct) =>
+        app.MapPost("/reports/cash-forecast/scenarios/{id:guid}/delete", async (IFormCollection _, Guid id, ForecastService forecasts, CancellationToken ct) =>
             await Forecast(async () =>
             {
                 await forecasts.DeleteScenarioAsync(id, ct);

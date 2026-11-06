@@ -148,7 +148,7 @@ public sealed class PrintService(
         await store.SaveChangesAsync(ct);
 
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         return new RenderedForm(FormService.FileName(company, $"Printing {count}", today), pdfs.Count == 1 ? pdfs[0] : renderer.Combine(pdfs), Guid.Empty,
             $"{count} document{(count == 1 ? "" : "s")}");
     }

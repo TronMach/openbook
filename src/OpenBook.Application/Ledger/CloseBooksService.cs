@@ -99,7 +99,7 @@ public sealed class CloseBooksService(
         var company = await companies.GetRequiredCompanyAsync(ct);
         if (company.FiscalYearEnd(fiscalYearEnd) != fiscalYearEnd)
             throw new DomainException("period.not_year_end", $"{fiscalYearEnd:yyyy-MM-dd} isn't the last day of a fiscal year.");
-        if (fiscalYearEnd >= DateOnly.FromDateTime(clock.UtcNow.UtcDateTime))
+        if (fiscalYearEnd >= CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone))
             throw new DomainException("period.year_not_over", "That fiscal year hasn't ended yet.");
         if (company.ClosingDate is { } current && current >= fiscalYearEnd)
             return new ClosingStatus(current, company.ClosingPasswordHash is not null);

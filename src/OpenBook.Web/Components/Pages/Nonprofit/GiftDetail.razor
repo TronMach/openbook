@@ -67,7 +67,7 @@
             {
                 <dt>Memo</dt><dd>@memo</dd>
             }
-            <dt>Thanked</dt><dd>@(_gift.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.LocalDateTime)) : "Not yet")</dd>
+            <dt>Thanked</dt><dd>@(_gift.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime)) : "Not yet")</dd>
         </dl>
 
         @if (_gift.Status == DocumentStatus.Posted)

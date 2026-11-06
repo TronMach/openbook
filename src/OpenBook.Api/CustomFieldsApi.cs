@@ -91,11 +91,16 @@ internal static class CustomFieldsApi
         values.MapPut("/{entityType}/{id:guid}", async (string entityType, Guid id, Dictionary<string, string?> body, CustomFieldService s, CancellationToken ct) =>
         {
             var shown = await s.EntriesAsync(entityType, id, ct);
-            var byKey = body.ToDictionary(
-                kv => Guid.TryParse(kv.Key, out var fieldId) ? fieldId
-                    : shown.FirstOrDefault(e => string.Equals(e.Field.Name, kv.Key, StringComparison.OrdinalIgnoreCase))?.Field.Id
-                      ?? throw new DomainException("customfield.not_on_record", $"There's no field \"{kv.Key}\" on this record."),
-                kv => kv.Value);
+            var byKey = new Dictionary<Guid, string?>();
+            foreach (var (key, value) in body)
+            {
+                var field = Guid.TryParse(key, out var fieldId) ? fieldId
+                    : shown.FirstOrDefault(e => string.Equals(e.Field.Name, key, StringComparison.OrdinalIgnoreCase))?.Field.Id
+                      ?? throw new DomainException("customfield.not_on_record", $"There's no field \"{key}\" on this record.");
+                if (!byKey.TryAdd(field, value))
+                    throw new DomainException("customfield.named_twice", $"The field \"{key}\" is in the request twice.");
+            }
+
             return Values(await s.SaveAsync(entityType, id, byKey, ct));
         });
     }

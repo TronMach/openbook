@@ -19,6 +19,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
     private static readonly Dictionary<string, HashSet<string>> Excluded = new(StringComparer.Ordinal)
     {
         ["Users"] = ["PasswordHash", "SecurityStamp", "ProtectedTwoFactorSecret", "RecoveryCodeHashes"],
+        ["Companies"] = ["ClosingPasswordHash"],
         ["ApiKeys"] = ["TokenHash"],
         ["UserSessions"] = ["SecurityStamp"],
         ["UserInvites"] = ["TokenHash"],

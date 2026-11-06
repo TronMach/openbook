@@ -112,6 +112,88 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_address_with_a_value_that_wont_read_answers_not_found()
+    {
+        var browser = await SetUpAsync(_app);
+        foreach (var path in new[] { "/reports/ar-aging?asOf=banana", "/customers?showInactive=x", "/login?restored=x", "/checks?all=maybe" })
+            Assert.Equal(HttpStatusCode.NotFound, (await browser.GetAsync(path)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Dates_and_years_at_the_ends_of_the_calendar_get_a_page_or_a_refusal()
+    {
+        var browser = await SetUpAsync(_app);
+        var pages = new[]
+        {
+            "/reports/profit-and-loss?preset=Custom&from=0001-01-01&to=9999-12-31",
+            "/reports/balance-sheet?asOf=9999-12-31", "/reports/balance-sheet?asOf=0001-01-01",
+            "/reports/trial-balance?asOf=9999-12-31", "/reports/trial-balance?asOf=0001-01-01",
+            "/reports/ar-aging?asOf=9999-12-31", "/reports/ap-aging?asOf=0001-01-01",
+            "/reports/general-ledger?preset=Custom&from=0001-01-01&to=9999-12-31",
+            "/reports/depreciation-schedule?year=0", "/reports/mileage-log?year=10000",
+            "/api/reports/profit-and-loss/table?preset=Custom&from=0001-01-01&to=9999-12-31",
+            "/api/reports/depreciation-schedule/table?year=0", "/api/reports/kpis?asOf=9999-12-31",
+            "/api/inventory/lots/expiring?days=2000000000",
+        };
+        Assert.Empty(await FailingAsync(browser, pages));
+    }
+
+    [Fact]
+    public async Task A_link_that_cant_be_answered_goes_back_to_a_page()
+    {
+        var browser = await SetUpAsync(_app);
+        Assert.Equal(HttpStatusCode.Redirect, (await browser.GetAsync("/settings/email-templates/reminder")).StatusCode);
+        var statement = await browser.GetAsync("/nonprofit/statements/2031");
+        Assert.Equal(HttpStatusCode.Redirect, statement.StatusCode);
+        Assert.StartsWith("/nonprofit/thanks?error=", statement.Headers.Location!.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_post_to_a_form_the_page_no_longer_draws_goes_back_to_the_page()
+    {
+        var browser = await SetUpAsync(_app);
+        var token = WebUtility.HtmlDecode(Token().Match(await browser.GetStringAsync("/settings/company")).Groups[1].Value);
+        var response = await browser.PostAsync("/settings/company", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = token,
+            ["_handler"] = "a-form-that-is-not-there",
+        }));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/settings/company", response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public void Every_signed_in_form_post_checks_the_antiforgery_token()
+    {
+        // Minimal APIs check the token only when a form is bound: a post that takes nothing from its form takes IFormCollection all the same.
+        string[] checkedByHand = ["logout", "account/sessions/{id:guid}/end"];
+        string[] anonymous = ["hooks/stripe", "portal/{token}/invoices/{id:guid}/pay"];
+        var open = _app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
+            .Where(e => !e.RoutePattern.RawText!.TrimStart('/').StartsWith("api/", StringComparison.Ordinal)
+                        && e.Metadata.GetMetadata<ComponentTypeMetadata>() is null
+                        && e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("POST") == true
+                        && e.Metadata.GetMetadata<Microsoft.AspNetCore.Antiforgery.IAntiforgeryMetadata>()?.RequiresValidation != true)
+            .Select(e => e.RoutePattern.RawText!.TrimStart('/'))
+            .Except(checkedByHand).Except(anonymous)
+            .Where(p => !p.StartsWith('_'))
+            .ToList();
+        Assert.Empty(open);
+    }
+
+    [Fact]
+    public void Every_api_path_belongs_to_an_area_or_is_closed_to_limited_keys_on_purpose()
+    {
+        string[] closed = ["/api/me", "/api/openapi", "/api/users", "/api/api-keys", "/api/webhooks", "/api/audit"];
+        var outside = _app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
+            .Select(e => "/" + e.RoutePattern.RawText!.TrimStart('/'))
+            .Where(p => p.StartsWith("/api/", StringComparison.Ordinal))
+            .Where(p => OpenBook.Domain.Companies.ApiScopes.AreaOf(p) is null && !closed.Any(c => p.StartsWith(c, StringComparison.Ordinal)))
+            .Distinct()
+            .ToList();
+        Assert.Empty(outside);
+    }
+
+    [Fact]
     public async Task Every_api_read_answers_in_an_empty_company()
     {
         var browser = await SetUpAsync(_app);

@@ -76,14 +76,14 @@ public static class DocumentEndpoints
                 return "done=read";
             })).RequireAuthorization();
 
-        app.MapPost("/documents/{id:guid}/dismiss", async (Guid id, DocumentCaptureService documents, CancellationToken ct) =>
+        app.MapPost("/documents/{id:guid}/dismiss", async (IFormCollection _, Guid id, DocumentCaptureService documents, CancellationToken ct) =>
             await Back($"/documents/{id}", async () =>
             {
                 await documents.DismissAsync(id, ct);
                 return "done=dismissed";
             })).RequireAuthorization();
 
-        app.MapPost("/documents/{id:guid}/restore", async (Guid id, DocumentCaptureService documents, CancellationToken ct) =>
+        app.MapPost("/documents/{id:guid}/restore", async (IFormCollection _, Guid id, DocumentCaptureService documents, CancellationToken ct) =>
             await Back($"/documents/{id}", async () =>
             {
                 await documents.RestoreAsync(id, ct);

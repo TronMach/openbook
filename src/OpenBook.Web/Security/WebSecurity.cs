@@ -58,6 +58,7 @@ public static class WebSecurity
         services.AddSingleton<TwoFactorCookies>();
         services.AddSingleton<OpenBook.Application.Forms.ISecretProtector, DataProtectionSecretProtector>();
         services.AddSingleton<SetupState>();
+        services.AddHostedService<JobLeaseRelease>();
         services.AddHostedService<RecurringPostingService>();
         services.AddHostedService<ScheduledBackupHostedService>();
         services.AddHostedService<ScheduledEmailHostedService>();

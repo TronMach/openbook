@@ -40,7 +40,7 @@
                         <td><a href="/customers/@g.DonorId">@_names.GetValueOrDefault(g.DonorId)</a></td>
                         <td>@(g.Kind == GiftKind.InKind ? "In kind" : g.PledgeId is null ? "Money" : "Pledge payment")@(g.Status == DocumentStatus.Voided ? " (voided)" : "")</td>
                         <td class="num">@Labels.Amount(g.Amount)</td>
-                        <td>@(g.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.LocalDateTime)) : "")</td>
+                        <td>@(g.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime)) : "")</td>
                     </tr>
                 }
             </tbody>

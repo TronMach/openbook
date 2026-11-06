@@ -79,7 +79,7 @@
                     @foreach (var d in _deliveries)
                     {
                         <tr>
-                            <td>@d.CreatedAt.LocalDateTime.ToString("g")</td>
+                            <td>@d.CreatedAt.InCompanyTime().ToString("g")</td>
                             <td><code>@d.EventType</code></td>
                             <td><span class="badge @(d.Status switch { WebhookDeliveryStatus.Succeeded => "ok", WebhookDeliveryStatus.Failed => "warn", _ => "" })">@d.Status</span></td>
                             <td class="num">@d.Attempts</td>

@@ -170,6 +170,13 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public Task<ReceiptCapture?> GetReceiptAsync(Guid id, CancellationToken ct) => db.ReceiptCaptures.SingleOrDefaultAsync(r => r.Id == id, ct);
 
+    public async Task<Guid?> FindOrderOfDeliveryAsync(Guid stockSourceId, CancellationToken ct) =>
+        await db.PurchaseOrders.AsNoTracking()
+            .SelectMany(o => o.Receipts, (o, r) => new { o.Id, r.StockSourceId })
+            .Where(r => r.StockSourceId == stockSourceId)
+            .Select(r => (Guid?)r.Id)
+            .FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<ReceiptCapture>> ListReceiptsAsync(CancellationToken ct) =>
         (await db.ReceiptCaptures.AsNoTracking().ToListAsync(ct)).OrderByDescending(r => r.CreatedAt).ToList();
 

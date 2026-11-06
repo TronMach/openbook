@@ -67,7 +67,7 @@
                 {
                     <tr class="@(d.IsActive ? null : "inactive")">
                         <td>@d.Name</td>
-                        <td>@Labels.Date(DateOnly.FromDateTime(d.CreatedAt.LocalDateTime))</td>
+                        <td>@Labels.Date(DateOnly.FromDateTime(d.CreatedAt.InCompanyTime().DateTime))</td>
                         <td>@(d.LastSyncAt?.InCompanyTime().ToString("g") ?? "")</td>
                         <td>
                             @if (d.IsActive)

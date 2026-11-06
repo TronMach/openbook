@@ -22,6 +22,7 @@ namespace OpenBook.Infrastructure.Forms;
 /// </summary>
 internal sealed class MigraDocFormRenderer : IFormRenderer
 {
+    private const int MaxImagePixels = 5000;
     private const double PageMargin = 48;
     private const double CompactMargin = 36;
     private static readonly Color Grey = new(0x6b, 0x72, 0x80);
@@ -747,6 +748,27 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
             image.Width = maxWidth;
         else
             image.Height = height;
+    }
+
+    /// <inheritdoc />
+    public bool CanPrint(byte[] image)
+    {
+        if (ImageSize(image) is not { Width: > 0 and <= MaxImagePixels, Height: > 0 and <= MaxImagePixels })
+            return false;
+        try
+        {
+            using var picture = XImage.FromStream(new MemoryStream(image));
+            using var document = new PdfDocument();
+            using (var page = XGraphics.FromPdfPage(document.AddPage()))
+                page.DrawImage(picture, 0, 0, 10, 10);
+            using var written = new MemoryStream();
+            document.Save(written);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Pixel size of a PNG (IHDR) or JPEG (first SOF marker); null when it can't be read.</summary>

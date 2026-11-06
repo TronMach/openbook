@@ -171,7 +171,7 @@ app.MapNonprofitEndpoints();
 app.MapChannelEndpoints();
 app.MapDashboardEndpoints();
 app.MapPluginEndpoints();
-app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async (Guid id, string action, HttpContext http,
+app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async (IFormCollection _, Guid id, string action, HttpContext http,
     OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
 {
     try
@@ -217,7 +217,7 @@ app.MapPost("/account/region", (IFormCollection form, HttpContext http) =>
 }).RequireAuthorization();
 // OpenBook Desktop runs in the background; this backs it up and stops it (Settings > System; the tray icon does the
 // same through its pipe). A server is stopped by whoever runs it.
-app.MapPost("/settings/system/quit", async (OpenBook.Web.Hosting.Installation install, OpenBook.Web.Hosting.DesktopQuit quit, CancellationToken ct) =>
+app.MapPost("/settings/system/quit", async (IFormCollection _, OpenBook.Web.Hosting.Installation install, OpenBook.Web.Hosting.DesktopQuit quit, CancellationToken ct) =>
 {
     if (!install.IsDesktop)
         return Results.NotFound();

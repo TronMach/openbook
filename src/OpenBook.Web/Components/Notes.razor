@@ -22,7 +22,7 @@
                 <li>
                     <p class="note-text">@note.Text</p>
                     <p class="muted note-meta">
-                        @note.CreatedBy · @note.CreatedAt.LocalDateTime.ToString("g")
+                        @note.CreatedBy · @note.CreatedAt.InCompanyTime().ToString("g")
                         @if (_canWrite)
                         {
                             <PostForm Action="@($"/notes/{note.Id}/delete")" class="inline-form" data-enhance="false">

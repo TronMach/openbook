@@ -156,8 +156,9 @@ public sealed class OnlinePaymentService(
         using var json = JsonDocument.Parse(payload);
         var type = json.RootElement.GetProperty("type").GetString();
         var session = json.RootElement.GetProperty("data").GetProperty("object");
-        var sessionId = session.GetProperty("id").GetString() ?? "";
-        if (await store.FindPaymentLinkAsync(sessionId, ct) is not { } link || link.Status == PaymentLinkStatus.Paid)
+        // Endpoints subscribed to everything get events about things with no id, such as a balance.
+        var sessionId = session.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
+        if (sessionId is null || await store.FindPaymentLinkAsync(sessionId, ct) is not { } link || link.Status == PaymentLinkStatus.Paid)
             return WebhookOutcome.Ignored;
 
         switch (type)
@@ -236,7 +237,7 @@ public static class StripeSignature
         var parts = header.Split(',').Select(p => p.Split('=', 2)).Where(p => p.Length == 2).ToList();
         var t = parts.FirstOrDefault(p => p[0] == "t")?[1];
         if (t is null || !long.TryParse(t, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
-            || (now - DateTimeOffset.FromUnixTimeSeconds(seconds)).Duration() > Tolerance)
+            || Math.Abs(seconds - now.ToUnixTimeSeconds()) > (long)Tolerance.TotalSeconds)
             return false;
         var expected = Encoding.ASCII.GetBytes(Hex(t, payload, secret));
         return parts.Where(p => p[0] == "v1").Any(p => CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(p[1]), expected));

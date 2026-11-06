@@ -23,8 +23,19 @@ public static class DateRanges
     /// <summary>The earliest date "all dates" reports from.</summary>
     public static readonly DateOnly Beginning = new(1900, 1, 1);
 
+    /// <summary>Years a report can be asked for.</summary>
+    public const int FirstYear = 1000;
+
+    public const int LastYear = 8999;
+
+    /// <summary>A date held inside <see cref="FirstYear"/>..<see cref="LastYear"/>, so stepping back or forward from it can't leave the calendar.</summary>
+    public static DateOnly Within(DateOnly date) =>
+        date.Year < FirstYear ? new DateOnly(FirstYear, 1, 1) : date.Year > LastYear ? new DateOnly(LastYear, 12, 31) : date;
+
     public static DateRange For(DatePreset preset, DateOnly today, int fiscalYearStartMonth, DateOnly? customFrom = null, DateOnly? customTo = null)
     {
+        customFrom = customFrom is { } from ? Within(from) : null;
+        customTo = customTo is { } to ? Within(to) : null;
         var monthStart = new DateOnly(today.Year, today.Month, 1);
         var quarterStart = new DateOnly(today.Year, ((today.Month - 1) / 3 * 3) + 1, 1);
         var fiscalStart = new DateOnly(today.Year, fiscalYearStartMonth, 1);

@@ -96,8 +96,8 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/gifts/{id}", () => gifts.VoidAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
-        app.MapGet("/nonprofit/gifts/{id:guid}/letter", async (Guid id, GiftService gifts, CancellationToken ct) =>
-            Results.File((await gifts.AcknowledgmentAsync(id, ct)).Pdf, "application/pdf")).RequireAuthorization();
+        app.MapGet("/nonprofit/gifts/{id:guid}/letter", (Guid id, GiftService gifts, CancellationToken ct) =>
+            Pdf($"/nonprofit/gifts/{id}", async () => (await gifts.AcknowledgmentAsync(id, ct)).Pdf)).RequireAuthorization();
 
         // Fields: id (one per ticked gift), back.
         app.MapPost("/nonprofit/thanks/mark", async (IFormCollection form, GiftService gifts, CancellationToken ct) =>
@@ -108,11 +108,11 @@ public static class NonprofitEndpoints
             return Results.Redirect(back == "/nonprofit/thanks" ? $"{back}?done={Uri.EscapeDataString($"{marked} gift(s) marked as thanked.")}" : back);
         }).RequireAuthorization();
 
-        app.MapGet("/nonprofit/statements/{year:int}", async (int year, GiftService gifts, CancellationToken ct) =>
-            Results.File((await gifts.YearStatementsAsync(year, ct)).Pdf, "application/pdf")).RequireAuthorization();
+        app.MapGet("/nonprofit/statements/{year:int}", (int year, GiftService gifts, CancellationToken ct) =>
+            Pdf("/nonprofit/thanks", async () => (await gifts.YearStatementsAsync(year, ct)).Pdf)).RequireAuthorization();
 
-        app.MapGet("/nonprofit/statements/{year:int}/{donorId:guid}", async (int year, Guid donorId, GiftService gifts, CancellationToken ct) =>
-            Results.File((await gifts.YearStatementAsync(donorId, year, ct)).Pdf, "application/pdf")).RequireAuthorization();
+        app.MapGet("/nonprofit/statements/{year:int}/{donorId:guid}", (int year, Guid donorId, GiftService gifts, CancellationToken ct) =>
+            Pdf("/nonprofit/thanks", async () => (await gifts.YearStatementAsync(donorId, year, ct)).Pdf)).RequireAuthorization();
 
         app.MapPost("/nonprofit/statements/{year:int}/email", async (int year, IFormCollection form, GiftService gifts, EmailService email, CancellationToken ct) =>
         {
@@ -295,6 +295,19 @@ public static class NonprofitEndpoints
         }).RequireAuthorization();
 
         return app;
+    }
+
+    /// <summary>A PDF, or back to the page with why not (a link kept in a tab or typed: a year with no gifts, a voided gift).</summary>
+    private static async Task<IResult> Pdf(string page, Func<Task<byte[]>> make)
+    {
+        try
+        {
+            return Results.File(await make(), "application/pdf");
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}");
+        }
     }
 
     private static async Task<IResult> Back<T>(string page, Func<Task<T>> change)

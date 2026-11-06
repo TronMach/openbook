@@ -108,6 +108,8 @@ public static class AccessRules
         ("/api/accountant", UserRole.Accountant, UserRole.Accountant),
         ("/reports/trial-balance-worksheet", UserRole.Accountant, UserRole.Accountant),
         ("/reports/adjusting-entries", UserRole.Accountant, UserRole.Accountant),
+        ("/api/reports/trial-balance-worksheet", UserRole.Accountant, UserRole.Accountant),
+        ("/api/reports/adjusting-entries", UserRole.Accountant, UserRole.Accountant),
         ("/api/reports/schedules", UserRole.Accountant, UserRole.Accountant),
         ("/nonprofit/gifts", UserRole.ViewOnly, UserRole.Standard),
         ("/nonprofit/pledges", UserRole.ViewOnly, UserRole.Standard),
@@ -192,6 +194,7 @@ public static class AccessRules
     [
         ("/settings/api-keys", null),
         ("/settings/custom-fields", "data"),
+        ("/api/settings/custom-fields", "data"),
         ("/sales/channels", "channels"),
         ("/sales", "sales"),
         ("/customers", "sales"),

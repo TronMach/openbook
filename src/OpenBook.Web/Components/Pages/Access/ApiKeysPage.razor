@@ -42,7 +42,7 @@
                         <td><code>@key.Hint</code></td>
                         <td>@(key.ScopeList is { } scopes ? string.Join(", ", scopes) : "Everything you can")</td>
                         <td>@Day(key.CreatedAt)</td>
-                        <td>@(key.ExpiresAt is { } e ? Day(e) : "never")</td>
+                        <td>@(key.ExpiresAt is { } e ? Day(e.AddSeconds(-1)) : "never")</td>
                         <td>@(key.LastUsedAt is { } u ? Day(u) : "never")</td>
                         <td>
                             @if (key.RevokedAt is not null)
@@ -148,7 +148,7 @@
         Navigation.NavigateTo("/settings/api-keys");
     }
 
-    private static string Day(DateTimeOffset at) => Labels.Date(DateOnly.FromDateTime(at.LocalDateTime));
+    private static string Day(DateTimeOffset at) => Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime));
 
     private sealed class KeyModel
     {

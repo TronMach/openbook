@@ -223,11 +223,11 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
             c.Vendor.CompanyName ?? c.Vendor.DisplayName)).ToList();
 
         var now = clock.UtcNow;
-        var today = DateOnly.FromDateTime(now.LocalDateTime);
-        var sentToday = (await store.ListAchBatchesAsync(accountId, ct)).Count(b => DateOnly.FromDateTime(b.CreatedAt.LocalDateTime) == today);
+        var today = CompanyTime.TodayAt(now, CompanyTime.Zone);
+        var sentToday = (await store.ListAchBatchesAsync(accountId, ct)).Count(b => CompanyTime.TodayAt(b.CreatedAt, CompanyTime.Zone) == today);
         var modifier = sentToday < 26 ? (char)('A' + sentToday) : sentToday < 36 ? (char)('0' + sentToday - 26)
             : throw new DomainException("ach.too_many_files", "A bank account can send at most 36 ACH files a day.");
-        var content = Ach.Build(settings, entries, effectiveDate, now.LocalDateTime, modifier);
+        var content = Ach.Build(settings, entries, effectiveDate, now.InCompanyTime().DateTime, modifier);
 
         var batch = AchBatch.Create(accountId, effectiveDate, modifier, entries.Count, entries.Sum(e => e.Amount), secrets.Protect(content), now);
         store.Add(batch);

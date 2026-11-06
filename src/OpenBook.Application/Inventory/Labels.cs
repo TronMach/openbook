@@ -1,3 +1,4 @@
+using OpenBook.Application.Companies;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
@@ -78,7 +79,7 @@ public interface ILabelRenderer
 }
 
 /// <summary>Barcode label sheets for items.</summary>
-public sealed class LabelService(ISalesStore sales, ILabelRenderer renderer)
+public sealed class LabelService(ISalesStore sales, ICompanyStore companies, ILabelRenderer renderer)
 {
     public const int MaxLabels = 900;
 
@@ -87,19 +88,31 @@ public sealed class LabelService(ISalesStore sales, ILabelRenderer renderer)
     {
         ArgumentNullException.ThrowIfNull(requests);
         var items = await sales.GetItemsAsync(requests.Select(r => r.ItemId).Distinct().ToList(), ct);
+        var symbol = showPrice ? Symbol((await companies.GetRequiredCompanyAsync(ct)).HomeCurrency.Code) : null;
         var labels = new List<ItemLabel>();
+        var total = 0L;
         foreach (var (itemId, copies) in requests.Where(r => r.Copies > 0))
         {
+            total += copies;
+            if (total > MaxLabels)
+                throw new DomainException("label.too_many", $"Print at most {MaxLabels} labels at a time.");
             var item = items.GetValueOrDefault(itemId) ?? throw new EntityNotFoundException("item", itemId);
             var barcode = item.Barcode ?? throw new DomainException("label.no_barcode", $"{item.Name} has no barcode. Add one on the item first.");
-            var price = showPrice ? item.Rate.ToString("C", System.Globalization.CultureInfo.CurrentCulture) : null;
+            var price = showPrice ? symbol + item.Rate.ToString("N2", System.Globalization.CultureInfo.CurrentCulture) : null;
             labels.AddRange(Enumerable.Repeat(new ItemLabel(item.Name, price, barcode), copies));
         }
 
         if (labels.Count == 0)
             throw new DomainException("label.none", "Choose at least one item and how many labels to print.");
-        if (labels.Count > MaxLabels)
-            throw new DomainException("label.too_many", $"Print at most {MaxLabels} labels at a time.");
         return renderer.Render(labels);
     }
+
+    /// <summary>The company's currency, not the region of whoever prints; other currencies print the number alone.</summary>
+    private static string Symbol(string currency) => currency switch
+    {
+        "USD" or "CAD" or "AUD" or "NZD" => "$",
+        "EUR" => "€",
+        "GBP" => "£",
+        _ => string.Empty,
+    };
 }

@@ -27,6 +27,7 @@ public sealed class PettyCashService(
     IBankingStore bank,
     BankingService banking,
     AccountService accounts,
+    IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser user)
 {
@@ -53,6 +54,9 @@ public sealed class PettyCashService(
         ArgumentNullException.ThrowIfNull(command);
         // Check what can be checked before creating anything.
         var probe = PettyCashFund.Create(Guid.Empty, command.FloatAmount, command.Custodian, clock.UtcNow);
+
+        // One transaction: a refused funding transfer (a closed date) leaves no account and no box behind.
+        await using var transaction = await unitOfWork.BeginAsync(ct);
         var chart = await accounts.GetChartAsync(ct);
         if (command.FundFromAccountId is { } source)
         {
@@ -86,6 +90,7 @@ public sealed class PettyCashService(
 
         if (command.FundFromAccountId is { } fromId)
             await banking.TransferAsync(new TransferCommand(fromId, account.Id, command.Date ?? Today(), fund.FloatAmount, "Fund petty cash"), ct);
+        await transaction.CommitAsync(ct);
         return fund;
     }
 
@@ -181,7 +186,7 @@ public sealed class PettyCashService(
         return fund.IsActive ? fund : throw new DomainException("petty_cash.inactive", "This petty cash box is closed.");
     }
 
-    private DateOnly Today() => DateOnly.FromDateTime(clock.UtcNow.LocalDateTime);
+    private DateOnly Today() => CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
 
     private static string Snapshot(PettyCashFund f) => JsonSerializer.Serialize(new { f.AccountId, f.FloatAmount, f.Custodian, f.IsActive });
 }

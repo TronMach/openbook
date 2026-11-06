@@ -67,7 +67,7 @@
                     <tr>
                         <td><a href="@Href(report)">@report.Name</a></td>
                         <td>@(definition?.Title ?? report.ReportKey)</td>
-                        <td class="muted">@report.CreatedBy, @Labels.Date(DateOnly.FromDateTime(report.CreatedAt.LocalDateTime))</td>
+                        <td class="muted">@report.CreatedBy, @Labels.Date(DateOnly.FromDateTime(report.CreatedAt.InCompanyTime().DateTime))</td>
                         <td class="num">
                             <PostForm Action="@($"/reports/saved/{report.Id}/delete")" class="inline-form" data-enhance="false">
                                 <AntiforgeryToken />

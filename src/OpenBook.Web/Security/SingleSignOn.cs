@@ -49,10 +49,12 @@ public static class SingleSignOn
     public static IEndpointRouteBuilder MapSingleSignOn(this IEndpointRouteBuilder app)
     {
         // Sends the browser to the provider.
-        app.MapGet("/login/sso", async (HttpContext http, SingleSignOnService sso, string? returnUrl) =>
+        app.MapGet("/login/sso", async (HttpContext http, SingleSignOnService sso, ISingleSignOnHost host, string? returnUrl) =>
         {
             if (await sso.ClientAsync(http.RequestAborted) is null)
                 return Results.Redirect("/login?sso=off");
+            // With several server instances, the settings may have been saved on another one.
+            host.SettingsChanged();
             var done = $"/login/sso/done?returnUrl={Uri.EscapeDataString(WebSecurity.SafeReturnUrl(returnUrl))}";
             return Results.Challenge(new AuthenticationProperties { RedirectUri = done }, [Scheme]);
         }).AllowAnonymous();

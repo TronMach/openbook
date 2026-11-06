@@ -21,6 +21,8 @@ public sealed record OpenBookStorage(string ConnectionString, string BackupDirec
 /// <summary>PostgreSQL has its own tools for this (pg_dump, point-in-time recovery), which do it better than an app can.</summary>
 internal sealed class UnsupportedBackupService : IBackupService
 {
+    public bool Supported => false;
+
     private static DomainException NotHere() => new(
         "backup.not_supported",
         "This company is in PostgreSQL. Back it up with pg_dump (or your server's backups) and restore with pg_restore.");

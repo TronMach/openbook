@@ -905,6 +905,9 @@
   <data name="Go back" xml:space="preserve">
     <value>Go back</value>
   </data>
+  <data name="Go to the home page" xml:space="preserve">
+    <value>Go to the home page</value>
+  </data>
   <data name="Grants" xml:space="preserve">
     <value>Grants</value>
   </data>
@@ -949,6 +952,9 @@
   </data>
   <data name="I've saved them" xml:space="preserve">
     <value>I've saved them</value>
+  </data>
+  <data name="If it keeps happening, give your administrator this reference:" xml:space="preserve">
+    <value>If it keeps happening, give your administrator this reference:</value>
   </data>
   <data name="Import" xml:space="preserve">
     <value>Import</value>
@@ -1429,6 +1435,9 @@
   </data>
   <data name="Open your authenticator app and add an account by scanning this code." xml:space="preserve">
     <value>Open your authenticator app and add an account by scanning this code.</value>
+  </data>
+  <data name="OpenBook couldn't finish that. Go back and try again; if it was a save, check whether it went through first." xml:space="preserve">
+    <value>OpenBook couldn't finish that. Go back and try again; if it was a save, check whether it went through first.</value>
   </data>
   <data name="OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go." xml:space="preserve">
     <value>OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go.</value>
@@ -2071,6 +2080,9 @@
   </data>
   <data name="so invoices and statements can be sent from OpenBook" xml:space="preserve">
     <value>so invoices and statements can be sent from OpenBook</value>
+  </data>
+  <data name="Something went wrong" xml:space="preserve">
+    <value>Something went wrong</value>
   </data>
   <data name="Sorry, the content you are looking for does not exist." xml:space="preserve">
     <value>Sorry, the content you are looking for does not exist.</value>

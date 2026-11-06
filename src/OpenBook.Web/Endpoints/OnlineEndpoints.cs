@@ -88,7 +88,7 @@ public static class OnlineEndpoints
             }
         }).AllowAnonymous();
 
-        app.MapPost("/sales/invoices/{id:guid}/payment-link", async (Guid id, OnlinePaymentService online, CancellationToken ct) =>
+        app.MapPost("/sales/invoices/{id:guid}/payment-link", async (IFormCollection _, Guid id, OnlinePaymentService online, CancellationToken ct) =>
             await Back($"/sales/invoices/{id}", "#online", async () =>
             {
                 await online.LinkForInvoiceAsync(id, ct);
@@ -114,7 +114,7 @@ public static class OnlineEndpoints
                 return "done=saved";
             })).RequireAuthorization();
 
-        app.MapPost("/customers/{id:guid}/portal/{accessId:guid}/revoke", async (Guid id, Guid accessId, CustomerPortalService portal, CancellationToken ct) =>
+        app.MapPost("/customers/{id:guid}/portal/{accessId:guid}/revoke", async (IFormCollection _, Guid id, Guid accessId, CustomerPortalService portal, CancellationToken ct) =>
             await Back($"/customers/{id}", "#portal", async () =>
             {
                 await portal.RevokeAsync(accessId, ct);
@@ -175,7 +175,7 @@ public static class OnlineEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/purchases/receipts/{id:guid}/dismiss", async (Guid id, ReceiptService receipts, CancellationToken ct) =>
+        app.MapPost("/purchases/receipts/{id:guid}/dismiss", async (IFormCollection _, Guid id, ReceiptService receipts, CancellationToken ct) =>
             await Back($"/purchases/receipts/{id}", "", async () =>
             {
                 await receipts.DismissAsync(id, ct);

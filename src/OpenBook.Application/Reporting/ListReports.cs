@@ -181,7 +181,7 @@ public sealed class ListReports(
                         new ReportCell(chart.FullName(a.Id) + (a.IsActive ? "" : " (inactive)"), new ReportLink("account", a.Id) { To = asOf }),
                         a.Type.Describe(),
                         a.Description,
-                        a.TaxLineKey,
+                        TaxLines.Find(a.TaxLineKey)?.Label ?? a.TaxLineKey,
                         new ReportCell(shown is 0m ? null : shown),
                     ], x.Depth);
                 }),

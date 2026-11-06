@@ -63,7 +63,7 @@ public sealed class ChannelSyncService(
         var channel = await store.GetChannelAsync(channelId, ct) ?? throw new EntityNotFoundException(ChannelService.ChannelEntity, channelId);
         if (!channel.IsConnected || channel.ProtectedCredential is not { } credential)
             throw new DomainException("channel.not_connected", "Connect the channel first.");
-        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         var since = channel.SyncedThrough?.AddDays(-OverlapDays) ?? today.AddDays(-FirstSyncDays);
         try
         {

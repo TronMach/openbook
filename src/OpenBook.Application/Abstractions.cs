@@ -188,6 +188,9 @@ public interface IJobLeases
 {
     /// <summary>Whether this process may run the job now: it holds the lease (renewed for <paramref name="ttl"/>), or nobody does.</summary>
     Task<bool> TryAcquireAsync(string job, TimeSpan ttl, CancellationToken ct);
+
+    /// <summary>Gives up what this process holds, at a clean stop, so the next start needn't wait for the leases to lapse.</summary>
+    Task ReleaseAllAsync(CancellationToken ct);
 }
 
 /// <summary>

@@ -168,15 +168,22 @@ public sealed class SalesLine
         TaxRateId = taxRateId,
     };
 
+    /// <summary>The largest price or quantity: stored as whole ten-thousandths, so anything near the limit of that would overflow.</summary>
+    public const decimal MaxRateOrQuantity = 999_999_999_999.9999m;
+
     public static decimal ValidRate(decimal rate) =>
-        decimal.Round(rate, Precision) == rate
-            ? rate
-            : throw new DomainException("sales.rate_precision", $"Prices can have at most {Precision} decimal places.");
+        Math.Abs(rate) > MaxRateOrQuantity
+            ? throw new DomainException("sales.rate_too_large", "That price is too large. Check it for a typing mistake.")
+            : decimal.Round(rate, Precision) == rate
+                ? rate
+                : throw new DomainException("sales.rate_precision", $"Prices can have at most {Precision} decimal places.");
 
     public static decimal ValidQuantity(decimal quantity) =>
-        decimal.Round(quantity, Precision) == quantity
-            ? quantity
-            : throw new DomainException("sales.quantity_precision", $"Quantities can have at most {Precision} decimal places.");
+        Math.Abs(quantity) > MaxRateOrQuantity
+            ? throw new DomainException("sales.quantity_too_large", "That quantity is too large. Check it for a typing mistake.")
+            : decimal.Round(quantity, Precision) == quantity
+                ? quantity
+                : throw new DomainException("sales.quantity_precision", $"Quantities can have at most {Precision} decimal places.");
 
     /// <summary>
     /// The journal lines for a sale: <paramref name="debitAccountId"/> (A/R or the deposit account) gets the

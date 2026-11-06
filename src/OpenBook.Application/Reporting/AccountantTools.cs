@@ -420,6 +420,9 @@ public sealed class AccountantPackageService(
         return Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
     }
 
+    /// <summary>"1099-NEC box 1", as reports show it.</summary>
+    public static string BoxLabel(Form1099Box box) => FormAndBox(box) is var (form, number) ? $"{form} box {number}" : string.Empty;
+
     public static (string Form, string Box) FormAndBox(Form1099Box box) => box switch
     {
         Form1099Box.MiscRents => ("1099-MISC", "1"),

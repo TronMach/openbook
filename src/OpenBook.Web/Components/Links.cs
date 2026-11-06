@@ -36,6 +36,7 @@ public static class Links
         (OpenBook.Domain.Channels.ChannelPayout.Source, { } id) => $"/sales/channels/payouts/{id}",
         (OpenBook.Domain.Channels.ChannelOrderBatch.Source, { } id) => $"/sales/channels/orders/{id}",
         (OpenBook.Domain.Channels.ChannelReturn.Source, { } id) => $"/sales/channels/returns/{id}",
+        (OpenBook.Application.Purchases.PurchaseOrderService.ReceiptSource, { } id) => $"/purchases/deliveries/{id}",
         (OpenBook.Domain.Assets.FixedAsset.DisposalSource, { } id) => $"/assets/{id}",
         (OpenBook.Domain.Assets.Loan.Source or OpenBook.Domain.Assets.Loan.PaymentSource, { } id) => $"/loans/{id}",
         _ => $"/journal/{journalEntryId}",
@@ -97,6 +98,7 @@ public static class Links
         "sales_channel" => $"/sales/channels/{id}",
         "channel_payout" => $"/sales/channels/payouts/{id}",
         "channel_orders" => $"/sales/channels/orders/{id}",
+        OpenBook.Domain.Inventory.InventorySources.PurchaseReceipt => $"/purchases/deliveries/{id}",
         "channel_return" => $"/sales/channels/returns/{id}",
         "loan" => $"/loans/{id}",
         "time_entry" => $"/time/{id}/edit",
@@ -182,6 +184,7 @@ public static class Links
         OpenBook.Domain.Assets.FixedAsset.DisposalSource => "asset disposal",
         OpenBook.Domain.Assets.Loan.Source => "loan",
         OpenBook.Domain.Assets.Loan.PaymentSource => "loan payment",
+        OpenBook.Application.Purchases.PurchaseOrderService.ReceiptSource => "purchase order delivery",
         _ when JournalEntry.IsJournalSource(source) => null,
         _ => "document",
     };
