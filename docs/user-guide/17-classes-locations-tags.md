@@ -26,6 +26,7 @@ With tracking on:
 
 - **Invoices, sales receipts, estimates, credit memos, bills, vendor credits, bank transactions and journal entries** have a location field, and a **Class** column on each line.
 - **Tags** are ticked on the transaction's page (**Tags**, then **Save tags**). They can be changed at any time after posting.
+- **Early payment discounts and bad debts** follow their invoice: its classes, shared as its income is, and its location. So a class's figures carry what it gave away or never collected. Entries made before this was added stay under "Not specified" until you reclassify them.
 - **Recurring templates** carry their classes, location and tags into every transaction they make.
 - **Journal entry CSV imports** can include class, location and tag columns.
 
