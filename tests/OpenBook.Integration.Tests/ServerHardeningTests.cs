@@ -167,7 +167,7 @@ public sealed class ServerHardeningTests
         {
             await Factory.DisposeAsync();
             SqliteConnection.ClearAllPools();
-            Directory.Delete(_folder, recursive: true);
+            TestFolder.Delete(_folder);
         }
     }
 

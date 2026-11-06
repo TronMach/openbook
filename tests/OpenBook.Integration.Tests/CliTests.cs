@@ -41,7 +41,7 @@ public sealed class CliTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private async Task<(int Code, string Out, string Err)> Run(params string[] args)

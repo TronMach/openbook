@@ -11,7 +11,7 @@ public sealed partial class DiagnosticsTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(_folder))
-            Directory.Delete(_folder, recursive: true);
+            TestFolder.Delete(_folder);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Posted {Count} entries.")]

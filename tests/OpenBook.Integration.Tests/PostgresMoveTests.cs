@@ -66,7 +66,7 @@ public sealed class PostgresMoveTests : IAsyncLifetime
         await _sqlite.DisposeAsync();
         SqliteConnection.ClearAllPools();
         NpgsqlConnection.ClearAllPools();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
         await LedgerDatabase.DropPostgresDatabaseAsync(_database);
     }
 

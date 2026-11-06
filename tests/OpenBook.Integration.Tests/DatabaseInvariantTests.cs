@@ -69,6 +69,61 @@ public sealed class DatabaseInvariantTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_entry_cannot_be_inserted_already_sealed()
+    {
+        var message = await Rejected($"""
+            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed","Basis")
+                VALUES ('{Id(Guid.NewGuid())}', 99, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', TRUE, 'Both');
+            """);
+
+        Assert.Contains("inserted unsealed", message, StringComparison.Ordinal);
+    }
+
+    [SqliteFact]
+    public async Task Only_one_value_seals_an_entry()
+    {
+        var entryId = Id(Guid.NewGuid());
+        var message = await Rejected($"""
+            INSERT INTO "JournalEntries" ("Id","Number","Date","Currency","Kind","Status","Source","PostedAt","IsSealed","Basis")
+                VALUES ('{entryId}', 99, '2026-01-20', 'USD', 'Standard', 'Posted', 'manual', '2026-01-20 00:00:00+00:00', 0, 'Both');
+            UPDATE "JournalEntries" SET "IsSealed" = 2 WHERE "Id" = '{entryId}';
+            """);
+
+        Assert.Contains("sealed with 1", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_line_needs_an_entry() =>
+        Assert.NotEmpty(await Rejected($"""
+            INSERT INTO "JournalLines" ("Id","LineNumber","AccountId","AmountMinor","JournalEntryId")
+                VALUES ('{Id(Guid.NewGuid())}', 1, '{Id(_cash.Id)}', 500, NULL);
+            """));
+
+    [Fact]
+    public async Task A_posted_entry_can_t_take_void_details_without_being_voided() =>
+        Assert.Contains("immutable", await Rejected($"""UPDATE "JournalEntries" SET "VoidReason" = 'Edited by hand' WHERE "Id" = '{Id(_entry.Id)}';"""), StringComparison.Ordinal);
+
+    [Fact]
+    public async Task Two_accounts_can_t_share_a_name_under_one_parent_whatever_the_case()
+    {
+        // As two first uses at once: each read the chart before the other saved, so neither was stopped by the rule in memory.
+        var thrown = await Assert.ThrowsAsync<OpenBook.Domain.Common.ConcurrencyConflictException>(() => _db.InDb(async db =>
+        {
+            db.Accounts.Add(Account.Create("CHECKING", AccountType.Bank, null, null));
+            return await db.SaveChangesAsync();
+        }));
+        Assert.Equal("save.conflict", thrown.Code);
+
+        // Under another parent the name is free.
+        var sub = await _db.InDb(async db =>
+        {
+            db.Accounts.Add(Account.Create("Checking", AccountType.Income, null, _sales.Id));
+            return await db.SaveChangesAsync();
+        });
+        Assert.Equal(1, sub);
+    }
+
+    [Fact]
     public async Task Posted_line_amounts_cannot_change() =>
         Assert.Contains("immutable", await Rejected("""UPDATE "JournalLines" SET "AmountMinor" = "AmountMinor" * 2;"""), StringComparison.Ordinal);
 

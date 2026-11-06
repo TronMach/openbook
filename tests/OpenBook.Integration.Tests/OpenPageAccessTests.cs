@@ -55,7 +55,7 @@ public sealed class OpenPageAccessTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private async Task<int> RunOnOpenPageAsync(ClaimsPrincipal? principal, bool inCircuit = true)

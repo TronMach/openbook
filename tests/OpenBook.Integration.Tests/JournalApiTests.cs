@@ -31,7 +31,7 @@ public sealed class JournalApiTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private static async Task<Guid> IdOf(HttpResponseMessage response)

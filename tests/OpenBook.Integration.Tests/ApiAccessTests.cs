@@ -50,7 +50,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private HttpClient Client(UserRole? role)

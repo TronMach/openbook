@@ -38,7 +38,7 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     [GeneratedRegex("name=\"__RequestVerificationToken\" value=\"([^\"]+)\"")]

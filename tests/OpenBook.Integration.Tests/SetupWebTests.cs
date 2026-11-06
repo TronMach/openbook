@@ -34,7 +34,7 @@ public sealed partial class SetupWebTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     [GeneratedRegex("name=\"(__RequestVerificationToken|Input.ImportToken)\" value=\"([^\"]+)\"")]

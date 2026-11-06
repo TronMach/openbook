@@ -188,7 +188,7 @@ public sealed class EncryptionTests : IAsyncLifetime
     public Task DisposeAsync()
     {
         SqliteConnection.ClearAllPools();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
         return Task.CompletedTask;
     }
 

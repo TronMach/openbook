@@ -117,6 +117,8 @@ public sealed class PostgresTests : IAsyncLifetime
                 db.Database.ExecuteSqlRawAsync("""UPDATE "JournalEntries" SET "Memo" = 'changed' WHERE "Id" = {0}""", entry.Id));
             await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("""DELETE FROM "AuditRecords" """));
             await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("""TRUNCATE "AuditRecords" """));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("""TRUNCATE "JournalLines" """));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("""TRUNCATE "JournalEntries" CASCADE"""));
             return 0;
         });
     }

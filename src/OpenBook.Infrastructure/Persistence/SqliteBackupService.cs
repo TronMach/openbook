@@ -197,7 +197,7 @@ internal sealed class SqliteBackupService(
                 throw Invalid("backup.newer_version", "This backup was made by a newer version of OpenBook. Update OpenBook first.");
 
             var triggers = await ListAsync(connection, "SELECT name FROM sqlite_master WHERE type = 'trigger';", ct);
-            if (SqliteLedgerTriggers.Names.Any(n => !triggers.Contains(n)))
+            if (SqliteLedgerTriggers.Names.Any(n => !triggers.Contains(n) && (!SqliteLedgerTriggers.AddedBy.TryGetValue(n, out var migration) || applied.Contains(migration))))
                 throw Invalid("backup.missing_safeguards", "This backup's ledger safeguards were removed, so its data can't be trusted.");
 
             if (await ScalarAsync<long>(connection, """SELECT COUNT(*) FROM "Companies";""", ct) != 1)

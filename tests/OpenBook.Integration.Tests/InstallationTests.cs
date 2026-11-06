@@ -36,7 +36,7 @@ public sealed partial class InstallationTests : IAsyncLifetime
         if (_app is not null)
             await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private static IConfiguration Settings(params (string Key, string Value)[] values) =>

@@ -38,7 +38,7 @@ public sealed partial class TwoFactorWebTests : IAsyncLifetime
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
         await _database.DropAsync();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private async Task<T> Services<T>(Func<IServiceProvider, Task<T>> work)

@@ -77,7 +77,7 @@ public sealed class UpdateFlowTests : IAsyncLifetime
         if (_app is not null)
             await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        Directory.Delete(_folder, recursive: true);
+        TestFolder.Delete(_folder);
     }
 
     private async Task<UpdateService> StartAsync(bool desktop = true)
