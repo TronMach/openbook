@@ -62,18 +62,16 @@ public sealed class DepositService(
         bool Holding(Guid accountId) => chart.Find(accountId)?.Type == AccountType.OtherCurrentAsset;
         var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
 
-        var undeposited = await store.ListUndepositedAsync(ct);
+        var undeposited = await store.ListUndepositedAsync(chart.Ordered(includeInactive: true).Select(x => x.Account).Where(a => Holding(a.Id)).Select(a => a.Id).ToList(), ct);
         var payments = undeposited.Payments
-            .Where(p => p.Amount > 0m && Holding(p.DepositAccountId))
+            .Where(p => p.Amount > 0m)
             .Select(p => new UndepositedItem(DepositedKind.Payment, p.Id, p.Date, p.CustomerId,
                 $"Payment from {customers.GetValueOrDefault(p.CustomerId)}", p.Reference, p.DepositAccountId, p.Amount, p.Method));
         var receipts = undeposited.Receipts
-            .Where(r => Holding(r.DepositAccountId))
             .Select(r => new UndepositedItem(DepositedKind.SalesReceipt, r.Id, r.Date, r.CustomerId,
                 r.CustomerId is { } c ? $"Sales receipt {r.Number} · {customers.GetValueOrDefault(c)}" : $"Sales receipt {r.Number}",
                 r.Reference, r.DepositAccountId, r.Total, r.Method));
         var retainers = undeposited.Retainers
-            .Where(r => Holding(r.DepositAccountId))
             .Select(r => new UndepositedItem(DepositedKind.Retainer, r.Id, r.Date, r.CustomerId,
                 $"Retainer from {customers.GetValueOrDefault(r.CustomerId)}", r.Reference, r.DepositAccountId, r.Amount, r.Method));
         var others = new List<UndepositedItem>();

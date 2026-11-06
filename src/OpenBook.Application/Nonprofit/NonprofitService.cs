@@ -19,6 +19,8 @@ public interface INonprofitStore
     Task<RestrictionRelease?> GetReleaseAsync(Guid id, CancellationToken ct);
 
     Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct);
+
+    Task<int> CountUnthankedDonationsAsync(CancellationToken ct);
     Task<Donation?> GetDonationAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<Pledge>> ListPledgesAsync(CancellationToken ct);
     Task<Pledge?> GetPledgeAsync(Guid id, CancellationToken ct);

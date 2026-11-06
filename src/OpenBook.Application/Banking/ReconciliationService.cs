@@ -124,7 +124,11 @@ public sealed class ReconciliationService(IBankingStore bank, AccountService acc
         }
 
         await bank.SaveChangesAsync(ct);
-        return await GetWorksheetAsync(reconciliationId, ct);
+
+        // The sheet just read, with the ticks moved: reading it all again would only take twice as long on a busy account.
+        var ticked = journalLineIds.ToHashSet();
+        var items = worksheet.Items.Select(i => ticked.Contains(i.Line.JournalLineId) ? i with { Cleared = cleared } : i).ToList();
+        return worksheet with { Items = items, ClearedTotal = items.Where(i => i.Cleared).Sum(i => i.NaturalAmount) };
     }
 
     public async Task<Reconciliation> CompleteAsync(Guid reconciliationId, CancellationToken ct = default)

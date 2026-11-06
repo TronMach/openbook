@@ -173,6 +173,12 @@
                 </div>
 
                 <div class="table-wrap">
+                    <datalist id="item-list">
+                        @foreach (var item in _items)
+                        {
+                            <option value="@item.Id" data-keywords="@item.Barcode">@item.Name</option>
+                        }
+                    </datalist>
                     <table class="data">
                         <thead>
                             <tr>
@@ -191,11 +197,11 @@
                                     <td><input name="sku:@i" maxlength="50" value="@line?.Sku" aria-label="Code, line @(i + 1)" style="width: 8rem" /></td>
                                     <td><input name="desc:@i" maxlength="500" value="@line?.Description" aria-label="Description, line @(i + 1)" style="min-width: 16rem" /></td>
                                     <td>
-                                        <select name="item:@i" data-search aria-label="Item, line @(i + 1)">
+                                        <select name="item:@i" data-search data-options="#item-list" aria-label="Item, line @(i + 1)">
                                             <option value="">None</option>
-                                            @foreach (var item in _items)
+                                            @if (_items.FirstOrDefault(item => item.Id == line?.ItemId) is { } chosen)
                                             {
-                                                <option value="@item.Id" selected="@(item.Id == line?.ItemId)" data-keywords="@item.Barcode">@item.Name</option>
+                                                <option value="@chosen.Id" selected>@chosen.Name</option>
                                             }
                                         </select>
                                     </td>

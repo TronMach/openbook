@@ -10,6 +10,8 @@ internal sealed class EfDocumentStore(OpenBookDbContext db) : IDocumentStore
 {
     public Task<CapturedDocument?> GetDocumentAsync(Guid id, CancellationToken ct) => db.CapturedDocuments.SingleOrDefaultAsync(d => d.Id == id, ct);
 
+    public Task<int> CountNewDocumentsAsync(CancellationToken ct) => db.CapturedDocuments.CountAsync(d => d.Status == CapturedDocumentStatus.New, ct);
+
     public async Task<IReadOnlyList<CapturedDocument>> ListDocumentsAsync(CancellationToken ct) =>
         (await db.CapturedDocuments.AsNoTracking().ToListAsync(ct)).OrderByDescending(d => d.CreatedAt).ToList();
 

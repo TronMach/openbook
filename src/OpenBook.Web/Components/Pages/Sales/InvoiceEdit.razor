@@ -55,7 +55,7 @@
 
             @if (!_allLocked)
             {
-                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
             }
 
             @if (_locked.Count > 0)
@@ -70,6 +70,17 @@
                                 <tr><td>@line.Description</td><td class="num">@Labels.Quantity(line.Quantity)</td><td class="num">@Labels.Price(line.Rate)</td><td class="num">@Labels.Amount(line.Amount)</td></tr>
                             }
                         </tbody>
+                        @if (_allLocked)
+                        {
+                            var tax = SalesLineModel.Tax(_lockedLines, _items, SelectedTax, TaxExemption is not null);
+                            <tfoot>
+                                @foreach (var (label, amount) in tax)
+                                {
+                                    <tr><td colspan="3" class="num muted">@label</td><td class="num">@Labels.Amount(amount)</td></tr>
+                                }
+                                <tr><td colspan="3" class="num">@L["Total"]</td><td class="num">@Labels.Amount(_locked.Sum(l => l.Amount) + tax.Sum(t => t.Amount))</td></tr>
+                            </tfoot>
+                        }
                     </table>
                     <span class="hint">@L["These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again."]</span>
                 </fieldset>
@@ -111,6 +122,7 @@
     private string? _reason;
     private List<SalesLineModel> _lines = [];
     private List<SalesLine> _locked = [];
+    private List<SalesLineModel> _lockedLines = [];
     private bool _allLocked;
     private bool _loaded;
     private bool _busy;
@@ -157,6 +169,7 @@
             var lines = _invoice.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).ToList();
             _locked = lines.Where(l => _allLocked || l.PriceSource is BillableExpenseService.PriceSource
                 or OpenBook.Application.Projects.ProjectBilling.TimePriceSource or OpenBook.Application.Projects.ProjectBilling.MileagePriceSource).ToList();
+            _lockedLines = _locked.Select(l => SalesLineModel.From(l.ToDraft())).ToList();
             _lines = lines.Except(_locked).Select(l =>
             {
                 var model = SalesLineModel.From(l.ToDraft());

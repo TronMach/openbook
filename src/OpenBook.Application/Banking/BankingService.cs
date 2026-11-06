@@ -93,16 +93,15 @@ public sealed class BankingService(
         {
             // Totals from the database: this runs on every banking page and the home page.
             var (balance, reconciled) = await bank.GetAccountTotalsAsync(account.Id, ct);
-            var reconciliations = await bank.ListReconciliationsAsync(account.Id, ct);
-            var completed = reconciliations.Where(r => r.Status == ReconciliationStatus.Completed).ToList();
+            var (lastCompleted, inProgress) = await bank.GetReconciliationStateAsync(account.Id, ct);
 
             result.Add(new BankAccountSummary(
                 account,
                 chart.FullName(account.Id),
                 BankingRules.Natural(account, balance),
                 BankingRules.Natural(account, reconciled),
-                completed.Count == 0 ? null : completed.Max(r => r.StatementDate),
-                reconciliations.FirstOrDefault(r => r.Status == ReconciliationStatus.InProgress)?.Id));
+                lastCompleted,
+                inProgress));
         }
 
         return result;

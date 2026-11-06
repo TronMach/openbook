@@ -89,7 +89,7 @@
         Add(bills.Count(b => b.Approval == OpenBook.Domain.Purchases.BillApproval.Pending), L["Bills waiting for approval"], "/purchases/approvals");
         Add((await Get<OpenBook.Application.Reporting.ReportSubscriptionService>().ListAsync()).Count(r => r.IsActive && r.LastRunFailed),
             L["Scheduled reports that failed"], "/reports/schedules", urgent: true);
-        Add((await Get<OpenBook.Application.Sales.ScheduledEmailService>().ListAsync()).Count(e => e.Status == OpenBook.Domain.Sales.ScheduledEmailStatus.Failed),
+        Add(await Get<ISalesStore>().CountFailedScheduledEmailsAsync(default),
             L["Invoice emails that failed"], "/sales/scheduled-emails", urgent: true);
         foreach (var account in banking)
         {
@@ -107,11 +107,11 @@
         Add(figures.OrdersToReceive, L["Purchase orders still to receive"], "/purchases/orders");
         if (figures.StockItems > 0)
             Add((await Get<ReorderService>().DueAsync()).Count, L["Items to reorder"], "/purchases/reorder", L["Counting what's on order and promised to customers"]);
-        Add((await Get<OpenBook.Application.Documents.DocumentCaptureService>().ListAsync()).Count(d => d.Status == OpenBook.Domain.Documents.CapturedDocumentStatus.New),
+        Add(await Get<OpenBook.Application.Documents.DocumentCaptureService>().NewCountAsync(),
             L["Documents to check"], "/documents", L["Vendor invoices, orders and packing slips uploaded and read"]);
-        Add((await Get<ReceiptService>().ListAsync()).Count(r => r.Status == ReceiptStatus.New), L["Receipts to record"], "/purchases/receipts");
+        Add(await Get<ReceiptService>().NewCountAsync(), L["Receipts to record"], "/purchases/receipts");
         if (Company.Edition == Edition.Nonprofit)
-            Add((await Get<GiftService>().ListAsync()).Count(g => g.Status == DocumentStatus.Posted && g.AcknowledgedAt is null), L["Gifts not yet thanked"], "/nonprofit/thanks");
+            Add(await Get<GiftService>().UnthankedCountAsync(), L["Gifts not yet thanked"], "/nonprofit/thanks");
 
         var sales = Get<ISalesStore>();
         var email = await Get<EmailService>().GetSettingsAsync();

@@ -48,7 +48,7 @@ public sealed class ReorderService(
         bool Counts(Guid? warehouseId) => warehouse is null || warehouseId == warehouse.Key;
 
         var onOrder = new Dictionary<Guid, decimal>();
-        foreach (var order in (await purchases.ListPurchaseOrdersAsync(null, ct)).Where(o => o.Status == PurchaseOrderStatus.Open && Counts(o.WarehouseId)))
+        foreach (var order in (await purchases.ListOpenPurchaseOrdersAsync(ct)).Where(o => Counts(o.WarehouseId)))
         {
             var progress = await orders.ProgressAsync(order, ct);
             foreach (var line in progress.Lines.Where(l => l.Line.ItemId is not null))
@@ -76,7 +76,7 @@ public sealed class ReorderService(
                 promised[itemId] = promised.GetValueOrDefault(itemId) + quantity;
         }
 
-        foreach (var order in (await sales.ListSalesOrdersAsync(null, ct)).Where(o => o.Status == SalesOrderStatus.Open && Counts(o.WarehouseId)))
+        foreach (var order in (await sales.ListOpenSalesOrdersAsync(ct)).Where(o => Counts(o.WarehouseId)))
         {
             var progress = await salesOrders.ProgressAsync(order, ct);
             foreach (var line in order.Lines.Where(l => l.Kind == SalesLineKind.Item && l.ItemId is not null))
@@ -92,7 +92,10 @@ public sealed class ReorderService(
 
     /// <summary>Inventory products (not assemblies, which are built) that need ordering, with the suggested quantity.</summary>
     public async Task<IReadOnlyList<StockOutlook>> DueAsync(CancellationToken ct = default) =>
-        (await OutlookAsync(null, ct)).Where(s => s.NeedsReorder && !s.Item.IsAssembly).ToList();
+        // Asked on every visit to the home page: without a reorder point on anything, there's nothing to work out.
+        (await sales.ListItemsAsync(ct)).Any(i => i.IsActive && i.IsInventory && i.ReorderPoint is not null)
+            ? (await OutlookAsync(null, ct)).Where(s => s.NeedsReorder && !s.Item.IsAssembly).ToList()
+            : [];
 
     /// <summary>
     /// One purchase order per vendor (vendors in name order, lines in the order given), all or none. Quantities and costs

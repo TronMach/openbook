@@ -190,8 +190,7 @@ public sealed class BankFeedService(
         return await bank.FindFeedItemInBatchAsync(id, ct) is { } first ? (first.AccountId, BankFeedStatus.Pending) : null;
     }
 
-    public async Task<int> PendingCountAsync(Guid accountId, CancellationToken ct = default) =>
-        (await bank.ListFeedItemsAsync(accountId, ct)).Count(i => i.Status == BankFeedStatus.Pending);
+    public Task<int> PendingCountAsync(Guid accountId, CancellationToken ct = default) => bank.CountPendingFeedItemsAsync(accountId, ct);
 
     /// <summary>Records the line as a new spend (money out) or receive (money in) in the chosen category.</summary>
     public async Task<BankTransaction> AddAsync(Guid itemId, AddFeedItemCommand command, CancellationToken ct = default)

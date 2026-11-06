@@ -86,12 +86,11 @@ public sealed class HomeWorkflowService(ISalesStore sales, IPurchasesStore purch
         var counts = await sales.CountDocumentsAsync(ct);
         var openInvoices = await sales.ListOpenInvoicesAsync(null, ct);
         var waiting = await deposits.UndepositedAsync(ct);
-        var orders = await purchases.ListPurchaseOrdersAsync(null, ct);
+        var openOrders = await purchases.ListOpenPurchaseOrdersAsync(ct);
         var openBills = await purchases.ListOpenBillsAsync(null, ct);
         var anyBills = openBills.Count > 0 || await purchases.AnyBillsAsync(ct);
         var items = (await sales.ListItemsAsync(ct)).Where(i => i.IsActive).ToList();
 
-        var openOrders = orders.Where(o => o.Status == PurchaseOrderStatus.Open).ToList();
         var payable = openBills.Where(b => b.CanBePaid).ToList();
 
         return new WorkflowFigures(
@@ -108,7 +107,7 @@ public sealed class HomeWorkflowService(ISalesStore sales, IPurchasesStore purch
             counts.Deposits > 0 || waiting.Count > 0,
             openOrders.Count,
             openOrders.Count(o => o.Lines.Any(l => l.ItemId is not null && o.Received.GetValueOrDefault(l.LineNumber) < l.Quantity)),
-            orders.Count > 0,
+            openOrders.Count > 0 || await purchases.AnyPurchaseOrdersAsync(ct),
             payable.Count,
             payable.Count(b => b.DueDate <= today.AddDays(DueSoonDays)),
             payable.Sum(b => b.Balance),

@@ -46,6 +46,11 @@ public interface IBankingStore
     /// </summary>
     Task<(decimal Balance, decimal Reconciled)> GetAccountTotalsAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>The account's reconciliations without their lines: the latest statement date finished, and the one in progress.</summary>
+    Task<(DateOnly? LastCompleted, Guid? InProgress)> GetReconciliationStateAsync(Guid accountId, CancellationToken ct);
+
+    Task<int> CountPendingFeedItemsAsync(Guid accountId, CancellationToken ct);
+
     /// <summary>For each entry touching the account, the other accounts it posts to.</summary>
     Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCounterpartAccountsAsync(Guid accountId, CancellationToken ct);
 

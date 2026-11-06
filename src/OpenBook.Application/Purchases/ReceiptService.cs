@@ -37,6 +37,8 @@ public sealed class ReceiptService(
 
     public Task<IReadOnlyList<ReceiptCapture>> ListAsync(CancellationToken ct = default) => store.ListReceiptsAsync(ct);
 
+    public Task<int> NewCountAsync(CancellationToken ct = default) => store.CountNewReceiptsAsync(ct);
+
     /// <summary>Saves the file on a new capture, then reads it. A file that can't be read is still kept, with no fields filled in.</summary>
     public async Task<ReceiptCapture> UploadAsync(string fileName, Stream content, CancellationToken ct = default)
     {

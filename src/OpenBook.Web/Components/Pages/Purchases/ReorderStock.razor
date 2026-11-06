@@ -66,6 +66,12 @@
                 }
             </div>
             <div class="table-wrap">
+                <datalist id="vendor-list">
+                    @foreach (var v in _vendors)
+                    {
+                        <option value="@v.Id">@v.DisplayName</option>
+                    }
+                </datalist>
                 <table class="data">
                     <thead>
                         <tr>
@@ -85,11 +91,11 @@
                                 <td class="num">@(o.OnSalesOrders == 0m ? "" : Labels.Quantity(o.OnSalesOrders))</td>
                                 <td class="num">@(o.Item.ReorderPoint is { } point ? Labels.Quantity(point) : "")</td>
                                 <td>
-                                    <select name="vendor:@id" aria-label="Vendor for @o.Item.Name" data-search>
+                                    <select name="vendor:@id" aria-label="Vendor for @o.Item.Name" data-search data-options="#vendor-list">
                                         <option value="">Choose a vendor</option>
-                                        @foreach (var v in _vendors)
+                                        @if (_vendors.FirstOrDefault(v => v.Id == o.Item.PreferredVendorId) is { } preferred)
                                         {
-                                            <option value="@v.Id" selected="@(v.Id == o.Item.PreferredVendorId)">@v.DisplayName</option>
+                                            <option value="@preferred.Id" selected>@preferred.DisplayName</option>
                                         }
                                     </select>
                                 </td>

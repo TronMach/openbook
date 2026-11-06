@@ -88,6 +88,8 @@ public sealed class GiftService(
     }
 
     /// <summary>Gifts newest first; voided ones included.</summary>
+    public Task<int> UnthankedCountAsync(CancellationToken ct = default) => store.CountUnthankedDonationsAsync(ct);
+
     public async Task<IReadOnlyList<Donation>> ListAsync(DateOnly? from = null, DateOnly? to = null, Guid? donorId = null, CancellationToken ct = default) =>
         (await store.ListDonationsAsync(ct))
             .Where(d => (from is null || d.Date >= from) && (to is null || d.Date <= to) && (donorId is null || d.DonorId == donorId))

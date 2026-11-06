@@ -47,19 +47,26 @@
 // The same picker for static (server-rendered) forms: a <select data-search> gets a search box in front of it and is
 // hidden; the select stays in the form and carries the value, so the page works unchanged without script. Matching
 // follows PickerOptions.Filter. Blazor's enhanced navigation drops the box when it patches the page, so it's added
-// again after every enhanced load.
+// again after every enhanced load. A grid with the same long list on every row gives each select only its current
+// choice and data-options="#id" naming one <datalist> with the list, so the page isn't rows × options long; picking
+// another then needs this script.
 (() => {
     const maxShown = 50;
     const fold = s => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
     let next = 0;
 
-    function choices(select) {
-        return [...select.options].map(o => ({
-            value: o.value,
-            label: o.text.replace(/\s+/g, ' ').trim(),
-            group: o.parentElement instanceof HTMLOptGroupElement ? o.parentElement.label : null,
-            haystack: fold([o.text, o.dataset.keywords].filter(Boolean).join(' '))
-        }));
+    const read = options => [...options].map(o => ({
+        value: o.value,
+        label: o.text.replace(/\s+/g, ' ').trim(),
+        group: o.parentElement instanceof HTMLOptGroupElement ? o.parentElement.label : null,
+        haystack: fold([o.text, o.dataset.keywords].filter(Boolean).join(' '))
+    }));
+
+    // Read once per list, however many rows share it.
+    const shared = new WeakMap();
+    function sharedChoices(list) {
+        if (!shared.has(list)) shared.set(list, read(list.options));
+        return shared.get(list);
     }
 
     function filter(options, query) {
@@ -89,12 +96,13 @@
 
         const key = `static-${++next}`;
         select.dataset.searchKey = key;
-        const all = choices(select);
-        const none = all.find(o => o.value === '');
-        const options = all.filter(o => o.value !== '');
+        const own = read(select.options);
+        const none = own.find(o => o.value === '');
+        const source = select.dataset.options ? document.querySelector(select.dataset.options) : null;
+        const options = source ? sharedChoices(source) : own.filter(o => o.value !== '');
         const label = select.id ? document.querySelector(`label[for="${CSS.escape(select.id)}"]`) : null;
         // An empty choice ("Choose…", "None") shows as the placeholder, not as typed text.
-        const current = () => select.value === '' ? '' : all.find(o => o.value === select.value)?.label ?? '';
+        const current = () => select.value === '' ? '' : select.selectedOptions[0]?.text.replace(/\s+/g, ' ').trim() ?? '';
 
         const box = document.createElement('div');
         box.className = 'search-select static';
@@ -129,6 +137,7 @@
             input.value = option?.label ?? '';
             const value = option?.value ?? '';
             if (select.value === value) return;
+            if (![...select.options].some(o => o.value === value)) select.add(new Option(option.label, value));
             select.value = value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
         }

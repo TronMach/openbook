@@ -30,6 +30,8 @@ public interface IDocumentStore
     /// <summary>Newest first.</summary>
     Task<IReadOnlyList<CapturedDocument>> ListDocumentsAsync(CancellationToken ct);
 
+    Task<int> CountNewDocumentsAsync(CancellationToken ct);
+
     /// <summary>Documents whose file has this SHA-256, oldest first.</summary>
     Task<IReadOnlyList<CapturedDocument>> ListDocumentsByFileHashAsync(string hash, CancellationToken ct);
 
@@ -92,6 +94,8 @@ public sealed class DocumentCaptureService(
     public Task<CapturedDocument?> GetAsync(Guid id, CancellationToken ct = default) => store.GetDocumentAsync(id, ct);
 
     public Task<IReadOnlyList<CapturedDocument>> ListAsync(CancellationToken ct = default) => store.ListDocumentsAsync(ct);
+
+    public Task<int> NewCountAsync(CancellationToken ct = default) => store.CountNewDocumentsAsync(ct);
 
     public bool CanReadImages => extractor.CanReadImages;
 

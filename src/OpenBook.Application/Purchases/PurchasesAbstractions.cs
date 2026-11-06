@@ -87,6 +87,12 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct);
 
+    Task<IReadOnlyList<PurchaseOrder>> ListOpenPurchaseOrdersAsync(CancellationToken ct);
+
+    Task<bool> AnyPurchaseOrdersAsync(CancellationToken ct);
+
+    Task<int> CountNewReceiptsAsync(CancellationToken ct);
+
     Task<IReadOnlyList<Bill>> ListBillsWithItemAsync(Guid itemId, CancellationToken ct);
 
     /// <summary>What posted payments settled of these bills (null: of every bill), whatever their dates, for splitting each in turn.</summary>

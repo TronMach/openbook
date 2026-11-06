@@ -129,7 +129,7 @@ public interface ISalesStore
     /// Posted payments, receipts and retainers not in a bank deposit, untracked, whatever account they went to
     /// (the caller picks the holding accounts).
     /// </summary>
-    Task<UndepositedDocuments> ListUndepositedAsync(CancellationToken ct);
+    Task<UndepositedDocuments> ListUndepositedAsync(IReadOnlyCollection<Guid> holdingAccountIds, CancellationToken ct);
 
     /// <summary>How many of each kind of sales document there are, for pages that only need to know whether any exist.</summary>
     Task<SalesDocumentCounts> CountDocumentsAsync(CancellationToken ct);
@@ -203,6 +203,10 @@ public interface ISalesStore
 
     /// <summary>Untracked, with lines, newest first.</summary>
     Task<IReadOnlyList<SalesOrder>> ListSalesOrdersAsync(Guid? customerId, CancellationToken ct);
+
+    Task<IReadOnlyList<SalesOrder>> ListOpenSalesOrdersAsync(CancellationToken ct);
+
+    Task<int> CountFailedScheduledEmailsAsync(CancellationToken ct);
 
     Task<IReadOnlyList<string>> ListSalesOrderNumbersAsync(CancellationToken ct);
 

@@ -100,6 +100,17 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
                 .ToListAsync(ct),
         ];
 
+    public async Task<(DateOnly? LastCompleted, Guid? InProgress)> GetReconciliationStateAsync(Guid accountId, CancellationToken ct)
+    {
+        var rows = await db.Reconciliations.AsNoTracking().Where(r => r.AccountId == accountId)
+            .Select(r => new { r.Id, r.Status, r.StatementDate }).ToListAsync(ct);
+        var completed = rows.Where(r => r.Status == ReconciliationStatus.Completed).ToList();
+        return (completed.Count == 0 ? null : completed.Max(r => r.StatementDate), rows.FirstOrDefault(r => r.Status == ReconciliationStatus.InProgress)?.Id);
+    }
+
+    public Task<int> CountPendingFeedItemsAsync(Guid accountId, CancellationToken ct) =>
+        db.BankFeedItems.CountAsync(i => i.AccountId == accountId && i.Status == BankFeedStatus.Pending, ct);
+
     public async Task<IReadOnlyList<Reconciliation>> ListReconciliationsAsync(Guid accountId, CancellationToken ct) =>
         await db.Reconciliations.Include(r => r.Lines).Where(r => r.AccountId == accountId).ToListAsync(ct);
 

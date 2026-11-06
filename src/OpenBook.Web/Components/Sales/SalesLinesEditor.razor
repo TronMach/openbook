@@ -103,14 +103,24 @@
         </tbody>
         <tfoot>
             @{
-                var tax = SalesLineModel.Tax(Lines, Items, Tax, Exempt);
+                IReadOnlyList<SalesLineModel> everyLine = Also.Count == 0 ? Lines : [.. Lines, .. Also];
+                var subtotal = SalesLineModel.Total(everyLine);
+                var tax = SalesLineModel.Tax(everyLine, Items, Tax, Exempt);
                 var extra = (Tax is null ? 1 : 2) + (Classes is null ? 0 : 1);
+            }
+            @if (Also.Count > 0)
+            {
+                <tr>
+                    <td colspan="4" class="num">Lines below</td>
+                    <td class="num">@Labels.Amount(subtotal - amounts.Sum())</td>
+                    <td colspan="@extra"></td>
+                </tr>
             }
             @if (Tax is not null)
             {
                 <tr>
                     <td colspan="4" class="num">Subtotal</td>
-                    <td class="num">@Labels.Amount(amounts.Sum())</td>
+                    <td class="num">@Labels.Amount(subtotal)</td>
                     <td colspan="@extra"></td>
                 </tr>
                 @foreach (var (label, taxAmount) in tax)
@@ -128,7 +138,7 @@
                     <button type="button" class="secondary" @onclick="() => AddAsync(new SalesLineModel { Kind = SalesLineKind.DiscountPercent })">Add discount</button>
                 </td>
                 <td colspan="2" class="num">Total</td>
-                <td class="num">@Labels.Amount(amounts.Sum() + tax.Sum(t => t.Amount))</td>
+                <td class="num">@Labels.Amount(subtotal + tax.Sum(t => t.Amount))</td>
                 <td colspan="@extra"></td>
             </tr>
         </tfoot>
@@ -161,6 +171,10 @@
     /// <summary>Raised after an edit that changes the total, so the parent can re-render what depends on it.</summary>
     [Parameter]
     public EventCallback OnChange { get; set; }
+
+    /// <summary>Lines the document has besides these (billed time, costs), shown elsewhere on the page but part of its totals and tax.</summary>
+    [Parameter]
+    public IReadOnlyList<SalesLineModel> Also { get; set; } = [];
 
     /// <summary>The tax code being charged; null hides the tax column and totals.</summary>
     [Parameter]

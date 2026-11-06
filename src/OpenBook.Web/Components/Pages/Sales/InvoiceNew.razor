@@ -57,7 +57,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" CustomerCodeOff="@(TaxCustomer?.TaxCodeId is { } own && _taxCodes.All(c => c.Code.Id != own))" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="TickedLines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             @if (_billable.Count > 0)
             {
@@ -70,7 +70,7 @@
                             <span>@Whose(b.CustomerId)@Labels.Date(b.Date) · @b.Description · @Labels.Amount(b.Amount)@(b.MarkupPercent > 0m ? $" (cost {Labels.Amount(b.Cost)} + {b.MarkupPercent:0.####}%)" : "")</span>
                         </label>
                     }
-                    <span class="hint">Ticked costs are added as "Billable Expenses" lines when you save: @Labels.Amount(BillableTotal) more on this invoice.</span>
+                    <span class="hint">Ticked costs are added as "Billable Expenses" lines when you save, and count in the total above.</span>
                 </fieldset>
             }
 
@@ -92,7 +92,7 @@
                             <span>@Whose(m.CustomerId)@Labels.Date(m.Date) · @m.Purpose · @Labels.Quantity(m.Miles) mi × @Labels.Price(m.BillRate) = @Labels.Amount(m.Amount)</span>
                         </label>
                     }
-                    <span class="hint">Ticked time and trips are added as lines when you save: @Labels.Amount(ProjectTotal) more on this invoice. Work for more than one project is grouped by project, each with a subtotal.</span>
+                    <span class="hint">Ticked time and trips are added as lines when you save, and count in the total above. Work for more than one project is grouped by project, each with a subtotal.</span>
                 </fieldset>
             }
 
@@ -162,6 +162,14 @@
 
     private IReadOnlyList<BillableExpense> _billable = [];
     private readonly HashSet<Guid> _chosenBillable = [];
+
+    /// <summary>What's ticked below, as the lines it'll become: time is taxed by its service, costs and mileage aren't taxed.</summary>
+    private List<SalesLineModel> TickedLines =>
+    [
+        .. _billable.Where(b => _chosenBillable.Contains(b.Id)).Select(b => new SalesLineModel { Description = b.Description, Quantity = 1m, Rate = b.Amount }),
+        .. _time.Where(t => _chosenTime.Contains(t.Id)).Select(t => new SalesLineModel { ItemId = t.ItemId, Quantity = t.Hours, Rate = t.BillRate }),
+        .. _trips.Where(m => _chosenTrips.Contains(m.Id)).Select(m => new SalesLineModel { Description = m.Purpose, Quantity = 1m, Rate = m.Amount }),
+    ];
 
     private decimal BillableTotal => _billable.Where(b => _chosenBillable.Contains(b.Id)).Sum(b => b.Amount);
 

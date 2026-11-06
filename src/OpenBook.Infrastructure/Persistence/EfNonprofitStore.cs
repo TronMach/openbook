@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpenBook.Domain.Common;
 using OpenBook.Application.Nonprofit;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Nonprofit;
@@ -12,6 +13,9 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
     public Task<RestrictionRelease?> GetReleaseAsync(Guid id, CancellationToken ct) => db.RestrictionReleases.SingleOrDefaultAsync(r => r.Id == id, ct);
 
     // Includes gifts added but not saved yet, so numbering and pledge balances see them.
+    public Task<int> CountUnthankedDonationsAsync(CancellationToken ct) =>
+        db.Donations.CountAsync(d => d.Status == DocumentStatus.Posted && d.AcknowledgedAt == null, ct);
+
     public async Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct) =>
         (await db.Donations.ToListAsync(ct)).Union(db.Donations.Local).Distinct().ToList();
 

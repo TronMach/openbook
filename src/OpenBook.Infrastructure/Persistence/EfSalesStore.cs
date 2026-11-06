@@ -218,10 +218,10 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public async Task<IReadOnlyList<SalesReceipt>> GetReceiptsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         ids.Count == 0 ? [] : await db.SalesReceipts.Where(r => ids.Contains(r.Id)).ToListAsync(ct);
 
-    public async Task<UndepositedDocuments> ListUndepositedAsync(CancellationToken ct) => new(
-        await db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.DepositId == null && p.PayoutId == null).ToListAsync(ct),
-        await db.SalesReceipts.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null).ToListAsync(ct),
-        await db.Retainers.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null).ToListAsync(ct));
+    public async Task<UndepositedDocuments> ListUndepositedAsync(IReadOnlyCollection<Guid> holdingAccountIds, CancellationToken ct) => new(
+        await db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.DepositId == null && p.PayoutId == null && holdingAccountIds.Contains(p.DepositAccountId)).ToListAsync(ct),
+        await db.SalesReceipts.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null && holdingAccountIds.Contains(r.DepositAccountId)).ToListAsync(ct),
+        await db.Retainers.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null && holdingAccountIds.Contains(r.DepositAccountId)).ToListAsync(ct));
 
     public async Task<SalesDocumentCounts> CountDocumentsAsync(CancellationToken ct) => new(
         await db.Estimates.CountAsync(ct),
@@ -348,6 +348,11 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
         (await db.ScheduledEmails.AsNoTracking().Where(e => invoiceId == null || e.InvoiceId == invoiceId).ToListAsync(ct)).OrderBy(e => e.SendAt).ToList();
 
     public Task<SalesOrder?> GetSalesOrderAsync(Guid id, CancellationToken ct) => db.SalesOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
+
+    public async Task<IReadOnlyList<SalesOrder>> ListOpenSalesOrdersAsync(CancellationToken ct) =>
+        await db.SalesOrders.AsNoTracking().Where(o => o.Status == SalesOrderStatus.Open).ToListAsync(ct);
+
+    public Task<int> CountFailedScheduledEmailsAsync(CancellationToken ct) => db.ScheduledEmails.CountAsync(e => e.Status == ScheduledEmailStatus.Failed, ct);
 
     public async Task<IReadOnlyList<SalesOrder>> ListSalesOrdersAsync(Guid? customerId, CancellationToken ct) =>
         (await db.SalesOrders.AsNoTracking().Where(o => customerId == null || o.CustomerId == customerId).ToListAsync(ct))

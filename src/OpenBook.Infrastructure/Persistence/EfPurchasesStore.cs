@@ -128,6 +128,13 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersWithItemAsync(Guid itemId, CancellationToken ct) =>
         await db.PurchaseOrders.AsNoTracking().Where(o => o.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<PurchaseOrder>> ListOpenPurchaseOrdersAsync(CancellationToken ct) =>
+        await db.PurchaseOrders.AsNoTracking().Where(o => o.Status == PurchaseOrderStatus.Open).ToListAsync(ct);
+
+    public Task<bool> AnyPurchaseOrdersAsync(CancellationToken ct) => db.PurchaseOrders.AnyAsync(ct);
+
+    public Task<int> CountNewReceiptsAsync(CancellationToken ct) => db.ReceiptCaptures.CountAsync(r => r.Status == ReceiptStatus.New, ct);
+
     public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct) =>
         (await db.PurchaseOrders.AsNoTracking().Where(o => vendorId == null || o.VendorId == vendorId).ToListAsync(ct))
             .OrderByDescending(o => o.Date)
