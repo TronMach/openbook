@@ -25,6 +25,8 @@ public sealed class FakeStripe : HttpMessageHandler
         public string PaymentIntent => "pi_" + Id[3..];
     }
 
+    public bool IsExpired(string sessionId) => _sessions[sessionId].Expired;
+
     public Session Pay(string sessionId)
     {
         var session = _sessions[sessionId];
@@ -56,6 +58,15 @@ public sealed class FakeStripe : HttpMessageHandler
                 AmountCents = long.Parse(form["line_items[0][price_data][unit_amount]"], CultureInfo.InvariantCulture),
             };
             _sessions[session.Id] = session;
+            return Ok(session);
+        }
+
+        if (request.Method == HttpMethod.Post && path.EndsWith("/expire", StringComparison.Ordinal))
+        {
+            var session = _sessions[path["/v1/checkout/sessions/".Length..^"/expire".Length]];
+            if (session.Paid)
+                return Error(HttpStatusCode.BadRequest, "Only Checkout Sessions with a status of open can be expired.");
+            session.Expired = true;
             return Ok(session);
         }
 

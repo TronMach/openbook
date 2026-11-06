@@ -389,6 +389,9 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
     public async Task<IReadOnlyList<PaymentLink>> ListPaymentLinksAsync(Guid invoiceId, CancellationToken ct) =>
         await db.PaymentLinks.Where(l => l.InvoiceId == invoiceId).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<PaymentLink>> ListOpenPaymentLinksAsync(CancellationToken ct) =>
+        await db.PaymentLinks.AsNoTracking().Where(l => l.Status == PaymentLinkStatus.Open).ToListAsync(ct);
+
     public Task<PaymentLink?> GetPaymentLinkAsync(Guid id, CancellationToken ct) => db.PaymentLinks.SingleOrDefaultAsync(l => l.Id == id, ct);
 
     public Task<PaymentLink?> FindPaymentLinkAsync(string sessionId, CancellationToken ct) => db.PaymentLinks.SingleOrDefaultAsync(l => l.SessionId == sessionId, ct);

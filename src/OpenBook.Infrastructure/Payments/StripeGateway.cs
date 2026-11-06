@@ -58,6 +58,12 @@ public sealed class StripeGateway : IPaymentGateway, IDisposable
         return await SendAsync(message, secretKey, ct);
     }
 
+    public async Task<CheckoutSession> ExpireCheckoutAsync(string secretKey, string sessionId, CancellationToken ct)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, $"{Api}/{Uri.EscapeDataString(sessionId)}/expire");
+        return await SendAsync(message, secretKey, ct);
+    }
+
     public void Dispose() => _client.Dispose();
 
     private async Task<CheckoutSession> SendAsync(HttpRequestMessage message, string secretKey, CancellationToken ct)

@@ -102,6 +102,62 @@ public sealed class OnlineServicesTests : IAsyncLifetime
         Assert.Single(await In<PaymentService, IReadOnlyList<CustomerPayment>>(s => s.ListAsync(_acme.Id)));
     }
 
+    private async Task<PaymentLink> LinkAgain(PaymentLink link) =>
+        (await In<OnlinePaymentService, IReadOnlyList<PaymentLink>>(s => s.LinksAsync(link.InvoiceId))).Single(l => l.Id == link.Id);
+
+    private Task<string?> CloseOutdated() => In<OnlinePaymentService, string?>(s => s.ExpireOutdatedAsync());
+
+    [Fact]
+    public async Task A_link_closes_once_the_invoice_no_longer_owes_its_amount()
+    {
+        await TurnOnPayments();
+        var paid = await Invoice(3m);
+        var partly = await Invoice(2m);
+        var voided = await Invoice(1m);
+        var untouched = await Invoice(4m);
+        var paidLink = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(paid.Id));
+        var partlyLink = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(partly.Id));
+        var voidedLink = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(voided.Id));
+        var standing = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(untouched.Id));
+
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Jan10, _undeposited.Id, [new ApplyToInvoice(paid.Id, 300m)])));
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Jan10, _undeposited.Id, [new ApplyToInvoice(partly.Id, 50m)])));
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(voided.Id, "Wrong customer"));
+
+        Assert.Null(await CloseOutdated());
+
+        foreach (var link in new[] { paidLink, partlyLink, voidedLink })
+        {
+            Assert.Equal(PaymentLinkStatus.Expired, (await LinkAgain(link)).Status);
+            Assert.True(_db.Stripe.IsExpired(link.SessionId));
+        }
+
+        Assert.Equal(PaymentLinkStatus.Open, (await LinkAgain(standing)).Status);
+        Assert.False(_db.Stripe.IsExpired(standing.SessionId));
+
+        // What's left gets a link of its own.
+        var fresh = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(partly.Id));
+        Assert.Equal(150m, fresh.Amount);
+        Assert.NotEqual(partlyLink.Id, fresh.Id);
+    }
+
+    [Fact]
+    public async Task A_link_paid_just_before_it_would_have_closed_is_recorded_as_credit()
+    {
+        await TurnOnPayments();
+        var invoice = await Invoice(3m);
+        var link = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(invoice.Id));
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Jan10, _undeposited.Id, [new ApplyToInvoice(invoice.Id, 300m)])));
+        _db.Stripe.Pay(link.SessionId);
+
+        Assert.Null(await CloseOutdated());
+
+        Assert.Equal(PaymentLinkStatus.Paid, (await LinkAgain(link)).Status);
+        var payments = await In<PaymentService, IReadOnlyList<CustomerPayment>>(s => s.ListAsync(_acme.Id));
+        Assert.Equal(2, payments.Count);
+        Assert.Contains(payments, p => p.Unapplied == 300m);
+    }
+
     // ---- Portal ----
 
     [Fact]

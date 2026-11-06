@@ -6,7 +6,8 @@ namespace OpenBook.Web.Security;
 
 /// <summary>
 /// Sends invoice emails scheduled for later: checks every minute and sends what's due. Failures are kept on each
-/// email for the invoice page, and logged. The audit log names the actor "system".
+/// email for the invoice page, and logged. The audit log names the actor "system". Payment links for an amount the
+/// invoice no longer owes are closed on the same beat, so a customer can't be charged for long by an old link.
 /// </summary>
 internal sealed partial class ScheduledEmailHostedService(
     IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Diagnostics.JobStatus status, ILogger<ScheduledEmailHostedService> logger) : BackgroundService
@@ -22,6 +23,7 @@ internal sealed partial class ScheduledEmailHostedService(
         do
         {
             await SendDueAsync(stoppingToken);
+            await CloseOutdatedLinksAsync(stoppingToken);
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
@@ -60,6 +62,36 @@ internal sealed partial class ScheduledEmailHostedService(
 
         status.Record("Scheduled emails", started, DateTimeOffset.UtcNow - started, error);
     }
+
+    private async Task CloseOutdatedLinksAsync(CancellationToken ct)
+    {
+        var started = DateTimeOffset.UtcNow;
+        string? error;
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            if (!await setup.CheckAsync(scope.ServiceProvider.GetRequiredService<CompanySetupService>(), ct)
+                || !await leases.TryAcquireAsync("payment-links", TimeSpan.FromMinutes(3), ct))
+                return;
+            scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
+            error = await scope.ServiceProvider.GetRequiredService<OnlinePaymentService>().ExpireOutdatedAsync(ct);
+            if (error is not null)
+                LogLinkNotClosed(error);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            LogLinksFailed(ex);
+            error = Diagnostics.JobStatus.Describe(ex);
+        }
+
+        status.Record("Payment links", started, DateTimeOffset.UtcNow - started, error);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "An outdated payment link wasn't closed: {Error}")]
+    private partial void LogLinkNotClosed(string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Outdated payment links couldn't be closed.")]
+    private partial void LogLinksFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Scheduled invoice email sent to {To}.")]
     private partial void LogSent(string to);

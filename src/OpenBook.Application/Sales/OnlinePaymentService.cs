@@ -25,6 +25,9 @@ public interface IPaymentGateway
     Task<CheckoutSession> CreateCheckoutAsync(string secretKey, CheckoutRequest request, CancellationToken ct);
 
     Task<CheckoutSession> GetCheckoutAsync(string secretKey, string sessionId, CancellationToken ct);
+
+    /// <summary>Closes an open checkout, so it can't be paid. Refused once it's been paid.</summary>
+    Task<CheckoutSession> ExpireCheckoutAsync(string secretKey, string sessionId, CancellationToken ct);
 }
 
 public sealed record OnlinePaymentSettingsCommand(bool Enabled, Guid? DepositAccountId, string? PublicUrl, string? SecretKey = null, string? WebhookSecret = null,
@@ -137,6 +140,55 @@ public sealed class OnlinePaymentService(
         }
 
         return link;
+    }
+
+    /// <summary>
+    /// Closes open links for an amount the invoice no longer owes: it's been paid some other way, changed or voided, and
+    /// a customer paying the old link would be charged too much. Runs apart from those saves, which every way of
+    /// settling an invoice comes to, and none of them then waits on the provider. A link found paid meanwhile is recorded.
+    /// </summary>
+    /// <returns>Why one couldn't be closed, if any couldn't; it's tried again next time.</returns>
+    public async Task<string?> ExpireOutdatedAsync(CancellationToken ct = default)
+    {
+        var settings = await GetSettingsAsync(ct);
+        if (settings.ProtectedSecretKey is null)
+            return null;
+        var now = clock.UtcNow;
+        var open = (await store.ListOpenPaymentLinksAsync(ct)).Where(l => l.IsUsable(now)).ToList();
+        if (open.Count == 0)
+            return null;
+        var invoices = (await store.GetInvoicesAsync(open.Select(l => l.InvoiceId).Distinct().ToList(), ct)).ToDictionary(i => i.Id);
+        var outdated = open.Where(l => invoices.GetValueOrDefault(l.InvoiceId) is not { IsOpen: true } invoice || invoice.Balance != l.Amount).Select(l => l.Id).ToList();
+        if (outdated.Count == 0)
+            return null;
+
+        var key = SecretKey(settings);
+        string? failure = null;
+        foreach (var id in outdated)
+        {
+            try
+            {
+                var link = await store.GetPaymentLinkAsync(id, ct) ?? throw new EntityNotFoundException("payment_link", id);
+                var session = await gateway.GetCheckoutAsync(key, link.SessionId, ct);
+                if (session.Paid)
+                {
+                    await RecordAsync(link, session.PaymentReference, session.AmountPaid ?? link.Amount, ct);
+                    continue;
+                }
+
+                if (!session.Expired)
+                    await gateway.ExpireCheckoutAsync(key, link.SessionId, ct);
+                link.Expire();
+                await store.SaveChangesAsync(ct);
+            }
+            catch (DomainException ex)
+            {
+                unit.DiscardPending();
+                failure ??= ex.Message;
+            }
+        }
+
+        return failure;
     }
 
     /// <summary>
