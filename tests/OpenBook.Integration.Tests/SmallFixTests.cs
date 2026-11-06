@@ -435,6 +435,18 @@ public sealed class SmallFixTests : IAsyncLifetime
         Assert.Contains(read.Warnings, w => w.Contains("dates", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Only_one_reconciliation_of_an_account_can_be_in_progress()
+    {
+        await In<ReconciliationService, Reconciliation>(s => s.StartAsync(_checking.Id, new DateOnly(2026, 1, 31), 0m));
+        var second = Reconciliation.Start(_checking.Id, new DateOnly(2026, 1, 31), 0m, 0m, null, _db.Clock.UtcNow, "someone");
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() => _db.InDb(async db =>
+        {
+            db.Reconciliations.Add(second);
+            return await db.SaveChangesAsync();
+        }));
+    }
+
     [SqliteFact]
     public async Task An_encrypted_file_stays_in_write_ahead_mode()
     {

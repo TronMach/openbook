@@ -794,7 +794,16 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Reconciliations_OneInProgress")
+                        .HasFilter("\"Status\" = 'InProgress'");
 
                     b.HasIndex("AccountId", "StatementDate");
 
@@ -2326,6 +2335,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("character varying(200)");
 
                     b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DesignId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("DocumentId")
@@ -5438,6 +5450,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("WrittenOff")
+                        .HasColumnType("bigint")
+                        .HasColumnName("WrittenOffMinor");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EstimateId");
@@ -6072,6 +6088,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Pdf")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("ScheduledBy")
                         .IsRequired()

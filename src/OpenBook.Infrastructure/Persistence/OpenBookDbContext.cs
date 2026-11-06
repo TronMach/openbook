@@ -175,7 +175,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(SalesReceipt), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
         typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
         typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(ReceiptCapture), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
-        typeof(BankFeedItem), typeof(RecurringEntry),
+        typeof(BankFeedItem), typeof(RecurringEntry), typeof(Reconciliation),
         typeof(Domain.Nonprofit.Donation), typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Assets.Loan),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
@@ -272,6 +272,14 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             if (ChangeTracker.Entries<Domain.Nonprofit.Pledge>().FirstOrDefault(p => p.Entity.Id == gift.Entity.PledgeId) is { State: EntityState.Unchanged or EntityState.Modified } pledge)
                 pledge.Property(VersionProperty).IsModified = true;
+        }
+
+        // A tick is a row of its own: finishing a reconciliation must notice one made meanwhile.
+        foreach (var line in ChangeTracker.Entries<ReconciliationLine>().Where(e => e.State is EntityState.Added or EntityState.Deleted))
+        {
+            var reconciliation = (Guid?)line.Property("ReconciliationId").CurrentValue;
+            if (ChangeTracker.Entries<Reconciliation>().FirstOrDefault(r => r.Entity.Id == reconciliation) is { State: EntityState.Unchanged or EntityState.Modified } tracked)
+                tracked.Property(VersionProperty).IsModified = true;
         }
 
         var entries = ChangeTracker.Entries().ToList();
@@ -734,6 +742,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.StartedBy).HasMaxLength(200);
             b.Property(r => r.CompletedBy).HasMaxLength(200);
             b.HasIndex(r => new { r.AccountId, r.StatementDate });
+            b.HasIndex(r => r.AccountId).IsUnique().HasFilter("\"Status\" = 'InProgress'").HasDatabaseName("IX_Reconciliations_OneInProgress");
             b.HasOne<Account>().WithMany().HasForeignKey(r => r.AccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasMany(r => r.Lines).WithOne().HasForeignKey("ReconciliationId").OnDelete(DeleteBehavior.Cascade);
             b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -1636,6 +1645,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.Memo).HasMaxLength(1000);
             b.Property(i => i.Total).HasColumnName("TotalMinor").HasConversion(MinorUnits);
             b.Property(i => i.AmountPaid).HasColumnName("AmountPaidMinor").HasConversion(MinorUnits);
+            b.Property(i => i.WrittenOff).HasColumnName("WrittenOffMinor").HasConversion(MinorUnits);
             b.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
             b.Ignore(i => i.Balance);
             b.Ignore(i => i.IsOpen);
@@ -2352,6 +2362,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("ScheduledEmails");
             b.HasKey(e => e.Id);
+            b.Property(e => e.Pdf).HasConversion<string>().HasMaxLength(10);
             b.HasIndex(e => e.InvoiceId);
             b.HasIndex(e => e.Status);
             b.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);

@@ -86,7 +86,7 @@ public sealed class WriteOffService(ISalesStore store, AccountService accounts, 
         {
             var invoice = invoices[writeOff.InvoiceId];
             var before = InvoiceService.Snapshot(invoice);
-            invoice.ApplyPayment(writeOff.Amount);
+            invoice.RecordWriteOff(writeOff.Amount);
             store.Add(writeOff);
             store.Add(Audit(AuditAction.Created, writeOff, null));
             store.Add(InvoiceService.Audit(clock, user, AuditAction.Updated, invoice, before));
@@ -107,7 +107,7 @@ public sealed class WriteOffService(ISalesStore store, AccountService accounts, 
         await engine.StageVoidAsync(writeOff.JournalEntryId, reason, fromDocument: true, ct);
         writeOff.Void();
         var invoiceBefore = InvoiceService.Snapshot(invoice);
-        invoice.RemovePayment(writeOff.Amount);
+        invoice.RemoveWriteOff(writeOff.Amount);
         store.Add(Audit(AuditAction.Voided, writeOff, before));
         store.Add(InvoiceService.Audit(clock, user, AuditAction.Updated, invoice, invoiceBefore));
         await store.SaveChangesAsync(ct);

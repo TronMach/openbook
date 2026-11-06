@@ -33,7 +33,7 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
             throw new DomainException("scheduled_email.duplicate", "This invoice already has an email waiting to go at that time.");
 
         var scheduled = ScheduledEmail.Create(invoiceId, message.To, message.Subject, message.Body, sendAt, clock.UtcNow, user.Actor,
-            message.Cc, message.Bcc, message.DesignId);
+            message.Cc, message.Bcc, message.DesignId, message.Pdf);
         store.Add(scheduled);
         store.Add(Audit(AuditAction.Created, scheduled, null));
         await store.SaveChangesAsync(ct);
@@ -95,7 +95,7 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
             {
                 try
                 {
-                    await email.SendFormAsync(FormKind.Invoice, scheduled.InvoiceId, new EmailDraft(scheduled.To, scheduled.Subject, scheduled.Body, scheduled.Cc, scheduled.Bcc, scheduled.DesignId), ct);
+                    await email.SendFormAsync(FormKind.Invoice, scheduled.InvoiceId, new EmailDraft(scheduled.To, scheduled.Subject, scheduled.Body, scheduled.Cc, scheduled.Bcc, scheduled.DesignId, scheduled.Pdf), ct);
                     scheduled.MarkSent(clock.UtcNow);
                     results.Add(new ScheduledEmailResult(scheduled, null));
                 }

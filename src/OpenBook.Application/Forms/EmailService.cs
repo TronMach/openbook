@@ -261,7 +261,7 @@ public sealed class EmailService(
         string? token = null;
         if (pdf != EmailPdf.Attach)
         {
-            (link, token) = DocumentLink.Create(LinkKind(source.Kind), source.Id, context.Customer!.Id, clock.UtcNow, user.Actor);
+            (link, token) = DocumentLink.Create(LinkKind(source.Kind), source.Id, context.Customer!.Id, clock.UtcNow, user.Actor, draft.DesignId);
             buttons.Add(new EmailButton(Article(source.Kind), $"{linkBase}/view/{token}"));
         }
 
@@ -483,11 +483,16 @@ public sealed class EmailService(
         RenderedForm rendered;
         try
         {
-            rendered = await Source(link.Kind).RenderAsync(new EmailSource(link.Kind, link.DocumentId), null, ct);
+            rendered = await Source(link.Kind).RenderAsync(new EmailSource(link.Kind, link.DocumentId), link.DesignId, ct);
         }
         catch (EntityNotFoundException)
         {
             return null;
+        }
+        catch (DomainException) when (link.DesignId is not null)
+        {
+            // The design chosen then has been switched off since.
+            rendered = await Source(link.Kind).RenderAsync(new EmailSource(link.Kind, link.DocumentId), null, ct);
         }
 
         if (link.Opened(clock.UtcNow))

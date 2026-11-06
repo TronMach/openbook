@@ -399,10 +399,13 @@ public sealed class DocumentLink
 
     public bool IsActive => RevokedAt is null;
 
+    /// <summary>The form design chosen for this email; null is the usual one. Switched off since, the usual one again.</summary>
+    public Guid? DesignId { get; private set; }
+
     /// <summary>Invoices, estimates, credit memos and sales receipts can be sent as a link.</summary>
     public static bool CanLink(EmailKind kind) => kind is EmailKind.Invoice or EmailKind.Estimate or EmailKind.CreditMemo or EmailKind.SalesReceipt;
 
-    public static (DocumentLink Link, string Token) Create(EmailKind kind, Guid documentId, Guid customerId, DateTimeOffset now, string actor)
+    public static (DocumentLink Link, string Token) Create(EmailKind kind, Guid documentId, Guid customerId, DateTimeOffset now, string actor, Guid? designId = null)
     {
         if (!CanLink(kind))
             throw new DomainException("email.link_unsupported", $"{EmailTemplates.Label(kind)}s can't be sent as a link.");
@@ -417,6 +420,7 @@ public sealed class DocumentLink
             TokenHash = Hash(token),
             CreatedAt = now.ToUniversalTime(),
             CreatedBy = actor,
+            DesignId = designId,
         }, token);
     }
 

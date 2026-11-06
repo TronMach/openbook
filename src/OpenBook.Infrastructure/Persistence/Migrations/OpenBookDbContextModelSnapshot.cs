@@ -787,7 +787,16 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Reconciliations_OneInProgress")
+                        .HasFilter("\"Status\" = 'InProgress'");
 
                     b.HasIndex("AccountId", "StatementDate");
 
@@ -2319,6 +2328,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DesignId")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("DocumentId")
@@ -5431,6 +5443,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("WrittenOff")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("WrittenOffMinor");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EstimateId");
@@ -6064,6 +6080,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Pdf")
+                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ScheduledBy")

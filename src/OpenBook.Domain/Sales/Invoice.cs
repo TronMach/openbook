@@ -43,6 +43,9 @@ public sealed class Invoice
     /// <summary>Settled so far: payments, early payment discounts and credits applied.</summary>
     public decimal AmountPaid { get; private set; }
 
+    /// <summary>The part of <see cref="AmountPaid"/> written off as bad debt, not paid by anyone.</summary>
+    public decimal WrittenOff { get; private set; }
+
     /// <summary>Copied from the customer's terms when the invoice was created.</summary>
     public decimal EarlyPaymentDiscountPercent { get; private set; }
 
@@ -103,6 +106,18 @@ public sealed class Invoice
     public IReadOnlyList<SalesLine> Lines => _lines;
 
     public decimal Balance => Status == DocumentStatus.Voided ? 0m : Total - AmountPaid;
+
+    public void RecordWriteOff(decimal amount)
+    {
+        ApplyPayment(amount);
+        WrittenOff += amount;
+    }
+
+    public void RemoveWriteOff(decimal amount)
+    {
+        RemovePayment(amount);
+        WrittenOff -= amount;
+    }
     public bool IsOpen => Status == DocumentStatus.Posted && Balance > 0m;
     public bool IsOverdue(DateOnly today) => IsOpen && DueDate < today;
 

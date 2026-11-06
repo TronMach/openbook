@@ -16,6 +16,7 @@ public enum CenterState
     Open,
     Overdue,
     Paid,
+    WrittenOff,
     Voided,
     Pending,
     Accepted,
@@ -51,7 +52,8 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
         var rows = new List<CenterRow>();
         foreach (var i in await sales.ListInvoicesAsync(customerId, ct))
             rows.Add(new(InvoiceType, i.Id, i.Date, i.Number, i.Memo, i.Total, i.IsOpen ? i.Balance : null,
-                i.Status == DocumentStatus.Voided ? CenterState.Voided : i.IsOverdue(today) ? CenterState.Overdue : i.IsOpen ? CenterState.Open : CenterState.Paid));
+                i.Status == DocumentStatus.Voided ? CenterState.Voided : i.IsOverdue(today) ? CenterState.Overdue : i.IsOpen ? CenterState.Open
+                : i.WrittenOff > 0m ? CenterState.WrittenOff : CenterState.Paid));
         foreach (var p in await sales.ListPaymentsAsync(customerId, ct))
             rows.Add(new("payment", p.Id, p.Date, p.Reference, p.Memo, p.Amount, p.Status == DocumentStatus.Posted && p.Unapplied > 0m ? p.Unapplied : null, Posted(p.Status)));
         foreach (var r in await sales.ListReceiptsForCustomerAsync(customerId, ct))

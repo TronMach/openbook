@@ -176,6 +176,7 @@ public static class Labels
     public static string Status(Invoice invoice, DateOnly today) => invoice switch
     {
         { Status: DocumentStatus.Voided } => "Voided",
+        { Balance: 0m, WrittenOff: > 0m } => "Written off",
         { Balance: 0m } => "Paid",
         _ when invoice.IsOverdue(today) => "Overdue",
         { AmountPaid: > 0m } => "Partially paid",
