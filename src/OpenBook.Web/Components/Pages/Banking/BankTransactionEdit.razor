@@ -175,7 +175,6 @@
         _transaction = await Ops.RunAsync<BankingService, BankTransaction?>(s => s.GetAsync(Id));
         if (_transaction is { Status: BankTransactionStatus.Posted } and not { Kind: BankTransactionKind.Transfer })
         {
-            _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
             IReadOnlyList<BankSplit> splits;
             (_chart, _useNumbers, _vendors, splits, _marked) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<AccountService>().GetChartAsync(),
@@ -186,6 +185,7 @@
                 _transaction.Kind == BankTransactionKind.Spend
                     ? (IReadOnlyList<BillableLine>)(await sp.GetRequiredService<BillableExpenseService>().LinesAsync(BillableSource.Expense, Id)).Where(l => l.Billable is not null).ToList()
                     : []));
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_transaction.LocationId, .. splits.Select(s => s.ClassId)]));
             _title = Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type);
             _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != _transaction.AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
             foreach (var used in splits.Select(s => s.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())

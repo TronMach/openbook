@@ -266,11 +266,18 @@
             } catch (e) {
                 if (e.removed || e.signedOut && await revoked(device)) return wiped();
                 if (!e.someoneElse) throw e;
-                // Someone else signed in on this browser: they get a device of their own.
-                await setMeta('deviceId', null);
+                // Someone else signed in on this browser: their own device, or a new one the first time.
+                const who = await fetch('/api/me', { credentials: 'same-origin' }).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
+                await setMeta('deviceId', (who.username && await getMeta('device:' + who.username)) || null);
                 device = await deviceId();
-                await refreshLists(device);
+                try {
+                    await refreshLists(device);
+                } catch (again) {
+                    if (again.removed) return wiped();
+                    throw again;
+                }
             }
+            await setMeta('device:' + lists.me, device);
             fillSelects();
             // Each person's drafts go in under their own name; anyone else's wait for them to sign in here.
             const waiting = (await loadDrafts()).filter(d => d.status === 'waiting' && (!d.user || d.user === lists.me));

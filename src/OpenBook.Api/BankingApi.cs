@@ -7,7 +7,7 @@ using OpenBook.Domain.Banking;
 
 namespace OpenBook.Api;
 
-public sealed record BankSplitRequest(Guid AccountId, decimal Amount, string? Memo = null);
+public sealed record BankSplitRequest(Guid AccountId, decimal Amount, string? Memo = null, Guid? ClassId = null);
 
 public sealed record RecordBankTransactionRequest(
     BankTransactionKind Kind,
@@ -17,7 +17,8 @@ public sealed record RecordBankTransactionRequest(
     string? Payee = null,
     string? Reference = null,
     string? Memo = null,
-    Guid? VendorId = null);
+    Guid? VendorId = null,
+    Guid? LocationId = null);
 
 public sealed record TransferRequest(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
@@ -132,8 +133,8 @@ internal static class BankingApi
         banking.MapPost("/transactions", async (RecordBankTransactionRequest r, BankingService s, CancellationToken ct) =>
         {
             var t = await s.RecordAsync(new RecordBankTransactionCommand(
-                r.Kind, r.AccountId, r.Date, (r.Splits ?? []).Select(x => new BankSplit(x.AccountId, x.Amount, x.Memo)).ToList(),
-                r.Payee, r.Reference, r.Memo, r.VendorId), ct);
+                r.Kind, r.AccountId, r.Date, (r.Splits ?? []).Select(x => new BankSplit(x.AccountId, x.Amount, x.Memo, x.ClassId)).ToList(),
+                r.Payee, r.Reference, r.Memo, r.VendorId, r.LocationId), ct);
             return Results.Created($"/api/banking/transactions/{t.Id}", BankTransactionResponse.From(t));
         });
 

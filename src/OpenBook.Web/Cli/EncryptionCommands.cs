@@ -55,5 +55,11 @@ public static class EncryptionCommands
             Console.Error.WriteLine($"{ex.Message} Nothing was changed.");
             return 1;
         }
+        catch (IOException)
+        {
+            // Windows won't open a file a running OpenBook holds, before anything else gets to look at it.
+            Console.Error.WriteLine("Something still has the company file open. Stop OpenBook and try again. Nothing was changed.");
+            return 1;
+        }
     }
 }
