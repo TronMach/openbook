@@ -45,7 +45,14 @@ internal sealed class MailKitEmailSender(OpenBookStorage storage) : IEmailSender
         if (!string.IsNullOrEmpty(settings.Username))
             await client.AuthenticateAsync(settings.Username, password ?? "", ct);
         await client.SendAsync(mime, ct);
-        await client.DisconnectAsync(quit: true, ct);
+        try
+        {
+            await client.DisconnectAsync(quit: true, ct);
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or MailKit.ProtocolException or MailKit.ServiceNotConnectedException)
+        {
+            // It's gone: failing here would report a sent email as unsent, and the next try would send it twice.
+        }
     }
 
     private static MimeMessage Build(EmailSettings settings, EmailMessage message)

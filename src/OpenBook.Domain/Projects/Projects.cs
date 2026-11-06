@@ -367,6 +367,13 @@ public sealed class MileageRate
         [2026] = 0.725m,
     };
 
+    /// <summary>The year's rate, else the latest before it: a new year's trips shouldn't cost nothing until its rate is announced.</summary>
+    public static decimal For(IReadOnlyDictionary<int, decimal> rates, int year)
+    {
+        ArgumentNullException.ThrowIfNull(rates);
+        return rates.TryGetValue(year, out var rate) ? rate : rates.Where(r => r.Key < year).OrderByDescending(r => r.Key).Select(r => r.Value).FirstOrDefault();
+    }
+
     public static MileageRate Create(int year, decimal rate)
     {
         var r = new MileageRate { Year = year };

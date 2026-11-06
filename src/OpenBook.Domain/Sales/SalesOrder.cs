@@ -165,7 +165,11 @@ public static class PartialInvoicing
             {
                 var left = remaining[l.LineNumber];
                 var share = decimal.Round(l.Quantity * percent / 100m, SalesLine.Precision, MidpointRounding.AwayFromZero);
-                return new InvoiceSourceLine(l.LineNumber, Math.Abs(share) >= Math.Abs(left) ? left : share);
+
+                // What would be left must be worth billing: under a cent it could never go on an invoice, and the source would stay open.
+                var after = left - share;
+                var finishes = Math.Abs(share) >= Math.Abs(left) || decimal.Round(after * l.Rate, 2, MidpointRounding.AwayFromZero) == 0m;
+                return new InvoiceSourceLine(l.LineNumber, finishes ? left : share);
             })
             .ToList();
     }

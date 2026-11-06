@@ -204,6 +204,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             throw new ConcurrencyConflictException(ex);
         }
+        catch (DbUpdateException ex) when (IsBusy(ex))
+        {
+            throw Busy();
+        }
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
@@ -221,7 +225,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             throw new ConcurrencyConflictException(ex);
         }
+        catch (DbUpdateException ex) when (IsBusy(ex))
+        {
+            throw Busy();
+        }
     }
+
+    /// <summary>A long save holding a SQLite file's one write lock (a big import, say), past the wait for it.</summary>
+    private static bool IsBusy(DbUpdateException ex) => ex.InnerException is Microsoft.Data.Sqlite.SqliteException { SqliteErrorCode: 5 or 6 };
+
+    private static Domain.Common.DomainException Busy() =>
+        new("save.busy", "OpenBook is busy with a long job, such as an import, so this wasn't saved. Try again in a moment.");
 
     /// <summary>
     /// Collisions with another save, not mistakes in this one: a versioned row changed since it was read, or a unique

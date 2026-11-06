@@ -74,7 +74,7 @@ public sealed class ProjectReports(
             income,
             expenses.Where(e => InRange(e.Date)).Sum(e => e.Cost),
             time.Where(t => InRange(t.Date)).Sum(t => t.Cost),
-            trips.Where(t => InRange(t.Date)).Sum(t => decimal.Round(t.Miles * rates.GetValueOrDefault(t.Date.Year), 2, MidpointRounding.AwayFromZero)),
+            trips.Where(t => InRange(t.Date)).Sum(t => decimal.Round(t.Miles * MileageRate.For(rates, t.Date.Year), 2, MidpointRounding.AwayFromZero)),
             time.Where(t => InRange(t.Date)).Sum(t => t.Hours),
             time.Where(t => t.Billable && t.InvoiceId is null).Sum(t => t.Amount),
             expenses.Where(e => e.IsBillable && e.InvoiceId is null).Sum(e => e.Amount),

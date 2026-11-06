@@ -72,7 +72,7 @@ public sealed class ChannelClient : IChannelClient, IDisposable
                 var quantity = Money(item, "quantity");
                 var sales = decimal.Round(Money(item, "price") * quantity - Money(item, "total_discount"), 2, MidpointRounding.AwayFromZero);
                 lines.Add(new ChannelOrderDraft(id, date, Text(item, "sku") is { Length: > 0 } sku ? sku : null, $"{name} · {Text(item, "title")}", quantity, sales,
-                    first ? shipping : 0m, TaxOf(item) + (first ? shippingTax : 0m), region.Length > 0 ? region : null));
+                    first ? shipping : 0m, TaxOf(item) + (first ? shippingTax : 0m), region.Length > 0 ? region : null, name));
                 first = false;
             }
         }

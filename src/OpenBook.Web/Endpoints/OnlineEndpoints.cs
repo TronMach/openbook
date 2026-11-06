@@ -17,10 +17,13 @@ namespace OpenBook.Web.Endpoints;
 /// </summary>
 public static class OnlineEndpoints
 {
+    private static readonly Action<ILogger, string, string, Exception?> HookRefused =
+        LoggerMessage.Define<string, string>(LogLevel.Warning, new EventId(1, "StripeWebhookRefused"), "A Stripe webhook was refused ({Code}): {Reason}");
+
     public static IEndpointRouteBuilder MapOnlineEndpoints(this IEndpointRouteBuilder app)
     {
         // Stripe posts events here; the signature is the authentication.
-        app.MapPost("/hooks/stripe", async (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, CancellationToken ct) =>
+        app.MapPost("/hooks/stripe", async (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, ILoggerFactory logs, CancellationToken ct) =>
         {
             using var reader = new StreamReader(request.Body);
             var payload = await reader.ReadToEndAsync(ct);
@@ -31,6 +34,8 @@ public static class OnlineEndpoints
             }
             catch (DomainException ex)
             {
+                // Money may have moved: the System page should show it wasn't recorded.
+                HookRefused(logs.CreateLogger("OpenBook.OnlinePayments"), ex.Code, ex.Message, null);
                 return Results.BadRequest(new { code = ex.Code, message = ex.Message });
             }
         }).AllowAnonymous().DisableAntiforgery();

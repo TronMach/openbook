@@ -63,6 +63,10 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
                 throw new DomainException("item.tracking_locked", $"{item.Name} has stock history, so its lot or serial tracking can't change.");
         }
 
+        if (details.Type == ItemType.Assembly && item.Type != ItemType.Assembly
+            && (await store.GetItemsAsync(item.Components.Select(c => c.ComponentItemId).ToList(), ct)).Values.FirstOrDefault(c => !c.IsInventory) is { } untracked)
+            throw new DomainException("item.component_untracked", $"{untracked.Name} isn't an inventory product or assembly. Assemblies are built from tracked stock.");
+
         var parents = item.Type == details.Type ? [] : (await store.ListItemsAsync(ct)).Where(i => i.Components.Any(c => c.ComponentItemId == id)).ToList();
         foreach (var parent in parents)
         {

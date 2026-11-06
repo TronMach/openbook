@@ -325,8 +325,9 @@ public sealed class InvoiceService(
         if (locked.Count == 0)
             return;
 
-        static (Guid?, string?, decimal, decimal, SalesLineKind, string?) Key(SalesLineDraft d) =>
-            (d.ItemId, d.Description, d.Quantity, d.Rate, d.Kind == SalesLineKind.Note ? SalesLineKind.Item : d.Kind, d.PriceSource);
+        // A typed price reads the same as no source once it's a draft, and asking for a new price isn't leaving the line as it was.
+        static (Guid?, string?, decimal, decimal, SalesLineKind, string?, bool) Key(SalesLineDraft d) =>
+            (d.ItemId, d.Description, d.Quantity, d.Rate, d.Kind == SalesLineKind.Note ? SalesLineKind.Item : d.Kind, d.PriceSource == SalesLine.ManualPrice ? null : d.PriceSource, d.AutoPrice);
         var offered = drafts.GroupBy(Key).ToDictionary(g => g.Key, g => g.Count());
         foreach (var line in locked)
         {

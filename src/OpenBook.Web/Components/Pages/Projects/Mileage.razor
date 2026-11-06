@@ -75,7 +75,7 @@
                 </div>
                 <div class="field">
                     <label for="rate">Bill per mile</label>
-                    <input id="rate" name="billRate" class="amount" inputmode="decimal" value="@_rates.GetValueOrDefault(CompanyTime.Today.Year).ToString("0.00##")" />
+                    <input id="rate" name="billRate" class="amount" inputmode="decimal" value="@OpenBook.Domain.Projects.MileageRate.For(_rates, CompanyTime.Today.Year).ToString("0.00##")" />
                 </div>
                 <div class="field">
                     <label><input type="checkbox" name="billable" value="true" /> Billable</label>
@@ -132,6 +132,10 @@
 
     <div class="card" style="margin-top: 1.5rem">
         <h2>Standard mileage rates</h2>
+        @if (!_rates.ContainsKey(CompanyTime.Today.Year))
+        {
+            <div class="alert notice" role="status">There's no rate for @CompanyTime.Today.Year yet, so the latest one is being used. Add this year's when it's announced.</div>
+        }
         <table class="data">
             <thead><tr><th>Year</th><th class="num">Per mile</th></tr></thead>
             <tbody>

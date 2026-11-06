@@ -383,6 +383,9 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
 
     public Task<OnlinePaymentSettings?> GetOnlinePaymentSettingsAsync(CancellationToken ct) => db.OnlinePaymentSettings.FirstOrDefaultAsync(ct);
 
+    public Task<bool> IsTakenOnlineAsync(Guid paymentId, CancellationToken ct) =>
+        db.PaymentLinks.AnyAsync(l => l.CustomerPaymentId == paymentId, ct);
+
     public async Task<IReadOnlyList<PaymentLink>> ListPaymentLinksAsync(Guid invoiceId, CancellationToken ct) =>
         await db.PaymentLinks.Where(l => l.InvoiceId == invoiceId).ToListAsync(ct);
 

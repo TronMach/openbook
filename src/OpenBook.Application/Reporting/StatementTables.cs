@@ -14,11 +14,11 @@ internal sealed record DerivedColumn(ReportColumn Column, Func<IReadOnlyList<dec
 
     /// <summary>The change as a percentage of the second column; blank when that's zero.</summary>
     public static DerivedColumn PercentChange { get; } = new(new("% change", ColumnFormat.Percent), a =>
-        a[1] is { } prior && prior != 0m ? decimal.Round(((a[0] ?? 0m) - prior) / Math.Abs(prior) * 100m, 1) : null);
+        a[1] is { } prior && prior != 0m ? decimal.Round(((a[0] ?? 0m) - prior) / Math.Abs(prior) * 100m, 1, MidpointRounding.AwayFromZero) : null);
 
     /// <summary>The first column as a percentage of the second.</summary>
     public static DerivedColumn PercentOf(string header) => new(new(header, ColumnFormat.Percent), a =>
-        a[1] is { } basis && basis != 0m ? decimal.Round((a[0] ?? 0m) / basis * 100m, 1) : null);
+        a[1] is { } basis && basis != 0m ? decimal.Round((a[0] ?? 0m) / basis * 100m, 1, MidpointRounding.AwayFromZero) : null);
 
     public static IReadOnlyList<DerivedColumn> For(Comparison comparison) => comparison switch
     {

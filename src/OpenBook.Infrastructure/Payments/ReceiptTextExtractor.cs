@@ -67,15 +67,24 @@ public sealed class ReceiptTextExtractor(string? tesseractPath) : IReceiptTextEx
         try
         {
             await File.WriteAllBytesAsync(input, content, ct);
-            var start = new ProcessStartInfo(tesseractPath!) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            var start = new ProcessStartInfo(tesseractPath!) { RedirectStandardOutput = true, UseShellExecute = false };
             start.ArgumentList.Add(input);
             start.ArgumentList.Add("stdout");
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Tesseract didn't start.");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(60));
-            var output = await process.StandardOutput.ReadToEndAsync(timeout.Token);
-            await process.WaitForExitAsync(timeout.Token);
-            return process.ExitCode == 0 && output.Trim().Length > 0 ? output : null;
+            try
+            {
+                var output = await process.StandardOutput.ReadToEndAsync(timeout.Token);
+                await process.WaitForExitAsync(timeout.Token);
+                return process.ExitCode == 0 && output.Trim().Length > 0 ? output : null;
+            }
+            catch (OperationCanceledException)
+            {
+                // Stopped, not abandoned: it would go on using a core, and hold the file.
+                process.Kill(entireProcessTree: true);
+                throw;
+            }
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException
                                        || (ex is OperationCanceledException && !ct.IsCancellationRequested))

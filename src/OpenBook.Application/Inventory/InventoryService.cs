@@ -23,7 +23,7 @@ internal sealed record BuildPlan(
 /// <param name="Value">FIFO cost of what's on hand.</param>
 public sealed record StockLevel(Item Item, decimal Quantity, decimal Value)
 {
-    public decimal? AverageCost => Quantity == 0m ? null : decimal.Round(Value / Quantity, 4);
+    public decimal? AverageCost => Quantity == 0m ? null : decimal.Round(Value / Quantity, 4, MidpointRounding.AwayFromZero);
     public bool NeedsReorder => Item.ReorderPoint is { } point && Quantity <= point;
 }
 
@@ -591,14 +591,9 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     /// <summary>A cost split over receipts in proportion to quantity, rounded to the cent with the last taking what's left.</summary>
     internal static IEnumerable<(decimal Quantity, string? Lot, decimal Cost)> Split(IReadOnlyList<(decimal Quantity, string? Lot)> receipts, decimal cost)
     {
-        var total = receipts.Sum(r => r.Quantity);
-        var left = cost;
+        var shares = Shares.ByWeight(cost, [.. receipts.Select(r => r.Quantity)]);
         for (var i = 0; i < receipts.Count; i++)
-        {
-            var share = i == receipts.Count - 1 || total == 0m ? left : decimal.Round(cost * receipts[i].Quantity / total, 2, MidpointRounding.AwayFromZero);
-            left -= share;
-            yield return (receipts[i].Quantity, receipts[i].Lot, share);
-        }
+            yield return (receipts[i].Quantity, receipts[i].Lot, shares[i]);
     }
 
     internal static string Describe(ItemTracking tracking) => tracking == ItemTracking.Serial ? "serial number" : "lot";

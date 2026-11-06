@@ -40,6 +40,7 @@ public sealed record BooksCheckReport(DateTimeOffset RanAt, IReadOnlyList<CheckR
 /// funds and inventory figures kept beside the ledger match its accounts. Reads only; changes nothing.
 /// </summary>
 public sealed class BooksCheckService(
+    IUnitOfWork unitOfWork,
     ILedgerStore ledger,
     ISalesStore sales,
     IPurchasesStore purchases,
@@ -84,6 +85,8 @@ public sealed class BooksCheckService(
 
     public async Task<BooksCheckReport> RunAsync(CancellationToken ct = default)
     {
+        // One moment of the books: someone saving between two reads isn't a problem to report.
+        await using var snapshot = await unitOfWork.BeginSnapshotAsync(ct);
         var data = await LoadAsync(ct);
         var results = new List<CheckResult>
         {
@@ -459,7 +462,11 @@ public sealed class BooksCheckService(
         var stock = await inventory.StockAsync(null, ct);
         var assetAccounts = stock.Where(s => s.Item.InventoryAssetAccountId is not null).Select(s => s.Item.InventoryAssetAccountId!.Value).ToHashSet();
         var lines = d.Accrual.Where(l => assetAccounts.Contains(l.AccountId)).ToList();
-        var others = lines.Where(l => JournalEntry.IsJournalSource(l.Source)).ToList();
+
+        // What reached those accounts without moving any stock: entered by hand, spent to them, or a bill's category line.
+        var plain = d.Bills.SelectMany(b => b.Lines.Where(l => l.ItemId is null).Select(l => (b.Id, l.AccountId, l.Amount))).ToHashSet();
+        var others = lines.Where(l => JournalEntry.IsJournalSource(l.Source) || l.Source.StartsWith("bank.", StringComparison.Ordinal)
+            || (l.Source == Bill.Source && l.SourceId is { } bill && plain.Contains((bill, l.AccountId, l.Amount)))).ToList();
         return Compare("inventory", "Stock value matches the books",
             "The cost of everything in stock equals the inventory asset accounts.",
             stock.Sum(s => s.Value), lines.Sum(l => l.Amount), others, "Stock on hand at cost", "the inventory asset accounts");

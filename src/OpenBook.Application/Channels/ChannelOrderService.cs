@@ -96,8 +96,10 @@ public sealed class ChannelOrderService(
             .. updated == 0 ? [] : new[] { $"{updated} order(s) waiting to be posted were updated from this report." },
             .. taken.Count == 0 ? [] : new[] { $"Already posted, and cancelled since: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? " and more" : "")}. Their stock and sales tax stay until you record a return." },
         ];
-        var fresh = lines.Where(l => !known.Contains(l.OrderId)).ToList();
-        var old = lines.Where(l => known.Contains(l.OrderId)).Select(l => l.OrderId).Distinct().Count();
+        // An order can be known by another name: a store's exports say "#1001" where its live connection says a long number.
+        bool Known(ChannelOrderDraft l) => known.Contains(l.OrderId) || (l.OtherId is { } other && known.Contains(other));
+        var fresh = lines.Where(l => !Known(l)).ToList();
+        var old = lines.Where(Known).Select(l => l.OrderId).Distinct().Count();
         var saved = new List<ChannelOrderBatch>();
         foreach (var day in fresh.GroupBy(l => l.Date).OrderBy(g => g.Key))
         {

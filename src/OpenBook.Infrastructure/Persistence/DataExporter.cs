@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
 using OpenBook.Application;
 using OpenBook.Domain.Attachments;
 
@@ -52,18 +53,14 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         await using (var file = File.Create(path))
         using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
         {
-            await db.Database.OpenConnectionAsync(ct);
-            try
+            // One snapshot: a save during the export can't leave lines without their entry.
+            await using (await new EfUnitOfWork(db).BeginSnapshotAsync(ct))
             {
                 foreach (var table in tables)
                     counts[table.Name] = await WriteTableAsync(zip, table, ct);
-            }
-            finally
-            {
-                await db.Database.CloseConnectionAsync();
+                await WriteAttachmentsAsync(zip, ct);
             }
 
-            await WriteAttachmentsAsync(zip, ct);
             await using var readme = new StreamWriter(zip.CreateEntry("README.md").Open(), new UTF8Encoding(false));
             await readme.WriteAsync(Readme(tables, counts));
         }
@@ -106,8 +103,10 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
     private async Task<int> WriteTableAsync(ZipArchive zip, Table table, CancellationToken ct)
     {
         var excluded = Excluded.GetValueOrDefault(table.Name) ?? [];
-        var columns = table.Columns.Where(c => !excluded.Contains(c.Name)).Select(c => c.Name).ToList();
+        var kept = table.Columns.Where(c => !excluded.Contains(c.Name)).ToList();
+        var columns = kept.Select(c => c.Name).ToList();
         await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = $"SELECT {string.Join(", ", columns.Select(c => $"\"{c}\""))} FROM \"{table.Name}\"";
 
         await using var writer = new StreamWriter(zip.CreateEntry($"{table.Name}.csv").Open(), new UTF8Encoding(true));
@@ -118,7 +117,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         {
             var fields = new string[reader.FieldCount];
             for (var i = 0; i < fields.Length; i++)
-                fields[i] = Quote(Format(reader.IsDBNull(i) ? null : reader.GetValue(i)));
+                fields[i] = Quote(Format(reader.IsDBNull(i) ? null : reader.GetValue(i), kept[i].ClrType));
             await writer.WriteAsync(string.Join(',', fields) + "\r\n");
             rows++;
         }
@@ -140,9 +139,15 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         }
     }
 
-    private static string Format(object? value) => value switch
+    /// <summary>By the column's type, not what the database hands back: SQLite keeps booleans as numbers and timestamps as text, and PostgreSQL dates come as DateTime.</summary>
+    private static string Format(object? value, Type type) => value switch
     {
         null => string.Empty,
+        _ when type == typeof(bool) => Convert.ToBoolean(value, CultureInfo.InvariantCulture) ? "true" : "false",
+        DateTime d when type == typeof(DateOnly) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        string t when type == typeof(Guid) => t.ToLowerInvariant(),
+        string t when type == typeof(DateTimeOffset) && DateTimeOffset.TryParse(t, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at) => at.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
         bool b => b ? "true" : "false",
         DateTime d => d.ToString("O", CultureInfo.InvariantCulture),
         DateTimeOffset d => d.ToString("O", CultureInfo.InvariantCulture),
@@ -246,6 +251,31 @@ internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
     public void ForgetEarlierSaves() => db.ForgetEarlierSaves();
 
     public void DiscardPending() => db.ChangeTracker.Clear();
+
+    public async Task<IAsyncDisposable> BeginSnapshotAsync(CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is not null)
+            return new Joined();
+        await db.Database.OpenConnectionAsync(ct);
+        var connection = db.Database.GetDbConnection();
+
+        // Deferred on SQLite: an ordinary transaction takes the write lock, and this only reads.
+        DbTransaction transaction = connection is Microsoft.Data.Sqlite.SqliteConnection sqlite
+            ? sqlite.BeginTransaction(deferred: true)
+            : await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        await db.Database.UseTransactionAsync(transaction, ct);
+        return new Snapshot(db, transaction);
+    }
+
+    private sealed class Snapshot(OpenBookDbContext db, DbTransaction transaction) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            await db.Database.UseTransactionAsync(null);
+            await transaction.DisposeAsync();
+            await db.Database.CloseConnectionAsync();
+        }
+    }
 
     private sealed class Transaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction inner) : IUnitOfWorkTransaction
     {

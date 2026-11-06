@@ -439,7 +439,7 @@ public sealed class MileageService(IProjectStore store, ISalesStore sales, ICloc
     public async Task<MileageYear> YearAsync(int year, CancellationToken ct = default)
     {
         var trips = await store.ListMileageAsync(new DateOnly(year, 1, 1), new DateOnly(year, 12, 31), null, ct);
-        var rate = (await RatesAsync(ct)).GetValueOrDefault(year);
+        var rate = MileageRate.For(await RatesAsync(ct), year);
         var miles = trips.Sum(t => t.Miles);
         return new MileageYear(year, rate, miles, decimal.Round(miles * rate, 2, MidpointRounding.AwayFromZero), trips);
     }

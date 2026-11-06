@@ -284,15 +284,29 @@ public static class ChannelReports
         var order = DateOrderOf(rows, date);
         var lines = new List<ChannelLineDraft>();
         var transfers = 0;
+        var unread = 0;
+        var notCompleted = 0;
         foreach (var row in rows)
         {
             var kind = (CsvColumns.Field(row, type) ?? "").Trim();
             if (CsvColumns.Field(row, impact) is { } memo && memo.Equals("Memo", StringComparison.OrdinalIgnoreCase))
+            {
+                notCompleted++;
                 continue;
+            }
+
             if (CsvColumns.Field(row, status) is { } s && !s.Equals("Completed", StringComparison.OrdinalIgnoreCase))
+            {
+                notCompleted++;
                 continue;
+            }
+
             if (!Amount(row, gross, out var amount))
+            {
+                unread++;
                 continue;
+            }
+
             var on = Date(CsvColumns.Field(row, date), order) ?? default;
             if (kind.Contains("withdrawal", StringComparison.OrdinalIgnoreCase) || kind.Contains("transfer", StringComparison.OrdinalIgnoreCase)
                 || kind.Contains("bank deposit", StringComparison.OrdinalIgnoreCase))
@@ -330,7 +344,7 @@ public static class ChannelReports
                 lines.Add(new ChannelLineDraft(on, ChannelLineType.Fee, f, reference, "PayPal fee")); // signed already: negative is a fee taken
         }
 
-        return WholeFile("paypal", lines, transfers);
+        return WholeFile("paypal", lines, transfers, unread, notCompleted);
     }
 
     // ---------------- Anything else (and Stripe and Shopify payout exports): date, type, amount ----------------
@@ -358,6 +372,7 @@ public static class ChannelReports
         var groups = new Dictionary<string, (List<ChannelLineDraft> Lines, DateOnly? Paid)>();
         var transfers = 0;
         var unpaid = 0;
+        var unreadRows = 0;
         foreach (var row in rows)
         {
             var kindText = (CsvColumns.Field(row, type) ?? "").Trim();
@@ -373,7 +388,11 @@ public static class ChannelReports
             if (gross is not null && Amount(row, gross, out var g))
             {
                 amount = g;
-                if (Amount(row, fee, out var f))
+
+                // The net says what the fee really was, a returned one included.
+                if (Amount(row, net, out var after))
+                    feeAmount = after - g;
+                else if (Amount(row, fee, out var f))
                     feeAmount = -Math.Abs(f);
             }
             else if (Amount(row, net, out var n))
@@ -382,6 +401,7 @@ public static class ChannelReports
             }
             else
             {
+                unreadRows++;
                 continue;
             }
 
@@ -425,19 +445,29 @@ public static class ChannelReports
             var lines = g.Value.Lines;
             var paid = g.Value.Paid ?? lines.Max(l => l.Date);
             var id = g.Key.Length > 0 ? g.Key : $"{prefix}:{lines.Min(l => l.Date):yyyyMMdd}-{lines.Max(l => l.Date):yyyyMMdd}:{lines.Sum(l => l.Amount).ToString("0.00", CultureInfo.InvariantCulture)}";
-            return new PayoutData(id, paid, Fix(lines, paid), lines.Min(l => l.Date), lines.Max(l => l.Date));
+            var dated = Fix(lines, paid);
+            return new PayoutData(id, paid, dated, dated.Min(l => l.Date), dated.Max(l => l.Date));
         }).ToList();
+        if (unreadRows > 0)
+            warnings.Add($"{unreadRows} row(s) were left out because their amounts couldn't be read, so the total may not match the deposit.");
         _ = fileName;
         return new ChannelReadResult(payouts, warnings);
     }
 
     // ---------------- shared ----------------
 
-    private static ChannelReadResult WholeFile(string prefix, List<ChannelLineDraft> lines, int transfers)
+    private static ChannelReadResult WholeFile(string prefix, List<ChannelLineDraft> lines, int transfers, int unread = 0, int notCompleted = 0)
     {
         var warnings = new List<string>();
         if (transfers > 0)
             warnings.Add($"{transfers} deposit, withdrawal or transfer row(s) were left out: record money moved to your bank as a transfer from the channel's balance.");
+        var undated = lines.RemoveAll(l => l.Date == default);
+        if (undated > 0)
+            warnings.Add($"{undated} line(s) were left out because their dates couldn't be read. Check the file's date format.");
+        if (unread > 0)
+            warnings.Add($"{unread} row(s) were left out because their amounts couldn't be read, so the total may not match the deposit.");
+        if (notCompleted > 0)
+            warnings.Add($"{notCompleted} memo or unfinished row(s) were left out.");
         if (lines.Count == 0)
             return new ChannelReadResult([], warnings);
         var first = lines.Min(l => l.Date);

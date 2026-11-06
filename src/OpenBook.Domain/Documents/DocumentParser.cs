@@ -196,7 +196,7 @@ public static partial class DocumentParser
             }
 
             if (prices && l.Quantity is null && l.Price is { } price && price != 0m && l.Amount is { } total
-                && decimal.Round(total / price, 4) is var count && decimal.Round(count * price, 2, MidpointRounding.AwayFromZero) == total)
+                && decimal.Round(total / price, 4, MidpointRounding.AwayFromZero) is var count && decimal.Round(count * price, 2, MidpointRounding.AwayFromZero) == total)
                 l = (count, price, total);
 
             items.Add(new DocumentLineFields(description, sku, l.Quantity, l.Price, l.Amount));

@@ -310,7 +310,7 @@ public sealed class ListReports(
             var name = new ReportCell(items.GetValueOrDefault(group.Key)?.Name ?? "", new ReportLink("item", group.Key));
             var quantity = group.Sum(b => b.Quantity);
             var amount = group.Sum(b => b.Amount);
-            var average = new ReportCell(quantity == 0m ? null : decimal.Round(amount / quantity, 4));
+            var average = new ReportCell(quantity == 0m ? null : decimal.Round(amount / quantity, 4, MidpointRounding.AwayFromZero));
             if (!detail)
             {
                 rows.Add(new ReportTableRow([name, null, null, new ReportCell(quantity), amount, average]));
@@ -320,7 +320,7 @@ public sealed class ListReports(
             rows.Add(new ReportTableRow([name, null, null, null, null, null], 0, ReportRowStyle.Section));
             rows.AddRange(group.OrderBy(b => b.Date).Select(b => new ReportTableRow(
                 [new ReportCell(b.Label, b.Link), new ReportCell(b.Date), vendorNames.GetValueOrDefault(b.VendorId), new ReportCell(b.Quantity), b.Amount,
-                 new ReportCell(b.Quantity == 0m ? null : decimal.Round(b.Amount / b.Quantity, 4))], 1)));
+                 new ReportCell(b.Quantity == 0m ? null : decimal.Round(b.Amount / b.Quantity, 4, MidpointRounding.AwayFromZero))], 1)));
             rows.Add(new ReportTableRow([$"Total {name.Value}", null, null, new ReportCell(quantity), amount, average], 0, ReportRowStyle.Subtotal));
         }
 

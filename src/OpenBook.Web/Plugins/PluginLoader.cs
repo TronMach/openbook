@@ -41,9 +41,9 @@ public static class PluginLoader
                 foreach (var plugin in plugins)
                     registry.Load(name, plugin);
             }
-            catch (Exception ex) when (ex is BadImageFormatException or FileLoadException or FileNotFoundException or ReflectionTypeLoadException
-                                           or TypeLoadException or MissingMethodException or TargetInvocationException or InvalidCastException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
+                // An add-in's own code, whatever it throws, stops that add-in and not OpenBook.
                 registry.Skip(name, PluginState.Failed, ex.Message);
             }
         }
@@ -54,15 +54,40 @@ public static class PluginLoader
     private static List<IOpenBookPlugin> Discover(string directory)
     {
         var result = new List<IOpenBookPlugin>();
+        Exception? failed = null;
         foreach (var dll in Directory.GetFiles(directory, "*.dll").Order(StringComparer.OrdinalIgnoreCase))
         {
-            var context = new PluginContext(dll);
-            var assembly = context.LoadFromAssemblyPath(Path.GetFullPath(dll));
-            foreach (var type in assembly.GetExportedTypes().Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IOpenBookPlugin).IsAssignableFrom(t)))
-                result.Add((IOpenBookPlugin)Activator.CreateInstance(type)!);
+            // Beside the add-in there may be native libraries, and helpers with optional parts missing: neither is the add-in.
+            if (!IsManaged(dll))
+                continue;
+            try
+            {
+                var context = new PluginContext(dll);
+                var assembly = context.LoadFromAssemblyPath(Path.GetFullPath(dll));
+                foreach (var type in assembly.GetExportedTypes().Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IOpenBookPlugin).IsAssignableFrom(t)))
+                    result.Add((IOpenBookPlugin)Activator.CreateInstance(type)!);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or ReflectionTypeLoadException or TypeLoadException)
+            {
+                failed ??= ex;
+            }
         }
 
-        return result;
+        // With nothing found, the reason is worth showing.
+        return result.Count == 0 && failed is not null ? throw failed : result;
+    }
+
+    private static bool IsManaged(string dll)
+    {
+        try
+        {
+            AssemblyName.GetAssemblyName(dll);
+            return true;
+        }
+        catch (BadImageFormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Resolves an add-in's own dependencies from its folder; OpenBook and framework assemblies come from the host.</summary>

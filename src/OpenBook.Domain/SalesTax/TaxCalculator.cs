@@ -52,18 +52,10 @@ public static class TaxCalculator
         ArgumentNullException.ThrowIfNull(components);
         var combined = components.Sum(c => c.Percent);
         var total = exempt || combined == 0m ? 0m : TaxOn(taxableAmount, combined);
-        var shares = new List<decimal>(components.Count);
-        var remaining = total;
-        for (var i = 0; i < components.Count; i++)
-        {
-            var share = i == components.Count - 1
-                ? remaining
-                : combined == 0m ? 0m : decimal.Round(total * components[i].Percent / combined, 2, MidpointRounding.AwayFromZero);
-            shares.Add(share);
-            remaining -= share;
-        }
-
-        return shares;
+        // A rate of 0% adds nothing to the running total, so it gets nothing, and no share can go below zero.
+        var weights = components.Select(c => c.Percent).ToList();
+        var last = weights.FindLastIndex(w => w != 0m);
+        return last < 0 ? [.. weights.Select(_ => 0m)] : [.. Common.Shares.ByWeight(total, weights[..(last + 1)]), .. weights[(last + 1)..].Select(_ => 0m)];
     }
 
     /// <summary>

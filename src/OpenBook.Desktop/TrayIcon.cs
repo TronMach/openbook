@@ -162,6 +162,13 @@ internal sealed class TrayIcon : ApplicationContext
                 return;
             }
 
+            if (answer == StillGoing)
+            {
+                // It's running, and backing up a large file to somewhere slow: leaving now would leave it with no icon.
+                MessageBox.Show("The backup is taking a while, so OpenBook is still running. Try Quit again when it's done.", "OpenBook", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             if (answer.StartsWith("failed", StringComparison.Ordinal)
                 && MessageBox.Show($"{Explain(answer).Text}\n\nQuit OpenBook anyway?", "OpenBook", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
@@ -179,8 +186,11 @@ internal sealed class TrayIcon : ApplicationContext
         }
     }
 
+    private const string StillGoing = "still going";
+
     private static (string Title, string Text, ToolTipIcon Icon) Explain(string? answer) => answer switch
     {
+        StillGoing => ("Still working", "OpenBook is still on that. It'll carry on in the background.", ToolTipIcon.Info),
         null => ("OpenBook isn't answering", "It may have stopped. Start it again from the Start menu.", ToolTipIcon.Warning),
         "none" => ("Nothing to back up yet", "Set up your company first.", ToolTipIcon.Info),
         _ when answer.StartsWith("ok ", StringComparison.Ordinal) => ("Backed up", $"Your books were saved as {answer[3..]}.", ToolTipIcon.Info),
@@ -192,14 +202,20 @@ internal sealed class TrayIcon : ApplicationContext
     private async Task<string?> SendAsync(string command, TimeSpan limit)
     {
         using var timeout = new CancellationTokenSource(limit);
+        var connected = false;
         try
         {
             await using var client = new NamedPipeClientStream(".", _pipe, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             await client.ConnectAsync(5000, timeout.Token);
+            connected = true;
             using var reader = new StreamReader(client, Encoding.UTF8, leaveOpen: true);
             await using var writer = new StreamWriter(client, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
             await writer.WriteLineAsync(command.AsMemory(), timeout.Token);
             return await reader.ReadLineAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (connected)
+        {
+            return StillGoing;
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException or UnauthorizedAccessException)
         {

@@ -363,7 +363,7 @@ public sealed class ChannelPayout
 /// <summary>One item line of an order, as the channel reported it.</summary>
 /// <param name="Sales">The item's price times quantity, after the order's discounts; without shipping and tax.</param>
 public sealed record ChannelOrderDraft(
-    string OrderId, DateOnly Date, string? Sku, string? Title, decimal Quantity, decimal Sales, decimal Shipping = 0m, decimal Tax = 0m, string? Region = null);
+    string OrderId, DateOnly Date, string? Sku, string? Title, decimal Quantity, decimal Sales, decimal Shipping = 0m, decimal Tax = 0m, string? Region = null, string? OtherId = null);
 
 public sealed class ChannelOrderLine
 {
@@ -377,9 +377,9 @@ public sealed class ChannelOrderLine
         Sku = Cut(draft.Sku, 100);
         Title = Cut(draft.Title, 300);
         Quantity = decimal.Round(draft.Quantity, 4) == draft.Quantity ? draft.Quantity : throw new DomainException("channel.quantity_invalid", "Quantities have at most 4 decimals.");
-        Sales = decimal.Round(draft.Sales, 2);
-        Shipping = decimal.Round(draft.Shipping, 2);
-        Tax = decimal.Round(draft.Tax, 2);
+        Sales = decimal.Round(draft.Sales, 2, MidpointRounding.AwayFromZero);
+        Shipping = decimal.Round(draft.Shipping, 2, MidpointRounding.AwayFromZero);
+        Tax = decimal.Round(draft.Tax, 2, MidpointRounding.AwayFromZero);
         Region = Cut(draft.Region, 50)?.ToUpperInvariant();
     }
 

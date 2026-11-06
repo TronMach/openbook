@@ -155,6 +155,9 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {receipt.Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");
 
+        if (receipt.DepositId is { } depositedIn && await store.GetDepositAsync(depositedIn, ct) is { } deposit && command.Date > deposit.Date)
+            throw new DomainException("receipt.after_deposit", $"Sales receipt {receipt.Number} went into a bank deposit on {deposit.Date:yyyy-MM-dd}, so it can't be dated after that.");
+
         // A feed line matched to the receipt is what the bank reported, so the money into that account stays.
         var feed = await Banking.BankFeedService.TiedToAsync(bank, receipt.DepositAccountId, receipt.JournalEntryId, null, ct);
         if (feed.Count > 0 && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))

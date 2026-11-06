@@ -37,7 +37,8 @@ internal sealed partial class ScheduledEmailHostedService(
                 || !await leases.TryAcquireAsync("scheduled-emails", TimeSpan.FromMinutes(3), ct))
                 return;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
-            foreach (var result in await scope.ServiceProvider.GetRequiredService<ScheduledEmailService>().SendDueAsync(ct))
+            foreach (var result in await scope.ServiceProvider.GetRequiredService<ScheduledEmailService>()
+                         .SendDueAsync(token => leases.TryAcquireAsync("scheduled-emails", TimeSpan.FromMinutes(3), token), ct))
             {
                 if (result.Error is null)
                     LogSent(result.Email.To);

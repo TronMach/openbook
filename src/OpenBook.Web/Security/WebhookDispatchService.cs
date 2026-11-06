@@ -21,7 +21,8 @@ internal sealed partial class WebhookDispatchService(
                 var company = scope.ServiceProvider.GetRequiredService<OpenBook.Application.Companies.CompanySetupService>();
                 // With several servers on one database, one of them sends (JobLeases).
                 if (await company.IsSetUpAsync(stoppingToken) && await leases.TryAcquireAsync("webhooks", TimeSpan.FromMinutes(1), stoppingToken))
-                    await scope.ServiceProvider.GetRequiredService<WebhookDispatcher>().RunOnceAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<WebhookDispatcher>()
+                        .RunOnceAsync(token => leases.TryAcquireAsync("webhooks", TimeSpan.FromMinutes(1), token), stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {

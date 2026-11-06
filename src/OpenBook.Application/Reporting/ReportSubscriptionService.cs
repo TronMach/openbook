@@ -117,8 +117,9 @@ public sealed class ReportSubscriptionService(
                 }
             }
         }
-        catch (DomainException ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Anything, an add-in's report included: the ones after it still go, and this one waits for its next slot.
             error = ex.Message;
         }
 

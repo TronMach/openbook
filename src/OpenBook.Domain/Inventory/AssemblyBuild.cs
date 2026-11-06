@@ -191,16 +191,7 @@ public sealed class LandedCost
             throw new DomainException("landed_cost.no_basis", method == LandedCostMethod.ByValue
                 ? "The stock on those bills cost nothing, so there's no value to spread by. Spread by quantity instead."
                 : "Those bills brought in no quantity to spread over.");
-        var shares = new List<decimal>(received.Count);
-        var left = amount;
-        for (var i = 0; i < received.Count; i++)
-        {
-            var share = i == received.Count - 1 ? left : decimal.Round(amount * weights[i] / total, 2, MidpointRounding.AwayFromZero);
-            shares.Add(share);
-            left -= share;
-        }
-
-        return shares;
+        return Shares.ByWeight(amount, weights);
     }
 
     public static LandedCost Create(

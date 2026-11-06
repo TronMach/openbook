@@ -237,5 +237,5 @@
     };
 
     private static string Change(decimal now, decimal before) =>
-        before == 0m ? "no figure" : (now >= before ? "+" : "") + decimal.Round((now - before) / Math.Abs(before) * 100m, 1).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+        before == 0m ? "no figure" : (now >= before ? "+" : "") + decimal.Round((now - before) / Math.Abs(before) * 100m, 1, MidpointRounding.AwayFromZero).ToString("0.#", CultureInfo.CurrentCulture) + "%";
 }

@@ -367,18 +367,8 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         if (lines.Count == 0 || total == 0m)
             return [];
 
-        var parts = new List<(Guid AccountId, Guid? ClassId, decimal Share)>(lines.Count);
-        var allocated = 0m;
-        for (var i = 0; i < lines.Count; i++)
-        {
-            var share = i == lines.Count - 1
-                ? amount - allocated
-                : decimal.Round(amount * lines[i].Amount / total, 2, MidpointRounding.AwayFromZero);
-            allocated += share;
-            parts.Add((lines[i].AccountId, lines[i].ClassId, share));
-        }
-
-        return parts
+        var shares = Domain.Common.Shares.ByWeight(amount, [.. lines.Select(l => l.Amount)]);
+        return lines.Select((l, i) => (l.AccountId, l.ClassId, Share: shares[i]))
             .GroupBy(p => (p.AccountId, p.ClassId))
             .Select(g => (g.Key.AccountId, g.Key.ClassId, g.Sum(p => p.Share)))
             .Where(p => p.Item3 != 0m)

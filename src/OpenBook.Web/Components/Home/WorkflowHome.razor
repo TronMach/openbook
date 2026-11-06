@@ -16,11 +16,11 @@
                 !F.OrdersUsed ? L["Check in what arrives on an order"] : F.OrdersToReceive > 0 ? L["{0} orders to receive", F.OrdersToReceive] : L["Nothing to receive"])
             @Arrow("a2")
             @Step("bill", "/purchases/bills/new", L["Enter Bills"],
-                !F.BillsUsed ? L["Record what vendors bill you"] : F.BillsToPay > 0 ? L["{0} unpaid · {1} you owe", F.BillsToPay, Labels.Amount(F.YouOwe)] : L["All paid"],
-                F.BillsToPay > 0 ? "/purchases" : null)
+                !F.BillsUsed ? L["Record what vendors bill you"] : F.BillsOpen > 0 ? L["{0} unpaid · {1} you owe", F.BillsOpen, Labels.Amount(F.AllYouOwe)] : L["All paid"],
+                F.BillsOpen > 0 ? "/purchases" : null)
             @Arrow("a3")
             @Step("pay", "/purchases/pay-bills", L["Pay Bills"],
-                !F.BillsUsed ? L["Pay what's due, several at once"] : F.BillsDueSoon > 0 ? L["{0} due within a week", F.BillsDueSoon] : F.BillsToPay > 0 ? L["Nothing due this week"] : L["Nothing to pay"])
+                !F.BillsUsed ? L["Pay what's due, several at once"] : F.BillsDueSoon > 0 ? L["{0} due within a week", F.BillsDueSoon] : F.BillsToPay > 0 ? L["Nothing due this week"] : F.BillsOpen > 0 ? L["Waiting for approval"] : L["Nothing to pay"])
         </div>
     </section>
 
@@ -33,8 +33,8 @@
             @Arrow("a1")
             @Step("inv", "/sales/invoices/new", L["Create Invoices"],
                 !F.InvoicesUsed ? L["Bill for what you sold"]
-                    : F.OverdueInvoices > 0 ? L["{0} overdue · {1} owed to you", F.OverdueInvoices, Labels.Amount(F.OwedToYou)]
-                    : F.OpenInvoices > 0 ? L["{0} open · {1} owed to you", F.OpenInvoices, Labels.Amount(F.OwedToYou)]
+                    : F.OverdueInvoices > 0 ? L["{0} overdue · {1} on open invoices", F.OverdueInvoices, Labels.Amount(F.OwedToYou)]
+                    : F.OpenInvoices > 0 ? L["{0} open · {1} on open invoices", F.OpenInvoices, Labels.Amount(F.OwedToYou)]
                     : L["All paid"],
                 F.OpenInvoices > 0 ? "/sales" : null, F.OverdueInvoices > 0)
             @Arrow("a2")

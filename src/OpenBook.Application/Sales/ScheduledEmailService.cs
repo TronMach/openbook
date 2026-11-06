@@ -75,11 +75,15 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
     public Task<IReadOnlyList<ScheduledEmail>> ListAsync(Guid? invoiceId = null, CancellationToken ct = default) =>
         store.ListScheduledEmailsAsync(invoiceId, ct);
 
-    public async Task<IReadOnlyList<ScheduledEmailResult>> SendDueAsync(CancellationToken ct = default)
+    /// <param name="stillOurs">Asked before each send where several servers share the work, so a slow run isn't overlapped by the next.</param>
+    /// <param name="ct">Cancels the run.</param>
+    public async Task<IReadOnlyList<ScheduledEmailResult>> SendDueAsync(Func<CancellationToken, Task<bool>>? stillOurs = null, CancellationToken ct = default)
     {
         var results = new List<ScheduledEmailResult>();
         foreach (var scheduled in await store.ListDueEmailsAsync(clock.UtcNow, ct))
         {
+            if (stillOurs is not null && !await stillOurs(ct))
+                break;
             var before = Snapshot(scheduled);
             var invoice = await store.GetInvoiceAsync(scheduled.InvoiceId, ct);
             if (invoice is null || invoice.Status == DocumentStatus.Voided)

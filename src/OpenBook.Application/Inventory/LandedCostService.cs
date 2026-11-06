@@ -87,6 +87,8 @@ public sealed class LandedCostService(
 
         var shares = LandedCost.Allocate(command.Amount, received.Select(r => (r.Quantity, r.Cost)).ToList(), command.Method);
         var items = await sales.GetItemsAsync(received.Select(r => r.ItemId).Distinct().ToList(), ct);
+        if (items.Values.FirstOrDefault(i => i.InventoryAssetAccountId == from.Id) is { } own)
+            throw new DomainException("landed_cost.account_is_stock", $"'{from.Name}' is where {own.Name} is kept, so the cost would come out of the same account it goes into. Use the account the freight or duty was entered to.");
         var lines = new List<(Guid BillId, Guid LayerId, Guid ItemId, decimal Amount, decimal ToStock)>();
         var postings = new List<JournalLineDraft>();
         var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
@@ -148,9 +150,12 @@ public sealed class LandedCostService(
         var own = await store.ListMovementsForSourceAsync(EntityType, id, ct);
         foreach (var adjustment in own.Where(m => m.ReversalOf is null))
         {
-            var later = (await store.ListMovementsAsync(adjustment.ItemId, ct))
-                .Any(m => m.LayerId == adjustment.LayerId && !(m.SourceType == EntityType && m.SourceId == id)
-                    && (m.CreatedAt > adjustment.CreatedAt || (m.CreatedAt == adjustment.CreatedAt && m.Id.CompareTo(adjustment.Id) > 0)));
+            // What was undone since, and moves between places, leave the cost where it was.
+            var history = await store.ListMovementsAsync(adjustment.ItemId, ct);
+            var undone = history.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
+            var later = history.Any(m => m.LayerId == adjustment.LayerId && !(m.SourceType == EntityType && m.SourceId == id)
+                && m.ReversalOf is null && !undone.Contains(m.Id) && m.SourceType != InventorySources.Transfer
+                && (m.CreatedAt > adjustment.CreatedAt || (m.CreatedAt == adjustment.CreatedAt && m.Id.CompareTo(adjustment.Id) > 0)));
             if (later)
             {
                 var item = (await sales.GetItemsAsync([adjustment.ItemId], ct)).GetValueOrDefault(adjustment.ItemId);
@@ -185,14 +190,10 @@ public sealed class LandedCostService(
         var assembly = (await sales.GetItemsAsync(outputs.Select(o => o.ItemId).Distinct().ToList(), ct)).Values.Single();
         var history = await store.ListMovementsAsync(assembly.Id, ct);
         var layers = Fifo.Layers(history).ToDictionary(l => l.LayerId);
-        var total = outputs.Sum(o => o.Quantity);
-        var left = amount;
+        var parts = Shares.ByWeight(amount, [.. outputs.Select(o => o.Quantity)]);
         for (var i = 0; i < outputs.Count; i++)
         {
-            // By quantity, the last layer taking the rounding.
-            var (layerId, quantity) = (outputs[i].Id, outputs[i].Quantity);
-            var part = i == outputs.Count - 1 ? left : decimal.Round(amount * quantity / total, 2, MidpointRounding.AwayFromZero);
-            left -= part;
+            var (layerId, quantity, part) = (outputs[i].Id, outputs[i].Quantity, parts[i]);
             var toStock = Portion(part, Math.Max(0m, layers[layerId].RemainingQuantity), quantity);
             lines.Add((billId, layerId, assembly.Id, part, toStock));
             if (toStock != 0m)

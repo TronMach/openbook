@@ -19,7 +19,7 @@ public sealed record OrderReadResult(IReadOnlyList<ChannelOrderDraft> Lines, IRe
 /// </summary>
 public static class ChannelOrderReports
 {
-    private static readonly string[] TaxHeaders = ["itemtax", "ordersalestax", "taxes", "ebaycollectedtax", "sellercollectedtax", "salestax", "tax"];
+    private static readonly string[] TaxHeaders = ["itemtax", "ordersalestax", "taxes", "ebaycollectedtax", "sellercollectedtax", "salestax", "tax", "shippingtax"];
 
     public static OrderReadResult Read(ChannelKind kind, string text)
     {
@@ -49,7 +49,7 @@ public static class ChannelOrderReports
         // Amazon's item-price is the line's total; elsewhere "price" is per unit.
         var total = kind == ChannelKind.Amazon ? First("itemprice") : First("itemtotal", "linetotal", "total");
         var unit = kind == ChannelKind.Amazon ? null : First("soldfor", "lineitemprice", "price", "unitprice");
-        var discount = kind == ChannelKind.Etsy ? First("discountamount") : First("lineitemdiscount", "discount");
+        var discount = kind == ChannelKind.Etsy ? First("discountamount") : First("lineitemdiscount", "discount", "itempromotiondiscount");
         var shipping = First("shippingprice", "ordershipping", "shippingandhandling", "shipping");
         var taxColumns = TaxHeaders.Select(n => columns.Find(n)).OfType<int>().Distinct().ToList();
         var region = First("shipstate", "shiptostate", "shippingprovince", "shipprovince", "state");

@@ -121,7 +121,7 @@ public sealed class ActivityReports(
                 new ReportCell(kv.Value.Quantity),
                 kv.Value.Amount,
                 new ReportCell(Share(kv.Value.Amount, total)),
-                new ReportCell(kv.Value.Quantity == 0m ? null : decimal.Round(kv.Value.Amount / kv.Value.Quantity, 2)),
+                new ReportCell(kv.Value.Quantity == 0m ? null : decimal.Round(kv.Value.Amount / kv.Value.Quantity, 2, MidpointRounding.AwayFromZero)),
             ]))
             .ToList();
         if (discounts != 0m)
@@ -309,7 +309,7 @@ public sealed class ActivityReports(
             Note: "Card payments are left out of the 1099 totals because the card company reports them on Form 1099-K.");
     }
 
-    private static decimal? Share(decimal amount, decimal total) => total == 0m ? null : decimal.Round(amount / total * 100m, 1);
+    private static decimal? Share(decimal amount, decimal total) => total == 0m ? null : decimal.Round(amount / total * 100m, 1, MidpointRounding.AwayFromZero);
 
     private static ReportCell[] Blank(int count) => Enumerable.Repeat(ReportCell.Empty, count).ToArray();
 }

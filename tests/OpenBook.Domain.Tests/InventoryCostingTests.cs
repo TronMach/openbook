@@ -9,10 +9,10 @@ public sealed class InventoryCostingTests
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Landed_costs_split_by_value_or_quantity_with_the_last_line_taking_the_rounding()
+    public void Landed_costs_split_by_value_or_quantity_and_add_up()
     {
         var received = new List<(decimal, decimal)> { (1m, 10m), (1m, 10m), (1m, 10m) };
-        Assert.Equal([33.33m, 33.33m, 33.34m], LandedCost.Allocate(100m, received, LandedCostMethod.ByValue));
+        Assert.Equal([33.33m, 33.34m, 33.33m], LandedCost.Allocate(100m, received, LandedCostMethod.ByValue));
         Assert.Equal([75m, 25m], LandedCost.Allocate(100m, [(3m, 0m), (1m, 50m)], LandedCostMethod.ByQuantity));
         Assert.Equal("landed_cost.no_basis", Assert.Throws<DomainException>(() => LandedCost.Allocate(10m, [(3m, 0m)], LandedCostMethod.ByValue)).Code);
     }

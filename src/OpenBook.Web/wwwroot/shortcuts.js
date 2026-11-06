@@ -185,7 +185,15 @@
         // Ctrl/Cmd + Enter: submit the form you're in, from any field (quick entry everywhere).
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             const form = e.target instanceof Element ? e.target.closest('form') : null;
-            if (form) { e.preventDefault(); if (!e.repeat) form.requestSubmit(); }
+            if (form) { e.preventDefault(); if (!e.repeat) form.requestSubmit(); return; }
+            // An interactive form has no form element, just its save button. Leaving the field first sends what was typed.
+            const save = document.querySelector('.actions button:not([disabled]):not(.secondary):not(.link)');
+            if (save) {
+                e.preventDefault();
+                if (e.repeat) return;
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                setTimeout(() => save.click(), 50);
+            }
             return;
         }
         if (e.altKey && (e.key === 'q' || e.key === 'Q')) {

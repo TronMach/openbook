@@ -25,7 +25,8 @@ public static class PublicNetwork
     public static SocketsHttpHandler Handler(OutboundPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
-        var handler = new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) };
+        // No proxy: what's checked below must be what's connected to, and through a proxy it would be the proxy.
+        var handler = new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5), UseProxy = false };
         if (!policy.AllowPrivateNetworks)
             handler.ConnectCallback = ConnectPublicAsync;
         return handler;
@@ -39,17 +40,29 @@ public static class PublicNetwork
         if (allowed.Count == 0 || allowed.Count != addresses.Length)
             throw new PrivateNetworkException(host);
 
-        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-        try
+        // Each in turn, as an ordinary client does: a host's first address may not answer.
+        SocketException? failed = null;
+        foreach (var address in allowed)
         {
-            await socket.ConnectAsync(allowed.Select(a => (EndPoint)new IPEndPoint(a, context.DnsEndPoint.Port)).First(), ct);
-            return new NetworkStream(socket, ownsSocket: true);
+            var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            try
+            {
+                await socket.ConnectAsync(new IPEndPoint(address, context.DnsEndPoint.Port), ct);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch (SocketException ex)
+            {
+                socket.Dispose();
+                failed = ex;
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
         }
-        catch
-        {
-            socket.Dispose();
-            throw;
-        }
+
+        throw failed!;
     }
 
     /// <summary>

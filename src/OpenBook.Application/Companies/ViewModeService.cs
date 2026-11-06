@@ -71,7 +71,9 @@ public sealed record WorkflowFigures(
     decimal YouOwe,
     bool BillsUsed,
     int ActiveItems,
-    int StockItems);
+    int StockItems,
+    int BillsOpen = 0,
+    decimal AllYouOwe = 0m);
 
 public sealed class HomeWorkflowService(ISalesStore sales, IPurchasesStore purchases, DepositService deposits)
 {
@@ -112,6 +114,8 @@ public sealed class HomeWorkflowService(ISalesStore sales, IPurchasesStore purch
             payable.Sum(b => b.Balance),
             anyBills,
             items.Count,
-            items.Count(i => i.IsInventory));
+            items.Count(i => i.IsInventory),
+            openBills.Count,
+            openBills.Sum(b => b.Balance));
     }
 }

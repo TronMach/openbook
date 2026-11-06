@@ -156,6 +156,9 @@ public interface IUnitOfWork
 {
     Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct);
 
+    /// <summary>Reads from here until it's disposed see one moment of the books, and hold nobody else up.</summary>
+    Task<IAsyncDisposable> BeginSnapshotAsync(CancellationToken ct);
+
     /// <summary>Whether anything has been saved in this scope, so an operation that then hit a conflict can't simply be run again.</summary>
     bool HasSaved { get; }
 

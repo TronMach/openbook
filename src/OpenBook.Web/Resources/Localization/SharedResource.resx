@@ -2405,6 +2405,9 @@
   <data name="Voided" xml:space="preserve">
     <value>Voided</value>
   </data>
+  <data name="Waiting for approval" xml:space="preserve">
+    <value>Waiting for approval</value>
+  </data>
   <data name="Waiting to post" xml:space="preserve">
     <value>Waiting to post</value>
   </data>
@@ -2612,14 +2615,14 @@
   <data name="{0} open" xml:space="preserve">
     <value>{0} open</value>
   </data>
-  <data name="{0} open · {1} owed to you" xml:space="preserve">
-    <value>{0} open · {1} owed to you</value>
+  <data name="{0} open · {1} on open invoices" xml:space="preserve">
+    <value>{0} open · {1} on open invoices</value>
   </data>
   <data name="{0} orders to receive" xml:space="preserve">
     <value>{0} orders to receive</value>
   </data>
-  <data name="{0} overdue · {1} owed to you" xml:space="preserve">
-    <value>{0} overdue · {1} owed to you</value>
+  <data name="{0} overdue · {1} on open invoices" xml:space="preserve">
+    <value>{0} overdue · {1} on open invoices</value>
   </data>
   <data name="{0} people can sign in" xml:space="preserve">
     <value>{0} people can sign in</value>

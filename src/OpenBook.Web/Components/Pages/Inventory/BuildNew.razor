@@ -215,8 +215,10 @@
         {
             _preview = await Builds.PreviewAsync(_itemId, _quantity, _date, _warehouseId);
         }
-        catch (DomainException ex) when (ex.Code == "build.no_components")
+        catch (DomainException ex)
         {
+            if (ex.Code != "build.no_components")
+                _error = ex.Message;
             _preview = new BuildPreview(_assemblies.First(a => a.Id == _itemId), _quantity, [], 0m);
         }
     }

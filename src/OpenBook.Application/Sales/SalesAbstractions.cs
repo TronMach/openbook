@@ -230,6 +230,9 @@ public interface ISalesStore
     /// <summary>Tracked.</summary>
     Task<IReadOnlyList<PaymentLink>> ListPaymentLinksAsync(Guid invoiceId, CancellationToken ct);
 
+    /// <summary>Whether a payment link recorded this payment.</summary>
+    Task<bool> IsTakenOnlineAsync(Guid paymentId, CancellationToken ct);
+
     /// <summary>Tracked.</summary>
     Task<PaymentLink?> GetPaymentLinkAsync(Guid id, CancellationToken ct);
 

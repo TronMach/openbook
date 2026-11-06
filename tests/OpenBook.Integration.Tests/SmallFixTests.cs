@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Banking;
+using OpenBook.Application.Channels;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Import;
@@ -17,11 +18,13 @@ using OpenBook.Application.Search;
 using OpenBook.Application.Segments;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
+using OpenBook.Domain.Channels;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
+using OpenBook.Domain.SalesTax;
 using OpenBook.Domain.Segments;
 using OpenBook.Infrastructure.Persistence;
 
@@ -31,6 +34,7 @@ namespace OpenBook.Integration.Tests;
 public sealed class SmallFixTests : IAsyncLifetime
 {
     private static readonly DateOnly Jan5 = new(2026, 1, 5);
+    private static readonly decimal[] RatesWithAZero = [2m, 2m, 2m, 0m];
 
     private readonly LedgerDatabase _db = new();
     private Account _checking = null!;
@@ -386,6 +390,49 @@ public sealed class SmallFixTests : IAsyncLifetime
 
         Assert.Equal(new DateOnly(2026, 1, 10), Assert.Single(moved.Applications).AppliedOn);
         _ = receivable;
+    }
+
+    [Fact]
+    public void Many_small_shares_add_up_and_none_goes_negative()
+    {
+        var shares = Shares.ByWeight(1.00m, [.. Enumerable.Repeat(10m, 200)]);
+        Assert.Equal(1.00m, shares.Sum());
+        Assert.All(shares, s => Assert.True(s >= 0m));
+    }
+
+    [Theory]
+    [InlineData(10.40, new[] { 0.21, 0.20, 0.21, 0.0 })]
+    [InlineData(10.20, new[] { 0.20, 0.21, 0.20, 0.0 })]
+    public void A_zero_rate_takes_no_tax_and_no_rate_goes_negative(double taxable, double[] expected)
+    {
+        var rates = RatesWithAZero.Select(p => new TaxComponent(Guid.NewGuid(), "Rate", p, Guid.NewGuid())).ToList();
+        var shares = TaxCalculator.Split((decimal)taxable, rates, exempt: false);
+        Assert.Equal(expected.Select(e => (decimal)e), shares);
+    }
+
+    [Fact]
+    public async Task A_percentage_that_would_leave_less_than_a_cent_finishes_the_line()
+    {
+        var income = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var item = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Hours", ItemType.Service, income.Id, 30m, Taxable: false)));
+        var line = SalesLine.FromDrafts([new SalesLineDraft(item.Id, "Work", 1m, 30m)], new Dictionary<Guid, Item> { [item.Id] = item })[0];
+        var picked = PartialInvoicing.ByPercent([line], new Dictionary<int, decimal> { [line.LineNumber] = 0.3334m }, 33.33m);
+        Assert.Equal(0.3334m, Assert.Single(picked).Quantity);
+    }
+
+    [Fact]
+    public void A_year_without_a_mileage_rate_uses_the_latest_before_it()
+    {
+        Assert.Equal(0.725m, OpenBook.Domain.Projects.MileageRate.For(OpenBook.Domain.Projects.MileageRate.Standard, 2027));
+        Assert.Equal(0.70m, OpenBook.Domain.Projects.MileageRate.For(OpenBook.Domain.Projects.MileageRate.Standard, 2025));
+    }
+
+    [Fact]
+    public void A_channel_file_says_what_it_left_out()
+    {
+        var read = ChannelReports.Read(ChannelKind.Etsy, "Date,Type,Net\n\"2 March 2026\",Sale,$25.00\n");
+        Assert.Empty(read.Payouts);
+        Assert.Contains(read.Warnings, w => w.Contains("dates", StringComparison.Ordinal));
     }
 
     [SqliteFact]

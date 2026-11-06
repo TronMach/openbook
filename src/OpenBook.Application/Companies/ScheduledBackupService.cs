@@ -141,12 +141,23 @@ public sealed class ScheduledBackupService(
             await target.UploadAsync(schedule, secret, file.Path, name, ct);
 
             // Only this company's own backups of this kind (the timestamp follows the prefix), newest first by their names.
-            var existing = (await target.ListAsync(schedule, secret, own, ct))
-                .Where(n => n.Length > own.Length && char.IsAsciiDigit(n[own.Length]))
-                .Order(StringComparer.Ordinal).Reverse().ToList();
-            var old = existing.Skip(keep ?? schedule.Keep).ToList();
-            foreach (var stale in old)
-                await target.DeleteAsync(schedule, secret, stale, ct);
+            // The backup is safely there by now: failing to tidy up the old ones doesn't make it a failed backup.
+            var old = new List<string>();
+            try
+            {
+                var existing = (await target.ListAsync(schedule, secret, own, ct))
+                    .Where(n => n.Length > own.Length && char.IsAsciiDigit(n[own.Length]))
+                    .Order(StringComparer.Ordinal).Reverse().ToList();
+                foreach (var stale in existing.Skip(keep ?? schedule.Keep))
+                {
+                    await target.DeleteAsync(schedule, secret, stale, ct);
+                    old.Add(stale);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The next run tries again.
+            }
 
             schedule.Succeeded(now, name);
             await store.SaveChangesAsync(ct);

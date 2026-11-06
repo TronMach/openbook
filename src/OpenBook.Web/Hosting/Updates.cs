@@ -57,6 +57,7 @@ public sealed partial class UpdateService(
     private string? _error;
     private UpdateManifest? _available;
     private string? _ready;
+    private string? _readyVersion;
 
     /// <summary>The version running, without the build suffix.</summary>
     public static string CurrentVersion { get; } =
@@ -132,8 +133,12 @@ public sealed partial class UpdateService(
             }
 
             _available = manifest;
-            if (installation.IsDesktop && Note(manifest) is null && _ready is null)
+            // A newer release since the last download replaces it: the file must be the version offered.
+            if (installation.IsDesktop && Note(manifest) is null && (_ready is null || _readyVersion != manifest.Version))
+            {
                 _ready = await DownloadAsync(client, manifest, ct);
+                _readyVersion = manifest.Version;
+            }
             return Status;
         }
         catch (Exception ex) when (ex is UpdateException or HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or UriFormatException && !ct.IsCancellationRequested)
@@ -189,16 +194,19 @@ public sealed partial class UpdateService(
         if (!File.Exists(target) || !await MatchesAsync(target, manifest, ct))
         {
             var part = target + ".part";
-            await using (var source = await client.GetStreamAsync(new Uri(Safe(manifest.Url)), ct))
-            await using (var file = File.Create(part))
-                await source.CopyToAsync(file, ct);
-            if (!await MatchesAsync(part, manifest, ct))
+            try
+            {
+                await using (var source = await client.GetStreamAsync(new Uri(Safe(manifest.Url)), ct))
+                await using (var file = File.Create(part))
+                    await CopyAsync(source, file, manifest.Size, ct);
+                if (!await MatchesAsync(part, manifest, ct))
+                    throw new UpdateException($"The download of version {manifest.Version} didn't match its manifest, so it was thrown away.");
+                File.Move(part, target, overwrite: true);
+            }
+            finally
             {
                 File.Delete(part);
-                throw new UpdateException($"The download of version {manifest.Version} didn't match its manifest, so it was thrown away.");
             }
-
-            File.Move(part, target, overwrite: true);
         }
 
         // Only the newest installer is kept.
@@ -206,6 +214,25 @@ public sealed partial class UpdateService(
             File.Delete(old);
         LogDownloaded(manifest.Version);
         return target;
+    }
+
+    /// <summary>Stops at the size the signed manifest gives, and when nothing has arrived for a minute: the host isn't trusted for either.</summary>
+    private static async Task CopyAsync(Stream source, Stream target, long size, CancellationToken ct)
+    {
+        var buffer = new byte[81920];
+        var written = 0L;
+        while (true)
+        {
+            using var stalled = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            stalled.CancelAfter(TimeSpan.FromMinutes(1));
+            var read = await source.ReadAsync(buffer, stalled.Token);
+            if (read == 0)
+                return;
+            written += read;
+            if (written > size)
+                throw new UpdateException("The download came to more than its manifest says, so it was thrown away.");
+            await target.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
     }
 
     private static async Task<bool> MatchesAsync(string path, UpdateManifest manifest, CancellationToken ct)

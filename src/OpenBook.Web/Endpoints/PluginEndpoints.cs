@@ -18,7 +18,7 @@ public static class PluginEndpoints
             var root = plugins.Folder;
             var path = root is null ? null : Path.GetFullPath(Path.Combine(root, folder));
             // Only a direct subfolder of the plugins folder, by its plain name.
-            if (path is null || folder.IndexOfAny(['/', '\\', '.']) >= 0 || !string.Equals(Path.GetDirectoryName(path), Path.GetFullPath(root!), StringComparison.OrdinalIgnoreCase)
+            if (path is null || folder.IndexOfAny(['/', '\\']) >= 0 || folder is "." or ".." || !string.Equals(Path.GetDirectoryName(path), Path.GetFullPath(root!), StringComparison.OrdinalIgnoreCase)
                 || !Directory.Exists(path))
                 return Results.Redirect("/settings/plugins?error=" + Uri.EscapeDataString("There's no such add-in folder."));
 

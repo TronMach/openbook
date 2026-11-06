@@ -179,10 +179,12 @@ public sealed class WebhookDispatcher(IWebhookStore store, IWebhookSender sender
     /// </summary>
     public static readonly TimeSpan GapWait = TimeSpan.FromMinutes(5);
 
-    public async Task<int> RunOnceAsync(CancellationToken ct = default)
+    /// <param name="stillOurs">Asked before each delivery where several servers share the work.</param>
+    /// <param name="ct">Cancels the run.</param>
+    public async Task<int> RunOnceAsync(Func<CancellationToken, Task<bool>>? stillOurs = null, CancellationToken ct = default)
     {
         await EnqueueAsync(ct);
-        return await DeliverDueAsync(ct);
+        return await DeliverDueAsync(stillOurs, ct);
     }
 
     internal async Task EnqueueAsync(CancellationToken ct)
@@ -236,12 +238,14 @@ public sealed class WebhookDispatcher(IWebhookStore store, IWebhookSender sender
         return settled;
     }
 
-    internal async Task<int> DeliverDueAsync(CancellationToken ct)
+    internal async Task<int> DeliverDueAsync(Func<CancellationToken, Task<bool>>? stillOurs, CancellationToken ct)
     {
         var due = await store.ListDueDeliveriesAsync(clock.UtcNow, 50, ct);
         var subscriptions = (await store.ListSubscriptionsAsync(ct)).ToDictionary(s => s.Id);
         foreach (var delivery in due)
         {
+            if (stillOurs is not null && !await stillOurs(ct))
+                break;
             if (!subscriptions.TryGetValue(delivery.SubscriptionId, out var subscription) || !subscription.IsActive)
                 continue;
             // Never signed with nothing: with the keys lost, the receiver couldn't trust it, and neither could we.

@@ -237,7 +237,9 @@
         const sends = [];
         let current = null;
         for (const draft of drafts) {
-            const wired = JSON.stringify({ id: draft.id, kind: draft.kind, capturedAt: draft.capturedAt, payload: wire(draft.payload) });
+            // One that needed attention is only asked about: the server has it, photo and all.
+            const payload = draft.status === 'attention' ? { ...draft.payload, photo: undefined } : draft.payload;
+            const wired = JSON.stringify({ id: draft.id, kind: draft.kind, capturedAt: draft.capturedAt, payload: wire(payload) });
             if (!current || current.size + wired.length > MAX_SEND || current.items.length === 200) {
                 current = { size: 0, items: [], drafts: [] };
                 sends.push(current);
@@ -280,8 +282,11 @@
             await setMeta('device:' + lists.me, device);
             fillSelects();
             // Each person's drafts go in under their own name; anyone else's wait for them to sign in here.
-            const waiting = (await loadDrafts()).filter(d => d.status === 'waiting' && (!d.user || d.user === lists.me));
-            for (const batch of batches(waiting)) {
+            const mine = (await loadDrafts()).filter(d => !d.user || d.user === lists.me);
+            const waiting = mine.filter(d => d.status === 'waiting');
+
+            // Those needing attention are asked about too, so one tried again or dismissed in OpenBook leaves here.
+            for (const batch of batches([...waiting, ...mine.filter(d => d.status === 'attention')])) {
                 const response = await fetch('/api/capture/sync', {
                     method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
                     body: `{"deviceId":${JSON.stringify(device)},"drafts":[${batch.items.join(',')}]}`,

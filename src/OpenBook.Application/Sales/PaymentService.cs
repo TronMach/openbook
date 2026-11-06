@@ -174,14 +174,15 @@ public sealed class PaymentService(
         var moneyChanged = amount != payment.Amount || depositId != payment.DepositAccountId;
         if (payment.DepositId is not null && moneyChanged)
             throw new DomainException("payment.deposited", "This payment is in a bank deposit, so its amount and deposit account stay. Void the deposit first to change them.");
+        if (payment.DepositId is { } depositedIn && await store.GetDepositAsync(depositedIn, ct) is { } deposit && command.Date > deposit.Date)
+            throw new DomainException("payment.after_deposit", $"This payment went into a bank deposit on {deposit.Date:yyyy-MM-dd}, so it can't be dated after that.");
         if (payment.PayoutId is not null && moneyChanged)
             throw new DomainException("payment.in_payout", "A sales channel payout brought this money in, so its amount and deposit account stay. Void the payout first to change them.");
         var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.DepositAccountId, payment.JournalEntryId, null, ct);
         if (feed.Count > 0 && moneyChanged)
             throw new DomainException("payment.feed_matched", "This payment is matched to a line from the bank feed, so its amount and deposit account stay. Undo the match first to change them.");
-        var online = false;
-        foreach (var invoiceId in old.Keys)
-            online |= (await store.ListPaymentLinksAsync(invoiceId, ct)).Any(l => l.CustomerPaymentId == payment.Id);
+        // Found by the payment, not its invoices: it may have moved to another since, or landed as credit.
+        var online = await store.IsTakenOnlineAsync(payment.Id, ct);
         if (online && (moneyChanged || !string.Equals(reference, payment.Reference, StringComparison.Ordinal)))
             throw new DomainException("payment.online", "This payment was taken online, so its amount, deposit account and reference stay as the payment service recorded them.");
 
