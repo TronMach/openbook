@@ -73,12 +73,16 @@ public sealed class WriteOffService(ISalesStore store, AccountService accounts, 
         {
             var id = Guid.CreateVersion7();
             var memo = $"Bad debt · invoice {invoice.Number} · {customers[invoice.CustomerId].DisplayName}";
+            // The cost goes with the classes and location that had the income.
+            var shares = invoice.ByClass(amount);
+            engine.Carry(shares.Select(s => s.ClassId).Append(invoice.LocationId).OfType<Guid>());
             var entry = await engine.StageAsync(new PostJournalEntryCommand(
                 command.Date,
-                [JournalLineDraft.Dr(expense.Id, amount), JournalLineDraft.Cr(invoice.ReceivableAccountId, amount)],
+                [.. shares.Select(s => JournalLineDraft.Dr(expense.Id, s.Amount, classId: s.ClassId)), JournalLineDraft.Cr(invoice.ReceivableAccountId, amount)],
                 memo,
                 BadDebtWriteOff.Source,
-                id), ct);
+                id,
+                LocationId: invoice.LocationId), ct);
             created.Add(BadDebtWriteOff.Create(id, invoice, command.Date, amount, expense.Id, entry.Id, clock.UtcNow, command.Memo));
         }
 

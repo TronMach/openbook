@@ -110,6 +110,38 @@ public sealed class SegmentFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_discount_or_bad_debt_goes_with_the_classes_and_location_of_its_invoice()
+    {
+        var discounted = await Invoice(Widgets(3, _retail), Widgets(1, _online));
+        var writtenOff = await Invoice(Widgets(1, _online));
+        // Deactivated since: what the invoice carries still goes on what follows from it.
+        await Seg(async s => { await s.SetActiveAsync(_online.Id, false); return true; });
+
+        var payment = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(
+            _acme.Id, Mar20, _checking.Id, [new ApplyToInvoice(discounted.Id, 380m, 20m)])));
+        var writeOff = Assert.Single(await In<WriteOffService, IReadOnlyList<BadDebtWriteOff>>(s => s.WriteOffAsync(new WriteOffCommand(Mar20, [new WriteOffLine(writtenOff.Id)]))));
+
+        var entry = await In<PostingEngine, JournalEntry?>(s => s.GetAsync(payment.JournalEntryId));
+        var segments = await Segments(payment.JournalEntryId);
+        var discounts = entry!.Lines.Where(l => l.Memo == "Early payment discount").ToList();
+        Assert.Equal(2, discounts.Count);
+        Assert.Equal(15m, discounts.Single(l => segments.Single(s => s.JournalLineId == l.Id).ClassId == _retail.Id).Amount);
+        Assert.Equal(5m, discounts.Single(l => segments.Single(s => s.JournalLineId == l.Id).ClassId == _online.Id).Amount);
+        // The location is the invoice's and stays on those lines: the money and A/R belong to no location.
+        Assert.Equal(2, segments.Count);
+        Assert.All(segments, s => Assert.Equal(_east.Id, s.LocationId));
+
+        var badDebt = await Segments(writeOff.JournalEntryId);
+        Assert.Contains(badDebt, s => s.ClassId == _online.Id);
+        Assert.All(badDebt, s => Assert.Equal(_east.Id, s.LocationId));
+
+        // A correction keeps them there, and the location doesn't spread to the rest of the entry.
+        var changed = await In<PaymentService, CustomerPayment>(s => s.ChangeAsync(payment.Id, new ChangePaymentCommand(
+            Mar20, [new ApplyToInvoice(discounted.Id, 380m, 20m)], "Reference added", Reference: "1001")));
+        Assert.Equal(2, (await Segments(changed.JournalEntryId)).Count);
+    }
+
+    [Fact]
     public async Task Voids_copy_segments_and_tags_so_reports_net_to_zero()
     {
         var invoice = await Invoice(Widgets(1, _retail));

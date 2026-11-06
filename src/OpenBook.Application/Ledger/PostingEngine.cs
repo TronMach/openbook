@@ -151,7 +151,9 @@ public sealed class PostingEngine(
     /// <summary>The location and tags on an entry, for a correction that posts its replacement.</summary>
     internal async Task<(Guid? LocationId, IReadOnlyList<Guid> TagIds)> SegmentsOfAsync(Guid entryId, CancellationToken ct)
     {
-        var location = (await store.GetLineSegmentsAsync([entryId], ct)).Select(s => s.LocationId).FirstOrDefault(l => l is not null);
+        // A location on some lines only is those lines' own (a discount on an invoice), not the transaction's.
+        var located = (await store.GetLineSegmentsAsync([entryId], ct)).Where(s => s.LocationId is not null).ToList();
+        var location = located.Count > 0 && located.Count == (await store.GetEntryAsync(entryId, ct))?.Lines.Count ? located[0].LocationId : null;
         return (location, (await store.GetEntryTagsAsync([entryId], ct)).Select(t => t.TagId).ToList());
     }
 
@@ -177,6 +179,8 @@ public sealed class PostingEngine(
         var locationId = command.LocationId == Guid.Empty ? null : command.LocationId;
         var tagIds = (command.TagIds ?? []).Where(t => t != Guid.Empty).Distinct().ToList();
         await EnsureSegmentsAsync(command.Lines.Select(l => l.ClassId), locationId, tagIds, ct);
+        foreach (var own in command.Lines.Select(l => l.LocationId).OfType<Guid>().Distinct())
+            await EnsureSegmentsAsync([], own, [], ct);
         var company = await companies.GetRequiredCompanyAsync(ct);
         EnsureOpen(company, command.Date, $"posting an entry dated {command.Date:yyyy-MM-dd}");
 
@@ -192,7 +196,7 @@ public sealed class PostingEngine(
             command.Basis);
 
         store.Add(entry);
-        AddSegments(entry, command.Lines.Select(l => l.ClassId).ToList(), locationId, tagIds);
+        AddSegments(entry, command.Lines, locationId, tagIds);
         store.Add(Audit(AuditAction.Posted, entry.Id, before: null, after: Snapshot(entry)));
 
         // A reversing entry: the mirror image, posted now for its later date (e.g. reversing an accrual next month).
@@ -210,7 +214,7 @@ public sealed class PostingEngine(
                 entry.Id,
                 command.Basis);
             store.Add(mirror);
-            AddSegments(mirror, command.Lines.Select(l => l.ClassId).ToList(), locationId, tagIds);
+            AddSegments(mirror, command.Lines, locationId, tagIds);
             store.Add(Audit(AuditAction.Posted, mirror.Id, before: null, after: Snapshot(mirror)));
         }
 
@@ -292,14 +296,19 @@ public sealed class PostingEngine(
         }
     }
 
+    /// <summary>What a posted document already carries stays usable on what follows from it, though it's been deactivated since.</summary>
+    internal void Carry(IEnumerable<Guid> segmentIds) => _carried.UnionWith(segmentIds);
+
     /// <summary>A segment row for each line with a class or location, and the entry's tags.</summary>
-    private void AddSegments(JournalEntry entry, List<Guid?> classIds, Guid? locationId, IReadOnlyCollection<Guid> tagIds)
+    private void AddSegments(JournalEntry entry, IReadOnlyCollection<JournalLineDraft> lines, Guid? locationId, IReadOnlyCollection<Guid> tagIds)
     {
+        var drafts = lines.ToList();
         foreach (var line in entry.Lines)
         {
-            var classId = classIds[line.LineNumber - 1];
-            if (classId is not null && classId != Guid.Empty || locationId is not null)
-                store.Add(new LineSegment(line.Id, entry.Id, classId, locationId));
+            var draft = drafts[line.LineNumber - 1];
+            var location = draft.LocationId ?? locationId;
+            if (draft.ClassId is not null && draft.ClassId != Guid.Empty || location is not null)
+                store.Add(new LineSegment(line.Id, entry.Id, draft.ClassId, location));
         }
 
         foreach (var tagId in tagIds)

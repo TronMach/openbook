@@ -113,7 +113,7 @@ public sealed class PaymentService(
         var payment = CustomerPayment.Create(
             id, customer.Id, command.Date, amount, deposit.Id, receivableId, applications, Guid.Empty, clock.UtcNow, command.Reference, command.Memo);
 
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Postings(amount, deposit.Id, discount, discountsAccount?.Id, receivableId),
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, Postings(amount, deposit.Id, DiscountLines(applications, invoices, discountsAccount?.Id), discount, receivableId),
             EntryMemo(customer, command.Reference), CustomerPayment.Source, id), ct);
 
         payment = CustomerPayment.Create(
@@ -201,7 +201,7 @@ public sealed class PaymentService(
         var (location, tags) = await engine.SegmentsOfAsync(payment.JournalEntryId, ct);
         await engine.StageVoidAsync(payment.JournalEntryId, $"Payment changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
-            Postings(amount, depositId, discount, discountsAccount?.Id, payment.ReceivableAccountId), EntryMemo(customer, reference), CustomerPayment.Source, payment.Id, LocationId: location, TagIds: tags), ct);
+            Postings(amount, depositId, DiscountLines(applications, invoices, discountsAccount?.Id), discount, payment.ReceivableAccountId), EntryMemo(customer, reference), CustomerPayment.Source, payment.Id, LocationId: location, TagIds: tags), ct);
 
         foreach (var (invoiceId, settled) in old)
             invoices[invoiceId].RemovePayment(settled);
@@ -230,14 +230,27 @@ public sealed class PaymentService(
         : $"Payment from {customer.DisplayName} · {reference.Trim()}";
 
     /// <summary>Dr the deposit account for the money and Discounts Given for any discount; Cr A/R for both.</summary>
-    private static List<JournalLineDraft> Postings(decimal amount, Guid depositId, decimal discount, Guid? discountsId, Guid receivableId)
+    private static List<JournalLineDraft> Postings(decimal amount, Guid depositId, IReadOnlyList<JournalLineDraft> discountLines, decimal discount, Guid receivableId)
     {
         var lines = new List<JournalLineDraft>();
         if (amount > 0m)
             lines.Add(JournalLineDraft.Dr(depositId, amount));
-        if (discountsId is { } discounts)
-            lines.Add(JournalLineDraft.Dr(discounts, discount, "Early payment discount"));
+        lines.AddRange(discountLines);
         lines.Add(JournalLineDraft.Cr(receivableId, amount + discount));
+        return lines;
+    }
+
+    /// <summary>Discounts Given in the classes and location of the invoices they came off, so each carries its own.</summary>
+    private List<JournalLineDraft> DiscountLines(IReadOnlyList<PaymentApplicationDraft> applications, Dictionary<Guid, Invoice> invoices, Guid? discountsId)
+    {
+        if (discountsId is not { } discounts)
+            return [];
+        var lines = applications.Where(a => a.Discount > 0m)
+            .SelectMany(a => invoices[a.InvoiceId].ByClass(a.Discount).Select(s => (s.ClassId, invoices[a.InvoiceId].LocationId, s.Amount)))
+            .GroupBy(l => (l.ClassId, l.LocationId))
+            .Select(g => new JournalLineDraft(discounts, g.Sum(l => l.Amount), 0m, "Early payment discount", g.Key.ClassId, g.Key.LocationId))
+            .ToList();
+        engine.Carry(lines.SelectMany(l => new[] { l.ClassId, l.LocationId }).OfType<Guid>());
         return lines;
     }
 

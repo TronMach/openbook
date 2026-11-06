@@ -2,7 +2,8 @@ namespace OpenBook.Domain.Ledger;
 
 /// <summary>What a caller asks to post: exactly one of <see cref="Debit"/> or <see cref="Credit"/> is positive.</summary>
 /// <param name="ClassId">The line's class (Domain.Segments), kept beside the ledger; null for none.</param>
-public sealed record JournalLineDraft(Guid AccountId, decimal Debit, decimal Credit, string? Memo = null, Guid? ClassId = null)
+/// <param name="LocationId">The line's own location, when it belongs to a document of its own; null takes the entry's.</param>
+public sealed record JournalLineDraft(Guid AccountId, decimal Debit, decimal Credit, string? Memo = null, Guid? ClassId = null, Guid? LocationId = null)
 {
     public static JournalLineDraft Dr(Guid accountId, decimal amount, string? memo = null, Guid? classId = null) => new(accountId, amount, 0m, memo, classId);
 

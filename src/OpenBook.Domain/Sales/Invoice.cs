@@ -176,6 +176,20 @@ public sealed class Invoice
             ? Math.Min(Balance, decimal.Round(Total * EarlyPaymentDiscountPercent / 100m, 2, MidpointRounding.AwayFromZero))
             : 0m;
 
+    /// <summary>
+    /// An amount taken off the invoice later (an early payment discount, a bad debt), spread over its classes as its
+    /// income is, so a class's figures carry the cost of what it sold.
+    /// </summary>
+    public IReadOnlyList<(Guid? ClassId, decimal Amount)> ByClass(decimal amount)
+    {
+        var classes = _lines.Where(l => l.Kind != SalesLineKind.Tax).GroupBy(l => l.ClassId)
+            .Select(g => (ClassId: g.Key, Income: g.Sum(l => l.Amount))).Where(c => c.Income > 0m).ToList();
+        if (classes.Count == 0)
+            return [(null, amount)];
+        var shares = Shares.ByWeight(amount, classes.Select(c => c.Income).ToList());
+        return classes.Zip(shares, (c, share) => (c.ClassId, share)).Where(s => s.share != 0m).ToList();
+    }
+
     public void MarkEmailed(DateTimeOffset at) => LastEmailedAt = at.ToUniversalTime();
 
     public void ApplyPayment(decimal amount)
