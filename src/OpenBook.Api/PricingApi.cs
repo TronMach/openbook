@@ -50,7 +50,7 @@ internal static class PricingApi
         pricing.MapPut("/levels/{id:guid}/active", async (Guid id, SetActiveRequest r, PricingService s, CancellationToken ct) =>
             PriceLevelResponse.From(await s.SetLevelActiveAsync(id, r.Active, ct)));
         pricing.MapPut("/levels/{id:guid}/items", async (Guid id, IReadOnlyList<LevelItemPriceDto> r, PricingService s, CancellationToken ct) =>
-            PriceLevelResponse.From(await s.SetLevelPricesAsync(id, r.Select(p => (p.ItemId, p.Price)).ToList(), ct)));
+            PriceLevelResponse.From(await s.SetLevelPricesAsync(id, r.Select(p => (p.ItemId, p.Price)).ToList(), ct: ct)));
         pricing.MapPost("/levels/{id:guid}/import", async (Guid id, HttpRequest request, PricingService s, CancellationToken ct) =>
         {
             var result = await s.ImportLevelPricesAsync(id, await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct), ct);

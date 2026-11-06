@@ -178,7 +178,8 @@ public sealed class BillService(
         var vendor = await store.GetVendorAsync(bill.VendorId, ct) ?? throw new EntityNotFoundException("vendor", bill.VendorId);
 
         var reference = command.Reference is null ? bill.Reference : string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
-        if (reference is not null && (await store.ListBillsAsync(vendor.Id, ct))
+        // Only a number being changed: two vendors merged can leave two bills with one number, and each must stay changeable.
+        if (reference is not null && !string.Equals(reference, bill.Reference, StringComparison.OrdinalIgnoreCase) && (await store.ListBillsAsync(vendor.Id, ct))
                 .Any(b => b.Id != bill.Id && b.Status == DocumentStatus.Posted && string.Equals(b.Reference, reference, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException("bill.reference_taken", $"There's already a bill {reference} from {vendor.DisplayName}.");
 

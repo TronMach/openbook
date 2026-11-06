@@ -206,6 +206,10 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
         await BankAccountAsync(accountId, ct);
         var settings = await store.GetAchSettingsAsync(accountId, ct)
             ?? throw new DomainException("ach.not_set_up", "Enter the bank's ACH details for this account first.");
+        if (effectiveDate < CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone))
+            throw new DomainException("ach.date_past", "The effective date can't be in the past.");
+        if (effectiveDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            throw new DomainException("ach.date_weekend", "Banks don't settle on weekends. Choose a weekday.");
         var candidates = (await CandidatesAsync(accountId, ct)).ToDictionary(c => c.Payment.Id);
         if (paymentIds.Count == 0)
             throw new DomainException("ach.no_entries", "Choose at least one payment.");
@@ -224,7 +228,10 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
 
         var now = clock.UtcNow;
         var today = CompanyTime.TodayAt(now, CompanyTime.Zone);
-        var sentToday = (await store.ListAchBatchesAsync(accountId, ct)).Count(b => CompanyTime.TodayAt(b.CreatedAt, CompanyTime.Zone) == today);
+        // The bank tells a day's files apart by origin and modifier, so accounts sharing an origin count together.
+        var sentToday = 0;
+        foreach (var sharing in await store.ListAccountsSharingOriginAsync(settings, ct))
+            sentToday += (await store.ListAchBatchesAsync(sharing, ct)).Count(b => CompanyTime.TodayAt(b.CreatedAt, CompanyTime.Zone) == today);
         var modifier = sentToday < 26 ? (char)('A' + sentToday) : sentToday < 36 ? (char)('0' + sentToday - 26)
             : throw new DomainException("ach.too_many_files", "A bank account can send at most 36 ACH files a day.");
         var content = Ach.Build(settings, entries, effectiveDate, now.InCompanyTime().DateTime, modifier);

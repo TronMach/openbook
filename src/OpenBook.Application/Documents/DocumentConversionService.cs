@@ -86,6 +86,8 @@ public sealed class DocumentConversionService(
         // The printed amount decides, as on a plain bill: unit prices are often rounded, or come before a discount.
         foreach (var (number, (quantity, amount, first)) in ordered)
         {
+            if (quantity == 0m)
+                throw new DomainException("document.quantity_required", $"Enter the quantity on line {first}.");
             var cost = decimal.Round(amount / quantity, 4, MidpointRounding.AwayFromZero);
             if (decimal.Round(quantity * cost, 2, MidpointRounding.AwayFromZero) != amount)
                 throw new DomainException("document.line_cost", string.Create(CultureInfo.CurrentCulture,
@@ -191,6 +193,8 @@ public sealed class DocumentConversionService(
             if (line.Line.ItemId is { } itemId && items.TryGetValue(itemId, out var item) && item.IsInventory && !item.IsAssembly)
             {
                 var quantity = line.Line.Quantity ?? 1m;
+                if (quantity == 0m)
+                    throw new DomainException("document.quantity_required", $"Enter the quantity on line {line.Line.LineNumber}.");
                 lines.Add(new PurchaseOrderLineDraft(itemId, null, line.Line.Description, quantity,
                     line.Line.UnitPrice ?? decimal.Round(line.Amount / quantity, 4, MidpointRounding.AwayFromZero)));
             }

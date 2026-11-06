@@ -112,6 +112,9 @@ public interface IPurchasesStore
     /// <summary>Tracked.</summary>
     Task<AchSettings?> GetAchSettingsAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>The accounts sending through the same bank under the same origin, this one among them.</summary>
+    Task<IReadOnlyList<Guid>> ListAccountsSharingOriginAsync(AchSettings settings, CancellationToken ct);
+
     Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct);
 
     /// <summary>Files still stored in clear, tracked.</summary>

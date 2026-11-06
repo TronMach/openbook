@@ -136,7 +136,7 @@
     {
         <div class="card" style="margin-top: 1.5rem" id="receive">
             <h2>Receive goods</h2>
-            <p class="muted">Record what arrived, to match against the vendor's bill. Stock goes into the books when the bill is entered.
+            <p class="muted">Record what arrived, to match against the vendor's bill. Stock goes into the books @(_settings?.ReceiveIntoStock == true ? "as it's received" : "when the bill is entered").
                 Have the packing slip as a file? <ActionLink Href="@($"/documents?kind=PackingSlip&order={_order.Id}")">Upload it</ActionLink> and OpenBook reads the quantities.</p>
             <PostForm Action="@($"/purchases/orders/{_order.Id}/receive")" data-enhance="false">
                 <AntiforgeryToken />

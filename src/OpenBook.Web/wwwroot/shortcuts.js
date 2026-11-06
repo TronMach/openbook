@@ -49,7 +49,9 @@
         if (!(menu instanceof HTMLDetailsElement) || !menu.open || !menu.matches('details.menu')) return;
         for (const other of openMenus()) if (other !== menu) other.open = false;
     }, true);
-    document.addEventListener('mouseover', e => {
+    document.addEventListener('pointerover', e => {
+        // A tap isn't pointing: it would open the menu, then its click would close it again.
+        if (e.pointerType !== 'mouse') return;
         const summary = e.target instanceof Element ? e.target.closest('.menubar details.menu > summary, .full-menu details.menu > summary') : null;
         if (!summary || openMenus().length === 0) return;
         summary.parentElement.open = true;
@@ -178,6 +180,8 @@
     window.Blazor?.addEventListener?.('enhancedload', startAgain);
 
     document.addEventListener('keydown', e => {
+        // Shift on its own is the start of typing ?, not a key of a g or n pair.
+        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return;
         // Ctrl/Cmd + Enter: submit the form you're in, from any field (quick entry everywhere).
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             const form = e.target instanceof Element ? e.target.closest('form') : null;

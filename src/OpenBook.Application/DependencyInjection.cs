@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<SavedReportService>();
         services.AddScoped<SearchService>();
         services.AddScoped<AccountService>();
+        services.AddScoped<IAccountInUse, AccountsInUse>();
         services.AddScoped<ChartImportService>();
         services.AddScoped<JournalImportService>();
         services.AddScoped<IifImportService>();

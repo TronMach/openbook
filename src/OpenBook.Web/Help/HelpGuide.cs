@@ -50,8 +50,14 @@ public sealed partial class HelpGuide
     public string? Html(string? key)
     {
         var name = string.IsNullOrEmpty(key) ? "README" : key;
-        if (name != "README" && Find(name) is null)
-            return null;
+        if (name != "README")
+        {
+            // The file's own spelling: names are case-sensitive on Linux, and addresses here aren't.
+            if (Find(name) is not { } chapter)
+                return null;
+            name = chapter.Key;
+        }
+
         return _rendered.GetOrAdd(name, n =>
         {
             var document = Markdown.Parse(File.ReadAllText(Path.Combine(_folder, n + ".md")), Pipeline);

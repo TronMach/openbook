@@ -127,6 +127,8 @@ public static class Comparisons
     /// <summary>"Mar 2026", "Jan – Mar 2026", "Jan 2025 – Dec 2026" for whole months; otherwise both dates.</summary>
     public static string Describe(DateOnly from, DateOnly to)
     {
+        if (from <= DateRanges.Beginning)
+            return $"All dates to {to:MMM d, yyyy}";
         if (!IsWholeMonths(from, to, out var months))
             return $"{from:MMM d, yyyy} – {to:MMM d, yyyy}";
         if (months == 1)

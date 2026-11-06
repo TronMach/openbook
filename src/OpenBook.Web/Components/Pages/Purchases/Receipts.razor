@@ -31,7 +31,7 @@
     <div class="card">
         <PostForm Action="/purchases/receipts/upload" enctype="multipart/form-data" data-enhance="false" class="inline">
             <AntiforgeryToken />
-            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.txt" multiple required aria-label="Receipt files" />
+            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt" multiple required aria-label="Receipt files" />
             <button type="submit">Upload receipts</button>
             <span class="hint">Several at once if you like, up to @OpenBook.Web.Endpoints.DocumentEndpoints.MaxFiles.</span>
         </PostForm>

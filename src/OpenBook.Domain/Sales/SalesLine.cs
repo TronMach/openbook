@@ -239,6 +239,10 @@ public sealed class SalesLine
         return lines;
     }
 
+    private static bool IsDiscountLabel(string? text) =>
+        text is { Length: > 9 } && text.StartsWith("Discount ", StringComparison.Ordinal) && text.EndsWith('%')
+        && decimal.TryParse(text[9..^1], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out _);
+
     /// <summary>
     /// A negative line: a percentage of <paramref name="subtotal"/> (the item lines above it), rounded to the
     /// cent, or a fixed amount.
@@ -263,7 +267,8 @@ public sealed class SalesLine
         {
             LineNumber = lineNumber,
             Kind = draft.Kind,
-            Description = Text.Optional(draft.Description, 1000, "sales.line_description_too_long", "Line description") ?? label,
+            // The label from before a correction goes with its old percentage; only wording someone chose stays.
+            Description = (IsDiscountLabel(draft.Description) ? null : Text.Optional(draft.Description, 1000, "sales.line_description_too_long", "Line description")) ?? label,
             Quantity = 1m,
             Rate = rate,
             Amount = -amount,

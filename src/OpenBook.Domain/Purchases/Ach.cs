@@ -153,12 +153,23 @@ public static class Ach
 {
     public const int RecordLength = 94;
 
+    /// <summary>The next weekday after <paramref name="today"/>; bank holidays aren't known here.</summary>
+    public static DateOnly NextBankingDay(DateOnly today)
+    {
+        var next = today.AddDays(1);
+        while (next.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            next = next.AddDays(1);
+        return next;
+    }
+
     /// <summary>A 9-digit ABA routing number with a valid check digit.</summary>
     public static string Routing(string? value)
     {
         var digits = (value ?? "").Trim();
         if (digits.Length != 9 || !digits.All(char.IsAsciiDigit))
             throw new DomainException("ach.routing_invalid", "A routing number has 9 digits.");
+        if (digits.All(c => c == '0'))
+            throw new DomainException("ach.routing_invalid", "A routing number can't be all zeros.");
         var d = digits.Select(c => c - '0').ToArray();
         if ((3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + d[2] + d[5] + d[8]) % 10 != 0)
             throw new DomainException("ach.routing_invalid", $"{digits} isn't a valid routing number (its check digit doesn't match).");
@@ -170,7 +181,7 @@ public static class Ach
         var number = (value ?? "").Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal);
         if (number.Length is < 4 or > 17 || !number.All(char.IsAsciiLetterOrDigit))
             throw new DomainException("ach.account_invalid", "A bank account number has 4 to 17 letters or digits.");
-        return number;
+        return number.ToUpperInvariant();
     }
 
     internal static string Field(string? value, int length, string what)
@@ -217,6 +228,9 @@ public static class Ach
         long totalCents = 0;
         foreach (var (entry, index) in entries.Select((e, i) => (e, i + 1)))
         {
+            // Banks match the name, so a blank one can't go; letters outside these fields don't survive Clean.
+            if (Clean(entry.Name).Length == 0)
+                throw new DomainException("ach.name_unreadable", $"\"{entry.Name}\" has no letters an ACH file can carry. Give the vendor a company name in English letters.");
             Money.EnsureCents(entry.Amount);
             if (entry.Amount <= 0m)
                 throw new DomainException("ach.amount_invalid", "ACH payments must be above zero.");

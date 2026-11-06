@@ -120,7 +120,7 @@ public sealed class WriteOffService(ISalesStore store, AccountService accounts, 
         var chart = await accounts.GetChartAsync(ct);
         var existing = chart.Ordered(includeInactive: false).Select(x => x.Account)
             .FirstOrDefault(a => a.Type is AccountType.Expense or AccountType.OtherExpense && string.Equals(a.Name, BadDebtsAccountName, StringComparison.OrdinalIgnoreCase));
-        return existing ?? await accounts.CreateAsync(new CreateAccountCommand(BadDebtsAccountName, AccountType.Expense,
+        return existing ?? await accounts.CreateUsualAsync(new CreateAccountCommand(BadDebtsAccountName, AccountType.Expense,
             Description: "Invoices written off as uncollectible."), ct);
     }
 
@@ -243,7 +243,8 @@ public sealed class LateFeeService(
         {
             var customer = customers[invoice.CustomerId];
             var last = lastFee.TryGetValue(invoice.Id, out var d) ? d : (DateOnly?)null;
-            if (customer.NoLateFees || !customer.IsActive || !settings.FeeDue(invoice.DueDate, last, today))
+            // Billed with a parent, the parent's "no late fees" covers it too.
+            if (customer.NoLateFees || customers[CustomerTree.BillTo(customer.Id, customers)].NoLateFees || !customer.IsActive || !settings.FeeDue(invoice.DueDate, last, today))
                 continue;
             var fee = settings.FeeFor(invoice.Balance);
             if (fee > 0m)
@@ -288,7 +289,9 @@ public sealed class LateFeeService(
         if (settings.LateFeeItemId is { } saved && await items.GetAsync(saved, ct) is { IsActive: true })
             return saved;
 
-        var item = (await items.ListAsync(includeInactive: false, ct)).FirstOrDefault(i => string.Equals(i.Name, ItemName, StringComparison.OrdinalIgnoreCase));
+        var item = (await items.ListAsync(includeInactive: true, ct)).FirstOrDefault(i => string.Equals(i.Name, ItemName, StringComparison.OrdinalIgnoreCase));
+        if (item is { IsActive: false })
+            throw new DomainException("collections.fee_item_inactive", $"The item \"{ItemName}\" is inactive. Make it active again to charge late fees.");
         if (item is null)
         {
             var chart = await accounts.GetChartAsync(ct);
@@ -334,7 +337,7 @@ public sealed class ReminderService(IUnitOfWork unit, ISalesStore store, ICompan
         {
             // A sub-customer billed with its parent is chased through the parent.
             var customer = customers[CustomerTree.BillTo(invoice.CustomerId, customers)];
-            if (customer.NoReminders || customer.Email is null)
+            if (customer.NoReminders || customers[invoice.CustomerId].NoReminders || customer.Email is null)
                 continue;
             var step = settings.ReminderDue(invoice.Date, invoice.DueDate, sent.TryGetValue(invoice.Id, out var last) ? last : null, today);
             if (step is { } s)

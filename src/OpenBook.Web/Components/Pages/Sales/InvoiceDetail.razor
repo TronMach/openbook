@@ -329,8 +329,9 @@
         _reminders = await Reminders.ForInvoiceAsync(Id);
         _scheduled = await ScheduledEmails.ListAsync(Id);
         _changes = await Invoices.ChangesAsync(Id);
-        if (_customer is { BillWithParent: true, ParentId: { } parentId })
-            _billTo = parentId;
+        // Whoever is billed, however many levels up: their payment is the one that can reach this invoice.
+        if (_customer is { BillWithParent: true })
+            _billTo = await CustomerService.BillToAsync(_customer.Id);
     }
 
     private PaymentTerms Terms => new(

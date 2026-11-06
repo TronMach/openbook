@@ -140,6 +140,11 @@
                 <label for="time-zone">@L["Time zone"]</label>
                 <InputSelect id="time-zone" @bind-Value="Input.TimeZoneId" data-search>
                     <option value="">@L["The server's ({0})", TimeZoneInfo.Local.DisplayName]</option>
+                    @* Kept on offer though this computer doesn't list it (a file moved from another system): saving mustn't clear it. *@
+                    @if (Input.TimeZoneId is { Length: > 0 } stored && TimeZones.All(t => t.Item1 != stored))
+                    {
+                        <option value="@stored">@stored</option>
+                    }
                     @foreach (var (id, name) in TimeZones)
                     {
                         <option value="@id">@name</option>

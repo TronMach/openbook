@@ -147,6 +147,12 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public Task<AchSettings?> GetAchSettingsAsync(Guid accountId, CancellationToken ct) => db.AchSettings.SingleOrDefaultAsync(a => a.AccountId == accountId, ct);
 
+    public async Task<IReadOnlyList<Guid>> ListAccountsSharingOriginAsync(AchSettings settings, CancellationToken ct) =>
+        await db.AchSettings.AsNoTracking()
+            .Where(a => a.OriginId == settings.OriginId && a.DestinationRouting == settings.DestinationRouting)
+            .Select(a => a.AccountId)
+            .ToListAsync(ct);
+
     public Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct) => db.AchBatches.AsNoTracking().SingleOrDefaultAsync(b => b.Id == id, ct);
 
     public async Task<IReadOnlyList<AchBatch>> ListUnprotectedAchBatchesAsync(CancellationToken ct) =>

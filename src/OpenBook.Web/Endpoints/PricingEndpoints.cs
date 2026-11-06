@@ -17,17 +17,21 @@ public static class PricingEndpoints
         app.MapPost("/pricing/levels/{id:guid}/prices", async (Guid id, IFormCollection form, PricingService service, CancellationToken ct) =>
         {
             var prices = new List<(Guid, decimal)>();
+            var shown = new List<Guid>();
             foreach (var (field, values) in form)
             {
                 var text = values.ToString().Trim();
-                if (!field.StartsWith("p:", StringComparison.Ordinal) || text.Length == 0 || !Guid.TryParse(field[2..], out var itemId))
+                if (!field.StartsWith("p:", StringComparison.Ordinal) || !Guid.TryParse(field[2..], out var itemId))
+                    continue;
+                shown.Add(itemId);
+                if (text.Length == 0)
                     continue;
                 if (!TryParse(text, out var price))
                     return Back($"/pricing/levels/{id}", $"'{text}' isn't a price.");
                 prices.Add((itemId, price));
             }
 
-            return await Run($"/pricing/levels/{id}", () => service.SetLevelPricesAsync(id, prices, ct));
+            return await Run($"/pricing/levels/{id}", () => service.SetLevelPricesAsync(id, prices, shown, ct));
         }).RequireAuthorization();
 
         app.MapPost("/pricing/levels/{id:guid}/import", async (Guid id, IFormCollection form, PricingService service, CancellationToken ct) =>

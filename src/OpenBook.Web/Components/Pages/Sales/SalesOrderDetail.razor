@@ -52,7 +52,7 @@
 
     @if (_order.Status == SalesOrderStatus.Open)
     {
-        <PartialInvoiceForm Lines="_order.Lines" Progress="_progress" Action="@($"/sales/orders/{_order.Id}/invoice")" Title="Invoice this order" Password="Password" />
+        <PartialInvoiceForm Lines="_order.Lines" Progress="_progress" Action="@($"/sales/orders/{_order.Id}/invoice")" AllowPercent="true" Title="Invoice this order" Password="Password" />
 
         <PostForm Action="@($"/sales/orders/{_order.Id}/cancel")" data-enhance="false" class="no-print actions">
             <AntiforgeryToken />

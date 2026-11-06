@@ -91,6 +91,9 @@ public sealed class VendorService(IPurchasesStore store, AccountService accounts
 
     private static string Snapshot(Vendor v) => JsonSerializer.Serialize(new
     {
+        v.Track1099,
+        v.Form1099Box,
+        v.MaskedTaxId,
         v.DisplayName,
         v.CompanyName,
         v.Email,

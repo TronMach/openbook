@@ -324,6 +324,70 @@ public sealed class SmallFixTests : IAsyncLifetime
         Assert.Equal(parent.Id, renamed.ParentId);
     }
 
+    [Fact]
+    public void All_dates_are_named_as_that_and_not_as_a_date_in_1900() =>
+        Assert.StartsWith("All dates to ", Comparisons.Describe(DateRanges.Beginning, new DateOnly(2026, 3, 31)), StringComparison.Ordinal);
+
+    [Fact]
+    public async Task The_builder_keeps_its_totals_when_the_first_column_is_an_amount()
+    {
+        await Post(40m);
+        var table = await In<ReportCatalog, ReportTable>(s => s.RunAsync("builder", ReportParameters.Parse("columns=Amount&groupBy=Account&preset=AllDates")));
+        Assert.Equal(40m, table.Rows.First(r => r.Style == ReportRowStyle.Subtotal && r.Cells[0].Value is decimal d && d == 40m).Cells[0].Value);
+    }
+
+    [Theory]
+    [InlineData(2026, 11, 5, 2026, 11, 6)] // a Thursday
+    [InlineData(2026, 11, 6, 2026, 11, 9)] // a Friday
+    [InlineData(2026, 11, 7, 2026, 11, 9)] // a Saturday
+    public void The_next_banking_day_skips_the_weekend(int y, int m, int d, int ny, int nm, int nd) =>
+        Assert.Equal(new DateOnly(ny, nm, nd), OpenBook.Domain.Purchases.Ach.NextBankingDay(new DateOnly(y, m, d)));
+
+    [Fact]
+    public void A_loans_schedule_comes_back_to_its_day_after_a_short_month()
+    {
+        var rest = OpenBook.Domain.Assets.Amortization.Schedule(1000m, 6m, 100m, new DateOnly(2027, 1, 31), startNumber: 3, monthsIn: 2);
+        Assert.Equal(new DateOnly(2027, 3, 31), rest[0].Date);
+    }
+
+    [Fact]
+    public async Task An_account_documents_still_need_stays_active()
+    {
+        var receivable = await _db.CreateAccount("Accounts Receivable", AccountType.AccountsReceivable, "1100");
+        var income = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var item = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Hours", ItemType.Service, income.Id, 100m, Taxable: false)));
+        var customer = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Acme")));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(customer.Id, Jan5, [new SalesLineDraft(item.Id, "Work", 1m, 100m)])));
+
+        Assert.Equal("account.in_use", await Refused(() => In<AccountService, Account>(s => s.DeactivateAsync(receivable.Id))));
+    }
+
+    [Fact]
+    public async Task A_name_held_by_an_inactive_account_says_what_to_do()
+    {
+        var held = await _db.CreateAccount("Bad Debts", AccountType.Expense, "6900");
+        await In<AccountService, Account>(s => s.DeactivateAsync(held.Id));
+        var refused = await Assert.ThrowsAsync<DomainException>(() => In<AccountService, Account>(s => s.CreateUsualAsync(new CreateAccountCommand("Bad Debts", AccountType.Expense))));
+        Assert.Equal("account.usual_name_held", refused.Code);
+        Assert.Contains("inactive", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_payment_moved_earlier_takes_its_application_with_it()
+    {
+        var receivable = await _db.CreateAccount("Accounts Receivable", AccountType.AccountsReceivable, "1100");
+        var income = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var item = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Hours", ItemType.Service, income.Id, 100m, Taxable: false)));
+        var customer = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Acme")));
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(customer.Id, new DateOnly(2026, 1, 2), [new SalesLineDraft(item.Id, "Work", 1m, 100m)])));
+        var payment = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(customer.Id, new DateOnly(2026, 1, 20), _checking.Id, [new ApplyToInvoice(invoice.Id, 100m)])));
+
+        var moved = await In<PaymentService, CustomerPayment>(s => s.ChangeAsync(payment.Id, new ChangePaymentCommand(new DateOnly(2026, 1, 10), [new ApplyToInvoice(invoice.Id, 100m)], "Wrong date")));
+
+        Assert.Equal(new DateOnly(2026, 1, 10), Assert.Single(moved.Applications).AppliedOn);
+        _ = receivable;
+    }
+
     [SqliteFact]
     public async Task An_encrypted_file_stays_in_write_ahead_mode()
     {

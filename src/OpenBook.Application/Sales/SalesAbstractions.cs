@@ -302,8 +302,8 @@ public sealed class SalesAccounts(AccountService accounts)
     {
         var chart = await accounts.GetChartAsync(ct);
         var existing = chart.Ordered(includeInactive: false).Select(x => x.Account)
-            .FirstOrDefault(a => a.Type == AccountType.Income && string.Equals(a.Name, DiscountsAccountName, StringComparison.OrdinalIgnoreCase));
-        return existing ?? await accounts.CreateAsync(new CreateAccountCommand(DiscountsAccountName, AccountType.Income,
+            .FirstOrDefault(a => a.Type is AccountType.Income or AccountType.Expense && string.Equals(a.Name, DiscountsAccountName, StringComparison.OrdinalIgnoreCase));
+        return existing ?? await accounts.CreateUsualAsync(new CreateAccountCommand(DiscountsAccountName, AccountType.Income,
             Description: "Discounts on sales and early payment discounts; reduces income."), ct);
     }
 

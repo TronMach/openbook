@@ -51,6 +51,10 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
 
     public Task<Customer?> GetAsync(Guid id, CancellationToken ct = default) => store.GetCustomerAsync(id, ct);
 
+    /// <summary>Who is billed for this customer, however many levels up.</summary>
+    public async Task<Guid> BillToAsync(Guid id, CancellationToken ct = default) =>
+        CustomerTree.BillTo(id, (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id));
+
     /// <summary>"Parent:Child" for every customer.</summary>
     public async Task<IReadOnlyDictionary<Guid, string>> FullNamesAsync(CancellationToken ct = default) =>
         CustomerTree.FullNames(await store.ListCustomersAsync(ct));
@@ -112,6 +116,8 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
             return customer;
         if (!active && (await store.ListInvoicesAsync(id, ct)).Any(i => i.IsOpen))
             throw new DomainException("customer.has_balance", $"{customer.DisplayName} has unpaid invoices, so they can't be made inactive.");
+        if (!active && (await store.ListRecurringInvoicesAsync(ct)).FirstOrDefault(r => r.CustomerId == id && r.IsActive) is { } recurring)
+            throw new DomainException("customer.has_recurring", $"{customer.DisplayName} has a recurring invoice, \"{recurring.Name}\". Stop it first, or it would fail each time it comes due.");
         var all = await store.ListCustomersAsync(ct);
         if (!active && all.Any(c => c.ParentId == id && c.IsActive))
             throw new DomainException("customer.has_active_children", $"{customer.DisplayName} has active sub-customers. Make those inactive first.");

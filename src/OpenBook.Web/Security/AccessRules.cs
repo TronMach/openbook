@@ -35,7 +35,7 @@ public static class AccessRules
 
         // Customers and the payment provider, without signing in (the portal checks its token, the webhook its signature).
         ("/portal", UserRole.ViewOnly, UserRole.ViewOnly),
-        ("/pay/", UserRole.ViewOnly, UserRole.ViewOnly),
+        ("/pay", UserRole.ViewOnly, UserRole.ViewOnly),
         ("/hooks", UserRole.ViewOnly, UserRole.ViewOnly),
         // A "View" link from an email (the endpoint checks its token).
         ("/view", UserRole.ViewOnly, UserRole.ViewOnly),

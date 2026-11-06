@@ -173,7 +173,7 @@ public sealed class RetainerService(ISalesStore store, SalesAccounts salesAccoun
         var chart = await accounts.GetChartAsync(ct);
         var existing = chart.Ordered(includeInactive: false).Select(x => x.Account)
             .FirstOrDefault(a => a.Type == AccountType.OtherCurrentLiability && string.Equals(a.Name, LiabilityAccountName, StringComparison.OrdinalIgnoreCase));
-        return existing ?? await accounts.CreateAsync(new CreateAccountCommand(LiabilityAccountName, AccountType.OtherCurrentLiability,
+        return existing ?? await accounts.CreateUsualAsync(new CreateAccountCommand(LiabilityAccountName, AccountType.OtherCurrentLiability,
             Description: "Retainers and deposits received from customers before they're billed."), ct);
     }
 

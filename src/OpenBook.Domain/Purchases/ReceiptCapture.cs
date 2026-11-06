@@ -61,7 +61,8 @@ public sealed class ReceiptCapture
     {
         ArgumentNullException.ThrowIfNull(fields);
         Text = string.IsNullOrWhiteSpace(text) ? null : Common.TextCleaning.Cut(text, MaxTextLength);
-        VendorName = Common.Text.Optional(fields.Vendor, 200, "receipt.vendor_too_long", "Vendor");
+        // A guess from the file, not something typed: cut rather than refused.
+        VendorName = string.IsNullOrWhiteSpace(fields.Vendor) ? null : Common.TextCleaning.Cut(fields.Vendor.Trim(), 200);
         VendorId = vendorId;
         Date = fields.Date;
         Total = fields.Total;

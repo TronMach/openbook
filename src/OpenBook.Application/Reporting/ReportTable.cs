@@ -147,8 +147,9 @@ public static class ReportCsv
 
     internal static string Quote(string field)
     {
-        // A leading =, +, - or @ would make a spreadsheet treat text as a formula.
-        if (field.Length > 0 && "=+@".Contains(field[0], StringComparison.Ordinal) || field.StartsWith('-') && !decimal.TryParse(field, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+        // A leading =, +, - or @ would make a spreadsheet treat text as a formula, and so can a tab or return; an indent doesn't hide one.
+        var text = field.TrimStart(' ');
+        if (text.Length > 0 && "=+@\t\r".Contains(text[0], StringComparison.Ordinal) || text.StartsWith('-') && !decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
             field = "'" + field;
         return field.IndexOfAny([',', '"', '\r', '\n']) >= 0 || field.StartsWith(' ') ? $"\"{field.Replace("\"", "\"\"", StringComparison.Ordinal)}\"" : field;
     }

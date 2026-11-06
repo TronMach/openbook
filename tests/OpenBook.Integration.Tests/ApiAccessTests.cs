@@ -520,6 +520,7 @@ public sealed class AccessRulesTests
     [InlineData("/view/obd_token", "GET", UserRole.ViewOnly)]
     [InlineData("/_blazor/negotiate", "POST", UserRole.ViewOnly)]
     [InlineData("/_blazor", "GET", UserRole.ViewOnly)]
+    [InlineData("/pay/done", "GET", UserRole.ViewOnly)]
     [InlineData("/api/reports/trial-balance-worksheet/table", "GET", UserRole.Accountant)]
     [InlineData("/api/reports/adjusting-entries/export", "GET", UserRole.Accountant)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>

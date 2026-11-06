@@ -64,7 +64,7 @@
                     <label for="reference">Reference / check no. <span class="muted">(optional)</span></label>
                     <input id="reference" @bind="_reference" maxlength="30" />
                 </div>
-                <PaymentMethodField @bind-Value="_method" />
+                <PaymentMethodField @bind-Value="_method" Change="true" />
                 <div class="field">
                     <label for="memo">Memo <span class="muted">(optional)</span></label>
                     <input id="memo" @bind="_memo" maxlength="1000" />

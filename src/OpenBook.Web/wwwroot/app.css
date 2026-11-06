@@ -448,7 +448,7 @@ table.entry select[aria-label="Class"] { min-width: 8rem; }
 .search-empty { padding: 0.35rem 0.6rem; }
 table.entry .search-select { min-width: 14rem; }
 /* An open picker list must not be clipped by the scrolling line table around it. */
-.table-wrap:has(.search-list) { overflow: visible; }
+.table-wrap:has(.search-list:not([hidden])) { overflow: visible; }
 /* Static forms: searchselect.js puts a search box in front of a <select data-search>, which then only carries the value. */
 .search-select.static + select[data-search] { display: none; }
 /* Lot and serial numbers under a line's description. */
@@ -584,7 +584,7 @@ input.copy-link { width: 100%; font-family: ui-monospace, SFMono-Regular, Consol
 .shortcuts svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (max-width: 700px) {
-    .simple-shell { grid-template-columns: 1fr; }
+    .simple-shell { grid-template-columns: minmax(0, 1fr); }
     .shortcuts {
         position: static;
         flex-direction: row;
@@ -789,6 +789,7 @@ details.company-facts[open] > summary { margin-bottom: 0.75rem; }
 @media (max-width: 760px) {
     .page { margin: 1rem auto; }
     .page table { display: block; max-width: 100%; overflow-x: auto; }
+    .page table:has(.search-list:not([hidden])) { overflow: visible; }
     .summary-bar { flex-wrap: wrap; }
     .toolbar h1 { flex-basis: 100%; }
     .card { padding: 1rem; }

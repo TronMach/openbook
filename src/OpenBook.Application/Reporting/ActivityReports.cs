@@ -77,7 +77,7 @@ public sealed class ActivityReports(
 
         return new ReportTable(
             "Sales by customer",
-            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}"],
+            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}", .. await FilteredAsync(filter, ct)],
             [new("Customer"), new("Income", ColumnFormat.Money), new("% of total", ColumnFormat.Percent)],
             rows,
             reportBasis,
@@ -141,6 +141,10 @@ public sealed class ActivityReports(
     /// Expenses (cost of goods sold, expense and other expense accounts) from the ledger, by the vendor on the bill,
     /// vendor credit, bill payment (cash basis), vendor refund or expense that posted them.
     /// </summary>
+    /// <summary>The filter as a subtitle: a printed report for one class mustn't read like the whole company's.</summary>
+    private async Task<IReadOnlyList<string>> FilteredAsync(SegmentFilter? filter, CancellationToken ct) =>
+        await ledger.DescribeAsync(filter, ct) is { } segments ? [segments] : [];
+
     public async Task<ReportTable> ExpensesByVendorAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, SegmentFilter? filter = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
@@ -186,7 +190,7 @@ public sealed class ActivityReports(
 
         return new ReportTable(
             "Expenses by vendor",
-            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}"],
+            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}", .. await FilteredAsync(filter, ct)],
             [new("Vendor"), new("Expenses", ColumnFormat.Money), new("% of total", ColumnFormat.Percent)],
             rows,
             reportBasis,

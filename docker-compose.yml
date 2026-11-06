@@ -24,7 +24,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      # This computer only: forwarded headers are trusted below, so OpenBook belongs behind your HTTPS proxy.
+      # Open it to the network only without that setting, or anyone could choose the address they appear to come from.
+      - "127.0.0.1:8080:8080"
     environment:
       ConnectionStrings__OpenBook: "Host=db;Database=openbook;Username=openbook;Password=change-me"
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"

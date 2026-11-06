@@ -131,7 +131,7 @@ public sealed class ReorderService(
             {
                 made.Add(await orders.CreateAsync(new SavePurchaseOrderCommand(vendor.Id, date, drafts, expectedDate, Memo: "Reorder", WarehouseId: warehouseId), ct));
             }
-            catch (DomainException ex)
+            catch (DomainException ex) when (ex is not ConcurrencyConflictException and not EntityNotFoundException)
             {
                 throw new DomainException(ex.Code, $"{vendor.DisplayName}: {ex.Message} No purchase orders were made.");
             }

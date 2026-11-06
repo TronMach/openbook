@@ -133,7 +133,9 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
             var changed = details.AssetAccountId != asset.AssetAccountId || details.AccumulatedAccountId != asset.AccumulatedAccountId
                 || details.ExpenseAccountId != asset.ExpenseAccountId || details.InServiceDate != asset.InServiceDate || details.Cost != asset.Cost
                 || details.Method != asset.Method || details.LifeMonths != asset.LifeMonths || details.Salvage != asset.Salvage
-                || details.PriorDepreciation != asset.PriorDepreciation;
+                || details.PriorDepreciation != asset.PriorDepreciation || (details.PriorDepreciation > 0m && details.PriorThrough != asset.PriorThrough)
+                || (details.Method == DepreciationMethod.Macrs && details.MacrsClass != asset.MacrsClass)
+                || (details.Method == DepreciationMethod.DecliningBalance && details.DecliningPercent != asset.DecliningPercent);
             if (changed)
                 throw new DomainException("asset.depreciated", $"{asset.Name} has depreciation posted, so only its name, number and description can change. Void the depreciation first.");
             asset.Rename(details.Name, details.Number, details.Description);
@@ -355,8 +357,8 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
     {
         ArgumentNullException.ThrowIfNull(loan);
         var made = loan.PaymentsMade.Where(p => !p.IsVoided).ToList();
-        var next = made.Count == 0 ? loan.FirstPaymentDate : made.Max(p => p.Date).AddMonths(1);
-        return Amortization.Schedule(loan.Balance, loan.AnnualRatePercent, loan.PaymentAmount, next, made.Count + 1);
+        // Counted from the first date, so a loan due on the 31st comes back to it after a short month or a late payment.
+        return Amortization.Schedule(loan.Balance, loan.AnnualRatePercent, loan.PaymentAmount, loan.FirstPaymentDate, made.Count + 1, made.Count);
     }
 
     public async Task<Loan> CreateAsync(CreateLoanCommand command, CancellationToken ct = default)

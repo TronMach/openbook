@@ -82,6 +82,9 @@ public sealed class UserService(ICompanyStore store, IPasswordHasher hasher, ICl
                 await EnsureAnotherAdminAsync(user, ct);
         }
 
+        if (active && user.AccessEnded(CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone)))
+            throw new DomainException("user.access_ended", $"{user.Username}'s access ended on {user.AccessEndsOn:yyyy-MM-dd}. Change the end date on their page first.");
+
         var before = Snapshot(user);
         if (active)
             user.Reactivate();

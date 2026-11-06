@@ -282,7 +282,7 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
         var cleared = Assert.Single(await Pay(await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_supplier.Id, Mar1, [new BillLineDraft(_freight.Id, 75m)], Reference: "Z")))));
         Assert.Single(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id)));
         await In<OpenBook.Application.Banking.BankFeedService, OpenBook.Application.Banking.FeedImportResult>(s => s.QueueAsync(_checking.Id,
-            [new OpenBook.Application.Banking.FeedLine(Mar1, -75m, "PARTS SUPPLY", null, null, "ACH-1")]));
+            [new OpenBook.Application.Banking.FeedLine(cleared.Date, -75m, "PARTS SUPPLY", null, null, "ACH-1")]));
         var line = Assert.Single(await In<OpenBook.Application.Banking.BankFeedService, IReadOnlyList<OpenBook.Application.Banking.FeedReviewItem>>(s => s.ReviewAsync(_checking.Id)));
         await _db.InScope(async sp => { await sp.GetRequiredService<OpenBook.Application.Banking.BankFeedService>().MatchAsync(line.Item.Id, cleared.JournalEntryId); return true; });
         Assert.Empty(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id)));

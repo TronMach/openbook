@@ -96,10 +96,15 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
     }
 
     /// <summary>Per item levels: replaces the item prices.</summary>
-    public async Task<PriceLevel> SetLevelPricesAsync(Guid id, IReadOnlyCollection<(Guid ItemId, decimal Price)> prices, CancellationToken ct = default)
+    /// <param name="prices">The prices to keep.</param>
+    /// <param name="shown">The items the form listed; prices of others (inactive items) stay. Null replaces them all.</param>
+    /// <param name="ct">Cancels the save.</param>
+    public async Task<PriceLevel> SetLevelPricesAsync(Guid id, IReadOnlyCollection<(Guid ItemId, decimal Price)> prices, IReadOnlyCollection<Guid>? shown = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(prices);
         var level = await RequiredLevelAsync(id, ct);
+        if (shown is not null)
+            prices = [.. prices, .. level.Items.Where(i => !shown.Contains(i.ItemId)).Select(i => (i.ItemId, i.Price))];
         var items = await sales.GetItemsAsync(prices.Select(p => p.ItemId).Distinct().ToList(), ct);
         var missing = prices.Select(p => p.ItemId).FirstOrDefault(i => !items.ContainsKey(i));
         if (missing != Guid.Empty || prices.Any(p => p.ItemId == Guid.Empty))
@@ -135,7 +140,8 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
             var priceText = CsvColumns.Field(record, priceColumn);
             if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(priceText))
                 continue;
-            if (name is null || !items.TryGetValue(name.Trim(), out var item))
+            // The export marks a name that would read as a formula with a leading quote.
+            if (name is null || !(items.TryGetValue(name.Trim(), out var item) || items.TryGetValue(name.Trim().TrimStart('\''), out item)))
             {
                 errors.Add($"Line {record.Line}: no item named '{name}'.");
                 continue;
@@ -156,7 +162,7 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
             return new LevelPriceImport(0, errors);
         try
         {
-            await SetLevelPricesAsync(id, prices.Select(p => (p.Key, p.Value)).ToList(), ct);
+            await SetLevelPricesAsync(id, prices.Select(p => (p.Key, p.Value)).ToList(), ct: ct);
         }
         catch (DomainException ex)
         {
@@ -179,7 +185,7 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
                 continue;
             // The price as it was set, so exporting and importing again changes nothing; a percent level's is worked out.
             var price = level.PriceFor(item.Id) ?? context.Quote(item, date, 1m).Price;
-            text.Append(CultureInfo.InvariantCulture, $"{CsvField(item.Name)},{item.Rate:0.00##},{price:0.00##}\r\n");
+            text.Append(CultureInfo.InvariantCulture, $"{Reporting.ReportCsv.Quote(item.Name)},{item.Rate:0.00##},{price:0.00##}\r\n");
         }
 
         return text.ToString();
@@ -330,9 +336,6 @@ public sealed class PricingService(IPricingStore store, ISalesStore sales, IComp
         if (existing.Any(e => e.Id != id && string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException(code, $"There's already a {what} named '{name}'.");
     }
-
-    private static string CsvField(string value) =>
-        value.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"" : value;
 
     private AuditRecord Audit(AuditAction action, string entityType, Guid id, string? before, string after) =>
         AuditRecord.Create(clock.UtcNow, user.Actor, action, entityType, id, before, after);

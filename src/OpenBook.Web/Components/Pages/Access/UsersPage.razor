@@ -53,9 +53,9 @@
                         {
                             <br /><span class="muted">@user.Email</span>
                         }
-                        @if (user.AccessEndsOn is { } ends && user.IsActive)
+                        @if (user.AccessEndsOn is { } ends)
                         {
-                            <br /><span class="muted">access ends @Labels.Date(ends)</span>
+                            <br /><span class="muted">access @(user.IsActive ? "ends" : "ended") @Labels.Date(ends)</span>
                         }
                     </td>
                     <td>

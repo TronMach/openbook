@@ -243,6 +243,8 @@ internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
 
     public bool HasSaved => db.HasSaved;
 
+    public void ForgetEarlierSaves() => db.ForgetEarlierSaves();
+
     public void DiscardPending() => db.ChangeTracker.Clear();
 
     private sealed class Transaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction inner) : IUnitOfWorkTransaction

@@ -48,7 +48,7 @@ public sealed class BatchInvoiceService(InvoiceService invoices, ISalesStore sto
                 var invoice = await invoices.CreateAsync(new CreateInvoiceCommand(id, command.Date, command.Lines, Memo: command.Memo), ct);
                 made.Add(new BatchInvoiceLine(id, customer.DisplayName, invoice.Id, invoice.Number, invoice.DueDate, invoice.Subtotal, invoice.TaxTotal, invoice.Total));
             }
-            catch (DomainException ex)
+            catch (DomainException ex) when (ex is not ConcurrencyConflictException and not EntityNotFoundException)
             {
                 throw new DomainException(ex.Code, $"{customer.DisplayName}: {ex.Message} Nothing was invoiced.");
             }

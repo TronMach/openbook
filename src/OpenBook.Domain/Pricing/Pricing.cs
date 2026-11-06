@@ -290,7 +290,10 @@ public sealed class QuantityBreak
 public sealed record PriceQuote(decimal ListPrice, decimal Price, IReadOnlyList<string> Steps)
 {
     /// <summary>"Wholesale (-10%) + Spring sale (-5%)", or null for the list price.</summary>
-    public string? Source => Steps.Count == 0 ? null : string.Join(" + ", Steps);
+    public string? Source => Steps.Count == 0 ? null : Common.TextCleaning.Cut(string.Join(" + ", Steps), MaxSourceLength);
+
+    /// <summary>What a sales line holds of it: only a label, so it's cut rather than refusing the document.</summary>
+    private const int MaxSourceLength = 200;
 }
 
 public static class Prices
@@ -385,7 +388,10 @@ public static class Prices
         var exclusive = matching.Where(r => r.IsExclusive).ToList();
         if (exclusive.Count > 0)
         {
-            deciding = exclusive.OrderBy(r => r.Apply(price)).ThenBy(r => r.Priority).First();
+            // What the customer would pay, so a rule's own rounding counts; ties go the same way every time.
+            var before = price;
+            deciding = exclusive.OrderBy(r => Round(Math.Max(0m, r.Apply(before)), r.Rounding ?? companyRounding))
+                .ThenBy(r => r.Priority).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).First();
             price = deciding.Apply(price);
             steps.Add(deciding.Describe());
         }
@@ -400,7 +406,11 @@ public static class Prices
         }
 
         price = Math.Max(0m, price);
-        price = steps.Count == 0 || price == item.Rate ? item.Rate : Round(price, deciding?.Rounding ?? companyRounding);
+        var lowered = price < item.Rate;
+        var rounded = steps.Count == 0 || price == item.Rate ? item.Rate : Round(price, deciding?.Rounding ?? companyRounding);
+
+        // A discount never ends above the list price, whatever the rounding would make of it.
+        price = lowered && rounded > item.Rate ? Round(price, PriceRounding.Cent) : rounded;
         return new PriceQuote(item.Rate, decimal.Round(price, SalesLine.Precision, MidpointRounding.AwayFromZero), steps);
     }
 }

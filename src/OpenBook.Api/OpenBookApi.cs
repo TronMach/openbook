@@ -170,6 +170,7 @@ public static class OpenBookApi
         if (!request.HasJsonContentType())
             request.EnableBuffering();
         var work = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
+        work.ForgetEarlierSaves();
         for (var attempt = 1; ; attempt++)
         {
             try

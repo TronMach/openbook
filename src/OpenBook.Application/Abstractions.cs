@@ -161,6 +161,9 @@ public interface IUnitOfWork
 
     /// <summary>Forgets every unsaved change in this scope, before running an operation again after a conflict.</summary>
     void DiscardPending();
+
+    /// <summary>Starts counting saves from here: what authentication recorded on the way in is no part of the operation.</summary>
+    void ForgetEarlierSaves();
 }
 
 /// <summary>

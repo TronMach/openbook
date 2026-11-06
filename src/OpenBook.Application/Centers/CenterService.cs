@@ -139,8 +139,9 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
         }
 
         // Documents above already show their own quantities; the rest of the stock ledger shows by source.
-        var shown = new HashSet<string>(StringComparer.Ordinal) { InventorySources.Bill, InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.CreditMemo };
-        foreach (var source in (await inventory.ListMovementsAsync(itemId, ct)).Where(m => !shown.Contains(m.SourceType)).GroupBy(m => (m.SourceType, m.SourceId)))
+        // A component sold in a bundle moved on a document with no line of its own, so that one shows here too.
+        var shown = rows.Select(r => (r.EntityType, r.Id)).ToHashSet();
+        foreach (var source in (await inventory.ListMovementsAsync(itemId, ct)).Where(m => !shown.Contains((m.SourceType, m.SourceId))).GroupBy(m => (m.SourceType, m.SourceId)))
         {
             var quantity = source.Sum(m => m.Quantity);
             var cost = source.Sum(m => m.Cost);

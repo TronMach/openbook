@@ -110,7 +110,8 @@
     {
         _entry = await TimeService.GetAsync(Id);
         _workers = await WorkerService.ListAsync(includeInactive: true);
-        _customers = await CustomerService.ListAsync(CompanyTime.Today);
+        // The entry's own customer stays on offer though inactive: missing from the list, saving would drop it.
+        _customers = (await CustomerService.ListAsync(CompanyTime.Today, includeInactive: true)).Where(c => c.Customer.IsActive || c.Customer.Id == _entry?.CustomerId).ToList();
         _services = (await ItemService.ListAsync(includeInactive: true))
             .Where(i => (i.IsActive || i.Id == _entry?.ItemId) && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
     }

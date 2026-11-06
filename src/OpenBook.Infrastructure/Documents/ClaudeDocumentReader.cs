@@ -120,8 +120,10 @@ public sealed class ClaudeDocumentReader : IClaudeDocumentReader
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                throw new DocumentReadException("the answer wasn't in the expected form");
             var lines = root.TryGetProperty("lines", out var array) && array.ValueKind == JsonValueKind.Array
-                ? array.EnumerateArray().Take(CapturedDocument.MaxLines)
+                ? array.EnumerateArray().Where(l => l.ValueKind == JsonValueKind.Object).Take(CapturedDocument.MaxLines)
                     .Select(l => new DocumentLineFields(Text(l, "description"), Text(l, "sku"), Number(l, "quantity"), Number(l, "unit_price"), Number(l, "amount")))
                     .ToList()
                 : [];

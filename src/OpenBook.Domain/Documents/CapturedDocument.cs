@@ -245,7 +245,10 @@ public sealed class CapturedDocument
             throw new DomainException("document.party_kind", "This document comes from a vendor.");
         if (!DocumentKinds.IsFromVendor(Kind) && (review.VendorId is not null || review.PurchaseOrderId is not null))
             throw new DomainException("document.party_kind", "This document comes from a customer.");
-        if (review.Lines.Count > MaxLines)
+        // Blank rows don't count (the form sends spares), and what a reading finds past the limit is left out rather than losing the file.
+        static bool Blank(DocumentReviewLine l) => string.IsNullOrWhiteSpace(l.Description) && string.IsNullOrWhiteSpace(l.Sku) && l.Quantity is null && l.UnitPrice is null && l.Amount is null && l.ItemId is null;
+        var filled = review.Lines.Where(l => !Blank(l)).ToList();
+        if (filled.Count > MaxLines && !lenient)
             throw new DomainException("document.too_many_lines", $"A document can have at most {MaxLines} lines.");
 
         Party = Field(review.Party, 200, "document.party_too_long", "Name", lenient);
@@ -262,7 +265,7 @@ public sealed class CapturedDocument
         Total = Amount(review.Total, lenient);
 
         _lines.Clear();
-        foreach (var line in review.Lines)
+        foreach (var line in filled.Take(MaxLines))
         {
             var description = Field(line.Description, 500, "document.description_too_long", "Description", lenient);
             var sku = Field(line.Sku, 50, "document.sku_too_long", "Code", lenient);

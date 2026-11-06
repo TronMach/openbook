@@ -83,7 +83,7 @@
         var feed = Get<BankFeedService>();
         var bills = await Get<IPurchasesStore>().ListOpenBillsAsync(null, default);
 
-        Add(figures.OverdueInvoices, L["Overdue invoices"], "/sales/collections", L["Remind the customers, or record payments that came in"], urgent: true);
+        Add(figures.OverdueInvoices, L["Overdue invoices"], "/reports/ar-aging", L["Remind the customers, or record payments that came in"], urgent: true);
         Add(figures.PaymentsToDeposit, L["Payments to deposit"], "/banking/deposits/new", L["{0} waiting to go into the bank", Labels.Amount(figures.ToDeposit)]);
         Add(figures.BillsDueSoon, L["Bills due within a week"], "/purchases/pay-bills", L["Including any overdue"], urgent: bills.Any(b => b.CanBePaid && b.IsOverdue(today)));
         Add(bills.Count(b => b.Approval == OpenBook.Domain.Purchases.BillApproval.Pending), L["Bills waiting for approval"], "/purchases/approvals");

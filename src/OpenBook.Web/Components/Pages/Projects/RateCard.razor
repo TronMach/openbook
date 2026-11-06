@@ -85,7 +85,7 @@
                             }
                         </optgroup>
                         <optgroup label="Service">
-                            @foreach (var item in _services)
+                            @foreach (var item in _services.Where(i => i.IsActive || i.Id == _editing?.ItemId))
                             {
                                 <option value="item:@item.Id" selected="@(item.Id == _editing?.ItemId)">@item.Name</option>
                             }
@@ -185,7 +185,11 @@
         _editing = _rates.FirstOrDefault(r => r.Id == Edit);
         _workers = await WorkerService.ListAsync(includeInactive: true);
         _roles = await Rates.RolesAsync();
-        _services = (await ItemService.ListAsync()).Where(i => i.Type is ItemType.Service or ItemType.NonInventory).ToList();
+        // What a line was set for stays on offer, retired or not: missing from the list, it would save as the client's general rate.
+        if (_editing?.Role is { } editingRole && !_roles.Contains(editingRole, StringComparer.OrdinalIgnoreCase))
+            _roles = [.. _roles, editingRole];
+        _services = (await ItemService.ListAsync(includeInactive: true))
+            .Where(i => (i.IsActive || _rates.Any(r => r.ItemId == i.Id)) && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
         _customers = (await CustomerService.ListAsync(today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
         if (TryWorker is { } worker)
         {

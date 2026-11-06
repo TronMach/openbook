@@ -49,6 +49,7 @@
             <PostForm Action="@($"/reports/cash-forecast/scenarios/{s.Id}")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <input name="name" value="@s.Name" maxlength="100" aria-label="Name" />
+                <input type="hidden" name="notes" value="@s.Notes" />
                 <label>Customers pay <input name="collectionDelay" type="number" class="short" value="@s.CollectionDelayDays" /> days late</label>
                 <label>Bills paid <input name="paymentDelay" type="number" class="short" value="@s.PaymentDelayDays" /> days late</label>
                 <button type="submit" class="secondary">Save</button>

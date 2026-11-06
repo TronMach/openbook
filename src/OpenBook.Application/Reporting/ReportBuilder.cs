@@ -104,7 +104,9 @@ public sealed class ReportBuilder(
     public static IReadOnlyList<string> TypeNames { get; } =
     [
         "Invoice", "Payment", "Sales receipt", "Credit memo", "Refund", "Deposit", "Bill", "Bill payment", "Vendor credit", "Vendor refund",
-        "Expense", "Transfer", "Sales tax payment", "Inventory adjustment", "Bad debt write-off", "Retainer", "Depreciation", "Loan payment", "Journal entry",
+        "Expense", "Transfer", "Sales tax payment", "Inventory adjustment", "Goods received", "Assembly build", "Landed cost", "Bad debt write-off",
+        "Retainer", "Retainer applied", "Retainer refund", "Depreciation", "Asset disposal", "Loan", "Loan payment", "Gift", "Pledge", "Pledge cancelled",
+        "Grant award", "Grant payment", "Grant income earned", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Journal entry",
     ];
 
     public static string Header(BuilderColumn column) => column switch
@@ -201,7 +203,8 @@ public sealed class ReportBuilder(
         };
         ReportCell? Total((BuilderColumn? Column, CustomField? Field) column, IReadOnlyList<LedgerLine> group, string label, int index) => column.Column switch
         {
-            _ when index == 0 => label,
+            // The first column carries the label, unless it's a figure: the total matters more, and the section heading names it.
+            _ when index == 0 && column.Column is not (BuilderColumn.Debit or BuilderColumn.Credit or BuilderColumn.Amount or BuilderColumn.Balance) => label,
             null => null,
             BuilderColumn.Debit => group.Where(l => l.Amount > 0m).Sum(l => l.Amount),
             BuilderColumn.Credit => -group.Where(l => l.Amount < 0m).Sum(l => l.Amount),

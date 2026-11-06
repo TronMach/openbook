@@ -2,7 +2,11 @@
 <div class="field">
     <label for="@Id">Payment method <span class="muted">(optional)</span></label>
     <select id="@Id" @onchange="ChangeAsync">
-        <option value="" selected="@(Value is null)">Not given</option>
+        @* On a correction blank means "keep it", so it isn't offered once there's a method to keep. *@
+        @if (Value is null || !Change)
+        {
+            <option value="" selected="@(Value is null)">Not given</option>
+        }
         @foreach (var method in Enum.GetValues<PaymentMethod>())
         {
             <option value="@method" selected="@(Value == method)">@PaymentMethods.Label(method)</option>
@@ -14,6 +18,7 @@
     [Parameter] public PaymentMethod? Value { get; set; }
     [Parameter] public EventCallback<PaymentMethod?> ValueChanged { get; set; }
     [Parameter] public string Id { get; set; } = "payment-method";
+    [Parameter] public bool Change { get; set; }
 
     private Task ChangeAsync(ChangeEventArgs e) =>
         ValueChanged.InvokeAsync(Enum.TryParse<PaymentMethod>(e.Value?.ToString(), out var m) ? m : null);

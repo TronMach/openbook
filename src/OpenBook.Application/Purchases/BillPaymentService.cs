@@ -238,7 +238,7 @@ public sealed class BillPaymentService(
     /// <summary>"1042" → "1043"; anything non-numeric repeats as-is.</summary>
     private static string? Next(string? reference) =>
         long.TryParse(reference, NumberStyles.None, CultureInfo.InvariantCulture, out var n)
-            ? (n + 1).ToString(CultureInfo.InvariantCulture)
+            ? (n + 1).ToString(CultureInfo.InvariantCulture).PadLeft(reference!.Length, '0')
             : reference;
 
     private AuditRecord Audit(AuditAction action, BillPayment p, string? before) =>

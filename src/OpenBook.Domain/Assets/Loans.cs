@@ -200,7 +200,7 @@ public static class Amortization
     }
 
     /// <summary>The schedule from a balance: each month's interest on the balance, the rest to principal, the last payment clearing it.</summary>
-    public static IReadOnlyList<Installment> Schedule(decimal balance, decimal annualRatePercent, decimal payment, DateOnly firstDate, int startNumber = 1)
+    public static IReadOnlyList<Installment> Schedule(decimal balance, decimal annualRatePercent, decimal payment, DateOnly firstDate, int startNumber = 1, int monthsIn = 0)
     {
         var r = annualRatePercent / 1200m;
         var result = new List<Installment>();
@@ -212,7 +212,7 @@ public static class Amortization
             if (principal <= 0m)
                 break;
             balance -= principal;
-            result.Add(new Installment(startNumber + n, firstDate.AddMonths(n), interest + principal, interest, principal, balance));
+            result.Add(new Installment(startNumber + n, firstDate.AddMonths(monthsIn + n), interest + principal, interest, principal, balance));
             n++;
         }
 

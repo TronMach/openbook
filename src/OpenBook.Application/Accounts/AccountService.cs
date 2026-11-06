@@ -2,6 +2,7 @@ using OpenBook.Application.Companies;
 using System.Text.Json;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
+using OpenBook.Domain.Common;
 
 namespace OpenBook.Application.Accounts;
 
@@ -12,7 +13,14 @@ public sealed record CreateAccountCommand(string Name, AccountType Type, string?
 public sealed record UpdateAccountCommand(Guid Id, string Name, AccountType Type, string? Number, Guid? ParentId, string? Description, bool? DonorRestricted = null);
 
 /// <summary>Chart-of-accounts maintenance. Accounts are never deleted; they're made inactive.</summary>
-public sealed class AccountService(ILedgerStore store, ICompanyStore companies, Ledger.PostingEngine engine, IClock clock, ICurrentUser user)
+/// <summary>Something outside the chart that an account is needed for, so it stays active: asked before an account is made inactive.</summary>
+public interface IAccountInUse
+{
+    /// <summary>Why the account can't go, in words that finish the sentence; null when nothing here needs it.</summary>
+    Task<string?> WhyNeededAsync(Account account, CancellationToken ct);
+}
+
+public sealed class AccountService(ILedgerStore store, ICompanyStore companies, Ledger.PostingEngine engine, IEnumerable<IAccountInUse> uses, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "account";
 
@@ -75,7 +83,31 @@ public sealed class AccountService(ILedgerStore store, ICompanyStore companies, 
         var chart = await GetChartAsync(ct);
         var account = chart.Get(id);
         chart.EnsureCanDeactivate(account);
+        foreach (var use in uses)
+        {
+            if (await use.WhyNeededAsync(account, ct) is { } reason)
+                throw new DomainException("account.in_use", $"{account.Name} can't be made inactive: {reason}");
+        }
+
         return await SetActiveAsync(account, active: false, ct);
+    }
+
+    /// <summary>
+    /// Makes an account OpenBook needs and doesn't have. When its name is held already, by an inactive account or one of
+    /// another type, says so: the plain refusal, that the name is taken, doesn't tell anyone what to do.
+    /// </summary>
+    public async Task<Account> CreateUsualAsync(CreateAccountCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var chart = await GetChartAsync(ct);
+        if (chart.Ordered(includeInactive: true).Select(x => x.Account).FirstOrDefault(a => a.ParentId is null && string.Equals(a.Name, command.Name, StringComparison.OrdinalIgnoreCase)) is { } held)
+        {
+            throw new DomainException("account.usual_name_held", held.IsActive
+                ? $"OpenBook needs an account named \"{held.Name}\" for this, and yours isn't the right type. Change its type on the chart of accounts, or rename it."
+                : $"The account \"{held.Name}\" is inactive. Make it active again on the chart of accounts.");
+        }
+
+        return await CreateAsync(command, ct);
     }
 
     public async Task<Account> ReactivateAsync(Guid id, CancellationToken ct = default)

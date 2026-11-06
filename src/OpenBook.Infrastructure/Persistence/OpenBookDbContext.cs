@@ -185,6 +185,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     /// <summary>Whether anything has been saved through this context, so an operation that then hit a conflict can't simply be run again.</summary>
     public bool HasSaved { get; private set; }
 
+    public void ForgetEarlierSaves() => HasSaved = false;
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         if (ChangeTracker.Entries<JournalEntry>().Any(e => e.State == EntityState.Added))

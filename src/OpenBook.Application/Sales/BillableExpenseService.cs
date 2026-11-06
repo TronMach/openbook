@@ -121,13 +121,15 @@ public sealed class BillableExpenseService(
     /// <summary>The "Billable Expenses" item, found or created with "Billable Expense Income".</summary>
     internal async Task<Guid> ItemIdAsync(CancellationToken ct)
     {
-        var item = (await items.ListAsync(includeInactive: false, ct)).FirstOrDefault(i => string.Equals(i.Name, ItemName, StringComparison.OrdinalIgnoreCase));
+        var item = (await items.ListAsync(includeInactive: true, ct)).FirstOrDefault(i => string.Equals(i.Name, ItemName, StringComparison.OrdinalIgnoreCase));
+        if (item is { IsActive: false })
+            throw new DomainException("billable.item_inactive", $"The item \"{ItemName}\" is inactive. Make it active again to bill expenses.");
         if (item is not null)
             return item.Id;
         var chart = await accounts.GetChartAsync(ct);
         var income = chart.Ordered(includeInactive: false).Select(x => x.Account)
             .FirstOrDefault(a => a.Type.ClassOf() == AccountClass.Income && string.Equals(a.Name, IncomeAccountName, StringComparison.OrdinalIgnoreCase))
-            ?? await accounts.CreateAsync(new CreateAccountCommand(IncomeAccountName, AccountType.Income,
+            ?? await accounts.CreateUsualAsync(new CreateAccountCommand(IncomeAccountName, AccountType.Income,
                 Description: "Costs passed on to customers on their invoices."), ct);
         return (await items.CreateAsync(new ItemDetails(ItemName, ItemType.Service, income.Id, 0m, "Costs passed on to the customer", Taxable: false), ct)).Id;
     }

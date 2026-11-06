@@ -118,7 +118,10 @@ public static class DashboardEndpoints
     }
 
     private static ForecastScenarioDetails Scenario(IFormCollection form) =>
-        new(form["name"].ToString(), Number(form["collectionDelay"]) is var c and >= -90 ? c : 0, Number(form["paymentDelay"]) is var d and >= -90 ? d : 0);
+        new(form["name"].ToString(), Delay(form["collectionDelay"]), Delay(form["paymentDelay"]), form["notes"].ToString());
+
+    /// <summary>Blank is no delay; anything else goes to the scenario's own check.</summary>
+    private static int Delay(string? value) => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0;
 
     private static async Task<IResult> Forecast(Func<Task<Guid?>> change)
     {

@@ -89,7 +89,7 @@
         _lines = TaxLines.For(_form);
         _chart = await AccountService.GetChartAsync();
         _accounts = _chart.Ordered()
-            .Where(x => !x.Account.Type.IsBalanceSheet() && (x.Account.IsActive || x.Account.TaxLineKey is not null))
+            .Where(x => !x.Account.Type.IsBalanceSheet())
             .ToList();
     }
 }

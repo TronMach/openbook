@@ -206,6 +206,7 @@
         <AuthorizeView>
             <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.CanPost($"/purchases/ach/vendors/{_vendor.Id}")" Error="@BankError" />
         </AuthorizeView>
+        <Attachments EntityType="vendor" EntityId="_vendor.Id" />
         <CustomFieldPanel EntityType="vendor" EntityId="_vendor.Id" />
         <Notes EntityType="vendor" EntityId="_vendor.Id" />
         <MergeCard Kind="vendors" Id="_vendor.Id" Name="@_vendor.DisplayName" />

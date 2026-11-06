@@ -95,8 +95,9 @@ public sealed class ScheduledEmailService(ISalesStore store, EmailService email,
                     scheduled.MarkSent(clock.UtcNow);
                     results.Add(new ScheduledEmailResult(scheduled, null));
                 }
-                catch (DomainException ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    // Anything: one email that can't be made mustn't hold up the ones behind it, every minute.
                     scheduled.MarkFailed(ex.Message);
                     results.Add(new ScheduledEmailResult(scheduled, ex.Message));
                 }

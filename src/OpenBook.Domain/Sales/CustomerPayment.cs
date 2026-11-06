@@ -169,7 +169,8 @@ public sealed class CustomerPayment
         var appliedOn = _applications.ToDictionary(a => a.InvoiceId, a => a.AppliedOn);
         _applications.Clear();
         _applications.AddRange(lines.Select(a => new PaymentApplication(a.InvoiceId, a.Amount, a.Discount,
-            appliedOn.TryGetValue(a.InvoiceId, out var on) && on > date ? on : date)));
+            // Credit applied after the payment keeps its date; what was applied with the payment moves with it.
+            appliedOn.TryGetValue(a.InvoiceId, out var on) && on > date && on != Date ? on : date)));
         Date = date;
         Amount = amount;
         DepositAccountId = depositAccountId;
