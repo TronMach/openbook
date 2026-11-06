@@ -186,7 +186,7 @@ public sealed class UpdateFlowTests : IAsyncLifetime
         var status = await updates.CheckAsync();
         Assert.Equal("99.1.0", status.Available?.Version);
         Assert.Null(status.Ready);
-        Assert.Contains("pull the new image", status.Note, StringComparison.Ordinal);
+        Assert.Contains("get the new source", status.Note, StringComparison.Ordinal);
         Assert.Equal("Only OpenBook Desktop installs its own updates.", await updates.InstallAsync(false));
         Assert.Equal(0, _releases.InstallerRequests);
     }

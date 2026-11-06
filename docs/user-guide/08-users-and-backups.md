@@ -92,7 +92,7 @@ Several people can work in the books at once. If two of you save a change to the
 Once a period is finished (a month you've reconciled, a year your accountant has filed taxes for), close it so nobody changes it by accident: **Settings → Closing date** (also **Accounts → Close the books**).
 
 - **Close the books through**: the last date that's closed. Nothing dated on or before it can be entered, voided or changed. That includes applying credit on such a date; a company that reports on the cash basis also needs the period open to apply credit from a payment dated in it, because that income counts on the payment's date. Leave it empty to reopen every period.
-- **Closing date password** (optional, at least 6 characters, separate from sign-in passwords): with one, someone who knows it can still change a closed period by typing it when OpenBook asks. Without one, closed periods can't be changed at all until the closing date is moved. Every change made with the password is recorded in the audit log.
+- **Closing date password** (optional, at least 6 characters, separate from sign-in passwords): with one, someone who knows it can still change a closed period by typing it when OpenBook asks: in a box on the form, or at the top of the page after the first try, and then doing it again. Without one, closed periods can't be changed at all until the closing date is moved. Every change made with the password is recorded in the audit log.
 - A closing date more than a year ahead shows a warning, in case the year was mistyped.
 - Moving the closing date earlier, clearing it, or changing or removing the password needs the current closing password.
 
