@@ -303,9 +303,10 @@ public sealed class BankingService(
                 $"This transfer stands for a line from the bank feed, so its amount ({transaction.Amount:N2}) and accounts stay. Undo the feed line first to change them.");
 
         var before = Snapshot(transaction);
+        var (location, tags) = await engine.SegmentsOfAsync(transaction.JournalEntryId, ct);
         await engine.StageVoidAsync(transaction.JournalEntryId, $"Transfer changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = string.IsNullOrWhiteSpace(command.Memo) ? $"Transfer from {chart.FullName(from.Id)} to {chart.FullName(to.Id)}" : command.Memo;
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, postings, memo, BankTransaction.TransferSource, transaction.Id), ct);
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, postings, memo, BankTransaction.TransferSource, transaction.Id, LocationId: location, TagIds: tags), ct);
 
         transaction.ChangeTransfer(from.Id, to.Id, command.Date, command.Amount, entry.Id, command.Memo);
         foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))

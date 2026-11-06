@@ -83,10 +83,10 @@ internal sealed class SalesEmailSource(
                     PaymentMethod.Check => p.Reference is { } n ? $"by check no. {n}" : "by check",
                     { } m => $"by {PaymentMethods.Label(m).ToLowerInvariant()}{(p.Reference is { } r2 ? $", reference {r2}" : "")}",
                 };
-                // The whole account: a client's receipt counts what its billed projects owe too.
-                var owed = 0m;
-                foreach (var billed in CustomerTree.Billed(customer.Id, (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id)))
-                    owed += (await sales.ListOpenInvoicesAsync(billed, ct)).Sum(i => i.Balance);
+                // The statement's figure: the whole account, billed projects included, less any credit held.
+                var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
+                var asOf = today > p.Date ? today : p.Date;
+                var owed = (await receivables.StatementAsync(customer.Id, asOf, asOf, ct)).ClosingBalance;
                 return new EmailContext(PaymentService.EntityType, p.Id, customer.DisplayName, $"Payment of {M(p.Amount)}", "", customer.Email, new Dictionary<string, string>
                 {
                     ["customer"] = customer.DisplayName, ["amount"] = M(p.Amount), ["date"] = D(p.Date), ["paid_by"] = paidBy, ["applied"] = applied,
@@ -231,8 +231,9 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
             return new EmailContext(GiftService.DonationEntity, gift.Id, donor.DisplayName, $"Gift acknowledgment {number}",
                 FormService.FileName(company, "Gift acknowledgment", number), donor.Email, new Dictionary<string, string>
                 {
-                    ["donor"] = donor.DisplayName, ["number"] = number, ["date"] = D(gift.Date), ["amount"] = M(gift.Amount), ["company"] = company.Name,
-                }, Refusal: gift.Status != DocumentStatus.Posted ? ("donation.voided", "This gift is voided.") : null);
+                    // An in-kind gift's letter gives no value, and neither does its email: the line with this fill-in drops out.
+                    ["donor"] = donor.DisplayName, ["number"] = number, ["date"] = D(gift.Date), ["amount"] = gift.Kind == GiftKind.InKind ? "" : M(gift.Amount), ["company"] = company.Name,
+                }, Customer: donor, Refusal: gift.Status != DocumentStatus.Posted ? ("donation.voided", "This gift is voided.") : null);
         }
 
         var year = source.Year ?? throw new DomainException("email.year_required", "Choose the year of the giving statement.");
@@ -243,7 +244,7 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
             giver.Email, new Dictionary<string, string>
             {
                 ["donor"] = giver.DisplayName, ["year"] = year.ToString(System.Globalization.CultureInfo.InvariantCulture), ["total"] = M(total), ["company"] = company.Name,
-            });
+            }, Customer: giver);
     }
 
     public Task<RenderedForm> RenderAsync(EmailSource source, Guid? designId, CancellationToken ct) =>

@@ -23,9 +23,16 @@
             <dt>Subject</dt><dd data-email-head="subject"><strong>@Preview.Subject</strong></dd>
         </dl>
         <div class="email-attachments" data-email-attachment-row hidden="@(Preview.Attachment is null)">
-            <button type="button" class="email-chip" data-email-tab="attachment" title="Show the attachment">
-                <span aria-hidden="true">📎</span> <span data-email-attachment>@Preview.Attachment</span> <span class="muted" data-email-size></span>
-            </button>
+            @if (PdfUrl is not null)
+            {
+                <button type="button" class="email-chip" data-email-tab="attachment" title="Show the attachment">
+                    <span aria-hidden="true">📎</span> <span data-email-attachment>@Preview.Attachment</span> <span class="muted" data-email-size></span>
+                </button>
+            }
+            else
+            {
+                <span class="email-chip"><span aria-hidden="true">📎</span> <span data-email-attachment>@Preview.Attachment</span> <span class="muted" data-email-size></span></span>
+            }
         </div>
         <div class="preview-frames email-frames" data-email-view="message">
             <iframe class="current" sandbox="" title="Preview of the message" srcdoc="@Preview.Html"></iframe>

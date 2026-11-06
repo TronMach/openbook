@@ -204,6 +204,8 @@ public sealed class BankFeedService(
             ?? throw new DomainException("feed.match_not_found", "That transaction isn't on this account, is voided, or is already matched.");
         if (candidate.Amount != item.Amount)
             throw new DomainException("feed.match_amount", $"That transaction is for {candidate.Amount:N2}, not {item.Amount:N2}.");
+        if (Math.Abs(candidate.Date.DayNumber - item.Date.DayNumber) > MatchWindowDays)
+            throw new DomainException("feed.match_window", $"That transaction is more than {MatchWindowDays} days from this line. Add the line, or change the transaction's date first.");
 
         var before = Snapshot(item);
         item.MarkMatched(journalEntryId, clock.UtcNow, user.Actor);

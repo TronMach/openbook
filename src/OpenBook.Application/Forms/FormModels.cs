@@ -129,7 +129,22 @@ public sealed record CheckForm(
     decimal Amount,
     string AmountInWords,
     string? Memo,
-    IReadOnlyList<(string Description, decimal Amount)> StubLines);
+    IReadOnlyList<(string Description, decimal Amount)> StubLines)
+{
+    private const int StubFits = 10;
+
+    public IReadOnlyList<(string Description, decimal Amount)> StubRows => StubRowsOf(StubLines);
+
+    /// <summary>What fits on a stub; anything past that as one line, so what's listed still adds up to the check.</summary>
+    public static IReadOnlyList<(string Description, decimal Amount)> StubRowsOf(IReadOnlyList<(string Description, decimal Amount)> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (lines.Count <= StubFits)
+            return lines;
+        var rest = lines.Skip(StubFits - 1).ToList();
+        return [.. lines.Take(StubFits - 1), ($"{rest.Count} more bills", rest.Sum(l => l.Amount))];
+    }
+}
 
 public sealed record DonorLetterGift(DateOnly Date, string Description, decimal Amount);
 

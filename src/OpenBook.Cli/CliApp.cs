@@ -55,7 +55,7 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
 
         Any API call
           openbook get <path> [--out FILE]
-          openbook post|put <path> --data '{"…": …}' | --data @FILE
+          openbook post|put <path> --data '{"…": …}' | --data @FILE | --file FILE (sent as it is)
           openbook delete <path>
 
         Options: --url, --key (override the saved settings and OPENBOOK_URL / OPENBOOK_API_KEY),
@@ -117,6 +117,21 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
             await error.WriteLineAsync($"Can't reach the server at {settings.Url}: {ex.Message}");
             return 1;
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            await error.WriteLineAsync($"Can't use that file: {ex.Message}");
+            return 2;
+        }
+        catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+        {
+            await error.WriteLineAsync($"The server address isn't right ({settings.Url}). It's a full address, like https://books.example.com.");
+            return 2;
+        }
+        catch (JsonException)
+        {
+            await error.WriteLineAsync($"That didn't answer like an OpenBook server ({settings.Url}).");
+            return 1;
+        }
         catch (OperationCanceledException)
         {
             await error.WriteLineAsync("Stopped.");
@@ -126,6 +141,9 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
 
     private async Task<int> ConfigAsync(CliSettings saved, Dictionary<string, string> options)
     {
+        if (options.GetValueOrDefault("url") is { } address
+            && !(Uri.TryCreate(address, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)))
+            return await Mistake("The server address is a full address, like https://books.example.com or http://localhost:5188.");
         if (!options.ContainsKey("url") && !options.ContainsKey("key"))
         {
             await output.WriteLineAsync($"Settings file: {settingsPath}");
@@ -222,7 +240,15 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
             return await Mistake("Format is table, json, csv, xlsx or pdf.");
         using var response = await client.GetAsync($"/api/reports/{escaped}/table{(query is { Length: > 0 } ? "?" + query : "")}", ct);
         var body = await Checked(response, ct);
-        await output.WriteAsync(format == "json" ? Pretty(body) + Environment.NewLine : RenderReport(body));
+        var text = format == "json" ? Pretty(body) + Environment.NewLine : RenderReport(body);
+        if (options.GetValueOrDefault("out") is { } file)
+        {
+            await File.WriteAllTextAsync(file, text, ct);
+            await output.WriteLineAsync($"Saved {Path.GetFullPath(file)}.");
+            return 0;
+        }
+
+        await output.WriteAsync(text);
         return 0;
     }
 
@@ -257,7 +283,13 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
             path = "/api" + path;
         using var client = Client(settings, options);
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (options.GetValueOrDefault("data") is { } data)
+        if (options.GetValueOrDefault("file") is { } upload)
+        {
+            // As it is on disk: a picture or PDF for a route that takes the raw file.
+            request.Content = new ByteArrayContent(await File.ReadAllBytesAsync(upload, ct));
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        }
+        else if (options.GetValueOrDefault("data") is { } data)
         {
             var json = data.StartsWith('@') ? await File.ReadAllTextAsync(data[1..], ct) : data;
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -312,8 +344,13 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
         try
         {
             using var document = JsonDocument.Parse(body);
-            if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("message", out var m))
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && (document.RootElement.TryGetProperty("message", out var m) || document.RootElement.TryGetProperty("title", out m)))
+            {
                 message = m.GetString();
+                if (document.RootElement.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String)
+                    message = $"{message} ({code.GetString()})";
+            }
         }
         catch (JsonException)
         {

@@ -186,10 +186,11 @@ public sealed class DepositService(
                 $"This deposit is matched to a line from the bank feed, so it stays {deposit.Total:N2} in the same account. Undo the match first to change that.");
 
         var before = Snapshot(deposit);
+        var (location, tags) = await engine.SegmentsOfAsync(deposit.JournalEntryId, ct);
         await engine.StageVoidAsync(deposit.JournalEntryId, $"Changed: {reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = command.Memo?.Trim() is { Length: > 0 } m ? m : $"Deposit · {items.Count} {(items.Count == 1 ? "item" : "items")}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, BankDeposit.Postings(account.Id, items, memo), memo, BankDeposit.Source, deposit.Id), ct);
+            command.Date, BankDeposit.Postings(account.Id, items, memo), memo, BankDeposit.Source, deposit.Id, LocationId: location, TagIds: tags), ct);
 
         // Only after staging succeeded: what came out goes back to waiting, what went in is marked.
         var kept = items.Select(i => (i.Kind, i.SourceId)).ToHashSet();

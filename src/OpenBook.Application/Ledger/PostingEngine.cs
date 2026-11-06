@@ -148,6 +148,13 @@ public sealed class PostingEngine(
             LocationId: segments.Values.Select(s => s.LocationId).FirstOrDefault(l => l is not null), TagIds: tags);
     }
 
+    /// <summary>The location and tags on an entry, for a correction that posts its replacement.</summary>
+    internal async Task<(Guid? LocationId, IReadOnlyList<Guid> TagIds)> SegmentsOfAsync(Guid entryId, CancellationToken ct)
+    {
+        var location = (await store.GetLineSegmentsAsync([entryId], ct)).Select(s => s.LocationId).FirstOrDefault(l => l is not null);
+        return (location, (await store.GetEntryTagsAsync([entryId], ct)).Select(t => t.TagId).ToList());
+    }
+
     /// <summary>Saves everything staged, for callers that stage several entries without a document of their own.</summary>
     internal Task SaveAsync(CancellationToken ct) => store.SaveChangesAsync(ct);
 

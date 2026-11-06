@@ -244,7 +244,14 @@ public sealed class WebhookDispatcher(IWebhookStore store, IWebhookSender sender
         {
             if (!subscriptions.TryGetValue(delivery.SubscriptionId, out var subscription) || !subscription.IsActive)
                 continue;
-            var secret = secrets.Unprotect(subscription.ProtectedSecret) ?? string.Empty;
+            // Never signed with nothing: with the keys lost, the receiver couldn't trust it, and neither could we.
+            if (secrets.Unprotect(subscription.ProtectedSecret) is not { } secret)
+            {
+                delivery.RecordAttempt(clock.UtcNow, null, "The signing secret can't be read on this computer. Make a new one on the Webhooks page.");
+                await store.SaveChangesAsync(ct);
+                continue;
+            }
+
             var timestamp = clock.UtcNow.ToUnixTimeSeconds();
             var headers = new Dictionary<string, string>
             {

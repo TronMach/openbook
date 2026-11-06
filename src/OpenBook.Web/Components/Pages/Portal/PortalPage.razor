@@ -32,6 +32,10 @@
     <div class="summary-bar">
         <div><span class="label">You owe</span><span class="value">@Labels.Amount(_view.OpenInvoices.Sum(i => i.Balance))</span></div>
         <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_view.OpenInvoices.Where(i => i.IsOverdue(_today)).Sum(i => i.Balance))</span></div>
+        @if (_view.OpenInvoices.Sum(i => i.Balance) - _view.Statement.ClosingBalance is > 0m and var credit)
+        {
+            <div><span class="label">Your credit</span><span class="value">@Labels.Amount(credit)</span></div>
+        }
     </div>
 
     <h2>Open invoices</h2>
@@ -83,7 +87,7 @@
                         <td>
                             @if (e.Status != EstimateStatus.Pending)
                             {
-                                <span>@(e.Status == EstimateStatus.Declined ? "Declined" : "Accepted")@(e.RespondedBy is { } by ? $" by {by}" : "")@(e.RespondedAt is { } at ? $" on {Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime))}" : "")</span>
+                                <span>@(e.Status == EstimateStatus.Declined ? "Declined" : e.Status == EstimateStatus.Closed && e.RespondedBy is null ? "Invoiced" : "Accepted")@(e.RespondedBy is { } by ? $" by {by}" : "")@(e.RespondedAt is { } at ? $" on {Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime))}" : "")</span>
                             }
                             else if (e.IsExpired(_today))
                             {

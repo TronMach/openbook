@@ -88,12 +88,21 @@
         showMessage(pane, p.html);
     }
 
+    // Outside the API a signed-out post is sent to the sign-in page, which fetch follows to an ordinary 200.
+    function signedOut(response) {
+        return response.redirected || !(response.headers.get('content-type') || '').includes('json');
+    }
+
     async function refresh(form) {
         const pane = paneFor(form);
         if (!pane) return;
         status(pane, 'Updating the preview…');
         try {
             const response = await fetch(form.dataset.emailPreview, { method: 'POST', body: fields(form), credentials: 'same-origin' });
+            if (signedOut(response)) {
+                status(pane, 'The preview could not be updated: you\'ve been signed out. Your message is still on the page.', true);
+                return;
+            }
             const body = await response.json().catch(() => ({}));
             if (!response.ok) {
                 status(pane, `Not shown yet: ${body.error || 'the preview could not be made.'}`, true);
@@ -247,6 +256,10 @@
         status(pane, 'Sending a test copy…');
         try {
             const response = await fetch(form.dataset.emailTest, { method: 'POST', body: fields(form), credentials: 'same-origin' });
+            if (signedOut(response)) {
+                status(pane, "The test wasn't sent: you've been signed out.", true);
+                return;
+            }
             const body = await response.json().catch(() => ({}));
             status(pane, response.ok ? body.message : `The test wasn't sent: ${body.error || 'something went wrong.'}`, !response.ok);
         } catch {

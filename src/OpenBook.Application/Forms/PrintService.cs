@@ -84,7 +84,11 @@ public sealed class PrintService(
     /// <summary>A printed document back in the queue.</summary>
     public async Task PutBackAsync(Guid itemId, CancellationToken ct = default)
     {
-        var item = (await ItemsAsync(ct)).FirstOrDefault(i => i.Id == itemId) ?? throw new EntityNotFoundException("print_queue_item", itemId);
+        var items = await ItemsAsync(ct);
+        var item = items.FirstOrDefault(i => i.Id == itemId) ?? throw new EntityNotFoundException("print_queue_item", itemId);
+        // Queued again since: it's waiting already, and once is enough.
+        if (items.Any(i => i.IsWaiting && i.Document == item.Document && i.DocumentId == item.DocumentId))
+            return;
         item.PutBack();
         await store.SaveChangesAsync(ct);
     }
@@ -142,6 +146,8 @@ public sealed class PrintService(
                 pdfs.Add((await forms.RenderStatementAsync(customerId, statements.From, statements.To, ct)).Pdf);
         }
 
+        // The PDF first: documents count as printed only once there's something to print.
+        var combined = pdfs.Count == 1 ? pdfs[0] : renderer.Combine(pdfs);
         var printed = unique.ToHashSet();
         foreach (var item in (await ItemsAsync(ct)).Where(i => i.IsWaiting && printed.Contains((i.Document, i.DocumentId))))
             item.MarkPrinted(clock.UtcNow, user.Actor);
@@ -149,8 +155,7 @@ public sealed class PrintService(
 
         var company = await companies.GetRequiredCompanyAsync(ct);
         var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        return new RenderedForm(FormService.FileName(company, $"Printing {count}", today), pdfs.Count == 1 ? pdfs[0] : renderer.Combine(pdfs), Guid.Empty,
-            $"{count} document{(count == 1 ? "" : "s")}");
+        return new RenderedForm(FormService.FileName(company, $"Printing {count}", today), combined, Guid.Empty, $"{count} document{(count == 1 ? "" : "s")}");
     }
 
     private Task<IReadOnlyList<PrintQueueItem>> ItemsAsync(CancellationToken ct) => store.ListAsync(clock.UtcNow - RecentlyPrinted, ct);

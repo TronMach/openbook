@@ -194,7 +194,7 @@ public sealed class ReconciliationService(IBankingStore bank, AccountService acc
 
         // As the books stood at completion: posted by then, dated on or before the statement, void pairs left out.
         var asOfStatement = lines
-            .Where(l => l.Date <= reconciliation.StatementDate && l.PostedAt <= completedAt && !l.IsVoidPair)
+            .Where(l => l.Date <= reconciliation.StatementDate && l.StoodAt(completedAt))
             .ToList();
 
         return new ReconciliationReport(

@@ -17,5 +17,8 @@ public sealed class BooksCheckStatus
 
     public void Record(BooksCheckReport report) => Volatile.Write(ref _last, report);
 
+    /// <summary>After a restore: the result was about the file that's gone.</summary>
+    public void Clear() => Volatile.Write(ref _last, null);
+
     public bool IsDue(DateTimeOffset now) => Last is not { } last || now - last.RanAt >= Interval;
 }

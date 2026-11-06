@@ -51,7 +51,17 @@ internal sealed class SqliteBackupService(
             companyName = (await db.Companies.AsNoTracking().SingleOrDefaultAsync(ct))?.Name ?? "openbook";
 
         var path = Path.Combine(Path.GetTempPath(), $"openbook-backup-{Guid.NewGuid():N}.db");
-        await CopyAsync(storage.ConnectionString, FileConnectionString(path, readOnly: false), ct);
+        try
+        {
+            await CopyAsync(storage.ConnectionString, FileConnectionString(path, readOnly: false), ct);
+        }
+        catch (Exception ex) when (ex is DbException or IOException)
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(path);
+            throw new DomainException("backup.failed", $"The backup couldn't be made: {ex.Message}");
+        }
+
         return new BackupFile(path, $"{Slug(companyName)}-{clock.UtcNow:yyyyMMdd-HHmmss}.openbook.db");
     }
 
@@ -80,7 +90,17 @@ internal sealed class SqliteBackupService(
             await ValidateAsync(workConnection, known, storage.Encrypted, ct);
 
             var safetyCopy = Path.Combine(storage.BackupDirectory, $"pre-restore-{clock.UtcNow:yyyyMMdd-HHmmss-fff}.openbook.db");
-            await CopyAsync(storage.ConnectionString, FileConnectionString(safetyCopy, readOnly: false), ct);
+            try
+            {
+                await CopyAsync(storage.ConnectionString, FileConnectionString(safetyCopy, readOnly: false), ct);
+            }
+            catch (Exception ex) when (ex is DbException or IOException)
+            {
+                // A full disk: half a copy is no use, and it's taking the room.
+                SqliteConnection.ClearAllPools();
+                File.Delete(safetyCopy);
+                throw;
+            }
 
             // From here it finishes even if the browser goes away.
             await CopyAsync(workConnection, storage.ConnectionString, CancellationToken.None);
@@ -208,8 +228,22 @@ internal sealed class SqliteBackupService(
         await using var destination = new SqliteConnection(destinationConnectionString);
         await source.OpenAsync(ct);
         await destination.OpenAsync(ct);
-        source.BackupDatabase(destination);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                source.BackupDatabase(destination);
+                return;
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode is 5 or 6 && attempt < CopyAttempts)
+            {
+                // Someone is saving: it's over in a moment.
+                await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
+            }
+        }
     }
+
+    private const int CopyAttempts = 4;
 
     // No pooling, so the file handle is released as soon as the connection closes. Same key as the company file.
     private string FileConnectionString(string path, bool readOnly) =>

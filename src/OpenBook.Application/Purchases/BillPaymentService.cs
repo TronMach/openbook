@@ -180,6 +180,7 @@ public sealed class BillPaymentService(
 
         var before = Snapshot(payment);
         var billsBefore = bills.Values.ToDictionary(b => b.Id, BillService.Snapshot);
+        var (location, tags) = await engine.SegmentsOfAsync(payment.JournalEntryId, ct);
         await engine.StageVoidAsync(payment.JournalEntryId, $"Payment changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var entryMemo = string.IsNullOrEmpty(reference) ? $"Bill payment to {vendor.DisplayName}" : $"Bill payment to {vendor.DisplayName} · {reference}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
@@ -187,7 +188,9 @@ public sealed class BillPaymentService(
             [JournalLineDraft.Dr(payment.PayableAccountId, draft.Amount), JournalLineDraft.Cr(accountId, draft.Amount)],
             entryMemo,
             BillPayment.Source,
-            payment.Id), ct);
+            payment.Id,
+            LocationId: location,
+            TagIds: tags), ct);
 
         foreach (var (billId, amount) in old)
             bills[billId].RemovePayment(amount);

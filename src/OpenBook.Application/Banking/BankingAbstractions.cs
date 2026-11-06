@@ -18,10 +18,15 @@ public sealed record AccountLine(
     Guid? SourceId,
     JournalEntryStatus EntryStatus,
     JournalEntryKind EntryKind,
-    DateTimeOffset PostedAt)
+    DateTimeOffset PostedAt,
+    DateTimeOffset? VoidedAt = null)
 {
     /// <summary>Voided entries and their reversals cancel out and never reach the bank, so reconciliation skips them.</summary>
     public bool IsVoidPair => EntryStatus == JournalEntryStatus.Voided || EntryKind == JournalEntryKind.Reversal;
+
+    /// <summary>In the books at that moment: posted by then and not yet voided. A void since doesn't change what stood.</summary>
+    public bool StoodAt(DateTimeOffset moment) =>
+        PostedAt <= moment && EntryKind != JournalEntryKind.Reversal && !(EntryStatus == JournalEntryStatus.Voided && VoidedAt <= moment);
 }
 
 public interface IBankingStore

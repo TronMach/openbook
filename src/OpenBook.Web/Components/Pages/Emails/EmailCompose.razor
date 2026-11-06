@@ -53,10 +53,12 @@
                 <div class="field">
                     <label for="subject">Subject</label>
                     <InputText id="subject" @bind-Value="Input.Subject" maxlength="300" />
+                    <ValidationMessage For="() => Input.Subject" />
                 </div>
                 <EmailBodyField For="body">
                     <InputTextArea id="body" rows="12" @bind-Value="Input.Body" />
                 </EmailBodyField>
+                <ValidationMessage For="() => Input.Body" />
 
                 @if (_designs.Count > 1)
                 {

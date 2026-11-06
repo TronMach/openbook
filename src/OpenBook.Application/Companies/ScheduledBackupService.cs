@@ -131,7 +131,9 @@ public sealed class ScheduledBackupService(
         {
             var target = targets.FirstOrDefault(t => t.Destination == schedule.Destination)
                 ?? throw new DomainException("backup.destination_unavailable", "That backup destination isn't available on this server.");
-            var secret = schedule.ProtectedSecretKey is { } protectedKey ? secrets.Unprotect(protectedKey) : null;
+            var secret = schedule.ProtectedSecretKey is { } protectedKey
+                ? secrets.Unprotect(protectedKey) ?? throw new DomainException("backup.secret_unreadable", "The secret access key can't be read on this computer. Enter it again on the Backup page.")
+                : null;
             file = await backups.CreateAsync(ct);
             // The company in the name: two companies, or a trial restore, can share a destination without deleting each other's.
             var own = $"{prefix}{(await store.GetRequiredCompanyAsync(ct)).Id.ToString("N")[..8]}-";

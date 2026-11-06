@@ -121,9 +121,17 @@ public static class DependencyInjection
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OpenBookDbContext>();
-        if (scope.ServiceProvider.GetService<OpenBookStorage>() is { Provider: DatabaseProvider.Sqlite } storage)
-            await SqliteBackupService.PrepareToMigrateAsync(db, storage, ct);
-        await db.Database.MigrateAsync(ct);
+        try
+        {
+            if (scope.ServiceProvider.GetService<OpenBookStorage>() is { Provider: DatabaseProvider.Sqlite } storage)
+                await SqliteBackupService.PrepareToMigrateAsync(db, storage, ct);
+            await db.Database.MigrateAsync(ct);
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 26)
+        {
+            // SQLITE_NOTADB: encrypted with another key, or no key given.
+            throw new Domain.Common.DomainException("company.file_unreadable", "The company file can't be opened: it's encrypted and OpenBook:EncryptionKey is missing or wrong, or it isn't a company file. The file hasn't been changed.");
+        }
     }
 
     /// <summary>The key goes in as the connection's Password, which Microsoft.Data.Sqlite applies with PRAGMA key on open.</summary>

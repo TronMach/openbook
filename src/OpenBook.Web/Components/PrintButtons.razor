@@ -18,22 +18,18 @@
         </div>
     </details>
 }
-@if (_canWrite)
-{
-    <form method="post" action="@(_waiting ? "/print/queue/remove" : "/print/queue")" class="inline-form" data-enhance="false">
-        <AntiforgeryToken />
-        <input type="hidden" name="document" value="@Document" />
-        <input type="hidden" name="id" value="@Id" />
-        <input type="hidden" name="returnUrl" value="@_returnUrl" />
-        <button type="submit" class="button secondary" title="@(_waiting ? "Waiting in the print queue: take it out" : "Add to the print queue, to print with others later")">
-            @(_waiting ? "In print queue ✓" : "Print later")
-        </button>
-    </form>
-}
+<PostForm Action="@(_waiting ? "/print/queue/remove" : "/print/queue")" class="inline-form" data-enhance="false">
+    <AntiforgeryToken />
+    <input type="hidden" name="document" value="@Document" />
+    <input type="hidden" name="id" value="@Id" />
+    <input type="hidden" name="returnUrl" value="@_returnUrl" />
+    <button type="submit" class="button secondary" title="@(_waiting ? "Waiting in the print queue: take it out" : "Add to the print queue, to print with others later")">
+        @(_waiting ? "In print queue ✓" : "Print later")
+    </button>
+</PostForm>
 
 @code {
     private bool _waiting;
-    private bool _canWrite;
     private string _returnUrl = "/";
     private IReadOnlyList<FormDesign> _designs = [];
 
@@ -46,12 +42,10 @@
     [Parameter, EditorRequired]
     public string PdfUrl { get; set; } = string.Empty;
 
-    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
         _returnUrl = new Uri(Navigation.Uri).PathAndQuery.Split("printError=")[0].TrimEnd('&', '?');
-        _canWrite = AuthState is not null && (await AuthState).User.CanPost("/print/queue");
         _waiting = await Print.IsWaitingAsync(Document, Id);
         _designs = [.. (await Designs.ListAsync()).Where(d => d.IsActive)];
     }

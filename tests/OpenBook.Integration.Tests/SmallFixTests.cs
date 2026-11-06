@@ -6,18 +6,21 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
+using OpenBook.Application.Import;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Nonprofit;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Sales;
 using OpenBook.Application.Search;
+using OpenBook.Application.Segments;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
+using OpenBook.Domain.Segments;
 using OpenBook.Infrastructure.Persistence;
 
 namespace OpenBook.Integration.Tests;
@@ -143,6 +146,76 @@ public sealed class SmallFixTests : IAsyncLifetime
     [Fact]
     public void Goods_received_are_named_in_reports() =>
         Assert.Equal("Goods received", ReportCatalog.DocumentType(OpenBook.Application.Purchases.PurchaseOrderService.ReceiptSource));
+
+    [Fact]
+    public void An_ofx_line_left_open_in_the_middle_is_kept_and_a_bad_balance_doesnt_stop_the_file()
+    {
+        var statement = Ofx.Parse("<OFX><STMTTRN><DTPOSTED>20260101<TRNAMT>-1.00<FITID>A<STMTTRN><DTPOSTED>20260102<TRNAMT>-2.00<FITID>B</STMTTRN>"
+            + "<LEDGERBAL><BALAMT>12.345<DTASOF>2026</LEDGERBAL></OFX>");
+        Assert.Equal(["A", "B"], statement.Transactions.Select(t => t.FitId));
+        Assert.Null(statement.LedgerBalance);
+    }
+
+    [Fact]
+    public void A_backup_in_the_hour_clocks_repeat_runs_once()
+    {
+        var eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        var schedule = BackupSchedule.Default();
+        schedule.Update(true, BackupFrequency.Daily, DayOfWeek.Sunday, 1, BackupDestination.Folder, "C:/backups", null, null, null, null, null, null, 14);
+        schedule.Started(new DateTimeOffset(2026, 11, 1, 5, 0, 0, TimeSpan.Zero));
+        Assert.False(schedule.IsDue(new DateTimeOffset(2026, 11, 1, 5, 15, 0, TimeSpan.Zero), eastern));
+        Assert.False(schedule.IsDue(new DateTimeOffset(2026, 11, 1, 6, 15, 0, TimeSpan.Zero), eastern));
+    }
+
+    [Fact]
+    public async Task A_correction_keeps_the_tags_on_a_transfer_and_a_payment()
+    {
+        var savings = await _db.CreateAccount("Savings", AccountType.Bank, "1010");
+        var tag = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Tag, "Audit 2026", null));
+        var transfer = await In<BankingService, BankTransaction>(s => s.TransferAsync(new TransferCommand(_checking.Id, savings.Id, Jan5, 50m, "First")));
+        await In<SegmentService, object?>(async s =>
+        {
+            await s.SetTagsAsync(transfer.JournalEntryId, [tag.Id]);
+            return null;
+        });
+
+        var changed = await In<BankingService, BankTransaction>(s => s.ChangeTransferAsync(transfer.Id, new ChangeTransferCommand(_checking.Id, savings.Id, Jan5, 50m, "Second", "Memo wrong")));
+
+        var tags = await _db.InScope(sp => sp.GetRequiredService<ILedgerStore>().GetEntryTagsAsync([changed.JournalEntryId], default));
+        Assert.Equal(tag.Id, Assert.Single(tags).TagId);
+    }
+
+    [Fact]
+    public async Task A_stale_check_voided_later_stays_on_the_old_reconciliation_report()
+    {
+        await Post(5m, "Before the statement");
+        var spend = await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(
+            BankTransactionKind.Spend, _checking.Id, Jan5, [new BankSplit(_expense.Id, 30m)], "Payee", "1002")));
+        var started = await In<ReconciliationService, Reconciliation>(s => s.StartAsync(_checking.Id, new DateOnly(2026, 1, 31), -5m));
+        var worksheet = await In<ReconciliationService, ReconciliationWorksheet>(s => s.GetWorksheetAsync(started.Id));
+        var ticks = worksheet.Items.Where(i => i.NaturalAmount == -5m).Select(i => i.Line.JournalLineId).ToList();
+        await In<ReconciliationService, ReconciliationWorksheet>(s => s.SetClearedAsync(started.Id, ticks, true));
+        await In<ReconciliationService, Reconciliation>(s => s.CompleteAsync(started.Id));
+        var before = await In<ReconciliationService, ReconciliationReport>(s => s.GetReportAsync(started.Id));
+        Assert.Single(before.Outstanding);
+
+        _db.Clock.UtcNow = _db.Clock.UtcNow.AddDays(60);
+        await In<BankingService, BankTransaction>(s => s.VoidAsync(spend.Id, "Stale"));
+
+        var after = await In<ReconciliationService, ReconciliationReport>(s => s.GetReportAsync(started.Id));
+        Assert.Single(after.Outstanding);
+        Assert.Equal(before.RegisterBalance, after.RegisterBalance);
+    }
+
+    [Fact]
+    public void A_stub_past_ten_bills_ends_with_one_line_that_keeps_the_total()
+    {
+        var lines = Enumerable.Range(1, 14).Select(i => ($"Bill {i}", 10m)).ToList();
+        var rows = CheckForm.StubRowsOf(lines);
+        Assert.Equal(10, rows.Count);
+        Assert.Equal(140m, rows.Sum(r => r.Amount));
+        Assert.Equal("5 more bills", rows[^1].Description);
+    }
 
     [SqliteFact]
     public async Task An_encrypted_file_stays_in_write_ahead_mode()

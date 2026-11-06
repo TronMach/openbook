@@ -20,10 +20,29 @@ public sealed class FolderBackupTarget : IBackupTarget
         Directory.CreateDirectory(folder);
         // Write under a temporary name, then rename, so a half-copied file never looks like a backup.
         var partial = Path.Combine(folder, name + ".partial");
-        await using (var source = File.OpenRead(localPath))
-        await using (var target = File.Create(partial))
-            await source.CopyToAsync(target, ct);
-        File.Move(partial, Path.Combine(folder, name), overwrite: true);
+        ClearStalePartials(folder);
+        try
+        {
+            await using (var source = File.OpenRead(localPath))
+            await using (var target = File.Create(partial))
+                await source.CopyToAsync(target, ct);
+            File.Move(partial, Path.Combine(folder, name), overwrite: true);
+        }
+        finally
+        {
+            // A copy that failed (a full drive) mustn't keep the room it took: each run has a new name.
+            File.Delete(partial);
+        }
+    }
+
+    /// <summary>What a run stopped mid-copy left; a day old, so a backup another copy of OpenBook is writing here is left alone.</summary>
+    private static void ClearStalePartials(string folder)
+    {
+        foreach (var old in Directory.EnumerateFiles(folder, "openbook-scheduled-*.partial"))
+        {
+            if (File.GetLastWriteTimeUtc(old) < DateTime.UtcNow.AddDays(-1))
+                File.Delete(old);
+        }
     }
 
     public Task<IReadOnlyList<string>> ListAsync(BackupSchedule schedule, string? secretKey, string namePrefix, CancellationToken ct)

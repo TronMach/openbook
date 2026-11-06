@@ -213,7 +213,7 @@ public sealed class ChannelTests : IAsyncLifetime
         Assert.Equal(-48.99m, Line(amazon.AdjustmentsAccountId));
 
         var report = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("channel-sales", ReportParameters.Parse("preset=Custom&from=2026-03-01&to=2026-03-31")));
-        Assert.Equal(73.50m, report.Rows.Single(r => r.Cells[0].Value as string == "Amazon US").Cells[9].Value);
+        Assert.Equal(73.50m, report.Rows.Single(r => r.Cells[0].Value as string == "Amazon US").Cells[10].Value);
 
         Assert.Equal("journal.void_document", (await Assert.ThrowsAsync<DomainException>(() =>
             In<PostingEngine, JournalEntry>(e => e.VoidAsync(entry.Id, "no")))).Code);

@@ -139,10 +139,19 @@ public static class AccountEndpoints
             {
                 return BackToBackupPage(ex.Code);
             }
+            catch (IOException)
+            {
+                return BackToBackupPage("backup.restore_failed");
+            }
             finally
             {
                 File.Delete(upload);
             }
+
+            // What's held in memory came from the old file.
+            http.RequestServices.GetRequiredService<OpenBook.Application.Companies.ISingleSignOnHost>().SettingsChanged();
+            http.RequestServices.GetRequiredService<Diagnostics.BooksCheckStatus>().Clear();
+            OpenBook.Application.CompanyTime.Use(await http.RequestServices.GetRequiredService<OpenBook.Application.Companies.ICompanyStore>().GetCompanyAsync(CancellationToken.None));
 
             // The restored file has its own users and security stamps.
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

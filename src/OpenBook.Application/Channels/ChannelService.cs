@@ -390,7 +390,7 @@ public sealed class ChannelSalesReport(ChannelService channels, OpenBook.Applica
         var company = await OpenBook.Application.Companies.CompanyStoreExtensions.GetRequiredCompanyAsync(companies, ct);
         var payouts = (await channels.PayoutsAsync(null, ct)).Where(p => p.Status == PayoutStatus.Posted && p.Date >= from && p.Date <= to).ToList();
         var rows = new List<OpenBook.Application.Reporting.ReportTableRow>();
-        var types = new[] { ChannelLineType.Sale, ChannelLineType.Shipping, ChannelLineType.Refund, ChannelLineType.Fee, ChannelLineType.Tax, ChannelLineType.MarketplaceTax, ChannelLineType.Adjustment };
+        var types = new[] { ChannelLineType.Sale, ChannelLineType.Shipping, ChannelLineType.Refund, ChannelLineType.Fee, ChannelLineType.Tax, ChannelLineType.MarketplaceTax, ChannelLineType.Adjustment, ChannelLineType.Cleared };
 
         OpenBook.Application.Reporting.ReportTableRow Row(OpenBook.Application.Reporting.ReportCell name, IReadOnlyCollection<ChannelPayout> ps, OpenBook.Application.Reporting.ReportRowStyle style) =>
             new([name, new OpenBook.Application.Reporting.ReportCell((decimal)ps.Count), .. types.Select(t => (OpenBook.Application.Reporting.ReportCell)ps.Sum(p => p.Total(t))), ps.Sum(p => p.Net)], 0, style);
@@ -412,6 +412,7 @@ public sealed class ChannelSalesReport(ChannelService channels, OpenBook.Applica
                 new("Shipping", OpenBook.Application.Reporting.ColumnFormat.Money), new("Refunds", OpenBook.Application.Reporting.ColumnFormat.Money),
                 new("Fees", OpenBook.Application.Reporting.ColumnFormat.Money), new("Sales tax", OpenBook.Application.Reporting.ColumnFormat.Money),
                 new("Tax paid by marketplace", OpenBook.Application.Reporting.ColumnFormat.Money), new("Adjustments", OpenBook.Application.Reporting.ColumnFormat.Money),
+                new("Invoices paid online", OpenBook.Application.Reporting.ColumnFormat.Money),
                 new("Net paid", OpenBook.Application.Reporting.ColumnFormat.Money),
             ],
             rows,

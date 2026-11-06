@@ -170,6 +170,11 @@
             _rule = await Rules.GetAsync(id);
             if (_rule is null)
                 return;
+            // Kept on offer though inactive since: a choice missing from the list would save as "any", and widen the rule.
+            if (_rule.AccountId is { } account && _banks.All(b => b.Id != account))
+                _banks = [.. _banks, _chart.Get(account)];
+            if (_rule.VendorId is { } vendor && _vendors.All(v => v.Id != vendor) && await VendorService.GetAsync(vendor) is { } inactive)
+                _vendors = [.. _vendors, inactive];
             Input ??= new RuleModel
             {
                 Name = _rule.Name, Priority = _rule.Priority, Contains = _rule.Contains, Direction = _rule.Direction, AccountId = _rule.AccountId,

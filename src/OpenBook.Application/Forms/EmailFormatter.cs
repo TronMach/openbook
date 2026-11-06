@@ -33,6 +33,12 @@ public static class EmailFormatter
         var text = new StringBuilder(Text(document));
         foreach (var button in buttons)
             text.Append(text.Length > 0 ? "\n\n" : "").Append(button.Label).Append(": ").Append(button.Url);
+        // The body signs itself with the company's name; what the HTML footer adds to that goes on the text too.
+        var closing = look.ContactLines.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        if (look.Footer is { Length: > 0 } footer)
+            closing.Add(footer);
+        if (closing.Count > 0)
+            text.Append(text.Length > 0 ? "\n\n" : "").AppendJoin('\n', closing);
         if (look.Style == EmailStyle.Plain)
             return new ComposedEmail(subject, text.ToString(), null, []);
 

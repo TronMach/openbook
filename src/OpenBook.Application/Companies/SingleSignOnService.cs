@@ -72,7 +72,8 @@ public sealed class SingleSignOnService(
     /// <summary>Null while single sign-on is off or incomplete.</summary>
     public async Task<SsoClient?> ClientAsync(CancellationToken ct = default) =>
         await store.GetSignInSettingsAsync(ct) is { IsSsoReady: true } s
-            ? new SsoClient(s.Authority!, s.SsoClientId!, protector.Unprotect(s.ProtectedSsoClientSecret!))
+            ? new SsoClient(s.Authority!, s.SsoClientId!, protector.Unprotect(s.ProtectedSsoClientSecret!)
+                ?? throw new DomainException("sso.secret_unreadable", "The single sign-on client secret can't be read on this computer. Enter it again under Settings, Sign-in."))
             : null;
 
     public async Task<SignInResult> SignInAsync(ExternalIdentity identity, CancellationToken ct = default)

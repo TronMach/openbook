@@ -197,9 +197,10 @@ public sealed class PaymentService(
 
         var before = Snapshot(payment);
         var invoicesBefore = invoices.Values.ToDictionary(i => i.Id, InvoiceService.Snapshot);
+        var (location, tags) = await engine.SegmentsOfAsync(payment.JournalEntryId, ct);
         await engine.StageVoidAsync(payment.JournalEntryId, $"Payment changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
-            Postings(amount, depositId, discount, discountsAccount?.Id, payment.ReceivableAccountId), EntryMemo(customer, reference), CustomerPayment.Source, payment.Id), ct);
+            Postings(amount, depositId, discount, discountsAccount?.Id, payment.ReceivableAccountId), EntryMemo(customer, reference), CustomerPayment.Source, payment.Id, LocationId: location, TagIds: tags), ct);
 
         foreach (var (invoiceId, settled) in old)
             invoices[invoiceId].RemovePayment(settled);

@@ -123,7 +123,9 @@ public sealed class BackupSchedule
                 slot = slot.AddDays(-1);
         }
 
-        return new DateTimeOffset(slot, zone.GetUtcOffset(slot));
+        // In the hour clocks repeat, the first time through: the second is still ahead of the first, and would make the slot run again.
+        var offset = zone.IsAmbiguousTime(slot) ? zone.GetAmbiguousTimeOffsets(slot).Max() : zone.GetUtcOffset(slot);
+        return new DateTimeOffset(slot, offset);
     }
 
     /// <summary>Due when enabled and nothing has run since the latest slot (so the first backup runs right away).</summary>

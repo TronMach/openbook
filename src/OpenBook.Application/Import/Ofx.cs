@@ -49,7 +49,8 @@ public static partial class Ofx
 
             if (tag == "STMTTRN")
             {
-                if (closing && current is not null)
+                // A new one opening with the last left open: that line ended there, in a file that doesn't close them.
+                if (current is { Count: > 0 } || (closing && current is not null))
                     transactions.Add(Transaction(current, ++line));
                 current = closing ? null : new Dictionary<string, string>(StringComparer.Ordinal);
                 continue;
@@ -58,6 +59,12 @@ public static partial class Ofx
             if (tag == "LEDGERBAL")
             {
                 inLedgerBalance = !closing;
+                if (!closing && current is { Count: > 0 })
+                {
+                    transactions.Add(Transaction(current, ++line));
+                    current = null;
+                }
+
                 continue;
             }
 
@@ -80,10 +87,10 @@ public static partial class Ofx
                     currency ??= value;
                     break;
                 case "BALAMT" when inLedgerBalance:
-                    balance = Amount(value, "ledger balance");
+                    balance = Shown(() => Amount(value, "ledger balance"));
                     break;
                 case "DTASOF" when inLedgerBalance:
-                    balanceDate = Date(value, "ledger balance date");
+                    balanceDate = Shown(() => Date(value, "ledger balance date"));
                     break;
             }
         }
@@ -97,6 +104,19 @@ public static partial class Ofx
         if (accounts.Count > 1)
             throw new DomainException("ofx.several_accounts", $"This file holds {accounts.Count} accounts. Download each account's statement separately and import them one at a time.");
         return new OfxStatement(accountId, currency, balance, balanceDate, transactions);
+    }
+
+    /// <summary>The balance is only shown beside the lines, so one that won't read is left out rather than refusing the file.</summary>
+    private static T? Shown<T>(Func<T> read) where T : struct
+    {
+        try
+        {
+            return read();
+        }
+        catch (DomainException)
+        {
+            return null;
+        }
     }
 
     private static OfxTransaction Transaction(Dictionary<string, string> fields, int number)

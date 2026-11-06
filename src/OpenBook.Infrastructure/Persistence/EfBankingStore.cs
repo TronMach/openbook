@@ -15,7 +15,7 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
             join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
             where l.AccountId == accountId
             orderby e.Date, e.Number, l.LineNumber
-            select new AccountLine(l.Id, e.Id, e.Number, e.Date, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Status, e.Kind, e.PostedAt))
+            select new AccountLine(l.Id, e.Id, e.Number, e.Date, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Status, e.Kind, e.PostedAt, e.VoidedAt))
             .AsNoTracking()
             .ToListAsync(ct);
 

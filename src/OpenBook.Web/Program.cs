@@ -119,7 +119,15 @@ if (isRestoreBackup)
 if (isMakeDemo)
     return await DemoCompanyCommand.RunAsync(app.Services, args);
 
-await app.Services.MigrateOpenBookDatabaseAsync();
+try
+{
+    await app.Services.MigrateOpenBookDatabaseAsync();
+}
+catch (OpenBook.Domain.Common.DomainException ex) when (ex.Code == "company.file_unreadable")
+{
+    Console.Error.WriteLine(ex.Message);
+    return 1;
+}
 await using (var scope = app.Services.CreateAsyncScope())
     OpenBook.Application.CompanyTime.Use(await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Companies.ICompanyStore>().GetCompanyAsync(default));
 

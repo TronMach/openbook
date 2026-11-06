@@ -190,7 +190,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
                     table.AddColumn(Unit.FromInch(5.5));
                     table.AddColumn(Unit.FromInch(2.0));
                     (table.TopPadding, table.BottomPadding) = (Unit.FromPoint(2), Unit.FromPoint(2));
-                    foreach (var (description, amount) in check.StubLines.Take(10))
+                    foreach (var (description, amount) in check.StubRows)
                     {
                         var row = table.AddRow();
                         row.Cells[0].AddParagraph(description);
@@ -878,6 +878,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         section.AddParagraph().Format.SpaceAfter = 6;
         var width = ContentWidth(section);
         var table = section.AddTable();
+        table.KeepTogether = true;
         table.AddColumn(Unit.FromPoint(130));
         table.AddColumn(Unit.FromPoint(120));
         table.Rows.LeftIndent = width - Unit.FromPoint(250);

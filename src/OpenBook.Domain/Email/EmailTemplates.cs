@@ -157,13 +157,13 @@ public static partial class EmailTemplates
     public static (string Subject, string Body) Usual(EmailKind kind) => kind switch
     {
         EmailKind.Invoice => ("Invoice {number} from {company}",
-            "Hello,\n\nPlease find invoice {number} attached. The balance of {balance} is due on {due}.\n\nThank you,\n{company}"),
+            "Hello,\n\nHere is invoice {number}. The balance of {balance} is due on {due}.\n\nThank you,\n{company}"),
         EmailKind.Estimate => ("Estimate {number} from {company}",
-            "Hello,\n\nPlease find estimate {number} attached, for {total}.\nIt's valid until {valid_until}.\n\nThank you,\n{company}"),
+            "Hello,\n\nHere is estimate {number}, for {total}.\nIt's valid until {valid_until}.\n\nThank you,\n{company}"),
         EmailKind.CreditMemo => ("Credit memo {number} from {company}",
-            "Hello,\n\nPlease find credit memo {number} attached, for {total}.\n\nThank you,\n{company}"),
+            "Hello,\n\nHere is credit memo {number}, for {total}.\n\nThank you,\n{company}"),
         EmailKind.SalesReceipt => ("Receipt {number} from {company}",
-            "Hello,\n\nThank you for your purchase. Your receipt {number} is attached.\n\nThank you,\n{company}"),
+            "Hello,\n\nThank you for your purchase. Here is your receipt {number}.\n\nThank you,\n{company}"),
         EmailKind.Statement => ("Statement from {company}",
             "Hello,\n\nPlease find your statement of account as of {to} attached.\n\nThank you,\n{company}"),
         EmailKind.PurchaseOrder => ("Purchase order {number} from {company}",

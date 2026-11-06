@@ -95,7 +95,7 @@ public sealed class EmailTests : IAsyncLifetime
         Assert.Contains($"- Invoice {first.Number}: 200.00, paid in full", draft.Body, StringComparison.Ordinal);
         Assert.Contains($"- Invoice {second.Number}: 100.00, 200.00 still to pay", draft.Body, StringComparison.Ordinal);
         Assert.Contains("50.00 is kept as a credit", draft.Body, StringComparison.Ordinal);
-        Assert.Contains("balance with us is now 200.00", draft.Body, StringComparison.Ordinal);
+        Assert.Contains("balance with us is now 150.00", draft.Body, StringComparison.Ordinal);
         Assert.Null((await In<EmailService, EmailPreview>(s => s.PreviewAsync(source, draft))).Attachment);
 
         await In<EmailService, SentEmail>(s => s.SendAsync(source, draft));

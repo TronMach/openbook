@@ -63,13 +63,14 @@ public sealed record PurchaseOrderResponse(
         {
             var status = progress?.Lines.FirstOrDefault(s => s.Line.LineNumber == l.LineNumber);
             return new PurchaseOrderLineResponse(l.LineNumber, l.ItemId, l.AccountId, l.Description, l.Quantity, l.UnitCost, l.Amount,
-                status?.Received ?? 0m, status?.BilledQuantity ?? 0m, status?.BilledAmount ?? 0m);
+                status?.Received, status?.BilledQuantity, status?.BilledAmount);
         }).ToList());
 }
 
+/// <param name="Received">Null where the answer doesn't work it out (lists and changes): GET one order for these three.</param>
 public sealed record PurchaseOrderLineResponse(
     int LineNumber, Guid? ItemId, Guid? AccountId, string? Description, decimal Quantity, decimal UnitCost, decimal Amount,
-    decimal Received, decimal BilledQuantity, decimal BilledAmount);
+    decimal? Received, decimal? BilledQuantity, decimal? BilledAmount);
 
 public sealed record ApprovalRequest(string? Note);
 
