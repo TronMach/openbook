@@ -18,7 +18,7 @@ If OpenBook isn't reachable from the internet, you can skip the webhook. Payment
 
 Once online payments are on:
 
-- **Emailed invoices** include a "Pay online" link.
+- **Emailed invoices** include a **Pay now** button.
 - An invoice's page has an **Online payment** panel: **Get a payment link for the balance** makes one to send any way you like, and **Check if paid** asks Stripe about it.
 - The **customer portal** (below) has **Pay now** on every open invoice.
 

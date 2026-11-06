@@ -19,7 +19,7 @@ The customer page shows their invoices, payments and balance, and has a **Statem
 
 **Customer Center** on the customer list shows the list and one customer side by side, with every transaction they have; see [The simple view](28-simple-view.md#customer-vendor-and-item-centers). The products and services list has an **Item Center** button that does the same for items.
 
-A customer with unpaid invoices can't be made inactive; once they're settled, **Make inactive** removes them from the pickers.
+A customer with unpaid invoices or a recurring invoice still running can't be made inactive; once those are settled or stopped, **Make inactive** removes them from the pickers.
 
 To add many at once, use **Customers → Import CSV** with a CSV file of names, emails, phones and addresses. As with every import, you get a preview first and nothing is added until every row is good. Customers that already exist are skipped.
 

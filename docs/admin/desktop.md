@@ -51,7 +51,7 @@ On Windows, with the .NET 10 SDK and [Inno Setup 6](https://jrsoftware.org/isinf
 powershell -File tools/package-desktop.ps1 -Version 1.0.0
 ```
 
-It publishes `OpenBook.Web` (the server) and `OpenBook.Desktop` (the launcher: no console window, starts the server and leaves) self-contained for win-x64 into `artifacts/desktop/win-x64`, adds `openbook.install.json`, and compiles `packaging/windows/OpenBook.iss` into `artifacts/desktop/OpenBook-Setup-<version>.exe`. It also builds the QuickBooks Desktop export helper (`tools/package-qb-export.ps1`, below) into its `QuickBooks` folder. `-SkipInstaller` stops after publishing; that folder runs as it is. The icon is made from the app's icon by `python tools/make-icon.py`.
+It publishes `OpenBook.Web` (the server) and `OpenBook.Desktop` (the launcher: no console window, starts the server, then stays as the tray icon) self-contained for win-x64 into `artifacts/desktop/win-x64`, adds `openbook.install.json`, and compiles `packaging/windows/OpenBook.iss` into `artifacts/desktop/OpenBook-Setup-<version>.exe`. It also builds the QuickBooks Desktop export helper (`tools/package-qb-export.ps1`, below) into its `QuickBooks` folder. `-SkipInstaller` stops after publishing; that folder runs as it is. The icon is made from the app's icon by `python tools/make-icon.py`.
 
 ## The QuickBooks export helper
 

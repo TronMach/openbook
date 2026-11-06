@@ -4,7 +4,7 @@ Open-source bookkeeping for small businesses and nonprofits, in your browser, wi
 
 OpenBook comes in two installs of the same program:
 
-- **OpenBook Desktop** for one computer: a Windows installer, the company file in your Documents folder, daily backups, and an icon in the system tray. A **simple view** with a QuickBooks Desktop-like home page suits a business one person runs.
+- **OpenBook Desktop** for one computer: a Windows installer, the company file in your Documents folder, daily backups, and an icon in the system tray. A **simple view** with a menu bar by task and a step-by-step home page suits a business one person runs.
 - **OpenBook Server** for several people: a Docker image, with PostgreSQL, behind your own HTTPS proxy.
 
 Moving in from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks is built in.

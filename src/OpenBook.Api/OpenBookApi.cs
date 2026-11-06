@@ -26,7 +26,10 @@ public static class OpenBookApi
                 Title = "OpenBook API",
                 Version = "v1",
                 Description = "Everything the app can do. Authenticate with an API key (Settings › API keys) as `Authorization: Bearer obk_…`; " +
-                    "it acts as its user with the user's role. Errors are 400 with a stable `code`, 403 when the role doesn't allow it.",
+                    "it acts as its user with the user's role. Refusals are problem details with a stable `code`: 400 for a mistake in the request, 401 without a " +
+                    "valid key, 403 when the role or the key's scopes don't allow it, 404 for a record that isn't there, 409 when another save got there first (try again), " +
+                    "422 for an idempotency key used on a different request, 429 past a rate limit. Two optional headers: `Idempotency-Key` on a write makes repeating it " +
+                    "safe, and `X-Closing-Password` allows a change dated in a closed period.",
             };
             document.Components ??= new OpenApiComponents();
             document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
@@ -36,6 +39,7 @@ public static class OpenBookApi
                 Scheme = "bearer",
                 Description = "An OpenBook API key.",
             };
+            document.Security = [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("apiKey", document)] = [] }];
             return Task.CompletedTask;
         }));
         return services;

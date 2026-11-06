@@ -23,7 +23,7 @@ When your role or permission set doesn't allow something, its button or link sti
 
 ## The home page
 
-In the full view the home page lists what's waiting under **To do**, each line linking to where it's done: overdue invoices, payments to deposit, bills due within a week, bills waiting for approval, bank lines to review, accounts to reconcile (not reconciled through the end of last month), estimates waiting for an answer, purchase orders still to receive, items to reorder and, for nonprofits, gifts not yet thanked. Only what you can act on is listed.
+In the full view the home page lists what's waiting under **To do**, each line linking to where it's done: overdue invoices, payments to deposit, bills due within a week, bills waiting for approval, bank lines to review, accounts to reconcile (not reconciled through the end of last month), estimates waiting for an answer, purchase orders still to receive, items to reorder, documents to check, receipts to record, figures in the books that don't agree and, for nonprofits, gifts not yet thanked. Only what you can act on is listed.
 
 Under it, **Getting started** checks off the first steps as you do them: setting up the chart of accounts, adding bank accounts, a customer and your products and services, the first invoice, email, reconciling and scheduled backups. It goes away once every step is done. **Company** at the bottom shows the company's legal structure, currency and fiscal year.
 
@@ -85,11 +85,11 @@ Select your username, then **Theme**, to cycle through *auto* (follow your compu
 
 ## Language and region
 
-Select your username, then **Language and region**. **Region** sets how dates and numbers are shown; **language** sets the text. Until you choose, OpenBook follows your browser's language. Parts of OpenBook are translated so far; anything not yet translated shows in English.
+Select your username, then **Language and region**. **Region** sets how dates and numbers are shown; **language** sets the text. Until you choose, OpenBook follows your browser's language. OpenBook is in English so far, so the language setting only matters once a translation is added; regions already work.
 
 ## Record pages
 
-Most pages for a single record (a customer, an invoice, a bill) share the same pieces at the bottom:
+Most pages for a single record (a customer, an invoice, a bill) share the same pieces; **History** is a button at the top, the others are at the bottom:
 
 - **Attachments**: add files such as a receipt photo, a signed contract or a tax-exemption certificate. They're stored inside the company file, so backups include them.
 - **Notes**: short free-text notes, each with who wrote it and when.

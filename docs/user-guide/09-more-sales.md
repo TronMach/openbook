@@ -63,7 +63,7 @@ A *credit memo* is the opposite of an invoice: it reduces the customer's balance
 
 The credit then sits on the customer's account. Use it by either:
 
-- **applying** it: on an invoice choose **Apply credit**, or **Sales → Apply credit** to pick the customer's credits and invoices (**Apply oldest first** does it in one step). Applying credit posts nothing new; it just settles the invoice. Applied to the wrong invoice? **Remove** beside it under **Applied to** on the credit memo takes it back: the invoice owes that amount again and the credit is free to use. Vendor credits work the same way.
+- **applying** it: on an invoice choose **Apply credit**, or **Sales → Apply credit** under Tools to pick the customer's credits and invoices (**Apply oldest first** does it in one step). Applying credit posts nothing new; it just settles the invoice. Applied to the wrong invoice? **Remove** beside it under **Applied to** on the credit memo takes it back: the invoice owes that amount again and the credit is free to use. Vendor credits work the same way.
 - **refunding** it (below).
 
 Overpayments work the same way: when a customer pays more than the invoices you apply the payment to, the rest is credit you can apply or refund.

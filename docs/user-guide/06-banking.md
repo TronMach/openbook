@@ -2,7 +2,7 @@
 
 The **Banking** page lists your bank and credit card accounts with their balances and what's waiting for review. From here you record money in and out, bring in your bank's statements, and reconcile.
 
-To add an account, use **Add an account** and give it the type *Bank* or *Credit card*.
+To add an account, use **Accounts** and give it the type *Bank* or *Credit card*; with none yet, **Add an account** here goes straight there.
 
 ## Recording transactions by hand
 

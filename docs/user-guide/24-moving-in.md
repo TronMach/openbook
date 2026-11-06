@@ -9,7 +9,7 @@ There are two ways to bring your books into OpenBook. Which suits you depends on
 
 Either way, pick a start date at a period end (a month, quarter or ideally a year end) and keep your old program, or exports from it, for the years before.
 
-All importing needs the accountant role.
+Importing accounts, journal entries and whole companies needs the accountant role; customers, vendors and items need the standard role.
 
 ## Starting fresh
 

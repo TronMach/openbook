@@ -81,7 +81,7 @@ public sealed class ActivityReports(
             [new("Customer"), new("Income", ColumnFormat.Money), new("% of total", ColumnFormat.Percent)],
             rows,
             reportBasis,
-            "Income accounts only, after discounts and before sales tax; the total matches income on the profit and loss.");
+            "Income and other income accounts, after discounts and before sales tax; the total matches those sections of the profit and loss.");
     }
 
     /// <summary>Item lines of invoices and sales receipts, less credit memos, dated in the period (accrual).</summary>
@@ -194,7 +194,7 @@ public sealed class ActivityReports(
             [new("Vendor"), new("Expenses", ColumnFormat.Money), new("% of total", ColumnFormat.Percent)],
             rows,
             reportBasis,
-            "Cost of goods sold and expense accounts; the total matches those sections of the profit and loss.");
+            "Cost of goods sold, expense and other expense accounts; the total matches those sections of the profit and loss.");
     }
 
     public async Task<ReportTable> OpenInvoicesAsync(DateOnly asOf, CancellationToken ct = default)

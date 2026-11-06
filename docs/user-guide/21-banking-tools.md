@@ -66,7 +66,7 @@ On the box's page, **Count the cash**: the **date** and the **cash counted**, an
 For something paid on a schedule straight from a bank or card account, with no bill (a software subscription on the card, an insurance or loan autopay), set up **Banking → Recurring expenses → New recurring expense**:
 
 - **Name**, the **Paid from** account (a bank or credit card account), the **vendor** (optional) and **payee**.
-- **Repeat every** so many days, weeks, months or years, the **first payment date**, and optionally an **end date** or a number of **times**.
+- **Repeat every** so many weeks, months, quarters or years, the **first payment date**, and optionally an **end date** or a number of **times**.
 - The category lines, as on a bill, and a memo (the name when left blank). A location and tags can go on every expense it records.
 - **Record expenses automatically when due**: OpenBook records each one in the hourly job. Otherwise they wait on the list until you select **Record due expenses**.
 

@@ -80,4 +80,4 @@ Every send is also in the audit log (**Emailed**), and a changed wording is reco
 
 ## Sending to many at once
 
-**Email statements** on the Print page ([Printed forms](27-printed-forms.md)) and **email every donor with an address** for giving statements ([Nonprofits](23-nonprofits.md)) send each one the usual wording for that kind of email, in their own design, with their copies. Those without an email address are listed, not sent.
+**Email statements** on the Print page ([Printed forms](27-printed-forms.md)) and **email every donor with an address** for giving statements ([Nonprofits](23-nonprofits.md)) send each one the usual wording for that kind of email, with their copies, in their own design (giving statements in the default design). Those without an email address are listed, not sent.

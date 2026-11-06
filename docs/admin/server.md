@@ -16,7 +16,7 @@ Data lives in two Docker volumes: `db-data` (PostgreSQL) and `app-data` (`/data`
 
 ## HTTPS behind a reverse proxy
 
-OpenBook itself speaks plain HTTP on port 8080. Anything beyond a trusted local network needs HTTPS, from a reverse proxy in front of it. The compose file sets `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, so OpenBook trusts the proxy's `X-Forwarded-For` and `X-Forwarded-Proto` headers: sign-in cookies are then marked secure and links use `https`. Because it trusts those headers from anyone, nothing but the proxy may reach port 8080: when the proxy runs on the same host, change the port line to `"127.0.0.1:8080:8080"`.
+OpenBook itself speaks plain HTTP on port 8080. Anything beyond a trusted local network needs HTTPS, from a reverse proxy in front of it. The compose file sets `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, so OpenBook trusts the proxy's `X-Forwarded-For` and `X-Forwarded-Proto` headers: sign-in cookies are then marked secure and links use `https`. Because it trusts those headers from anyone, nothing but the proxy may reach port 8080, so the compose file publishes it to this computer only (`"127.0.0.1:8080:8080"`). With the proxy on another host, open the port to that host alone, by firewall.
 
 Pages update over a WebSocket (Blazor), so the proxy must pass WebSocket upgrades and keep idle connections open.
 
@@ -121,7 +121,7 @@ A company kept by OpenBook Desktop moves into the server's empty database with t
    ```
 
    If the desktop file was encrypted, add `-e OpenBook__EncryptionKey=<its key>` after `run --rm`.
-4. `docker compose up -d` (or restart `openbook`) and sign in as on the desktop. The move is the newest entry in **Settings → Audit log**.
+4. `docker compose up -d` (or restart `openbook`) and sign in as on the desktop. The move is the newest entry in **Settings → Audit log**. If the company never had a time zone set it now follows the server's, usually UTC, so choose one under **Settings → Company details**, or "today" can be a day out.
 5. Delete the copied keys from `/srv/openbook/move`. Keep the desktop file as a backup, but stop using it.
 
 The command can also run on the desktop computer against the server's database, from the OpenBook program folder: `OpenBook.Web.exe move-to-postgres --to "Host=<server>;…" --target-keys <a copy of the server's keys folder>`. Whichever side it runs on, the other side's keys folder is the one to give.
@@ -138,6 +138,19 @@ Nothing is changed when a check fails; the message says what differed. `move.tar
 - **More than one OpenBook container** on the same PostgreSQL database (behind a load balancer): every container serves pages, and each background job (the hourly work, scheduled emails, webhooks, bank and channel syncs, backups) runs in one container at a time, which holds a lease on it and renews it each run. If that container stops, another takes the job over once the lease lapses (within 90 minutes for the hourly work, minutes for the rest). Share the Data Protection keys folder between them, or sign-ins and stored secrets won't work across containers.
 - **SQLite on a server**: the image also runs without PostgreSQL (`docker run -p 8080:8080 -v openbook-data:/data openbook`): one company file in `/data`, with the in-app backups. PostgreSQL is better for several people.
 
+## Settings worth knowing
+
+Set these as environment variables, with `__` in place of `:`.
+
+| Setting | What it does |
+|---|---|
+| `OpenBook:Ocr:TesseractPath` | The Tesseract program, for reading photos and scans of documents and receipts. The image doesn't include it; without it, photos are kept but not read. |
+| `OpenBook:EncryptionKey` | The key of an encrypted SQLite company file (below). |
+| `OpenBook:Plugins:Path` | Where add-ins live. It defaults to `plugins` in the working directory, which in a container is outside `/data`: point it into the volume. |
+| `OpenBook:Plugins:SafeMode` | `true` starts without any add-ins. |
+| `OpenBook:LogDirectory` | Where log files go. |
+| `OpenBook:Outbound:AllowPrivateNetworks` | `true` lets webhooks and bank connections reach addresses on your own network. |
+
 ## Encrypting a SQLite company file
 
 Only for the SQLite image; PostgreSQL has its own disk encryption.
@@ -146,5 +159,7 @@ Only for the SQLite image; PostgreSQL has its own disk encryption.
 2. Run `OpenBook.Web encrypt-database` with `OpenBook__EncryptionKey` set, using the same volume. `decrypt-database` undoes it.
 3. Keep `OpenBook__EncryptionKey` set from now on, and start OpenBook. Without the key the file can't be opened.
 4. The original stays beside the file as a `.bak`. Check OpenBook works, then delete it: it isn't encrypted.
+
+Backups and `pre-restore-` copies made before encrypting stay unencrypted, so keep them safe or delete them. They can't be restored into the encrypted company until it's decrypted again.
 
 The command takes the file for itself while it copies, and stops if something has it open. On Linux a server that's idle can't be noticed, so stopping it first is what keeps the copy whole.

@@ -85,7 +85,7 @@ OpenBook's own two-factor code isn't asked for after single sign-on: the provide
 
 ### Working at the same time
 
-Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, nothing of yours is saved and you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed.
+Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed. Something that goes out in several steps, such as a run of recurring entries or an email already sent, may have got part of the way, so check before repeating it.
 
 ## Closing the books
 
@@ -114,11 +114,11 @@ Downloads a copy of the whole company file, attachments included, as a `.openboo
 
 Set OpenBook to back itself up:
 
-- **How often**: daily or weekly, at an hour in the company's time zone (**Settings → Time zone**; the server's if none is set).
+- **How often**: daily or weekly, at an hour in the company's time zone (**Settings → Company details → Time zone**; the server's if none is set).
 - **Keep the newest**: how many to keep; older scheduled backups are deleted.
 - **Save to**: a **folder** (give the full path, ideally a different drive or a synced folder), or **S3-compatible storage** such as Amazon S3, Backblaze B2, Cloudflare R2, Wasabi or MinIO (service URL, region, bucket, folder and an access key that can only put, list and delete in that bucket; the secret is stored encrypted).
 
-**Save schedule**, then **Back up now** to check it works. The page shows the outcome of the last run. The first scheduled backup runs right after you save.
+**Save schedule**, then **Back up now** to check it works. The page shows the outcome of the last run. The first scheduled backup runs within 15 minutes of saving.
 
 On **OpenBook Desktop** this is already on: every day from noon to the `Backups` folder beside your company file (`Documents\OpenBook\Backups`), keeping 14. Backups only run while OpenBook is running; if the computer was off at noon, the next start makes one. Change it like any schedule, and consider a folder on another drive or one your cloud storage syncs.
 
@@ -130,7 +130,7 @@ Restoring happens on the Backup page, and a new copy of OpenBook only shows that
 
 ### Restoring a backup
 
-**Restore from a backup**: choose the backup file, type your password and select **Restore backup**. OpenBook checks the file first (that it's an OpenBook company file, undamaged, and balances) and refuses it otherwise. Before replacing anything it saves a safety copy of the current books in a `backups` folder next to the company file, so a restore can itself be undone. Everyone else is signed out.
+**Restore from a backup**: choose the backup file, type your password, tick the box confirming you want to replace the current data, and select **Restore backup**. OpenBook checks the file first (that it's an OpenBook company file, undamaged, and balances) and refuses it otherwise. Before replacing anything it saves a safety copy of the current books in a `backups` folder next to the company file, so a restore can itself be undone. Everyone else is signed out.
 
 ### With PostgreSQL
 
@@ -148,8 +148,10 @@ The company file can be encrypted, so a stolen copy can't be read without the ke
 
 OpenBook comes in two installs of the same program:
 
-- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run), with an OpenBook icon in the system tray by the clock, until you quit it or sign out of Windows. Right-click the tray icon for **Open OpenBook**, **Back up now** and **Quit OpenBook**. Quitting, there or with **Settings → System → Quit OpenBook**, backs up your books first (to the same place as the daily backups; the last five of these are kept), so closing OpenBook always leaves a fresh copy. If that backup doesn't work, the tray asks before quitting anyway. When a new version of OpenBook is out, it's downloaded in the background and the tray offers **Install OpenBook x.y.z** (so does **Settings → System → Updates**, which also has **Check now**). Installing backs up your books, closes OpenBook, updates it and starts it again by itself within a minute or two. It's installed on Windows from `OpenBook-Setup.exe` (for your Windows user, no administrator rights) and started from the Start menu; installing a newer version or uninstalling never touches the company file or its backups.
+- **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run), with an OpenBook icon in the system tray by the clock, until you quit it or sign out of Windows. Right-click the tray icon for **Open OpenBook**, **Back up now** and **Quit OpenBook**. Quitting, there or with **Settings → System → Quit OpenBook**, backs up your books first (to the same place as the daily backups; the last five of these are kept), so closing OpenBook always leaves a fresh copy. If that backup doesn't work, the tray asks before quitting anyway. When a new version of OpenBook is out, it's downloaded in the background and the tray offers **Install OpenBook x.y.z** (so does **Settings → System → Updates**, which also has **Check now**). Installing backs up your books, closes OpenBook, updates it and starts it again by itself within a minute or two. It's installed on Windows from `OpenBook-Setup-x.y.z.exe` (for your Windows user, no administrator rights) and started from the Start menu; installing a newer version or uninstalling never touches the company file or its backups.
 - **OpenBook Server** runs on a server or in Docker, usually with PostgreSQL, for several people on several computers. Whoever runs it decides where the data lives and backs it up.
+
+A company moved to a server with no time zone set follows the server's clock, so set one under **Settings → Company details** after moving. Backups made before a company file is encrypted stay unencrypted, and can only be restored once it's decrypted.
 
 Whoever installs or looks after OpenBook will find the details in `docs/admin/desktop.md` and `docs/admin/server.md` (HTTPS, keys, `pg_dump` backups, moving a company in).
 

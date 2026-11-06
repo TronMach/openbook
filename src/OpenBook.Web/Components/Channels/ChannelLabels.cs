@@ -19,8 +19,8 @@ public static class ChannelLabels
         ChannelKind.Ebay => "Seller Hub › Payments › Reports › Transaction report (CSV).",
         ChannelKind.Etsy => "Shop Manager › Finances › Payment account › download the monthly CSV.",
         ChannelKind.PayPal => "Activity › Statements › Activity download, CSV, completed payments. Withdrawals to your bank are left out.",
-        ChannelKind.Shopify => "Finances › Payouts › Export transactions (CSV), with the payout ID column. A live connection comes later.",
-        ChannelKind.Stripe => "Balance › Payouts › Export, or Reports › Payout reconciliation (CSV) with the transfer column. A live connection comes later.",
+        ChannelKind.Shopify => "Finances › Payouts › Export transactions (CSV), with the payout ID column. Or connect the store below, and payouts come in by themselves.",
+        ChannelKind.Stripe => "Balance › Payouts › Export, or Reports › Payout reconciliation (CSV) with the transfer column. Or connect the account below, and payouts come in by themselves.",
         _ => "Any CSV with a date, a type (sale, refund, fee, shipping, tax…) and an amount (or gross and fee) column; a payout id column groups rows into payouts.",
     };
 

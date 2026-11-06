@@ -14,11 +14,11 @@ OpenBook works out sales tax on invoices, sales receipts, estimates and credit m
 
 1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly or annually; this sets the period OpenBook suggests you report) and your **permit or account number** with it.
 2. **Add its rates**: **name**, **rate (%)** (up to four decimals) and **paid to** (the agency). Leave **Also make a tax code that charges just this rate** ticked unless you'll only use it combined with others.
-3. If you charge several rates together, **add a tax code**, give it a name, and tick its rates in the order they should print.
+3. If you charge several rates together, **add a tax code**, give it a name, and tick its rates. They print in the order they're listed there.
 4. On each **customer**, choose their **tax code**. New invoices, receipts and estimates for them start with it.
 5. On each **product or service**, tick **Taxable** if sales tax applies to it.
 
-When a rate changes, edit its percentage. The new rate applies to documents from then on; existing ones keep the tax they were charged, even when you change them later: the tax follows the lines, at the rates and exemption the document had. Choosing a different tax code on the document uses that code as it stands now.
+When a rate changes, edit its percentage. The new rate applies to documents from then on; existing ones keep the rate they were charged, even when you change them later: the tax is worked out again on the lines you change, at the rates and exemption the document had. Choosing a different tax code on the document uses that code as it stands now.
 
 ## On sales
 

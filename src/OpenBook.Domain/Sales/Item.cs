@@ -112,7 +112,7 @@ public sealed class Item
 
     /// <summary>
     /// Inventory products: how many to order once stock (with what's on order) falls to the reorder point; null orders
-    /// enough to bring it back up to the reorder point.
+    /// enough to bring it back above the reorder point.
     /// </summary>
     public decimal? ReorderQuantity { get; private set; }
 

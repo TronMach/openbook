@@ -13,13 +13,13 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 ## The simple view
 
 28. [The simple view](28-simple-view.md): a short menu bar by task and a home page that walks through each step, for a business one person runs; switching between it and the full view.
-29. [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, and what was sent.
 
 ## Everyday work
 
-4. [Customers and sales](04-sales.md): products and services, invoices, receiving payments, deposits, sales receipts.
+4. [Customers and sales](04-sales.md): products and services, invoices, batch invoicing, receiving payments, deposits, sales receipts, merging duplicates.
 5. [Vendors and purchases](05-purchases.md): bills, paying bills, expenses, vendor credits.
 6. [Banking](06-banking.md): importing statements, reviewing transactions, bank rules, reconciling.
+29. [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, and what was sent.
 7. [Reports](07-reports.md): the main statements, accrual and cash basis, exporting and saving reports.
 
 ## Running the books
@@ -49,7 +49,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 
 19. [Fixed assets and loans](19-assets-and-loans.md): the asset register, depreciation (straight-line, declining balance, MACRS), disposals, loans and their payments.
 20. [Budgets, the dashboard, custom reports and accountant tools](20-budgets-and-analysis.md): budgets, the dashboard, the custom transaction report, scheduled reports, the cash-flow forecast, the year-end package.
-21. [Bank connections, checks, positive pay and petty cash](21-banking-tools.md): SimpleFIN connections, printing checks, positive pay files, petty cash boxes.
+21. [Bank connections, checks, positive pay and petty cash](21-banking-tools.md): SimpleFIN connections, printing checks, positive pay files, petty cash boxes, recurring expenses.
 22. [Sales channels](22-sales-channels.md): payouts from Shopify, Stripe, Amazon, eBay, Etsy and PayPal, orders and stock.
 23. [Nonprofits](23-nonprofits.md): donor restrictions and releases, functional expenses, gifts and letters, pledges, grants.
 
@@ -64,7 +64,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 
 Knowing these makes the rest of the guide easier to follow:
 
-- **Nothing posted is ever edited or deleted.** To correct a journal entry you *void* it, which records an opposite entry on the same date, and then enter it again. The original stays on record, marked voided. Invoices, customer and bill payments, sales receipts, credit memos, bills, vendor credits, expenses, checks, deposits and transfers can be changed in place: OpenBook voids the old entry and posts the corrected one for you, keeping the document's number and payments.
+- **Nothing posted is ever edited or deleted.** To correct a journal entry you *void* it, which records an opposite entry on the same date, and enter it again, or use **Change** on one typed in, which does both. The original stays on record, marked voided. Invoices, customer and bill payments, sales receipts, credit memos, bills, vendor credits, expenses, checks, deposits and transfers can be changed in place: OpenBook voids the old entry and posts the corrected one for you, keeping the document's number and payments.
 - **Every change is recorded.** Who did what and when is kept in the audit log, which accountants can open from Settings or from the **History** link on most record pages.
 - **Everything balances.** Every transaction, whatever screen it came from, ends up as a balanced journal entry. The database itself refuses anything that doesn't add up.
 - **Lists are never emptied.** Customers, vendors, products and accounts you no longer use are made *inactive* rather than deleted, so old transactions keep their names.

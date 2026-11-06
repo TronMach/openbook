@@ -10,7 +10,7 @@ Record the purchase as usual: a bill, an expense or a journal entry, to a **Fixe
 
 ### Adding it to the register
 
-**Fixed assets → New**:
+**Fixed assets → Add an asset**:
 
 - **Name** and optional **asset number**.
 - **Cost** and the date it was **placed in service**.
@@ -23,7 +23,7 @@ Record the purchase as usual: a bill, an expense or a journal entry, to a **Fixe
 - **Accumulated depreciation account** and **depreciation expense account**: leave them on the defaults ("Accumulated Depreciation" and "Depreciation Expense", created when first needed) unless your chart has its own.
 - **Depreciation already recorded** **through** a date, for an asset bought before you started with OpenBook. Depreciation carries on from the schedule after that date, and if what you enter differs from the schedule, the last month takes the difference, so the asset still ends at its full depreciable amount.
 
-The asset's page shows its **schedule**, month by month, adding up exactly to its cost less salvage. Once depreciation has been posted, only the name, number and description can be changed.
+The asset's page shows its **schedule**, a row a year, adding up exactly to its cost less salvage. Once depreciation has been posted, only the name, number and description can be changed.
 
 ### Running depreciation
 

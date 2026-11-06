@@ -20,7 +20,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download). In the OpenBo
 dotnet run --project src/OpenBook.Web
 ```
 
-The first start creates `openbook.db` in the folder you ran it from. Open the address it prints (usually `http://localhost:5135`) in your browser.
+The first start creates `openbook.db` in `src/OpenBook.Web`, the folder the project runs in. Open the address it prints (usually `http://localhost:5135`) in your browser.
 
 ### With Docker, single file
 

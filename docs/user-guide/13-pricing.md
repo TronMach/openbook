@@ -56,7 +56,7 @@ The company rounding is set at the bottom of the Pricing page (accountant role):
 
 ## On sales forms
 
-As you choose a customer, items and quantities, each line's rate updates. Next to it you see the list price, what changed it ("Wholesale · Spring sale"), and the last price you charged this customer for the item.
+As you choose a customer, items and quantities, each line's rate updates. Next to it you see the list price, what changed it ("Wholesale (-10%) + Spring sale (-5%)"), and the last price you charged this customer for the item.
 
 If you type a different rate, it's kept as you typed it and the line stops repricing. **Automatic price** on the line switches it back.
 

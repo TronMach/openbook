@@ -67,6 +67,7 @@ Accounts are never deleted. Open the account and make it **inactive**: it drops 
 Number,Account,Type,Description
 1000,Checking,Bank,Main operating account
 1100,Accounts Receivable,Accounts Receivable,Money customers owe you
+6000,Utilities,Expense,
 6100,Utilities:Electric,Expense,
 ```
 

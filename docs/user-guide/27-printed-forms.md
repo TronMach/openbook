@@ -25,7 +25,7 @@ The **Ready-made designs** card has designs to start from:
 
 **Preview** (or **as an estimate**) shows one beside the list with your company's details. **Use this design** adds it as a design of your own, which you can change like any other; nothing else changes until you make it the default or choose it for documents or customers. Adding the same one twice numbers the name ("Bold 2").
 
-Each design has, on its page, in sections you can fold away (**Look**, **Fonts**, **Columns**, **What's shown**, **Footer**, **Titles and messages**); **Save design** stays at the bottom of the window:
+Each design has, on its page, in sections you can fold away (**Look**, **Fonts**, **Columns**, **What's shown**, **Footer**, **Email look**, **Titles and messages**); **Save design** stays at the bottom of the window:
 
 - **Template**: **Classic (accent rule)**, **Modern (colored band)**, **Compact (smaller type)**, **Bold (accent bar, filled rows)**, **Minimal (hairlines)**, **Boxed (boxes and grid)** or **Elegant (centered, double rules)**, and an **Accent color**.
 - **Font**: the built-in OpenBook Sans or any font added under **Fonts** (below). **Your company's name and details** can have a font of their own (your name, address, phone and email at the top), or **The same font**.
@@ -45,7 +45,7 @@ The preview beside the form updates as you change things, so you can see the res
 2. Otherwise the design set for that kind of document: under **Where it's used** on a design's page, tick **Use it for every:** invoice, estimate, and so on. A kind of document belongs to one design at a time, so ticking it here takes it from the other.
 3. Otherwise the default design (**Make it the default** on any design's page).
 
-A design you no longer want can be switched off (**Switch it off**); documents and customers that used it print with the default. The default design can't be switched off. Designs are never deleted.
+A design you no longer want can be switched off (**Switch it off**); customers that used it print with the design set for that document, or else the default. The default design can't be switched off. Designs are never deleted.
 
 ### Print with another design
 

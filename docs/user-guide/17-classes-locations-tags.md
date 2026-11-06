@@ -33,7 +33,7 @@ Voiding a transaction copies its classes, locations and tags onto the reversal, 
 
 ## Fixing them afterwards
 
-Posted transactions can't be edited, but their classes and locations can be corrected, because they're kept beside the ledger rather than in it.
+Their classes and locations can be corrected here without changing the transaction itself or posting anything, because they're kept beside the ledger rather than in it.
 
 **Classes and locations → Reclassify** (accountant):
 

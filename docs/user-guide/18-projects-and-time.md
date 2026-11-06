@@ -31,14 +31,14 @@ The project's page has its **status** (and dates) and **budgets** for revenue, c
 
 Among lines for the same thing, the latest that has started by the work's date wins. **Check** on the rate card answers which rate applies to a person, client, service and date.
 
-Time takes its rate when entered, and records where it came from ("Acme · Partner"). Changing the rate card afterwards doesn't reprice time already entered.
+Time takes its rate when entered, and records where it came from ("Acme · Partner"). Changing the rate card afterwards doesn't reprice time already entered, until that entry is edited: saving one that took its rate from the card looks the rate up again.
 
 ## Recording time
 
-**Time** in the menu:
+**Time**, from the menu or a project's page:
 
 - **Start timer**: choose the person, customer or project, service and notes, and start it. **Stop** when done; the minutes are rounded and saved. One timer runs per person at a time.
-- **Add time**: the same fields with **hours** (to 2 decimals, up to 24 a day) and a **date**.
+- **Add time**: the same fields with **hours** (to 2 decimals, up to 24 an entry) and a **date**.
 - **Week grid**: a timesheet, one row per client and service, a column per day. Type hours in the cells and **Save the week**. Clearing a cell deletes its time. The blank rows at the bottom are for new work; one that repeats a row above adds its hours to that row.
 
 Billable time needs a customer or project and a service. A **rate per hour** typed in overrides the rate card. Time posts nothing to the books by itself; it's income only once invoiced. Time can be edited or deleted until it's invoiced.
