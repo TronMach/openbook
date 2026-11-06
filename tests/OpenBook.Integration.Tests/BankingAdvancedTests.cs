@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpenBook.Application.Accounts;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Purchases;
 using OpenBook.Domain.Accounts;
@@ -153,6 +154,28 @@ public sealed class BankingAdvancedTests : BankingFixture
         result = await Connections(s => s.SyncAsync(connection.Id, Utc));
         Assert.Equal((0, 1, 1), (result.Queued, result.AutoAdded, result.Skipped));
         Assert.Equal(-45.20m, await Balance(Checking));
+    }
+
+    [Fact]
+    public async Task A_sync_that_fails_part_way_keeps_what_was_finished_and_records_the_failure()
+    {
+        BridgeHasChecking();
+        Db.Bridge.Accounts.Add(new FakeSimpleFinBridge.Account("ACT-2", "Business Card", "First Bank", 1m,
+            [new("T9", new DateOnly(2026, 1, 12), -3m, "OTHER")]));
+        var connection = await Connections(s => s.ConnectAsync(BankConnectionProvider.SimpleFin, FakeSimpleFinBridge.SetupToken, null, Utc));
+        await Connections(s => s.LinkAsync(connection.Id, "ACT-1", Checking.Id, null));
+        await Connections(s => s.LinkAsync(connection.Id, "ACT-2", Visa.Id, null));
+        // Linked as a card, then changed to something that can't take a feed: refused once the first account's lines are in.
+        await Db.InScope(sp => sp.GetRequiredService<AccountService>().UpdateAsync(new UpdateAccountCommand(Visa.Id, Visa.Name, AccountType.Expense, Visa.Number, null, null)));
+
+        var result = await Connections(s => s.SyncAsync(connection.Id, Utc));
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(2, result.Queued);
+        Assert.Equal(2, (await Feed(Checking)).Count);
+        var saved = await Connections(s => s.GetAsync(connection.Id));
+        Assert.True(saved!.LastSyncFailed);
+        Assert.Equal(1, await Db.InScope(sp => sp.GetRequiredService<OpenBookDbContext>().AuditRecords.CountAsync(a => a.EntityType == "bank_feed_import")));
     }
 
     [Fact]

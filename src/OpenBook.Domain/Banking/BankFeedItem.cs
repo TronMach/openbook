@@ -88,6 +88,14 @@ public sealed class BankFeedItem
         return item;
     }
 
+    /// <summary>A bank used this line's id for another line: it's told apart by what it says.</summary>
+    public void IdReused() =>
+        DedupeKey = ReusedKey(DedupeKey, Date, Amount);
+
+    /// <summary>The key of a line whose bank id already belongs to a different line.</summary>
+    public static string ReusedKey(string key, DateOnly date, decimal amount) =>
+        FormattableString.Invariant($"{key}|{date:yyyy-MM-dd}|{amount:0.00}");
+
     /// <summary>
     /// Lines with a bank id are keyed by it alone; others by what they say, plus which repeat it is within the
     /// file (two identical $5.00 coffees on one day are two lines, and re-importing the file gives the same keys).

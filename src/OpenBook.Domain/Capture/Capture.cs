@@ -131,6 +131,13 @@ public sealed class CaptureDraft
         Payload = payload;
     }
 
+    /// <summary>Someone has seen the note on an entered draft: it goes, with the photo kept for them.</summary>
+    public void Acknowledge(string payload)
+    {
+        Compact(payload);
+        Error = null;
+    }
+
     public void Failed(string error)
     {
         Status = CaptureStatus.NeedsAttention;

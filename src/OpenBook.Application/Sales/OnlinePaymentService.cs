@@ -47,7 +47,7 @@ public enum WebhookOutcome
 /// </summary>
 public sealed class OnlinePaymentService(
     ISalesStore store, ICompanyStore companies, IPaymentGateway gateway, ISecretProtector secrets, PaymentService payments, SalesAccounts salesAccounts,
-    IClock clock, ICurrentUser user)
+    IUnitOfWork unit, IClock clock, ICurrentUser user)
 {
     public const string SettingsEntity = "online_payment_settings";
 
@@ -187,6 +187,8 @@ public sealed class OnlinePaymentService(
         var settings = await GetSettingsAsync(ct);
         var invoice = await store.GetInvoiceAsync(link.InvoiceId, ct) ?? throw new EntityNotFoundException("invoice", link.InvoiceId);
         var now = clock.UtcNow;
+        // One transaction: a link paid without its payment's id would lift the lock on changing that payment.
+        await using var transaction = await unit.BeginAsync(ct);
         link.MarkPaid(now, reference);
         var applied = Math.Min(amount, invoice.Balance);
         var payment = await payments.ReceiveAsync(new ReceivePaymentCommand(
@@ -200,6 +202,7 @@ public sealed class OnlinePaymentService(
             Method: PaymentMethod.Card), ct);
         link.RecordPayment(payment.Id);
         await store.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     private string SecretKey(OnlinePaymentSettings settings) =>

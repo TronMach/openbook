@@ -20,6 +20,8 @@ The capture page keeps a copy of your customer, service, account and vendor list
 
 On OpenBook's **Capture** page (`/capture`), entries that need attention are listed with the reason, for example a closed period, an inactive customer or a photo too large to keep. Fix the cause, then **Try again**, or **Dismiss** it.
 
+An expense goes in even when its photo can't be attached, usually because of the kind of file (a TIFF scan, say). It's listed under **Entered, with a note**, and the photo stays there: **Save the photo**, convert it to JPEG, PNG or PDF and attach it to the expense, then choose **Done**.
+
 ### Lost phones
 
 The same page lists every device that has used the capture page. **Remove access** for a lost or replaced one: it can't send anything more, it signs out the session it signed in with, and next time it connects it wipes its stored entries. Tick the box to also sign out all your other sessions. Changing your password is wise too.

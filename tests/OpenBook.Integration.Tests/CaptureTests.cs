@@ -204,6 +204,31 @@ public sealed class CaptureTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_photo_the_record_refuses_stays_until_someone_has_seen_why()
+    {
+        var expense = Draft(CaptureKind.Expense, new
+        {
+            date = "2026-03-03", amount = 42.5m, accountId = _checking.Id, categoryId = _supplies.Id, payee = "Paper Co",
+            photo = new { fileName = "scan.tiff", base64 = Png },
+        });
+        var outcome = Assert.Single(await Sync(expense));
+        Assert.Equal(CaptureStatus.Entered, outcome.Status);
+        Assert.Contains("wasn't attached", outcome.Error, StringComparison.Ordinal);
+
+        var noted = Assert.Single(await In<CaptureService, IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)>>(s => s.EnteredWithNotesAsync(_userId)));
+        Assert.Equal(expense.Id, noted.Draft.Id);
+        var photo = await In<CaptureService, (string Name, byte[] Bytes)?>(s => s.PhotoAsync(expense.Id, _userId));
+        Assert.Equal("scan.tiff", photo!.Value.Name);
+        Assert.Equal(Convert.FromBase64String(Png), photo.Value.Bytes);
+
+        await In<CaptureService, bool>(async s => { await s.AcknowledgeAsync(expense.Id, _userId); return true; });
+        Assert.Empty(await In<CaptureService, IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)>>(s => s.EnteredWithNotesAsync(_userId)));
+        Assert.Null(await In<CaptureService, (string Name, byte[] Bytes)?>(s => s.PhotoAsync(expense.Id, _userId)));
+        var stored = await _db.InDb(db => db.CaptureDrafts.AsNoTracking().SingleAsync(d => d.Id == expense.Id));
+        Assert.DoesNotContain("base64", stored.Payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Only_the_owner_s_active_devices_can_sync_and_lists_hold_no_secrets()
     {
         var other = (await In<UserService, Domain.Companies.User>(s => s.CreateAsync("clerk", "a long password", Domain.Companies.UserRole.Standard))).Id;

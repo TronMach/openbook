@@ -16,7 +16,7 @@ public enum AmountSign
 public sealed record BankImportOptions(DateOrder? DateOrder = null, AmountSign AmountSign = AmountSign.PositiveIsMoneyIn);
 
 /// <param name="Amount">Positive is money in (deposit, card credit); negative is money out.</param>
-/// <param name="PossibleDuplicate">A transaction with the same date, amount and payee is already on the account.</param>
+/// <param name="PossibleDuplicate">A transaction with the same date, amount and payee is already on the account, or a feed line with the same date and amount.</param>
 /// <param name="FitId">The bank's transaction id, from OFX files.</param>
 /// <param name="AlreadyImported">The same line is already in the bank feed: importing again skips it.</param>
 public sealed record BankImportRow(

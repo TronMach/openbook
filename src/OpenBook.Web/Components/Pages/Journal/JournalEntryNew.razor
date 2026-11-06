@@ -175,12 +175,10 @@
         try
         {
             var drafts = JournalLines.Drafts(_lines);
-            var entry = await Ops.RunAsync<PostingEngine, JournalEntry>(e => Change is { } changeId
-                ? e.ChangeAsync(changeId, new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, LocationId: _locationId, TagIds: _tagIds), _reason ?? "")
-                : e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId, TagIds: _tagIds)),
+            var entry = await Ops.RunAsync<AdjustingEntryService, JournalEntry>(e => Change is { } changeId
+                ? e.ChangeAsync(changeId, new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, LocationId: _locationId, TagIds: _tagIds), _reason ?? "", _adjusting)
+                : e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId, TagIds: _tagIds), _adjusting),
                 _closingPassword);
-            if (_adjusting)
-                await Ops.RunAsync<AdjustingEntryService, bool>(async s => { await s.SetAsync(entry.Id, true); return true; });
             Navigation.NavigateTo($"/journal/{entry.Id}");
         }
         catch (DomainException ex)

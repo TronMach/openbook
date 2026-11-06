@@ -19,7 +19,7 @@
         <div class="alert error" role="alert">@Error</div>
     }
     <div class="card">
-        <PostForm Action="/nonprofit/grants" data-enhance="false">
+        <PostForm Action="/nonprofit/grants" data-enhance="false" data-keep-typed>
             <AntiforgeryToken />
             <div class="row">
                 <div class="field"><label for="name">Name</label><input id="name" name="name" required maxlength="@Grant.MaxNameLength" placeholder="Youth literacy 2026" /></div>

@@ -141,12 +141,10 @@ public static class OpenBookApi
             var old = await engine.DraftOfAsync(id, ct);
             var lines = (request.Lines ?? []).Select(l => new JournalLineDraft(l.AccountId, l.Debit, l.Credit, l.Memo,
                 l.ClassId ?? old?.Lines.FirstOrDefault(o => o.AccountId == l.AccountId && o.Debit == l.Debit && o.Credit == l.Credit)?.ClassId)).ToList();
-            var wasAdjusting = (await adjusting.MarkedAsync(ct)).Contains(id);
-            var changed = await engine.ChangeAsync(id, new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis,
-                LocationId: ApiKeep.Id(request.LocationId, old?.LocationId), TagIds: request.TagIds ?? old?.TagIds), request.Reason, ct);
             // The replacement stays an adjusting entry, as the change page keeps it.
-            if (wasAdjusting)
-                await adjusting.SetAsync(changed.Id, true, ct);
+            var wasAdjusting = (await adjusting.MarkedAsync(ct)).Contains(id);
+            var changed = await adjusting.ChangeAsync(id, new PostJournalEntryCommand(request.Date, lines, request.Memo, Basis: request.Basis,
+                LocationId: ApiKeep.Id(request.LocationId, old?.LocationId), TagIds: request.TagIds ?? old?.TagIds), request.Reason, wasAdjusting, ct);
             return JournalEntryResponse.From(changed);
         });
         api.MapPost("/journal-entries/{id:guid}/void", async (Guid id, VoidJournalEntryRequest request, PostingEngine engine, CancellationToken ct) =>

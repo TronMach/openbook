@@ -125,9 +125,10 @@
     document.addEventListener('submit', e => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-keep-typed')) return;
+        // Everything but what mustn't be kept: a password stays out of storage, whichever form it's on.
         const typed = {};
-        for (const field of form.querySelectorAll('input[type="text"], input[type="date"]'))
-            if (field.name && field.value) typed[field.name] = field.value;
+        for (const field of form.querySelectorAll('input:not([type="password"], [type="hidden"], [type="file"], [type="radio"]), select:not([multiple]), textarea'))
+            if (field.name) typed[field.name] = field.type === 'checkbox' ? field.checked : field.value;
         try { sessionStorage.setItem(typedKey(form), JSON.stringify(typed)); } catch { /* the sheet just comes back empty */ }
     });
     function restoreTyped() {
@@ -139,7 +140,8 @@
             if (!saved || !new URLSearchParams(location.search).has('error')) return;
             for (const [name, value] of Object.entries(JSON.parse(saved))) {
                 const field = form.querySelector(`[name="${CSS.escape(name)}"]`);
-                if (field) field.value = value;
+                if (field?.type === 'checkbox') field.checked = value === true;
+                else if (field) field.value = value;
             }
         } catch { /* nothing to bring back */ }
     }

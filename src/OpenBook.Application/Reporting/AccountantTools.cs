@@ -5,6 +5,7 @@ using System.Text.Json;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Assets;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
@@ -187,7 +188,8 @@ public sealed record WorksheetLine(Guid AccountId, string Name, decimal Unadjust
 /// Adjusting entries: journal entries an accountant marks as year-end adjustments, kept beside the ledger so the
 /// worksheet can show balances before and after them. Voided entries don't count as adjustments.
 /// </summary>
-public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore ledgerStore, ReportLedger ledger, AccountService accounts, ICompanyStore companies, IClock clock, ICurrentUser user)
+public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore ledgerStore, ReportLedger ledger, AccountService accounts, ICompanyStore companies,
+    PostingEngine engine, IUnitOfWork unit, IClock clock, ICurrentUser user)
 {
     public async Task<IReadOnlySet<Guid>> MarkedAsync(CancellationToken ct = default) =>
         (await store.ListAdjustingEntriesAsync(ct)).Select(a => a.JournalEntryId).ToHashSet();
@@ -208,6 +210,29 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "journal_entry", journalEntryId,
             JsonSerializer.Serialize(new { Adjusting = !adjusting }), JsonSerializer.Serialize(new { Adjusting = adjusting })));
         await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Posts an entry and marks it together, so an adjusting entry can't stand without its mark.</summary>
+    public async Task<JournalEntry> PostAsync(PostJournalEntryCommand command, bool adjusting, CancellationToken ct = default)
+    {
+        await using var transaction = await unit.BeginAsync(ct);
+        var entry = await engine.PostAsync(command, ct);
+        if (adjusting)
+            await SetAsync(entry.Id, true, ct);
+        await transaction.CommitAsync(ct);
+        return entry;
+    }
+
+    /// <summary>Corrects a hand-entered entry; the replacement takes the mark in the same transaction.</summary>
+    /// <returns>The replacement entry.</returns>
+    public async Task<JournalEntry> ChangeAsync(Guid entryId, PostJournalEntryCommand command, string reason, bool adjusting, CancellationToken ct = default)
+    {
+        await using var transaction = await unit.BeginAsync(ct);
+        var entry = await engine.ChangeAsync(entryId, command, reason, ct);
+        if (adjusting)
+            await SetAsync(entry.Id, true, ct);
+        await transaction.CommitAsync(ct);
+        return entry;
     }
 
     /// <summary>The marked entries that are posted (not voided), dated from <paramref name="from"/> through <paramref name="to"/>.</summary>

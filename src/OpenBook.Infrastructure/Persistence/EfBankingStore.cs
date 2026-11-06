@@ -112,8 +112,8 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
 
     public void Add(BankRule rule) => db.BankRules.Add(rule);
 
-    public async Task<IReadOnlyList<string>> ListFeedKeysAsync(Guid accountId, CancellationToken ct) =>
-        await db.BankFeedItems.AsNoTracking().Where(i => i.AccountId == accountId).Select(i => i.DedupeKey).ToListAsync(ct);
+    public async Task<IReadOnlyList<FeedIdentity>> ListFeedIdentitiesAsync(Guid accountId, CancellationToken ct) =>
+        await db.BankFeedItems.AsNoTracking().Where(i => i.AccountId == accountId).Select(i => new FeedIdentity(i.DedupeKey, i.Date, i.Amount)).ToListAsync(ct);
 
     public async Task<IReadOnlyList<BankTransaction>> ListCheckSpendsAsync(CancellationToken ct) =>
         await db.BankTransactions.AsNoTracking()

@@ -52,6 +52,42 @@
         <p class="hint">@L["Fix what stopped a draft (reopen the period, reactivate the customer) and try again, or dismiss it and enter it by hand."]</p>
     }
 
+    @if (_noted.Count > 0)
+    {
+        <h2>@L["Entered, with a note"]</h2>
+        <table class="data">
+            <thead><tr><th>@L["Captured"]</th><th>@L["What"]</th><th>@L["Device"]</th><th>@L["Note"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var (draft, device) in _noted)
+                {
+                    <tr>
+                        <td>@draft.CapturedAt.InCompanyTime().ToString("g")</td>
+                        <td>
+                            @if (draft.ResultType is { } type && draft.ResultId is { } id && Links.ForAuditEntity(type, id) is { } href)
+                            {
+                                <a href="@href">@draft.Kind</a>
+                            }
+                            else
+                            {
+                                @draft.Kind
+                            }
+                        </td>
+                        <td>@device.Name</td>
+                        <td>@draft.Error</td>
+                        <td>
+                            <a class="button secondary" href="@($"/capture/drafts/{draft.Id}/photo")" data-enhance-nav="false">@L["Save the photo"]</a>
+                            <PostForm Action="@($"/capture/drafts/{draft.Id}/done")" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <button type="submit" class="link" data-confirm="@L["The photo kept here will be deleted. Have you saved it?"]">@L["Done"]</button>
+                            </PostForm>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="hint">@L["The record was entered, but its photo couldn't be attached, usually because of the kind of file. Save the photo, convert it to JPEG, PNG or PDF, and attach it to the record."]</p>
+    }
+
     <h2>@L["Your devices"]</h2>
     <DesktopNote>@L["OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go."]</DesktopNote>
     @if (_devices.Count == 0)
@@ -93,6 +129,7 @@
 
 @code {
     private IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)> _waiting = [];
+    private IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)> _noted = [];
     private IReadOnlyList<CaptureDevice> _devices = [];
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
@@ -102,6 +139,7 @@
     {
         var userId = (await AuthState).User.GetUserId();
         _waiting = await Capture.NeedingAttentionAsync(userId);
+        _noted = await Capture.EnteredWithNotesAsync(userId);
         _devices = (await Capture.ListDevicesAsync(userId)).OrderByDescending(d => d.CreatedAt).ToList();
     }
 }

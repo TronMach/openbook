@@ -179,13 +179,23 @@ app.MapNonprofitEndpoints();
 app.MapChannelEndpoints();
 app.MapDashboardEndpoints();
 app.MapPluginEndpoints();
-app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss)$)}", async (IFormCollection _, Guid id, string action, HttpContext http,
+app.MapGet("/capture/drafts/{id:guid}/photo", async (Guid id, HttpContext http, OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
+{
+    if (await capture.PhotoAsync(id, http.User.GetUserId(), ct) is not { } photo)
+        return Results.NotFound();
+    http.Response.Headers.XContentTypeOptions = "nosniff";
+    return Results.File(photo.Bytes, "application/octet-stream", Path.GetFileName(photo.Name));
+}).RequireAuthorization();
+
+app.MapPost("/capture/drafts/{id:guid}/{action:regex(^(retry|dismiss|done)$)}", async (IFormCollection _, Guid id, string action, HttpContext http,
     OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
 {
     try
     {
         if (action == "retry")
             await capture.RetryAsync(id, http.User.GetUserId(), kind => OpenBook.Application.Companies.AuthClaims.MayWrite(http.User, OpenBook.Application.Capture.CaptureService.AreaOf(kind)), ct);
+        else if (action == "done")
+            await capture.AcknowledgeAsync(id, http.User.GetUserId(), ct);
         else
             await capture.DismissAsync(id, http.User.GetUserId(), ct);
         return Results.Redirect("/capture");

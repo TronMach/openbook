@@ -29,6 +29,9 @@ public sealed record AccountLine(
         PostedAt <= moment && EntryKind != JournalEntryKind.Reversal && !(EntryStatus == JournalEntryStatus.Voided && VoidedAt <= moment);
 }
 
+/// <summary>What tells one feed line of an account from another.</summary>
+public sealed record FeedIdentity(string Key, DateOnly Date, decimal Amount);
+
 public interface IBankingStore
 {
     /// <summary>Every sealed ledger line on the account, oldest first (date, entry number, line).</summary>
@@ -62,7 +65,7 @@ public interface IBankingStore
     /// <summary>Every feed line for the account, any status, tracked.</summary>
     Task<IReadOnlyList<BankFeedItem>> ListFeedItemsAsync(Guid accountId, CancellationToken ct);
 
-    Task<IReadOnlyList<string>> ListFeedKeysAsync(Guid accountId, CancellationToken ct);
+    Task<IReadOnlyList<FeedIdentity>> ListFeedIdentitiesAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>Posted spends not brought in from a statement or feed: what can be a check.</summary>
     Task<IReadOnlyList<BankTransaction>> ListCheckSpendsAsync(CancellationToken ct);

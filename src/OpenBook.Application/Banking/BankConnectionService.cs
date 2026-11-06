@@ -25,6 +25,7 @@ public sealed class BankConnectionService(
     IBankingStore bank,
     BankFeedService feed,
     AccountService accounts,
+    IUnitOfWork unit,
     IEnumerable<IBankConnectionClient> clients,
     ISecretProtector protector,
     IClock clock,
@@ -185,7 +186,10 @@ public sealed class BankConnectionService(
         }
         catch (Exception ex) when (IsServiceFailure(ex, ct) || ex is DomainException)
         {
+            // What failed stays unsaved: a half-queued chunk has no import record, and a save conflict would only come back here.
             var error = Describe(ex);
+            unit.DiscardPending();
+            connection = await RequiredAsync(id, ct);
             connection.SyncFailed(now, error);
             await bank.SaveChangesAsync(ct);
             return new ConnectionSyncResult(queued, autoAdded, skipped, error);

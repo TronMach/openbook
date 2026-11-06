@@ -671,6 +671,9 @@
   <data name="Documents to check" xml:space="preserve">
     <value>Documents to check</value>
   </data>
+  <data name="Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
   <data name="Donor Center" xml:space="preserve">
     <value>Donor Center</value>
   </data>
@@ -748,6 +751,9 @@
   </data>
   <data name="Entered" xml:space="preserve">
     <value>Entered</value>
+  </data>
+  <data name="Entered, with a note" xml:space="preserve">
+    <value>Entered, with a note</value>
   </data>
   <data name="Entering" xml:space="preserve">
     <value>Entering</value>
@@ -1364,6 +1370,9 @@
   <data name="Not set up: no sales tax is charged" xml:space="preserve">
     <value>Not set up: no sales tax is charged</value>
   </data>
+  <data name="Note" xml:space="preserve">
+    <value>Note</value>
+  </data>
   <data name="Nothing due this week" xml:space="preserve">
     <value>Nothing due this week</value>
   </data>
@@ -1943,6 +1952,9 @@
   <data name="Save settings" xml:space="preserve">
     <value>Save settings</value>
   </data>
+  <data name="Save the photo" xml:space="preserve">
+    <value>Save the photo</value>
+  </data>
   <data name="Saved." xml:space="preserve">
     <value>Saved.</value>
   </data>
@@ -2213,8 +2225,14 @@
   <data name="The per-mile rate for each year (the IRS business rates are filled in)." xml:space="preserve">
     <value>The per-mile rate for each year (the IRS business rates are filled in).</value>
   </data>
+  <data name="The photo kept here will be deleted. Have you saved it?" xml:space="preserve">
+    <value>The photo kept here will be deleted. Have you saved it?</value>
+  </data>
   <data name="The places you keep stock, and the bins inside them." xml:space="preserve">
     <value>The places you keep stock, and the bins inside them.</value>
+  </data>
+  <data name="The record was entered, but its photo couldn't be attached, usually because of the kind of file. Save the photo, convert it to JPEG, PNG or PDF, and attach it to the record." xml:space="preserve">
+    <value>The record was entered, but its photo couldn't be attached, usually because of the kind of file. Save the photo, convert it to JPEG, PNG or PDF, and attach it to the record.</value>
   </data>
   <data name="The server's ({0})" xml:space="preserve">
     <value>The server's ({0})</value>

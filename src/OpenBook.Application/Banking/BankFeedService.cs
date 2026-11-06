@@ -73,7 +73,7 @@ public sealed class BankFeedService(
             preview = await csvImport.PreviewAsync(accountId, text, options, ct);
         }
 
-        var known = await KnownKeysAsync(accountId, ct);
+        var known = await FeedKeysAsync(accountId, ct);
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
         return preview with
         {
@@ -82,8 +82,15 @@ public sealed class BankFeedService(
                 if (r.Date is not { } date || r.Amount is not { } amount)
                     return r;
                 var occurrence = Occurrence(seen, BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId));
-                var key = BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId, occurrence);
-                return r with { AlreadyImported = known.Contains(key) || r.AlreadyImported, Occurrence = occurrence };
+                var key = known.KeyFor(BankFeedItem.KeyFor(date, amount, r.Payee, r.Reference, r.FitId, occurrence), r.FitId, date, amount);
+                var imported = !known.Add(key) || r.AlreadyImported;
+                // An id the bank changed, or text it reworded, brings a line in again: the feed's own lines are compared too.
+                return r with
+                {
+                    AlreadyImported = imported,
+                    PossibleDuplicate = r.PossibleDuplicate || (!imported && known.Holds(date, amount)),
+                    Occurrence = occurrence,
+                };
             }).ToList(),
         };
     }
@@ -98,7 +105,7 @@ public sealed class BankFeedService(
         if (lines.Count > BankImportService.MaxRows)
             throw new DomainException("import.too_many_rows", $"Import at most {BankImportService.MaxRows} transactions at a time.");
 
-        var known = await KnownKeysAsync(accountId, ct);
+        var known = await FeedKeysAsync(accountId, ct);
         var batchId = Guid.CreateVersion7();
         var rules = await ActiveRulesAsync(ct);
         int queued = 0, autoAdded = 0, skipped = 0;
@@ -110,7 +117,10 @@ public sealed class BankFeedService(
             // Which repeat it is in the file, as the preview counted: the page sends only the rows chosen.
             var occurrence = line.Occurrence ?? Occurrence(seen, BankFeedItem.KeyFor(line.Date, line.Amount, line.Payee, line.Reference, line.FitId));
             var item = BankFeedItem.Create(accountId, line.Date, line.Amount, line.Payee, line.Reference, line.Memo, line.FitId, batchId, clock.UtcNow, occurrence);
-            if (!known.Add(item.DedupeKey))
+            var key = known.KeyFor(item.DedupeKey, item.FitId, item.Date, item.Amount);
+            if (key != item.DedupeKey)
+                item.IdReused();
+            if (!known.Add(key))
             {
                 skipped++;
                 continue;
@@ -256,8 +266,42 @@ public sealed class BankFeedService(
         return item.Status == BankFeedStatus.Pending ? item : throw new DomainException("feed.not_pending", "This item has already been reviewed.");
     }
 
-    private async Task<HashSet<string>> KnownKeysAsync(Guid accountId, CancellationToken ct) =>
-        (await bank.ListFeedKeysAsync(accountId, ct)).ToHashSet(StringComparer.Ordinal);
+    private async Task<FeedKeys> FeedKeysAsync(Guid accountId, CancellationToken ct) =>
+        new(await bank.ListFeedIdentitiesAsync(accountId, ct));
+
+    /// <summary>
+    /// The keys an account's feed holds. A bank's id says which line it is, and a line keeps it though its posting date
+    /// moves a little. An id that comes with another amount, or a date well away, is a different line the bank
+    /// numbered the same: it's kept under a key of its own, so it isn't dropped, and that key is the same on every import.
+    /// </summary>
+    private sealed class FeedKeys
+    {
+        private readonly HashSet<string> _keys = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (DateOnly Date, decimal Amount)> _idHolders = new(StringComparer.Ordinal);
+        private readonly HashSet<(DateOnly, decimal)> _stored = [];
+
+        public FeedKeys(IReadOnlyList<FeedIdentity> lines)
+        {
+            foreach (var line in lines)
+            {
+                _keys.Add(line.Key);
+                _idHolders.TryAdd(line.Key, (line.Date, line.Amount));
+                _stored.Add((line.Date, line.Amount));
+            }
+        }
+
+        public bool Holds(DateOnly date, decimal amount) => _stored.Contains((date, amount));
+
+        public bool Add(string key) => _keys.Add(key);
+
+        public string KeyFor(string key, string? fitId, DateOnly date, decimal amount)
+        {
+            if (string.IsNullOrEmpty(fitId) || _idHolders.TryAdd(key, (date, amount)))
+                return key;
+            var holder = _idHolders[key];
+            return holder.Amount == amount && Math.Abs(holder.Date.DayNumber - date.DayNumber) <= MatchWindowDays ? key : BankFeedItem.ReusedKey(key, date, amount);
+        }
+    }
 
     /// <summary>
     /// The account's feed lines standing for a document about to be corrected: matched to its entry, or added as the

@@ -123,6 +123,31 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
         return (await store.ListDraftsAsync(devices.Keys, ct)).Where(d => d.Status == CaptureStatus.NeedsAttention).Select(d => (d, devices[d.DeviceId])).ToList();
     }
 
+    /// <summary>The user's entered drafts that came with something to know: a photo the record couldn't take, kept until they've seen it.</summary>
+    public async Task<IReadOnlyList<(CaptureDraft Draft, CaptureDevice Device)>> EnteredWithNotesAsync(Guid? userId, CancellationToken ct = default)
+    {
+        var devices = (await store.ListDevicesAsync(userId, ct)).ToDictionary(d => d.Id);
+        return (await store.ListDraftsAsync(devices.Keys, ct)).Where(d => d.Status == CaptureStatus.Entered && d.Error is not null).Select(d => (d, devices[d.DeviceId])).ToList();
+    }
+
+    /// <summary>The photo a draft still holds, or null.</summary>
+    public async Task<(string Name, byte[] Bytes)?> PhotoAsync(Guid draftId, Guid? ownerId, CancellationToken ct = default)
+    {
+        var (draft, _) = await OwnedAsync(draftId, ownerId, ct);
+        return Photo(Read<PhotoHolder>(draft).Photo);
+    }
+
+    /// <summary>The note on an entered draft has been seen: it goes, and the photo it was keeping.</summary>
+    public async Task AcknowledgeAsync(Guid draftId, Guid? ownerId, CancellationToken ct = default)
+    {
+        var (draft, device) = await OwnedAsync(draftId, ownerId, ct);
+        if (draft.Status != CaptureStatus.Entered || draft.Error is null)
+            return;
+        draft.Acknowledge(WithoutPhoto(draft.Payload));
+        store.Add(Audit(AuditAction.Updated, draft, device));
+        await store.SaveChangesAsync(ct);
+    }
+
     /// <summary>
     /// A device checking in, from a browser someone is signed in on: refused once its access is removed, and when
     /// it belongs to someone else (<c>capture.device_other_user</c>), so a second person on one browser gets a device of their own.
@@ -436,7 +461,8 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
             }
         }
 
-        if (draft.Status == CaptureStatus.Entered && System.Text.Json.Nodes.JsonNode.Parse(draft.Payload) is System.Text.Json.Nodes.JsonObject json
+        // A photo the record couldn't take stays here until someone has seen why: the device deletes its copy now.
+        if (draft.Status == CaptureStatus.Entered && draft.Error is null && System.Text.Json.Nodes.JsonNode.Parse(draft.Payload) is System.Text.Json.Nodes.JsonObject json
             && json.Remove("photo"))
             draft.Compact(json.ToJsonString());
     }
@@ -478,6 +504,8 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
             d.ResultId,
             d.CapturedAt,
         }));
+
+    private sealed record PhotoHolder(PhotoPayload? Photo);
 
     private sealed record TimePayload(Guid WorkerId, DateOnly Date, decimal Hours, Guid? CustomerId, Guid? ItemId, bool Billable, decimal? Rate, string? Notes);
 

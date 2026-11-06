@@ -80,6 +80,54 @@ public sealed class BankingProTests : IAsyncLifetime
     private Task<IReadOnlyList<FeedReviewItem>> Review(Guid account, BankFeedStatus status = BankFeedStatus.Pending) =>
         In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(account, status));
 
+    private const string OfxHead = "<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKACCTFROM><ACCTID>1</BANKACCTFROM><BANKTRANLIST>";
+
+    private static string Statement(params string[] lines) => OfxHead + string.Concat(lines) + "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>";
+
+    private static string Line(string id, string date, string amount, string name) =>
+        $"<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>{date}<TRNAMT>{amount}<FITID>{id}<NAME>{name}</STMTTRN>";
+
+    [Fact]
+    public async Task A_bank_id_used_for_two_lines_brings_both_in_once()
+    {
+        var file = Statement(Line("X", "20260302", "-5.00", "COFFEE"), Line("X", "20260302", "-9.00", "LUNCH"));
+        var preview = await Preview(_checking.Id, file);
+        Assert.DoesNotContain(preview.Rows, r => r.AlreadyImported);
+
+        var first = await Queue(_checking.Id, preview);
+        Assert.Equal((2, 0), (first.Queued, first.Skipped));
+        Assert.Equal(2, (await Review(_checking.Id)).Count);
+
+        // The same file again: both are known, under keys that don't change.
+        var again = await Preview(_checking.Id, file);
+        Assert.All(again.Rows, r => Assert.True(r.AlreadyImported));
+        var second = await Queue(_checking.Id, again);
+        Assert.Equal((0, 2), (second.Queued, second.Skipped));
+    }
+
+    [Fact]
+    public async Task A_line_whose_posting_date_moved_is_still_the_same_line()
+    {
+        await Queue(_checking.Id, await Preview(_checking.Id, Statement(Line("Y", "20260302", "-5.00", "COFFEE"))));
+
+        var moved = await Preview(_checking.Id, Statement(Line("Y", "20260304", "-5.00", "COFFEE")));
+
+        Assert.True(Assert.Single(moved.Rows).AlreadyImported);
+    }
+
+    [Fact]
+    public async Task A_line_the_bank_gave_a_new_id_is_flagged_though_it_never_became_a_transaction()
+    {
+        await Queue(_checking.Id, await Preview(_checking.Id, Statement(Line("Z1", "20260302", "-5.00", "COFFEE"))));
+        var line = Assert.Single(await Review(_checking.Id)).Item;
+        await In<BankFeedService, bool>(async s => { await s.ExcludeAsync(line.Id); return true; });
+
+        var row = Assert.Single((await Preview(_checking.Id, Statement(Line("Z2", "20260302", "-5.00", "COFFEE SHOP")))).Rows);
+
+        Assert.False(row.AlreadyImported);
+        Assert.True(row.PossibleDuplicate);
+    }
+
     // ---- OFX ----
 
     [Fact]
