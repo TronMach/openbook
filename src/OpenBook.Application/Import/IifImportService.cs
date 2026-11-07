@@ -48,7 +48,12 @@ public sealed class IifImportService(MigrationImportService migration)
         }
 
         foreach (var r in records.Where(r => r.Type == "CUST"))
-            data.Customers.Add(new SourceCustomer(r.Line, new CustomerDetails(r.Get("NAME") ?? string.Empty, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR"))));
+        {
+            // A job is written "Customer:Job".
+            var full = r.Get("NAME") ?? string.Empty;
+            var cut = full.LastIndexOf(':');
+            data.Customers.Add(new SourceCustomer(r.Line, new CustomerDetails(full[(cut + 1)..], r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR")), Parent: cut < 0 ? null : full[..cut]));
+        }
 
         foreach (var r in records.Where(r => r.Type == "VEND"))
             data.Vendors.Add(new SourceVendor(r.Line, new VendorDetails(r.Get("NAME") ?? string.Empty, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("ADDR"),
@@ -60,13 +65,15 @@ public sealed class IifImportService(MigrationImportService migration)
             ItemType? type = kind switch
             {
                 "SERV" => ItemType.Service,
-                "PART" or "OTHC" or "INVENTORY" or "INVENTORYPART" or "NONINV" => ItemType.NonInventory,
+                "PART" or "INVENTORY" or "INVENTORYPART" => ItemType.Inventory,
+                "OTHC" or "NONINV" => ItemType.NonInventory,
                 _ => null,
             };
             var note = type is null ? "Discounts, subtotals, groups, payments and tax items aren't imported."
-                : kind.StartsWith("INVENTORY", StringComparison.Ordinal) ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
+                : null;
             var rate = MigrationReaders.Price(r.Get("PRICE") ?? "0") ?? 0m;
-            data.Items.Add(new SourceItem(r.Line, r.Get("NAME") ?? string.Empty, kind, rate < 0m ? null : type, r.Get("ACCNT"), Math.Max(rate, 0m), r.Get("DESC"), rate < 0m ? MigrationReaders.NegativePrice : note));
+            data.Items.Add(new SourceItem(r.Line, r.Get("NAME") ?? string.Empty, kind, rate < 0m ? null : type, r.Get("ACCNT"), Math.Max(rate, 0m), r.Get("DESC"), rate < 0m ? MigrationReaders.NegativePrice : note,
+                MigrationReaders.Price(r.Get("QNTY") ?? "0") ?? 0m, MigrationReaders.Price(r.Get("COST") ?? "0") ?? 0m));
         }
 
         // A child before its parent would be refused for a parent that isn't there yet.

@@ -147,7 +147,7 @@ public sealed class MigrationFlowTests : IAsyncLifetime
         var preview = await Preview(MigrationSource.QuickBooksQbxml, qbxml);
         Assert.Equal(0, preview.ErrorCount);
         Assert.Contains(preview.Rows, r => r is { Kind: MigrationKind.Account, Name: "Estimates", Status: MigrationRowStatus.Skipped });
-        Assert.Contains(preview.Rows, r => r is { Kind: MigrationKind.Customer, Name: "Acme:Project X", Status: MigrationRowStatus.Skipped });
+        Assert.Contains(preview.Rows, r => r is { Kind: MigrationKind.Customer, Name: "Project X", Detail: "Job of Acme", Status: MigrationRowStatus.New });
         Assert.Contains(preview.Warnings, w => w.Contains("1 Invoice", StringComparison.Ordinal));
 
         await Import(MigrationSource.QuickBooksQbxml, Encoding.UTF8.GetBytes(qbxml));

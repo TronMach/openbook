@@ -58,8 +58,9 @@ internal static class QuickBooksOnlineReader
                 var details = new CustomerDetails(Str(c, "DisplayName") ?? "", Str(c, "CompanyName"), Str(c, "PrimaryEmailAddr", "Address"),
                     Str(c, "PrimaryPhone", "FreeFormNumber"), Address(c, "BillAddr"), Address(c, "ShipAddr"));
                 var job = c.TryGetProperty("Job", out var j) && j.ValueKind == JsonValueKind.True;
-                data.Customers.Add(new SourceCustomer(++index, job ? details with { DisplayName = Str(c, "FullyQualifiedName") ?? details.DisplayName } : details,
-                    job ? "Sub-customers (projects) aren't imported; their parent customer is." : null));
+                var full = Str(c, "FullyQualifiedName") ?? details.DisplayName;
+                var cut = full.LastIndexOf(':');
+                data.Customers.Add(new SourceCustomer(++index, job && cut > 0 ? details with { DisplayName = full[(cut + 1)..] } : details, Parent: job && cut > 0 ? full[..cut] : null));
             }
 
             foreach (var v in Get(lists, "Vendor"))
@@ -75,15 +76,16 @@ internal static class QuickBooksOnlineReader
                 ItemType? type = kind switch
                 {
                     "Service" => ItemType.Service,
-                    "NonInventory" or "Inventory" => ItemType.NonInventory,
+                    "Inventory" => ItemType.Inventory,
+                    "NonInventory" => ItemType.NonInventory,
                     _ => null,
                 };
                 var income = Str(i, "IncomeAccountRef", "value") is { } id && accountNames.TryGetValue(id, out var n) ? n : Str(i, "IncomeAccountRef", "name");
                 var note = type is null ? "Categories, bundles and other item kinds aren't imported."
-                    : kind == "Inventory" ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
+                    : null;
                 var price = decimal.Round(Number(i, "UnitPrice") ?? 0m, 4, MidpointRounding.AwayFromZero);
                 data.Items.Add(new SourceItem(++index, Str(i, "FullyQualifiedName") ?? Str(i, "Name") ?? "", kind, price < 0m ? null : type, income,
-                    Math.Max(price, 0m), Str(i, "Description"), price < 0m ? MigrationReaders.NegativePrice : note));
+                    Math.Max(price, 0m), Str(i, "Description"), price < 0m ? MigrationReaders.NegativePrice : note, Number(i, "QtyOnHand") ?? 0m, Number(i, "PurchaseCost") ?? 0m));
             }
 
             foreach (var e in Get(lists, "JournalEntry"))

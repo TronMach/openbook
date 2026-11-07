@@ -1031,6 +1031,9 @@
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>
   </data>
+  <data name="Import unpaid invoices and bills" xml:space="preserve">
+    <value>Import unpaid invoices and bills</value>
+  </data>
   <data name="Inactive" xml:space="preserve">
     <value>Inactive</value>
   </data>
@@ -2539,6 +2542,9 @@
   </data>
   <data name="What you sell and buy" xml:space="preserve">
     <value>What you sell and buy</value>
+  </data>
+  <data name="What's owed when starting fresh, from a CSV." xml:space="preserve">
+    <value>What's owed when starting fresh, from a CSV.</value>
   </data>
   <data name="When" xml:space="preserve">
     <value>When</value>

@@ -15,8 +15,10 @@ Importing accounts, journal entries and whole companies needs the accountant rol
 
 1. **Lists**: import your chart of accounts ([chapter 3](03-chart-of-accounts.md#importing-a-chart-from-a-csv-file)), customers, vendors and products from CSV files exported from your old program. Each list page has an **Import CSV** button.
 2. **Opening balances** as of the day before your start date, from your old program's balance sheet ([chapter 3](03-chart-of-accounts.md#opening-balances)).
-3. **Open invoices and bills**: enter each unpaid customer invoice and vendor bill, dated when it was issued, so you can receive payments and pay bills against them. Leave accounts receivable and payable out of the opening balances.
-4. **Bank reconciliation**: start each bank account's first reconciliation from the statement that covers your start date, and tick the uncleared checks and deposits you entered.
+3. **Open invoices and bills**: bring each unpaid customer invoice and vendor bill, dated when it was issued, so you can receive payments and pay bills against them. Leave accounts receivable and payable out of the opening balances. **Import → Unpaid invoices and bills** (`/import/open-documents`) takes them from a CSV: customer or vendor, number, date, due date and what's unpaid. Or enter them one at a time.
+4. **Stock**: leave Inventory Asset out of the opening balances too, then bring what's on hand through **Inventory → Import stock on hand** (`/inventory/opening-stock`), from a CSV of item, quantity and unit cost. That puts the value in Inventory Asset against Opening Balance Equity; entering it both ways would count it twice. **Count stock** does the same one warehouse at a time, typed in: choose Opening Balance Equity as its account. If your balances already hold the stock's value, tick **My books already hold this stock's value**, and the stock comes in with the accounts left as they are.
+5. **People, rates and unbilled time**, for a firm: **Time → People → Import** (`/time/people/import`) takes them from CSV files, people first.
+6. **Bank reconciliation**: start each bank account's first reconciliation from the statement that covers your start date, and tick the uncleared checks and deposits you entered.
 
 ## Importing the history
 
@@ -45,7 +47,7 @@ OpenBook can't open a QuickBooks company file itself: the format is Intuit's own
 
 Good to know:
 
-- Active customers, vendors and items come over; every account comes over, including inactive ones, because old transactions use them. Jobs (sub-customers) aren't imported; their transactions are, as journal entries.
+- Active customers, vendors and items come over; every account comes over, including inactive ones, because old transactions use them. Jobs come in as sub-customers billed with their customer (a job name used twice gets its customer's name in front), and their transactions as journal entries. Inventory parts come in as inventory items with their stock on hand at cost, on the date of the last transaction, without changing the balances that came with the history.
 - Each transaction becomes one journal entry with QuickBooks' type, number and name in its memo (for example "Invoice 1001 · Acme"). As with every import, invoices and bills don't become documents, so the A/R and A/P aging won't list them (see [What to expect](#what-to-expect)).
 - The helper goes back month by month until it finds five years in a row with nothing. If your books have an older gap than that, run it from a command prompt with `--from` and the first date, for example `OpenBook.QuickBooksExport --from 2005-01-01`. `--help` lists the other options (another folder, a date range, a company file for QuickBooks to open).
 - If your antivirus stops the helper, it's because the program is new and not yet signed; allow it, or ask whoever runs OpenBook.

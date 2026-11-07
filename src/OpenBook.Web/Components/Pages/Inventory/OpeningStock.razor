@@ -1,0 +1,133 @@
+@page "/inventory/opening-stock"
+@rendermode InteractiveServer
+@using OpenBook.Application.Inventory
+@inject Operations Ops
+
+<PageTitle>Import stock on hand · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import stock on hand</h1>
+        <ActionLink Class="button secondary" Href="/inventory">Inventory</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/count">Count stock</ActionLink>
+    </div>
+
+    <div class="card">
+        <p>
+            For moving in: what you have on your start date, from a CSV with a header row. <strong>Item</strong> (a name or barcode) and <strong>Quantity</strong> are
+            required, with a <strong>Unit cost</strong> or total <strong>Value</strong>; without either, the item's purchase cost is used. Items that already have stock
+            are left alone. Nothing is imported unless every row is good.
+        </p>
+        <div class="row">
+            <div class="field">
+                <label for="date">Stock on</label>
+                <input id="date" type="date" @bind="_date" />
+            </div>
+        </div>
+        <label class="check">
+            <input type="checkbox" @bind="_alreadyInBooks" />
+            <span>My books already hold this stock's value (Inventory Asset came in with opening balances or imported history)</span>
+        </label>
+        <p class="hint">Tick it, or the value counts twice. Left unticked, the stock's value goes to Inventory Asset against Opening Balance Equity, so leave Inventory Asset out of your opening balances.</p>
+        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">Imported stock for @_imported.NewCount item(s), worth @Labels.Amount(_imported.Total).</div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        <div class="import-summary">
+            <span><span class="badge ok">@_preview.NewCount</span> to bring in, @Labels.Amount(_preview.Total)</span>
+            <span><span class="badge">@_preview.ExistingCount</span> skipped</span>
+            <span><span class="badge @(_preview.ErrorCount > 0 ? "warn" : null)">@_preview.ErrorCount</span> with errors</span>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Line</th><th>Status</th><th>Item</th><th class="num">Quantity</th><th class="num">Unit cost</th><th class="num">Value</th><th>Note</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _preview.Rows)
+                    {
+                        <tr class="@(row.Status == ImportRowStatus.Exists ? "inactive" : null)">
+                            <td class="num">@row.Line</td>
+                            <td><span class="badge @(row.Status switch { ImportRowStatus.New => "ok", ImportRowStatus.Error => "warn", _ => null })">@row.Status</span></td>
+                            <td>@row.Item</td>
+                            <td class="num">@row.Quantity.ToString("0.####")</td>
+                            <td class="num">@Labels.Price(row.UnitCost)</td>
+                            <td class="num">@Labels.AmountOrBlank(row.Value)</td>
+                            <td class="out-of-balance">@row.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+        <div class="actions">
+            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">Import stock for @_preview.NewCount item(s)</button>
+        </div>
+    }
+</div>
+
+@code {
+    private DateOnly _date = CompanyTime.Today;
+    private bool _alreadyInBooks;
+    private string? _csv;
+    private OpeningStockPlan? _preview;
+    private OpeningStockPlan? _imported;
+    private string? _error;
+    private bool _busy;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _imported = null;
+        _preview = null;
+        _error = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(5 * 1024 * 1024);
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
+            _preview = await Ops.RunAsync<OpeningStockImportService, OpeningStockPlan>(s => s.PreviewAsync(_csv));
+        }
+        catch (Exception ex) when (ex is DomainException or IOException)
+        {
+            _error = ex is DomainException ? ex.Message : "That file is larger than 5 MB.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_busy || _csv is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (date, held) = (_date, _alreadyInBooks);
+            _imported = await Ops.RunAsync<OpeningStockImportService, OpeningStockPlan>(s => s.ImportAsync(_csv, date, held), _closingPassword);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

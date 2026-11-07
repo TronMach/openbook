@@ -35,12 +35,15 @@ public enum MigrationSource
 public sealed record SourceAccount(
     int Line, string FullName, string TypeLabel, AccountType? Type, string? Number = null, string? Description = null, string? SkipReason = null, string? Note = null);
 
-public sealed record SourceCustomer(int Line, CustomerDetails Details, string? SkipReason = null);
+/// <param name="Parent">A job's customer, by the source's full name ("Acme" or "Acme:Kitchen"): it comes in as a sub-customer billed with them.</param>
+public sealed record SourceCustomer(int Line, CustomerDetails Details, string? SkipReason = null, string? Parent = null);
 
 public sealed record SourceVendor(int Line, VendorDetails Details, string? SkipReason = null);
 
 /// <param name="Type">Null skips the item, with <paramref name="Note"/> saying why.</param>
-public sealed record SourceItem(int Line, string Name, string KindLabel, ItemType? Type, string? IncomeAccount, decimal Price, string? Description, string? Note = null);
+/// <param name="Quantity">Stock on hand, for an inventory product.</param>
+/// <param name="UnitCost">What it cost per unit, for an inventory product.</param>
+public sealed record SourceItem(int Line, string Name, string KindLabel, ItemType? Type, string? IncomeAccount, decimal Price, string? Description, string? Note = null, decimal Quantity = 0m, decimal UnitCost = 0m);
 
 /// <param name="Amount">Positive is a debit, negative a credit.</param>
 public sealed record SourceLine(string Account, decimal Amount, string? Memo);

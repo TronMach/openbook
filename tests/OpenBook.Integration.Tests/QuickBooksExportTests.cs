@@ -73,7 +73,7 @@ public sealed class QuickBooksExportTests : IAsyncLifetime
         Assert.Equal(80.25m, entries[1].Lines.Where(l => l.AccountId == phone.Id).Sum(l => l.Amount));
         Assert.Equal(2, entries[1].Lines.Count(l => l.AccountId == phone.Id));
         Assert.Equal(-250m, entries[2].Lines.Single(l => l.AccountId == chart.FindByFullName("Accounts Receivable")!.Id).Amount);
-        Assert.Equal(2, await _db.InDb(db => db.Customers.CountAsync())); // the job (Acme:Store) isn't imported
+        Assert.Equal(3, await _db.InDb(db => db.Customers.CountAsync())); // with the job (Acme:Store) as a sub-customer
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class QuickBooksExportTests : IAsyncLifetime
         foreach (var file in result.Files)
             Assert.Equal(0, (await Import(file)).ErrorCount);
         Assert.Equal(3, (await Imported()).Count);
-        Assert.Equal(2, await _db.InDb(db => db.Customers.CountAsync()));
+        Assert.Equal(3, await _db.InDb(db => db.Customers.CountAsync()));
     }
 
     [Fact]

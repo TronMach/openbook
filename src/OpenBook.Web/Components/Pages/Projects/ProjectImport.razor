@@ -1,0 +1,148 @@
+@page "/time/people/import"
+@rendermode InteractiveServer
+@using OpenBook.Application.Projects
+@inject Operations Ops
+
+<PageTitle>Import people, rates and time · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import people, rates and time</h1>
+        <ActionLink Class="button secondary" Href="/time/people">People</ActionLink>
+        <ActionLink Class="button secondary" Href="/time/rates">Rate card</ActionLink>
+    </div>
+
+    <div class="card">
+        <p>For moving in. Import <strong>people</strong> first, since the others name them, and bring in customers and services before rates and time. Each file is all or nothing, and what's already here is skipped.</p>
+        <ul>
+            <li><strong>People:</strong> Name, and optionally Role, Cost rate, Bill rate and Weekly hours.</li>
+            <li><strong>Rate card:</strong> Rate, with any of Client, Person, Role, Service and Starts.</li>
+            <li><strong>Unbilled time:</strong> Date, Person and Hours, with Client, Service, Billable, Rate and Notes when you have them. Time with a client and a service is billable unless Billable says no.</li>
+        </ul>
+        <div class="field">
+            <label for="kind">What's in the file</label>
+            <select id="kind" @bind="_kind" @bind:after="ChangedAsync">
+                <option value="@ProjectImportKind.People">People</option>
+                <option value="@ProjectImportKind.Rates">Rate card</option>
+                <option value="@ProjectImportKind.Time">Unbilled time</option>
+            </select>
+        </div>
+        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">Imported @_imported.NewCount row(s).</div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        @foreach (var warning in _preview.Warnings)
+        {
+            <div class="alert notice">@warning</div>
+        }
+        <div class="import-summary">
+            <span><span class="badge ok">@_preview.NewCount</span> new</span>
+            <span><span class="badge">@_preview.ExistingCount</span> skipped</span>
+            <span><span class="badge @(_preview.ErrorCount > 0 ? "warn" : null)">@_preview.ErrorCount</span> with errors</span>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Line</th><th>Status</th><th>Row</th><th>Note</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _preview.Rows)
+                    {
+                        <tr class="@(row.Status == ImportRowStatus.Exists ? "inactive" : null)">
+                            <td class="num">@row.Line</td>
+                            <td><span class="badge @(row.Status switch { ImportRowStatus.New => "ok", ImportRowStatus.Error => "warn", _ => null })">@row.Status</span></td>
+                            <td>@row.Text</td>
+                            <td class="out-of-balance">@row.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="actions">
+            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">Import @_preview.NewCount row(s)</button>
+        </div>
+    }
+</div>
+
+@code {
+    private ProjectImportKind _kind = ProjectImportKind.People;
+    private string? _csv;
+    private ProjectImportResult? _preview;
+    private ProjectImportResult? _imported;
+    private string? _error;
+    private bool _busy;
+
+    private async Task ChangedAsync()
+    {
+        _imported = null;
+        await PreviewAsync();
+    }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _imported = null;
+        _error = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(5 * 1024 * 1024);
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
+            await PreviewAsync();
+        }
+        catch (IOException)
+        {
+            _error = "That file is larger than 5 MB.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        _preview = null;
+        if (_csv is null)
+            return;
+        try
+        {
+            var kind = _kind;
+            _preview = await Ops.RunAsync<ProjectImportService, ProjectImportResult>(s => s.PreviewAsync(kind, _csv));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_busy || _csv is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var kind = _kind;
+            _imported = await Ops.RunAsync<ProjectImportService, ProjectImportResult>(s => s.ImportAsync(kind, _csv));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -62,6 +62,7 @@ public sealed class MigrationImportService(
     PostingEngine engine,
     ICompanyStore companies,
     IUnitOfWork unitOfWork,
+    Inventory.OpeningStockService openingStock,
     Plugins.PluginRegistry plugins)
 {
     /// <summary>Largest export accepted (decompressed).</summary>
@@ -138,14 +139,28 @@ public sealed class MigrationImportService(
             await accounts.CreateAsync(new CreateAccountCommand(a.FullName[(cut + 1)..], a.Type, a.Number, parent?.Id, a.Description), ct);
         }
 
-        foreach (var c in plan.Customers)
-            await customers.CreateAsync(c, ct);
+        // Parents before their jobs. A job's parent is new in this file, or already in the books.
+        var madeCustomers = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var heldCustomers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.DisplayName, c => c.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var c in plan.Customers.OrderBy(c => c.FullName.Count(x => x == ':')))
+        {
+            Guid? parent = c.Parent is null ? null : madeCustomers.TryGetValue(c.Parent, out var made) ? made : heldCustomers.GetValueOrDefault(c.Parent[(c.Parent.LastIndexOf(':') + 1)..]);
+            var created = await customers.CreateAsync(parent is { } id && id != Guid.Empty ? c.Details with { ParentId = id, BillWithParent = true } : c.Details, ct);
+            madeCustomers[c.FullName] = created.Id;
+        }
+
         foreach (var v in plan.Vendors)
             await vendors.CreateAsync(v, ct);
 
         var final = await accounts.GetChartAsync(ct);
-        foreach (var (details, incomeAccount) in plan.Items)
-            await items.CreateAsync(details with { IncomeAccountId = final.FindByFullName(incomeAccount)!.Id }, ct);
+        var stock = new List<Inventory.OpeningStockLine>();
+        foreach (var (details, incomeAccount, quantity) in plan.Items)
+        {
+            var item = await items.CreateAsync(details with { IncomeAccountId = final.FindByFullName(incomeAccount)!.Id }, ct);
+            if (quantity > 0m)
+                stock.Add(new Inventory.OpeningStockLine(item.Id, quantity, details.PurchaseCost));
+        }
+
 
         var batch = Guid.CreateVersion7();
         foreach (var t in plan.Transactions)
@@ -158,6 +173,10 @@ public sealed class MigrationImportService(
 
         if (plan.Transactions.Count > 0)
             await engine.SaveAsync(ct);
+
+        // Stock on hand: on the last date of the history, whose inventory account already holds its value.
+        if (stock.Count > 0)
+            await openingStock.RecordAsync(plan.Transactions.Count > 0 ? plan.Transactions.Max(t => t.Date) : CompanyTime.Today, stock, alreadyInBooks: plan.Transactions.Count > 0, ct);
         await transaction.CommitAsync(ct);
         return plan.Result;
     }
@@ -166,6 +185,8 @@ public sealed class MigrationImportService(
 
     private sealed record PlannedAccount(string FullName, AccountType Type, string? Number, string? Description);
 
+    private sealed record PlannedCustomer(CustomerDetails Details, string FullName, string? Parent);
+
     private static string? LineMemo(string? memo) => memo is { Length: > 1000 } ? memo[..1000] : memo;
 
     private sealed record PlannedTransaction(DateOnly Date, string? Memo, IReadOnlyList<SourceLine> Lines);
@@ -173,9 +194,9 @@ public sealed class MigrationImportService(
     private sealed record Plan(
         MigrationResult Result,
         List<PlannedAccount> Accounts,
-        List<CustomerDetails> Customers,
+        List<PlannedCustomer> Customers,
         List<VendorDetails> Vendors,
-        List<(ItemDetails Details, string IncomeAccount)> Items,
+        List<(ItemDetails Details, string IncomeAccount, decimal Quantity)> Items,
         List<PlannedTransaction> Transactions);
 
     private async Task<Plan> PlanAsync(MigrationData data, CancellationToken ct)
@@ -254,7 +275,7 @@ public sealed class MigrationImportService(
 
         // Customers and vendors: new names only.
         var existingCustomers = (await sales.ListCustomersAsync(ct)).Select(c => c.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var plannedCustomers = new List<CustomerDetails>();
+        var plannedCustomers = new List<PlannedCustomer>();
         foreach (var c in data.Customers)
         {
             var name = c.Details.DisplayName;
@@ -264,16 +285,26 @@ public sealed class MigrationImportService(
                 continue;
             }
 
-            if (existingCustomers.Contains(name.Trim()) || plannedCustomers.Any(p => string.Equals(p.DisplayName, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            // Names are unique across all customers, so a job called "Kitchen" under two customers needs telling apart.
+            var fullName = c.Parent is null ? name.Trim() : $"{c.Parent}:{name.Trim()}";
+            var taken = existingCustomers.Contains(name.Trim()) || plannedCustomers.Any(p => string.Equals(p.Details.DisplayName, name.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (taken && c.Parent is not null)
+            {
+                var distinct = $"{c.Parent[(c.Parent.LastIndexOf(':') + 1)..]} - {name.Trim()}";
+                taken = existingCustomers.Contains(distinct) || plannedCustomers.Any(p => string.Equals(p.Details.DisplayName, distinct, StringComparison.OrdinalIgnoreCase));
+                name = distinct;
+            }
+
+            if (taken)
             {
                 rows.Add(new MigrationRow(MigrationKind.Customer, c.Line, name, null, MigrationRowStatus.Exists));
                 continue;
             }
 
-            var error = Try(() => Customer.Create(c.Details));
+            var error = Try(() => Customer.Create(c.Details with { DisplayName = name }));
             if (error is null)
-                plannedCustomers.Add(c.Details with { DisplayName = name.Trim() });
-            rows.Add(new MigrationRow(MigrationKind.Customer, c.Line, name, c.Details.CompanyName, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error));
+                plannedCustomers.Add(new PlannedCustomer(c.Details with { DisplayName = name.Trim() }, fullName, c.Parent));
+            rows.Add(new MigrationRow(MigrationKind.Customer, c.Line, name, c.Parent is null ? c.Details.CompanyName : $"Job of {c.Parent}", error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error));
         }
 
         var existingVendors = (await purchases.ListVendorsAsync(ct)).Select(v => v.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -301,7 +332,7 @@ public sealed class MigrationImportService(
 
         // Products and services.
         var existingItems = (await sales.ListItemsAsync(ct)).Select(i => i.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var plannedItems = new List<(ItemDetails, string)>();
+        var plannedItems = new List<(ItemDetails, string, decimal)>();
         foreach (var i in data.Items)
         {
             var name = i.Name;
@@ -329,9 +360,9 @@ public sealed class MigrationImportService(
             var error = Try(() => Item.NormalizeName(name))
                 ?? (!Known(income) ? $"Its income account '{income}' isn't in the file or the chart." : null)
                 ?? Try(() => SalesLine.ValidRate(i.Price))
-                ?? Try(() => Item.Create(new ItemDetails(name, i.Type.Value, Guid.NewGuid(), i.Price, i.Description)));
+                ?? Try(() => Item.Create(new ItemDetails(name, i.Type.Value, Guid.NewGuid(), i.Price, i.Description, InventoryAssetAccountId: Guid.NewGuid(), CostAccountId: Guid.NewGuid())));
             if (error is null)
-                plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description), income));
+                plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description, PurchaseCost: Math.Max(i.UnitCost, 0m)), income, Math.Max(i.Quantity, 0m)));
             rows.Add(new MigrationRow(MigrationKind.Item, i.Line, name, i.KindLabel, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? i.Note));
         }
 

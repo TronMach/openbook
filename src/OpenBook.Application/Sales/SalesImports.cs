@@ -22,7 +22,9 @@ public sealed record ImportResult<TRow>(IReadOnlyList<TRow> Rows, int NewCount, 
 
 /// <summary>
 /// Customer list CSV import, all-or-nothing. A name column is required; company, email, phone, addresses
-/// (one column, or street/city/state/zip/country), terms ("Net 30", "Due on receipt", "15") and notes are optional.
+/// (one column, or street/city/state/zip/country), terms ("Net 30", "Due on receipt", "15"), notes and a parent are
+/// optional. A parent is a Parent column or, as QuickBooks writes jobs, a name like "Acme:Kitchen": the sub-customer
+/// comes in billed with them unless a "Bill with parent" column says no. The parent can be further down the file.
 /// </summary>
 public sealed partial class CustomerImportService(ISalesStore store, CustomerService customers, CustomFieldImport fieldImport)
 {
@@ -67,18 +69,52 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
         var shipping = cols.Find("shippingaddress", "shipto", "shiptoaddress");
         var terms = cols.Find("terms", "paymentterms");
         var notes = cols.Find("notes", "note");
+        var parentColumn = cols.Find("parent", "parentcustomer", "subcustomerof", "customerof");
+        var billWithParent = cols.Find("billwithparent", "billparent");
 
-        var existing = (await store.ListCustomersAsync(ct)).Select(c => c.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var current = await store.ListCustomersAsync(ct);
+        var existing = current.Select(c => c.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ids = current.ToDictionary(c => c.DisplayName, c => c.Id, StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var created = new List<Customer>();
         var rows = new List<CustomerImportRow>();
 
-        foreach (var r in records.Skip(1))
+        // "Acme:Kitchen" is Kitchen under Acme, when the file has no Parent column to say so.
+        (string? Name, string? Parent) Named(CsvRecord r)
+        {
+            var written = CsvColumns.Field(r, name)?.Trim();
+            var parent = CsvColumns.Field(r, parentColumn)?.Trim();
+            var cut = written?.LastIndexOf(':') ?? -1;
+            return string.IsNullOrEmpty(parent) && cut > 0 ? (written![(cut + 1)..].Trim(), written[..cut].Trim()) : (written, string.IsNullOrEmpty(parent) ? null : parent);
+        }
+
+        // Parents first, wherever they are in the file; anything left is for a parent nobody has, and is refused below.
+        var ordered = new List<CsvRecord>();
+        var waiting = records.Skip(1).ToList();
+        var known = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+        while (waiting.Count > 0)
+        {
+            var ready = waiting.Where(r => Named(r).Parent is not { } parent || known.Contains(parent[(parent.LastIndexOf(':') + 1)..].Trim())).ToList();
+            if (ready.Count == 0)
+                break;
+            ordered.AddRange(ready);
+            waiting.RemoveAll(ready.Contains);
+            known.UnionWith(ready.Select(r => Named(r).Name).OfType<string>());
+        }
+
+        ordered.AddRange(waiting);
+
+        foreach (var r in ordered)
         {
             string? F(int? c) => CsvColumns.Field(r, c);
-            var displayName = F(name);
+            var (displayName, parentName) = Named(r);
             try
             {
+                Guid? parentId = null;
+                if (parentName is not null && !ids.TryGetValue(parentName[(parentName.LastIndexOf(':') + 1)..].Trim(), out var found))
+                    throw new DomainException("import.no_parent", $"There's no customer \"{parentName}\".");
+                else if (parentName is not null)
+                    parentId = ids[parentName[(parentName.LastIndexOf(':') + 1)..].Trim()];
                 var parsedTerms = F(terms) is { } termsText ? ParseTerms(termsText) : new PaymentTerms(30);
                 var details = new CustomerDetails(
                     displayName ?? string.Empty,
@@ -90,7 +126,9 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
                     parsedTerms.DueDays,
                     F(notes),
                     EarlyPaymentDiscountPercent: parsedTerms.DiscountPercent,
-                    EarlyPaymentDiscountDays: parsedTerms.DiscountDays);
+                    EarlyPaymentDiscountDays: parsedTerms.DiscountDays,
+                    ParentId: parentId,
+                    BillWithParent: parentId is not null && !(F(billWithParent)?.Trim().ToUpperInvariant() is "N" or "NO" or "FALSE" or "0"));
 
                 var custom = fieldColumns.Read(r);
                 if (displayName is not null && existing.Contains(displayName.Trim()))
@@ -104,6 +142,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
 
                 var made = Customer.Create(details);
                 created.Add(made);
+                ids[made.DisplayName] = made.Id;
                 fieldValues[made.Id] = custom;
                 rows.Add(new CustomerImportRow(r.Line, details, ImportRowStatus.New, null));
             }
@@ -113,7 +152,7 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
             }
         }
 
-        return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
+        return (SalesImport.Result(rows.OrderBy(r => r.Line).ToList(), r => r.Status), created, fieldColumns, fieldValues);
     }
 
     /// <summary>

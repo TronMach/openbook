@@ -9,7 +9,7 @@ namespace OpenBook.Application.Import.Migration;
 
 /// <summary>
 /// QuickBooks Desktop SDK responses (qbXML): AccountQueryRs, CustomerQueryRs, VendorQueryRs, item queries and
-/// JournalEntryQueryRs, in one file or several concatenated under one root. Jobs (sub-customers) are skipped. With a
+/// JournalEntryQueryRs, in one file or several concatenated under one root. Jobs come in as sub-customers. With a
 /// Journal report (<see cref="QbxmlJournal"/>, as OpenBook's QuickBooks export helper writes) every transaction comes
 /// from the report; without one, only journal entries are imported and other transaction types are reported.
 /// </summary>
@@ -46,8 +46,9 @@ internal static class QbxmlReader
             var job = int.TryParse(c.Text("Sublevel"), out var level) && level > 0;
             var details = new CustomerDetails(c.Text("Name") ?? "", c.Text("CompanyName"), c.Text("Email"), c.Text("Phone"),
                 Address(c.Child("BillAddress")), Address(c.Child("ShipAddress")));
-            data.Customers.Add(new SourceCustomer(MigrationReaders.LineOf(c), job ? details with { DisplayName = c.Text("FullName") ?? details.DisplayName } : details,
-                job ? "Jobs (sub-customers) aren't imported; their parent customer is." : null));
+            var full = c.Text("FullName") ?? details.DisplayName;
+            var cut = full.LastIndexOf(':');
+            data.Customers.Add(new SourceCustomer(MigrationReaders.LineOf(c), details, Parent: job && cut > 0 ? full[..cut] : null));
         }
 
         foreach (var v in document.Named("VendorRet"))
@@ -63,7 +64,8 @@ internal static class QbxmlReader
             ItemType? type = kind switch
             {
                 "Service" => ItemType.Service,
-                "NonInventory" or "Inventory" or "OtherCharge" => ItemType.NonInventory,
+                "Inventory" => ItemType.Inventory,
+                "NonInventory" or "OtherCharge" => ItemType.NonInventory,
                 _ => null,
             };
             var terms = i.Child("SalesOrPurchase") ?? i.Child("SalesAndPurchase");
@@ -71,9 +73,10 @@ internal static class QbxmlReader
             var price = MigrationReaders.Price(terms.Text("Price") ?? terms.Text("SalesPrice") ?? i.Text("SalesPrice")) ?? 0m;
             var income = (terms?.Child("AccountRef") ?? terms?.Child("IncomeAccountRef") ?? i.Child("IncomeAccountRef")).Text("FullName");
             var note = type is null ? "Discounts, subtotals, groups, payments and tax items aren't imported."
-                : kind == "Inventory" ? "Imported as a non-inventory product; set up stock afterwards if you track it." : null;
+                : null;
             data.Items.Add(new SourceItem(MigrationReaders.LineOf(i), i.Text("FullName") ?? i.Text("Name") ?? "", kind, price < 0m ? null : type, income, Math.Max(price, 0m),
-                terms.Text("Desc") ?? terms.Text("SalesDesc") ?? i.Text("SalesDesc"), price < 0m ? MigrationReaders.NegativePrice : note));
+                terms.Text("Desc") ?? terms.Text("SalesDesc") ?? i.Text("SalesDesc"), price < 0m ? MigrationReaders.NegativePrice : note,
+                MigrationReaders.Price(i.Text("QuantityOnHand")) ?? 0m, MigrationReaders.Price(i.Text("AverageCost") ?? i.Text("PurchaseCost")) ?? 0m));
         }
 
         var journals = document.Named("ReportRet").Where(QbxmlJournal.IsJournal).ToList();

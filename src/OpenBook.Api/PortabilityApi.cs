@@ -48,6 +48,23 @@ internal static class PortabilityApi
             return dryRun == true ? await s.PreviewAsync(text, ct) : await s.ImportAsync(text, ct);
         }).Accepts<string>("text/plain");
 
+        // Unpaid invoices or bills when starting fresh, as a CSV body. account is the income account or category.
+        import.MapPost("/open-documents/{kind}", async (Application.Import.OpenDocumentKind kind, HttpRequest request, Guid accountId, bool? dryRun, Application.Import.OpenDocumentImportService s, CancellationToken ct) =>
+        {
+            var text = await ReadAsync(request, ct);
+            return dryRun == true ? await s.PreviewAsync(kind, text, ct) : await s.ImportAsync(kind, text, accountId, ct);
+        }).Accepts<string>("text/csv");
+        import.MapPost("/opening-stock", async (HttpRequest request, DateOnly? date, bool? alreadyInBooks, bool? dryRun, Application.Inventory.OpeningStockImportService s, CancellationToken ct) =>
+        {
+            var text = await ReadAsync(request, ct);
+            return dryRun == true ? await s.PreviewAsync(text, ct) : await s.ImportAsync(text, date ?? CompanyTime.Today, alreadyInBooks == true, ct);
+        }).Accepts<string>("text/csv");
+        import.MapPost("/projects/{kind}", async (Application.Projects.ProjectImportKind kind, HttpRequest request, bool? dryRun, Application.Projects.ProjectImportService s, CancellationToken ct) =>
+        {
+            var text = await ReadAsync(request, ct);
+            return dryRun == true ? await s.PreviewAsync(kind, text, ct) : await s.ImportAsync(kind, text, ct);
+        }).Accepts<string>("text/csv");
+
         // Any supported program's export as the raw request body: source is a MigrationSource (QuickBooksIif, GnuCash, Xero...).
         import.MapPost("/migrate/{source}", async (string source, HttpRequest request, bool? dryRun, Application.Import.Migration.MigrationImportService s, CancellationToken ct) =>
         {
