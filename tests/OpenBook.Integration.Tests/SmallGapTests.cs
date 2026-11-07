@@ -225,6 +225,28 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_gift_card_is_owed_until_it_is_redeemed()
+    {
+        var fees = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var cards = await _db.CreateAccount("Gift Cards Outstanding", AccountType.OtherCurrentLiability);
+        Assert.Equal("item.income_account_type", (await Assert.ThrowsAsync<DomainException>(() => In<ItemService, Item>(s =>
+            s.CreateAsync(new ItemDetails("Boxed card", ItemType.Inventory, cards.Id, 50m))))).Code);
+        var card = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Gift card", ItemType.Service, cards.Id, 50m, Taxable: false)));
+        var work = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Haircut", ItemType.Service, fees.Id, 80m, Taxable: false)));
+        var giver = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Gift buyer")));
+        var friend = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Their friend")));
+
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(giver.Id, Mar1, [new SalesLineDraft(card.Id, "Gift card 0001", 1m, 50m)])));
+        var redeemed = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(friend.Id, Mar31,
+            [new SalesLineDraft(work.Id, null, 1m, 80m), new SalesLineDraft(card.Id, "Gift card 0001 redeemed", -1m, 50m)])));
+        Assert.Equal(30m, redeemed.Total);
+
+        var lines = await In<OpenBook.Application.Reporting.ReportLedger, IReadOnlyList<OpenBook.Application.LedgerLine>>(s => s.LinesAsync(OpenBook.Domain.Ledger.ReportBasis.Accrual, null, Mar31));
+        Assert.Equal(0m, lines.Where(l => l.AccountId == cards.Id).Sum(l => l.Amount));
+        Assert.Equal(-80m, lines.Where(l => l.AccountId == fees.Id).Sum(l => l.Amount));
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";

@@ -42,7 +42,9 @@ Every line on an invoice that charges something names a *product or service* (an
   - **Non-inventory**: something you sell but don't count (a part bought for one job).
   - **Inventory**: something you stock and count. OpenBook tracks quantity on hand and its cost, and posts the cost of what you sell. See [Inventory](14-inventory.md).
   - **Bundle** and **Assembly**: items made of other items, also in [Inventory](14-inventory.md#bundles-and-assemblies).
-- **Income account**: where sales of the item are credited, for example "Consulting Income" or "Product Sales".
+- **Income account**: where sales of the item are credited, for example "Consulting Income" or "Product Sales". A service or non-inventory item can use an *other current liability* account instead, for money taken now for something given later.
+
+**Gift cards**: add an other current liability account such as "Gift Cards Outstanding" and a service item "Gift card" on it (not taxable). Selling a card (on a sales receipt or invoice) credits that account: it's money you owe in goods, not income. When the card is spent, add the same item to that sale with a quantity of **-1** at the card's value: it comes off the total and off what you owe. The account's register shows what's outstanding. Cards sold through a sales channel's payouts aren't split out yet.
 - **Barcode** (optional): scanning it into any item picker chooses the item.
 - **Taxable**: whether sales tax applies.
 

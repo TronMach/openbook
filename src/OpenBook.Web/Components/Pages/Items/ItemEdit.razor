@@ -11,6 +11,7 @@
 @inject WarehouseService WarehouseService
 @inject ViewModeService Views
 @inject ICompanyStore Companies
+@inject OpenBook.Application.SalesTax.SalesTaxService Taxes
 @inject NavigationManager Navigation
 
 <PageTitle>@(_item?.Name ?? "New product or service") · OpenBook</PageTitle>
@@ -394,6 +395,7 @@
     private IReadOnlyList<Vendor> _vendors = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _incomeAccounts = [];
+    private List<Account> _liabilities = [];
     private List<Account> _assetAccounts = [];
     private List<Account> _costAccounts = [];
     private StockLevel? _stock;
@@ -443,6 +445,15 @@
             @foreach (var account in _incomeAccounts)
             {
                 <option value="@account.Id">@_chart.FullName(account.Id)</option>
+            }
+            @if (_liabilities.Count > 0 && Input.Type is ItemType.Service or ItemType.NonInventory)
+            {
+                <optgroup label="Liabilities (gift cards and the like)">
+                    @foreach (var account in _liabilities)
+                    {
+                        <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                    }
+                </optgroup>
             }
         </InputSelect>
         <ValidationMessage For="() => Input.IncomeAccountId" />
@@ -523,6 +534,11 @@
         _sellShortAllowed = (await Companies.GetCompanyAsync(default))?.AllowSellingShort ?? false;
         _chart = await AccountService.GetChartAsync();
         _incomeAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
+        // Sales tax liabilities (and the account above them) belong to the tax agencies, not to items.
+        var taxAccounts = (await Taxes.ListAgenciesAsync()).Select(t => t.LiabilityAccountId).ToHashSet();
+        var taxParents = taxAccounts.Select(id => _chart.Find(id)?.ParentId).OfType<Guid>().ToHashSet();
+        _liabilities = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type == AccountType.OtherCurrentLiability && !taxAccounts.Contains(a.Id) && !taxParents.Contains(a.Id)).ToList();
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
         _costAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
         _item = Id is { } id ? await ItemService.GetAsync(id) : null;

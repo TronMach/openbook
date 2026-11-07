@@ -256,12 +256,19 @@ public sealed class Item
 
     public void Reactivate() => IsActive = true;
 
-    /// <summary>Sales post to income accounts (income or other income).</summary>
-    public static void EnsureIncomeAccount(Account account)
+    /// <summary>
+    /// Sales post to income accounts (income or other income). A service or non-stock item may instead post to an other
+    /// current liability: money taken now for something given later, such as gift cards, which a negative line on a later
+    /// sale redeems.
+    /// </summary>
+    public static void EnsureIncomeAccount(Account account, ItemType? type = null)
     {
         ArgumentNullException.ThrowIfNull(account);
-        if (account.Type.ClassOf() != AccountClass.Income)
-            throw new DomainException("item.income_account_type", $"'{account.Name}' isn't an income account.");
+        var liabilityAllowed = type is ItemType.Service or ItemType.NonInventory && account.Type == AccountType.OtherCurrentLiability;
+        if (account.Type.ClassOf() != AccountClass.Income && !liabilityAllowed)
+            throw new DomainException("item.income_account_type", type is ItemType.Service or ItemType.NonInventory
+                ? $"'{account.Name}' isn't an income account (or an other current liability, for gift cards and the like)."
+                : $"'{account.Name}' isn't an income account.");
         if (!account.IsActive)
             throw new DomainException("item.income_account_inactive", $"'{account.Name}' is inactive.");
     }

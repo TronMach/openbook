@@ -186,7 +186,7 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         if (Item.NormalizeBarcode(details.Barcode) is { } barcode && items.FirstOrDefault(i => i.Id != except && string.Equals(i.Barcode, barcode, StringComparison.OrdinalIgnoreCase)) is { } other)
             throw new DomainException("item.barcode_taken", $"{other.Name} already has the barcode {barcode}.");
         var chart = await accounts.GetChartAsync(ct);
-        Item.EnsureIncomeAccount(chart.Get(details.IncomeAccountId));
+        Item.EnsureIncomeAccount(chart.Get(details.IncomeAccountId), details.Type);
         if (Item.IsTracked(details.Type))
         {
             Item.EnsureInventoryAssetAccount(chart.Get(details.InventoryAssetAccountId ?? Guid.Empty));
