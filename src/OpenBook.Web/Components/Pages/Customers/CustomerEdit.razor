@@ -172,7 +172,7 @@
                     <span class="hint">For terms like "2% 10, Net 30". Offered when you receive a payment in time.</span>
                 </div>
             </div>
-            <MoreOptions Open="@(Input.PriceLevelId is not null || Input.ParentId is not null || Input.BillWithParent || Input.NoReminders || Input.NoLateFees)" Title="More options: pricing, sub-customer, collections">
+            <MoreOptions Open="@(Input.PriceLevelId is not null || Input.ParentId is not null || Input.BillWithParent || Input.NoReminders || Input.NoLateFees || Input.CreditLimit is not null || Input.CreditHold)" Title="More options: pricing, sub-customer, collections">
                 <div class="field">
                     <label for="price-level">Price level</label>
                     <InputSelect id="price-level" @bind-Value="Input.PriceLevelId">
@@ -212,6 +212,15 @@
                     <label class="check">
                         <InputCheckbox @bind-Value="Input.NoLateFees" />
                         <span>Don't charge late fees</span>
+                    </label>
+                    <div class="field">
+                        <label for="credit-limit">Credit limit <span class="muted">(optional)</span></label>
+                        <InputNumber id="credit-limit" class="amount" @bind-Value="Input.CreditLimit" />
+                        <span class="hint">New invoices and orders warn when they owe this much or more.</span>
+                    </div>
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.CreditHold" />
+                        <span>On credit hold: warn on every new invoice and order</span>
                     </label>
                 </fieldset>
             </MoreOptions>
@@ -424,6 +433,8 @@
                 BillWithParent = _customer.BillWithParent,
                 NoReminders = _customer.NoReminders,
                 NoLateFees = _customer.NoLateFees,
+                CreditLimit = _customer.CreditLimit,
+                CreditHold = _customer.CreditHold,
             };
         Input.Version ??= opened;
     }
@@ -436,7 +447,7 @@
                 Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
                 Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
                 Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty,
-                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees);
+                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees, Input.CreditLimit, Input.CreditHold);
             await Versions.EnsureUnchangedAsync<Customer>(_customer?.Id ?? Guid.Empty, Input.Version);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
@@ -510,5 +521,9 @@
         public bool BillWithParent { get; set; }
         public bool NoReminders { get; set; }
         public bool NoLateFees { get; set; }
+
+        public decimal? CreditLimit { get; set; }
+
+        public bool CreditHold { get; set; }
     }
 }

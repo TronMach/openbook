@@ -5308,6 +5308,13 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<bool>("CreditHold")
+                        .HasColumnType("boolean");
+
+                    b.Property<long?>("CreditLimit")
+                        .HasColumnType("bigint")
+                        .HasColumnName("CreditLimitMinor");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)

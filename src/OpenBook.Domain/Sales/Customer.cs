@@ -61,6 +61,12 @@ public sealed class Customer
     /// <summary>Never charge the customer late fees.</summary>
     public bool NoLateFees { get; private set; }
 
+    /// <summary>What the customer may owe before new sales warn; null for no limit. A warning, never a refusal.</summary>
+    public decimal? CreditLimit { get; private set; }
+
+    /// <summary>Sales to them warn until it's lifted (overdue, a dispute); nothing is refused.</summary>
+    public bool CreditHold { get; private set; }
+
     /// <summary>The form design their documents print with; null = the usual one for each document.</summary>
     public Guid? FormDesignId { get; private set; }
 
@@ -113,6 +119,9 @@ public sealed class Customer
         BillWithParent = ParentId is not null && details.BillWithParent;
         NoReminders = details.NoReminders;
         NoLateFees = details.NoLateFees;
+        if (details.CreditLimit is { } limit && (limit < 0m || decimal.Round(limit, 2) != limit || limit > Money.MaxAmount))
+            throw new DomainException("customer.credit_limit_invalid", "The credit limit is an amount from zero, in dollars and cents.");
+        (CreditLimit, CreditHold) = (details.CreditLimit, details.CreditHold);
 
         ExemptionCertificate = Text.Optional(details.ExemptionCertificate, 50, "customer.exemption_too_long", "Exemption certificate");
         if (ExemptionCertificate is null)
@@ -175,7 +184,9 @@ public sealed record CustomerDetails(
     Guid? ParentId = null,
     bool BillWithParent = false,
     bool NoReminders = false,
-    bool NoLateFees = false);
+    bool NoLateFees = false,
+    decimal? CreditLimit = null,
+    bool CreditHold = false);
 
 /// <summary>
 /// Rules for sub-customers: at most <see cref="MaxDepth"/> levels, no cycles, full names "Parent:Child", and who

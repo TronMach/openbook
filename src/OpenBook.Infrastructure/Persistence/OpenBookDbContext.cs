@@ -1439,6 +1439,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("Customers");
             b.HasKey(c => c.Id);
+            b.Property(c => c.CreditLimit).HasColumnName("CreditLimitMinor").HasConversion(NullableMinorUnits);
             b.Property(c => c.DisplayName).HasMaxLength(200);
             b.HasIndex(c => c.DisplayName).IsUnique();
             b.Property(c => c.CompanyName).HasMaxLength(200);

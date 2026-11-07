@@ -34,6 +34,10 @@
                     <input id="number" @bind="_number" maxlength="20" />
                 </div>
             </div>
+            @if (_creditWarning is not null)
+            {
+                <div class="alert notice" role="status">@_creditWarning</div>
+            }
             <div class="row">
                 <div class="field">
                     <label for="date">@L["Invoice date"]</label>
@@ -241,6 +245,8 @@
         _loaded = true;
     }
 
+    private string? _creditWarning;
+
     private Task PickCustomer(ChangeEventArgs e) => SetCustomerAsync(Guid.TryParse(e.Value as string, out var id) ? id : null);
 
     /// <summary>"Remodel · " before a project's work on its client's invoice (lines are grouped by project).</summary>
@@ -251,6 +257,7 @@
     {
         _customerId = id;
         _customer = _customers.FirstOrDefault(c => c.Id == id);
+        _creditWarning = id is { } who ? await Ops.RunAsync<CustomerService, string?>(s => s.CreditWarningAsync(who)) : null;
         if (_customer is not null)
             _dueDate = _customer.DueDateFor(_date);
         DefaultTaxCode();

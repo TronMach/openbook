@@ -10,6 +10,7 @@ Everything here starts from **Sales** in the menu.
 
 - **Display name** is how the customer appears everywhere. It has to be unique.
 - **Company, email, phone, billing and shipping address** print on invoices and statements. The email is where invoices are sent.
+- **Credit limit** and **On credit hold** (under **More options**): a new invoice for a customer owing that much or more, or on hold, shows a warning beside the customer. Nothing is refused; it's a prompt to check before selling on credit. A sub-customer billed with its parent follows the parent's.
 - **Payment terms** set the due date of their invoices: due on receipt, net 15, net 30 and so on. An **early payment discount** turns them into terms like "2% 10, Net 30": a customer who pays within 10 days may take 2% off.
 - **Price level** gives this customer a pricing baseline (see [Pricing](13-pricing.md)).
 - **Sub-customer of** puts a job, project or location under another customer, up to five levels. Tick **bill with parent** to have the parent billed and sent statements for it.

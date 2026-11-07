@@ -281,4 +281,17 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.Equal(("0042", "900", "0043"), ((await In<BankingService, BankTransaction?>(s => s.GetAsync(first.Id)))!.Reference,
             (await In<BankingService, BankTransaction?>(s => s.GetAsync(numbered.Id)))!.Reference, (await In<BankingService, BankTransaction?>(s => s.GetAsync(second.Id)))!.Reference));
     }
+
+    [Fact]
+    public async Task A_customer_over_their_credit_limit_or_on_hold_is_warned_about()
+    {
+        await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var item = await _db.InScope(sp => sp.GetRequiredService<ItemService>().CreateQuickAsync("Work", ItemType.Service, 100m, false, null));
+        var customer = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Wholesale Co", CreditLimit: 500m)));
+        Assert.Null(await In<CustomerService, string?>(s => s.CreditWarningAsync(customer.Id)));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(customer.Id, Mar1, [new SalesLineDraft(item.Id, null, 6m, 100m)])));
+        Assert.Contains("credit limit of 500.00", await In<CustomerService, string?>(s => s.CreditWarningAsync(customer.Id)), StringComparison.Ordinal);
+        await In<CustomerService, Customer>(s => s.UpdateAsync(customer.Id, new CustomerDetails("Wholesale Co", CreditHold: true)));
+        Assert.Contains("credit hold", await In<CustomerService, string?>(s => s.CreditWarningAsync(customer.Id)), StringComparison.Ordinal);
+    }
 }

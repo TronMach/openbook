@@ -18,6 +18,25 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
     private const string EntityType = "customer";
 
     /// <param name="today">For working out what's overdue.</param>
+    /// <summary>
+    /// A sentence for sales forms when a customer is on credit hold, or owes (with what's billed with them) at or over their
+    /// credit limit; null otherwise. Sales go ahead either way.
+    /// </summary>
+    public async Task<string?> CreditWarningAsync(Guid customerId, CancellationToken ct = default)
+    {
+        var customers = await store.ListCustomersAsync(ct);
+        var byId = customers.ToDictionary(c => c.Id);
+        if (!byId.TryGetValue(customerId, out var customer))
+            return null;
+        var billTo = byId[CustomerTree.BillTo(customerId, byId)];
+        if (billTo.CreditHold)
+            return $"{billTo.DisplayName} is on credit hold. Check with whoever looks after their account before selling on credit.";
+        if (billTo.CreditLimit is not { } limit)
+            return null;
+        var owed = (await ListAsync(CompanyTime.Today, includeInactive: true, ct)).Where(s => CustomerTree.BillTo(s.Customer.Id, byId) == billTo.Id).Sum(s => s.Balance);
+        return owed >= limit ? $"{billTo.DisplayName} owes {owed:N2} against a credit limit of {limit:N2}." : null;
+    }
+
     public async Task<IReadOnlyList<CustomerSummary>> ListAsync(DateOnly today, bool includeInactive = false, CancellationToken ct = default)
     {
         var customers = await store.ListCustomersAsync(ct);
@@ -211,6 +230,8 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
         c.BillWithParent,
         c.NoReminders,
         c.NoLateFees,
+        c.CreditLimit,
+        c.CreditHold,
         c.IsActive,
     });
 }

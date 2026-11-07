@@ -5301,6 +5301,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CreditHold")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("CreditLimit")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CreditLimitMinor");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)
