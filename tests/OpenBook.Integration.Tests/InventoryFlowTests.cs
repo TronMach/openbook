@@ -196,11 +196,11 @@ public sealed class InventoryFlowTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Vendor_credits_and_recurring_bills_refuse_item_lines()
+    public async Task A_vendor_credit_cant_send_back_stock_that_isnt_there()
     {
         var credit = await Assert.ThrowsAsync<DomainException>(() => Run(sp => sp.GetRequiredService<VendorCreditService>().CreateAsync(new CreateVendorCreditCommand(
-            _vendor.Id, Feb1, [new BillLineDraft(Guid.Empty, 5m, null, _widget.Id, 1m)]))));
-        Assert.Equal("vendorcredit.no_items", credit.Code);
+            _vendor.Id, Feb1, [new BillLineDraft(Guid.Empty, 5m, null, _widget.Id, 21m)]))));
+        Assert.Equal("inventory.insufficient", credit.Code);
     }
 
     [Fact]

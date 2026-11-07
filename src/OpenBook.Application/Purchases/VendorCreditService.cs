@@ -53,6 +53,7 @@ public sealed class VendorCreditService(
     PurchaseAccounts purchaseAccounts,
     AccountService accounts,
     PostingEngine engine,
+    Inventory.InventoryService inventory,
     ICompanyStore companies,
     ILedgerStore ledger,
     IClock clock,
@@ -80,20 +81,22 @@ public sealed class VendorCreditService(
         if (!vendor.IsActive)
             throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
 
-        if ((command.Lines ?? []).Any(l => l.ItemId is not null))
-            throw new DomainException("vendorcredit.no_items", "Vendor credits are for categories only. To send stock back, record a quantity adjustment.");
-        var lines = Bill.LinesFrom(command.Lines ?? []);
+        // Item lines send stock back: they credit the item's asset, and the stock leaves at its cost.
         var chart = await accounts.GetChartAsync(ct);
-        foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
+        foreach (var accountId in (command.Lines ?? []).Where(l => l.ItemId is null).Select(l => l.AccountId).Distinct())
             Bill.EnsureCategoryAccount(chart.Get(accountId));
+        var (drafts, stock) = await inventory.PlanVendorReturnAsync(command.Lines ?? [], command.Date, null,
+            async c => (await purchaseAccounts.GetOrCreatePriceVarianceAsync(c)).Id, ct);
+        var lines = Bill.LinesFrom(drafts);
         var payables = await purchaseAccounts.GetOrCreatePayablesAsync(ct);
 
         var id = Guid.CreateVersion7();
         var reference = string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
         var memo = reference is null ? $"Vendor credit · {vendor.DisplayName}" : $"Vendor credit {reference} · {vendor.DisplayName}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, VendorCredit.Postings(payables.Id, lines, memo), memo, VendorCredit.Source, id,
+            command.Date, [.. VendorCredit.Postings(payables.Id, lines, memo), .. stock.Postings], memo, VendorCredit.Source, id,
             LocationId: command.LocationId, TagIds: command.TagIds), ct);
+        inventory.Apply(stock, OpenBook.Domain.Inventory.InventorySources.VendorCredit, id);
 
         var credit = VendorCredit.Create(id, vendor.Id, payables.Id, command.Date, lines, entry.Id, clock.UtcNow, reference, command.Memo);
         credit.SetLocation(command.LocationId);
@@ -121,8 +124,8 @@ public sealed class VendorCreditService(
             throw new DomainException("vendorcredit.voided", "This vendor credit is voided, so it can't be changed.");
         var vendor = await store.GetVendorAsync(credit.VendorId, ct) ?? throw new EntityNotFoundException("vendor", credit.VendorId);
 
-        if (command.Lines.Any(l => l.ItemId is not null))
-            throw new DomainException("vendorcredit.no_items", "Vendor credits are for categories only. To send stock back, record a quantity adjustment.");
+        if (command.Lines.Any(l => l.ItemId is not null) || credit.Lines.Any(l => l.ItemId is not null))
+            throw new DomainException("vendorcredit.items_fixed", "A vendor credit that sends stock back can't be changed. Void it and enter it again.");
         var lines = Bill.LinesFrom(command.Lines);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
@@ -171,8 +174,10 @@ public sealed class VendorCreditService(
         if (credit.AmountRefunded > 0m)
             throw new DomainException("vendorcredit.refunded", "This credit was refunded. Void the refund first.");
 
+        var stock = await inventory.PlanReversalAsync(OpenBook.Domain.Inventory.InventorySources.VendorCredit, credit.Id, credit.Date, "this vendor credit", ct);
         var before = Snapshot(credit);
         await engine.StageVoidAsync(credit.JournalEntryId, reason, fromDocument: true, ct);
+        inventory.Apply(stock, OpenBook.Domain.Inventory.InventorySources.VendorCredit, credit.Id);
         credit.Void();
         store.Add(Audit(AuditAction.Voided, EntityType, credit.Id, before, Snapshot(credit)));
         await store.SaveChangesAsync(ct);

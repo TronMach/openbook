@@ -35,7 +35,8 @@
                 </div>
             </div>
 
-            <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
+            <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Items="_stockItems" Changed="StateHasChanged" />
+            <p class="hint">Sending stock back? Choose the item and its quantity on a line: the stock leaves at its cost, and any difference from the amount credited goes to Purchase Price Variance.</p>
 
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field" style="margin-top: 1rem">
@@ -56,6 +57,7 @@
     private IReadOnlyList<Vendor> _vendors = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _categories = [];
+    private IReadOnlyList<Item> _stockItems = [];
     private bool _useNumbers;
     private Guid? _vendorId;
     private string? _reference;
@@ -85,6 +87,8 @@
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
         _categories = BillLineModel.Categories(_chart);
+        _stockItems = await Ops.RunAsync(async sp =>
+            (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory && i.Tracking == ItemTracking.None).ToList());
         if (PresetVendor is { } preset)
             SetVendor(preset);
         _loaded = true;

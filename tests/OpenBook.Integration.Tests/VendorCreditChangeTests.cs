@@ -70,7 +70,7 @@ public sealed class VendorCreditChangeTests : IAsyncLifetime
         Assert.Equal(3, entries.Count);
         Assert.Single(await In<VendorCreditService, IReadOnlyList<DocumentChange>>(s => s.ChangesAsync(original.Id)));
         Assert.Null((await Change(original.Id, Mar5, [Rent(80m)], reference: "")).Reference);
-        Assert.Equal("vendorcredit.no_items", await Refused(() => Change(original.Id, Mar5, [new BillLineDraft(Guid.Empty, 10m, "Widget", Guid.NewGuid(), 1m)])));
+        Assert.Equal("vendorcredit.items_fixed", await Refused(() => Change(original.Id, Mar5, [new BillLineDraft(Guid.Empty, 10m, "Widget", Guid.NewGuid(), 1m)])));
     }
 
     [Fact]

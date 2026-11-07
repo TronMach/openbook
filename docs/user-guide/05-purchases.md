@@ -101,7 +101,9 @@ A *vendor credit* reduces what you owe a vendor: a return, a refund promised for
 - **Apply to bills**: use it against their open bills, which lowers what's left to pay, or
 - if they pay you the money back, use **Record a refund from the vendor** on the credit's page.
 
-To correct a vendor credit, use **Change** at the top of its page: the credit number, date, lines, location and memo (the vendor stays). Say **Why are you changing it?** and **Save changes**. OpenBook reverses its journal entry on its original date and posts the corrected one, keeping what's applied and refunded; each change is listed under **Changes**. The new total can't be less than what's already applied and refunded, the date can't be later than the day it was first applied, and if it was refunded in a closed period, changing its lines needs the closing date password.
+**Sending stock back**: on a line, choose the inventory item and the **quantity** going back, with the amount they credit. The stock leaves at its cost (oldest first, or the average for average-cost items), and if the credit is more or less than that cost, the difference goes to "Purchase Price Variance" (added the first time). Items tracked by lot or serial number go back with a quantity adjustment naming them instead. A credit that sends stock back can't be changed; void it (which puts the stock back) and enter it again.
+
+To correct a vendor credit (one without stock on it), use **Change** at the top of its page: the credit number, date, lines, location and memo (the vendor stays). Say **Why are you changing it?** and **Save changes**. OpenBook reverses its journal entry on its original date and posts the corrected one, keeping what's applied and refunded; each change is listed under **Changes**. The new total can't be less than what's already applied and refunded, the date can't be later than the day it was first applied, and if it was refunded in a closed period, changing its lines needs the closing date password.
 
 ## Where it shows up
 

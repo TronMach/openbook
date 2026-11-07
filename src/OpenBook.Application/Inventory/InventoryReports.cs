@@ -148,7 +148,7 @@ public sealed class InventoryReports(
         var period = movements.Where(m => m.Date >= from).ToList();
         decimal Of(params string[] sources) => period.Where(m => sources.Contains(m.SourceType)).Sum(m => m.Cost);
 
-        var purchases = Of(InventorySources.Bill, InventorySources.PurchaseReceipt);
+        var purchases = Of(InventorySources.Bill, InventorySources.PurchaseReceipt, InventorySources.VendorCredit);
         var landed = Of(InventorySources.LandedCost);
         var builds = Of(InventorySources.AssemblyBuild);
         var adjustments = Of(InventorySources.Adjustment);

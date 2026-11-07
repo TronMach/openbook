@@ -312,6 +312,58 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
     /// Bills: item lines must be tracked items; their account becomes the item's asset account and each line opens a
     /// layer (one per lot or serial) at its amount in the warehouse. Returns the drafts to post with.
     /// </summary>
+    /// <summary>
+    /// A vendor credit sending stock back: each item line's quantity leaves the warehouse at its cost (FIFO or average,
+    /// never more than is on hand); the line credits the item's asset at the credit's amount, and the difference between
+    /// that and the cost goes to <paramref name="varianceAccountId"/>, so the asset falls by exactly the stock's cost.
+    /// Lot and serial items aren't taken this way.
+    /// </summary>
+    internal async Task<(IReadOnlyList<BillLineDraft> Drafts, InventoryPlan Plan)> PlanVendorReturnAsync(
+        IReadOnlyList<BillLineDraft> drafts, DateOnly date, Guid? warehouseId, Func<CancellationToken, Task<Guid>> varianceAccountId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(drafts);
+        var ids = drafts.Where(d => d.ItemId is not null).Select(d => d.ItemId!.Value).Distinct().ToList();
+        if (ids.Count == 0)
+            return (drafts, InventoryPlan.None);
+
+        var items = await sales.GetItemsAsync(ids, ct);
+        var result = new List<BillLineDraft>(drafts.Count);
+        var postings = new List<JournalLineDraft>();
+        var movements = new List<Func<string, Guid, DateTimeOffset, InventoryMovement>>();
+        var histories = new Dictionary<Guid, List<InventoryMovement>>();
+        foreach (var draft in drafts)
+        {
+            if (draft.ItemId is not { } itemId)
+            {
+                result.Add(draft);
+                continue;
+            }
+
+            var item = InventoryItem(items, itemId);
+            if (item.Tracking != ItemTracking.None)
+                throw new DomainException("vendorcredit.tracked_item", $"{item.Name} is tracked by lot or serial number. Send it back with a quantity adjustment naming them, and credit the amount on a category line.");
+            if (draft.Quantity is not { } quantity || quantity <= 0m || draft.Amount <= 0m)
+                throw new DomainException("vendorcredit.item_line", $"{item.Name}: a line sending stock back needs the quantity and the amount credited, both above zero.");
+
+            var asset = item.InventoryAssetAccountId!.Value;
+            result.Add(draft with { AccountId = asset, Description = draft.Description ?? item.Name });
+            var history = await SharedHistoryAsync(histories, item.Id, ct);
+            var takes = TakeAndSimulate(item, history, quantity, date, StockFilter.In(warehouseId));
+            var difference = draft.Amount - takes.Sum(t => t.Cost);
+            if (difference != 0m)
+            {
+                var variance = await varianceAccountId(ct);
+                var memo = $"{item.Name} sent back: credit less cost";
+                postings.Add(difference > 0m ? JournalLineDraft.Dr(asset, difference, memo, draft.ClassId) : JournalLineDraft.Dr(variance, -difference, memo, draft.ClassId));
+                postings.Add(difference > 0m ? JournalLineDraft.Cr(variance, difference, memo, draft.ClassId) : JournalLineDraft.Cr(asset, -difference, memo, draft.ClassId));
+            }
+
+            movements.AddRange(takes.Select(t => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((type, id, at) => InventoryMovement.Issue(t, item.Id, date, type, id, at))));
+        }
+
+        return (result, new InventoryPlan(postings, movements));
+    }
+
     internal async Task<(IReadOnlyList<BillLineDraft> Drafts, InventoryPlan Plan)> PlanPurchaseAsync(
         IReadOnlyList<BillLineDraft> drafts, DateOnly date, Guid? warehouseId, CancellationToken ct, IReadOnlySet<Guid>? carried = null)
     {

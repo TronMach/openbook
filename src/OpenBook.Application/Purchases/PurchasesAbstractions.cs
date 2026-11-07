@@ -185,6 +185,13 @@ public interface IPurchasesStore
 /// <summary>The accounts purchases post to: payables, and what bills are paid from.</summary>
 public sealed class PurchaseAccounts(AccountService accounts)
 {
+    /// <summary>"Purchase Price Variance" (cost of goods sold), created on first use.</summary>
+    public async Task<Account> GetOrCreatePriceVarianceAsync(CancellationToken ct) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.CostOfGoodsSold && string.Equals(a.Name, PurchaseOrderService.PriceVarianceName, StringComparison.OrdinalIgnoreCase))
+        ?? await accounts.CreateUsualAsync(new CreateAccountCommand(PurchaseOrderService.PriceVarianceName, AccountType.CostOfGoodsSold,
+            Description: "What bills cost more (or less) than goods were received at."), ct);
+
     /// <summary>
     /// The first active A/P account in chart order. If there is none, "Accounts Payable" is created and saved
     /// right away, as QuickBooks does: the posting engine looks accounts up in the database.

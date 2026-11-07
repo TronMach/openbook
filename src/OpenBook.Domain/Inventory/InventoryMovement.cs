@@ -17,6 +17,7 @@ public static class InventorySources
     public const string ChannelOrders = "channel_orders";
     public const string ChannelReturn = "channel_return";
     public const string PurchaseReceipt = "purchase_receipt";
+    public const string VendorCredit = "vendor_credit";
 }
 
 /// <summary>

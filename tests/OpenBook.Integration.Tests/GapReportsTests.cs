@@ -278,6 +278,29 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_vendor_credit_sends_stock_back_at_cost_with_the_difference_to_variance()
+    {
+        await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Jan5, [new InventoryAdjustmentLineDraft(_widget.Id, 10m, 10m)])));
+        Assert.Equal("inventory.insufficient", (await Assert.ThrowsAsync<DomainException>(() => In<VendorCreditService, VendorCredit>(s => s.CreateAsync(
+            new CreateVendorCreditCommand(_vendor.Id, Mar31, [new BillLineDraft(Guid.Empty, 120m, ItemId: _widget.Id, Quantity: 11m)]))))).Code);
+
+        // Three back at 10 each, credited 36: stock falls by 30, the other 6 is a price variance.
+        var credit = await In<VendorCreditService, VendorCredit>(s => s.CreateAsync(
+            new CreateVendorCreditCommand(_vendor.Id, Mar31, [new BillLineDraft(Guid.Empty, 36m, ItemId: _widget.Id, Quantity: 3m)])));
+        var stock = (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!;
+        Assert.Equal((7m, 70m), (stock.Quantity, stock.Value));
+        var chart = await In<OpenBook.Application.Accounts.AccountService, ChartOfAccounts>(s => s.GetChartAsync());
+        var variance = chart.Ordered(includeInactive: false).Select(x => x.Account).Single(a => a.Name == PurchaseOrderService.PriceVarianceName);
+        var entry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(credit.JournalEntryId)))!;
+        Assert.Equal(-6m, entry.Lines.Where(l => l.AccountId == variance.Id).Sum(l => l.Amount));
+        Assert.Equal(0, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Problems);
+
+        await In<VendorCreditService, VendorCredit>(s => s.VoidAsync(credit.Id, "Entered twice"));
+        stock = (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!;
+        Assert.Equal((10m, 100m), (stock.Quantity, stock.Value));
+    }
+
+    [Fact]
     public async Task Stock_is_written_down_in_value_without_losing_units()
     {
         await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Jan5, [new InventoryAdjustmentLineDraft(_widget.Id, 10m, 10m)])));
