@@ -83,6 +83,14 @@ public sealed class LabelService(ISalesStore sales, ICompanyStore companies, ILa
 {
     public const int MaxLabels = 900;
 
+    /// <summary>
+    /// The barcode's width on a 2⅝" label less its padding, in points, and the narrowest bar most scanners still read
+    /// (about 7.5 mils): a longer code is drawn finer than that, so it's refused rather than printed unreadable.
+    /// </summary>
+    public const double PrintableWidthPoints = 177.48;
+
+    public const double NarrowestBarPoints = 0.54;
+
     /// <summary>Labels for each item with a barcode, <c>Copies</c> of each, in the order given.</summary>
     public async Task<byte[]> RenderAsync(IReadOnlyList<(Guid ItemId, int Copies)> requests, bool showPrice, CancellationToken ct = default)
     {
@@ -98,6 +106,8 @@ public sealed class LabelService(ISalesStore sales, ICompanyStore companies, ILa
                 throw new DomainException("label.too_many", $"Print at most {MaxLabels} labels at a time.");
             var item = items.GetValueOrDefault(itemId) ?? throw new EntityNotFoundException("item", itemId);
             var barcode = item.Barcode ?? throw new DomainException("label.no_barcode", $"{item.Name} has no barcode. Add one on the item first.");
+            if (PrintableWidthPoints / (Code128.Modules(barcode).Sum() + 20) < NarrowestBarPoints)
+                throw new DomainException("label.barcode_too_long", $"{item.Name}'s barcode is too long to print readably on these labels ({barcode.Length} characters). Use a shorter one, ideally digits only, which pack two to a symbol.");
             var price = showPrice ? symbol + item.Rate.ToString("N2", System.Globalization.CultureInfo.CurrentCulture) : null;
             labels.AddRange(Enumerable.Repeat(new ItemLabel(item.Name, price, barcode), copies));
         }

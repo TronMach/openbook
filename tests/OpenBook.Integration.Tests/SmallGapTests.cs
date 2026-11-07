@@ -257,4 +257,15 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.True(await In<BankingService, bool>(s => s.CheckNumberUsedAsync(_checking.Id, " 1042 ")));
         Assert.False(await In<BankingService, bool>(s => s.CheckNumberUsedAsync(_checking.Id, "1043")));
     }
+
+    [Fact]
+    public async Task A_barcode_too_long_to_scan_on_a_label_is_refused()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var shortCode = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Mug", ItemType.Service, sales.Id, 8m, Barcode: "012345678905")));
+        var longCode = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Kit", ItemType.Service, sales.Id, 8m, Barcode: "KIT-DELUXE-EDITION-BLUE-LARGE-2026")));
+        Assert.NotEmpty(await In<OpenBook.Application.Inventory.LabelService, byte[]>(s => s.RenderAsync([(shortCode.Id, 1)], showPrice: false)));
+        var refused = await Assert.ThrowsAsync<DomainException>(() => In<OpenBook.Application.Inventory.LabelService, byte[]>(s => s.RenderAsync([(longCode.Id, 1)], showPrice: false)));
+        Assert.Equal("label.barcode_too_long", refused.Code);
+    }
 }

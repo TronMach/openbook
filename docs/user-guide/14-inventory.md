@@ -116,7 +116,7 @@ The part for stock still on hand raises its cost; the part for stock already sol
 
 ## Barcode labels
 
-**Inventory → Labels** prints sheets of Code 128 barcode labels (Letter, 3 × 10, 2⅝" × 1") for chosen items, as a PDF.
+**Inventory → Labels** prints sheets of Code 128 barcode labels (Letter, 3 × 10, 2⅝" × 1") for chosen items, as a PDF. A barcode too long to print with bars a scanner can read (about 25 letters, or more digits, since digits pack two to a symbol) is refused with the item's name: give it a shorter one.
 
 ## Reports
 
