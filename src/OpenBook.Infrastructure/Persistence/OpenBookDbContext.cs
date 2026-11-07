@@ -152,6 +152,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
     public DbSet<Filing1099> Filings1099 => Set<Filing1099>();
     public DbSet<Prior1099Payment> Prior1099Payments => Set<Prior1099Payment>();
+    public DbSet<OnlinePaymentNotice> OnlinePaymentNotices => Set<OnlinePaymentNotice>();
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<LineSegment> LineSegments => Set<LineSegment>();
     public DbSet<EntryTag> EntryTags => Set<EntryTag>();
@@ -1936,6 +1937,21 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.PublicUrl).HasMaxLength(200);
             b.Ignore(s => s.IsReady);
             b.HasOne<Account>().WithMany().HasForeignKey(s => s.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OnlinePaymentNotice>(b =>
+        {
+            b.ToTable("OnlinePaymentNotices");
+            b.HasKey(n => n.Id);
+            b.Property(n => n.EventId).HasMaxLength(200);
+            b.HasIndex(n => n.EventId).IsUnique();
+            b.Property(n => n.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(n => n.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(n => n.Reason).HasMaxLength(200);
+            b.Property(n => n.ResolvedBy).HasMaxLength(100);
+            b.HasIndex(n => n.InvoiceId);
+            b.HasOne<PaymentLink>().WithMany().HasForeignKey(n => n.PaymentLinkId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(n => n.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PaymentLink>(b =>

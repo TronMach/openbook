@@ -239,4 +239,32 @@ public sealed class OnlineServicesTests : IAsyncLifetime
         Assert.Equal("receipt.done", await Refused(() => In<ReceiptService, BankTransaction>(s =>
             s.RecordAsync(capture.Id, new RecordReceiptCommand(_checking.Id, supplies.Id, Jan10, 1m)))));
     }
+
+    [Fact]
+    public async Task A_refund_or_dispute_at_Stripe_waits_on_the_invoice_until_dealt_with()
+    {
+        await TurnOnPayments();
+        var invoice = await Invoice(3m);
+        var link = await In<OnlinePaymentService, PaymentLink>(s => s.LinkForInvoiceAsync(invoice.Id));
+        _db.Stripe.Pay(link.SessionId);
+        await Webhook(_db.Stripe.Event("checkout.session.completed", link.SessionId));
+        var intent = "pi_" + link.SessionId[3..];
+
+        var refunded = """{"id":"evt_refund_1","type":"charge.refunded","data":{"object":{"id":"ch_1","payment_intent":"INTENT","amount_refunded":12500}}}""".Replace("INTENT", intent, StringComparison.Ordinal);
+        Assert.Equal(WebhookOutcome.Handled, await Webhook(refunded));
+        Assert.Equal(WebhookOutcome.Handled, await Webhook(refunded));
+        var disputed = """{"id":"evt_dispute_1","type":"charge.dispute.created","data":{"object":{"id":"dp_1","payment_intent":"INTENT","amount":30000,"reason":"fraudulent"}}}""".Replace("INTENT", intent, StringComparison.Ordinal);
+        Assert.Equal(WebhookOutcome.Handled, await Webhook(disputed));
+        Assert.Equal(WebhookOutcome.Ignored, await Webhook("""{"id":"evt_other","type":"charge.refunded","data":{"object":{"id":"ch_9","payment_intent":"pi_unknown","amount_refunded":100}}}"""));
+
+        var notices = await In<OnlinePaymentService, IReadOnlyList<OnlinePaymentNotice>>(s => s.NoticesAsync(invoice.Id));
+        Assert.Equal(2, notices.Count);
+        Assert.Contains(notices, n => n.Kind == OnlineNoticeKind.Refund && n.Amount == 125m);
+        Assert.Contains(notices, n => n.Kind == OnlineNoticeKind.Dispute && n.Amount == 300m && n.Reason == "fraudulent");
+        // Nothing is posted: the invoice stays paid until someone records what happened.
+        Assert.Equal(0m, (await In<InvoiceService, Invoice?>(s => s.GetAsync(invoice.Id)))!.Balance);
+
+        await In<OnlinePaymentService, OnlinePaymentNotice>(s => s.ResolveNoticeAsync(notices[0].Id));
+        Assert.Single(await In<OnlinePaymentService, IReadOnlyList<OnlinePaymentNotice>>(s => s.NoticesAsync(openOnly: true)));
+    }
 }

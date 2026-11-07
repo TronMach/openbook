@@ -428,6 +428,21 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
 
     public Task<PaymentLink?> FindPaymentLinkAsync(string sessionId, CancellationToken ct) => db.PaymentLinks.SingleOrDefaultAsync(l => l.SessionId == sessionId, ct);
 
+    public Task<PaymentLink?> FindPaidLinkByReferenceAsync(string reference, CancellationToken ct) =>
+        db.PaymentLinks.FirstOrDefaultAsync(l => l.PaymentReference == reference && l.Status == PaymentLinkStatus.Paid, ct);
+
+    public async Task<IReadOnlyList<OnlinePaymentNotice>> ListOnlineNoticesAsync(Guid? invoiceId, bool openOnly, CancellationToken ct) =>
+        (await db.OnlinePaymentNotices.AsNoTracking()
+            .Where(n => (invoiceId == null || n.InvoiceId == invoiceId) && (!openOnly || n.ResolvedAt == null))
+            .ToListAsync(ct))
+        .OrderByDescending(n => n.ReceivedAt).ToList();
+
+    public Task<OnlinePaymentNotice?> GetOnlineNoticeAsync(Guid id, CancellationToken ct) => db.OnlinePaymentNotices.FirstOrDefaultAsync(n => n.Id == id, ct);
+
+    public Task<bool> OnlineNoticeExistsAsync(string eventId, CancellationToken ct) => db.OnlinePaymentNotices.AnyAsync(n => n.EventId == eventId, ct);
+
+    public void Add(OnlinePaymentNotice notice) => db.OnlinePaymentNotices.Add(notice);
+
     public async Task<IReadOnlyList<PortalAccess>> ListPortalAccessAsync(Guid customerId, CancellationToken ct) =>
         await db.PortalAccess.AsNoTracking().Where(a => a.CustomerId == customerId).ToListAsync(ct);
 

@@ -208,6 +208,8 @@ public sealed class OnlinePaymentService(
         using var json = JsonDocument.Parse(payload);
         var type = json.RootElement.GetProperty("type").GetString();
         var session = json.RootElement.GetProperty("data").GetProperty("object");
+        if (type is "charge.refunded" or "charge.dispute.created")
+            return await NoticeAsync(json.RootElement, type, session, ct);
         // Endpoints subscribed to everything get events about things with no id, such as a balance.
         var sessionId = session.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
         if (sessionId is null || await store.FindPaymentLinkAsync(sessionId, ct) is not { } link || link.Status == PaymentLinkStatus.Paid)
@@ -228,6 +230,48 @@ public sealed class OnlinePaymentService(
             default:
                 return WebhookOutcome.Ignored;
         }
+    }
+
+    /// <summary>
+    /// A refund or dispute made at Stripe on a charge an invoice was paid by: kept as a notice to deal with, once per
+    /// event. Charges OpenBook didn't take (no paid link with that PaymentIntent) are ignored.
+    /// </summary>
+    private async Task<WebhookOutcome> NoticeAsync(JsonElement root, string type, JsonElement charge, CancellationToken ct)
+    {
+        var eventId = root.TryGetProperty("id", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
+        var intent = charge.TryGetProperty("payment_intent", out var i) && i.ValueKind == JsonValueKind.String ? i.GetString() : null;
+        if (eventId is null || intent is null || await store.FindPaidLinkByReferenceAsync(intent, ct) is not { } link)
+            return WebhookOutcome.Ignored;
+        if (await store.OnlineNoticeExistsAsync(eventId, ct))
+            return WebhookOutcome.Handled;
+
+        var refund = type == "charge.refunded";
+        var cents = charge.TryGetProperty(refund ? "amount_refunded" : "amount", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetInt64() : 0L;
+        var reason = !refund && charge.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+        var notice = OnlinePaymentNotice.Create(eventId, refund ? OnlineNoticeKind.Refund : OnlineNoticeKind.Dispute, link, cents / 100m, reason, clock.UtcNow);
+        store.Add(notice);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", link.InvoiceId, null, JsonSerializer.Serialize(new
+        {
+            OnlinePayment = refund ? "Refunded at Stripe" : "Disputed at Stripe",
+            notice.Amount,
+            notice.Reason,
+        })));
+        await store.SaveChangesAsync(ct);
+        return WebhookOutcome.Handled;
+    }
+
+    public Task<IReadOnlyList<OnlinePaymentNotice>> NoticesAsync(Guid? invoiceId = null, bool openOnly = false, CancellationToken ct = default) =>
+        store.ListOnlineNoticesAsync(invoiceId, openOnly, ct);
+
+    /// <summary>Marks a refund or dispute as dealt with in the books, audited on its invoice.</summary>
+    public async Task<OnlinePaymentNotice> ResolveNoticeAsync(Guid id, CancellationToken ct = default)
+    {
+        var notice = await store.GetOnlineNoticeAsync(id, ct) ?? throw new EntityNotFoundException("online_payment_notice", id);
+        notice.Resolve(clock.UtcNow, user.Actor);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", notice.InvoiceId, null,
+            JsonSerializer.Serialize(new { OnlinePayment = $"{(notice.Kind == OnlineNoticeKind.Refund ? "Refund" : "Dispute")} at Stripe dealt with", notice.Amount })));
+        await store.SaveChangesAsync(ct);
+        return notice;
     }
 
     /// <summary>

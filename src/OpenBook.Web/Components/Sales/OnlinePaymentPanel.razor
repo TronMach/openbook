@@ -5,6 +5,30 @@
 {
     <div class="card no-print" id="online" style="margin-top: 1.5rem">
         <h2>Online payment</h2>
+        @foreach (var notice in _notices)
+        {
+            <div class="alert @(notice.ResolvedAt is null ? "error" : "notice")" role="status">
+                @(notice.Kind == OnlineNoticeKind.Refund ? "Refunded at Stripe" : "Disputed by the customer at Stripe"): @Labels.Amount(notice.Amount)
+                @(notice.Reason is { } reason ? $"({reason})" : "") on @notice.ReceivedAt.InCompanyTime().ToString("d").
+                @if (notice.ResolvedAt is { } done)
+                {
+                    <span class="muted">Dealt with @done.InCompanyTime().ToString("d") by @notice.ResolvedBy.</span>
+                }
+                else
+                {
+                    <span>
+                        @(notice.Kind == OnlineNoticeKind.Refund
+                            ? "Record it in the books as a refund of the payment's credit (change the payment so the money isn't applied, then refund it), or as a credit memo refund."
+                            : "If the dispute is lost, record the payment as returned on its page; if it's won, nothing changes.")
+                    </span>
+                    <PostForm Action="@($"/sales/online-notices/{notice.Id}/resolve")" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="invoiceId" value="@InvoiceId" />
+                        <button type="submit" class="secondary">Mark as dealt with</button>
+                    </PostForm>
+                }
+            </div>
+        }
         @if (_links.Count == 0)
         {
             <p class="muted">No payment link yet. Emailing the invoice adds one automatically.</p>
@@ -59,6 +83,7 @@
 
 @code {
     private IReadOnlyList<PaymentLink> _links = [];
+    private IReadOnlyList<OnlinePaymentNotice> _notices = [];
     private bool _ready;
 
     [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
@@ -68,5 +93,6 @@
     {
         _ready = (await Online.GetSettingsAsync()).IsReady;
         _links = await Online.LinksAsync(InvoiceId);
+        _notices = await Online.NoticesAsync(InvoiceId);
     }
 }

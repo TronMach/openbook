@@ -1490,6 +1490,9 @@
   <data name="On hand" xml:space="preserve">
     <value>On hand</value>
   </data>
+  <data name="On invoices paid online: record them in the books" xml:space="preserve">
+    <value>On invoices paid online: record them in the books</value>
+  </data>
   <data name="On: invoices can be paid online" xml:space="preserve">
     <value>On: invoices can be paid online</value>
   </data>
@@ -1894,6 +1897,9 @@
   </data>
   <data name="Refunds" xml:space="preserve">
     <value>Refunds</value>
+  </data>
+  <data name="Refunds and disputes made at Stripe" xml:space="preserve">
+    <value>Refunds and disputes made at Stripe</value>
   </data>
   <data name="Region" xml:space="preserve">
     <value>Region</value>

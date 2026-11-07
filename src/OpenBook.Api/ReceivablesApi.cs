@@ -294,6 +294,9 @@ internal static class ReceivablesApi
             PaymentLinkResponse.From(await s.LinkForInvoiceAsync(id, ct)));
         sales.MapPost("/payment-links/{id:guid}/check", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
             PaymentLinkResponse.From(await s.CheckAsync(id, ct)));
+        // Refunds and disputes made at Stripe, waiting to be dealt with in the books.
+        sales.MapGet("/online-notices", async (Guid? invoiceId, bool? open, OnlinePaymentService s, CancellationToken ct) => await s.NoticesAsync(invoiceId, open ?? false, ct));
+        sales.MapPost("/online-notices/{id:guid}/resolve", async (Guid id, OnlinePaymentService s, CancellationToken ct) => await s.ResolveNoticeAsync(id, ct));
         api.MapGet("/settings/online-payments", async (OnlinePaymentService s, CancellationToken ct) => OnlinePaymentSettingsResponse.From(await s.GetSettingsAsync(ct)));
         api.MapPut("/settings/online-payments", async (OnlinePaymentSettingsCommand r, OnlinePaymentService s, CancellationToken ct) =>
             OnlinePaymentSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));

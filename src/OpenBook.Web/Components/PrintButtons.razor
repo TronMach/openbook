@@ -2,10 +2,15 @@
 @using OpenBook.Domain.Companies
 @inject PrintService Print
 @inject FormDesignService Designs
+@inject FormService Forms
 @inject NavigationManager Navigation
 @* Print (straight to the print dialog), print with another design (a packing slip, say), and "print later" for a document's toolbar. *@
 
-<button type="button" class="button secondary" data-print="@PdfUrl">Print</button>
+<button type="button" class="button secondary" data-print="@PdfUrl" title="@_scriptWarning">Print@(_scriptWarning is null ? "" : " ⚠")</button>
+@if (_scriptWarning is not null)
+{
+    <span class="muted" role="note" title="@_scriptWarning">Check the PDF: some text may not print as written.</span>
+}
 @if (_designs.Count > 1)
 {
     <details class="menu center-new">
@@ -33,6 +38,9 @@
     private string _returnUrl = "/";
     private IReadOnlyList<FormDesign> _designs = [];
 
+    /// <summary>Text the form may not draw (right-to-left, or beyond the Latin alphabets): said on the button, so the PDF is checked.</summary>
+    private string? _scriptWarning;
+
     [Parameter, EditorRequired]
     public FormDocuments Document { get; set; }
 
@@ -48,6 +56,15 @@
         _returnUrl = new Uri(Navigation.Uri).PathAndQuery.Split("printError=")[0].TrimEnd('&', '?');
         _waiting = await Print.IsWaitingAsync(Document, Id);
         _designs = [.. (await Designs.ListAsync()).Where(d => d.IsActive)];
+        FormKind? kind = Document switch
+        {
+            FormDocuments.Invoice => FormKind.Invoice,
+            FormDocuments.Estimate => FormKind.Estimate,
+            FormDocuments.CreditMemo => FormKind.CreditMemo,
+            FormDocuments.SalesReceipt => FormKind.SalesReceipt,
+            _ => null,
+        };
+        _scriptWarning = kind is { } k ? FormScripts.Warning(await Forms.BuildAsync(k, Id, null)) : null;
     }
 
     private string WithDesign(Guid design) => $"{PdfUrl}{(PdfUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?')}design={design}";

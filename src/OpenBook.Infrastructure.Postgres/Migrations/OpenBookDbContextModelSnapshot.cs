@@ -5888,6 +5888,61 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("Items", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Sales.OnlinePaymentNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<Guid?>("CustomerPaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PaymentLinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("PaymentLinkId");
+
+                    b.ToTable("OnlinePaymentNotices", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Sales.OnlinePaymentSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10322,6 +10377,21 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Navigation("Components");
 
                     b.Navigation("QuantityBreaks");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Sales.OnlinePaymentNotice", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Sales.PaymentLink", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentLinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Sales.OnlinePaymentSettings", b =>

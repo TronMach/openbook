@@ -151,4 +151,12 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.Equal(2, (await In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(_checking.Id, BankFeedStatus.Matched))).Count);
         Assert.Equal("feed.not_pending", (await Assert.ThrowsAsync<DomainException>(() => In<FeedDocumentService, Guid>(s => s.ApplyAsync(paysInvoice.Id, FeedDocumentKind.Invoice, invoice.Id)))).Code);
     }
+
+    [Fact]
+    public void Text_a_printed_form_may_not_draw_is_pointed_out()
+    {
+        Assert.Null(OpenBook.Application.Forms.FormScripts.Warning(["Café Müller", "Smith & Sons — €1,250.00", "naïve “quotes”"]));
+        Assert.Contains("beyond the Latin alphabet", OpenBook.Application.Forms.FormScripts.Warning(["山田商店"]), StringComparison.Ordinal);
+        Assert.Contains("right to left", OpenBook.Application.Forms.FormScripts.Warning(["شركة الأمل", "山田"]), StringComparison.Ordinal);
+    }
 }

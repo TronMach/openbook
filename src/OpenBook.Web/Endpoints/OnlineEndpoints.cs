@@ -110,6 +110,16 @@ public static class OnlineEndpoints
             });
         }).RequireAuthorization();
 
+        app.MapPost("/sales/online-notices/{id:guid}/resolve", async (Guid id, IFormCollection form, OnlinePaymentService online, CancellationToken ct) =>
+        {
+            var invoiceId = Guid.TryParse(form["invoiceId"], out var g) ? g : Guid.Empty;
+            return await Back($"/sales/invoices/{invoiceId}", "#online", async () =>
+            {
+                await online.ResolveNoticeAsync(id, ct);
+                return "done=resolved";
+            });
+        }).RequireAuthorization();
+
         app.MapPost("/settings/online-payments", async (IFormCollection form, OnlinePaymentService online, CancellationToken ct) =>
             await Back("/settings/online-payments", "", async () =>
             {

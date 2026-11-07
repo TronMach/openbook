@@ -117,6 +117,62 @@ public sealed class PaymentLink
     }
 }
 
+public enum OnlineNoticeKind
+{
+    /// <summary>Money given back at the provider (Stripe: <c>charge.refunded</c>).</summary>
+    Refund,
+
+    /// <summary>The customer disputed the charge with their card company (<c>charge.dispute.created</c>).</summary>
+    Dispute,
+}
+
+/// <summary>
+/// Something done at the payment provider to an invoice paid online that the books don't know about yet: a refund or a
+/// dispute. Nothing posts: someone decides (record a refund from the payment's credit, or a returned payment for a
+/// dispute lost) and marks it dealt with. One per provider event.
+/// </summary>
+public sealed class OnlinePaymentNotice
+{
+    private OnlinePaymentNotice() => EventId = string.Empty;
+
+    public Guid Id { get; private set; }
+
+    /// <summary>The provider's event id, so a repeated delivery adds nothing.</summary>
+    public string EventId { get; private set; }
+
+    public OnlineNoticeKind Kind { get; private set; }
+    public Guid PaymentLinkId { get; private set; }
+    public Guid InvoiceId { get; private set; }
+    public Guid? CustomerPaymentId { get; private set; }
+
+    /// <summary>What was refunded in all so far, or what's disputed.</summary>
+    public decimal Amount { get; private set; }
+
+    public string? Reason { get; private set; }
+    public DateTimeOffset ReceivedAt { get; private set; }
+    public DateTimeOffset? ResolvedAt { get; private set; }
+    public string? ResolvedBy { get; private set; }
+
+    public static OnlinePaymentNotice Create(string eventId, OnlineNoticeKind kind, PaymentLink link, decimal amount, string? reason, DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        return new OnlinePaymentNotice
+        {
+            Id = Guid.CreateVersion7(),
+            EventId = Common.Text.Optional(eventId, 200, "notice.event_too_long", "Event id") ?? throw new Common.DomainException("notice.event_required", "The event has no id."),
+            Kind = kind,
+            PaymentLinkId = link.Id,
+            InvoiceId = link.InvoiceId,
+            CustomerPaymentId = link.CustomerPaymentId,
+            Amount = amount,
+            Reason = reason is { Length: > 200 } long_ ? long_[..200] : reason,
+            ReceivedAt = at.ToUniversalTime(),
+        };
+    }
+
+    public void Resolve(DateTimeOffset at, string by) => (ResolvedAt, ResolvedBy) = (ResolvedAt ?? at.ToUniversalTime(), ResolvedBy ?? by);
+}
+
 /// <summary>
 /// A link a customer uses to see their invoices and statement and pay online, without signing in. Only a hash of the
 /// token is kept; the token is shown once when the link is made. Revoked, never deleted.

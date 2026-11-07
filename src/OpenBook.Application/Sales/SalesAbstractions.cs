@@ -257,6 +257,18 @@ public interface ISalesStore
     /// <summary>Tracked: the link for a provider's checkout id.</summary>
     Task<PaymentLink?> FindPaymentLinkAsync(string sessionId, CancellationToken ct);
 
+    /// <summary>The paid link whose provider payment reference (Stripe: the PaymentIntent id) this is.</summary>
+    Task<PaymentLink?> FindPaidLinkByReferenceAsync(string reference, CancellationToken ct);
+
+    /// <summary>Refunds and disputes made at the provider, newest first; all, or one invoice's, or only those not dealt with.</summary>
+    Task<IReadOnlyList<OnlinePaymentNotice>> ListOnlineNoticesAsync(Guid? invoiceId, bool openOnly, CancellationToken ct);
+
+    Task<OnlinePaymentNotice?> GetOnlineNoticeAsync(Guid id, CancellationToken ct);
+
+    Task<bool> OnlineNoticeExistsAsync(string eventId, CancellationToken ct);
+
+    void Add(OnlinePaymentNotice notice);
+
     /// <summary>Untracked.</summary>
     Task<IReadOnlyList<PortalAccess>> ListPortalAccessAsync(Guid customerId, CancellationToken ct);
 
