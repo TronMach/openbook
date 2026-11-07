@@ -122,21 +122,23 @@ public sealed record RecurringInvoiceResponse(
 }
 
 public sealed record DepositResponse(Guid Id, Guid BankAccountId, DateOnly Date, string? Memo, decimal Total, DocumentStatus Status, Guid JournalEntryId,
-    IReadOnlyList<DepositLineResponse> Lines)
+    IReadOnlyList<DepositLineResponse> Lines,
+    IReadOnlyList<DepositExtraDraft>? Extras = null)
 {
     public static DepositResponse From(BankDeposit d) => new(d.Id, d.BankAccountId, d.Date, d.Memo, d.Total, d.Status, d.JournalEntryId,
-        d.Lines.Select(l => new DepositLineResponse(l.Kind, l.SourceId, l.FromAccountId, l.Amount)).ToList());
+        d.Lines.Select(l => new DepositLineResponse(l.Kind, l.SourceId, l.FromAccountId, l.Amount)).ToList(), [.. d.Extras.Select(e => e.ToDraft())]);
 }
 
 public sealed record DepositLineResponse(DepositedKind Kind, Guid SourceId, Guid FromAccountId, decimal Amount);
 
 public sealed record DepositItemRequest(DepositedKind Kind, Guid Id);
 
-public sealed record MakeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string? Memo = null);
+/// <param name="Extras">Fees and cash back (negative) or other money (positive) besides the items.</param>
+public sealed record MakeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string? Memo = null, IReadOnlyList<DepositExtraDraft>? Extras = null);
 
 public sealed record EmailStatementsRequest(IReadOnlyList<Guid> CustomerIds, DateOnly? From = null, DateOnly? To = null);
 
-public sealed record ChangeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string Reason, string? Memo = null);
+public sealed record ChangeDepositRequest(Guid BankAccountId, DateOnly Date, IReadOnlyList<DepositItemRequest> Items, string Reason, string? Memo = null, IReadOnlyList<DepositExtraDraft>? Extras = null);
 
 public sealed record ApplyCreditRequest(Guid CustomerId, DateOnly Date, IReadOnlyList<ApplyCredit> Applications);
 
@@ -355,12 +357,12 @@ internal static class ReceivablesApi
             await s.GetAsync(id, ct) is { } d ? Results.Ok(DepositResponse.From(d)) : Results.NotFound());
         sales.MapPost("/deposits", async (MakeDepositRequest r, DepositService s, CancellationToken ct) =>
         {
-            var d = await s.DepositAsync(new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo), ct);
+            var d = await s.DepositAsync(new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo, r.Extras), ct);
             return Results.Created($"/api/sales/deposits/{d.Id}", DepositResponse.From(d));
         });
         // Correct a deposit in place: its entry reversed and a new one posted, items added or taken out.
         sales.MapPut("/deposits/{id:guid}", async (Guid id, ChangeDepositRequest r, DepositService s, CancellationToken ct) =>
-            DepositResponse.From(await s.ChangeAsync(id, new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo), r.Reason, ct)));
+            DepositResponse.From(await s.ChangeAsync(id, new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo, r.Extras), r.Reason, ct)));
         sales.MapPost("/deposits/{id:guid}/void", async (Guid id, VoidRequest r, DepositService s, CancellationToken ct) =>
             DepositResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

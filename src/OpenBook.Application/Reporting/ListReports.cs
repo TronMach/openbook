@@ -398,6 +398,8 @@ public sealed class ListReports(
         rows.Add(new ReportTableRow([$"Checks ({checks.Count})", null, null, checks.Sum(i => i.Amount)], 0, ReportRowStyle.Subtotal));
         if (Sum(i => i.Method is not (PaymentMethod.Cash or PaymentMethod.Check)) is not 0m and var other)
             rows.Add(new ReportTableRow(["Other (card, transfer, not given)", null, null, other], 0, ReportRowStyle.Subtotal));
+        foreach (var extra in deposit.Extras)
+            rows.Add(new ReportTableRow([$"{(extra.Amount < 0m ? "Less" : "Plus")} {extra.Memo ?? chart.FullName(extra.AccountId)}", null, null, extra.Amount], 0, ReportRowStyle.Subtotal));
         rows.Add(new ReportTableRow(["Total deposit", null, null, deposit.Total], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Deposit slip",

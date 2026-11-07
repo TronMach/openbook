@@ -136,7 +136,8 @@ If you received payments into Undeposited Funds, record the trip to the bank: **
 
 1. Choose the bank account in **Deposit to** and the **date**.
 2. Tick the payments that went into this deposit, so the total matches the deposit slip or the line on your bank statement.
-3. **Save deposit**.
+3. If less (or more) reached the bank than the payments add up to, use **Add a fee or other line** under **Fees, cash back and other money**: **Take off** a card processor's fee or cash kept back, to an expense such as merchant fees, or **Add** money from elsewhere. So a processor that pays out 970.00 for 1,000.00 of card payments makes one deposit of 970.00, matching the bank line.
+4. **Save deposit**.
 
 When the waiting payments were made different ways, **Tick only** buttons above the list tick just the cash, the checks or the card payments, since those usually reach the bank separately.
 

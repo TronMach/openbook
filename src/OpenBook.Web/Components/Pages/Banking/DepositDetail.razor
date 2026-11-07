@@ -56,6 +56,16 @@
                     <td class="num">@Labels.Amount(item.Amount)</td>
                 </tr>
             }
+            @foreach (var extra in _deposit.Extras)
+            {
+                <tr>
+                    <td>@(extra.Amount < 0m ? "Taken off" : "Added")@(extra.Memo is { } memo ? $": {memo}" : "")</td>
+                    <td></td>
+                    <td></td>
+                    <td class="muted">@_chart.FullName(extra.AccountId)</td>
+                    <td class="num">@Labels.Amount(extra.Amount)</td>
+                </tr>
+            }
         </tbody>
         <tfoot><tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_deposit.Total)</td></tr></tfoot>
     </table>

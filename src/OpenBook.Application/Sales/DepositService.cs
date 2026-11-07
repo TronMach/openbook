@@ -31,7 +31,9 @@ public interface IUndepositedSource
     Task ClearAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 }
 
-public sealed record MakeDepositCommand(Guid BankAccountId, DateOnly Date, IReadOnlyList<(DepositedKind Kind, Guid Id)> Items, string? Memo = null);
+/// <param name="Extras">Fees, cash back (negative) and other money (positive) besides the items, so a processor's net payout is one deposit.</param>
+public sealed record MakeDepositCommand(Guid BankAccountId, DateOnly Date, IReadOnlyList<(DepositedKind Kind, Guid Id)> Items, string? Memo = null,
+    IReadOnlyList<DepositExtraDraft>? Extras = null);
 
 /// <summary>
 /// Undeposited funds: payments and receipts recorded to an "other current asset" holding account, then
@@ -101,6 +103,8 @@ public sealed class DepositService(
 
         if (items.Count == 0)
             throw new DomainException("deposit.empty", "Choose at least one payment to deposit.");
+        var extras = await ExtrasAsync(command, bank.Id, ct);
+        BankDeposit.CheckItems(items, extras);
 
         var payments = (await store.GetPaymentsAsync(items.Where(i => i.Kind == DepositedKind.Payment).Select(i => i.SourceId).ToList(), ct)).ToDictionary(p => p.Id);
         var receipts = (await store.GetReceiptsAsync(items.Where(i => i.Kind == DepositedKind.SalesReceipt).Select(i => i.SourceId).ToList(), ct)).ToDictionary(r => r.Id);
@@ -108,9 +112,9 @@ public sealed class DepositService(
         var id = Guid.CreateVersion7();
         var memo = command.Memo?.Trim() is { Length: > 0 } m ? m : $"Deposit · {items.Count} {(items.Count == 1 ? "item" : "items")}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, BankDeposit.Postings(bank.Id, items, memo), memo, BankDeposit.Source, id), ct);
+            command.Date, BankDeposit.Postings(bank.Id, items, memo, extras), memo, BankDeposit.Source, id), ct);
 
-        var deposit = BankDeposit.Create(id, bank.Id, command.Date, items, entry.Id, clock.UtcNow, command.Memo);
+        var deposit = BankDeposit.Create(id, bank.Id, command.Date, items, entry.Id, clock.UtcNow, command.Memo, extras);
         foreach (var item in items)
         {
             if (item.Kind == DepositedKind.Payment)
@@ -178,10 +182,12 @@ public sealed class DepositService(
 
         if (items.Count == 0)
             throw new DomainException("deposit.empty", "Choose at least one payment to deposit. To undo the whole deposit, void it.");
+        var extras = await ExtrasAsync(command, command.BankAccountId, ct, deposit);
+        BankDeposit.CheckItems(items, extras);
 
         var oldEntry = deposit.JournalEntryId;
         var feed = await Banking.BankFeedService.TiedToAsync(bank, deposit.BankAccountId, oldEntry, null, ct);
-        if (feed.Count > 0 && (command.BankAccountId != deposit.BankAccountId || items.Sum(i => i.Amount) != deposit.Total))
+        if (feed.Count > 0 && (command.BankAccountId != deposit.BankAccountId || items.Sum(i => i.Amount) + extras.Sum(e => e.Amount) != deposit.Total))
             throw new DomainException("deposit.feed_amount",
                 $"This deposit is matched to a line from the bank feed, so it stays {deposit.Total:N2} in the same account. Undo the match first to change that.");
 
@@ -190,7 +196,7 @@ public sealed class DepositService(
         await engine.StageVoidAsync(deposit.JournalEntryId, $"Changed: {reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = command.Memo?.Trim() is { Length: > 0 } m ? m : $"Deposit · {items.Count} {(items.Count == 1 ? "item" : "items")}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, BankDeposit.Postings(account.Id, items, memo), memo, BankDeposit.Source, deposit.Id, LocationId: location, TagIds: tags), ct);
+            command.Date, BankDeposit.Postings(account.Id, items, memo, extras), memo, BankDeposit.Source, deposit.Id, LocationId: location, TagIds: tags), ct);
 
         // Only after staging succeeded: what came out goes back to waiting, what went in is marked.
         var kept = items.Select(i => (i.Kind, i.SourceId)).ToHashSet();
@@ -198,7 +204,7 @@ public sealed class DepositService(
         var added = items.Where(i => !current.ContainsKey((i.Kind, i.SourceId))).ToList();
         await ClearAsync(removed, ct);
         await MarkAsync(added, deposit.Id, ct);
-        deposit.Change(account.Id, command.Date, items, entry.Id, command.Memo);
+        deposit.Change(account.Id, command.Date, items, entry.Id, command.Memo, extras);
         foreach (var item in feed.Where(i => i.Status == Domain.Banking.BankFeedStatus.Matched))
             item.FollowEntry(oldEntry, entry.Id);
 
@@ -306,6 +312,31 @@ public sealed class DepositService(
     }
 
     /// <summary>
+    /// The command's other lines, each to an active account that can take them: not A/R or A/P (money owed is settled by
+    /// documents), nor the bank being deposited to. A correction keeps lines whose account was deactivated since.
+    /// </summary>
+    private async Task<IReadOnlyList<DepositExtraDraft>> ExtrasAsync(MakeDepositCommand command, Guid bankId, CancellationToken ct, BankDeposit? existing = null)
+    {
+        var extras = command.Extras ?? [];
+        if (extras.Count == 0)
+            return [];
+        var chart = await accounts.GetChartAsync(ct);
+        var kept = existing?.Extras.Select(e => e.AccountId).ToHashSet() ?? [];
+        foreach (var extra in extras)
+        {
+            var account = chart.Get(extra.AccountId);
+            if (account.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable)
+                throw new DomainException("deposit.extra_receivable", $"'{account.Name}' holds money owed; record that with a payment instead.");
+            if (account.Id == bankId)
+                throw new DomainException("deposit.extra_same_bank", "An other line can't go to the account the deposit goes into.");
+            if (!account.IsActive && !kept.Contains(account.Id))
+                throw new DomainException("deposit.extra_inactive", $"'{account.Name}' is inactive.");
+        }
+
+        return [.. extras.Select(e => e with { Memo = e.Memo?.Trim() is { Length: > 0 } m ? m : null })];
+    }
+
+    /// <summary>
     /// A payment the bank took back stays in its deposit, which happened: the return took the money out of that bank.
     /// Changing or voiding the deposit would move it from under the return.
     /// </summary>
@@ -354,5 +385,6 @@ public sealed class DepositService(
         d.Memo,
         Status = d.Status.ToString(),
         Lines = d.Lines.Select(l => new { Kind = l.Kind.ToString(), l.SourceId, l.FromAccountId, l.Amount }),
+        Extras = d.Extras.Select(e => new { e.AccountId, e.Amount, e.Memo }),
     });
 }

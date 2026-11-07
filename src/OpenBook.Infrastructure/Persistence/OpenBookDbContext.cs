@@ -2539,6 +2539,16 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.FromAccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(d => d.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(d => d.Extras, l =>
+            {
+                l.ToTable("BankDepositExtras");
+                l.WithOwner().HasForeignKey("BankDepositId");
+                l.HasKey("BankDepositId", nameof(DepositExtra.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Memo).HasMaxLength(200);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(d => d.Extras).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
     }
 

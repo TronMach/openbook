@@ -83,10 +83,52 @@
                     }
                 </tbody>
                 <tfoot>
-                    <tr><td colspan="6">Deposit total (@_items.Count(i => i.Selected) selected)</td><td class="num">@Labels.Amount(Total)</td></tr>
+                    @if (_extras.Count > 0)
+                    {
+                        <tr><td colspan="6">Items (@_items.Count(i => i.Selected) selected)</td><td class="num">@Labels.Amount(ItemsTotal)</td></tr>
+                        <tr><td colspan="6">Fees, cash back and other money</td><td class="num">@Labels.Amount(ExtrasTotal)</td></tr>
+                    }
+                    <tr><td colspan="6">Deposit total@(_extras.Count > 0 ? "" : $" ({_items.Count(i => i.Selected)} selected)")</td><td class="num">@Labels.Amount(Total)</td></tr>
                 </tfoot>
             </table>
         </div>
+
+        <h2>Fees, cash back and other money</h2>
+        <p class="muted">So the deposit matches what reached the bank: a card processor's fee or cash kept back comes off, money from elsewhere adds on.</p>
+        @if (_extras.Count > 0)
+        {
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead><tr><th>What</th><th>Account</th><th>Memo</th><th class="num">Amount</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var extra in _extras)
+                        {
+                            <tr @key="extra">
+                                <td>
+                                    <select aria-label="What it is" @bind="extra.TakeOff">
+                                        <option value="true">Take off (fee, cash back)</option>
+                                        <option value="false">Add (other money)</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select aria-label="Account" @bind="extra.AccountId">
+                                        <option value="@Guid.Empty">Choose an account</option>
+                                        @foreach (var a in _extraAccounts)
+                                        {
+                                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input aria-label="Memo" maxlength="200" @bind="extra.Memo" /></td>
+                                <td class="num"><input aria-label="Amount" class="amount" inputmode="decimal" @bind="extra.Amount" @bind:event="oninput" /></td>
+                                <td><button type="button" class="secondary" @onclick="() => _extras.Remove(extra)">Remove</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <p><button type="button" class="secondary" disabled="@(_extras.Count >= BankDeposit.MaxExtras)" @onclick="AddExtra">Add a fee or other line</button></p>
 
         @if (Change is not null)
         {
@@ -121,7 +163,14 @@
     private bool _needsClosingPassword;
     private string? _closingPassword;
 
-    private decimal Total => _items.Where(i => i.Selected).Sum(i => i.Item.Amount);
+    private List<ExtraRow> _extras = [];
+    private List<Account> _extraAccounts = [];
+
+    private decimal ItemsTotal => _items.Where(i => i.Selected).Sum(i => i.Item.Amount);
+
+    private decimal ExtrasTotal => _extras.Sum(e => e.Signed);
+
+    private decimal Total => ItemsTotal + ExtrasTotal;
 
     /// <summary>A deposit being changed ("Change" on its page): its items come ticked, with what's waiting below.</summary>
     [SupplyParameterFromQuery(Name = "change")]
@@ -144,11 +193,21 @@
         _items = [.. contents.Select(i => new Row(i) { Selected = true }), .. items.Select(i => new Row(i))];
         _banks = chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
         _bankAccountId = _banks.FirstOrDefault()?.Id ?? Guid.Empty;
+        var kept = deposit?.Extras.Select(e => e.AccountId).ToHashSet() ?? [];
+        _extraAccounts = chart.Ordered(includeInactive: true).Select(x => x.Account)
+            .Where(a => (a.IsActive || kept.Contains(a.Id)) && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
         if (deposit is { Status: DocumentStatus.Posted })
         {
             _bankAccountId = deposit.BankAccountId;
             _date = deposit.Date;
             _memo = deposit.Memo;
+            _extras = [.. deposit.Extras.Select(e => new ExtraRow
+            {
+                TakeOff = e.Amount < 0m,
+                AccountId = e.AccountId,
+                Memo = e.Memo,
+                Amount = Math.Abs(e.Amount).ToString("0.00", System.Globalization.CultureInfo.CurrentCulture),
+            })];
         }
         else
         {
@@ -156,6 +215,14 @@
         }
 
         _loaded = true;
+    }
+
+    /// <summary>A fee by default, to "Merchant and Marketplace Fees" or "Bank Service Charges" when the chart has one.</summary>
+    private void AddExtra()
+    {
+        var fee = _extraAccounts.FirstOrDefault(a => a.IsActive && a.Type == AccountType.Expense
+            && (a.Name.Contains("fee", StringComparison.OrdinalIgnoreCase) || a.Name.Contains("charge", StringComparison.OrdinalIgnoreCase)));
+        _extras.Add(new ExtraRow { TakeOff = true, AccountId = fee?.Id ?? Guid.Empty });
     }
 
     /// <summary>Cash and checks usually go to the bank together, card payments arrive on their own.</summary>
@@ -180,7 +247,10 @@
         _error = null;
         try
         {
-            var command = new MakeDepositCommand(_bankAccountId, _date, _items.Where(i => i.Selected).Select(i => (i.Item.Kind, i.Item.Id)).ToList(), _memo);
+            if (_extras.Any(e => e.Value is null))
+                throw new DomainException("deposit.extra_amount", "Each fee or other line needs an amount above zero, like 12.50.");
+            var command = new MakeDepositCommand(_bankAccountId, _date, _items.Where(i => i.Selected).Select(i => (i.Item.Kind, i.Item.Id)).ToList(), _memo,
+                [.. _extras.Select(e => new DepositExtraDraft(e.AccountId, e.Signed, e.Memo))]);
             var deposit = await Ops.ChangeAsync<BankDeposit, DepositService, BankDeposit>(Change ?? Guid.Empty, _version, s => Change is { } id ? s.ChangeAsync(id, command, _reason ?? "") : s.DepositAsync(command), _closingPassword);
             Navigation.NavigateTo($"/banking/deposits/{deposit.Id}");
         }
@@ -193,6 +263,22 @@
         {
             _busy = false;
         }
+    }
+
+    private sealed class ExtraRow
+    {
+        public bool TakeOff { get; set; } = true;
+
+        public Guid AccountId { get; set; }
+
+        public string? Memo { get; set; }
+
+        public string? Amount { get; set; }
+
+        /// <summary>The typed amount, above zero, or null when it can't be read ("." is the decimal point).</summary>
+        public decimal? Value => decimal.TryParse(Amount, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.CurrentCulture, out var v) && v > 0m ? v : null;
+
+        public decimal Signed => Value is { } v ? (TakeOff ? -v : v) : 0m;
     }
 
     private sealed class Row(UndepositedItem item)

@@ -9500,6 +9500,44 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsMany("OpenBook.Domain.Sales.DepositExtra", "Extras", b1 =>
+                        {
+                            b1.Property<Guid>("BankDepositId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Memo")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.HasKey("BankDepositId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("BankDepositExtras", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("BankDepositId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Sales.DepositLine", "Lines", b1 =>
                         {
                             b1.Property<Guid>("BankDepositId")
@@ -9543,6 +9581,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
                         });
+
+                    b.Navigation("Extras");
 
                     b.Navigation("Lines");
                 });

@@ -143,4 +143,31 @@ public sealed class PaymentReturnTests : IAsyncLifetime
         Assert.Equal(0m, await Balance(ReportBasis.Cash, _checking.Id, Mar1, Mar31));
         await AssertBooksAgree();
     }
+
+    [Fact]
+    public async Task A_deposit_takes_a_processors_fee_so_the_net_payout_is_one_deposit()
+    {
+        var fees = await _db.CreateAccount("Merchant Fees", AccountType.Expense, "6100");
+        var first = await Pay(await Invoice(Mar1, 6m), Mar5, _undeposited.Id);
+        var second = await Pay(await Invoice(Mar1, 4m), Mar5, _undeposited.Id);
+
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(_checking.Id, Mar10,
+            [(DepositedKind.Payment, first.Id), (DepositedKind.Payment, second.Id)], Extras: [new DepositExtraDraft(fees.Id, -30m, "Card fees")])));
+
+        Assert.Equal(970m, deposit.Total);
+        Assert.Equal(970m, await Balance(ReportBasis.Accrual, _checking.Id, Mar1, Mar31));
+        Assert.Equal(30m, await Balance(ReportBasis.Accrual, fees.Id, Mar1, Mar31));
+        Assert.Equal(0m, await Balance(ReportBasis.Accrual, _undeposited.Id, Mar1, Mar31));
+        Assert.Equal(30m, await Balance(ReportBasis.Cash, fees.Id, Mar1, Mar31));
+        await AssertBooksAgree();
+
+        var changed = await In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id, new MakeDepositCommand(_checking.Id, Mar10,
+            [(DepositedKind.Payment, first.Id), (DepositedKind.Payment, second.Id)], Extras: [new DepositExtraDraft(fees.Id, -31m, "Card fees")]), "Fee was 31"));
+        Assert.Equal((969m, 1), (changed.Total, changed.Extras.Count));
+
+        Assert.Equal("deposit.total_not_positive", await Refused(() => In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id, new MakeDepositCommand(_checking.Id, Mar10,
+            [(DepositedKind.Payment, first.Id)], Extras: [new DepositExtraDraft(fees.Id, -600m)]), "Too much"))));
+        Assert.Equal("deposit.extra_receivable", await Refused(() => In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id, new MakeDepositCommand(_checking.Id, Mar10,
+            [(DepositedKind.Payment, first.Id)], Extras: [new DepositExtraDraft(first.ReceivableAccountId, -6m)]), "A/R"))));
+    }
 }
