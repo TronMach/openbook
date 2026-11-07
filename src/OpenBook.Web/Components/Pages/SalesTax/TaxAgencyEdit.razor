@@ -56,6 +56,11 @@
                     <label for="registration">Permit or account number <span class="muted">(optional)</span></label>
                     <InputText id="registration" @bind-Value="Input.RegistrationNumber" />
                 </div>
+                <div class="field">
+                    <label for="region">State for online sales <span class="muted">(optional)</span></label>
+                    <InputText id="region" @bind-Value="Input.Region" maxlength="50" placeholder="e.g. TX" />
+                    <span class="hint">Sales tax on sales channels' orders shipped there goes to this agency.</span>
+                </div>
             </div>
             <div class="actions">
                 <button type="submit">Save agency</button>
@@ -90,7 +95,7 @@
             _agency = await Taxes.GetAgencyAsync(id);
             if (_agency is null)
                 return;
-            Input ??= new AgencyModel { Name = _agency.Name, FilingFrequency = _agency.FilingFrequency, RegistrationNumber = _agency.RegistrationNumber };
+            Input ??= new AgencyModel { Name = _agency.Name, FilingFrequency = _agency.FilingFrequency, RegistrationNumber = _agency.RegistrationNumber, Region = _agency.Region };
         }
         else
         {
@@ -102,7 +107,7 @@
     {
         try
         {
-            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber);
+            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber, Input.Region);
             if (Id is { } id)
                 await Taxes.UpdateAgencyAsync(id, details);
             else
@@ -138,5 +143,8 @@
 
         [StringLength(50)]
         public string? RegistrationNumber { get; set; }
+
+        [StringLength(50)]
+        public string? Region { get; set; }
     }
 }

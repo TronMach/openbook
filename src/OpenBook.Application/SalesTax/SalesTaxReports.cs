@@ -25,7 +25,7 @@ public sealed record TaxLiabilityReport(DateOnly From, DateOnly To, IReadOnlyLis
 /// <summary>A tax-exempt customer, for checking certificates.</summary>
 public sealed record ExemptCustomer(Customer Customer, bool Expired, bool ExpiresSoon);
 
-public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, SalesTaxPaymentService payments, IClock clock)
+public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, SalesTaxPaymentService payments, Channels.IChannelStore channels, IClock clock)
 {
     public const int ExpiresSoonDays = 30;
 
@@ -74,6 +74,19 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
             }
         }
 
+        // Sales channels' payouts: tax by the state shipped to, which the agency for that state is owed.
+        var online = (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Posted && InRange(p.Date))
+            .SelectMany(p => p.Lines).Where(l => l.Region is not null).ToLookup(l => l.Region!, StringComparer.OrdinalIgnoreCase);
+
+        TaxLiabilityRow? Online(TaxAgency agency)
+        {
+            if (agency.Region is not { } region || !online.Contains(region))
+                return null;
+            var tax = online[region].Where(l => l.Type is Domain.Channels.ChannelLineType.Tax or Domain.Channels.ChannelLineType.MarketplaceTax).Sum(l => l.Amount);
+            var total = online[region].Where(l => l.Type is Domain.Channels.ChannelLineType.Sale or Domain.Channels.ChannelLineType.Shipping or Domain.Channels.ChannelLineType.Refund).Sum(l => l.Amount);
+            return tax == 0m ? null : new TaxLiabilityRow(Guid.Empty, "Online sales", 0m, total, 0m, 0m, total, tax);
+        }
+
         var rates = await store.ListRatesAsync(ct);
         var startOwed = await payments.OwedAsync(from.AddDays(-1), ct);
         var endOwed = await payments.OwedAsync(to, ct);
@@ -90,6 +103,7 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
                     .SelectMany(r => rows.Where(x => x.Key.Rate == r.Id).Select(x => (Rate: r, x.Key.Percent, Row: x.Value)))
                     .OrderBy(x => x.Rate.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Percent)
                     .Select(x => new TaxLiabilityRow(x.Rate.Id, x.Rate.Name, x.Percent, x.Row.Total, x.Row.NonTaxable, x.Row.Exempt, x.Row.Taxable, x.Row.Tax))
+                    .Concat(Online(agency) is { } channelRow ? [channelRow] : [])
                     .ToList(),
                 startOwed.GetValueOrDefault(agency.Id),
                 paid.GetValueOrDefault(agency.Id),

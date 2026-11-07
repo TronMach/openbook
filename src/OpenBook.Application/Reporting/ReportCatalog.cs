@@ -550,7 +550,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         {
             rows.Add(new ReportTableRow([new ReportCell(agency.Agency.Name, new ReportLink("tax_agency", agency.Agency.Id)), .. Enumerable.Repeat(ReportCell.Empty, 6)], 0, ReportRowStyle.Section));
             rows.AddRange(agency.Rates.Select(r => new ReportTableRow(
-                [r.RateName, r.TotalSales, r.NonTaxable, r.Exempt, r.Taxable, new ReportCell(r.Percent), r.Tax], 1)));
+                [r.RateName, r.TotalSales, r.NonTaxable, r.Exempt, r.Taxable, r.TaxRateId == Guid.Empty ? ReportCell.Empty : new ReportCell(r.Percent), r.Tax], 1)));
             rows.Add(new ReportTableRow(["Tax charged", null, null, null, null, null, agency.Tax], 0, ReportRowStyle.Subtotal));
             rows.Add(new ReportTableRow(["Owed at the start of the period", null, null, null, null, null, agency.OwedAtStart], 1));
             rows.Add(new ReportTableRow(["Paid in the period (incl. adjustments)", null, null, null, null, null, -agency.Paid], 1));

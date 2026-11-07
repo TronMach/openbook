@@ -52,7 +52,7 @@
                             <td class="num">@Labels.AmountOrBlank(row.NonTaxable)</td>
                             <td class="num">@Labels.AmountOrBlank(row.Exempt)</td>
                             <td class="num">@Labels.Amount(row.Taxable)</td>
-                            <td class="num">@Labels.Percent(row.Percent)</td>
+                            <td class="num">@(row.TaxRateId == Guid.Empty ? "" : Labels.Percent(row.Percent))</td>
                             <td class="num">@Labels.Amount(row.Tax)</td>
                         </tr>
                     }

@@ -6292,6 +6292,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("Region")
+                        .HasColumnType("text");
+
                     b.Property<string>("RegistrationNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");

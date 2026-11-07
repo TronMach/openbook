@@ -51,6 +51,12 @@ When you file, record the payment: **Pay** on the agency's row (or **Sales tax â
 
 The payment clears that much of the agency's liability. To correct one, void it from its page; the tax is owed again. Payments already reconciled at the bank can't be voided.
 
+## Sales through channels
+
+Tax that Amazon, Shopify and other sales channels report comes in with their payouts. To have it owed to the right agency, enter the state on the agency's page as the channel writes it (**State for online sales**, such as `TX`). When a payout posts, tax on lines shipped to that state goes to that agency's account: it shows as owed on **Sales tax** and in the liability report as **Online sales**, and paying the agency clears it. Tax a marketplace collected and paid itself nets to nothing there.
+
+Tax with no state in the report, or for a state with no agency, stays in the channel's own sales tax account. **Sales tax by state (online orders)** shows the figures by state to file from.
+
 ## Turning things off
 
 Rates, codes and agencies are made inactive, never deleted. A rate still used by an active code, or an agency with active rates, can't be made inactive until those are, and a code can't be while active customers use it: give them another code first. Changing a document that was charged under an inactive code keeps its tax.

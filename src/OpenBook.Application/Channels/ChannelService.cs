@@ -37,7 +37,7 @@ public sealed record PayoutImportResult(IReadOnlyList<PayoutData> New, IReadOnly
 /// Sales channels and their payouts. A report is read by <see cref="ChannelReports"/>; payouts not seen before (by the
 /// channel's id for them) wait as Pending until posted, each as one journal entry (<see cref="ChannelPayout.Source"/>).
 /// </summary>
-public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies)
+public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies, SalesTax.ISalesTaxStore taxes)
 {
     public const string ChannelEntity = "sales_channel";
     public const string PayoutEntity = "channel_payout";
@@ -224,7 +224,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
                 $"The transactions add up to {payout.Net:N2}, but the channel reported {payout.ReportedNet:N2}. Check the report before posting.");
         var before = PayoutSnapshot(payout, channel);
         var recorded = await RecordedChargesAsync(channel, payout, ct);
-        var postings = payout.Postings(channel);
+        var taxAccounts = (await taxes.ListAgenciesAsync(ct)).Where(a => a.IsActive && a.Region is not null).ToDictionary(a => a.Region!, a => a.LiabilityAccountId, StringComparer.OrdinalIgnoreCase);
+        var postings = payout.Postings(channel, taxAccounts);
         if (postings.Count < 2)
             throw new DomainException("channel.payout_zero", "Everything in this payout nets to zero; there's nothing to post. Dismiss it instead.");
         var entry = await engine.StageAsync(new PostJournalEntryCommand(payout.Date, postings, $"{channel.Name} payout {payout.ExternalId}", ChannelPayout.Source, payout.Id), ct);

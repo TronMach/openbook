@@ -291,15 +291,21 @@ public sealed class ChannelPayout
     /// <summary>
     /// The journal lines: the deposit account takes the net (debit when positive), and each type's total goes to its
     /// account with the opposite sign (sales and shipping credited, fees and refunds debited). Both tax types share
-    /// the tax account, so marketplace-collected tax nets out there.
+    /// the tax account, so marketplace-collected tax nets out there. Tax on a line shipped to a state with its own
+    /// agency goes to that agency's account (<paramref name="taxAccounts"/>, by region), so it's owed there.
     /// </summary>
-    public IReadOnlyList<Ledger.JournalLineDraft> Postings(SalesChannel channel)
+    public IReadOnlyList<Ledger.JournalLineDraft> Postings(SalesChannel channel, IReadOnlyDictionary<string, Guid>? taxAccounts = null)
     {
         ArgumentNullException.ThrowIfNull(channel);
+        Guid AccountOf(ChannelPayoutLine line) =>
+            line.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax && line.Region is { } region && taxAccounts?.GetValueOrDefault(region) is { } agency && agency != Guid.Empty
+                ? agency
+                : channel.AccountFor(line.Type);
+
         var lines = new List<Ledger.JournalLineDraft>();
         if (Net != 0m)
             lines.Add(Net > 0m ? Ledger.JournalLineDraft.Dr(channel.DepositAccountId, Net, "Payout") : Ledger.JournalLineDraft.Cr(channel.DepositAccountId, -Net, "Payout"));
-        foreach (var group in _lines.GroupBy(l => channel.AccountFor(l.Type)))
+        foreach (var group in _lines.GroupBy(AccountOf))
         {
             var amount = group.Sum(l => l.Amount);
             var memo = string.Join(", ", group.Select(l => Label(l.Type)).Distinct());

@@ -21,20 +21,24 @@ public sealed class TaxAgency
     /// <summary>Your sales tax permit or account number with the agency.</summary>
     public string? RegistrationNumber { get; private set; }
 
+    /// <summary>The state or region this agency taxes, as sales channels' reports write it ("CA"): online orders shipped there owe it their tax.</summary>
+    public string? Region { get; private set; }
+
     public FilingFrequency FilingFrequency { get; private set; }
     public bool IsActive { get; private set; }
 
-    public static TaxAgency Create(string name, Guid liabilityAccountId, FilingFrequency frequency, string? registrationNumber = null)
+    public static TaxAgency Create(string name, Guid liabilityAccountId, FilingFrequency frequency, string? registrationNumber = null, string? region = null)
     {
         if (liabilityAccountId == Guid.Empty)
             throw new DomainException("tax.agency_account_required", "A tax agency needs a liability account.");
         var agency = new TaxAgency { Id = Guid.CreateVersion7(), LiabilityAccountId = liabilityAccountId, IsActive = true };
-        agency.Update(name, frequency, registrationNumber);
+        agency.Update(name, frequency, registrationNumber, region);
         return agency;
     }
 
-    public void Update(string name, FilingFrequency frequency, string? registrationNumber)
+    public void Update(string name, FilingFrequency frequency, string? registrationNumber, string? region = null)
     {
+        Region = Text.Optional(region, 50, "tax.region_too_long", "State or region")?.ToUpperInvariant();
         Name = NormalizeName(name);
         FilingFrequency = Enum.IsDefined(frequency) ? frequency : throw new DomainException("tax.frequency_invalid", $"Unknown filing frequency {frequency}.");
         RegistrationNumber = Text.Optional(registrationNumber, 50, "tax.registration_too_long", "Registration number");

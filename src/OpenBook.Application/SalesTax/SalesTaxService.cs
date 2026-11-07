@@ -42,7 +42,7 @@ public interface ISalesTaxStore
     Task SaveChangesAsync(CancellationToken ct);
 }
 
-public sealed record TaxAgencyDetails(string Name, FilingFrequency FilingFrequency = FilingFrequency.Quarterly, string? RegistrationNumber = null);
+public sealed record TaxAgencyDetails(string Name, FilingFrequency FilingFrequency = FilingFrequency.Quarterly, string? RegistrationNumber = null, string? Region = null);
 
 /// <summary>A tax code ready to charge: its rates' current percentages and where each one's tax is owed.</summary>
 public sealed record TaxCodeChoice(TaxCode Code, IReadOnlyList<TaxComponent> Components)
@@ -77,11 +77,20 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         EnsureUnique(agencies.Select(a => (a.Id, a.Name)), Guid.Empty, name, "tax.agency_name_taken", "agency");
 
         var account = await LiabilityAccountAsync(name, agencies, ct);
-        var agency = TaxAgency.Create(name, account.Id, details.FilingFrequency, details.RegistrationNumber);
+        EnsureRegionFree(agencies, Guid.Empty, details.Region);
+        var agency = TaxAgency.Create(name, account.Id, details.FilingFrequency, details.RegistrationNumber, details.Region);
         store.Add(agency);
         store.Add(Audit(AuditAction.Created, AgencyEntity, agency.Id, null, Snapshot(agency)));
         await store.SaveChangesAsync(ct);
         return agency;
+    }
+
+    private static void EnsureRegionFree(IEnumerable<TaxAgency> agencies, Guid except, string? region)
+    {
+        if (string.IsNullOrWhiteSpace(region))
+            return;
+        if (agencies.FirstOrDefault(a => a.Id != except && string.Equals(a.Region, region.Trim(), StringComparison.OrdinalIgnoreCase)) is { } other)
+            throw new DomainException("tax.region_taken", $"{other.Name} already takes the tax for {region.Trim().ToUpperInvariant()}.");
     }
 
     public async Task<TaxAgency> UpdateAgencyAsync(Guid id, TaxAgencyDetails details, CancellationToken ct = default)
@@ -89,9 +98,11 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         ArgumentNullException.ThrowIfNull(details);
         var agency = await store.GetAgencyAsync(id, ct) ?? throw new EntityNotFoundException(AgencyEntity, id);
         var name = TaxAgency.NormalizeName(details.Name);
-        EnsureUnique((await store.ListAgenciesAsync(ct)).Select(a => (a.Id, a.Name)), id, name, "tax.agency_name_taken", "agency");
+        var agencies = await store.ListAgenciesAsync(ct);
+        EnsureUnique(agencies.Select(a => (a.Id, a.Name)), id, name, "tax.agency_name_taken", "agency");
+        EnsureRegionFree(agencies, id, details.Region);
         var before = Snapshot(agency);
-        agency.Update(name, details.FilingFrequency, details.RegistrationNumber);
+        agency.Update(name, details.FilingFrequency, details.RegistrationNumber, details.Region);
         store.Add(Audit(AuditAction.Updated, AgencyEntity, id, before, Snapshot(agency)));
         await store.SaveChangesAsync(ct);
         return agency;
@@ -327,6 +338,7 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         a.LiabilityAccountId,
         FilingFrequency = a.FilingFrequency.ToString(),
         a.RegistrationNumber,
+        a.Region,
         a.IsActive,
     });
 

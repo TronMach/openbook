@@ -6285,6 +6285,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Region")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RegistrationNumber")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
