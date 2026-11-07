@@ -143,6 +143,9 @@ public interface IPurchasesStore
 
     Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<AchBatch?> GetAchBatchForChangeAsync(Guid id, CancellationToken ct);
+
     /// <summary>Files still stored in clear, tracked.</summary>
     Task<IReadOnlyList<AchBatch>> ListUnprotectedAchBatchesAsync(CancellationToken ct);
 

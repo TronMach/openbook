@@ -4043,6 +4043,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("Content");
 
+                    b.Property<string>("WithdrawReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("WithdrawnAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");

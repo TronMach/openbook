@@ -154,6 +154,20 @@ public static class PurchasingEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/purchases/ach/files/{id:guid}/withdraw", async (Guid id, IFormCollection form, AchService ach, CancellationToken ct) =>
+        {
+            var accountId = (await ach.GetBatchAsync(id, ct))?.AccountId;
+            try
+            {
+                await ach.WithdrawFileAsync(id, form["reason"], ct);
+                return Results.Redirect($"/purchases/ach?accountId={accountId}&done=withdrawn");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/purchases/ach?accountId={accountId}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapGet("/purchases/ach/files/{id:guid}", async (Guid id, HttpContext http, AchService ach, CancellationToken ct) =>
         {
             if (await ach.GetBatchAsync(id, ct) is not { } batch)

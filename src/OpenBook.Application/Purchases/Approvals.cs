@@ -84,6 +84,9 @@ public sealed record AchSettingsCommand(
 /// <summary>A bill payment that can go in an ACH file: the vendor has bank details and it hasn't been sent or printed as a check.</summary>
 public sealed record AchCandidate(BillPayment Payment, Vendor Vendor, VendorBankAccount BankAccount);
 
+/// <summary>An ACH file made, with how many of its payments have been voided since (don't send it as it is).</summary>
+public sealed record AchFile(AchBatch Batch, int VoidedPayments);
+
 /// <summary>
 /// ACH (NACHA) files for paying vendors: vendors' bank details (account numbers encrypted, shown as last four), the
 /// bank's settings per bank account, and files of chosen bill payments, each payment sent once.
@@ -173,9 +176,50 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
 
     public Task<AchBatch?> GetBatchAsync(Guid id, CancellationToken ct = default) => store.GetAchBatchAsync(id, ct);
 
+    /// <summary>The account's files, newest first as listed, each with the payments in it voided since it was made.</summary>
+    public async Task<IReadOnlyList<AchFile>> FilesAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var voided = (await store.ListPaymentsAsync(null, ct)).Where(p => p.AchBatchId is not null && p.Status == DocumentStatus.Voided)
+            .GroupBy(p => p.AchBatchId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        return [.. (await store.ListAchBatchesAsync(accountId, ct)).Select(b => new AchFile(b, voided.GetValueOrDefault(b.Id)))];
+    }
+
+    /// <summary>
+    /// Withdraws a file the bank never got (or refused): its payments lose their ACH mark, so they can go in another file,
+    /// print as checks or be voided. Refused once any of them has come through the bank (matched to a bank line or reconciled).
+    /// </summary>
+    public async Task<AchBatch> WithdrawFileAsync(Guid batchId, string? reason, CancellationToken ct = default)
+    {
+        var batch = await store.GetAchBatchForChangeAsync(batchId, ct) ?? throw new EntityNotFoundException(BatchEntity, batchId);
+        var payments = (await store.ListPaymentsAsync(null, ct)).Where(p => p.AchBatchId == batch.Id).ToList();
+        var cleared = (await bank.ListFeedItemsAsync(batch.AccountId, ct)).SelectMany(i => i.MatchedEntryIds).ToHashSet();
+        foreach (var p in payments)
+        {
+            if (cleared.Contains(p.JournalEntryId) || await ledger.IsInReconciliationAsync(p.JournalEntryId, ct))
+                throw new DomainException("ach.payment_cleared", "A payment in this file has come through the bank (matched to a bank line or reconciled), so the bank had the file. Leave it as it is.");
+        }
+
+        var now = clock.UtcNow;
+        batch.Withdraw(now, reason);
+        foreach (var p in payments)
+        {
+            var tracked = (await store.GetPaymentAsync(p.Id, ct))!;
+            tracked.WithdrawFromAch();
+            store.Add(AuditRecord.Create(now, user.Actor, AuditAction.Updated, "bill_payment", p.Id,
+                JsonSerializer.Serialize(new { AchBatchId = batch.Id }), JsonSerializer.Serialize(new { AchBatchId = (Guid?)null, AchFileWithdrawn = batch.Id })));
+        }
+
+        store.Add(AuditRecord.Create(now, user.Actor, AuditAction.Updated, BatchEntity, batch.Id, null,
+            JsonSerializer.Serialize(new { batch.WithdrawnAt, batch.WithdrawReason, Payments = payments.Select(p => p.Id) })));
+        await store.SaveChangesAsync(ct);
+        return batch;
+    }
+
     /// <summary>The file itself, to send to the bank.</summary>
     public string FileText(AchBatch batch)
     {
+        if (batch.WithdrawnAt is not null)
+            throw new DomainException("ach.withdrawn", "This ACH file was withdrawn, so it isn't to be sent. Make a new file for its payments.");
         ArgumentNullException.ThrowIfNull(batch);
         return batch.ProtectedContent is not { } file
             ? batch.UnprotectedContent

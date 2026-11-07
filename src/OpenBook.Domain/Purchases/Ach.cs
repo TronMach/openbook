@@ -139,6 +139,20 @@ public sealed class AchBatch
 
     /// <summary>Takes the encrypted form of a file stored in clear, and drops the clear one.</summary>
     public void Protect(string protectedContent) => (ProtectedContent, UnprotectedContent) = (protectedContent, string.Empty);
+
+    /// <summary>When it was withdrawn: not sent to the bank after all, its payments free to go again or be voided.</summary>
+    public DateTimeOffset? WithdrawnAt { get; private set; }
+
+    public string? WithdrawReason { get; private set; }
+
+    public void Withdraw(DateTimeOffset now, string? reason)
+    {
+        if (WithdrawnAt is not null)
+            throw new DomainException("ach.withdrawn", "This ACH file was already withdrawn.");
+        WithdrawReason = Text.Optional(reason, 500, "ach.reason_too_long", "Reason")
+            ?? throw new DomainException("ach.reason_required", "Say why the file is withdrawn.");
+        WithdrawnAt = now.ToUniversalTime();
+    }
 }
 
 /// <summary>One credit to a vendor in an ACH file.</summary>

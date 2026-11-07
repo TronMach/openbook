@@ -192,6 +192,8 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public Task<AchBatch?> GetAchBatchAsync(Guid id, CancellationToken ct) => db.AchBatches.AsNoTracking().SingleOrDefaultAsync(b => b.Id == id, ct);
 
+    public Task<AchBatch?> GetAchBatchForChangeAsync(Guid id, CancellationToken ct) => db.AchBatches.SingleOrDefaultAsync(b => b.Id == id, ct);
+
     public async Task<IReadOnlyList<AchBatch>> ListUnprotectedAchBatchesAsync(CancellationToken ct) =>
         await db.AchBatches.Where(b => b.UnprotectedContent != "").ToListAsync(ct);
 

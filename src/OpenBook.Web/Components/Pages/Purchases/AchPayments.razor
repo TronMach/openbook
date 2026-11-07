@@ -23,6 +23,10 @@
     {
         <div class="alert notice" role="status">Saved.</div>
     }
+    else if (Done == "withdrawn")
+    {
+        <div class="alert notice" role="status">The file was withdrawn. Its payments are back in the list to send, print or void.</div>
+    }
 
     @if (_banks.Count == 0)
     {
@@ -107,16 +111,40 @@
         {
             <h2>Files made</h2>
             <table class="data">
-                <thead><tr><th>Made</th><th>Effective</th><th class="num">Payments</th><th class="num">Total</th><th></th></tr></thead>
+                <thead><tr><th>Made</th><th>Effective</th><th class="num">Payments</th><th class="num">Total</th><th></th><th></th></tr></thead>
                 <tbody>
-                    @foreach (var b in _batches)
+                    @foreach (var (b, voided) in _batches)
                     {
-                        <tr>
+                        <tr class="@(b.WithdrawnAt is null && voided > 0 ? "warn" : "")">
                             <td>@b.CreatedAt.InCompanyTime().ToString("g")</td>
                             <td>@Labels.Date(b.EffectiveDate)</td>
                             <td class="num">@b.EntryCount</td>
                             <td class="num">@Labels.Amount(b.Total)</td>
-                            <td><ActionLink Href="@($"/purchases/ach/files/{b.Id}")">Download</ActionLink></td>
+                            @if (b.WithdrawnAt is { } withdrawn)
+                            {
+                                <td class="muted" colspan="2">Withdrawn @withdrawn.InCompanyTime().ToString("g"): @b.WithdrawReason</td>
+                            }
+                            else
+                            {
+                                <td>
+                                    <ActionLink Href="@($"/purchases/ach/files/{b.Id}")">Download</ActionLink>
+                                    @if (voided > 0)
+                                    {
+                                        <div class="muted">@voided payment(s) in it voided since. Don't send it as it is: withdraw it and make a new file.</div>
+                                    }
+                                </td>
+                                <td>
+                                    <details>
+                                        <summary>Withdraw…</summary>
+                                        <PostForm Action="@($"/purchases/ach/files/{b.Id}/withdraw")" data-enhance="false">
+                                            <AntiforgeryToken />
+                                            <p class="muted">Only for a file the bank never got, or refused. Its payments can then go in another file, print as checks or be voided.</p>
+                                            <div class="field"><label for="reason-@b.Id">Reason</label><input id="reason-@b.Id" name="reason" required maxlength="500" /></div>
+                                            <div class="actions"><button type="submit" class="secondary">Withdraw the file</button></div>
+                                        </PostForm>
+                                    </details>
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>
@@ -131,7 +159,7 @@
     private Guid _accountId;
     private AchSettings? _settings;
     private IReadOnlyList<AchCandidate> _candidates = [];
-    private IReadOnlyList<AchBatch> _batches = [];
+    private IReadOnlyList<AchFile> _batches = [];
 
     [SupplyParameterFromQuery] private Guid? AccountId { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -146,6 +174,6 @@
         _accountId = _banks.FirstOrDefault(a => a.Id == AccountId)?.Id ?? _banks[0].Id;
         _settings = await Ach.GetSettingsAsync(_accountId);
         _candidates = await Ach.CandidatesAsync(_accountId);
-        _batches = await Ach.ListBatchesAsync(_accountId);
+        _batches = await Ach.FilesAsync(_accountId);
     }
 }

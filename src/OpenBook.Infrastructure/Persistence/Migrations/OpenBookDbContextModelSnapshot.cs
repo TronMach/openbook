@@ -4036,6 +4036,12 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("Content");
 
+                    b.Property<string>("WithdrawReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("WithdrawnAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");

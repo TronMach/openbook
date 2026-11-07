@@ -86,6 +86,9 @@ public sealed class BillPayment
         AchBatchId = batchId;
     }
 
+    /// <summary>Its ACH file was withdrawn before the bank had it.</summary>
+    public void WithdrawFromAch() => AchBatchId = null;
+
     public static BillPayment Create(
         Guid id,
         Guid vendorId,

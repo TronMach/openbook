@@ -71,3 +71,5 @@ Instead of printing checks, you can pay vendors by direct deposit using an ACH f
 5. Download the file from **Files made** and upload it to your bank.
 
 A payment goes in one file only, and payments printed as checks are left out.
+
+If the bank never got a file, or refused it, open **Withdraw…** beside it under **Files made**, give the reason and click **Withdraw the file**: its payments come back to **Payments ready to send** (or can be printed as checks or voided), and the file can't be downloaded again. A file can't be withdrawn once one of its payments has come through the bank (matched to a bank line or reconciled). If a payment in a file is voided after the file is made, the file is marked: don't upload it as it is. Withdraw it and make a new one.

@@ -212,6 +212,43 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_ach_file_the_bank_never_got_is_withdrawn_and_a_voided_payment_flags_its_file()
+    {
+        await In<AchService, VendorBankAccount>(s => s.SetVendorBankAccountAsync(_supplier.Id, new VendorBankAccountCommand("021000021", "1234-56789", BankAccountKind.Checking)));
+        await In<AchService, AchSettings>(s => s.SaveSettingsAsync(_checking.Id,
+            new AchSettingsCommand("011000015", "Federal Reserve Bank", "1234567890", "Studio LLC", "1234567890", "Studio LLC", "Payables")));
+        async Task<BillPayment> PaidBill(decimal amount, string reference) =>
+            Assert.Single(await Pay(await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_supplier.Id, Mar1, [new BillLineDraft(_freight.Id, amount)], Reference: reference)))));
+        var payment = await PaidBill(100m, "W1");
+        var effective = new DateOnly(2026, 4, 2);
+        var batch = await In<AchService, AchBatch>(s => s.CreateFileAsync(_checking.Id, effective, [payment.Id]));
+
+        Assert.Equal("ach.reason_required", await Refused(() => In<AchService, AchBatch>(s => s.WithdrawFileAsync(batch.Id, " "))));
+        var withdrawn = await In<AchService, AchBatch>(s => s.WithdrawFileAsync(batch.Id, "Bank portal rejected the upload"));
+        Assert.NotNull(withdrawn.WithdrawnAt);
+        Assert.Null((await In<BillPaymentService, BillPayment?>(s => s.GetAsync(payment.Id)))!.AchBatchId);
+        Assert.Equal(payment.Id, Assert.Single(await In<AchService, IReadOnlyList<AchCandidate>>(s => s.CandidatesAsync(_checking.Id))).Payment.Id);
+        Assert.Equal("ach.withdrawn", await Refused(() => In<AchService, string>(async s => s.FileText((await s.GetBatchAsync(batch.Id))!))));
+        Assert.Equal("ach.withdrawn", await Refused(() => In<AchService, AchBatch>(s => s.WithdrawFileAsync(batch.Id, "again"))));
+
+        // Sent again; then voided, the file it's in says so.
+        var again = await In<AchService, AchBatch>(s => s.CreateFileAsync(_checking.Id, effective, [payment.Id]));
+        await In<BillPaymentService, BillPayment>(s => s.VoidAsync(payment.Id, "Paid twice"));
+        var files = await In<AchService, IReadOnlyList<AchFile>>(s => s.FilesAsync(_checking.Id));
+        Assert.Equal(1, files.Single(f => f.Batch.Id == again.Id).VoidedPayments);
+        Assert.Equal(0, files.Single(f => f.Batch.Id == batch.Id).VoidedPayments);
+
+        // A file whose payment has come through the bank stays.
+        var cleared = await PaidBill(75m, "W2");
+        var third = await In<AchService, AchBatch>(s => s.CreateFileAsync(_checking.Id, effective, [cleared.Id]));
+        await In<OpenBook.Application.Banking.BankFeedService, OpenBook.Application.Banking.FeedImportResult>(s => s.QueueAsync(_checking.Id,
+            [new OpenBook.Application.Banking.FeedLine(cleared.Date, -75m, "PARTS SUPPLY", null, null, "ACH-2")]));
+        var line = Assert.Single(await In<OpenBook.Application.Banking.BankFeedService, IReadOnlyList<OpenBook.Application.Banking.FeedReviewItem>>(s => s.ReviewAsync(_checking.Id)));
+        await _db.InScope(async sp => { await sp.GetRequiredService<OpenBook.Application.Banking.BankFeedService>().MatchAsync(line.Item.Id, cleared.JournalEntryId); return true; });
+        Assert.Equal("ach.payment_cleared", await Refused(() => In<AchService, AchBatch>(s => s.WithdrawFileAsync(third.Id, "Mistake"))));
+    }
+
+    [Fact]
     public async Task Ach_files_pay_vendors_once_in_nacha_format()
     {
         var bank = await In<AchService, VendorBankAccount>(s => s.SetVendorBankAccountAsync(_supplier.Id, new VendorBankAccountCommand("021000021", "1234-56789", BankAccountKind.Checking)));

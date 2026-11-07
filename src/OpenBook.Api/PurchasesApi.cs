@@ -76,10 +76,15 @@ public sealed record ApprovalRequest(string? Note);
 
 public sealed record AchFileRequest(DateOnly EffectiveDate, IReadOnlyList<Guid> PaymentIds);
 
-public sealed record AchBatchResponse(Guid Id, Guid AccountId, DateOnly EffectiveDate, int EntryCount, decimal Total, DateTimeOffset CreatedAt)
+public sealed record AchBatchResponse(Guid Id, Guid AccountId, DateOnly EffectiveDate, int EntryCount, decimal Total, DateTimeOffset CreatedAt,
+    DateTimeOffset? WithdrawnAt = null, string? WithdrawReason = null, int VoidedPayments = 0)
 {
-    public static AchBatchResponse From(AchBatch b) => new(b.Id, b.AccountId, b.EffectiveDate, b.EntryCount, b.Total, b.CreatedAt);
+    public static AchBatchResponse From(AchBatch b) => new(b.Id, b.AccountId, b.EffectiveDate, b.EntryCount, b.Total, b.CreatedAt, b.WithdrawnAt, b.WithdrawReason);
+
+    public static AchBatchResponse From(AchFile f) => From(f.Batch) with { VoidedPayments = f.VoidedPayments };
 }
+
+public sealed record WithdrawAchRequest(string? Reason);
 
 public sealed record BillPaymentResponse(
     Guid Id,
@@ -204,7 +209,9 @@ internal static class PurchasesApi
         purchases.MapGet("/ach/{accountId:guid}/payments", async (Guid accountId, AchService s, CancellationToken ct) =>
             (await s.CandidatesAsync(accountId, ct)).Select(c => new { PaymentId = c.Payment.Id, c.Payment.Date, c.Payment.Amount, c.Vendor.DisplayName, c.BankAccount.AccountLast4 }));
         purchases.MapGet("/ach/{accountId:guid}/files", async (Guid accountId, AchService s, CancellationToken ct) =>
-            (await s.ListBatchesAsync(accountId, ct)).Select(AchBatchResponse.From));
+            (await s.FilesAsync(accountId, ct)).Select(f => AchBatchResponse.From(f)));
+        purchases.MapPost("/ach/files/{id:guid}/withdraw", async (Guid id, WithdrawAchRequest r, AchService s, CancellationToken ct) =>
+            AchBatchResponse.From(await s.WithdrawFileAsync(id, r.Reason, ct)));
         purchases.MapPost("/ach/{accountId:guid}/files", async (Guid accountId, AchFileRequest r, AchService s, CancellationToken ct) =>
         {
             var batch = await s.CreateFileAsync(accountId, r.EffectiveDate, r.PaymentIds ?? [], ct);
