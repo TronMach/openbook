@@ -347,6 +347,24 @@ public sealed class GiftService(
     }
 
     /// <summary>
+    /// Replaces a pledge's installment schedule (posting nothing; empty clears it), audited <c>Updated</c> on the pledge.
+    /// </summary>
+    public async Task<Pledge> SetInstallmentsAsync(Guid id, IReadOnlyList<(DateOnly DueDate, decimal Amount)> installments, CancellationToken ct = default)
+    {
+        var pledge = await store.GetPledgeAsync(id, ct) ?? throw new EntityNotFoundException(PledgeEntity, id);
+        var before = Schedule(pledge);
+        pledge.SetInstallments(installments);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PledgeEntity, pledge.Id, before, Schedule(pledge)));
+        await store.SaveChangesAsync(ct);
+        return pledge;
+    }
+
+    private static string Schedule(Pledge p) => JsonSerializer.Serialize(new
+    {
+        Installments = p.Installments.Select(i => $"{i.DueDate:yyyy-MM-dd} {i.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}").ToList(),
+    });
+
+    /// <summary>
     /// The donor won't pay the rest: reverses the unpaid part (Dr the contribution account / Cr the receivable, on its
     /// class, accrual basis only). Payments can't be recorded after it, unless it's undone.
     /// </summary>

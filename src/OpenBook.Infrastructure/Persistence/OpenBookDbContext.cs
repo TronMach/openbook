@@ -1230,6 +1230,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(p => p.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Segment>().WithMany().HasForeignKey(p => p.ClassId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(p => p.Installments, i =>
+            {
+                i.ToTable("PledgeInstallments");
+                i.WithOwner().HasForeignKey("PledgeId");
+                i.HasKey("PledgeId", nameof(OpenBook.Domain.Nonprofit.PledgeInstallment.Position));
+                i.Property(x => x.Position).ValueGeneratedNever();
+                i.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            });
+            b.Navigation(p => p.Installments).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.Grant>(b =>

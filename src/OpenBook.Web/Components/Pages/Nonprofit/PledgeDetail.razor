@@ -78,6 +78,55 @@
             </table>
         }
 
+        @if (p.Status == DocumentStatus.Posted)
+        {
+            <div class="card" style="margin-top: 1.5rem" id="installments">
+                <h2>Installments</h2>
+                @if (p.Installments.Count > 0)
+                {
+                    var today = CompanyTime.Today;
+                    var overdue = Math.Max(0m, Math.Min(p.DueBy(today), p.Amount - p.CancelledAmount) - _pledge.Paid);
+                    <table class="data">
+                        <thead><tr><th>Due</th><th class="num">Amount</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in p.Installments)
+                            {
+                                <tr><td>@Labels.Date(i.DueDate)</td><td class="num">@Labels.Amount(i.Amount)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (overdue > 0m)
+                    {
+                        <p class="out-of-balance">@Labels.Amount(overdue) was due by today and hasn't been paid.</p>
+                    }
+                    <PostForm Action="@($"/nonprofit/pledges/{p.Id}/installments")" data-enhance="false" class="inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="clear" value="true" />
+                        <button type="submit" class="secondary">Clear the schedule</button>
+                    </PostForm>
+                }
+                else
+                {
+                    <p class="muted">Paid all at once@(p.DueDate is { } dueOn ? $", due {Labels.Date(dueOn)}" : "")? Or spread it out:</p>
+                }
+                <PostForm Action="@($"/nonprofit/pledges/{p.Id}/installments")" data-enhance="false" class="inline-actions">
+                    <AntiforgeryToken />
+                    <label>Installments <input name="count" type="number" min="1" max="@Pledge.MaxInstallments" value="12" style="width: 5rem" /></label>
+                    <label>every
+                        <select name="months">
+                            <option value="1">month</option>
+                            <option value="3">3 months</option>
+                            <option value="6">6 months</option>
+                            <option value="12">year</option>
+                        </select>
+                    </label>
+                    <label>from <input name="first" type="date" value="@((p.DueDate ?? p.Date).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))" /></label>
+                    <button type="submit" class="secondary">@(p.Installments.Count > 0 ? "Replace the schedule" : "Make the schedule")</button>
+                </PostForm>
+                <p class="hint">Equal amounts, the last taking any cents left over. The schedule posts nothing: it says what's due when, for the open pledges report's overdue column. Gifts naming the pledge pay it, whenever they come.</p>
+            </div>
+        }
+
         @if (p.Status == DocumentStatus.Posted && _pledge.Balance > 0m && p.CancelEntryId is null)
         {
             <div class="card" style="margin-top: 1.5rem">

@@ -172,8 +172,77 @@ public sealed class Donation
 /// (cash basis counts the money as it's paid). Paid by gifts that name it. Voided only while nothing is paid. When the
 /// donor won't pay the rest, it's cancelled: the reverse for the unpaid part, also accrual only, and undoable.
 /// </summary>
+/// <summary>One payment a pledge's schedule expects: beside the books, posting nothing.</summary>
+public sealed class PledgeInstallment
+{
+    private PledgeInstallment()
+    {
+    }
+
+    internal PledgeInstallment(int position, DateOnly dueDate, decimal amount)
+    {
+        Position = position;
+        DueDate = dueDate;
+        Amount = amount;
+    }
+
+    public int Position { get; private set; }
+    public DateOnly DueDate { get; private set; }
+    public decimal Amount { get; private set; }
+}
+
 public sealed class Pledge
 {
+    public const int MaxInstallments = 120;
+
+    private readonly List<PledgeInstallment> _installments = [];
+
+    /// <summary>The payment schedule, by due date; empty for a pledge due all at once (on <see cref="DueDate"/>).</summary>
+    public IReadOnlyList<PledgeInstallment> Installments => [.. _installments.OrderBy(i => i.DueDate).ThenBy(i => i.Position)];
+
+    /// <summary>Replaces the schedule: amounts above zero to the cent, adding up to the pledge, due on or after its date. Empty clears it.</summary>
+    public void SetInstallments(IReadOnlyList<(DateOnly DueDate, decimal Amount)> installments)
+    {
+        ArgumentNullException.ThrowIfNull(installments);
+        if (Status != DocumentStatus.Posted)
+            throw new DomainException("pledge.voided", "This pledge is voided.");
+        if (installments.Count > MaxInstallments)
+            throw new DomainException("pledge.too_many_installments", $"A pledge takes at most {MaxInstallments} installments.");
+        if (installments.Any(i => i.Amount <= 0m || decimal.Round(i.Amount, 2) != i.Amount))
+            throw new DomainException("pledge.installment_amount", "Each installment needs an amount above zero, in cents.");
+        if (installments.Any(i => i.DueDate < Date))
+            throw new DomainException("pledge.installment_before_date", "An installment can't be due before the pledge was made.");
+        if (installments.Count > 0 && installments.Sum(i => i.Amount) != Amount)
+            throw new DomainException("pledge.installments_total",
+                $"The installments add up to {installments.Sum(i => i.Amount):N2}; the pledge is {Amount:N2}.");
+        _installments.Clear();
+        _installments.AddRange(installments.Select((i, n) => new PledgeInstallment(n + 1, i.DueDate, i.Amount)));
+    }
+
+    /// <summary>What the schedule expects to have been paid by a date: the installments due by then, else the whole pledge once its due date has come.</summary>
+    public decimal DueBy(DateOnly date) =>
+        _installments.Count > 0 ? _installments.Where(i => i.DueDate <= date).Sum(i => i.Amount)
+        : DueDate is { } due && due <= date ? Amount : 0m;
+
+    /// <summary>The next due date after a date, if the pledge has one.</summary>
+    public DateOnly? NextDueAfter(DateOnly date) =>
+        _installments.Count > 0 ? _installments.Where(i => i.DueDate > date).Select(i => (DateOnly?)i.DueDate).Min()
+        : DueDate is { } due && due > date ? due : null;
+
+    /// <summary>
+    /// Evenly spread installments (the last takes the cents left over), every <paramref name="months"/> months from
+    /// <paramref name="first"/>.
+    /// </summary>
+    public static IReadOnlyList<(DateOnly DueDate, decimal Amount)> Spread(decimal amount, DateOnly first, int count, int months)
+    {
+        if (count is < 1 or > MaxInstallments)
+            throw new DomainException("pledge.installment_count", $"Choose between 1 and {MaxInstallments} installments.");
+        if (months is < 1 or > 12)
+            throw new DomainException("pledge.installment_interval", "Installments are 1 to 12 months apart.");
+        var each = decimal.Floor(amount / count * 100m) / 100m;
+        return [.. Enumerable.Range(0, count).Select(n => (first.AddMonths(n * months), n == count - 1 ? amount - each * (count - 1) : each))];
+    }
+
     public const string Source = "nonprofit.pledge";
     public const string CancelSource = "nonprofit.pledge_cancel";
 

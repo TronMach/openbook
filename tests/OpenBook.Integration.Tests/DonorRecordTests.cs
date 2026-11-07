@@ -56,6 +56,24 @@ public sealed class DonorRecordTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_pledge_paid_in_installments_shows_what_is_overdue()
+    {
+        var pledge = await In<GiftService, Pledge>(s => s.PledgeAsync(new PledgeCommand(_pat.Id, Mar1, 1_000m)));
+        var schedule = Pledge.Spread(1_000m, Mar1, 3, 1);
+        Assert.Equal([333.33m, 333.33m, 333.34m], schedule.Select(i => i.Amount).ToArray());
+        Assert.Equal("pledge.installments_total", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Pledge>(s => s.SetInstallmentsAsync(pledge.Id, [(Mar1, 10m)])))).Code);
+        await In<GiftService, Pledge>(s => s.SetInstallmentsAsync(pledge.Id, schedule));
+        await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(_pat.Id, Mar1, 300m, _bank.Id, PledgeId: pledge.Id)));
+
+        // By April 15 two installments (666.66) were due and 300 paid.
+        var report = await In<GiftReports, OpenBook.Application.Reporting.ReportTable>(s => s.PledgesAsync(new DateOnly(2026, 4, 15)));
+        var row = report.Rows[0].Cells;
+        Assert.Equal((366.66m, 700m), ((decimal)row[6].Value!, (decimal)row[5].Value!));
+        Assert.Equal(new DateOnly(2026, 5, 1), (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Pledge.NextDueAfter(new DateOnly(2026, 4, 15)));
+    }
+
+    [Fact]
     public async Task Search_finds_gifts_by_donor_reference_and_amount()
     {
         await Gift(_pat, 123.45m, "CHK-778");

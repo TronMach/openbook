@@ -8792,6 +8792,31 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ReceivableAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.PledgeInstallment", "Installments", b1 =>
+                        {
+                            b1.Property<Guid>("PledgeId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly>("DueDate")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("PledgeId", "Position");
+
+                            b1.ToTable("PledgeInstallments", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("PledgeId");
+                        });
+
+                    b.Navigation("Installments");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.RecurringGift", b =>

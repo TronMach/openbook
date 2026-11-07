@@ -158,7 +158,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
         var company = await companies.GetRequiredCompanyAsync(ct);
         var donations = await store.ListDonationsAsync(ct);
         var rows = new List<ReportTableRow>();
-        decimal promised = 0m, paid = 0m;
+        decimal promised = 0m, paid = 0m, late = 0m;
         foreach (var p in (await gifts.ListPledgesAsync(null, ct)).Where(p => p.Pledge.Status == DocumentStatus.Posted && p.Pledge.Date <= asOf)
                      .OrderBy(p => p.Pledge.Date).ThenBy(p => p.Pledge.Number))
         {
@@ -169,18 +169,20 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
             var standing = p.Pledge.Amount - cancelled;
             promised += standing;
             paid += paidBy;
+            var overdue = Math.Max(0m, Math.Min(p.Pledge.DueBy(asOf), standing) - paidBy);
+            late += overdue;
             rows.Add(new ReportTableRow([new ReportCell($"{p.Pledge.Number} · {p.Donor}", new ReportLink("pledge", p.Pledge.Id)),
                 p.Pledge.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
-                p.Pledge.DueDate?.ToString("d", System.Globalization.CultureInfo.CurrentCulture), standing, paidBy, standing - paidBy]));
+                p.Pledge.NextDueAfter(asOf)?.ToString("d", System.Globalization.CultureInfo.CurrentCulture), standing, paidBy, standing - paidBy, overdue]));
         }
 
-        rows.Add(new ReportTableRow(["Total", null, null, promised, paid, promised - paid], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", null, null, promised, paid, promised - paid, late], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Open pledges",
             [company.Name, $"As of {asOf.ToString("d", System.Globalization.CultureInfo.CurrentCulture)}"],
-            [new("Pledge"), new("Date"), new("Due"), new("Promised", ColumnFormat.Money), new("Paid", ColumnFormat.Money), new("Still to come", ColumnFormat.Money)],
+            [new("Pledge"), new("Date"), new("Next due"), new("Promised", ColumnFormat.Money), new("Paid", ColumnFormat.Money), new("Still to come", ColumnFormat.Money), new("Overdue", ColumnFormat.Money)],
             rows,
-            Note: "Pledges not fully paid by the date. Their balance is in Pledges Receivable on accrual-basis reports.");
+            Note: "Pledges not fully paid by the date. Overdue is what the pledge's due date or installments expected by then less what's been paid. Their balance is in Pledges Receivable on accrual-basis reports.");
     }
 
     private async Task<Dictionary<Guid, string>> NamesAsync(CancellationToken ct) =>
