@@ -94,6 +94,10 @@ On the grant's page:
 - **Money from the funder**: record each payment (**Record payment**). On a conditional grant, money received before it's earned is held as a refundable advance until spending catches up.
 - **Close the grant** when it ends (**Reopen** if needed), or void it; void individual payments and recognitions.
 
+### Reporting to a funder
+
+On a grant's page, **Grant budget vs. actual** is the report to send: budget, this period, to date and what's left, by budget line. **Make a request** writes a reimbursement request for a period, with the spending by line and the amount, as a letter to print or send. It posts nothing. When the money comes, choose the request under **Pays request** as you record the payment.
+
 ## Reports
 
 In the **Nonprofit** group:
@@ -107,3 +111,7 @@ In the **Nonprofit** group:
 - **Form 990 Part IX expenses**: expenses by 990 line and function, from your accounts' tax lines.
 
 Each grant needs its own class or subclass: two grants on one class in the same dates are refused, because both would count the same spending. A gift or pledge whose restricted money has been released can't be voided until that release is.
+
+Three statements can sit beside an earlier period: **Statement of activities**, **Statement of financial position** and **Statement of functional expenses** each have a comparison choice, and activities can be run for one class or location. The accountant's package includes the nonprofit statements for a nonprofit company.
+
+**Budget by program** puts each class's budget side by side for the board: year to date against budget, then the total, the year's budget and what's left. It uses budgets made for a class for the fiscal year of the date you choose.

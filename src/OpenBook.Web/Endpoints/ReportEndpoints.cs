@@ -83,6 +83,25 @@ public static class ReportEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapGet("/reports/budgets/{id:guid}/csv", async (Guid id, BudgetService service, CancellationToken ct) =>
+            Results.File(System.Text.Encoding.UTF8.GetBytes(await service.ToCsvAsync(id, ct)), "text/csv", "budget.csv")).RequireAuthorization();
+
+        app.MapPost("/reports/budgets/{id:guid}/upload", async (Guid id, IFormCollection form, BudgetService service, CancellationToken ct) =>
+        {
+            if (form.Files.GetFile("file") is not { Length: > 0 } file)
+                return Results.Redirect($"/reports/budgets/{id}?error={Uri.EscapeDataString("Choose a CSV file.")}");
+            try
+            {
+                await using var stream = file.OpenReadStream();
+                await service.ImportCsvAsync(id, await OpenBook.Application.Import.TextFiles.ReadAsync(stream, ct), ct);
+                return Results.Redirect($"/reports/budgets/{id}?saved=true");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/reports/budgets/{id}?error={Uri.EscapeDataString(ex.Message + " Nothing was saved.")}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/reports/budgets/{id:guid}/delete", async (Guid id, IFormCollection form, BudgetService service, CancellationToken ct) =>
         {
             await service.DeleteAsync(id, ct);

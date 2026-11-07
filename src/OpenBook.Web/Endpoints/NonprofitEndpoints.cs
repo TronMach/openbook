@@ -217,7 +217,20 @@ public static class NonprofitEndpoints
         {
             closing.Password = Password(form);
             return await Back($"/nonprofit/grants/{id}", () => grants.ReceiveAsync(id, Date(form["date"]) ?? CompanyTime.Today,
-                Number(form["amount"]) ?? 0m, Id(form["bankAccountId"]) ?? Guid.Empty, ct));
+                Number(form["amount"]) ?? 0m, Id(form["bankAccountId"]) ?? Guid.Empty, int.TryParse(form["requestLine"], out var request) ? request : null, ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/requests", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.RequestAsync(id, Date(form["date"]) ?? CompanyTime.Today,
+                Date(form["from"]) ?? CompanyTime.Today, Date(form["to"]) ?? CompanyTime.Today, FormNumbers.Amount(form["amount"]), ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/requests/{line:int}/void", async (Guid id, int line, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.VoidRequestAsync(id, line, ct))).RequireAuthorization();
+
+        app.MapGet("/nonprofit/grants/{id:guid}/requests/{line:int}/letter", async (Guid id, int line, GrantService grants, CancellationToken ct) =>
+        {
+            var letter = await grants.RequestLetterAsync(id, line, ct);
+            return Results.File(letter.Pdf, "application/pdf", letter.FileName);
         }).RequireAuthorization();
 
         app.MapPost("/nonprofit/grants/{id:guid}/recognize", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>

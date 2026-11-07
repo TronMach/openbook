@@ -43,6 +43,8 @@ public sealed record GrantBudgetRequest(Guid AccountId, decimal Amount);
 
 public sealed record GrantReceiptRequest(DateOnly Date, decimal Amount, Guid BankAccountId);
 
+public sealed record GrantRequestRequest(DateOnly Date, DateOnly From, DateOnly To, decimal? Amount = null);
+
 public sealed record GrantRecognizeRequest(DateOnly Through);
 
 public sealed record GrantResponse(
@@ -167,8 +169,18 @@ internal static class NonprofitApi
         });
         nonprofit.MapPost("/grants/{id:guid}/receipts", async (Guid id, GrantReceiptRequest r, GrantService s, CancellationToken ct) =>
         {
-            await s.ReceiveAsync(id, r.Date, r.Amount, r.BankAccountId, ct);
+            await s.ReceiveAsync(id, r.Date, r.Amount, r.BankAccountId, ct: ct);
             return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/requests", async (Guid id, GrantRequestRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.RequestAsync(id, r.Date, r.From, r.To, r.Amount, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapGet("/grants/{id:guid}/requests/{line:int}/letter", async (Guid id, int line, GrantService s, CancellationToken ct) =>
+        {
+            var letter = await s.RequestLetterAsync(id, line, ct);
+            return Results.File(letter.Pdf, "application/pdf", letter.FileName);
         });
         nonprofit.MapPost("/grants/{id:guid}/recognize", async (Guid id, GrantRecognizeRequest r, GrantService s, CancellationToken ct) =>
         {

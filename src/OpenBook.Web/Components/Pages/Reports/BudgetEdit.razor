@@ -17,6 +17,7 @@
     <div class="toolbar">
         <h1>@_budget.Name</h1>
         <a href="/reports/budget-vs-actual?budgetId=@_budget.Id">Budget vs. actual</a>
+        <a href="/reports/budgets/@_budget.Id/csv" data-enhance="false">Download as CSV</a>
         <a href="/reports/budgets">All budgets</a>
     </div>
     <p class="muted">
@@ -32,6 +33,12 @@
     {
         <div class="alert error" role="alert">@Error</div>
     }
+
+    <PostForm Action="@($"/reports/budgets/{_budget.Id}/upload")" enctype="multipart/form-data" data-enhance="false" class="inline no-print">
+        <AntiforgeryToken />
+        <label>Fill in from a CSV <input type="file" name="file" accept=".csv,text/csv" required /></label>
+        <button type="submit" class="secondary">Upload</button>
+    </PostForm>
 
     <PostForm Action="@($"/reports/budgets/{_budget.Id}")" data-enhance="false">
         <AntiforgeryToken />

@@ -3,6 +3,7 @@ using OpenBook.Application.Companies;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Segments;
 using OpenBook.Domain.Accounts;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Nonprofit;
 using OpenBook.Domain.Segments;
@@ -21,36 +22,47 @@ public sealed class NonprofitReports(
     private const string With = "With donor restrictions";
 
     /// <summary>Revenue, support and expenses in a column each for without and with donor restrictions, then the change in and the net assets at each end.</summary>
-    public async Task<ReportTable> ActivitiesAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
+    public async Task<ReportTable> ActivitiesAsync(
+        DateOnly from, DateOnly to, ReportBasis? basis = null, Comparison comparison = Comparison.None, SegmentFilter? filter = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var all = await ledger.LinesAsync(reportBasis, null, to, ct);
+        var all = await ledger.LinesAsync(reportBasis, null, to, filter, ct);
         var period = all.Where(l => l.Date >= from && !chart.Get(l.AccountId).Type.IsBalanceSheet()).ToList();
 
         var free = FinancialReports.Sum(period.Where(l => !chart.Get(l.AccountId).DonorRestricted));
         var held = FinancialReports.Sum(period.Where(l => chart.Get(l.AccountId).DonorRestricted));
         var total = FinancialReports.Sum(period);
-        var show = Active(free, held, total);
-        var columns = new[] { (Without, free), (With, held), ("Total", total) }
-            .Select(c => new StatementColumn<ProfitAndLoss>(c.Item1, FinancialReports.BuildProfitAndLoss(from, to, reportBasis, chart, c.Item2, show), from, to))
+
+        // A comparative statement: the earlier period's total beside this one's columns.
+        var earlier = comparison == Comparison.None ? null : Comparisons.Columns(from, to, comparison)[1];
+        var before = earlier is null ? null : FinancialReports.Sum(all.Where(l => l.Date >= earlier.From && l.Date <= earlier.To && !chart.Get(l.AccountId).Type.IsBalanceSheet()));
+        var show = before is null ? Active(free, held, total) : Active(free, held, total, before);
+        var columns = new[] { (Without, free, from, to), (With, held, from, to), ("Total", total, from, to) }
+            .Select(c => new StatementColumn<ProfitAndLoss>(c.Item1, FinancialReports.BuildProfitAndLoss(c.Item3, c.Item4, reportBasis, chart, c.Item2, show), c.Item3, c.Item4))
             .ToList();
+        if (earlier is not null)
+            columns.Add(new StatementColumn<ProfitAndLoss>(earlier.Label, FinancialReports.BuildProfitAndLoss(earlier.From, earlier.To, reportBasis, chart, before!, show), earlier.From, earlier.To));
 
         var rows = StatementTables.ProfitAndLoss(columns, []).Select(Relabel).ToList();
         var opening = NetAssets(chart, all.Where(l => l.Date < from));
         var closing = NetAssets(chart, all);
-        rows.Add(new ReportTableRow(["Net assets, beginning of period", opening.Without, opening.With, opening.Without + opening.With], 0, ReportRowStyle.Subtotal));
+        (decimal Without, decimal With)? priorOpening = earlier is null ? null : NetAssets(chart, all.Where(l => l.Date < earlier.From));
+        (decimal Without, decimal With)? priorClosing = earlier is null ? null : NetAssets(chart, all.Where(l => l.Date <= earlier.To));
+        ReportCell[] Line(string label, (decimal Without, decimal With) now, (decimal Without, decimal With)? then) =>
+            then is { } prior ? [label, now.Without, now.With, now.Without + now.With, prior.Without + prior.With] : [label, now.Without, now.With, now.Without + now.With];
+        rows.Add(new ReportTableRow(Line("Net assets, beginning of period", opening, priorOpening), 0, ReportRowStyle.Subtotal));
         // Equity entries (opening balances, say) change net assets without being income or expense.
         var change = NetAssets(chart, period);
         var other = (Without: closing.Without - opening.Without - change.Without, With: closing.With - opening.With - change.With);
         if (other.Without != 0m || other.With != 0m)
-            rows.Add(new ReportTableRow(["Other changes in net assets", other.Without, other.With, other.Without + other.With], 0));
-        rows.Add(new ReportTableRow(["Net assets, end of period", closing.Without, closing.With, closing.Without + closing.With], 0, ReportRowStyle.Total));
+            rows.Add(new ReportTableRow(Line("Other changes in net assets", other, earlier is null ? null : (0m, 0m)), 0));
+        rows.Add(new ReportTableRow(Line("Net assets, end of period", closing, priorClosing), 0, ReportRowStyle.Total));
 
         return new ReportTable(
             "Statement of activities",
-            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}"],
+            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}", .. await ledger.DescribeAsync(filter, ct) is { } segmented ? new[] { segmented } : []],
             StatementTables.Columns("", columns, []),
             rows,
             reportBasis,
@@ -58,21 +70,34 @@ public sealed class NonprofitReports(
     }
 
     /// <summary>Assets and liabilities as on the balance sheet, with net assets split into without and with donor restrictions.</summary>
-    public async Task<ReportTable> FinancialPositionAsync(DateOnly asOf, ReportBasis? basis = null, CancellationToken ct = default)
+    public async Task<ReportTable> FinancialPositionAsync(DateOnly asOf, ReportBasis? basis = null, Comparison comparison = Comparison.None, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
         var lines = await ledger.LinesAsync(reportBasis, null, asOf, ct);
-        var sheet = FinancialReports.BuildBalanceSheet(asOf, reportBasis, company.FiscalYearStart(asOf), chart, lines);
-        var (free, held) = NetAssets(chart, lines);
-        sheet = sheet with
+        static DateOnly MonthEnd(DateOnly d) => new DateOnly(d.Year, d.Month, 1).AddMonths(1).AddDays(-1);
+        var isMonthEnd = asOf == MonthEnd(asOf);
+        DateOnly[] dates = comparison switch
         {
-            Equity = new ReportSection("Net assets",
-                [new ReportRow(null, Without, 1, free, RowKind.Computed), new ReportRow(null, With, 1, held, RowKind.Computed)], free + held),
+            Comparison.PreviousPeriod => [asOf, isMonthEnd ? MonthEnd(asOf.AddMonths(-1)) : asOf.AddMonths(-1)],
+            Comparison.PreviousYear => [asOf, isMonthEnd ? MonthEnd(asOf.AddYears(-1)) : asOf.AddYears(-1)],
+            _ => [asOf],
         };
 
-        var columns = new[] { new StatementColumn<BalanceSheet>($"{asOf:MMM d, yyyy}", sheet, null, asOf) };
+        var columnLines = dates.Select(d => (IReadOnlyList<LedgerLine>)lines.Where(l => l.Date <= d).ToList()).ToList();
+        var show = Active([.. columnLines.Select(l => (IReadOnlyDictionary<Guid, decimal>)FinancialReports.Sum(l))]);
+        var columns = dates.Select((d, i) =>
+        {
+            var sheet = FinancialReports.BuildBalanceSheet(d, reportBasis, company.FiscalYearStart(d), chart, columnLines[i], show);
+            var (free, held) = NetAssets(chart, columnLines[i]);
+            sheet = sheet with
+            {
+                Equity = new ReportSection("Net assets",
+                    [new ReportRow(null, Without, 1, free, RowKind.Computed), new ReportRow(null, With, 1, held, RowKind.Computed)], free + held),
+            };
+            return new StatementColumn<BalanceSheet>($"{d:MMM d, yyyy}", sheet, null, d);
+        }).ToList();
         return new ReportTable(
             "Statement of financial position",
             [company.Name, $"As of {asOf:MMM d, yyyy} · {StatementReports.Describe(reportBasis)}"],
@@ -88,7 +113,7 @@ public sealed class NonprofitReports(
     /// under the class that sets program services (such as "Programs:Scholarships"), with its own subclasses; lines on
     /// that class itself get a column of their own.
     /// </summary>
-    public async Task<ReportTable> FunctionalExpensesAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
+    public async Task<ReportTable> FunctionalExpensesAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, Comparison comparison = Comparison.None, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
@@ -116,10 +141,16 @@ public sealed class NonprofitReports(
         if (unassigned.Values.Any(v => v != 0m))
             parts.Add((FunctionalAreas.Label(null), unassigned));
         parts.Add(("Total", FinancialReports.Sum(lines)));
+        var drill = parts.Count - 1;
+        if (comparison != Comparison.None)
+        {
+            var earlier = Comparisons.Columns(from, to, comparison)[1];
+            parts.Add((earlier.Label, FinancialReports.Sum((await ledger.LinesAsync(reportBasis, earlier.From, earlier.To, ct)).Where(l => chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense))));
+        }
 
         var show = Active([.. parts.Select(p => p.Item2)]);
         var columns = parts.Select((p, i) => new StatementColumn<ProfitAndLoss>(p.Item1,
-            FinancialReports.BuildProfitAndLoss(from, to, reportBasis, chart, p.Item2, show), from, to, Drill: i == parts.Count - 1)).ToList();
+            FinancialReports.BuildProfitAndLoss(from, to, reportBasis, chart, p.Item2, show), from, to, Drill: i == drill)).ToList();
 
         return new ReportTable(
             "Statement of functional expenses",
@@ -128,6 +159,33 @@ public sealed class NonprofitReports(
             StatementTables.Expenses(columns, []),
             reportBasis,
             "Each line counts toward the functional area of its class (or the nearest parent class that has one). Set a class's area on its page under Segments; lines without one show as not assigned.");
+    }
+
+    /// <summary>
+    /// One grant for its funder: budget, this period, to date and what's left, by budget line, with what's been spent on
+    /// accounts the budget doesn't list. Without a grant chosen, the newest active one.
+    /// </summary>
+    public async Task<ReportTable> GrantBudgetAsync(Guid? grantId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var all = await grants.ListAsync(ct);
+        var grant = grantId is { } id ? all.FirstOrDefault(g => g.Id == id) : all.Where(g => g.Status == GrantStatus.Active).MaxBy(g => g.AwardedOn);
+        if (grant is null)
+            return new ReportTable("Grant budget vs. actual", [company.Name], [new("")], [], ReportBasis.Accrual, "There's no grant to report on. Add one under Nonprofit, Grants.");
+        var atStart = await grants.PositionAsync(grant.Id, from.AddDays(-1), ct);
+        var atEnd = await grants.PositionAsync(grant.Id, to, ct);
+        var before = atStart!.Rows.ToDictionary(r => r.AccountId, r => r.Spent);
+        var rows = atEnd!.Rows.Select(r => new ReportTableRow(
+            [r.Account, r.Budget, r.Spent - before.GetValueOrDefault(r.AccountId), r.Spent, r.Budget - r.Spent])).ToList();
+        var budget = atEnd.Rows.Sum(r => r.Budget);
+        rows.Add(new ReportTableRow(["Total", budget, atEnd.Spent - atStart.Spent, atEnd.Spent, budget - atEnd.Spent], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            $"Grant budget vs. actual: {grant.Name}",
+            [company.Name, $"{atEnd.Funder}{(grant.Reference is { } reference ? $" · {reference}" : "")} · {Comparisons.Describe(from, to)} · Award {grant.Amount:N2}"],
+            [new("Budget line"), new("Budget", ColumnFormat.Money), new("This period", ColumnFormat.Money), new("To date", ColumnFormat.Money), new("Left", ColumnFormat.Money)],
+            rows,
+            ReportBasis.Accrual,
+            "Spending on the grant's class and its subclasses, from the grant's start date.");
     }
 
     /// <summary>Every grant on a date: awarded, earned as income, paid by the funder, spent and what's left.</summary>

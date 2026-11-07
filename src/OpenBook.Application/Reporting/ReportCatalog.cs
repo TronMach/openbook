@@ -55,6 +55,9 @@ public enum ReportInputs
 
     /// <summary>warehouseId: only stock in that warehouse (blank for all).</summary>
     Warehouse = 2048,
+
+    /// <summary>grantId: which grant.</summary>
+    Grant = 4096,
 }
 
 public sealed record ReportDefinition(
@@ -239,11 +242,11 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("loans", "Loans", "Every loan's rate, payment, next payment, interest paid and balance.",
             "Fixed assets and loans", ReportInputs.AsOf),
         new("statement-of-activities", "Statement of activities", "Revenue, support and expenses over a period, without and with donor restrictions, and the net assets they leave.",
-            "Nonprofit", ReportInputs.Period | ReportInputs.Basis),
+            "Nonprofit", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Compare | ReportInputs.Segments, Comparisons: [Comparison.None, Comparison.PreviousPeriod, Comparison.PreviousYear]),
         new("statement-of-financial-position", "Statement of financial position", "Assets, liabilities and net assets (without and with donor restrictions) on a date.",
-            "Nonprofit", ReportInputs.AsOf | ReportInputs.Basis),
+            "Nonprofit", ReportInputs.AsOf | ReportInputs.Basis | ReportInputs.Compare, Comparisons: [Comparison.None, Comparison.PreviousPeriod, Comparison.PreviousYear]),
         new("functional-expenses", "Statement of functional expenses", "Expenses by kind and by function: each program, management and general, and fundraising.",
-            "Nonprofit", ReportInputs.Period | ReportInputs.Basis),
+            "Nonprofit", ReportInputs.Period | ReportInputs.Basis | ReportInputs.Compare, Comparisons: [Comparison.None, Comparison.PreviousPeriod, Comparison.PreviousYear]),
         new("restricted-net-assets", "Restricted net assets by purpose", "What each purpose holds with donor restrictions, what's been spent on it and what's ready to release.",
             "Nonprofit", ReportInputs.AsOf),
         new("giving-by-donor", "Giving by donor", "Each donor's gifts in a period: how many, the total, the largest and the latest.",
@@ -256,6 +259,14 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Nonprofit", ReportInputs.AsOf),
         new("form-990-expenses", "Form 990 Part IX expenses", "Expenses by Form 990 line, split into program services, management and general, and fundraising.",
             "Nonprofit", ReportInputs.Period | ReportInputs.Basis, DatePreset.LastFiscalYear),
+        new("budget-by-class", "Budget by program", "Each class with a budget side by side: year to date against budget, then the total, the year's budget and what's left. For board reports.",
+            "Budgets", ReportInputs.AsOf | ReportInputs.Basis),
+        new("grant-budget-vs-actual", "Grant budget vs. actual", "One grant for its funder: budget, this period, to date and what's left, by budget line.",
+            "Nonprofit", ReportInputs.Period | ReportInputs.Grant),
+        new("inventory-rollforward", "Inventory roll-forward", "Stock at the start, what came in and went out, and stock at the end: the figures for cost of goods sold on a tax return.",
+            "Inventory", ReportInputs.Period, DatePreset.LastFiscalYear),
+        new("profit-by-product", "Profit by product", "Sales, cost and margin of each product and service, channel orders included.",
+            "Sales", ReportInputs.Period),
         new("budget-vs-actual", "Budget vs. actual", "Actual income and expenses beside a budget, with what's over or under.",
             "Budgets", ReportInputs.Budget | ReportInputs.Basis),
     ];
@@ -330,9 +341,13 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
             "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetYear("year") ?? today.Year, ct),
             "channel-sales" => await Get<Channels.ChannelSalesReport>().TableAsync(from, range.To, ct),
-            "statement-of-activities" => await Get<Nonprofit.NonprofitReports>().ActivitiesAsync(from, range.To, basis, ct),
-            "statement-of-financial-position" => await Get<Nonprofit.NonprofitReports>().FinancialPositionAsync(asOf, basis, ct),
-            "functional-expenses" => await Get<Nonprofit.NonprofitReports>().FunctionalExpensesAsync(from, range.To, basis, ct),
+            "statement-of-activities" => await Get<Nonprofit.NonprofitReports>().ActivitiesAsync(from, range.To, basis, Compare(p, definition), segments, ct),
+            "statement-of-financial-position" => await Get<Nonprofit.NonprofitReports>().FinancialPositionAsync(asOf, basis, Compare(p, definition), ct),
+            "functional-expenses" => await Get<Nonprofit.NonprofitReports>().FunctionalExpensesAsync(from, range.To, basis, Compare(p, definition), ct),
+            "grant-budget-vs-actual" => await Get<Nonprofit.NonprofitReports>().GrantBudgetAsync(p.GetId("grantId"), from, range.To, ct),
+            "budget-by-class" => await Get<StatementReports>().BudgetByClassAsync(asOf, basis, ct),
+            "inventory-rollforward" => await Get<InventoryReports>().RollForwardAsync(from, range.To, ct),
+            "profit-by-product" => await Get<ActivityReports>().ProfitByProductAsync(from, range.To, ct),
             "restricted-net-assets" => await Get<Nonprofit.NonprofitReports>().RestrictedNetAssetsAsync(asOf, ct),
             "giving-by-donor" => await Get<Nonprofit.GiftReports>().GivingByDonorAsync(from, range.To, p.GetFlag("detail"), ct),
             "lapsed-donors" => await Get<Nonprofit.GiftReports>().LapsedDonorsAsync(p.GetYear("year") ?? today.Year, ct),

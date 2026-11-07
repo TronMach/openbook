@@ -1,10 +1,12 @@
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
+using OpenBook.Application.Inventory;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 using OpenBook.Domain.Sales;
@@ -19,7 +21,9 @@ public sealed class ActivityReports(
     ISalesStore sales,
     IPurchasesStore purchases,
     ReceivablesService receivables,
-    PayablesService payables)
+    PayablesService payables,
+    Channels.ChannelOrderService channelOrders,
+    IInventoryStore inventory)
 {
     /// <summary>
     /// Income from the ledger (so it ties to the profit and loss, on either basis) credited to each customer
@@ -85,9 +89,8 @@ public sealed class ActivityReports(
     }
 
     /// <summary>Item lines of invoices and sales receipts, less credit memos, dated in the period (accrual).</summary>
-    public async Task<ReportTable> SalesByItemAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    private async Task<(Dictionary<Guid, (decimal Quantity, decimal Amount)> ByItem, decimal Discounts)> SoldByItemAsync(DateOnly from, DateOnly to, CancellationToken ct)
     {
-        var company = await companies.GetRequiredCompanyAsync(ct);
         bool Counts(DocumentStatus status, DateOnly date) => status == DocumentStatus.Posted && date >= from && date <= to;
         var documents = new List<(IReadOnlyList<SalesLine> Lines, decimal Sign)>();
         documents.AddRange((await sales.ListInvoicesAsync(null, ct)).Where(i => Counts(i.Status, i.Date)).Select(i => (i.Lines, 1m)));
@@ -110,8 +113,68 @@ public sealed class ActivityReports(
             }
         }
 
+        return (byItem, discounts);
+    }
+
+    /// <summary>
+    /// Sales, cost and margin of each product and service. Sales are as on sales by product; cost is what stock moved
+    /// out for them, on the same dates. A bundle's cost lands on its components, and services show no cost.
+    /// </summary>
+    public async Task<ReportTable> ProfitByProductAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var (byItem, _) = await SoldByItemAsync(from, to, ct);
+        var channel = await channelOrders.SoldAsync(from, to, ct);
+        foreach (var line in channel.Where(c => c.ItemId is not null))
+        {
+            var (q, a) = byItem.GetValueOrDefault(line.ItemId!.Value);
+            byItem[line.ItemId.Value] = (q + line.Quantity, a + line.Amount);
+        }
+
+        string[] sold_ = [InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.CreditMemo, InventorySources.ChannelOrders, InventorySources.ChannelReturn];
+        var costs = (await inventory.ListMovementsAsync(null, ct))
+            .Where(m => m.Date >= from && m.Date <= to && sold_.Contains(m.SourceType))
+            .GroupBy(m => m.ItemId).ToDictionary(g => g.Key, g => -g.Sum(m => m.Cost));
         var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);
-        var total = byItem.Values.Sum(v => v.Amount) + discounts;
+        var rows = byItem.Keys.Union(costs.Keys)
+            .Select(id => (Item: items[id], Sold: byItem.GetValueOrDefault(id), Cost: costs.GetValueOrDefault(id)))
+            .Where(x => x.Sold.Amount != 0m || x.Sold.Quantity != 0m || x.Cost != 0m)
+            .OrderBy(x => x.Item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new ReportTableRow(
+            [
+                new ReportCell(x.Item.Name, new ReportLink("item", x.Item.Id)),
+                new ReportCell(x.Sold.Quantity),
+                x.Sold.Amount,
+                x.Cost,
+                x.Sold.Amount - x.Cost,
+                new ReportCell(Share(x.Sold.Amount - x.Cost, x.Sold.Amount)),
+            ]))
+            .ToList();
+        var (sold, cost) = (byItem.Values.Sum(v => v.Amount), costs.Values.Sum());
+        rows.Add(new ReportTableRow(["Total", ReportCell.Empty, sold, cost, sold - cost, new ReportCell(Share(sold - cost, sold))], 0, ReportRowStyle.Total));
+
+        return new ReportTable(
+            "Profit by product",
+            [company.Name, $"{Comparisons.Describe(from, to)} · Accrual basis"],
+            [new("Product or service"), new("Quantity", ColumnFormat.Number), new("Sales", ColumnFormat.Money), new("Cost", ColumnFormat.Money), new("Profit", ColumnFormat.Money), new("Margin", ColumnFormat.Percent)],
+            rows,
+            ReportBasis.Accrual,
+            "Sales from invoices, sales receipts and channel orders, less credit memos and returns, before discounts given on the whole document. Cost is what stock left for them. A bundle's cost shows on its components; a service has none.");
+    }
+
+    public async Task<ReportTable> SalesByItemAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var (byItem, discounts) = await SoldByItemAsync(from, to, ct);
+        var channel = await channelOrders.SoldAsync(from, to, ct);
+        foreach (var line in channel.Where(c => c.ItemId is not null))
+        {
+            var (q, a) = byItem.GetValueOrDefault(line.ItemId!.Value);
+            byItem[line.ItemId.Value] = (q + line.Quantity, a + line.Amount);
+        }
+
+        var unstocked = channel.Where(c => c.ItemId is null).ToList();
+        var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);        var total = byItem.Values.Sum(v => v.Amount) + discounts + unstocked.Sum(c => c.Amount);
         var rows = byItem
             .Where(kv => kv.Value.Amount != 0m || kv.Value.Quantity != 0m)
             .OrderBy(kv => items[kv.Key].Name, StringComparer.OrdinalIgnoreCase)
@@ -124,6 +187,8 @@ public sealed class ActivityReports(
                 new ReportCell(kv.Value.Quantity == 0m ? null : decimal.Round(kv.Value.Amount / kv.Value.Quantity, 2, MidpointRounding.AwayFromZero)),
             ]))
             .ToList();
+        rows.AddRange(unstocked.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).Select(c => new ReportTableRow(
+            [c.Name, new ReportCell(c.Quantity), c.Amount, new ReportCell(Share(c.Amount, total)), ReportCell.Empty])));
         if (discounts != 0m)
             rows.Add(new ReportTableRow(["Discounts", ReportCell.Empty, discounts, new ReportCell(Share(discounts, total)), ReportCell.Empty]));
         rows.Add(new ReportTableRow(["Total", ReportCell.Empty, total, new ReportCell(total == 0m ? null : 100m), ReportCell.Empty], 0, ReportRowStyle.Total));
@@ -134,7 +199,7 @@ public sealed class ActivityReports(
             [new("Product or service"), new("Quantity", ColumnFormat.Number), new("Amount", ColumnFormat.Money), new("% of sales", ColumnFormat.Percent), new("Average price", ColumnFormat.Money)],
             rows,
             ReportBasis.Accrual,
-            "From invoices and sales receipts, less credit memos, dated in the period. Amounts are before sales tax.");
+            "From invoices, sales receipts and posted channel orders, less credit memos and returns, dated in the period. Amounts are before sales tax.");
     }
 
     /// <summary>

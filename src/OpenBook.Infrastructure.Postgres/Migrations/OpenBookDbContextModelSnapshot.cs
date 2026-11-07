@@ -8131,11 +8131,51 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("GrantId");
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantRequest", "Requests", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("boolean");
+
+                            b1.Property<DateOnly>("PeriodFrom")
+                                .HasColumnType("date");
+
+                            b1.Property<DateOnly>("PeriodTo")
+                                .HasColumnType("date");
+
+                            b1.Property<int?>("ReceiptLine")
+                                .HasColumnType("integer");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.ToTable("GrantRequests", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
                     b.Navigation("Budget");
 
                     b.Navigation("Receipts");
 
                     b.Navigation("Recognitions");
+
+                    b.Navigation("Requests");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Pledge", b =>

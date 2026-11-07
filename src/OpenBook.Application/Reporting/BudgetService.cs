@@ -94,6 +94,71 @@ public sealed class BudgetService(IReportingStore store, AccountService accounts
         return budget;
     }
 
+    /// <summary>The budget as a CSV: an account's full name, then its twelve months in the budget's order.</summary>
+    public async Task<string> ToCsvAsync(Guid id, CancellationToken ct = default)
+    {
+        var budget = await store.GetBudgetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var chart = await accounts.GetChartAsync(ct);
+        var text = new System.Text.StringBuilder("Account");
+        for (var month = 1; month <= Budget.Periods; month++)
+            text.Append(',').Append(budget.PeriodStart(month).ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
+        text.Append("\r\n");
+        var amounts = budget.Lines.ToLookup(l => l.AccountId);
+        foreach (var (account, _) in chart.Ordered(includeInactive: false).Where(x => !x.Account.Type.IsBalanceSheet()))
+        {
+            text.Append('"').Append(chart.FullName(account.Id).Replace("\"", "\"\"", StringComparison.Ordinal)).Append('"');
+            for (var month = 1; month <= Budget.Periods; month++)
+                text.Append(',').Append((amounts[account.Id].FirstOrDefault(l => l.Period == month)?.Amount ?? 0m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+            text.Append("\r\n");
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Replaces the amounts of the accounts a CSV lists, all or nothing: an Account column by full name or number, then
+    /// twelve columns of months in the budget's order. Accounts it doesn't list keep theirs.
+    /// </summary>
+    public async Task<Budget> ImportCsvAsync(Guid id, string csv, CancellationToken ct = default)
+    {
+        var budget = await store.GetBudgetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var records = Sales.SalesImport.Records(csv, 2000);
+        var cols = new Import.CsvColumns(records[0]);
+        var accountColumn = cols.Find("account", "accountname", "name")
+            ?? throw new DomainException("budget.csv_no_account", "The file needs an Account column.");
+        var chart = await accounts.GetChartAsync(ct);
+        var byName = chart.Ordered(includeInactive: true).ToDictionary(x => chart.FullName(x.Account.Id), x => x.Account, StringComparer.OrdinalIgnoreCase);
+        var listed = new HashSet<Guid>();
+        var amounts = new List<BudgetAmount>();
+        foreach (var record in records.Skip(1))
+        {
+            var name = Import.CsvColumns.Field(record, accountColumn)?.Trim();
+            if (string.IsNullOrEmpty(name))
+                continue;
+            var account = byName.GetValueOrDefault(name) ?? chart.Ordered(includeInactive: true).Select(x => x.Account).FirstOrDefault(a => a.Number == name)
+                ?? throw new DomainException("budget.csv_account", $"Line {record.Line}: there's no account \"{name}\".");
+            if (account.Type.IsBalanceSheet())
+                throw new DomainException("budget.account_invalid", "Budgets are for income and expense accounts.");
+            if (!listed.Add(account.Id))
+                throw new DomainException("budget.csv_repeat", $"Line {record.Line}: {name} is listed twice.");
+            for (var month = 1; month <= Budget.Periods; month++)
+            {
+                var text = Import.CsvColumns.Field(record, accountColumn + month);
+                if (string.IsNullOrWhiteSpace(text))
+                    continue;
+                if (!Import.StatementValues.TryParseAmount(text, out var amount))
+                    throw new DomainException("budget.csv_amount", $"Line {record.Line}: \"{text}\" isn't an amount.");
+                if (amount != 0m)
+                    amounts.Add(new BudgetAmount(account.Id, month, amount));
+            }
+        }
+
+        if (listed.Count == 0)
+            throw new DomainException("budget.csv_empty", "The file has no accounts in it.");
+        var kept = budget.Lines.Where(l => !listed.Contains(l.AccountId)).Select(l => new BudgetAmount(l.AccountId, l.Period, l.Amount));
+        return await UpdateAsync(id, budget.Name, [.. kept, .. amounts], ct);
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var budget = await store.GetBudgetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);

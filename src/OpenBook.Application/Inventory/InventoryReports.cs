@@ -1,5 +1,6 @@
 using OpenBook.Application.Companies;
 using OpenBook.Application.Reporting;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
@@ -72,6 +73,59 @@ public sealed class InventoryReports(
             rows,
             ReportBasis.Accrual,
             detail ? "Each layer is what's left of one purchase, build, return or adjustment (with any landed costs); FIFO sales use the oldest first." : null);
+    }
+
+    /// <summary>
+    /// What happened to the value of stock in a period, for a tax return's cost of goods sold: what was there, what came
+    /// in, what went out, and what's left. Every movement counts on its own date.
+    /// </summary>
+    public async Task<ReportTable> RollForwardAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        if (to < from)
+            throw new DomainException("report.range_invalid", "The start date is after the end date.");
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var movements = (await store.ListMovementsAsync(null, ct)).Where(m => m.Date <= to).ToList();
+        var opening = movements.Where(m => m.Date < from).Sum(m => m.Cost);
+        var period = movements.Where(m => m.Date >= from).ToList();
+        decimal Of(params string[] sources) => period.Where(m => sources.Contains(m.SourceType)).Sum(m => m.Cost);
+
+        var purchases = Of(InventorySources.Bill, InventorySources.PurchaseReceipt);
+        var landed = Of(InventorySources.LandedCost);
+        var builds = Of(InventorySources.AssemblyBuild);
+        var adjustments = Of(InventorySources.Adjustment);
+        var sold = Of(InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.CreditMemo, InventorySources.ChannelOrders, InventorySources.ChannelReturn);
+        var closing = opening + period.Sum(m => m.Cost);
+        var other = closing - opening - purchases - landed - builds - adjustments - sold;
+
+        var rows = new List<ReportTableRow>
+        {
+            new([$"Inventory at {from:MMM d, yyyy}", opening], 0, ReportRowStyle.Subtotal),
+            new(["Purchases", purchases], 1),
+            new(["Landed costs", landed], 1),
+        };
+        if (builds != 0m)
+            rows.Add(new(["Assembly builds", builds], 1));
+        rows.Add(new(["Adjustments and counts", adjustments], 1));
+        rows.Add(new(["Cost of goods sold", sold], 1));
+        if (other != 0m)
+            rows.Add(new(["Other movements", other], 1));
+        rows.Add(new([$"Inventory at {to:MMM d, yyyy}", closing], 0, ReportRowStyle.Total));
+
+        // What the books say, so a difference (a journal entry to an inventory account, say) stands out.
+        var items = await inventory.StockAsync(to, ct);
+        var assets = items.Select(s => s.Item.InventoryAssetAccountId).OfType<Guid>().ToHashSet();
+        var costs = items.Select(s => s.Item.CostAccountId).OfType<Guid>().ToHashSet();
+        var totals = await ledger.TotalsAsync(ReportBasis.Accrual, from, to, ct);
+        rows.Add(new(["Inventory asset accounts in the books", totals.Where(l => assets.Contains(l.AccountId)).Sum(l => l.Amount)]));
+        rows.Add(new(["Cost of goods sold accounts in the period", totals.Where(l => costs.Contains(l.AccountId) && l.Date >= from).Sum(l => l.Amount)]));
+
+        return new ReportTable(
+            "Inventory roll-forward",
+            [company.Name, $"{Comparisons.Describe(from, to)} · Accrual basis"],
+            [new(""), new("Value", ColumnFormat.Money)],
+            rows,
+            ReportBasis.Accrual,
+            "From the stock movements. Cost of goods sold accounts can differ by entries made to them by hand, and by what a bill corrected on stock sold short.");
     }
 
     public async Task<ReportTable> StockStatusAsync(Guid? warehouseId = null, CancellationToken ct = default)

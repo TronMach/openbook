@@ -274,6 +274,62 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
     }
 
     /// <summary>
+    /// The board's page: each class with a budget for the fiscal year holding the date, side by side, year to date against
+    /// budget, then those totalled, the year's budget and what's left of it. Budget to date counts whole months.
+    /// </summary>
+    public async Task<ReportTable> BudgetByClassAsync(DateOnly asOf, ReportBasis? basis = null, CancellationToken ct = default)
+    {
+        var budgets = (await store.ListBudgetsAsync(ct))
+            .Where(b => b.ClassId is not null && b.LocationId is null && b.FiscalYearStart <= asOf && asOf <= b.FiscalYearEnd)
+            .OrderBy(b => b.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var reportBasis = basis ?? company.DefaultReportBasis;
+        if (budgets.Count == 0)
+            return new ReportTable("Budget by program", [company.Name], [new("")], [], reportBasis, "No budget for this fiscal year is for a class. Make one for each program under Budgets.");
+        var chart = await accounts.GetChartAsync(ct);
+        var from = budgets.Min(b => b.FiscalYearStart);
+
+        Dictionary<Guid, decimal> Budgeted(Budget budget, int through) => budget.Lines
+            .Where(l => l.Period <= through && chart.Find(l.AccountId) is not null)
+            .GroupBy(l => l.AccountId)
+            .ToDictionary(g => g.Key, g => (chart.Get(g.Key).Type.IsDebitNormal() ? 1m : -1m) * g.Sum(l => l.Amount));
+        static void Add(Dictionary<Guid, decimal> total, IReadOnlyDictionary<Guid, decimal> part)
+        {
+            foreach (var (account, amount) in part)
+                total[account] = total.GetValueOrDefault(account) + amount;
+        }
+
+        var parts = new List<(string Label, IReadOnlyDictionary<Guid, decimal> Amounts, bool Drill)>();
+        Dictionary<Guid, decimal> allActual = [], allBudget = [], allYear = [];
+        foreach (var budget in budgets)
+        {
+            var months = (asOf.Year - budget.FiscalYearStart.Year) * 12 + asOf.Month - budget.FiscalYearStart.Month + 1;
+            var actual = FinancialReports.Sum(await ledger.LinesAsync(reportBasis, budget.FiscalYearStart, asOf, new SegmentFilter(budget.ClassId), ct));
+            var toDate = Budgeted(budget, months);
+            parts.Add(($"{budget.Name}: actual", actual, false));
+            parts.Add(($"{budget.Name}: budget", toDate, false));
+            Add(allActual, actual);
+            Add(allBudget, toDate);
+            Add(allYear, Budgeted(budget, Budget.Periods));
+        }
+
+        parts.Add(("Total actual", allActual, false));
+        parts.Add(("Total budget to date", allBudget, false));
+        parts.Add(("Budget for the year", allYear, false));
+        var show = Active([.. parts.Select(p => p.Amounts)]);
+        var columns = parts.Select(p => new StatementColumn<ProfitAndLoss>(p.Label, FinancialReports.BuildProfitAndLoss(from, asOf, reportBasis, chart, p.Amounts, show), from, asOf, Drill: p.Drill)).ToList();
+        List<DerivedColumn> derived = [new(new ReportColumn("Left of the year", ColumnFormat.Money), a => (a[^1] ?? 0m) - (a[^3] ?? 0m))];
+
+        return new ReportTable(
+            "Budget by program",
+            [company.Name, $"{Comparisons.Describe(from, asOf)} · {Describe(reportBasis)}"],
+            StatementTables.Columns("", columns, derived),
+            StatementTables.ProfitAndLoss(columns, derived),
+            reportBasis,
+            "Each column is a budget for one class, with that class and its subclasses' actual figures. A class with no budget isn't here, so the totals are the budgeted programs'.");
+    }
+
+    /// <summary>
     /// Profit and loss amounts totalled by tax return line. A subaccount without a line of its own goes on its
     /// nearest parent's line.
     /// </summary>

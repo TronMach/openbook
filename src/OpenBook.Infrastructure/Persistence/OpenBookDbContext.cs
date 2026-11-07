@@ -1215,6 +1215,14 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
                 l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
             });
+            b.OwnsMany(g => g.Requests, l =>
+            {
+                l.ToTable("GrantRequests");
+                l.WithOwner().HasForeignKey("GrantId");
+                l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantRequest.LineNumber));
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            });
+            b.Navigation(g => g.Requests).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.OwnsMany(g => g.Recognitions, l =>
             {
                 l.ToTable("GrantRecognitions");

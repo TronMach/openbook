@@ -2,6 +2,7 @@
 @using OpenBook.Application.Reporting
 @using OpenBook.Domain.Reporting
 @inject OpenBook.Application.Inventory.WarehouseService Warehouses
+@inject OpenBook.Application.Nonprofit.GrantService Grants
 @inject ReportCatalog Catalog
 @inject CompanySettingsService Settings
 @inject BudgetService Budgets
@@ -43,6 +44,18 @@
                         @{ var list = ListReportKeys.Contains(_definition?.Key ?? ""); }
                         <option value="false" selected="@(!_parameters.GetFlag("detail"))">@(list ? "Active only" : "Summary")</option>
                         <option value="true" selected="@_parameters.GetFlag("detail")">@(list ? "Include inactive" : "Each document")</option>
+                    </select>
+                </div>
+            }
+            @if (Has(ReportInputs.Grant))
+            {
+                <div class="field">
+                    <label for="grant">Grant</label>
+                    <select id="grant" name="grantId" data-search>
+                        @foreach (var g in _grants)
+                        {
+                            <option value="@g.Id" selected="@(g.Id == _parameters.GetId("grantId"))">@g.Name</option>
+                        }
                     </select>
                 </div>
             }
@@ -160,6 +173,7 @@
     private Budget? _budget;
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<OpenBook.Domain.Inventory.Warehouse> _warehouses = [];
+    private IReadOnlyList<OpenBook.Domain.Nonprofit.Grant> _grants = [];
     private IReadOnlyList<OpenBook.Domain.Pricing.PriceLevel> _levels = [];
     private ReportTable? _table;
     private string? _error;
@@ -193,6 +207,9 @@
 
         if (Has(ReportInputs.Warehouse))
             _warehouses = await Warehouses.ListAsync(includeInactive: true);
+
+        if (Has(ReportInputs.Grant))
+            _grants = await Grants.ListAsync();
 
         if (Has(ReportInputs.Budget))
         {

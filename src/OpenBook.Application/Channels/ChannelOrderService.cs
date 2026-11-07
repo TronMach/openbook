@@ -31,6 +31,9 @@ public interface IChannelOrderStore
 
 public sealed record OrderImportResult(int Orders, int AlreadyImported, IReadOnlyList<ChannelOrderBatch> Saved, IReadOnlyList<string> Warnings);
 
+/// <summary>What a channel sold of one thing in a period, less what came back. No item: a SKU that isn't stocked.</summary>
+public sealed record ChannelSold(Guid? ItemId, string Name, decimal Quantity, decimal Amount);
+
 /// <summary>A SKU seen in a channel's orders and what it maps to (null item: not stocked, or not mapped yet).</summary>
 public sealed record SkuChoice(string Sku, string? Title, Guid? ItemId, bool Mapped, bool Automatic);
 
@@ -134,6 +137,44 @@ public sealed class ChannelOrderService(
                 : Automatic(s.Sku, items) is { } auto ? new SkuChoice(s.Sku, s.Title, auto.Id, true, true)
                 : new SkuChoice(s.Sku, s.Title, null, false, false))
             .OrderBy(s => s.Mapped).ThenBy(s => s.Sku, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Posted orders dated in the period, by item, at what the orders show (after discounts, without shipping and tax), less returns.</summary>
+    public async Task<IReadOnlyList<ChannelSold>> SoldAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var sold = new Dictionary<(Guid? Item, string Name), (decimal Quantity, decimal Amount)>();
+        var posted = (await store.ListBatchesAsync(null, ct)).Where(b => b.Status == PayoutStatus.Posted).ToList();
+        foreach (var channel in posted.GroupBy(b => b.ChannelId))
+        {
+            var mapping = (await SkusAsync(channel.Key, ct)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
+            void Add(ChannelOrderLine line, decimal quantity, decimal amount)
+            {
+                var item = mapping.GetValueOrDefault(line.MappingKey)?.ItemId;
+                var key = (item, item is null ? line.Title ?? line.MappingKey : string.Empty);
+                var (q, a) = sold.GetValueOrDefault(key);
+                sold[key] = (q + quantity, a + amount);
+            }
+
+            foreach (var batch in channel)
+            {
+                if (batch.Date >= from && batch.Date <= to)
+                {
+                    foreach (var line in batch.Lines)
+                        Add(line, line.Quantity, line.Sales);
+                }
+
+                foreach (var back in (await store.ListReturnsAsync(batch.Id, ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date >= from && r.Date <= to))
+                {
+                    foreach (var returned in back.Lines)
+                    {
+                        if (batch.Lines.FirstOrDefault(l => l.LineNumber == returned.OrderLine) is { Quantity: > 0m } line)
+                            Add(line, -returned.Quantity, -decimal.Round(line.Sales * returned.Quantity / line.Quantity, 2, MidpointRounding.AwayFromZero));
+                    }
+                }
+            }
+        }
+
+        return sold.Select(s => new ChannelSold(s.Key.Item, s.Key.Name, s.Value.Quantity, s.Value.Amount)).ToList();
     }
 
     /// <summary>Maps a SKU to an item, or (null) marks it not stocked.</summary>

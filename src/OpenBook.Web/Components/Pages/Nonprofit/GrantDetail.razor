@@ -89,6 +89,49 @@
             }
 
             <div class="card" style="margin-top: 1.5rem">
+                <h2>Asking the funder</h2>
+                <p class="muted"><a href="/reports/grant-budget-vs-actual?grantId=@g.Id">Grant budget vs. actual</a> is the report for the funder. A reimbursement request is a letter with the spending for a period; it posts nothing.</p>
+                @if (g.Requests.Count > 0)
+                {
+                    <table class="data">
+                        <thead><tr><th>No.</th><th>Date</th><th>Period</th><th class="num">Amount</th><th>Paid</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in g.Requests)
+                            {
+                                <tr class="@(r.IsVoided ? "muted" : null)">
+                                    <td>@r.LineNumber</td>
+                                    <td>@Labels.Date(r.Date)</td>
+                                    <td>@OpenBook.Application.Reporting.Comparisons.Describe(r.PeriodFrom, r.PeriodTo)</td>
+                                    <td class="num">@Labels.Amount(r.Amount)</td>
+                                    <td>@(r.IsVoided ? "Taken back" : r.ReceiptLine is { } paid ? $"Payment {paid}" : "Waiting")</td>
+                                    <td>
+                                        <a href="/nonprofit/grants/@g.Id/requests/@r.LineNumber/letter" data-enhance="false">Letter</a>
+                                        @if (!r.IsVoided && r.ReceiptLine is null)
+                                        {
+                                            <PostForm Action="@($"/nonprofit/grants/{g.Id}/requests/{r.LineNumber}/void")" Class="inline">
+                                                <AntiforgeryToken />
+                                                <button type="submit" class="link">Take back</button>
+                                            </PostForm>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/requests")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="request-date">Date</label><input id="request-date" name="date" type="date" value="@Iso(CompanyTime.Today)" /></div>
+                        <div class="field"><label for="request-from">Spending from</label><input id="request-from" name="from" type="date" value="@Iso(g.StartsOn)" /></div>
+                        <div class="field"><label for="request-to">To</label><input id="request-to" name="to" type="date" value="@Iso(CompanyTime.Today)" /></div>
+                        <div class="field"><label for="request-amount">Amount <span class="muted">(blank: what's spent and not yet asked for)</span></label><input id="request-amount" name="amount" class="amount" inputmode="decimal" /></div>
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">Make a request</button></div>
+                </PostForm>
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem">
                 <h2>Money from the funder</h2>
                 <PostForm Action="@($"/nonprofit/grants/{g.Id}/receive")" data-enhance="false">
                     <AntiforgeryToken />
@@ -104,6 +147,19 @@
                                 }
                             </select>
                         </div>
+                        @if (g.Requests.Any(r => !r.IsVoided && r.ReceiptLine is null))
+                        {
+                            <div class="field">
+                                <label for="request">Pays request</label>
+                                <select id="request" name="requestLine">
+                                    <option value="">None</option>
+                                    @foreach (var r in g.Requests.Where(r => !r.IsVoided && r.ReceiptLine is null))
+                                    {
+                                        <option value="@r.LineNumber">@r.LineNumber · @Labels.Amount(r.Amount)</option>
+                                    }
+                                </select>
+                            </div>
+                        }
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
                     <div class="actions"><button type="submit">Record payment</button></div>

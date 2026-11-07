@@ -371,6 +371,16 @@ public sealed class AccountantPackageService(
         ("tax-summary", "15 Tax summary"),
     ];
 
+    /// <summary>A nonprofit's statements, added to its package.</summary>
+    public static IReadOnlyList<(string Key, string File)> NonprofitReports { get; } =
+    [
+        ("statement-of-activities", "17 Statement of activities"),
+        ("statement-of-financial-position", "18 Statement of financial position"),
+        ("functional-expenses", "19 Statement of functional expenses"),
+        ("restricted-net-assets", "20 Restricted net assets"),
+        ("grants", "21 Grants"),
+    ];
+
     public async Task<ExportFile> BuildAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         if (to < from)
@@ -383,7 +393,7 @@ public sealed class AccountantPackageService(
         await using (var file = File.Create(path))
         using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
         {
-            foreach (var (key, name) in Reports)
+            foreach (var (key, name) in company.Edition == Domain.Companies.Edition.Nonprofit ? [.. Reports, .. NonprofitReports] : Reports)
             {
                 var table = await catalog.RunAsync(key, ReportParameters.Parse(key == "1099" ? query.Replace($"year={to.Year}", $"year={taxYear}", StringComparison.Ordinal) : query), ct);
                 var entry = zip.CreateEntry($"{name}.xlsx", CompressionLevel.Optimal);

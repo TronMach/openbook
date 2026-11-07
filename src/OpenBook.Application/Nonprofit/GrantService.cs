@@ -1,5 +1,6 @@
 using System.Text.Json;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Sales;
@@ -50,7 +51,7 @@ public sealed record GrantPosition(Grant Grant, string Funder, string ClassName,
 /// <summary>Grants: awards, their budgets, spending against them (by class), money from funders and, for conditional grants, income as it's earned.</summary>
 public sealed class GrantService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, ReportLedger ledger, PostingEngine engine,
-    IUnitOfWork unitOfWork, IClock clock, ICurrentUser user)
+    IUnitOfWork unitOfWork, OpenBook.Application.Companies.ICompanyStore companies, Forms.IFormRenderer renderer, Forms.FormDesignService designs, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "grant";
     public const string GrantsIncomeName = "Grants";
@@ -168,7 +169,65 @@ public sealed class GrantService(
     }
 
     /// <summary>Money from the funder into a bank account: Dr bank / Cr the grant's receivable.</summary>
-    public async Task<Grant> ReceiveAsync(Guid id, DateOnly date, decimal amount, Guid bankAccountId, CancellationToken ct = default)
+    /// <summary>
+    /// A reimbursement request for spending through <paramref name="to"/>. With no amount, what's been spent and neither
+    /// requested nor paid yet. It posts nothing: the money comes in through <see cref="ReceiveAsync"/>.
+    /// </summary>
+    public async Task<Grant> RequestAsync(Guid id, DateOnly date, DateOnly from, DateOnly to, decimal? amount = null, CancellationToken ct = default)
+    {
+        var position = await PositionAsync(id, to, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var grant = await RequiredAsync(id, ct);
+        var before = Snapshot(grant);
+        grant.AddRequest(date, from, to, amount ?? Math.Min(position.Spent, grant.Amount) - Math.Max(grant.Requested, grant.Received));
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
+    public async Task<Grant> VoidRequestAsync(Guid id, int line, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        var before = Snapshot(grant);
+        grant.VoidRequest(line);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
+    /// <summary>The request as a letter to the funder: spending by budget line in the period, and what's being asked for.</summary>
+    public async Task<Forms.RenderedForm> RequestLetterAsync(Guid id, int line, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        var request = grant.Requests.FirstOrDefault(r => r.LineNumber == line) ?? throw new EntityNotFoundException("grant_request", id);
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
+        var atStart = await PositionAsync(id, request.PeriodFrom.AddDays(-1), ct);
+        var atEnd = await PositionAsync(id, request.PeriodTo, ct);
+        var funder = await sales.GetCustomerAsync(grant.FunderId, ct);
+        var before = atStart!.Rows.ToDictionary(r => r.AccountId, r => r.Spent);
+        var rows = atEnd!.Rows.Where(r => r.Spent != before.GetValueOrDefault(r.AccountId))
+            .Select(r => new Forms.DonorLetterGift(request.PeriodTo, r.Account, r.Spent - before.GetValueOrDefault(r.AccountId))).ToList();
+        var title = $"Reimbursement request {line}: {grant.Name}";
+        var letter = new Forms.DonorLetter(
+            new Forms.FormParty(company.LegalName ?? company.Name, company.Address, company.Email, company.Phone),
+            new Forms.FormParty(funder?.CompanyName ?? funder?.DisplayName ?? "Funder", funder?.BillingAddress, funder?.Email, funder?.Phone),
+            title,
+            request.Date,
+            $"For grant {grant.Name}{(grant.Reference is { } reference ? $" ({reference})" : "")}: what was spent from {request.PeriodFrom:MMM d, yyyy} to {request.PeriodTo:MMM d, yyyy}.",
+            rows,
+            [
+                $"Amount requested: {company.HomeCurrency.Code} {request.Amount:N2}.",
+                $"Award {grant.Amount:N2}. Spent to date {atEnd.Spent:N2}. Received to date {grant.ReceivedBy(request.Date):N2}.",
+            ],
+            null,
+            null,
+            company.HomeCurrency.Code,
+            await designs.DefaultStyleAsync(ct));
+        return new Forms.RenderedForm(Forms.FormService.FileName(company, $"Reimbursement request {line}", grant.Name), renderer.Render([letter]), grant.FunderId, title);
+    }
+
+    /// <param name="requestLine">The reimbursement request this pays, when it answers one.</param>
+    public async Task<Grant> ReceiveAsync(Guid id, DateOnly date, decimal amount, Guid bankAccountId, int? requestLine = null, CancellationToken ct = default)
     {
         var grant = await RequiredAsync(id, ct);
         var bank = (await accounts.GetChartAsync(ct)).Find(bankAccountId);
@@ -202,7 +261,9 @@ public sealed class GrantService(
             cashEntry = (await engine.StageAsync(new PostJournalEntryCommand(date, cash, $"{memo} (cash basis)", Grant.ReceiptSource, grant.Id, EntryBasis.CashOnly), ct)).Id;
         }
 
-        grant.AddReceipt(date, amount, bank.Id, entry.Id, cashEntry);
+        var receipt = grant.AddReceipt(date, amount, bank.Id, entry.Id, cashEntry);
+        if (requestLine is { } paid)
+            grant.MarkRequestPaid(paid, receipt.LineNumber);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -376,6 +437,7 @@ public sealed class GrantService(
         g.Terms,
         Status = g.Status.ToString(),
         Budget = g.Budget.Select(b => new { b.AccountId, b.Amount }),
+        Requests = g.Requests.Select(r => new { r.LineNumber, r.Date, r.Amount, r.ReceiptLine, r.IsVoided }),
         Receipts = g.Receipts.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
         Recognitions = g.Recognitions.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
     });

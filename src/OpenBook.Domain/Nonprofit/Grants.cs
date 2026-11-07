@@ -32,6 +32,7 @@ public sealed class Grant
 
     private readonly List<GrantBudgetLine> _budget = [];
     private readonly List<GrantReceipt> _receipts = [];
+    private readonly List<GrantRequest> _requests = [];
     private readonly List<GrantRecognition> _recognitions = [];
 
     private Grant()
@@ -69,6 +70,44 @@ public sealed class Grant
     public DateTimeOffset CreatedAt { get; private set; }
     public IReadOnlyList<GrantBudgetLine> Budget => _budget;
     public IReadOnlyList<GrantReceipt> Receipts => _receipts;
+
+    /// <summary>What's been asked of the funder (reimbursement requests).</summary>
+    public IReadOnlyList<GrantRequest> Requests => _requests;
+
+    /// <summary>What's been asked for and not taken back.</summary>
+    public decimal Requested => _requests.Where(r => !r.IsVoided).Sum(r => r.Amount);
+
+    public GrantRequest AddRequest(DateOnly date, DateOnly from, DateOnly to, decimal amount)
+    {
+        EnsureActive();
+        Common.Money.EnsureCents(amount);
+        if (amount <= 0m)
+            throw new Common.DomainException("grant.request_amount", "A request is for more than zero.");
+        if (to < from)
+            throw new Common.DomainException("grant.request_dates", "The period ends before it starts.");
+        if (Received + _requests.Where(r => !r.IsVoided && r.ReceiptLine is null).Sum(r => r.Amount) + amount > Amount)
+            throw new Common.DomainException("grant.request_over_award", "That's more than is left of the award.");
+        var request = new GrantRequest(_requests.Count + 1, date, from, to, amount);
+        _requests.Add(request);
+        return request;
+    }
+
+    /// <summary>The funder paid it: <paramref name="receiptLine"/> is the payment.</summary>
+    public void MarkRequestPaid(int line, int receiptLine)
+    {
+        var request = _requests.FirstOrDefault(r => r.LineNumber == line) ?? throw new Common.DomainException("grant.request_unknown", "There's no such request.");
+        if (request.IsVoided || request.ReceiptLine is not null)
+            throw new Common.DomainException("grant.request_closed", "That request is already paid or taken back.");
+        request.PaidBy(receiptLine);
+    }
+
+    public void VoidRequest(int line)
+    {
+        var request = _requests.FirstOrDefault(r => r.LineNumber == line) ?? throw new Common.DomainException("grant.request_unknown", "There's no such request.");
+        if (request.ReceiptLine is not null)
+            throw new Common.DomainException("grant.request_paid", "The funder has paid this request. Void that payment first.");
+        request.Void();
+    }
     public IReadOnlyList<GrantRecognition> Recognitions => _recognitions;
 
     public decimal Received => _receipts.Where(r => !r.IsVoided).Sum(r => r.Amount);
@@ -209,6 +248,8 @@ public sealed class Grant
         if (!receipt.IsVoided && receipt.AdvancePart > Advance)
             throw new DomainException("grant.advance_used", "Income has been recognized from this payment since. Void that first.");
         receipt.Void();
+        foreach (var request in _requests.Where(r => r.ReceiptLine == line))
+            request.PaidBy(null);
     }
 
     /// <summary>A recognition can be voided unless the funder has since paid what it made receivable (void that payment first).</summary>
@@ -265,6 +306,43 @@ public sealed class GrantBudgetLine
     public int LineNumber { get; private set; }
     public Guid AccountId { get; private set; }
     public decimal Amount { get; private set; }
+}
+
+/// <summary>A reimbursement request sent to the funder: posts nothing, and is paid by a <see cref="GrantReceipt"/>.</summary>
+public sealed class GrantRequest
+{
+    private GrantRequest()
+    {
+    }
+
+    internal GrantRequest(int lineNumber, DateOnly date, DateOnly from, DateOnly to, decimal amount)
+    {
+        LineNumber = lineNumber;
+        Date = date;
+        PeriodFrom = from;
+        PeriodTo = to;
+        Amount = amount;
+    }
+
+    public int LineNumber { get; private set; }
+    public DateOnly Date { get; private set; }
+    public DateOnly PeriodFrom { get; private set; }
+    public DateOnly PeriodTo { get; private set; }
+    public decimal Amount { get; private set; }
+
+    /// <summary>The payment that settled it.</summary>
+    public int? ReceiptLine { get; private set; }
+
+    public bool IsVoided { get; private set; }
+
+    internal void PaidBy(int? receiptLine) => ReceiptLine = receiptLine;
+
+    internal void Void()
+    {
+        if (IsVoided)
+            throw new Common.DomainException("grant.request_voided", "This request is already taken back.");
+        IsVoided = true;
+    }
 }
 
 /// <summary>Money from the funder: Dr the bank / Cr the grant's receivable, and the refundable advance for anything paid ahead.</summary>

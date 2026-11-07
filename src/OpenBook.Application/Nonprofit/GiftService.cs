@@ -128,6 +128,8 @@ public sealed class GiftService(
     public async Task<IReadOnlyList<Donation>> RecordBatchAsync(GiftBatchCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Rows);
+        ArgumentNullException.ThrowIfNull(command.Defaults);
         if (command.Rows.Count == 0)
             throw new DomainException("donation.batch_empty", "Enter at least one gift.");
         var total = command.Rows.Sum(r => r.Amount);
