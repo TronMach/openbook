@@ -92,6 +92,12 @@ To correct an expense, open it and use **Change** ([Correcting a transaction](06
 
 Bought something for the business with your own card or cash? Use **Banking → Paid with your own money** (or the same button on **Write Checks**). It opens the expense form paying from "Owner Contributions", an equity account OpenBook adds the first time: the cost goes to its category and counts as money you put into the business. Vendors, categories and 1099 totals work as for any expense. To pay yourself back later, record a transfer or a check from the bank to an owner's draw account. Through the API, any equity account or a loan from the owner (an other current or long-term liability) can be the pay-from account.
 
+## Deposits paid to vendors
+
+When a vendor wants money before their bill (a deposit on an order), use **Purchases → Vendor deposit**: the vendor, amount, date, the bank or card account it's **paid from**, and if you like the **purchase order** it's for and a reference. It goes into "Vendor Deposits", an asset account OpenBook adds the first time, because it's still yours until the goods come.
+
+When their bill arrives, open the deposit and **Use it on bills**: it lists the vendor's unpaid bills with the deposit spread over them, oldest first; change the amounts if you like and **Pay these bills from the deposit**. Each becomes an ordinary bill payment from "Vendor Deposits" (reference "Deposit …"), so the bill's balance, the A/P aging and cash-basis reports all follow; on cash basis the cost counts on that date. The deposit page shows what's used and what's left. To take some back off a bill, void that payment. A deposit can be voided only while none of it is used.
+
 ## Vendor credits
 
 A *vendor credit* reduces what you owe a vendor: a return, a refund promised for a billing mistake.

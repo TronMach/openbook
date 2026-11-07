@@ -125,6 +125,7 @@ public static class DependencyInjection
         services.AddScoped<BillService>();
         services.AddScoped<BillPaymentService>();
         services.AddScoped<VendorCreditService>();
+        services.AddScoped<VendorDepositService>();
         services.AddScoped<RecurringBillService>();
         services.AddScoped<PayablesService>();
         services.AddScoped<Filing1099Service>();

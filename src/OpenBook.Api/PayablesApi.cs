@@ -45,6 +45,20 @@ internal static class PayablesApi
         var purchases = api.MapGroup("/purchases");
         static DateOnly Today() => CompanyTime.Today;
 
+        purchases.MapGet("/vendor-deposits", async (Guid? vendorId, VendorDepositService s, CancellationToken ct) =>
+            (await s.ListAsync(vendorId, ct)).Select(d => new { d.Deposit.Id, d.Deposit.VendorId, d.Deposit.Date, d.Deposit.Amount, d.Applied, d.Remaining, Status = d.Deposit.Status.ToString() }));
+        purchases.MapPost("/vendor-deposits", async (CreateVendorDepositCommand r, VendorDepositService s, CancellationToken ct) =>
+        {
+            var d = await s.CreateAsync(r, ct);
+            return Results.Created($"/api/purchases/vendor-deposits/{d.Id}", new { d.Id, d.JournalEntryId });
+        });
+        purchases.MapPost("/vendor-deposits/{id:guid}/apply", async (Guid id, VendorDepositApplyRequest r, VendorDepositService s, CancellationToken ct) =>
+            (await s.ApplyAsync(id, r.Date, r.Applications ?? [], ct)).Select(p => new { p.Id, p.Amount }));
+        purchases.MapPost("/vendor-deposits/{id:guid}/void", async (Guid id, VoidDepositRequest r, VendorDepositService s, CancellationToken ct) =>
+        {
+            var d = await s.VoidAsync(id, r.Reason ?? "", ct);
+            return new { d.Id, Status = d.Status.ToString() };
+        });
         purchases.MapGet("/vendor-credits", async (Guid? vendorId, VendorCreditService s, CancellationToken ct) =>
             (await s.ListAsync(vendorId, ct)).Select(VendorCreditResponse.From));
         purchases.MapGet("/vendor-credits/{id:guid}", async (Guid id, VendorCreditService s, CancellationToken ct) =>
@@ -172,3 +186,7 @@ internal static class PayablesApi
         });
     }
 }
+
+public sealed record VendorDepositApplyRequest(DateOnly Date, IReadOnlyList<ApplyToBill>? Applications);
+
+public sealed record VoidDepositRequest(string? Reason);

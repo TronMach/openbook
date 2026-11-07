@@ -248,6 +248,15 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public void Add(VendorCredit credit) => db.VendorCredits.Add(credit);
 
+    public void Add(VendorDeposit deposit) => db.VendorDeposits.Add(deposit);
+
+    public Task<VendorDeposit?> GetVendorDepositAsync(Guid id, CancellationToken ct) => db.VendorDeposits.SingleOrDefaultAsync(d => d.Id == id, ct);
+
+    // SQLite can't ORDER BY DateTimeOffset, so newest-first ordering happens in memory.
+    public async Task<IReadOnlyList<VendorDeposit>> ListVendorDepositsAsync(Guid? vendorId, CancellationToken ct) =>
+        (await db.VendorDeposits.AsNoTracking().Where(d => vendorId == null || d.VendorId == vendorId).ToListAsync(ct))
+            .OrderByDescending(d => d.Date).ThenByDescending(d => d.CreatedAt).ToList();
+
     public void Add(VendorRefund refund) => db.VendorRefunds.Add(refund);
 
     public void Add(RecurringBill recurringBill) => db.RecurringBills.Add(recurringBill);

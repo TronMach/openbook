@@ -141,6 +141,8 @@ public sealed class BooksCheckService(
                 list.Add(new Document(label, entityType, id, source, entry, posted));
         }
 
+        foreach (var v in await purchases.ListVendorDepositsAsync(null, ct))
+            Add($"Vendor deposit of {v.Date:MMM d, yyyy}", "vendor_deposit", v.Id, VendorDeposit.Source, v.JournalEntryId, v.Status == DocumentStatus.Posted);
         foreach (var p in await salesTax.ListPaymentsAsync(null, ct))
             Add($"Sales tax payment of {p.Date:MMM d, yyyy}", "sales_tax_payment", p.Id, Domain.SalesTax.SalesTaxPayment.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted);
         foreach (var a in await stock.ListAdjustmentsAsync(ct))

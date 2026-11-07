@@ -72,6 +72,11 @@ public interface IPurchasesStore
     /// <summary>Tracked, with lines and applications.</summary>
     Task<VendorCredit?> GetVendorCreditAsync(Guid id, CancellationToken ct);
 
+    Task<VendorDeposit?> GetVendorDepositAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Newest first; voided ones included.</summary>
+    Task<IReadOnlyList<VendorDeposit>> ListVendorDepositsAsync(Guid? vendorId, CancellationToken ct);
+
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<VendorCredit>> ListVendorCreditsAsync(Guid? vendorId, CancellationToken ct);
 
@@ -168,6 +173,8 @@ public interface IPurchasesStore
     void Add(Bill bill);
     void Add(BillPayment payment);
     void Add(VendorCredit credit);
+
+    void Add(VendorDeposit deposit);
     void Add(VendorRefund refund);
     void Add(RecurringBill recurringBill);
     void Add(PurchaseOrder order);

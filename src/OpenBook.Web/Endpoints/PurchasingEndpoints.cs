@@ -16,6 +16,7 @@ public static class PurchasingEndpoints
 {
     public static IEndpointRouteBuilder MapPurchasingEndpoints(this IEndpointRouteBuilder app)
     {
+        MapVendorDeposits(app);
         // Fields: pick (item ids ticked), vendor:{itemId}, qty:{itemId}, cost:{itemId}, date, expectedDate, warehouseId.
         app.MapPost("/purchases/reorder", async (IFormCollection form, Application.Inventory.ReorderService reorder, CancellationToken ct) =>
             await Back("/purchases/reorder", async () =>
@@ -222,6 +223,58 @@ public static class PurchasingEndpoints
                 ? amount
                 : throw new DomainException("purchaseorder.number_invalid", $"'{text}' isn't a number."));
         }
+    }
+
+    internal static void MapVendorDeposits(IEndpointRouteBuilder app)
+    {
+        app.MapPost("/purchases/vendor-deposits", async (IFormCollection form, VendorDepositService deposits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                var deposit = await deposits.CreateAsync(new CreateVendorDepositCommand(
+                    Id(form["vendorId"]) ?? throw new DomainException("vendordeposit.vendor_required", "Choose the vendor."),
+                    Date(form["date"]) ?? CompanyTime.Today,
+                    Amount(form["amount"]) ?? throw new DomainException("vendordeposit.amount", "Enter an amount above zero."),
+                    Id(form["paidFromAccountId"]) ?? Guid.Empty,
+                    Id(form["purchaseOrderId"]),
+                    form["reference"],
+                    form["memo"]), ct);
+                return Results.Redirect($"/purchases/vendor-deposits/{deposit.Id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                return Results.Redirect($"/purchases/vendor-deposits?vendor={form["vendorId"]}&error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/purchases/vendor-deposits/{id:guid}/apply", async (Guid id, IFormCollection form, VendorDepositService deposits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/purchases/vendor-deposits/{id}", async () =>
+            {
+                var applications = new List<ApplyToBill>();
+                foreach (var key in form.Keys.Where(k => k.StartsWith("bill:", StringComparison.Ordinal)))
+                {
+                    if (Guid.TryParse(key[5..], out var billId) && Amount(form[key]) is { } amount and > 0m)
+                        applications.Add(new ApplyToBill(billId, amount));
+                }
+
+                await deposits.ApplyAsync(id, Date(form["date"]) ?? CompanyTime.Today, applications, ct);
+                return "done=applied";
+            });
+        }).RequireAuthorization();
+
+        app.MapPost("/purchases/vendor-deposits/{id:guid}/void", async (Guid id, IFormCollection form, VendorDepositService deposits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/purchases/vendor-deposits/{id}", async () =>
+            {
+                await deposits.VoidAsync(id, form["reason"].ToString() is { Length: > 0 } reason ? reason : throw new DomainException("void.reason_required", "Say why."), ct);
+                return "done=voided";
+            });
+        }).RequireAuthorization();
     }
 
     /// <param name="page">The page, ending in "?" or "&amp;" when it has a query already.</param>

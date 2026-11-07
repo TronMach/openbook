@@ -129,6 +129,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Bill> Bills => Set<Bill>();
     public DbSet<BillPayment> BillPayments => Set<BillPayment>();
     public DbSet<VendorCredit> VendorCredits => Set<VendorCredit>();
+    public DbSet<VendorDeposit> VendorDeposits => Set<VendorDeposit>();
     public DbSet<VendorRefund> VendorRefunds => Set<VendorRefund>();
     public DbSet<RecurringBill> RecurringBills => Set<RecurringBill>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
@@ -181,7 +182,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     [
         typeof(Invoice), typeof(CreditMemo), typeof(CustomerPayment), typeof(SalesReceipt), typeof(Estimate), typeof(SalesOrder), typeof(Retainer),
         typeof(PaymentLink), typeof(ScheduledEmail), typeof(RecurringInvoice),
-        typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(ReceiptCapture), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
+        typeof(Bill), typeof(BillPayment), typeof(VendorCredit), typeof(VendorDeposit), typeof(ReceiptCapture), typeof(PurchaseOrder), typeof(RecurringBill), typeof(RecurringExpense),
         typeof(BankFeedItem), typeof(RecurringEntry), typeof(Reconciliation),
         typeof(Domain.Nonprofit.Donation), typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Assets.Loan),
@@ -2710,6 +2711,23 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.Property(x => x.AccruedAmount).HasColumnName("AccruedAmountMinor").HasConversion(MinorUnits);
             });
             b.Navigation(x => x.SourceLines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<VendorDeposit>(b =>
+        {
+            b.ToTable("VendorDeposits");
+            b.HasKey(d => d.Id);
+            b.HasIndex(d => d.VendorId);
+            b.HasIndex(d => d.JournalEntryId).IsUnique();
+            b.Property(d => d.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(d => d.Reference).HasMaxLength(50);
+            b.Property(d => d.Memo).HasMaxLength(VendorDeposit.MaxTextLength);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(d => d.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<PurchaseOrder>().WithMany().HasForeignKey(d => d.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(d => d.PaidFromAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(d => d.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(d => d.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<VendorCredit>(b =>

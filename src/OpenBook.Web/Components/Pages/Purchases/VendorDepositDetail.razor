@@ -1,0 +1,139 @@
+@page "/purchases/vendor-deposits/{Id:guid}"
+@inject VendorDepositService Deposits
+@inject VendorService Vendors
+@inject BillPaymentService Payments
+@inject AccountService AccountService
+
+<PageTitle>Vendor deposit · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_deposit is null)
+    {
+        <h1>Deposit not found</h1>
+    }
+    else
+    {
+        var d = _deposit.Deposit;
+        <div class="toolbar">
+            <h1>Deposit to @_vendor?.DisplayName@(d.Status == DocumentStatus.Voided ? " (voided)" : "")</h1>
+            <ActionLink Class="button secondary" Href="@($"/journal/{d.JournalEntryId}")">Journal entry</ActionLink>
+            <ActionLink Class="button secondary" Href="/purchases/vendor-deposits">Vendor deposits</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <dl class="facts">
+            <dt>Date</dt><dd>@Labels.Date(d.Date)</dd>
+            <dt>Amount</dt><dd>@Labels.Amount(d.Amount)</dd>
+            <dt>Paid from</dt><dd>@_chart.FullName(d.PaidFromAccountId)</dd>
+            <dt>Held in</dt><dd>@_chart.FullName(d.DepositAccountId)</dd>
+            @if (d.PurchaseOrderId is { } order)
+            {
+                <dt>For</dt><dd><a href="/purchases/orders/@order">purchase order</a></dd>
+            }
+            @if (d.Reference is not null)
+            {
+                <dt>Reference</dt><dd>@d.Reference</dd>
+            }
+            <dt>Used</dt><dd>@Labels.Amount(_deposit.Applied)</dd>
+            <dt>Left</dt><dd>@Labels.Amount(_deposit.Remaining)</dd>
+        </dl>
+
+        @if (_deposit.Payments.Count > 0)
+        {
+            <h2>Bills it paid</h2>
+            <table class="data">
+                <thead><tr><th>Date</th><th>Payment</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var p in _deposit.Payments)
+                    {
+                        <tr class="@(p.Status == DocumentStatus.Voided ? "muted" : "")">
+                            <td>@Labels.Date(p.Date)</td>
+                            <td><a href="/purchases/payments/@p.Id">Bill payment@(p.Status == DocumentStatus.Voided ? " (voided)" : "")</a></td>
+                            <td class="num">@Labels.Amount(p.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="hint">To take some back off a bill, void that payment; the amount comes back to the deposit.</p>
+        }
+
+        @if (_deposit.Remaining > 0m)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Use it on bills</h2>
+                @if (_bills.Count == 0)
+                {
+                    <p class="muted">@_vendor?.DisplayName has no unpaid bills yet. Enter their bill, then come back here.</p>
+                }
+                else
+                {
+                    <PostForm Action="@($"/purchases/vendor-deposits/{d.Id}/apply")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <table class="data entry">
+                            <thead><tr><th>Bill</th><th>Due</th><th class="num">Left to pay</th><th class="num">Use</th></tr></thead>
+                            <tbody>
+                                @{ var left = _deposit.Remaining; }
+                                @foreach (var b in _bills)
+                                {
+                                    var use = Math.Min(left, b.Balance);
+                                    left -= use;
+                                    <tr>
+                                        <td><a href="/purchases/bills/@b.Id">@(b.Reference ?? "Bill") of @Labels.Date(b.Date)</a></td>
+                                        <td>@Labels.Date(b.DueDate)</td>
+                                        <td class="num">@Labels.Amount(b.Balance)</td>
+                                        <td class="num"><input name="bill:@b.Id" class="amount" inputmode="decimal" value="@(use > 0m ? use.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "")" aria-label="Amount to use on this bill" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="field">
+                            <label for="date">Date</label>
+                            <input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                        </div>
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <div class="actions"><button type="submit">Pay these bills from the deposit</button></div>
+                    </PostForm>
+                }
+            </div>
+        }
+
+        @if (d.Status == DocumentStatus.Posted && _deposit.Applied == 0m)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Void</h2>
+                <PostForm Action="@($"/purchases/vendor-deposits/{d.Id}/void")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="reason">Reason</label>
+                        <input id="reason" name="reason" required />
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="danger" data-confirm="Void this deposit?">Void</button></div>
+                </PostForm>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private VendorDepositBalance? _deposit;
+    private Vendor? _vendor;
+    private IReadOnlyList<Bill> _bills = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _deposit = await Deposits.GetAsync(Id);
+        if (_deposit is null)
+            return;
+        _vendor = await Vendors.GetAsync(_deposit.Deposit.VendorId);
+        _chart = await AccountService.GetChartAsync();
+        _bills = (await Payments.OpenBillsAsync(_deposit.Deposit.VendorId)).Where(b => b.CanBePaid).ToList();
+    }
+}

@@ -24,7 +24,11 @@
         }
         <ActionLink Class="button secondary" Href="/purchases?show=payments">Back to bill payments</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_payment.Id}")">History</ActionLink>
-        @if (_payment.Status == DocumentStatus.Posted)
+        @if (_payment.VendorDepositId is { } deposit)
+        {
+            <ActionLink Class="button secondary" Href="@($"/purchases/vendor-deposits/{deposit}")">The deposit it uses</ActionLink>
+        }
+        else if (_payment.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/purchases/payments/{_payment.Id}/edit")">Change</ActionLink>
         }

@@ -301,6 +301,30 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_deposit_paid_to_a_vendor_pays_their_bill_later()
+    {
+        var deposit = await In<VendorDepositService, VendorDeposit>(s => s.CreateAsync(new CreateVendorDepositCommand(_vendor.Id, Jan5, 500m, _checking.Id, Reference: "1001")));
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_vendor.Id, Mar31, [new BillLineDraft(_rent.Id, 800m, "Fit-out")])));
+        Assert.Equal("vendordeposit.too_much", (await Assert.ThrowsAsync<DomainException>(() => In<VendorDepositService, IReadOnlyList<BillPayment>>(s =>
+            s.ApplyAsync(deposit.Id, Mar31, [new ApplyToBill(bill.Id, 600m)])))).Code);
+
+        var paid = Assert.Single(await In<VendorDepositService, IReadOnlyList<BillPayment>>(s => s.ApplyAsync(deposit.Id, Mar31, [new ApplyToBill(bill.Id, 500m)])));
+        Assert.Equal((deposit.DepositAccountId, deposit.Id), (paid.PaymentAccountId, paid.VendorDepositId));
+        Assert.Equal(300m, (await In<BillService, Bill?>(s => s.GetAsync(bill.Id)))!.Balance);
+        Assert.Equal(0m, (await In<VendorDepositService, VendorDepositBalance?>(s => s.GetAsync(deposit.Id)))!.Remaining);
+
+        // Cash basis: the deposit clears and the rent counts when the deposit pays the bill.
+        var cash = await In<ReportLedger, IReadOnlyList<OpenBook.Application.LedgerLine>>(s => s.LinesAsync(ReportBasis.Cash, null, Mar31));
+        Assert.Equal(0m, cash.Where(l => l.AccountId == deposit.DepositAccountId).Sum(l => l.Amount));
+        Assert.Equal(500m, cash.Where(l => l.AccountId == _rent.Id).Sum(l => l.Amount));
+        Assert.Equal(0, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Problems);
+
+        Assert.Equal("vendordeposit.applied", (await Assert.ThrowsAsync<DomainException>(() => In<VendorDepositService, VendorDeposit>(s => s.VoidAsync(deposit.Id, "No")))).Code);
+        await In<BillPaymentService, BillPayment>(s => s.VoidAsync(paid.Id, "Wrong bill"));
+        await In<VendorDepositService, VendorDeposit>(s => s.VoidAsync(deposit.Id, "Refunded in full"));
+    }
+
+    [Fact]
     public async Task Stock_is_written_down_in_value_without_losing_units()
     {
         await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Jan5, [new InventoryAdjustmentLineDraft(_widget.Id, 10m, 10m)])));

@@ -70,6 +70,30 @@ public sealed class BillPaymentService(
             throw new DomainException("payment.duplicate_bill", "Each bill can appear only once.");
 
         var account = await purchaseAccounts.GetPaymentAccountAsync(command.PaymentAccountId, ct);
+        return await PayCoreAsync(command, applications, account.Id, null, ct);
+    }
+
+    /// <summary>
+    /// Pays the vendor's bills from a deposit already paid to them: the payment comes from the deposit's asset account
+    /// and records the deposit, so it uses it up. Saved with everything else.
+    /// </summary>
+    internal async Task<IReadOnlyList<BillPayment>> PayFromDepositAsync(VendorDeposit deposit, DateOnly date, IReadOnlyList<ApplyToBill> applications, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(deposit);
+        var given = applications.Where(a => a.Amount != 0m).ToList();
+        if (given.Count == 0)
+            throw new DomainException("payment.no_bills", "Choose at least one bill to pay.");
+        if (given.Any(a => a.Amount < 0m))
+            throw new DomainException("payment.amount_not_positive", "Payment amounts must be more than zero.");
+        var bills = await store.GetBillsAsync(given.Select(a => a.BillId).ToList(), ct);
+        if (bills.Any(b => b.VendorId != deposit.VendorId))
+            throw new DomainException("vendordeposit.other_vendor", "A deposit pays only that vendor's bills.");
+        return await PayCoreAsync(new PayBillsCommand(date, deposit.DepositAccountId, given, deposit.Reference is { } r ? $"Deposit {r}" : "Deposit"),
+            given, deposit.DepositAccountId, deposit.Id, ct);
+    }
+
+    private async Task<IReadOnlyList<BillPayment>> PayCoreAsync(PayBillsCommand command, List<ApplyToBill> applications, Guid accountId, Guid? depositId, CancellationToken ct)
+    {
         var bills = (await store.GetBillsAsync(applications.Select(a => a.BillId).ToList(), ct)).ToDictionary(b => b.Id);
         var vendors = (await store.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
 
@@ -103,13 +127,15 @@ public sealed class BillPaymentService(
             var memo = string.IsNullOrEmpty(reference) ? $"Bill payment to {vendor.DisplayName}" : $"Bill payment to {vendor.DisplayName} · {reference}";
             var entry = await engine.StageAsync(new PostJournalEntryCommand(
                 command.Date,
-                [JournalLineDraft.Dr(group.Key.PayableAccountId, total), JournalLineDraft.Cr(account.Id, total)],
+                [JournalLineDraft.Dr(group.Key.PayableAccountId, total), JournalLineDraft.Cr(accountId, total)],
                 memo,
                 BillPayment.Source,
                 id), ct);
 
-            var payment = BillPayment.Create(id, vendor.Id, command.Date, account.Id, group.Key.PayableAccountId,
+            var payment = BillPayment.Create(id, vendor.Id, command.Date, accountId, group.Key.PayableAccountId,
                 group.Select(a => (a.BillId, a.Amount)).ToList(), entry.Id, clock.UtcNow, reference, command.Memo ?? vendor.AccountNumber);
+            if (depositId is { } fromDeposit)
+                payment.FromDeposit(fromDeposit);
             foreach (var application in payment.Applications)
                 bills[application.BillId].ApplyPayment(application.Amount);
 
@@ -139,6 +165,8 @@ public sealed class BillPaymentService(
         var payment = await store.GetPaymentAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (payment.Status == DocumentStatus.Voided)
             throw new DomainException("payment.voided", "This payment is voided, so it can't be changed.");
+        if (payment.VendorDepositId is not null)
+            throw new DomainException("payment.from_deposit", "This payment uses a deposit paid to the vendor. Void it and apply the deposit again instead.");
         var vendor = await store.GetVendorAsync(payment.VendorId, ct) ?? throw new EntityNotFoundException("vendor", payment.VendorId);
 
         var applications = command.Applications.Where(a => a.Amount != 0m).ToList();

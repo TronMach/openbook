@@ -1,0 +1,127 @@
+@page "/purchases/vendor-deposits"
+@inject VendorDepositService Deposits
+@inject VendorService Vendors
+@inject AccountService AccountService
+@inject PurchaseOrderService Orders
+
+<PageTitle>Vendor deposits · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Vendor deposits</h1>
+        <ActionLink Class="button secondary" Href="/purchases">Purchases</ActionLink>
+    </div>
+    <p class="muted">Money paid to a vendor before their bill: a deposit on an order. It waits in "Vendor Deposits" (an asset) until you use it to pay their bills.</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <h2>Pay a deposit</h2>
+        <PostForm Action="/purchases/vendor-deposits" data-enhance="false" data-keep-typed>
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="vendor">Vendor</label>
+                    <select id="vendor" name="vendorId" data-search required>
+                        <option value="">Choose a vendor…</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id" selected="@(v.Id == Vendor)">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="amount">Amount</label>
+                    <input id="amount" name="amount" class="amount" inputmode="decimal" required />
+                </div>
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="from">Paid from</label>
+                    <select id="from" name="paidFromAccountId" data-search required>
+                        @foreach (var a in _banks)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="order">For purchase order <span class="muted">(optional)</span></label>
+                    <select id="order" name="purchaseOrderId" data-search>
+                        <option value="">(none)</option>
+                        @foreach (var o in _orders)
+                        {
+                            <option value="@o.Id" selected="@(o.Id == Order)">@o.Number</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="reference">Reference <span class="muted">(optional)</span></label>
+                    <input id="reference" name="reference" maxlength="50" placeholder="Check number" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="memo">Memo <span class="muted">(optional)</span></label>
+                <input id="memo" name="memo" maxlength="@VendorDeposit.MaxTextLength" />
+            </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <div class="actions"><button type="submit">Pay deposit</button></div>
+        </PostForm>
+    </div>
+
+    <h2>Deposits</h2>
+    @if (_deposits.Count == 0)
+    {
+        <p class="muted">None yet.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Date</th><th>Vendor</th><th>Reference</th><th class="num">Amount</th><th class="num">Used</th><th class="num">Left</th></tr></thead>
+            <tbody>
+                @foreach (var d in _deposits)
+                {
+                    <tr class="@(d.Deposit.Status == DocumentStatus.Voided ? "muted" : "")">
+                        <td><a href="/purchases/vendor-deposits/@d.Deposit.Id">@Labels.Date(d.Deposit.Date)</a></td>
+                        <td>@_names.GetValueOrDefault(d.Deposit.VendorId)@(d.Deposit.Status == DocumentStatus.Voided ? " (voided)" : "")</td>
+                        <td>@d.Deposit.Reference</td>
+                        <td class="num">@Labels.Amount(d.Deposit.Amount)</td>
+                        <td class="num">@Labels.Amount(d.Applied)</td>
+                        <td class="num">@Labels.Amount(d.Remaining)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<VendorDepositBalance> _deposits = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private Dictionary<Guid, string> _names = [];
+    private List<Account> _banks = [];
+    private IReadOnlyList<PurchaseOrder> _orders = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private Guid? Vendor { get; set; }
+    [SupplyParameterFromQuery] private Guid? Order { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _deposits = await Deposits.ListAsync();
+        var all = await Vendors.ListAsync(CompanyTime.Today, includeInactive: true);
+        _names = all.ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _vendors = [.. all.Select(v => v.Vendor).Where(v => v.IsActive)];
+        _chart = await AccountService.GetChartAsync();
+        _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+        _orders = (await Orders.ListAsync()).Where(o => o.Status == PurchaseOrderStatus.Open).ToList();
+    }
+}

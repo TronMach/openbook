@@ -76,6 +76,11 @@ public sealed class BillPayment
 
     public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
+    /// <summary>The vendor deposit this payment uses up (paid from its asset account); null for an ordinary payment.</summary>
+    public Guid? VendorDepositId { get; private set; }
+
+    public void FromDeposit(Guid depositId) => VendorDepositId = depositId;
+
     /// <summary>The ACH file it was sent in; null if it hasn't been.</summary>
     public Guid? AchBatchId { get; private set; }
 
