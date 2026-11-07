@@ -158,6 +158,8 @@ public sealed class BooksCheckService(
             Add($"Proceeds of {l.Name}", "loan", l.Id, Domain.Assets.Loan.Source, l.ProceedsEntryId, !l.IsVoided);
             foreach (var p in l.PaymentsMade)
                 Add($"Payment on {l.Name} of {p.Date:MMM d, yyyy}", "loan", l.Id, Domain.Assets.Loan.PaymentSource, p.JournalEntryId, !p.IsVoided);
+            foreach (var w in l.Draws)
+                Add($"Draw on {l.Name} of {w.Date:MMM d, yyyy}", "loan", l.Id, Domain.Assets.Loan.DrawSource, w.EntryId, !w.IsVoided);
         }
 
         foreach (var r in await nonprofit.ListAllocationRunsAsync(ct))
@@ -538,10 +540,10 @@ public sealed class BooksCheckService(
     {
         var loans = await assets.ListLoansAsync(ct);
         var accountIds = loans.Select(l => l.LiabilityAccountId).ToHashSet();
-        var (lines, others) = On(d, accountIds, Domain.Assets.Loan.Source, Domain.Assets.Loan.PaymentSource);
+        var (lines, others) = On(d, accountIds, Domain.Assets.Loan.Source, Domain.Assets.Loan.PaymentSource, Domain.Assets.Loan.DrawSource);
         // A loan whose money was entered with it credits the principal; otherwise it's in the books some other way.
         var expected = loans.Where(l => !l.IsVoided)
-            .Sum(l => (l.ProceedsAccountId is null ? 0m : -l.Principal) + l.PaymentsMade.Where(p => !p.IsVoided).Sum(p => p.Principal));
+            .Sum(l => (l.ProceedsAccountId is null ? 0m : -l.Principal) - l.Drawn + l.PaymentsMade.Where(p => !p.IsVoided).Sum(p => p.Principal));
         return Compare("loans", "Loan balances match the books",
             "What's left to repay on each loan, by its payments, equals the loan accounts. A loan entered without its money (already in the books) is counted from the entry that put it there.",
             expected, lines.Sum(l => l.Amount), others, "The loans' balances", Names(d, accountIds, "the loan accounts"), credit: true);

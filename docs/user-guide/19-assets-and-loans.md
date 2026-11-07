@@ -42,6 +42,8 @@ OpenBook posts the depreciation due up to that date, takes the asset's cost and 
 
 ## Loans
 
+
+**Lines of credit and merchant advances.** Give a loan a **line of credit limit** and its page takes **draws** (each one Dr the bank / Cr the loan, up to the limit), with interest each month on what's owed. Give it a **fixed fee** instead of an interest rate for a merchant cash advance: each repayment carries its share of the fee as interest, and the last one whatever is left.
 **Loans → Add a loan** for any debt repaid monthly: a bank loan, an equipment loan, a vehicle loan.
 
 - **Name**, and the **loan account** (a liability account, usually long-term).

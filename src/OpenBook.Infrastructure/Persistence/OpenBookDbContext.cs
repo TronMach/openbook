@@ -1012,6 +1012,21 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Ignore(l => l.IsVoided);
             b.Ignore(l => l.NextPayment);
             b.Ignore(l => l.LatestPayment);
+            b.Ignore(l => l.Drawn);
+            b.Ignore(l => l.FeePaid);
+            b.Property(l => l.CreditLimit).HasColumnName("CreditLimitMinor").HasConversion(NullableMinorUnits);
+            b.Property(l => l.FactorFee).HasColumnName("FactorFeeMinor").HasConversion(NullableMinorUnits);
+            b.OwnsMany(l => l.Draws, w =>
+            {
+                w.ToTable("LoanDraws");
+                w.WithOwner().HasForeignKey("LoanId");
+                w.HasKey(x => x.Id);
+                w.Property(x => x.Id).ValueGeneratedNever();
+                w.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                w.HasOne<Account>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+                w.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(l => l.Draws).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.LiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.InterestAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.ProceedsAccountId).OnDelete(DeleteBehavior.Restrict);

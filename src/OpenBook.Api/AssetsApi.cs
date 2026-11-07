@@ -41,6 +41,8 @@ public sealed record LoanPaymentResponse(Guid Id, DateOnly Date, decimal Amount,
 
 public sealed record DepreciationRequest(DateOnly Through);
 
+public sealed record LoanDrawRequest(DateOnly Date, decimal Amount, Guid BankAccountId);
+
 public static class AssetsApi
 {
     public static void MapAssetsApi(this RouteGroupBuilder api)
@@ -111,6 +113,13 @@ public static class AssetsApi
             await s.PayAsync(id, r, ct);
             return LoanResponse.From((await s.GetAsync(id, ct))!);
         });
+        assets.MapPost("/loans/{id:guid}/draws", async (Guid id, LoanDrawRequest r, LoanService s, CancellationToken ct) =>
+        {
+            var draw = await s.DrawAsync(id, r.Date, r.Amount, r.BankAccountId, ct);
+            return new { draw.Id, draw.Date, draw.Amount, draw.EntryId };
+        });
+        assets.MapPost("/loans/{id:guid}/draws/{drawId:guid}/void", async (Guid id, Guid drawId, VoidRequest r, LoanService s, CancellationToken ct) =>
+            LoanResponse.From(await s.VoidDrawAsync(id, drawId, r.Reason, ct)));
         assets.MapPost("/loans/{id:guid}/void", async (Guid id, VoidRequest r, LoanService s, CancellationToken ct) =>
             LoanResponse.From(await s.VoidAsync(id, r.Reason, ct)));
         assets.MapPost("/loans/{id:guid}/payments/{paymentId:guid}/void", async (Guid id, Guid paymentId, VoidRequest r, LoanService s, CancellationToken ct) =>

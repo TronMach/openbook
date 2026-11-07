@@ -63,6 +63,11 @@
                     <div class="field"><label for="first">First payment</label><input id="first" name="firstPaymentDate" type="date" required /></div>
                     <div class="field"><label for="payment">Payment <span class="muted">(blank: worked out)</span></label><input id="payment" name="paymentAmount" class="amount" inputmode="decimal" /></div>
                 </div>
+                <div class="row">
+                    <div class="field"><label for="limit">Line of credit: limit <span class="muted">(optional)</span></label><input id="limit" name="creditLimit" class="amount" inputmode="decimal" /></div>
+                    <div class="field"><label for="factor">Merchant advance: fixed fee <span class="muted">(optional, with rate 0)</span></label><input id="factor" name="factorFee" class="amount" inputmode="decimal" /></div>
+                </div>
+                <p class="hint">A line of credit takes more draws up to its limit, with interest each month on what's owed. A merchant cash advance has a fixed fee instead of interest: each repayment carries its share of the fee, and the last one what's left.</p>
                 <div class="field">
                     <label for="interest">Interest goes to</label>
                     <select id="interest" name="interestAccountId">

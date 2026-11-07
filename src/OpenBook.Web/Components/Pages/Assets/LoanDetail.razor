@@ -59,6 +59,52 @@
             </div>
         }
 
+        @if (_loan.CreditLimit is { } limit && !_loan.IsVoided)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Draw on the line of credit</h2>
+                <p class="muted">Owed @Labels.Amount(_loan.Balance) of a @Labels.Amount(limit) limit: up to @Labels.Amount(limit - _loan.Balance) can be drawn.</p>
+                <PostForm Action="@($"/loans/{_loan.Id}/draw")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="draw-amount">Amount</label><input id="draw-amount" name="amount" class="amount" inputmode="decimal" required /></div>
+                        <div class="field"><label for="draw-date">Date</label><input id="draw-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" /></div>
+                        <div class="field">
+                            <label for="draw-bank">Into</label>
+                            <select id="draw-bank" name="bankAccountId">
+                                @foreach (var a in _payFrom.Where(a => a.Type == AccountType.Bank))
+                                {
+                                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit">Record the draw</button></div>
+                </PostForm>
+                @if (_loan.Draws.Count > 0)
+                {
+                    <table class="data" style="margin-top: 1rem">
+                        <thead><tr><th>Drawn</th><th class="num">Amount</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _loan.Draws)
+                            {
+                                <tr class="@(d.IsVoided ? "muted" : "")">
+                                    <td><a href="/journal/@d.EntryId">@Labels.Date(d.Date)</a>@(d.IsVoided ? " (voided)" : "")</td>
+                                    <td class="num">@Labels.Amount(d.Amount)</td>
+                                    <td>@if (!d.IsVoided) { <OpenBook.Web.Components.Pages.Nonprofit.VoidLine Action="@($"/loans/{_loan.Id}/draws/{d.Id}/void")" Password="Password" /> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+        @if (_loan.FactorFee is { } fee)
+        {
+            <p class="muted">A merchant advance: a fixed fee of @Labels.Amount(fee), @Labels.Amount(_loan.FeePaid) of it paid so far.</p>
+        }
+
         @if (_loan.PaymentsMade.Count > 0)
         {
             <h2>Payments</h2>

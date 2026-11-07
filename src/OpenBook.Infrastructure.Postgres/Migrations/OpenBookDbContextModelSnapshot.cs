@@ -225,6 +225,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("CreditLimit")
+                        .HasColumnType("bigint")
+                        .HasColumnName("CreditLimitMinor");
+
+                    b.Property<long?>("FactorFee")
+                        .HasColumnType("bigint")
+                        .HasColumnName("FactorFeeMinor");
+
                     b.Property<DateOnly>("FirstPaymentDate")
                         .HasColumnType("date");
 
@@ -7000,6 +7008,56 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("ProceedsEntryId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.OwnsMany("OpenBook.Domain.Assets.LoanDraw", "Draws", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid>("BankAccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<Guid>("EntryId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("boolean");
+
+                            b1.Property<Guid>("LoanId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("BankAccountId");
+
+                            b1.HasIndex("EntryId");
+
+                            b1.HasIndex("LoanId");
+
+                            b1.ToTable("LoanDraws", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("BankAccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("EntryId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoanId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Assets.LoanPayment", "PaymentsMade", b1 =>
                         {
                             b1.Property<Guid>("Id")
@@ -7058,6 +7116,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
                         });
+
+                    b.Navigation("Draws");
 
                     b.Navigation("PaymentsMade");
                 });

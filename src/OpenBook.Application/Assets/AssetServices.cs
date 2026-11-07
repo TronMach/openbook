@@ -480,6 +480,34 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         return payment;
     }
 
+    /// <summary>Draws money on a line of credit into a bank account: Dr the bank / Cr the loan.</summary>
+    public async Task<LoanDraw> DrawAsync(Guid id, DateOnly date, decimal amount, Guid bankAccountId, CancellationToken ct = default)
+    {
+        var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var bank = await accounts.CheckAsync(bankAccountId, "account it went into", ct, AccountType.Bank, AccountType.OtherCurrentAsset);
+        var before = Snapshot(loan);
+        loan.CheckDraw(amount);
+        var drawId = Guid.CreateVersion7();
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(date,
+            [JournalLineDraft.Dr(bank.Id, amount, "Drawn"), JournalLineDraft.Cr(loan.LiabilityAccountId, amount, "Drawn")],
+            $"Drawn on {loan.Name}", Loan.DrawSource, loan.Id), ct);
+        var draw = loan.AddDraw(drawId, date, amount, bank.Id, entry.Id);
+        store.Add(Audit(AuditAction.Updated, loan, before));
+        await store.SaveChangesAsync(ct);
+        return draw;
+    }
+
+    public async Task<Loan> VoidDrawAsync(Guid id, Guid drawId, string reason, CancellationToken ct = default)
+    {
+        var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(loan);
+        var draw = loan.VoidDraw(drawId);
+        await engine.StageVoidAsync(draw.EntryId, reason, fromDocument: true, ct);
+        store.Add(Audit(AuditAction.Updated, loan, before));
+        await store.SaveChangesAsync(ct);
+        return loan;
+    }
+
     public async Task<Loan> VoidPaymentAsync(Guid id, Guid paymentId, string reason, CancellationToken ct = default)
     {
         var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);

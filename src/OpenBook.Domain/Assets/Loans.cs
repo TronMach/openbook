@@ -17,7 +17,9 @@ public sealed record LoanDetails(
     decimal? PaymentAmount = null,
     Guid? LenderVendorId = null,
     string? Notes = null,
-    Guid? ClassId = null);
+    Guid? ClassId = null,
+    decimal? CreditLimit = null,
+    decimal? FactorFee = null);
 
 /// <summary>One line of an amortization schedule.</summary>
 public readonly record struct Installment(int Number, DateOnly Date, decimal Payment, decimal Interest, decimal Principal, decimal Balance);
@@ -31,8 +33,55 @@ public sealed class Loan
 {
     public const string Source = "assets.loan";
     public const string PaymentSource = "assets.loan_payment";
+    public const string DrawSource = "assets.loan_draw";
 
     private readonly List<LoanPayment> _payments = [];
+    private readonly List<LoanDraw> _draws = [];
+
+    /// <summary>A line of credit: more can be drawn, up to this balance. Null for a term loan.</summary>
+    public decimal? CreditLimit { get; private set; }
+
+    /// <summary>A merchant cash advance: a fixed fee instead of interest, paid in proportion with each repayment. Null otherwise.</summary>
+    public decimal? FactorFee { get; private set; }
+
+    public IReadOnlyList<LoanDraw> Draws => _draws;
+
+    public decimal Drawn => _draws.Where(d => !d.IsVoided).Sum(d => d.Amount);
+
+    /// <summary>The fee paid so far, on an advance.</summary>
+    public decimal FeePaid => FactorFee is null ? 0m : _payments.Where(p => !p.IsVoided).Sum(p => p.Interest);
+
+    /// <summary>Draws money on a line of credit, up to its limit.</summary>
+    public LoanDraw AddDraw(Guid id, DateOnly date, decimal amount, Guid bankAccountId, Guid entryId)
+    {
+        CheckDraw(amount);
+        var draw = new LoanDraw(id, date, amount, bankAccountId, entryId);
+        _draws.Add(draw);
+        return draw;
+    }
+
+    public void CheckDraw(decimal amount)
+    {
+        if (IsVoided)
+            throw new DomainException("loan.voided", "This loan is voided.");
+        if (CreditLimit is not { } limit)
+            throw new DomainException("loan.not_revolving", $"{Name} isn't a line of credit, so nothing more can be drawn on it.");
+        Money.EnsureCents(amount);
+        if (amount <= 0m)
+            throw new DomainException("loan.draw_not_positive", "Enter the amount drawn.");
+        if (Balance + amount > limit)
+            throw new DomainException("loan.over_limit", $"That would take the balance to {Balance + amount:N2}, over the {limit:N2} limit.");
+    }
+
+    /// <summary>A draw can be voided while what's owed covers it (payments since may have repaid it).</summary>
+    public LoanDraw VoidDraw(Guid drawId)
+    {
+        var draw = _draws.FirstOrDefault(d => d.Id == drawId && !d.IsVoided) ?? throw new DomainException("loan.draw_unknown", "There's no such draw standing.");
+        if (Balance - draw.Amount < 0m)
+            throw new DomainException("loan.draw_repaid", "Payments since have repaid this draw. Void them first.");
+        draw.Void();
+        return draw;
+    }
 
     private Loan() => Name = string.Empty;
 
@@ -63,7 +112,7 @@ public sealed class Loan
 
     public decimal MonthlyRate => AnnualRatePercent / 1200m;
 
-    public decimal Balance => IsVoided ? 0m : Principal - _payments.Where(p => !p.IsVoided).Sum(p => p.Principal);
+    public decimal Balance => IsVoided ? 0m : Principal + Drawn - _payments.Where(p => !p.IsVoided).Sum(p => p.Principal);
 
     public bool IsPaidOff => Balance == 0m;
 
@@ -85,6 +134,12 @@ public sealed class Loan
         if (termsChange && _payments.Any(p => !p.IsVoided))
             throw new DomainException("loan.has_payments", "The terms can't change once payments are recorded.");
         Money.EnsureCents(details.Principal);
+        if (details.CreditLimit is { } limit && (limit < details.Principal || decimal.Round(limit, 2) != limit))
+            throw new DomainException("loan.limit_invalid", "A line of credit's limit is at least what's drawn now, in cents.");
+        if (details.FactorFee is { } factorFee && (factorFee <= 0m || decimal.Round(factorFee, 2) != factorFee || details.AnnualRatePercent != 0m || details.CreditLimit is not null))
+            throw new DomainException("loan.factor_invalid", "An advance's fee is an amount above zero, with no interest rate, and it isn't a line of credit.");
+        if (termsChange && _draws.Any(d => !d.IsVoided))
+            throw new DomainException("loan.has_payments", "The terms can't change once money has been drawn.");
         if (details.Principal <= 0m)
             throw new DomainException("loan.principal_not_positive", "Enter the amount borrowed.");
         if (details.AnnualRatePercent is < 0m or > 100m || decimal.Round(details.AnnualRatePercent, 4) != details.AnnualRatePercent)
@@ -106,6 +161,8 @@ public sealed class Loan
         LenderVendorId = details.LenderVendorId;
         Notes = Text.Optional(details.Notes, 1000, "loan.notes_too_long", "Notes");
         ClassId = details.ClassId;
+        CreditLimit = details.CreditLimit;
+        FactorFee = details.FactorFee;
     }
 
     /// <summary>The class its interest is posted to; null for none. Changes only later payments.</summary>
@@ -133,12 +190,24 @@ public sealed class Loan
         Money.EnsureCents(amount);
         if (IsPaidOff)
             throw new DomainException("loan.paid_off", $"{Name} is paid off.");
-        var interest = decimal.Round(Balance * MonthlyRate, 2, MidpointRounding.AwayFromZero);
+        var interest = FactorFee is { } fee
+            ? FeeShare(amount, fee)
+            : decimal.Round(Balance * MonthlyRate, 2, MidpointRounding.AwayFromZero);
+        if (FactorFee is { } total && amount > Balance + total - FeePaid)
+            throw new DomainException("loan.overpaid", $"Only {Balance + total - FeePaid:N2} is left to repay with the fee.");
         if (amount <= 0m)
             throw new DomainException("loan.payment_not_positive", "Enter the amount paid.");
         if (amount > Balance + interest)
             throw new DomainException("loan.overpaid", $"Only {Balance + interest:N2} is owed with this month's interest.");
         return amount < interest ? (amount, 0m) : (interest, amount - interest);
+    }
+
+    // An advance's fee is repaid in proportion: the last repayment takes what's left of it.
+    private decimal FeeShare(decimal amount, decimal fee)
+    {
+        var left = fee - FeePaid;
+        var owed = Balance + left;
+        return amount >= owed ? left : Math.Min(left, decimal.Round(amount * fee / (Principal + Drawn + fee), 2, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>The next scheduled payment: the regular payment, or what's left with interest.</summary>
@@ -223,4 +292,24 @@ public static class Amortization
 
         return result;
     }
+}
+
+/// <summary>Money drawn on a line of credit: Dr the bank / Cr the loan.</summary>
+public sealed class LoanDraw
+{
+    private LoanDraw()
+    {
+    }
+
+    internal LoanDraw(Guid id, DateOnly date, decimal amount, Guid bankAccountId, Guid entryId) =>
+        (Id, Date, Amount, BankAccountId, EntryId) = (id, date, amount, bankAccountId, entryId);
+
+    public Guid Id { get; private set; }
+    public DateOnly Date { get; private set; }
+    public decimal Amount { get; private set; }
+    public Guid BankAccountId { get; private set; }
+    public Guid EntryId { get; private set; }
+    public bool IsVoided { get; private set; }
+
+    internal void Void() => IsVoided = true;
 }

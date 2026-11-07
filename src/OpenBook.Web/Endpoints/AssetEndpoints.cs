@@ -94,7 +94,9 @@ public static class AssetEndpoints
                         Number(form["rate"]) ?? throw new DomainException("loan.rate_invalid", "Enter the interest rate."),
                         int.TryParse(form["payments"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0,
                         Date(form["firstPaymentDate"]) ?? throw new DomainException("loan.first_payment_required", "Enter the first payment's date."),
-                        Number(form["paymentAmount"])),
+                        Number(form["paymentAmount"]),
+                        CreditLimit: Number(form["creditLimit"]),
+                        FactorFee: Number(form["factorFee"])),
                     Id(form["proceedsAccountId"]),
                     Date(form["proceedsDate"])), ct);
                 return Results.Redirect($"/loans/{loan.Id}");
@@ -123,6 +125,19 @@ public static class AssetEndpoints
                 Date(form["date"]) ?? Today(),
                 Id(form["paymentAccountId"]) ?? throw new DomainException("loan.payment_account", "Choose the account it was paid from."),
                 Number(form["amount"])), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/loans/{id:guid}/draw", async (Guid id, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/loans/{id}", () => loans.DrawAsync(id, Date(form["date"]) ?? Today(), Number(form["amount"]) ?? 0m,
+                Id(form["bankAccountId"]) ?? throw new DomainException("loan.draw_account", "Choose the account the money went into."), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/loans/{id:guid}/draws/{drawId:guid}/void", async (Guid id, Guid drawId, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/loans/{id}", () => loans.VoidDrawAsync(id, drawId, Reason(form), ct));
         }).RequireAuthorization();
 
         app.MapPost("/loans/{id:guid}/payments/{paymentId:guid}/void", async (Guid id, Guid paymentId, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>

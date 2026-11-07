@@ -153,6 +153,34 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_line_of_credit_takes_draws_and_a_merchant_advance_repays_its_fee_in_proportion()
+    {
+        var line = await _db.CreateAccount("Line of Credit", AccountType.OtherCurrentLiability, "2200");
+        var advance = await _db.CreateAccount("Merchant Advance", AccountType.OtherCurrentLiability, "2210");
+        var credit = await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.Loan>(s => s.CreateAsync(new OpenBook.Application.Assets.CreateLoanCommand(
+            new OpenBook.Domain.Assets.LoanDetails("Bank line", line.Id, Guid.Empty, 1_000m, 12m, 12, Mar31, CreditLimit: 5_000m), _checking.Id, Mar1)));
+        await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.LoanDraw>(s => s.DrawAsync(credit.Id, Mar1.AddDays(5), 2_000m, _checking.Id));
+        Assert.Equal("loan.over_limit", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.LoanDraw>(s => s.DrawAsync(credit.Id, Mar1.AddDays(6), 2_500m, _checking.Id)))).Code);
+        // Interest is a month on what's owed now: 1% of 3,000.
+        var paid = await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.LoanPayment>(s => s.PayAsync(credit.Id, new OpenBook.Application.Assets.LoanPaymentCommand(Mar31, _checking.Id, 500m)));
+        Assert.Equal((30m, 470m), (paid.Interest, paid.Principal));
+
+        // An advance of 10,000 with a 2,000 fee: each repayment is one sixth fee.
+        var mca = await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.Loan>(s => s.CreateAsync(new OpenBook.Application.Assets.CreateLoanCommand(
+            new OpenBook.Domain.Assets.LoanDetails("Card advance", advance.Id, Guid.Empty, 10_000m, 0m, 10, Mar31, FactorFee: 2_000m), _checking.Id, Mar1)));
+        var repaid = await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.LoanPayment>(s => s.PayAsync(mca.Id, new OpenBook.Application.Assets.LoanPaymentCommand(Mar31, _checking.Id, 1_200m)));
+        Assert.Equal((200m, 1_000m), (repaid.Interest, repaid.Principal));
+        // The last repayment takes what's left of both.
+        var last = await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.LoanPayment>(s => s.PayAsync(mca.Id, new OpenBook.Application.Assets.LoanPaymentCommand(Mar31, _checking.Id, 10_800m)));
+        Assert.Equal((1_800m, 9_000m), (last.Interest, last.Principal));
+
+        var check = await In<OpenBook.Application.Ledger.BooksCheckService, OpenBook.Application.Ledger.BooksCheckReport>(s => s.RunAsync());
+        Assert.Equal(OpenBook.Application.Ledger.CheckOutcome.Ok, check.Results.Single(r => r.Key == "loans").Outcome);
+        Assert.Equal(0, check.Problems);
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";
