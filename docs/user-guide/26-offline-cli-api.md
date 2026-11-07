@@ -28,7 +28,7 @@ The same page lists every device that has used the capture page. **Remove access
 
 ## API keys
 
-OpenBook has a REST API for connecting other programs and writing your own tools. Most of what you can do on the pages, the API can do; restoring a backup is one thing it can't.
+OpenBook has a REST API for connecting other programs and writing your own tools. What you do with the books on the pages, the API can do: records and documents, attachments (`POST /api/attachments` with the file as the body, `GET /api/attachments/{id}/content`), customer portal links, grant receipts and recognitions, channel orders and returns, the time week grid, the accountant's package and the 1099 figures. Left out on purpose: restoring a backup (it replaces the whole company file, so it stays with an admin on the **Backup** page or the `restore-backup` command), and what belongs to a browser or the computer OpenBook runs on: signing in, two-factor, sessions, view and menu choices, add-ins, updates and quitting the desktop app.
 
 **Settings → API keys**, or the API keys link on your password page (select your username in the top bar). Anyone can make keys for themselves, whatever their role:
 

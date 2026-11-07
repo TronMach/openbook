@@ -104,6 +104,8 @@ public sealed record ConnectRequest(string SetupToken, string? Name);
 
 public sealed record LinkConnectionAccountRequest(Guid? AccountId, DateOnly? ImportFrom);
 
+public sealed record RenameConnectionRequest(string Name);
+
 public sealed record BankConnectionResponse(
     Guid Id, BankConnectionProvider Provider, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastSyncAt,
     DateTimeOffset? LastSuccessAt, bool LastSyncFailed, string? LastError, IReadOnlyList<BankConnectionAccountResponse> Accounts)
@@ -138,6 +140,8 @@ internal static class BankingProApi
             var connection = await s.ConnectAsync(BankConnectionProvider.SimpleFin, r.SetupToken, r.Name, CompanyTime.Zone, ct);
             return Results.Created($"/api/banking/connections/{connection.Id}", BankConnectionResponse.From(connection));
         });
+        banking.MapPut("/connections/{id:guid}/name", async (Guid id, RenameConnectionRequest r, BankConnectionService s, CancellationToken ct) =>
+            BankConnectionResponse.From(await s.RenameAsync(id, r.Name, ct)));
         banking.MapPost("/connections/{id:guid}/sync", async (Guid id, BankConnectionService s, CancellationToken ct) =>
             await s.SyncAsync(id, CompanyTime.Zone, ct));
         banking.MapPut("/connections/{id:guid}/accounts/{remoteId}", async (Guid id, string remoteId, LinkConnectionAccountRequest r, BankConnectionService s, CancellationToken ct) =>

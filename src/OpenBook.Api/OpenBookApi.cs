@@ -25,7 +25,7 @@ public static class OpenBookApi
             {
                 Title = "OpenBook API",
                 Version = "v1",
-                Description = "Everything the app can do. Authenticate with an API key (Settings › API keys) as `Authorization: Bearer obk_…`; " +
+                Description = "What the app does with the books (restoring a backup and sign-in, sessions, view preferences, add-ins and updates stay in the browser or on the server). Authenticate with an API key (Settings › API keys) as `Authorization: Bearer obk_…`; " +
                     "it acts as its user with the user's role. Refusals are problem details with a stable `code`: 400 for a mistake in the request, 401 without a " +
                     "valid key, 403 when the role or the key's scopes don't allow it, 404 for a record that isn't there, 409 when another save got there first (try again), " +
                     "422 for an idempotency key used on a different request, 429 past a rate limit. Two optional headers: `Idempotency-Key` on a write makes repeating it " +

@@ -10,6 +10,8 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Api;
 
 /// <param name="FeeAccountId">Null: "Bank Service Charges".</param>
+public sealed record PortalLinkRequest(Guid CustomerId);
+
 public sealed record PaymentReturnRequest(DateOnly Date, string Reason, decimal? Fee = null, Guid? FeeAccountId = null);
 
 public sealed record CustomerResponse(
@@ -152,6 +154,19 @@ internal static class SalesApi
     {
         api.MapGet("/customers", async (bool? includeInactive, CustomerService s, CancellationToken ct) =>
             (await s.ListAsync(CompanyTime.Today, includeInactive ?? false, ct)).Select(x => CustomerResponse.From(x.Customer, x.Balance)));
+        // Customer portal links: the token is in the answer once, never again.
+        api.MapGet("/sales/portal-links", async (Guid customerId, CustomerPortalService s, CancellationToken ct) =>
+            (await s.ListAsync(customerId, ct)).Select(a => new { a.Id, a.CustomerId, a.Hint, a.CreatedAt, a.CreatedBy, a.LastUsedAt, a.RevokedAt }));
+        api.MapPost("/sales/portal-links", async (PortalLinkRequest r, CustomerPortalService s, CancellationToken ct) =>
+        {
+            var (access, token) = await s.CreateAsync(r.CustomerId, ct);
+            return Results.Created($"/api/sales/portal-links/{access.Id}", new { access.Id, access.CustomerId, Token = token, Path = $"/portal/{token}" });
+        });
+        api.MapDelete("/sales/portal-links/{id:guid}", async (Guid id, CustomerPortalService s, CancellationToken ct) =>
+        {
+            await s.RevokeAsync(id, ct);
+            return Results.NoContent();
+        });
         api.MapGet("/customers/{id:guid}", async (Guid id, CustomerService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } c ? Results.Ok(CustomerResponse.From(c)) : Results.NotFound());
         api.MapPost("/customers", async (CustomerDetails r, CustomerService s, CancellationToken ct) =>

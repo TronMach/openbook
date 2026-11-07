@@ -50,12 +50,21 @@ public sealed record GrantRecognizeRequest(DateOnly Through);
 public sealed record GrantResponse(
     Guid Id, string Name, Guid FunderId, string Funder, string? Reference, decimal Amount, DateOnly AwardedOn, DateOnly StartsOn, DateOnly EndsOn,
     Guid ClassId, Guid IncomeAccountId, bool Conditional, GrantStatus Status, decimal Recognized, decimal Received, decimal Due, decimal Spent,
-    decimal ReadyToRecognize, IReadOnlyList<GrantBudgetRow> Budget)
+    decimal ReadyToRecognize, IReadOnlyList<GrantBudgetRow> Budget,
+    IReadOnlyList<GrantRowResponse>? Receipts = null, IReadOnlyList<GrantRowResponse>? Recognitions = null, IReadOnlyList<GrantRequestResponse>? Requests = null)
 {
     public static GrantResponse From(GrantPosition p) => new(p.Grant.Id, p.Grant.Name, p.Grant.FunderId, p.Funder, p.Grant.Reference, p.Grant.Amount,
         p.Grant.AwardedOn, p.Grant.StartsOn, p.Grant.EndsOn, p.Grant.ClassId, p.Grant.IncomeAccountId, p.Grant.Conditional, p.Grant.Status,
-        p.Grant.Recognized, p.Grant.Received, p.Grant.Due, p.Spent, p.ReadyToRecognize, p.Rows);
+        p.Grant.Recognized, p.Grant.Received, p.Grant.Due, p.Spent, p.ReadyToRecognize, p.Rows,
+        [.. p.Grant.Receipts.Select(r => new GrantRowResponse(r.LineNumber, r.Date, r.Amount, r.EntryId, r.AdvancePart, r.IsVoided, r.BankAccountId))],
+        [.. p.Grant.Recognitions.Select(r => new GrantRowResponse(r.LineNumber, r.Date, r.Amount, r.EntryId, r.AdvancePart, r.IsVoided))],
+        [.. p.Grant.Requests.Select(r => new GrantRequestResponse(r.LineNumber, r.Date, r.PeriodFrom, r.PeriodTo, r.Amount, r.ReceiptLine, r.IsVoided))]);
 }
+
+/// <summary>A receipt or recognition of a grant; <paramref name="Line"/> names it in the void routes.</summary>
+public sealed record GrantRowResponse(int Line, DateOnly Date, decimal Amount, Guid EntryId, decimal AdvancePart, bool IsVoided, Guid? BankAccountId = null);
+
+public sealed record GrantRequestResponse(int Line, DateOnly Date, DateOnly PeriodFrom, DateOnly PeriodTo, decimal Amount, int? PaidByReceiptLine, bool IsVoided);
 
 internal static class NonprofitApi
 {
@@ -105,6 +114,13 @@ internal static class NonprofitApi
         {
             var letter = await s.AcknowledgmentAsync(id, ct);
             return Results.File(letter.Pdf, "application/pdf", letter.FileName);
+        });
+        // Every donor's giving statement for the year by email, as the Thank donors page does.
+        nonprofit.MapPost("/statements/{year:int}/email", async (int year, GiftService gifts, Application.Forms.EmailService email, CancellationToken ct) =>
+        {
+            var donors = await gifts.DonorsInYearAsync(year, ct);
+            var run = await email.SendEachAsync([.. donors.Select(d => new Application.Forms.EmailSource(Domain.Email.EmailKind.GivingStatement, d, Year: year))], ct);
+            return new { Sent = run.Sent.Count, NoEmail = run.NoEmail, Failed = run.Failed.Select(f => new { f.Name, f.Reason }), AlreadySent = run.AlreadySent?.Count ?? 0 };
         });
         nonprofit.MapGet("/statements/{year:int}/{donorId:guid}", async (int year, Guid donorId, GiftService s, CancellationToken ct) =>
         {
@@ -195,6 +211,26 @@ internal static class NonprofitApi
         nonprofit.MapPost("/grants/{id:guid}/close", async (Guid id, GrantService s, CancellationToken ct) =>
         {
             await s.CloseAsync(id, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/receipts/{line:int}/void", async (Guid id, int line, VoidRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.VoidReceiptAsync(id, line, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/recognitions/{line:int}/void", async (Guid id, int line, VoidRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.VoidRecognitionAsync(id, line, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/requests/{line:int}/void", async (Guid id, int line, GrantService s, CancellationToken ct) =>
+        {
+            await s.VoidRequestAsync(id, line, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/reopen", async (Guid id, GrantService s, CancellationToken ct) =>
+        {
+            await s.ReopenAsync(id, ct);
             return await Position(s, id, ct);
         });
         nonprofit.MapPost("/grants/{id:guid}/void", async (Guid id, VoidRequest r, GrantService s, CancellationToken ct) =>

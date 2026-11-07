@@ -149,6 +149,14 @@ internal static class ReportsApi
         });
         accountant.MapGet("/worksheet", async (DateOnly? asOf, ReportBasis? basis, AdjustingEntryService s, CompanySettingsService settings, CancellationToken ct) =>
             await s.WorksheetAsync(asOf ?? CompanyTime.Today, basis ?? (await settings.GetAsync(ct)).DefaultReportBasis, ct));
+        accountant.MapGet("/package", async (DateOnly? from, DateOnly? to, AccountantPackageService s, CancellationToken ct) =>
+        {
+            var end = to ?? CompanyTime.Today;
+            var file = await s.BuildAsync(from ?? new DateOnly(end.Year, 1, 1), end, ct);
+            var bytes = await File.ReadAllBytesAsync(file.Path, ct);
+            File.Delete(file.Path);
+            return Results.File(bytes, "application/zip", file.FileName);
+        });
         accountant.MapGet("/1099-filing", async (int year, decimal? threshold, AccountantPackageService s, CancellationToken ct) =>
             Results.File(await s.Filing1099CsvAsync(year, audit: true, threshold: threshold, ct: ct), "text/csv", $"1099 filing data {year}.csv"));
 

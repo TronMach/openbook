@@ -142,7 +142,25 @@ internal static class PayablesApi
             };
         });
 
-        // Uploads go through the web app's form endpoint, which checks the antiforgery token.
+        // A file with the raw body, like receipts (a page uploads through the web app's form endpoint instead).
+        api.MapPost("/attachments", async (HttpRequest request, string entityType, Guid entityId, string fileName, AttachmentService s, CancellationToken ct) =>
+        {
+            var a = await s.AddAsync(entityType, entityId, fileName, request.Body, ct);
+            return Results.Created($"/api/attachments/{a.Id}/content", new { a.Id, a.FileName, a.ContentType, a.Size, a.AddedAt, a.AddedBy });
+        });
+        // The file itself, read with its record; served as the page serves it (no sniffing, scripts can't run).
+        api.MapGet("/attachments/{id:guid}/content", async (Guid id, HttpContext http, AttachmentService s, CancellationToken ct) =>
+        {
+            var attachment = await s.GetAsync(id, ct);
+            var content = attachment is null ? null : await s.GetContentAsync(id, ct);
+            if (attachment is null || content is null)
+                return Results.NotFound();
+            if (Application.Companies.AuthClaims.LevelIn(http.User, Application.Companies.RecordAreas.Of(attachment.EntityType)) is null)
+                return Results.Forbid();
+            http.Response.Headers.XContentTypeOptions = "nosniff";
+            http.Response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+            return Results.File(content, attachment.ContentType, attachment.FileName);
+        });
         api.MapGet("/attachments", async (string entityType, Guid entityId, System.Security.Claims.ClaimsPrincipal user, AttachmentService s, CancellationToken ct) =>
             Application.Companies.AuthClaims.LevelIn(user, Application.Companies.RecordAreas.Of(entityType)) is null
                 ? Results.Forbid()

@@ -182,6 +182,11 @@ internal static class PurchasesApi
         purchases.MapGet("/approvals/settings", async (BillApprovalService s, CancellationToken ct) => await s.GetSettingsAsync(ct));
         purchases.MapPut("/approvals/settings", async (PurchasingSettingsCommand r, BillApprovalService s, CancellationToken ct) => await s.SaveSettingsAsync(r, ct));
 
+        // A vendor's bank details as the page shows them: the account number only as its last four.
+        purchases.MapGet("/ach/vendors/{vendorId:guid}", async (Guid vendorId, AchService s, CancellationToken ct) =>
+            await s.GetVendorBankAccountAsync(vendorId, ct) is { } b
+                ? Results.Ok(new { b.VendorId, b.RoutingNumber, Account = b.Masked, b.AccountLast4, b.Kind, b.UpdatedAt })
+                : Results.NotFound());
         purchases.MapPut("/ach/vendors/{vendorId:guid}", async (Guid vendorId, VendorBankAccountCommand r, AchService s, CancellationToken ct) =>
         {
             var account = await s.SetVendorBankAccountAsync(vendorId, r, ct);

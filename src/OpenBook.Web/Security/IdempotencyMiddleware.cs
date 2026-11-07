@@ -19,7 +19,7 @@ public sealed class IdempotencyMiddleware(RequestDelegate next)
     public const string Header = "Idempotency-Key";
     public const string ReplayedHeader = "Idempotency-Replayed";
 
-    private static readonly string[] SecretPaths = ["/api/api-keys", "/api/users/invites", "/api/webhooks", "/api/capture"];
+    private static readonly string[] SecretPaths = ["/api/api-keys", "/api/users/invites", "/api/webhooks", "/api/capture", "/api/sales/portal-links"];
 
     public async Task InvokeAsync(HttpContext http, IIdempotencyStore store)
     {

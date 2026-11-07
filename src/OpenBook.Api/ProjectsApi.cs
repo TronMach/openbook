@@ -97,6 +97,10 @@ public static class ProjectsApi
         projects.MapPost("/workers/{id:guid}/active", async (Guid id, bool active, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
             WorkerResponse.From(await s.SetActiveAsync(id, active, ct), user));
 
+        // The week grid: rows of client, service, billable and hours Monday to Sunday (null leaves a day as it is).
+        projects.MapGet("/time/week", async (Guid workerId, DateOnly monday, TimeService s, CancellationToken ct) => await s.WeekAsync(workerId, monday, ct));
+        projects.MapPut("/time/week", async (Guid workerId, DateOnly monday, IReadOnlyList<WeekRow> rows, TimeService s, CancellationToken ct) =>
+            new { Saved = await s.SaveWeekAsync(workerId, monday, rows ?? [], ct) });
         projects.MapGet("/time", async (DateOnly? from, DateOnly? to, Guid? workerId, Guid? customerId, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>
             (await s.ListAsync(new TimeFilter(from, to, workerId, customerId), ct)).Select(t => TimeEntryResponse.From(t, user)));
         projects.MapPost("/time", async (TimeEntryDetails r, TimeService s, ClaimsPrincipal user, CancellationToken ct) =>

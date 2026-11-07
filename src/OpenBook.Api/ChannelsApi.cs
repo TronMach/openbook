@@ -105,6 +105,26 @@ public static class ChannelsApi
         channels.MapPost("/orders/{id:guid}/post", async (Guid id, ChannelOrderService s, CancellationToken ct) => (await s.PostAsync(id, ct)).Status);
         channels.MapPost("/orders/{id:guid}/void", async (Guid id, VoidPayoutRequest r, ChannelOrderService s, CancellationToken ct) =>
             (await s.VoidAsync(id, r.Reason ?? "Orders voided", ct)).Status);
+        // A batch with its lines (the line numbers returns refer to).
+        channels.MapGet("/orders/{id:guid}", async (Guid id, ChannelOrderService s, CancellationToken ct) =>
+            await s.GetBatchAsync(id, ct) is { } b
+                ? Results.Ok(new
+                {
+                    b.Id, b.ChannelId, b.Date, b.Status, b.Orders, b.JournalEntryId,
+                    Lines = b.Lines.Select(l => new { Line = l.LineNumber, l.OrderId, l.Date, l.Sku, l.Title, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Region }),
+                })
+                : Results.NotFound());
+        channels.MapPost("/orders/{id:guid}/dismiss", async (Guid id, ChannelOrderService s, CancellationToken ct) => (await s.SetDismissedAsync(id, true, ct)).Status);
+        channels.MapPost("/orders/{id:guid}/restore", async (Guid id, ChannelOrderService s, CancellationToken ct) => (await s.SetDismissedAsync(id, false, ct)).Status);
+        channels.MapPost("/orders/{id:guid}/returns", async (Guid id, ChannelReturnRequest r, ChannelOrderService s, CancellationToken ct) =>
+        {
+            var made = await s.ReturnAsync(id, r.Date ?? OpenBook.Application.CompanyTime.Today, [.. (r.Lines ?? []).Select(l => (l.Line, l.Quantity))], r.Memo, ct);
+            return Results.Created($"/api/channels/returns/{made.Id}", ReturnResponse(made));
+        });
+        channels.MapGet("/returns/{id:guid}", async (Guid id, ChannelOrderService s, CancellationToken ct) =>
+            await s.GetReturnAsync(id, ct) is { } r ? Results.Ok(ReturnResponse(r)) : Results.NotFound());
+        channels.MapPost("/returns/{id:guid}/void", async (Guid id, VoidPayoutRequest r, ChannelOrderService s, CancellationToken ct) =>
+            ReturnResponse(await s.VoidReturnAsync(id, r.Reason ?? "Return voided", ct)));
 
         channels.MapGet("/payouts/{id:guid}", async (Guid id, ChannelService s, CancellationToken ct) =>
             await s.GetPayoutAsync(id, ct) is { } p ? Results.Ok(PayoutResponse.From(p, lines: true)) : Results.NotFound());
@@ -114,4 +134,15 @@ public static class ChannelsApi
         channels.MapPost("/payouts/{id:guid}/dismiss", async (Guid id, ChannelService s, CancellationToken ct) => PayoutResponse.From(await s.SetDismissedAsync(id, true, ct)));
         channels.MapPost("/payouts/{id:guid}/restore", async (Guid id, ChannelService s, CancellationToken ct) => PayoutResponse.From(await s.SetDismissedAsync(id, false, ct)));
     }
+
+    private static object ReturnResponse(OpenBook.Domain.Channels.ChannelReturn r) => new
+    {
+        r.Id, r.ChannelId, r.BatchId, r.Date, r.Memo, r.Status, r.JournalEntryId,
+        Lines = r.Lines.Select(l => new { l.OrderLine, l.Quantity }),
+    };
 }
+
+/// <summary>What came back, by the batch's line numbers (<c>GET /api/channels/orders/{id}</c>); date defaults to today.</summary>
+public sealed record ChannelReturnRequest(DateOnly? Date, IReadOnlyList<ChannelReturnLineRequest>? Lines, string? Memo = null);
+
+public sealed record ChannelReturnLineRequest(int Line, decimal Quantity);
