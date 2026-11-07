@@ -137,6 +137,27 @@ public sealed class Donation
 
     public void MarkAcknowledged(DateTimeOffset at) => AcknowledgedAt ??= at.ToUniversalTime();
 
+    /// <summary>A correction in place: same id and number, the new entry; the kind, pledge and anything beside the books stay.</summary>
+    public void Change(Guid donorId, DateOnly date, decimal amount, Guid debitAccountId, Guid incomeAccountId, Guid? classId,
+        string? reference, string? memo, string? description, decimal goodsValue, string? goodsDescription, Guid journalEntryId)
+    {
+        if (Status != DocumentStatus.Posted)
+            throw new DomainException("donation.voided", "This gift is voided, so it can't be changed.");
+        Check(Kind, amount, description, goodsValue, goodsDescription, PledgeId);
+        DonorId = donorId;
+        Date = date;
+        Amount = amount;
+        DebitAccountId = debitAccountId;
+        IncomeAccountId = incomeAccountId;
+        ClassId = classId == Guid.Empty ? null : classId;
+        Reference = Text.Optional(reference, MaxReferenceLength, "donation.reference_too_long", "Reference");
+        Memo = Text.Optional(memo, MaxTextLength, "donation.memo_too_long", "Memo");
+        Description = Text.Optional(description, MaxTextLength, "donation.description_too_long", "Description");
+        GoodsValue = goodsValue;
+        GoodsDescription = Text.Optional(goodsDescription, MaxTextLength, "donation.goods_too_long", "What the donor received");
+        JournalEntryId = journalEntryId;
+    }
+
     public void MarkDeposited(Guid depositId)
     {
         if (Status != DocumentStatus.Posted || Kind != GiftKind.Cash)
@@ -167,11 +188,6 @@ public sealed class Donation
     }
 }
 
-/// <summary>
-/// A donor's promise to give: Dr "Pledges Receivable" / Cr the contribution account on its class, accrual basis only
-/// (cash basis counts the money as it's paid). Paid by gifts that name it. Voided only while nothing is paid. When the
-/// donor won't pay the rest, it's cancelled: the reverse for the unpaid part, also accrual only, and undoable.
-/// </summary>
 /// <summary>One payment a pledge's schedule expects: beside the books, posting nothing.</summary>
 public sealed class PledgeInstallment
 {
@@ -191,6 +207,11 @@ public sealed class PledgeInstallment
     public decimal Amount { get; private set; }
 }
 
+/// <summary>
+/// A donor's promise to give: Dr "Pledges Receivable" / Cr the contribution account on its class, accrual basis only
+/// (cash basis counts the money as it's paid). Paid by gifts that name it. Voided only while nothing is paid. When the
+/// donor won't pay the rest, it's cancelled: the reverse for the unpaid part, also accrual only, and undoable.
+/// </summary>
 public sealed class Pledge
 {
     public const int MaxInstallments = 120;

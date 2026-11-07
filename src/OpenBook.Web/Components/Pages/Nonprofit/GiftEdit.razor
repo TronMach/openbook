@@ -1,0 +1,154 @@
+@page "/nonprofit/gifts/{Id:guid}/edit"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject CustomerService CustomerService
+@inject AccountService AccountService
+@inject SegmentService Segments
+@inject GiftService Gifts
+@inject OpenBook.Application.IRecordVersions Versions
+
+<PageTitle>Change gift · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_gift is null)
+    {
+        <h1>Gift not found</h1>
+    }
+    else
+    {
+        var g = _gift;
+        <div class="toolbar">
+            <h1>Change gift @g.Number</h1>
+            <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts/{g.Id}")">Back to the gift</ActionLink>
+        </div>
+        <p class="muted">
+            Saving reverses the gift's journal entry on its original date and posts the corrected one; the gift keeps its number and history.
+            @(g.DepositId is not null || g.PayoutId is not null ? "It's in a deposit or payout, so its amount and account stay." : "")
+            A gift paying a pledge is voided and recorded again instead.
+        </p>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <PostForm Action="@($"/nonprofit/gifts/{g.Id}/edit")" data-enhance="false" data-keep-typed>
+                <AntiforgeryToken />
+                <input type="hidden" name="version" value="@_version" />
+                <div class="row">
+                    <div class="field">
+                        <label for="donor">Donor</label>
+                        <select id="donor" name="donorId" data-search required>
+                            @foreach (var c in _donors.Where(d => d.Customer.IsActive || d.Customer.Id == g.DonorId))
+                            {
+                                <option value="@c.Customer.Id" selected="@(c.Customer.Id == g.DonorId)">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="amount">Amount</label>
+                        <input id="amount" name="amount" class="amount" inputmode="decimal" required value="@g.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
+                    </div>
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input id="date" name="date" type="date" value="@g.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="debit">@(g.Kind == GiftKind.Cash ? "Deposited to" : "Recorded to")</label>
+                        <select id="debit" name="debitAccountId" data-search required>
+                            @foreach (var a in _accounts)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == g.DebitAccountId)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="income">Contribution account</label>
+                        <select id="income" name="incomeAccountId" data-search>
+                            @foreach (var a in _income)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == g.IncomeAccountId)">@_chart.FullName(a.Id)@(a.DonorRestricted ? " (restricted)" : "")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="class">Purpose (class) <span class="muted">(optional)</span></label>
+                        <select id="class" name="classId" data-search>
+                            <option value="">(none)</option>
+                            @foreach (var c in _classes)
+                            {
+                                <option value="@c.Segment.Id" selected="@(c.Segment.Id == g.ClassId)">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="reference">Reference <span class="muted">(optional)</span></label>
+                        <input id="reference" name="reference" maxlength="@Donation.MaxReferenceLength" value="@g.Reference" />
+                    </div>
+                </div>
+                @if (g.Kind == GiftKind.InKind)
+                {
+                    <div class="field">
+                        <label for="description">What was given</label>
+                        <input id="description" name="description" maxlength="@Donation.MaxTextLength" value="@g.Description" />
+                    </div>
+                }
+                <div class="row">
+                    <div class="field">
+                        <label for="goods-value">Received in return: fair value</label>
+                        <input id="goods-value" name="goodsValue" class="amount" inputmode="decimal" value="@(g.GoodsValue == 0m ? "" : g.GoodsValue.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
+                    </div>
+                    <div class="field">
+                        <label for="goods">What it was</label>
+                        <input id="goods" name="goodsDescription" maxlength="@Donation.MaxTextLength" value="@g.GoodsDescription" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="memo">Memo <span class="muted">(optional)</span></label>
+                    <input id="memo" name="memo" maxlength="@Donation.MaxTextLength" value="@g.Memo" />
+                </div>
+                <div class="field">
+                    <label for="reason">Why are you changing it?</label>
+                    <input id="reason" name="reason" required maxlength="500" />
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit">Save changes</button></div>
+            </PostForm>
+        </div>
+    }
+</div>
+
+@code {
+    private Donation? _gift;
+    private int? _version;
+    private IReadOnlyList<CustomerSummary> _donors = [];
+    private List<Account> _accounts = [];
+    private List<Account> _income = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _version = await Versions.GetAsync<Donation>(Id);
+        _gift = await Gifts.GetAsync(Id);
+        if (_gift is null)
+            return;
+        _donors = await CustomerService.ListAsync(CompanyTime.Today);
+        _chart = await AccountService.GetChartAsync();
+        var g = _gift;
+        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.IsActive || a.Id == g.DebitAccountId || a.Id == g.IncomeAccountId).ToList();
+        _accounts = g.Kind == GiftKind.Cash
+            ? active.Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).ToList()
+            : active.Where(a => a.Type is AccountType.OtherCurrentAsset or AccountType.FixedAsset or AccountType.OtherAsset || a.Type.ClassOf() == AccountClass.Expense).ToList();
+        _income = active.Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+    }
+}

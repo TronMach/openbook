@@ -74,6 +74,26 @@ public sealed class DonorRecordTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_gift_is_corrected_in_place_keeping_its_number()
+    {
+        var gift = await Gift(_pat, 100m, "CHK-1");
+        Assert.Equal("donation.change_reason_required", (await Assert.ThrowsAsync<DomainException>(() => In<GiftService, Donation>(s =>
+            s.ChangeAsync(gift.Id, new ChangeGiftCommand(_lee.Id, Mar1, 120m, _bank.Id, " "))))).Code);
+
+        var changed = await In<GiftService, Donation>(s => s.ChangeAsync(gift.Id, new ChangeGiftCommand(_lee.Id, Mar1.AddDays(1), 120m, _bank.Id, "Wrong donor", Reference: "CHK-2")));
+        Assert.Equal((gift.Number, _lee.Id, 120m, "CHK-2"), (changed.Number, changed.DonorId, changed.Amount, changed.Reference));
+        Assert.NotEqual(gift.JournalEntryId, changed.JournalEntryId);
+        var old = (await In<OpenBook.Application.Ledger.PostingEngine, OpenBook.Domain.Ledger.JournalEntry?>(e => e.GetAsync(gift.JournalEntryId)))!;
+        Assert.Equal(OpenBook.Domain.Ledger.JournalEntryStatus.Voided, old.Status);
+        Assert.Equal(0, (await In<OpenBook.Application.Ledger.BooksCheckService, OpenBook.Application.Ledger.BooksCheckReport>(s => s.RunAsync())).Problems);
+
+        var pledge = await In<GiftService, Pledge>(s => s.PledgeAsync(new PledgeCommand(_pat.Id, Mar1, 500m)));
+        var payment = await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(_pat.Id, Mar1, 50m, _bank.Id, PledgeId: pledge.Id)));
+        Assert.Equal("donation.change_pledge", (await Assert.ThrowsAsync<DomainException>(() => In<GiftService, Donation>(s =>
+            s.ChangeAsync(payment.Id, new ChangeGiftCommand(_pat.Id, Mar1, 60m, _bank.Id, "More"))))).Code);
+    }
+
+    [Fact]
     public async Task Search_finds_gifts_by_donor_reference_and_amount()
     {
         await Gift(_pat, 123.45m, "CHK-778");

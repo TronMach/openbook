@@ -28,6 +28,10 @@
             {
                 <a class="button secondary" href="/nonprofit/gifts/@_gift.Id/letter" target="_blank">Acknowledgment (PDF)</a>
             }
+            @if (_gift.Status == DocumentStatus.Posted && _gift.PledgeId is null)
+            {
+                <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts/{_gift.Id}/edit")">Change</ActionLink>
+            }
             <ActionLink Class="button secondary" Href="@($"/journal/{_gift.JournalEntryId}")">Journal entry</ActionLink>
             <ActionLink Class="button secondary" Href="@($"/audit?entityId={_gift.Id}")">History</ActionLink>
             <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>

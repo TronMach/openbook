@@ -18,6 +18,21 @@ namespace OpenBook.Application.Nonprofit;
 /// <param name="DebitAccountId">Cash: the bank account it went into. In kind: the asset or expense it was recorded to.</param>
 /// <param name="IncomeAccountId">Null: "Contributions" (cash) or "In-kind Contributions", created on first use; a pledge payment takes the pledge's.</param>
 /// <param name="ClassId">The purpose; a pledge payment takes the pledge's.</param>
+/// <summary>A gift's corrected details; the kind and any pledge stay as they are.</summary>
+public sealed record ChangeGiftCommand(
+    Guid DonorId,
+    DateOnly Date,
+    decimal Amount,
+    Guid DebitAccountId,
+    string Reason,
+    Guid? IncomeAccountId = null,
+    Guid? ClassId = null,
+    string? Reference = null,
+    string? Memo = null,
+    string? Description = null,
+    decimal GoodsValue = 0m,
+    string? GoodsDescription = null);
+
 public sealed record RecordGiftCommand(
     Guid DonorId,
     DateOnly Date,
@@ -72,7 +87,8 @@ public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string
 /// </summary>
 public sealed class GiftService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine, NonprofitService nonprofit,
-    ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IUnitOfWork unitOfWork, IClock clock, ICurrentUser user)
+    ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IUnitOfWork unitOfWork, IClock clock, ICurrentUser user,
+    Banking.IBankingStore bank)
 {
     public const string DonationEntity = "donation";
     public const string PledgeEntity = "pledge";
@@ -244,6 +260,70 @@ public sealed class GiftService(
             .GroupBy(d => d.Campaign!, StringComparer.OrdinalIgnoreCase)
             .OrderByDescending(g => g.Max(d => d.Date)).ThenBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase)
             .Select(g => g.OrderByDescending(d => d.Date).First().Campaign!)];
+
+    /// <summary>
+    /// Corrects a posted gift in place (same id and number): its entry is voided (the reversal dated the original date) and
+    /// a new one posted, in one save. The kind stays; a payment on a pledge is voided and recorded again instead. While
+    /// the gift is in a bank deposit, a processor's payout or matched to a bank feed line, its amount and account stay.
+    /// Taking restricted money off a purpose needs it not to have been released.
+    /// </summary>
+    public async Task<Donation> ChangeAsync(Guid id, ChangeGiftCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new DomainException("donation.change_reason_required", "Say why the gift is being changed.");
+        var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
+        if (donation.Status != DocumentStatus.Posted)
+            throw new DomainException("donation.voided", "This gift is voided, so it can't be changed.");
+        if (donation.PledgeId is not null)
+            throw new DomainException("donation.change_pledge", "This gift pays a pledge. Void it and record it again to change it.");
+        Donation.Check(donation.Kind, command.Amount, command.Description, command.GoodsValue, command.GoodsDescription, null);
+        var donor = await DonorAsync(command.DonorId, ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var debit = chart.Find(command.DebitAccountId) ?? throw new DomainException("donation.account_required", "Choose the account the gift went to.");
+        if (debit.Id != donation.DebitAccountId && !debit.IsActive)
+            throw new DomainException("donation.account_inactive", $"'{debit.Name}' is inactive.");
+        if (donation.Kind == GiftKind.Cash && debit.Type is not (AccountType.Bank or AccountType.OtherCurrentAsset))
+            throw new DomainException("donation.deposit_bank", "Money gifts go into a bank account or Undeposited Funds.");
+        if (donation.Kind == GiftKind.InKind && (debit.Type is AccountType.Bank or AccountType.AccountsReceivable or AccountType.AccountsPayable or AccountType.CreditCard
+                                                 || debit.Type.ClassOf() is AccountClass.Liability or AccountClass.Equity or AccountClass.Income))
+            throw new DomainException("donation.in_kind_account", "Record an in-kind gift to the asset or expense it became.");
+
+        var moneyStays = command.Amount == donation.Amount && debit.Id == donation.DebitAccountId;
+        if ((donation.DepositId is not null || donation.PayoutId is not null) && !moneyStays)
+            throw new DomainException("donation.deposited_fixed",
+                $"Gift {donation.Number} is in a {(donation.DepositId is not null ? "bank deposit" : "processor's payout")}, so its amount and account stay. Void that first to change them.");
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, donation.DebitAccountId, donation.JournalEntryId, null, ct);
+        if (feed.Count > 0 && !moneyStays)
+            throw new DomainException("donation.feed_matched", $"Gift {donation.Number} is matched to a line from the bank feed, so its amount and account stay. Undo the match first.");
+
+        var classId = command.ClassId == Guid.Empty ? null : command.ClassId;
+        var incomeId = command.IncomeAccountId is { } chosen && chosen == donation.IncomeAccountId
+            ? chosen
+            : (await IncomeAccountAsync(chart, command.IncomeAccountId, donation.Kind == GiftKind.InKind ? InKindName : ContributionsName, ct)).Id;
+        // What leaves the old purpose: all of it when the purpose changes, else what the amount drops by.
+        var samePurpose = incomeId == donation.IncomeAccountId && classId == donation.ClassId;
+        var leaving = samePurpose ? Math.Max(0m, donation.Amount - command.Amount) : donation.Amount;
+        if (leaving > 0m)
+            await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, leaving, ct);
+
+        var before = Snapshot(donation);
+        var oldEntry = donation.JournalEntryId;
+        await engine.StageVoidAsync(oldEntry, $"Gift changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
+        var memo = $"Gift from {donor.DisplayName}";
+        var debitClass = debit.Type.ClassOf() == AccountClass.Expense ? classId : null;
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
+            [JournalLineDraft.Dr(debit.Id, command.Amount, memo, debitClass), JournalLineDraft.Cr(incomeId, command.Amount, memo, classId)],
+            command.Memo ?? memo, Donation.Source, donation.Id), ct);
+        donation.Change(donor.Id, command.Date, command.Amount, debit.Id, incomeId, classId, command.Reference, command.Memo,
+            command.Description, command.GoodsValue, command.GoodsDescription, entry.Id);
+        foreach (var item in feed)
+            item.FollowEntry(oldEntry, entry.Id);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, DonationEntity, donation.Id, before,
+            DocumentChanges.WithReason(Snapshot(donation), command.Reason)));
+        await store.SaveChangesAsync(ct);
+        return donation;
+    }
 
     public async Task<Donation> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {

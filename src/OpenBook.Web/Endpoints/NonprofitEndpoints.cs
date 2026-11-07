@@ -61,6 +61,35 @@ public static class NonprofitEndpoints
 
         // Gifts. Fields: donorId, date, amount, kind, debitAccountId, incomeAccountId, pledgeId, classId, reference, memo,
         // description, goodsValue, goodsDescription, ClosingPassword.
+        app.MapPost("/nonprofit/gifts/{id:guid}/edit", async (Guid id, IFormCollection form, GiftService gifts, OpenBook.Application.IRecordVersions versions,
+            ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            try
+            {
+                await versions.EnsureUnchangedAsync<Donation>(id, int.TryParse(form["version"], out var v) ? v : null, ct);
+                await gifts.ChangeAsync(id, new ChangeGiftCommand(
+                    Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
+                    Date(form["date"]) ?? CompanyTime.Today,
+                    Number(form["amount"]) ?? throw new DomainException("donation.amount", "Enter an amount above zero."),
+                    Id(form["debitAccountId"]) ?? Guid.Empty,
+                    form["reason"].ToString(),
+                    Id(form["incomeAccountId"]),
+                    Id(form["classId"]),
+                    form["reference"],
+                    form["memo"],
+                    form["description"],
+                    Number(form["goodsValue"]) ?? 0m,
+                    form["goodsDescription"]), ct);
+                return Results.Redirect($"/nonprofit/gifts/{id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                return Results.Redirect($"/nonprofit/gifts/{id}/edit?error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/nonprofit/gifts", async (IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

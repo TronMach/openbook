@@ -42,7 +42,7 @@ OpenBook keeps all of these on the line's class, so plan the tree once: function
 
 - **Campaign or appeal** (optional): the letter, event or drive the gift answered, such as "Year-end letter 2026". Earlier campaigns are suggested as you type. It's kept beside the books, so it can be changed on the gift's page at any time; **Giving by campaign** totals gifts by it.
 
-Gifts can be voided from their page.
+To correct a gift, use **Change** on its page: donor, amount, date, account, contribution account, purpose, reference, what the donor received and memo (the kind stays). Say **Why are you changing it?** and **Save changes**. OpenBook reverses its journal entry on the original date and posts the corrected one; the gift keeps its number and its history. While it's in a bank deposit or a processor's payout, or matched to a bank feed line, its amount and account stay. Taking restricted money off a purpose that's since been released is refused until the release is voided. A gift paying a pledge is voided and recorded again instead. Gifts can also be voided from their page.
 
 ### Many gifts at once
 
