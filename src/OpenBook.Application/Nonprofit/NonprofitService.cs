@@ -20,6 +20,13 @@ public interface INonprofitStore
 
     Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct);
 
+    Task<IReadOnlyList<AllocationRule>> ListAllocationRulesAsync(CancellationToken ct);
+    Task<AllocationRule?> GetAllocationRuleAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<AllocationRun>> ListAllocationRunsAsync(CancellationToken ct);
+    Task<AllocationRun?> GetAllocationRunAsync(Guid id, CancellationToken ct);
+    void Add(AllocationRule rule);
+    void Add(AllocationRun run);
+
     /// <summary>Gifts, pledges and grants a search finds, newest first.</summary>
     Task<(IReadOnlyList<Donation> Gifts, IReadOnlyList<Pledge> Pledges, IReadOnlyList<Grant> Grants)> SearchAsync(DocumentSearch search, CancellationToken ct);
 

@@ -1,0 +1,205 @@
+@page "/nonprofit/allocations"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Application.Segments
+@using OpenBook.Domain.Accounts
+@using OpenBook.Domain.Nonprofit
+@using OpenBook.Domain.Segments
+@inject AllocationService Allocation
+@inject AccountService AccountService
+@inject SegmentService Segments
+
+<PageTitle>Shared cost allocations · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Shared cost allocations</h1>
+        <ActionLink Class="button secondary" Href="/nonprofit">Nonprofit</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/functional-expenses">Functional expenses</ActionLink>
+    </div>
+    <p class="muted">A rule spreads one expense account across classes by percentage. Enter rent or salaries as usual, in the pool (no class, or a class of your choice); a run moves what's in the pool for a month into the programs and functions. Running again moves only what's new.</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <section class="card">
+        <h2>Run for a period</h2>
+        <form method="get" class="inline no-print" data-enhance="false">
+            <label>From <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd")" /></label>
+            <label>To <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd")" /></label>
+            <button type="submit" class="secondary">Show</button>
+        </form>
+        @if (_preview.Count == 0)
+        {
+            <p class="muted">No rules yet.</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>Rule</th><th>Account</th><th class="num">In the pool</th></tr></thead>
+                <tbody>
+                    @foreach (var p in _preview)
+                    {
+                        <tr><td>@p.Rule.Name</td><td>@p.Account</td><td class="num">@Labels.Amount(p.Amount)</td></tr>
+                    }
+                </tbody>
+            </table>
+            <PostForm Action="/nonprofit/allocations/run" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="from" value="@_from.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="to" value="@_to.ToString("yyyy-MM-dd")" />
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit" disabled="@(_preview.All(p => p.Amount <= 0m))">Post the allocations</button></div>
+            </PostForm>
+        }
+    </section>
+
+    <section class="card">
+        <h2>@(_editing is null ? "New rule" : $"Change {_editing.Name}")</h2>
+        <PostForm Action="/nonprofit/allocations/rules" data-enhance="false" data-keep-typed>
+            <AntiforgeryToken />
+            @if (_editing is not null)
+            {
+                <input type="hidden" name="id" value="@_editing.Id" />
+            }
+            <div class="row">
+                <div class="field"><label for="name">Name</label><input id="name" name="name" maxlength="@AllocationRule.MaxNameLength" value="@_editing?.Name" required /></div>
+                <div class="field">
+                    <label for="account">Expense account</label>
+                    <select id="account" name="accountId" data-search>
+                        @foreach (var a in _expenses)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _editing?.AccountId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="pool">Pool</label>
+                    <select id="pool" name="poolClassId">
+                        <option value="">Lines with no class</option>
+                        @foreach (var c in _classes)
+                        {
+                            <option value="@c.Segment.Id" selected="@(c.Segment.Id == _editing?.PoolClassId)">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <table class="data">
+                <thead><tr><th>Class</th><th class="num">Percent</th></tr></thead>
+                <tbody>
+                    @for (var i = 0; i < 8; i++)
+                    {
+                        var share = _editing is not null && i < _editing.Shares.Count ? _editing.Shares[i] : null;
+                        <tr>
+                            <td>
+                                <select name="class:@i" aria-label="Class @(i + 1)">
+                                    <option value="">(none)</option>
+                                    @foreach (var c in _classes)
+                                    {
+                                        <option value="@c.Segment.Id" selected="@(c.Segment.Id == share?.ClassId)">@c.FullName</option>
+                                    }
+                                </select>
+                            </td>
+                            <td class="num"><input class="amount" name="percent:@i" inputmode="decimal" aria-label="Percent @(i + 1)" value="@share?.Percent.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="actions"><button type="submit">Save rule</button></div>
+        </PostForm>
+    </section>
+
+    @if (_rules.Count > 0)
+    {
+        <section class="card">
+            <h2>Rules</h2>
+            <table class="data">
+                <thead><tr><th>Rule</th><th>Account</th><th>Shares</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _rules)
+                    {
+                        <tr class="@(r.IsActive ? null : "inactive")">
+                            <td><a href="/nonprofit/allocations?edit=@r.Id">@r.Name</a></td>
+                            <td>@_chart.FullName(r.AccountId)</td>
+                            <td>@string.Join(", ", r.Shares.Select(s => $"{_classNames.GetValueOrDefault(s.ClassId)} {s.Percent:0.##}%"))</td>
+                            <td>
+                                <PostForm Action="@($"/nonprofit/allocations/rules/{r.Id}/active")" Class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="active" value="@(r.IsActive ? "false" : "true")" />
+                                    <button type="submit" class="link">@(r.IsActive ? "Switch off" : "Switch on")</button>
+                                </PostForm>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+
+    @if (_runs.Count > 0)
+    {
+        <section class="card">
+            <h2>Runs</h2>
+            <table class="data">
+                <thead><tr><th>Period</th><th>Rule</th><th class="num">Amount</th><th></th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var run in _runs.OrderByDescending(r => r.To).ThenByDescending(r => r.CreatedAt))
+                    {
+                        <tr class="@(run.Status == DocumentStatus.Voided ? "muted" : null)">
+                            <td>@OpenBook.Application.Reporting.Comparisons.Describe(run.From, run.To)</td>
+                            <td>@_rules.FirstOrDefault(r => r.Id == run.RuleId)?.Name</td>
+                            <td class="num">@Labels.Amount(run.Amount)</td>
+                            <td><a href="/journal/@run.JournalEntryId">Entry</a></td>
+                            <td>
+                                @if (run.Status == DocumentStatus.Posted)
+                                {
+                                    <VoidLine Action="@($"/nonprofit/allocations/runs/{run.Id}/void")" />
+                                }
+                                else
+                                {
+                                    <span class="muted">Voided</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+</div>
+
+@code {
+    private DateOnly _from;
+    private DateOnly _to;
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _expenses = [];
+    private IReadOnlyList<SegmentChoice> _classes = [];
+    private Dictionary<Guid, string> _classNames = [];
+    private IReadOnlyList<AllocationRule> _rules = [];
+    private IReadOnlyList<AllocationRun> _runs = [];
+    private IReadOnlyList<AllocationPreview> _preview = [];
+    private AllocationRule? _editing;
+
+    [SupplyParameterFromQuery(Name = "from")] private string? FromText { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] private string? ToText { get; set; }
+    [SupplyParameterFromQuery] private Guid? Edit { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = CompanyTime.Today;
+        var lastMonth = new DateOnly(today.Year, today.Month, 1).AddMonths(-1);
+        _from = DateOnly.TryParseExact(FromText, "yyyy-MM-dd", out var from) ? from : lastMonth;
+        _to = DateOnly.TryParseExact(ToText, "yyyy-MM-dd", out var to) ? to : lastMonth.AddMonths(1).AddDays(-1);
+        _chart = await AccountService.GetChartAsync();
+        _expenses = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
+        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+        _classNames = _classes.ToDictionary(c => c.Segment.Id, c => c.FullName);
+        _rules = await Allocation.RulesAsync();
+        _runs = await Allocation.RunsAsync();
+        _preview = await Allocation.PreviewAsync(_from, _to);
+        _editing = _rules.FirstOrDefault(r => r.Id == Edit);
+    }
+}

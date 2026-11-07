@@ -156,6 +156,8 @@ public sealed class BooksCheckService(
                 Add($"Payment on {l.Name} of {p.Date:MMM d, yyyy}", "loan", l.Id, Domain.Assets.Loan.PaymentSource, p.JournalEntryId, !p.IsVoided);
         }
 
+        foreach (var r in await nonprofit.ListAllocationRunsAsync(ct))
+            Add($"Cost allocation of {r.To:MMM d, yyyy}", "allocation_run", r.Id, Domain.Nonprofit.AllocationRun.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted);
         foreach (var r in await nonprofit.ListReleasesAsync(ct))
             Add($"Restriction release of {r.Date:MMM d, yyyy}", "restriction_release", r.Id, Domain.Nonprofit.RestrictionRelease.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted);
         foreach (var g in await nonprofit.ListDonationsAsync(ct))

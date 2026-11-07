@@ -84,6 +84,11 @@ internal static class NonprofitApi
             var csv = await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
             return dryRun == true ? await s.PreviewAsync(csv, ct) : await s.ImportAsync(csv, new GiftBatchDefaults(accountId, incomeAccountId, classId), ct);
         }).Accepts<string>("text/csv");
+        nonprofit.MapGet("/allocations/rules", (AllocationService s, CancellationToken ct) => s.RulesAsync(ct));
+        nonprofit.MapPost("/allocations/rules", async (AllocationRuleDetails r, AllocationService s, CancellationToken ct) => await s.SaveAsync(null, r, ct));
+        nonprofit.MapPut("/allocations/rules/{id:guid}", async (Guid id, AllocationRuleDetails r, AllocationService s, CancellationToken ct) => await s.SaveAsync(id, r, ct));
+        nonprofit.MapGet("/allocations/preview", (DateOnly from, DateOnly to, AllocationService s, CancellationToken ct) => s.PreviewAsync(from, to, ct));
+        nonprofit.MapPost("/allocations/run", (DateOnly from, DateOnly to, AllocationService s, CancellationToken ct) => s.RunAsync(from, to, null, ct));
         nonprofit.MapGet("/donors/{id:guid}/giving", (Guid id, GiftService s, CancellationToken ct) => s.GivingAsync(id, ct));
         nonprofit.MapGet("/gifts/{id:guid}", async (Guid id, GiftService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } g ? Results.Ok(GiftResponse.From(g)) : Results.NotFound());

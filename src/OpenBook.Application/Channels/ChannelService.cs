@@ -37,7 +37,7 @@ public sealed record PayoutImportResult(IReadOnlyList<PayoutData> New, IReadOnly
 /// Sales channels and their payouts. A report is read by <see cref="ChannelReports"/>; payouts not seen before (by the
 /// channel's id for them) wait as Pending until posted, each as one journal entry (<see cref="ChannelPayout.Source"/>).
 /// </summary>
-public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies, SalesTax.ISalesTaxStore taxes)
+public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies, SalesTax.ISalesTaxStore taxes, Nonprofit.INonprofitStore gifts)
 {
     public const string ChannelEntity = "sales_channel";
     public const string PayoutEntity = "channel_payout";
@@ -224,12 +224,19 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
                 $"The transactions add up to {payout.Net:N2}, but the channel reported {payout.ReportedNet:N2}. Check the report before posting.");
         var before = PayoutSnapshot(payout, channel);
         var recorded = await RecordedChargesAsync(channel, payout, ct);
+        var recordedGifts = await RecordedGiftsAsync(channel, payout, ct);
         var taxAccounts = (await taxes.ListAgenciesAsync(ct)).Where(a => a.IsActive && a.Region is not null).ToDictionary(a => a.Region!, a => a.LiabilityAccountId, StringComparer.OrdinalIgnoreCase);
         var postings = payout.Postings(channel, taxAccounts);
         if (postings.Count < 2)
             throw new DomainException("channel.payout_zero", "Everything in this payout nets to zero; there's nothing to post. Dismiss it instead.");
         var entry = await engine.StageAsync(new PostJournalEntryCommand(payout.Date, postings, $"{channel.Name} payout {payout.ExternalId}", ChannelPayout.Source, payout.Id), ct);
         payout.Posted(entry.Id);
+        foreach (var gift in recordedGifts)
+        {
+            gift.SettleByPayout(payout.Id);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "donation", gift.Id, null, JsonSerializer.Serialize(new { Payout = payout.ExternalId })));
+        }
+
         foreach (var payment in recorded)
         {
             payment.SettleByPayout(payout.Id);
@@ -239,6 +246,26 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         store.Add(Audit(AuditAction.Updated, PayoutEntity, payout.Id, before, PayoutSnapshot(payout, channel)));
         await store.SaveChangesAsync(ct);
         return payout;
+    }
+
+    /// <summary>
+    /// Gifts recorded from the processor's own export, found by the charge's reference: their money reached the books as
+    /// gifts, into a holding account the payout now clears, so as sales too they'd count twice.
+    /// </summary>
+    private async Task<IReadOnlyList<Domain.Nonprofit.Donation>> RecordedGiftsAsync(SalesChannel channel, ChannelPayout payout, CancellationToken ct)
+    {
+        var references = payout.Lines.Where(l => l.Type is ChannelLineType.Sale or ChannelLineType.Cleared).Select(l => l.Reference).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        if (references.Count == 0)
+            return [];
+        var found = (await gifts.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Kind == Domain.Nonprofit.GiftKind.Cash
+            && d.DepositId is null && d.PayoutId is null && d.Reference is { } reference && references.Contains(reference)).ToList();
+        if (found.Count == 0)
+            return [];
+        if (channel.ClearingAccountId is null)
+            channel.UseClearingAccount(found[0].DebitAccountId);
+        var held = found.Where(d => d.DebitAccountId == channel.ClearingAccountId).ToList();
+        payout.ClearCharges(held.Select(d => d.Reference!).ToHashSet(StringComparer.Ordinal));
+        return held;
     }
 
     /// <summary>
@@ -279,6 +306,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         payout.Unpost();
         foreach (var payment in await sales.ListPaymentsInPayoutAsync(payout.Id, ct))
             payment.ClearPayout();
+        foreach (var gift in (await gifts.ListDonationsAsync(ct)).Where(d => d.PayoutId == payout.Id))
+            gift.ClearPayout();
         store.Add(Audit(AuditAction.Voided, PayoutEntity, payout.Id, before, PayoutSnapshot(payout, channel)));
         await store.SaveChangesAsync(ct);
         return payout;

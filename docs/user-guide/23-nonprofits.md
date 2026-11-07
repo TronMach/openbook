@@ -48,6 +48,20 @@ Gifts can be voided from their page.
 
 A donor's page has a **Giving** card once there's anything to show: this year, last year, all time, the last gift, what's still to come on pledges and any grants. **Their gifts** opens the Gifts page for that donor alone. Their gifts, pledges and grants also list in the **Customer Center** and turn up in search, by donor, reference or amount.
 
+### Gifts made online
+
+Gifts through Stripe, PayPal or a giving platform reach you as a payout, after fees. To get a record of each donor as well:
+
+1. Add the processor as a sales channel ([chapter 22](22-sales-channels.md)).
+2. **Import gifts** from the processor's export of payments, into **Undeposited Funds**. Its amount (gross) goes in as the gift, and its charge or transaction id as the reference.
+3. Import the payout report and post it. A charge with a gift's reference clears that gift rather than counting as a sale, the fee goes to fees, and the net reaches the bank.
+
+Gifts cleared this way don't wait to be deposited, and can't be voided until the payout is. Thank-you letters and giving statements work as usual.
+
+### Spreading shared costs
+
+**Nonprofit → Shared cost allocations** spreads an expense such as rent across programs and functions. A rule names the account, where the cost sits until it's spread (lines with no class, or a class you keep for it) and each class's percentage, adding up to 100. Pick a period, check what's in each pool, and **Post the allocations**: one entry per rule, dated at the end of the period, moving the cost out of the pool. Running it again moves only what's new, and a run can be voided.
+
 ### Recurring gifts
 
 **Nonprofit → Recurring gifts** for monthly card gifts, standing transfers or pledges paid in installments: donor, amount, deposited to, **every** so often, **starting** and **ending** (or after a number of gifts). Each becomes an ordinary gift on its date, automatically within the hour, or by hand with **Record what's due**. **Stop** ends one. On a pledge, the last gift is whatever's left of it, and the recurring gift then stops by itself.

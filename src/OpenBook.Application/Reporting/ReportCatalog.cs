@@ -619,6 +619,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Inventory.LandedCost.Source => "Landed cost",
         Domain.Assets.DepreciationRun.Source => "Depreciation",
         Domain.Nonprofit.RestrictionRelease.Source => "Release from restriction",
+        Domain.Nonprofit.AllocationRun.Source => "Cost allocation",
         Domain.Nonprofit.Donation.Source => "Gift",
         Domain.Nonprofit.Pledge.Source => "Pledge",
         Domain.Nonprofit.Pledge.CancelSource => "Pledge cancelled",

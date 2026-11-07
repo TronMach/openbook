@@ -3028,6 +3028,74 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("RecurringEntries", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.AllocationRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PoolClassId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("PoolClassId");
+
+                    b.ToTable("AllocationRules", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.AllocationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("From")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RuleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("To")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("RuleId");
+
+                    b.ToTable("AllocationRuns", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Donation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3095,6 +3163,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Number")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("PayoutId")
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid?>("PledgeId")
                         .HasColumnType("TEXT");
@@ -7955,6 +8026,69 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.AllocationRule", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Segments.Segment", null)
+                        .WithMany()
+                        .HasForeignKey("PoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.AllocationShare", "Shares", b1 =>
+                        {
+                            b1.Property<Guid>("RuleId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<Guid>("ClassId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("RuleId", "LineNumber");
+
+                            b1.HasIndex("ClassId");
+
+                            b1.ToTable("AllocationShares", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Segments.Segment", null)
+                                .WithMany()
+                                .HasForeignKey("ClassId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("RuleId");
+                        });
+
+                    b.Navigation("Shares");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.AllocationRun", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Nonprofit.AllocationRule", null)
+                        .WithMany()
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Donation", b =>

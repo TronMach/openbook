@@ -17,6 +17,18 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
     public Task<int> CountUnthankedDonationsAsync(CancellationToken ct) =>
         db.Donations.CountAsync(d => d.Status == DocumentStatus.Posted && d.AcknowledgedAt == null, ct);
 
+    public async Task<IReadOnlyList<AllocationRule>> ListAllocationRulesAsync(CancellationToken ct) => (await db.AllocationRules.ToListAsync(ct)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    public Task<AllocationRule?> GetAllocationRuleAsync(Guid id, CancellationToken ct) => db.AllocationRules.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public async Task<IReadOnlyList<AllocationRun>> ListAllocationRunsAsync(CancellationToken ct) => await db.AllocationRuns.ToListAsync(ct);
+
+    public Task<AllocationRun?> GetAllocationRunAsync(Guid id, CancellationToken ct) => db.AllocationRuns.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public void Add(AllocationRule rule) => db.AllocationRules.Add(rule);
+
+    public void Add(AllocationRun run) => db.AllocationRuns.Add(run);
+
 #pragma warning disable CA1304, CA1311, CA1862 // The culture overloads of ToLower don't translate.
     public async Task<(IReadOnlyList<Donation> Gifts, IReadOnlyList<Pledge> Pledges, IReadOnlyList<Grant> Grants)> SearchAsync(DocumentSearch search, CancellationToken ct)
     {

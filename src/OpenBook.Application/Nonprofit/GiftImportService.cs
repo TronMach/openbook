@@ -74,13 +74,13 @@ public sealed class GiftImportService(ISalesStore sales, INonprofitStore store, 
     {
         var records = SalesImport.Records(csv, MaxRows);
         var cols = new CsvColumns(records[0]);
-        var dateColumn = cols.Find("date", "giftdate", "donationdate", "received", "datereceived")
+        var dateColumn = cols.Find("date", "giftdate", "donationdate", "received", "datereceived", "created", "createdutc", "createddate", "transactiondate")
             ?? throw new DomainException("import.no_date_column", "The file needs a date column.");
-        var donorColumn = cols.Find("donor", "name", "customer", "donorname", "fullname", "from")
+        var donorColumn = cols.Find("donor", "name", "customer", "donorname", "fullname", "from", "customername", "customerdescription", "fromname")
             ?? throw new DomainException("import.no_name_column", "The file needs a donor column (\"Donor\" or \"Name\").");
-        var amountColumn = cols.Find("amount", "gift", "giftamount", "donation", "total")
+        var amountColumn = cols.Find("gross") ?? cols.Find("amount", "gift", "giftamount", "donation", "total")
             ?? throw new DomainException("import.no_amount_column", "The file needs an amount column.");
-        var referenceColumn = cols.Find("reference", "check", "checknumber", "checkno", "ref", "transactionid");
+        var referenceColumn = cols.Find("reference", "check", "checknumber", "checkno", "ref", "transactionid", "id", "chargeid", "paymentintent", "paymentintentid");
         var memoColumn = cols.Find("memo", "note", "notes");
         var purposeColumn = cols.Find("purpose", "fund", "class", "designation", "program");
 

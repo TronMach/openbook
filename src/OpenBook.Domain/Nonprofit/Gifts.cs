@@ -141,8 +141,17 @@ public sealed class Donation
 
     public void ClearDeposit() => DepositId = null;
 
+    /// <summary>The processor's payout that brought the money in, for a gift made online: it isn't for a bank deposit.</summary>
+    public Guid? PayoutId { get; private set; }
+
+    public void SettleByPayout(Guid payoutId) => PayoutId = payoutId;
+
+    public void ClearPayout() => PayoutId = null;
+
     public void Void()
     {
+        if (PayoutId is not null)
+            throw new DomainException("donation.in_payout", "This gift is part of a posted payout. Void the payout first.");
         if (Status == DocumentStatus.Voided)
             throw new DomainException("donation.already_voided", "This gift is already voided.");
         if (DepositId is not null)

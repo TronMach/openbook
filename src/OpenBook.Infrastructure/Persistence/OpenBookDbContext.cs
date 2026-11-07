@@ -100,6 +100,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.Worker> Workers => Set<OpenBook.Domain.Projects.Worker>();
     public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
     public DbSet<OpenBook.Domain.Projects.PreBill> PreBills => Set<OpenBook.Domain.Projects.PreBill>();
+    public DbSet<OpenBook.Domain.Nonprofit.AllocationRule> AllocationRules => Set<OpenBook.Domain.Nonprofit.AllocationRule>();
+    public DbSet<OpenBook.Domain.Nonprofit.AllocationRun> AllocationRuns => Set<OpenBook.Domain.Nonprofit.AllocationRun>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
     public DbSet<OpenBook.Domain.Projects.MileageRate> MileageRates => Set<OpenBook.Domain.Projects.MileageRate>();
     public DbSet<OpenBook.Domain.Projects.BillingRate> BillingRates => Set<OpenBook.Domain.Projects.BillingRate>();
@@ -1306,6 +1308,34 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Customer>().WithMany().HasForeignKey(r => r.CustomerId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(r => r.WorkerId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Item>().WithMany().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.AllocationRule>(b =>
+        {
+            b.ToTable("AllocationRules");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(OpenBook.Domain.Nonprofit.AllocationRule.MaxNameLength);
+            b.HasOne<Account>().WithMany().HasForeignKey(r => r.AccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Segment>().WithMany().HasForeignKey(r => r.PoolClassId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Shares, s =>
+            {
+                s.ToTable("AllocationShares");
+                s.WithOwner().HasForeignKey("RuleId");
+                s.HasKey("RuleId", nameof(OpenBook.Domain.Nonprofit.AllocationShare.LineNumber));
+                s.Property(x => x.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+                s.HasOne<Segment>().WithMany().HasForeignKey(x => x.ClassId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(r => r.Shares).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.AllocationRun>(b =>
+        {
+            b.ToTable("AllocationRuns");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<OpenBook.Domain.Nonprofit.AllocationRule>().WithMany().HasForeignKey(r => r.RuleId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.PreBill>(b =>

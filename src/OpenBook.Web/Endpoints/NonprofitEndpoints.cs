@@ -233,6 +233,29 @@ public static class NonprofitEndpoints
             return Results.File(letter.Pdf, "application/pdf", letter.FileName);
         }).RequireAuthorization();
 
+        // Shared cost allocations.
+        app.MapPost("/nonprofit/allocations/rules", async (IFormCollection form, AllocationService allocations, CancellationToken ct) =>
+        {
+            var shares = Enumerable.Range(0, 8).Select(i => new AllocationShareDraft(Id(form[$"class:{i}"]) ?? Guid.Empty, Number(form[$"percent:{i}"]) ?? 0m)).ToList();
+            return await Back("/nonprofit/allocations", () => allocations.SaveAsync(Id(form["id"]),
+                new AllocationRuleDetails(form["name"].ToString(), Id(form["accountId"]) ?? Guid.Empty, Id(form["poolClassId"]), shares), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/allocations/rules/{id:guid}/active", async (Guid id, IFormCollection form, AllocationService allocations, CancellationToken ct) =>
+            await Back("/nonprofit/allocations", () => allocations.SetActiveAsync(id, form["active"] == "true", ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/allocations/run", async (IFormCollection form, AllocationService allocations, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["closingPassword"];
+            return await Back("/nonprofit/allocations", () => allocations.RunAsync(Date(form["from"]) ?? CompanyTime.Today, Date(form["to"]) ?? CompanyTime.Today, null, ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/allocations/runs/{id:guid}/void", async (Guid id, IFormCollection form, AllocationService allocations, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["closingPassword"];
+            return await Back("/nonprofit/allocations", () => allocations.VoidAsync(id, Reason(form), ct));
+        }).RequireAuthorization();
+
         app.MapPost("/nonprofit/grants/{id:guid}/recognize", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

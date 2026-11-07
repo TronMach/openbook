@@ -12,7 +12,7 @@ public sealed class GiftDeposits(INonprofitStore store) : IUndepositedSource
 
     public async Task<IReadOnlyList<UndepositedItem>> WaitingAsync(Func<Guid, bool> holding, IReadOnlyDictionary<Guid, string> customers, CancellationToken ct) =>
         (await store.ListDonationsAsync(ct))
-            .Where(d => d.Status == DocumentStatus.Posted && d.Kind == GiftKind.Cash && d.DepositId is null && holding(d.DebitAccountId))
+            .Where(d => d.Status == DocumentStatus.Posted && d.Kind == GiftKind.Cash && d.PayoutId is null && d.DepositId is null && holding(d.DebitAccountId))
             .Select(d => Item(d, customers))
             .ToList();
 
