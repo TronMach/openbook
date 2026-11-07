@@ -63,6 +63,8 @@ Set it up once with the server's address and an API key:
 openbook config --url https://books.example.com --key obk_yourkey
 ```
 
+Use an `https://` address for any server but your own computer: the key goes with every request, and over plain `http://` the command warns that it can be read on the way.
+
 Then, for example:
 
 - `openbook whoami`: who the key belongs to.

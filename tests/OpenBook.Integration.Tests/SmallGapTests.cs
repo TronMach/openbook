@@ -224,4 +224,11 @@ public sealed class SmallGapTests : IAsyncLifetime
         var made = await In<OpenBook.Application.Segments.SegmentService, OpenBook.Domain.Segments.Segment?>(s => s.GetAsync(grant.ClassId));
         Assert.Equal(program.Id, made!.ParentId);
     }
+
+    [Fact]
+    public void Twice_a_year_filing_periods_are_halves_of_the_year()
+    {
+        Assert.Equal((new DateOnly(2026, 7, 1), new DateOnly(2026, 12, 31)), OpenBook.Domain.SalesTax.FilingPeriods.Containing(OpenBook.Domain.SalesTax.FilingFrequency.Semiannually, new DateOnly(2026, 8, 15)));
+        Assert.Equal((new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)), OpenBook.Domain.SalesTax.FilingPeriods.LastCompleted(OpenBook.Domain.SalesTax.FilingFrequency.Semiannually, new DateOnly(2026, 8, 15)));
+    }
 }

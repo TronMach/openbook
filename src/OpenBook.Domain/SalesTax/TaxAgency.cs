@@ -58,6 +58,9 @@ public enum FilingFrequency
     Monthly,
     Quarterly,
     Annually,
+
+    /// <summary>Twice a year: January to June and July to December.</summary>
+    Semiannually,
 }
 
 public static class FilingPeriods
@@ -69,6 +72,7 @@ public static class FilingPeriods
         {
             FilingFrequency.Monthly => 1,
             FilingFrequency.Quarterly => 3,
+            FilingFrequency.Semiannually => 6,
             _ => 12,
         };
         var from = new DateOnly(date.Year, (date.Month - 1) / months * months + 1, 1);

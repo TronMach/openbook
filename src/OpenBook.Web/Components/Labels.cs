@@ -216,7 +216,7 @@ public static class Labels
     /// <summary>"6.25%".</summary>
     public static string Percent(decimal percent) => percent.ToString("0.####", CultureInfo.CurrentCulture) + "%";
 
-    public static string For(FilingFrequency frequency) => frequency.ToString();
+    public static string For(FilingFrequency frequency) => frequency == FilingFrequency.Semiannually ? "Twice a year" : frequency.ToString();
 
     /// <summary>"1000 · Checking" when numbering is on, otherwise the full name.</summary>
     public static string AccountName(ChartOfAccounts chart, Guid accountId, bool useNumbers)

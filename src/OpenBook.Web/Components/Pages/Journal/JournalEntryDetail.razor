@@ -7,6 +7,8 @@
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
 @inject AdjustingEntryService Adjusting
+@inject OpenBook.Application.Segments.SegmentService Segments
+@inject ILedgerStore Ledger
 @inject OpenBook.Application.Import.JournalImportService Imports
 
 <PageTitle>Journal entry @(_entry?.Number) · OpenBook</PageTitle>
@@ -76,16 +78,32 @@
                     <th class="num">Debit</th>
                     <th class="num">Credit</th>
                     <th>Memo</th>
+                    @if (_lineClasses.Any(c => c is not null))
+                    {
+                        <th>Class</th>
+                    }
+                    @if (_lineLocations.Any(l => l is not null))
+                    {
+                        <th>@_locationLabel</th>
+                    }
                 </tr>
             </thead>
             <tbody>
-                @foreach (var line in _entry.Lines.OrderBy(l => l.LineNumber))
+                @foreach (var (line, i) in _entry.Lines.OrderBy(l => l.LineNumber).Select((l, i) => (l, i)))
                 {
                     <tr>
                         <td><a href="/accounts/@line.AccountId">@Labels.AccountName(_chart, line.AccountId, _useNumbers)</a></td>
                         <td class="num">@Labels.AmountOrBlank(line.Debit)</td>
                         <td class="num">@Labels.AmountOrBlank(line.Credit)</td>
                         <td>@line.Memo</td>
+                        @if (_lineClasses.Any(c => c is not null))
+                        {
+                            <td>@(i < _lineClasses.Count ? _lineClasses[i] : null)</td>
+                        }
+                        @if (_lineLocations.Any(l => l is not null))
+                        {
+                            <td>@(i < _lineLocations.Count ? _lineLocations[i] : null)</td>
+                        }
                     </tr>
                 }
             </tbody>
@@ -94,7 +112,7 @@
                     <td>Total (@_entry.Currency)</td>
                     <td class="num">@Labels.Amount(_entry.TotalDebits.Amount)</td>
                     <td class="num">@Labels.Amount(_entry.TotalCredits.Amount)</td>
-                    <td></td>
+                    <td colspan="@(1 + (_lineClasses.Any(c => c is not null) ? 1 : 0) + (_lineLocations.Any(l => l is not null) ? 1 : 0))"></td>
                 </tr>
             </tfoot>
         </table>
@@ -205,6 +223,10 @@
     /// <summary>For an imported entry: how many entries of its import are still standing (including this one).</summary>
     private int _importStanding;
 
+    private List<string?> _lineClasses = [];
+    private List<string?> _lineLocations = [];
+    private string _locationLabel = "Location";
+
     protected override async Task OnInitializedAsync()
     {
         _isAdjusting = (await Adjusting.MarkedAsync()).Contains(Id);
@@ -213,6 +235,17 @@
         _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
         _chart = await AccountService.GetChartAsync();
         _entry = await Engine.GetAsync(Id);
+        if (_entry is not null)
+        {
+            // Classes and locations live beside the ledger; the page shows them with each line.
+            var names = (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).Concat(await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location))
+                .ToDictionary(s => s.Segment.Id, s => s.FullName);
+            var segments = (await Ledger.GetLineSegmentsAsync([_entry.Id], default)).ToDictionary(s => s.JournalLineId);
+            var ordered = _entry.Lines.OrderBy(l => l.LineNumber).Select(l => segments.GetValueOrDefault(l.Id)).ToList();
+            _lineClasses = [.. ordered.Select(s => s?.ClassId is { } c ? names.GetValueOrDefault(c) : null)];
+            _lineLocations = [.. ordered.Select(s => s?.LocationId is { } l ? names.GetValueOrDefault(l) : null)];
+            _locationLabel = (await Settings.GetAsync()).LocationLabel ?? "Location";
+        }
         if (_entry?.Status == JournalEntryStatus.Voided)
             _reversalId = await Engine.FindReversalIdAsync(_entry.Id);
         if (_entry is not null && JournalEntry.IsJournalSource(_entry.Source) && _entry.Source != JournalEntry.AutoReversalSource)

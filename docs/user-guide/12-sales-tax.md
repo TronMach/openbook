@@ -12,7 +12,7 @@ OpenBook works out sales tax on invoices, sales receipts, estimates and credit m
 
 ## Setting up
 
-1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly or annually; this sets the period OpenBook suggests you report) and your **permit or account number** with it.
+1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly, twice a year or annually; this sets the period OpenBook suggests you report) and your **permit or account number** with it.
 2. **Add its rates**: **name**, **rate (%)** (up to four decimals) and **paid to** (the agency). Leave **Also make a tax code that charges just this rate** ticked unless you'll only use it combined with others.
 3. If you charge several rates together, **add a tax code**, give it a name, and tick its rates. They print in the order they're listed there.
 4. On each **customer**, choose their **tax code**. New invoices, receipts and estimates for them start with it.

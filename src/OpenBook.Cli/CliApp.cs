@@ -324,6 +324,9 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
             throw new CliException("No server set. Run `openbook config --url https://… --key obk_…` (or set OPENBOOK_URL).", 2);
         if (settings.ApiKey is null)
             throw new CliException("No API key set. Make one under Settings › API keys, then `openbook config --key obk_…` (or set OPENBOOK_API_KEY).", 2);
+        // The key travels in every request: over plain http to another computer, anyone on the way can read it.
+        if (Uri.TryCreate(settings.Url, UriKind.Absolute, out var address) && address.Scheme == Uri.UriSchemeHttp && !address.IsLoopback)
+            error.WriteLine($"Warning: {address.Host} is reached over plain http, so the API key can be read on the way. Use https.");
         var client = clientFactory?.Invoke(settings) ?? new HttpClient { BaseAddress = new Uri(settings.Url!), Timeout = Timeout.InfiniteTimeSpan };
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         if (options.GetValueOrDefault("closing-password") is { } password)
