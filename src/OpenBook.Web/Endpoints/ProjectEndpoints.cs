@@ -55,7 +55,7 @@ public static class ProjectEndpoints
                 }
 
                 rows.Add(new WeekRow(Guid.TryParse(form[$"c:{r}"], out var c) ? c : null, Guid.TryParse(form[$"i:{r}"], out var item) ? item : null,
-                    form[$"b:{r}"] == "true", hours));
+                    form[$"b:{r}"] == "true", hours, Notes: form[$"n:{r}"]));
             }
 
             try

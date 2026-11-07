@@ -375,7 +375,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
                     continue;
                 if (cell.Count == 0)
                 {
-                    var details = new TimeEntryDetails(workerId, date, target, row.CustomerId, row.ItemId, row.Billable);
+                    var details = new TimeEntryDetails(workerId, date, target, row.CustomerId, row.ItemId, row.Billable, Notes: string.IsNullOrWhiteSpace(row.Notes) ? null : row.Notes.Trim());
                     var (billRate, costRate, source) = await RatesAsync(details, ct);
                     var entry = TimeEntry.Create(details, billRate, costRate, clock.UtcNow, source);
                     store.Add(entry);
@@ -414,7 +414,20 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
             {
                 var given = same.Select(r => day < r.Hours.Count ? r.Hours[day] : null).OfType<decimal>().ToList();
                 return given.Count == 0 ? (decimal?)null : given.Sum();
-            }).ToList()));
+            }).ToList(), Notes: same.Select(r => r.Notes).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))));
+
+    /// <summary>
+    /// Last week's rows (client, service, billable) that this week doesn't have yet, with no hours: a start for a week
+    /// that repeats the last one.
+    /// </summary>
+    public async Task<IReadOnlyList<WeekRow>> RowsFromLastWeekAsync(Guid workerId, DateOnly monday, CancellationToken ct = default)
+    {
+        var have = (await WeekAsync(workerId, monday, ct)).Select(r => (r.CustomerId, r.ItemId, r.Billable)).ToHashSet();
+        return (await WeekAsync(workerId, monday.AddDays(-7), ct))
+            .Where(r => !have.Contains((r.CustomerId, r.ItemId, r.Billable)))
+            .Select(r => new WeekRow(r.CustomerId, r.ItemId, r.Billable, [.. Enumerable.Repeat<decimal?>(null, 7)]))
+            .ToList();
+    }
 
     private async Task<List<TimeEntry>> WeekEntriesAsync(Guid workerId, DateOnly monday, CancellationToken ct) =>
         (await store.ListTimeAsync(new TimeFilter(monday, monday.AddDays(6), workerId), ct)).Where(e => !e.IsRunning).ToList();

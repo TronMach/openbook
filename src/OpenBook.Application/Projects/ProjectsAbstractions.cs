@@ -7,7 +7,8 @@ namespace OpenBook.Application.Projects;
 /// <summary>One row of a week's time sheet: client, service and billable, with hours Monday to Sunday.</summary>
 /// <param name="Hours">Seven totals; when saving, null leaves a day as it is.</param>
 /// <param name="Locked">Days that can't be changed from the grid (invoiced, or more than one entry); empty when saving.</param>
-public sealed record WeekRow(Guid? CustomerId, Guid? ItemId, bool Billable, IReadOnlyList<decimal?> Hours, IReadOnlyList<bool>? Locked = null);
+/// <param name="Notes">Notes for the entries this save adds in the row (existing entries keep theirs).</param>
+public sealed record WeekRow(Guid? CustomerId, Guid? ItemId, bool Billable, IReadOnlyList<decimal?> Hours, IReadOnlyList<bool>? Locked = null, string? Notes = null);
 
 public sealed record TimeFilter(DateOnly? From = null, DateOnly? To = null, Guid? WorkerId = null, Guid? CustomerId = null);
 

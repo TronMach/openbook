@@ -115,6 +115,23 @@ public sealed class ProjectsTests : IAsyncLifetime
         In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(details ?? new ProjectDetails(), name, _acme.Id)));
 
     [Fact]
+    public async Task A_week_row_carries_notes_and_last_weeks_rows_start_the_next()
+    {
+        var monday = new DateOnly(2026, 3, 2);
+        decimal?[] Week(params decimal?[] days) => [.. days, .. Enumerable.Repeat<decimal?>(null, 7 - days.Length)];
+        await In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, monday,
+            [new WeekRow(_acme.Id, _consulting.Id, true, Week(2m), Notes: "Site survey"), new WeekRow(null, null, false, Week(1m))]));
+        var entry = (await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.ListAsync(new TimeFilter(monday, monday.AddDays(6), _ana.Id)))).Single(e => e.Billable);
+        Assert.Equal("Site survey", entry.Notes);
+
+        var next = monday.AddDays(7);
+        await In<TimeService, int>(s => s.SaveWeekAsync(_ana.Id, next, [new WeekRow(null, null, false, Week(1m))]));
+        var copied = Assert.Single(await In<TimeService, IReadOnlyList<WeekRow>>(s => s.RowsFromLastWeekAsync(_ana.Id, next)));
+        Assert.Equal((_acme.Id, _consulting.Id, true), (copied.CustomerId, copied.ItemId, copied.Billable));
+        Assert.All(copied.Hours, h => Assert.Null(h));
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);

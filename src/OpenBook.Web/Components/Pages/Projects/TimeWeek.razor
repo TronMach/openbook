@@ -13,6 +13,10 @@
         <a class="button secondary" href="@Link(_monday.AddDays(-7))">Previous week</a>
         <a class="button secondary" href="@Link(_monday.AddDays(7))">Next week</a>
         <ActionLink Class="button secondary" Href="/time">Time list</ActionLink>
+        @if (_worker is not null && !Copy)
+        {
+            <a class="button secondary" href="@(Link(_monday) + "&copy=true")">Copy last week's rows</a>
+        }
     </div>
     @if (Error is not null)
     {
@@ -50,7 +54,7 @@
                 <table class="data">
                     <thead>
                         <tr>
-                            <th>Client</th><th>Service</th><th>Billable</th>
+                            <th>Client</th><th>Service</th><th>Billable</th><th>Notes for time added</th>
                             @for (var d = 0; d < 7; d++)
                             {
                                 <th class="num">@_monday.AddDays(d).ToString("ddd d", CultureInfo.CurrentCulture)</th>
@@ -76,6 +80,7 @@
                                     @(row.Billable ? "Yes" : "No")
                                     <input type="hidden" name="b:@index" value="@(row.Billable ? "true" : "false")" />
                                 </td>
+                                <td><input name="n:@index" size="16" maxlength="500" aria-label="Notes for time added in this row" /></td>
                                 @for (var d = 0; d < 7; d++)
                                 {
                                     var day = d;
@@ -88,9 +93,10 @@
                                 <td class="num">@row.Hours.Sum(h => h ?? 0m).ToString("0.##", CultureInfo.CurrentCulture)</td>
                             </tr>
                         }
-                        @for (var n = 0; n < 3; n++)
+                        @for (var n = 0; n < Math.Max(3, _copied.Count + 1); n++)
                         {
                             var index = _rows.Count + n;
+                            var start = n < _copied.Count ? _copied[n] : null;
                             <tr>
                                 <td>
                                     <input type="hidden" name="new:@index" value="true" />
@@ -98,7 +104,7 @@
                                         <option value="">(none)</option>
                                         @foreach (var c in _customers)
                                         {
-                                            <option value="@c.Customer.Id">@c.FullName</option>
+                                            <option value="@c.Customer.Id" selected="@(start?.CustomerId == c.Customer.Id)">@c.FullName</option>
                                         }
                                     </select>
                                 </td>
@@ -107,11 +113,12 @@
                                         <option value="">(none)</option>
                                         @foreach (var s in _services)
                                         {
-                                            <option value="@s.Id">@s.Name</option>
+                                            <option value="@s.Id" selected="@(start?.ItemId == s.Id)">@s.Name</option>
                                         }
                                     </select>
                                 </td>
-                                <td><input type="checkbox" name="b:@index" value="true" aria-label="Billable" /></td>
+                                <td><input type="checkbox" name="b:@index" value="true" checked="@(start?.Billable == true)" aria-label="Billable" /></td>
+                                <td><input name="n:@index" size="16" maxlength="500" aria-label="Notes for a new row" /></td>
                                 @for (var d = 0; d < 7; d++)
                                 {
                                     var day = d;
@@ -123,7 +130,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="3">Total</td>
+                            <td colspan="4">Total</td>
                             @for (var d = 0; d < 7; d++)
                             {
                                 var day = d;
@@ -134,7 +141,11 @@
                     </tfoot>
                 </table>
             </div>
-            <p class="muted">Clearing a cell deletes its time. Billable time needs a client and a service; rates come from the rate card. Running timers aren't shown.</p>
+            @if (Copy && _copied.Count == 0)
+            {
+                <p class="muted">Last week has no rows this week doesn't already have.</p>
+            }
+            <p class="muted">Notes go on the time a row adds when you save, and onto the invoice with it. Clearing a cell deletes its time. Billable time needs a client and a service; rates come from the rate card. Running timers aren't shown.</p>
             <div class="actions"><button type="submit">Save the week</button></div>
         </PostForm>
     }
@@ -154,6 +165,8 @@
     [SupplyParameterFromQuery] private string? Week { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private int? Saved { get; set; }
+    [SupplyParameterFromQuery] private bool Copy { get; set; }
+    private IReadOnlyList<WeekRow> _copied = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -165,6 +178,8 @@
         if (_worker is null)
             return;
         _rows = await TimeService.WeekAsync(_worker.Id, _monday);
+        if (Copy)
+            _copied = await TimeService.RowsFromLastWeekAsync(_worker.Id, _monday);
         _customers = (await CustomerService.ListAsync(today)).Where(c => c.Customer.IsActive).ToList();
         _customerNames = await CustomerService.FullNamesAsync();
         var items = await ItemService.ListAsync(includeInactive: true);
