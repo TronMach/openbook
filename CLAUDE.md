@@ -48,7 +48,7 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - `IX_Accounts_SiblingName` (raw SQL in both projects, on the parent and lower-case name, not in the EF model) stops two first uses making one account twice: an EF rebuild of `Accounts` would lose it.
 - Never let EF rebuild `JournalEntries`, `JournalLines` or `AuditRecords` (its SQLite `DropColumn`/`AlterColumn`): the rebuild loses triggers and its table swap runs after all `Sql()` steps. Drop the triggers, use native `ALTER TABLE … DROP COLUMN` via `Sql()`, recreate the triggers. Check generated migrations for `ef_temp_`.
 - Backfill non-null columns explicitly in the migration (`defaultValue`), not with model `HasDefaultValue` (EF's sentinel rule would turn `false`/`0` into the DB default).
-- `MigrationTests` cover a fresh database, upgrading an M0-era file, and downgrading.
+- `MigrationTests` cover a fresh database, upgrading an M0-era file, downgrading, and upgrading files from three later milestones holding a row in every table (parents first, the ledger sealed and balanced; every row must survive, foreign keys and integrity hold, triggers present); `PostgresMigrationTests` do the last on PostgreSQL. A new starting point is one more `InlineData`. EF's own `__EF…` tables are never filled (a row in `__EFMigrationsLock` makes the next migration wait forever).
 - Keep SQL provider-neutral (quoted identifiers, no SQLite-only functions) for the V1.8 PostgreSQL provider.
 - Domain errors throw `DomainException` with a stable `code`; the API maps them to 400 (404 for `EntityNotFoundException`).
 
