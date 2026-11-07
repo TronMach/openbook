@@ -61,6 +61,16 @@ Voiding the invoice puts everything back on the unbilled list.
 
 Bill and expense lines can be charged to a project for its profitability without being billed to the client: in the **Billable to customers and project costs** panel on the bill or expense page, choose the project for the line and untick **Bill it**.
 
+## The billing run
+
+**Time → Billing run** (`/time/billing`) lists who has time, mileage and costs waiting to be billed through a date, with sub-customers billed with their client under the client. Tick clients and **Make drafts**. A draft posts nothing: open it to change what time is billed at, with a reason (0 writes it off), take lines off for a later bill, or add a message. **Save and post** makes the invoice; or tick several drafts on the run page and **Post ticked drafts**, emailing each if you like. **Discard** puts the work back.
+
+**Realization** shows what billed time came to against what it was worth when worked, by client, and **Time written up or down** lists each change with its reason.
+
+## Fixed fees and limits
+
+On a project, **How it's billed** can be by the hour, a **fixed fee** or **not to exceed**. Time on a fixed-fee project stays out of unbilled work, since the fee is what's invoiced: invoice it as an ordinary line, and the project page sets the fee against the effort worked. A not-to-exceed project is billed by the hour, and the billing run warns when a bill would take it over.
+
 ## Reports
 
 In the **Projects and time** group:

@@ -12,6 +12,19 @@ public enum ProjectStatus
 
 /// <param name="BudgetRevenue">What the project should bring in (contract value).</param>
 /// <param name="BudgetCost">What it should cost: expenses, labor and mileage.</param>
+/// <summary>How a project is billed.</summary>
+public enum BillingArrangement
+{
+    /// <summary>By the hour, from the time recorded.</summary>
+    TimeAndMaterials,
+
+    /// <summary>A set fee: its time is effort to measure, not work waiting to be billed.</summary>
+    FixedFee,
+
+    /// <summary>By the hour, up to a limit.</summary>
+    NotToExceed,
+}
+
 public sealed record ProjectDetails(
     ProjectStatus Status = ProjectStatus.InProgress,
     DateOnly? StartDate = null,
@@ -19,7 +32,9 @@ public sealed record ProjectDetails(
     decimal? BudgetRevenue = null,
     decimal? BudgetCost = null,
     decimal? BudgetHours = null,
-    string? Description = null);
+    string? Description = null,
+    BillingArrangement Arrangement = BillingArrangement.TimeAndMaterials,
+    decimal? Fee = null);
 
 /// <summary>
 /// A job done for a customer, tracked for budget and profit. A project is a sub-customer (its own customer record,
@@ -42,6 +57,10 @@ public sealed class Project
     public decimal? BudgetCost { get; private set; }
     public decimal? BudgetHours { get; private set; }
     public string? Description { get; private set; }
+    public BillingArrangement Arrangement { get; private set; }
+
+    /// <summary>The fixed fee, or the not-to-exceed amount.</summary>
+    public decimal? Fee { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     public bool IsOpen => Status is ProjectStatus.NotStarted or ProjectStatus.InProgress;
@@ -64,6 +83,13 @@ public sealed class Project
         Budget(details.BudgetCost, "Cost budget");
         if (details.BudgetHours is { } hours && (hours < 0m || decimal.Round(hours, 2) != hours))
             throw new DomainException("project.budget_invalid", "Budgeted hours can't be negative and have at most 2 decimals.");
+        if (!Enum.IsDefined(details.Arrangement))
+            throw new DomainException("project.arrangement_invalid", "Choose how the project is billed.");
+        Budget(details.Fee, "Fee");
+        if (details.Arrangement != BillingArrangement.TimeAndMaterials && details.Fee is null or 0m)
+            throw new DomainException("project.fee_required", "Enter the fee, or the amount not to exceed.");
+        Arrangement = details.Arrangement;
+        Fee = details.Arrangement == BillingArrangement.TimeAndMaterials ? null : details.Fee;
         Status = details.Status;
         StartDate = details.StartDate;
         EndDate = details.EndDate;
@@ -190,7 +216,48 @@ public sealed class TimeEntry
 
     public bool IsRunning => StartedAt is not null;
 
-    public decimal Amount => Billable ? decimal.Round(Hours * BillRate, 2, MidpointRounding.AwayFromZero) : 0m;
+    /// <summary>What it's billed at: its worked value, unless it's been written up or down.</summary>
+    public decimal Amount => Billable ? BilledAmount ?? Worked : 0m;
+
+    /// <summary>Hours at the rate, as worked.</summary>
+    public decimal Worked => Billable ? decimal.Round(Hours * BillRate, 2, MidpointRounding.AwayFromZero) : 0m;
+
+    /// <summary>Set when it's billed at something other than its worked value.</summary>
+    public decimal? BilledAmount { get; private set; }
+
+    public string? WriteDownReason { get; private set; }
+    public DateOnly? WrittenDownOn { get; private set; }
+    public string? WrittenDownBy { get; private set; }
+
+    /// <summary>Written down to nothing: it won't be billed.</summary>
+    public bool WrittenOff => BilledAmount == 0m;
+
+    /// <summary>The rate for an invoice line, so hours at it come to <see cref="Amount"/>.</summary>
+    public decimal RateBilled => BilledAmount is { } billed && Hours > 0m ? decimal.Round(billed / Hours, 4, MidpointRounding.AwayFromZero) : BillRate;
+
+    /// <summary>Bills it at another amount, up or down, with a reason. Zero writes it off.</summary>
+    public void Adjust(decimal billed, string reason, DateOnly on, string by)
+    {
+        EnsureEditable();
+        if (!Billable || IsRunning)
+            throw new DomainException("time.not_billable", "Only stopped, billable time can be written up or down.");
+        Money.EnsureCents(billed);
+        if (billed < 0m)
+            throw new DomainException("time.adjust_negative", "Time can't be billed below zero.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("time.adjust_reason", "Say why this time is written up or down.");
+        BilledAmount = billed == Worked ? null : billed;
+        WriteDownReason = BilledAmount is null ? null : TextCleaning.Cut(reason.Trim(), 200);
+        WrittenDownOn = BilledAmount is null ? null : on;
+        WrittenDownBy = BilledAmount is null ? null : by;
+    }
+
+    /// <summary>Back to its worked value.</summary>
+    public void ClearAdjustment()
+    {
+        EnsureEditable();
+        (BilledAmount, WriteDownReason, WrittenDownOn, WrittenDownBy) = (null, null, null, null);
+    }
 
     public decimal Cost => decimal.Round(Hours * CostRate, 2, MidpointRounding.AwayFromZero);
 

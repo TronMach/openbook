@@ -7,6 +7,13 @@ namespace OpenBook.Infrastructure.Persistence;
 
 internal sealed class EfProjectStore(OpenBookDbContext db) : IProjectStore
 {
+    public async Task<IReadOnlyList<PreBill>> ListPreBillsAsync(PreBillStatus status, CancellationToken ct) =>
+        (await db.PreBills.Where(b => b.Status == status).ToListAsync(ct)).OrderBy(b => b.CreatedAt).ToList();
+
+    public Task<PreBill?> GetPreBillAsync(Guid id, CancellationToken ct) => db.PreBills.SingleOrDefaultAsync(b => b.Id == id, ct);
+
+    public void Add(PreBill preBill) => db.PreBills.Add(preBill);
+
     public async Task<IReadOnlyList<Project>> ListProjectsAsync(CancellationToken ct) => await db.Projects.ToListAsync(ct);
 
     public Task<Project?> GetProjectAsync(Guid id, CancellationToken ct) => db.Projects.SingleOrDefaultAsync(p => p.Id == id, ct);

@@ -3700,11 +3700,59 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("MileageTrips", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Projects.PreBill", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly>("Through")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("PreBills", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Projects.Project", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Arrangement")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<long?>("BudgetCost")
                         .HasColumnType("bigint")
@@ -3730,6 +3778,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<DateOnly?>("EndDate")
                         .HasColumnType("date");
+
+                    b.Property<long?>("Fee")
+                        .HasColumnType("bigint")
+                        .HasColumnName("FeeMinor");
 
                     b.Property<DateOnly?>("StartDate")
                         .HasColumnType("date");
@@ -3759,6 +3811,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<bool>("Billable")
                         .HasColumnType("boolean");
+
+                    b.Property<long?>("BilledAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("BilledAmountMinor");
 
                     b.Property<long>("CostRate")
                         .HasColumnType("bigint")
@@ -3796,6 +3852,17 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid>("WorkerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("WriteDownReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("WrittenDownBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("WrittenDownOn")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
@@ -8351,6 +8418,73 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany()
                         .HasForeignKey("WorkerId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Projects.PreBill", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Projects.PreBillLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("PreBillId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<long>("Billed")
+                                .HasColumnType("bigint")
+                                .HasColumnName("BilledMinor");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("Description")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)");
+
+                            b1.Property<long>("Hours")
+                                .HasColumnType("bigint")
+                                .HasColumnName("HoursTenThousandths");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Reason")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<Guid>("SourceId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Worked")
+                                .HasColumnType("bigint")
+                                .HasColumnName("WorkedMinor");
+
+                            b1.HasKey("PreBillId", "LineNumber");
+
+                            b1.ToTable("PreBillLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("PreBillId");
+                        });
+
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Projects.Project", b =>

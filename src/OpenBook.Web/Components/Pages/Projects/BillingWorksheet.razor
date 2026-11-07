@@ -1,0 +1,122 @@
+@page "/time/billing"
+@inject PreBillService Billing
+@inject CustomerService Customers
+
+<PageTitle>Billing run · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Billing run</h1>
+        <ActionLink Class="button secondary" Href="/time">Time</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/unbilled-work">Unbilled work</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/realization">Realization</ActionLink>
+    </div>
+    <p class="muted">Who has time, mileage and costs waiting to be billed. Make drafts, adjust them, and post them when they're right: nothing reaches the books until then.</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Note is not null)
+    {
+        <div class="alert notice" role="status">@Note</div>
+    }
+
+    <form method="get" class="inline no-print" data-enhance="false">
+        <label>Work through <input type="date" name="through" value="@_through.ToString("yyyy-MM-dd")" /></label>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    @if (_rows.Count == 0)
+    {
+        <div class="card"><p>Nothing is waiting to be billed through that date.</p></div>
+    }
+    else
+    {
+        <PostForm Action="/time/billing/drafts" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="through" value="@_through.ToString("yyyy-MM-dd")" />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th></th><th>Client</th><th class="num">Hours</th><th class="num">Time</th><th class="num">Mileage</th><th class="num">Expenses</th><th class="num">Total</th><th>Oldest</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td><input type="checkbox" name="client" value="@row.Client.Id" aria-label="Bill @row.Client.DisplayName" checked /></td>
+                                <td>
+                                    <a href="/customers/@row.Client.Id">@row.Client.DisplayName</a>
+                                    @if (row.Warning is { } warning)
+                                    {
+                                        <div class="out-of-balance">@warning</div>
+                                    }
+                                </td>
+                                <td class="num">@Labels.Quantity(row.Hours)</td>
+                                <td class="num">@Labels.AmountOrBlank(row.Time)</td>
+                                <td class="num">@Labels.AmountOrBlank(row.Mileage)</td>
+                                <td class="num">@Labels.AmountOrBlank(row.Expenses)</td>
+                                <td class="num">@Labels.Amount(row.Total)</td>
+                                <td>@Labels.Date(row.Oldest)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr class="grand-total"><td colspan="6">Total</td><td class="num">@Labels.Amount(_rows.Sum(r => r.Total))</td><td></td></tr></tfoot>
+                </table>
+            </div>
+            <div class="actions"><button type="submit">Make drafts</button></div>
+        </PostForm>
+    }
+
+    @if (_drafts.Count > 0)
+    {
+        <h2>Drafts</h2>
+        <PostForm Action="/time/billing/post" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th></th><th>Client</th><th>Through</th><th class="num">Worked</th><th class="num">To bill</th><th>Made by</th></tr></thead>
+                    <tbody>
+                        @foreach (var draft in _drafts)
+                        {
+                            <tr>
+                                <td><input type="checkbox" name="draft" value="@draft.Id" aria-label="Post this draft" checked /></td>
+                                <td><a href="/time/billing/@draft.Id">@_names.GetValueOrDefault(draft.CustomerId)</a></td>
+                                <td>@Labels.Date(draft.Through)</td>
+                                <td class="num">@Labels.Amount(draft.Worked)</td>
+                                <td class="num">@Labels.Amount(draft.Billed)</td>
+                                <td>@draft.CreatedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">Invoice date</label>
+                    <input id="date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+            <label class="check"><input type="checkbox" name="send" value="true" /> <span>Email each invoice to its customer</span></label>
+            <div class="actions"><button type="submit" data-confirm="Post the ticked drafts as invoices?">Post ticked drafts</button></div>
+        </PostForm>
+    }
+</div>
+
+@code {
+    private DateOnly _through;
+    private IReadOnlyList<BillingRow> _rows = [];
+    private IReadOnlyList<PreBill> _drafts = [];
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+
+    [SupplyParameterFromQuery(Name = "through")] private string? ThroughText { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _through = DateOnly.TryParseExact(ThroughText, "yyyy-MM-dd", out var date) ? date : CompanyTime.Today;
+        _rows = await Billing.WorksheetAsync(_through);
+        _drafts = await Billing.DraftsAsync();
+        _names = await Customers.FullNamesAsync();
+    }
+}

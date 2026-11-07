@@ -103,6 +103,8 @@ public sealed class ProjectService(IProjectStore store, ISalesStore sales, Custo
         p.BudgetCost,
         p.BudgetHours,
         p.Description,
+        Arrangement = p.Arrangement.ToString(),
+        p.Fee,
     });
 }
 
@@ -190,8 +192,38 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
     public async Task<IReadOnlyList<TimeEntry>> OpenAsync(Guid customerId, CancellationToken ct = default)
     {
         var billed = CustomerTree.Billed(customerId, (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id));
+        // A fixed fee is invoiced as the fee: its time measures the effort.
+        var fixedFee = (await store.ListProjectsAsync(ct)).Where(p => p.Arrangement == BillingArrangement.FixedFee).Select(p => p.CustomerId).ToHashSet();
         return (await store.ListTimeAsync(new TimeFilter(), ct))
-            .Where(t => t.CustomerId is { } c && billed.Contains(c) && t.Billable && !t.IsRunning && t.InvoiceId is null).ToList();
+            .Where(t => t.CustomerId is { } c && billed.Contains(c) && !fixedFee.Contains(c) && t.Billable && !t.IsRunning && t.InvoiceId is null && !t.WrittenOff).ToList();
+    }
+
+    /// <summary>Bills time at another amount, with a reason; zero writes it off. Audited. The caller saves, or a draft bill does.</summary>
+    internal async Task AdjustAsync(TimeEntry entry, decimal billed, string reason, DateOnly on, CancellationToken ct)
+    {
+        var before = Snapshot(entry);
+        entry.Adjust(billed, reason, on, user.Actor);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, entry.Id, before, Snapshot(entry)));
+        await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Writes time up, down or off straight from its page.</summary>
+    public async Task<TimeEntry> WriteDownAsync(Guid id, decimal billed, string reason, DateOnly on, CancellationToken ct = default)
+    {
+        var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        await AdjustAsync(entry, billed, reason, on, ct);
+        return entry;
+    }
+
+    /// <summary>Puts written-down time back at its worked value.</summary>
+    public async Task<TimeEntry> ClearWriteDownAsync(Guid id, CancellationToken ct = default)
+    {
+        var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(entry);
+        entry.ClearAdjustment();
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, entry.Id, before, Snapshot(entry)));
+        await store.SaveChangesAsync(ct);
+        return entry;
     }
 
     public async Task<TimeEntry> CreateAsync(TimeEntryDetails details, CancellationToken ct = default)
@@ -403,6 +435,9 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         t.Notes,
         t.StartedAt,
         t.InvoiceId,
+        t.BilledAmount,
+        t.WriteDownReason,
+        t.WrittenDownOn,
     });
 }
 

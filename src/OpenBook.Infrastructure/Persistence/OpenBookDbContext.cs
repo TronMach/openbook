@@ -99,6 +99,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.Project> Projects => Set<OpenBook.Domain.Projects.Project>();
     public DbSet<OpenBook.Domain.Projects.Worker> Workers => Set<OpenBook.Domain.Projects.Worker>();
     public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
+    public DbSet<OpenBook.Domain.Projects.PreBill> PreBills => Set<OpenBook.Domain.Projects.PreBill>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
     public DbSet<OpenBook.Domain.Projects.MileageRate> MileageRates => Set<OpenBook.Domain.Projects.MileageRate>();
     public DbSet<OpenBook.Domain.Projects.BillingRate> BillingRates => Set<OpenBook.Domain.Projects.BillingRate>();
@@ -1027,6 +1028,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(p => p.BudgetRevenue).HasColumnName("BudgetRevenueMinor").HasConversion(NullableMinorUnits);
             b.Property(p => p.BudgetCost).HasColumnName("BudgetCostMinor").HasConversion(NullableMinorUnits);
             b.Property(p => p.BudgetHours).HasColumnName("BudgetHoursTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(p => p.Arrangement).HasConversion<string>().HasMaxLength(20);
+            b.Property(p => p.Fee).HasColumnName("FeeMinor").HasConversion(NullableMinorUnits);
             b.Property(p => p.Description).HasMaxLength(2000);
             b.Ignore(p => p.IsOpen);
             b.HasOne<Customer>().WithMany().HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Restrict);
@@ -1305,6 +1308,33 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Item>().WithMany().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<OpenBook.Domain.Projects.PreBill>(b =>
+        {
+            b.ToTable("PreBills");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Memo).HasMaxLength(OpenBook.Domain.Projects.PreBill.MaxMemoLength);
+            b.Property(x => x.CreatedBy).HasMaxLength(100);
+            b.Ignore(x => x.Worked);
+            b.Ignore(x => x.Billed);
+            b.HasIndex(x => x.Status);
+            b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("PreBillLines");
+                l.WithOwner().HasForeignKey("PreBillId");
+                l.HasKey("PreBillId", nameof(OpenBook.Domain.Projects.PreBillLine.LineNumber));
+                l.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+                l.Property(x => x.Description).HasMaxLength(500);
+                l.Property(x => x.Hours).HasColumnName("HoursTenThousandths").HasConversion(TenThousandths);
+                l.Property(x => x.Worked).HasColumnName("WorkedMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Billed).HasColumnName("BilledMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Reason).HasMaxLength(OpenBook.Domain.Projects.PreBillLine.MaxReasonLength);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
         modelBuilder.Entity<OpenBook.Domain.Projects.TimeEntry>(b =>
         {
             b.ToTable("TimeEntries");
@@ -1320,6 +1350,12 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Ignore(t => t.IsRunning);
             b.Ignore(t => t.Amount);
             b.Ignore(t => t.Cost);
+            b.Ignore(t => t.Worked);
+            b.Ignore(t => t.WrittenOff);
+            b.Ignore(t => t.RateBilled);
+            b.Property(t => t.BilledAmount).HasColumnName("BilledAmountMinor").HasConversion(NullableMinorUnits);
+            b.Property(t => t.WriteDownReason).HasMaxLength(200);
+            b.Property(t => t.WrittenDownBy).HasMaxLength(100);
             b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(t => t.WorkerId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Customer>().WithMany().HasForeignKey(t => t.CustomerId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Item>().WithMany().HasForeignKey(t => t.ItemId).OnDelete(DeleteBehavior.Restrict);

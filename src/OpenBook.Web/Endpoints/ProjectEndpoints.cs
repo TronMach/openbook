@@ -148,7 +148,77 @@ public static class ProjectEndpoints
                 int.TryParse(form["year"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var year) ? year : 0,
                 Number(form["rate"]) ?? throw new DomainException("mileage.rate_invalid", "Enter the rate per mile."), ct))).RequireAuthorization();
 
+        // The billing run.
+        app.MapPost("/time/billing/drafts", async (IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        {
+            var through = Date(form["through"]) ?? Today();
+            List<Guid> clients = [.. form["client"].Select(c => Guid.TryParse(c, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty)];
+            try
+            {
+                var drafts = await billing.MakeDraftsAsync(clients, through, ct);
+                return Results.Redirect($"/time/billing?through={through:yyyy-MM-dd}&note={Uri.EscapeDataString($"{drafts.Count} draft(s) made.")}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/billing?through={through:yyyy-MM-dd}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/time/billing/post", async (IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        {
+            List<Guid> drafts = [.. form["draft"].Select(c => Guid.TryParse(c, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty)];
+            var run = await billing.PostManyAsync(drafts, Date(form["date"]) ?? Today(), form["send"] == "true", ct);
+            var note = $"{run.Posted} posted, {run.Emailed} emailed.{(run.Problems.Count == 0 ? "" : " " + string.Join(" ", run.Problems))}";
+            return Results.Redirect($"/time/billing?note={Uri.EscapeDataString(note)}");
+        }).RequireAuthorization();
+
+        app.MapPost("/time/billing/{id:guid}", async (Guid id, IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        {
+            try
+            {
+                await SaveDraftAsync(billing, id, form, ct);
+                return Results.Redirect($"/time/billing/{id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/billing/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/time/billing/{id:guid}/post", async (Guid id, IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        {
+            try
+            {
+                await SaveDraftAsync(billing, id, form, ct);
+                var invoice = await billing.PostAsync(id, Today(), ct);
+                return Results.Redirect(invoice is null ? "/time/billing" : $"/sales/invoices/{invoice.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/billing/{id}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/time/billing/{id:guid}/discard", async (Guid id, IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        {
+            await billing.DiscardAsync(id, ct);
+            return Results.Redirect("/time/billing");
+        }).RequireAuthorization();
+
         return app;
+    }
+
+    private static async Task SaveDraftAsync(PreBillService billing, Guid id, IFormCollection form, CancellationToken ct)
+    {
+        var removed = form["remove"].Select(r => int.TryParse(r, out var line) ? line : 0).ToHashSet();
+        var changes = new List<PreBillLineChange>(removed.Where(l => l > 0).Select(l => new PreBillLineChange(l, 0m, null, Remove: true)));
+        foreach (var key in form.Keys.Where(k => k.StartsWith("billed:", StringComparison.Ordinal)))
+        {
+            if (int.TryParse(key["billed:".Length..], out var line) && !removed.Contains(line) && Number(form[key]) is { } billed)
+                changes.Add(new PreBillLineChange(line, billed, form[$"reason:{line}"].ToString()));
+        }
+
+        await billing.SaveAsync(id, form["memo"].ToString(), changes, ct);
     }
 
     private static ProjectDetails Details(IFormCollection form) => new(
@@ -158,7 +228,9 @@ public static class ProjectEndpoints
         Number(form["budgetRevenue"]),
         Number(form["budgetCost"]),
         Number(form["budgetHours"]),
-        Text(form["description"]));
+        Text(form["description"]),
+        Enum.TryParse<BillingArrangement>(form["arrangement"], out var arrangement) ? arrangement : BillingArrangement.TimeAndMaterials,
+        Number(form["fee"]));
 
     private static TimeEntryDetails TimeDetails(IFormCollection form, bool requireHours) => new(
         Id(form["workerId"]) ?? throw new DomainException("time.worker_required", "Choose who did the work."),

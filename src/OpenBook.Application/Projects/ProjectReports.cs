@@ -186,10 +186,65 @@ public sealed class ProjectReports(
     /// Work in progress: billable time, mileage and expenses not invoiced on <paramref name="asOf"/> (an invoice dated
     /// later counts as not yet), by client and project, with the oldest work waiting. Detail lists each piece.
     /// </summary>
+    /// <summary>What billed time came to against what it was worth when worked, by client.</summary>
+    public async Task<ReportTable> RealizationAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
+        var time = (await store.ListTimeAsync(new TimeFilter(From: from, To: to), ct)).Where(t => t.Billable && t.CustomerId is not null && (t.InvoiceId is not null || t.WrittenOff)).ToList();
+        var rows = time.GroupBy(t => t.CustomerId!.Value)
+            .OrderBy(g => customers.GetValueOrDefault(g.Key, ""), StringComparer.OrdinalIgnoreCase)
+            .Select(g => Line(new ReportCell(customers.GetValueOrDefault(g.Key, "Unknown client"), new ReportLink("customer", g.Key)), g.ToList()))
+            .ToList();
+        ReportTableRow Line(ReportCell name, IReadOnlyList<TimeEntry> entries, ReportRowStyle style = ReportRowStyle.Normal)
+        {
+            var (worked, billed) = (entries.Sum(t => t.Worked), entries.Sum(t => t.Amount));
+            return new ReportTableRow([name, new ReportCell(entries.Sum(t => t.Hours)), worked, billed, billed - worked, new ReportCell(worked == 0m ? null : decimal.Round(billed / worked * 100m, 1))], 0, style);
+        }
+
+        rows.Add(Line("Total", time, ReportRowStyle.Total));
+        return new ReportTable(
+            "Realization",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Client"), new("Hours", ColumnFormat.Number), new("Worked value", ColumnFormat.Money), new("Billed", ColumnFormat.Money), new("Up or down", ColumnFormat.Money), new("Realization", ColumnFormat.Percent)],
+            rows,
+            null,
+            "Time worked in the period and billed or written off. Worked value is hours at the rate when entered.");
+    }
+
+    /// <summary>Each write-up, write-down and write-off dated in the period, with its reason.</summary>
+    public async Task<ReportTable> WriteDownsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
+        var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
+        var entries = (await store.ListTimeAsync(new TimeFilter(), ct)).Where(t => t.WrittenDownOn >= from && t.WrittenDownOn <= to).OrderBy(t => t.WrittenDownOn).ToList();
+        var rows = entries.Select(t => new ReportTableRow(
+        [
+            new ReportCell(t.WrittenDownOn!.Value),
+            t.CustomerId is { } c ? new ReportCell(customers.GetValueOrDefault(c, "Unknown client"), new ReportLink("customer", c)) : ReportCell.Empty,
+            workers.GetValueOrDefault(t.WorkerId)?.Name,
+            new ReportCell(t.Hours),
+            t.Worked,
+            t.Amount,
+            t.Amount - t.Worked,
+            t.WriteDownReason,
+            t.WrittenDownBy,
+        ])).ToList();
+        rows.Add(new ReportTableRow(["Total", null, null, new ReportCell(entries.Sum(t => t.Hours)), entries.Sum(t => t.Worked), entries.Sum(t => t.Amount), entries.Sum(t => t.Amount - t.Worked), null, null], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Time written up or down",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Date", ColumnFormat.Date), new("Client"), new("Person"), new("Hours", ColumnFormat.Number), new("Worked value", ColumnFormat.Money), new("Billed", ColumnFormat.Money), new("Up or down", ColumnFormat.Money), new("Reason"), new("By")],
+            rows);
+    }
+
     public async Task<ReportTable> UnbilledWorkAsync(DateOnly asOf, bool detail, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var time = (await store.ListTimeAsync(new TimeFilter(To: asOf), ct)).Where(t => t.Billable && !t.IsRunning && t.CustomerId is not null).ToList();
+        // Fixed fees are billed as the fee, and written-off time won't be billed: neither is work in progress.
+        var fixedFee = (await store.ListProjectsAsync(ct)).Where(p => p.Arrangement == BillingArrangement.FixedFee).Select(p => p.CustomerId).ToHashSet();
+        var time = (await store.ListTimeAsync(new TimeFilter(To: asOf), ct)).Where(t => t.Billable && !t.IsRunning && t.CustomerId is { } c && !fixedFee.Contains(c) && !t.WrittenOff).ToList();
         var trips = (await store.ListMileageAsync(null, asOf, null, ct)).Where(t => t.Billable && t.CustomerId is not null).ToList();
         var expenses = (await sales.ListBillableExpensesAsync(null, ct)).Where(e => e.IsBillable && e.Date <= asOf).ToList();
         var invoiceIds = time.Select(t => t.InvoiceId).Concat(trips.Select(t => t.InvoiceId)).Concat(expenses.Select(e => e.InvoiceId)).OfType<Guid>().Distinct().ToList();

@@ -1,0 +1,107 @@
+@page "/time/billing/{Id:guid}"
+@inject PreBillService Billing
+@inject CustomerService Customers
+
+<PageTitle>Draft bill · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_draft is null)
+    {
+        <h1>Draft not found</h1>
+        <p><a href="/time/billing">Back to the billing run</a></p>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>Draft bill: @_client</h1>
+            <span class="badge">@_draft.Status</span>
+            <ActionLink Class="button secondary" Href="/time/billing">Billing run</ActionLink>
+            @if (_draft.InvoiceId is { } invoice)
+            {
+                <ActionLink Class="button" Href="@($"/sales/invoices/{invoice}")">Invoice</ActionLink>
+            }
+        </div>
+        <p class="muted">Work through @Labels.Date(_draft.Through). Change what time is billed at, with a reason; 0 writes it off. Take a line off to leave it for a later bill.</p>
+
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <PostForm Action="@($"/time/billing/{_draft.Id}")" data-enhance="false" data-keep-typed>
+            <AntiforgeryToken />
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Work</th><th class="num">Hours</th><th class="num">Worked</th><th class="num">To bill</th><th>Reason</th><th>Take off</th></tr></thead>
+                    <tbody>
+                        @foreach (var line in _draft.Lines)
+                        {
+                            <tr>
+                                <td>@Labels.Date(line.Date)</td>
+                                <td>@line.Description</td>
+                                <td class="num">@(line.Hours == 0m ? "" : Labels.Quantity(line.Hours))</td>
+                                <td class="num">@Labels.Amount(line.Worked)</td>
+                                <td class="num">
+                                    @if (line.Kind == PreBillLineKind.Time && Open)
+                                    {
+                                        <input class="amount" name="billed:@line.LineNumber" inputmode="decimal" aria-label="To bill" value="@line.Billed.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
+                                    }
+                                    else
+                                    {
+                                        @Labels.Amount(line.Billed)
+                                    }
+                                </td>
+                                <td>
+                                    @if (line.Kind == PreBillLineKind.Time && Open)
+                                    {
+                                        <input name="reason:@line.LineNumber" aria-label="Reason" maxlength="@PreBillLine.MaxReasonLength" value="@line.Reason" />
+                                    }
+                                    else
+                                    {
+                                        @line.Reason
+                                    }
+                                </td>
+                                <td>
+                                    @if (Open)
+                                    {
+                                        <input type="checkbox" name="remove" value="@line.LineNumber" aria-label="Take this line off" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr class="grand-total"><td colspan="3">Total</td><td class="num">@Labels.Amount(_draft.Worked)</td><td class="num">@Labels.Amount(_draft.Billed)</td><td colspan="2"></td></tr></tfoot>
+                </table>
+            </div>
+            <div class="field">
+                <label for="memo">Message on the invoice <span class="muted">(optional)</span></label>
+                <input id="memo" name="memo" maxlength="@PreBill.MaxMemoLength" value="@_draft.Memo" disabled="@(!Open)" />
+            </div>
+            @if (Open)
+            {
+                <div class="actions">
+                    <button type="submit">Save</button>
+                    <button type="submit" class="secondary" formaction="@($"/time/billing/{_draft.Id}/post")" data-confirm="Save this draft and post it as an invoice?">Save and post</button>
+                    <button type="submit" class="secondary" formaction="@($"/time/billing/{_draft.Id}/discard")" data-confirm="Discard this draft? The work goes back to waiting.">Discard</button>
+                </div>
+            }
+        </PostForm>
+    }
+</div>
+
+@code {
+    private PreBill? _draft;
+    private string? _client;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private bool Open => _draft?.Status == PreBillStatus.Draft;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _draft = await Billing.GetAsync(Id);
+        if (_draft is not null)
+            _client = (await Customers.FullNamesAsync()).GetValueOrDefault(_draft.CustomerId);
+    }
+}

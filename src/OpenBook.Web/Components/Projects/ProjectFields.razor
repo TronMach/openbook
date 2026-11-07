@@ -33,6 +33,20 @@
         <input id="budgetHours" name="budgetHours" class="short" inputmode="decimal" value="@Project?.BudgetHours?.ToString("0.##")" />
     </div>
 </div>
+<div class="row">
+    <div class="field">
+        <label for="arrangement">How it's billed</label>
+        <select id="arrangement" name="arrangement">
+            <option value="@BillingArrangement.TimeAndMaterials" selected="@(Project?.Arrangement is null or BillingArrangement.TimeAndMaterials)">By the hour</option>
+            <option value="@BillingArrangement.FixedFee" selected="@(Project?.Arrangement == BillingArrangement.FixedFee)">Fixed fee</option>
+            <option value="@BillingArrangement.NotToExceed" selected="@(Project?.Arrangement == BillingArrangement.NotToExceed)">By the hour, not to exceed</option>
+        </select>
+    </div>
+    <div class="field" data-shown-by="#arrangement" data-shown-for="FixedFee NotToExceed">
+        <label for="fee">Fee or limit</label>
+        <input id="fee" name="fee" class="amount" inputmode="decimal" value="@Project?.Fee?.ToString("0.00")" />
+    </div>
+</div>
 <div class="field">
     <label for="description">Description <span class="muted">(optional)</span></label>
     <input id="description" name="description" maxlength="2000" value="@Project?.Description" />

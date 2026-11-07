@@ -14,6 +14,14 @@ public sealed record TimeFilter(DateOnly? From = null, DateOnly? To = null, Guid
 public interface IProjectStore
 {
     Task<IReadOnlyList<Project>> ListProjectsAsync(CancellationToken ct);
+
+    /// <summary>Tracked, with lines, oldest first.</summary>
+    Task<IReadOnlyList<PreBill>> ListPreBillsAsync(PreBillStatus status, CancellationToken ct);
+
+    /// <summary>Tracked, with lines.</summary>
+    Task<PreBill?> GetPreBillAsync(Guid id, CancellationToken ct);
+
+    void Add(PreBill preBill);
     Task<Project?> GetProjectAsync(Guid id, CancellationToken ct);
     Task<Project?> GetProjectForCustomerAsync(Guid customerId, CancellationToken ct);
 

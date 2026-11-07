@@ -34,6 +34,18 @@
             <p>@description</p>
         }
 
+        @if (p.Arrangement != BillingArrangement.TimeAndMaterials)
+        {
+            <p>
+                <strong>@(p.Arrangement == BillingArrangement.FixedFee ? "Fixed fee" : "Not to exceed") @Labels.Amount(p.Fee ?? 0m).</strong>
+                Billed so far @Labels.Amount(_figures.Income), worked @Labels.Amount(_worked)
+                @if (p.Fee is { } fee)
+                {
+                    <span class="@(_worked > fee ? "out-of-balance" : "muted")">(@(_worked > fee ? $"{Labels.Amount(_worked - fee)} of effort beyond it" : $"{Labels.Amount(fee - _worked)} of it left in effort"))</span>
+                }
+            </p>
+        }
+
         <table class="data">
             <thead><tr><th></th><th class="num">Actual</th><th class="num">Budget</th><th class="num">Left</th></tr></thead>
             <tbody>
@@ -133,6 +145,8 @@
 </div>
 
 @code {
+    private decimal _worked;
+
     private ProjectSummary? _project;
     private ProjectFigures? _figures;
     private IReadOnlyList<TimeEntry> _time = [];
@@ -149,6 +163,7 @@
         if (_project is null)
             return;
         _figures = await Reports.FiguresAsync(_project, null, DateOnly.MaxValue);
+        _worked = (await TimeService.ListAsync(new TimeFilter(CustomerId: _project.Customer.Id))).Where(t => !t.IsRunning).Sum(t => t.Worked);
         var customerId = _project.Customer.Id;
         _time = await TimeService.ListAsync(new TimeFilter(CustomerId: customerId));
         _expenses = await Billables.ListAsync(customerId);
