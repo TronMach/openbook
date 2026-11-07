@@ -44,7 +44,7 @@
                     <input id="memo" @bind="_memo" @bind:after="Changed" maxlength="1000" />
                 </div>
             </div>
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="Changed" CustomerId="null" Date="_date" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="Changed" CustomerId="null" Date="_date" />
         </div>
 
         <div class="card" style="margin-top: 1.5rem">

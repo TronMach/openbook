@@ -1,9 +1,10 @@
 @* A search-as-you-type picker for interactive forms (the ARIA combobox pattern): type part of a name to narrow the list,
    arrow keys and Enter to choose (searchselect.js), Esc or Tab to leave. Leaving with an exact name typed chooses it;
-   anything else puts back the current choice. *@
+   anything else puts back the current choice. Given CustomerAdded, VendorAdded or ItemAdded it also offers to add a new
+   one (QuickAdd), for people allowed to, and chooses it; the callback puts the record in the page's list first. *@
 
 <div class="search-select @Class" @onfocusout="LeaveAsync">
-    <input id="@Id" class="search-input" type="text" role="combobox" autocomplete="off" spellcheck="false"
+    <input id="@Id" @ref="_input" class="search-input" type="text" role="combobox" autocomplete="off" spellcheck="false"
            aria-autocomplete="list" aria-expanded="@(_open ? "true" : "false")" aria-controls="@_listId" aria-label="@AriaLabel"
            placeholder="@Placeholder" value="@_text" disabled="@Disabled"
            @oninput="Typed" @onfocus="Open" @onclick="Open" />
@@ -36,7 +37,7 @@
                     }
                 </li>
             }
-            @if (_matches.Count == 0)
+            @if (_matches.Count == 0 && _query.Length > 0)
             {
                 <li role="presentation" class="search-empty muted">No matches for “@_query”</li>
             }
@@ -44,9 +45,18 @@
             {
                 <li role="presentation" class="search-empty muted">Type more to see other matches</li>
             }
+            @if (CanAdd && !_matches.Any(m => string.Equals(m.Label, _query, StringComparison.CurrentCultureIgnoreCase)))
+            {
+                <li id="@($"{_listId}-add")" role="option" class="search-option search-add@(_matches.Count == 0 && _query.Length > 0 ? " active" : "")" aria-selected="false"
+                    @onmousedown="StartAdd" @onmousedown:preventDefault>@(_query.Length > 0 ? L["+ Add “{0}”", _query] : AddLabel)</li>
+            }
         </ul>
     }
 </div>
+@if (_adding is { } adding)
+{
+    <QuickAdd Kind="Kind" Name="@adding" OnSaved="AddedAsync" OnCancel="() => StopAdding()" />
+}
 
 @code {
     private readonly string _listId = $"search-{Guid.NewGuid():N}";
@@ -55,6 +65,10 @@
     private string _text = string.Empty;
     private IReadOnlyList<PickerOption> _matches = [];
     private Guid? _shownValue;
+    private ElementReference _input;
+    private string? _adding;
+    private bool _focusBack;
+    private bool _mayAdd;
 
     [Parameter, EditorRequired]
     public IReadOnlyList<PickerOption> Options { get; set; } = [];
@@ -88,6 +102,52 @@
     [Parameter]
     public bool Disabled { get; set; }
 
+    [Parameter]
+    public EventCallback<OpenBook.Domain.Sales.Customer> CustomerAdded { get; set; }
+
+    [Parameter]
+    public EventCallback<OpenBook.Domain.Purchases.Vendor> VendorAdded { get; set; }
+
+    [Parameter]
+    public EventCallback<OpenBook.Domain.Sales.Item> ItemAdded { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private QuickAddKind Kind =>
+        CustomerAdded.HasDelegate ? QuickAddKind.Customer : VendorAdded.HasDelegate ? QuickAddKind.Vendor : QuickAddKind.Item;
+
+    private bool CanAdd => _mayAdd && !Disabled;
+
+    private string AddLabel => Kind switch
+    {
+        QuickAddKind.Customer => L["+ Add a new customer"],
+        QuickAddKind.Vendor => L["+ Add a new vendor"],
+        _ => L["+ Add a new product or service"],
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is null || !(CustomerAdded.HasDelegate || VendorAdded.HasDelegate || ItemAdded.HasDelegate))
+            return;
+        var page = Kind switch
+        {
+            QuickAddKind.Customer => "/customers/new",
+            QuickAddKind.Vendor => "/vendors/new",
+            _ => "/items/new",
+        };
+        _mayAdd = (await AuthState).User.CanReach(page);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusBack)
+        {
+            await _input.FocusAsync();
+            _focusBack = false;
+        }
+    }
+
     protected override void OnParametersSet()
     {
         // Follow the parent's value unless the user is typing.
@@ -105,7 +165,7 @@
 
     private void Open()
     {
-        if (_open || Disabled)
+        if (_open || Disabled || _focusBack)
             return;
         _open = true;
         _query = string.Empty;
@@ -118,6 +178,39 @@
         _query = _text.Trim();
         _open = true;
         _matches = PickerOptions.Filter(Options, _query);
+    }
+
+    private void StartAdd()
+    {
+        _adding = _query;
+        _open = false;
+        _query = string.Empty;
+        _text = Label(Value);
+    }
+
+    private void StopAdding()
+    {
+        _adding = null;
+        _focusBack = true;
+    }
+
+    private async Task AddedAsync(QuickAdded added)
+    {
+        StopAdding();
+        switch (added.Record)
+        {
+            case OpenBook.Domain.Sales.Customer customer:
+                await CustomerAdded.InvokeAsync(customer);
+                break;
+            case OpenBook.Domain.Purchases.Vendor vendor:
+                await VendorAdded.InvokeAsync(vendor);
+                break;
+            case OpenBook.Domain.Sales.Item item:
+                await ItemAdded.InvokeAsync(item);
+                break;
+        }
+
+        await PickAsync(new PickerOption(added.Id, added.Label));
     }
 
     private async Task PickAsync(PickerOption? option)

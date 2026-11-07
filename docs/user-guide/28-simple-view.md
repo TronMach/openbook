@@ -71,6 +71,8 @@ Select a step to start it: **Create Invoices** opens a new invoice, **Pay Bills*
 
 A step you haven't used yet stays on the page and says what it's for (Purchase Orders says "Order stock from vendors"), so you can find it when you need it. Bills waiting for approval don't count as bills to pay. **Pay Bills** counts bills due within a week, including overdue ones.
 
+Under the steps, **To do** lists anything else that's waiting: bank lines to review, accounts to reconcile, receipts to record, and figures in the books that don't agree. It's only there when there's something on it. **Getting started** follows until each of its steps is done.
+
 ## Setting up in the simple view
 
 Company setup asks three more questions: **What do you sell?** (services and products, services, or products), **I keep products in stock and want them counted**, and **I charge sales tax**. When the company starts in the simple view, and you're not starting from an export, OpenBook sets up the starter chart of accounts for your business type, fitted to the answers:
@@ -79,7 +81,7 @@ Company setup asks three more questions: **What do you sell?** (services and pro
 - Products only: no Service Revenue account.
 - Keeping stock: an Inventory Asset account for what your stock cost.
 
-Anything left out is created the first time it's needed. If you charge sales tax, you go to **Sales tax** next to add the agency you pay it to and its rate; otherwise to the home page. In the full view you choose a starter chart yourself, as before.
+A company that sells services also starts with a **Services** item, so a first invoice has something to put on a line; rename it, or add your own from the invoice. Anything left out is created the first time it's needed. If you charge sales tax, you go to **Sales tax** next to add the agency you pay it to and its rate; otherwise to the home page. In the full view you choose a starter chart yourself, as before.
 
 ## Reports and the dashboard
 

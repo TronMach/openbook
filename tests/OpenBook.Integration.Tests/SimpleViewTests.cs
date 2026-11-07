@@ -249,7 +249,7 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
         Assert.Contains("Create Invoices", home, StringComparison.Ordinal);
         Assert.Contains("Order stock from vendors", home, StringComparison.Ordinal);
         Assert.Contains("href=\"/banking/write-checks\"", home, StringComparison.Ordinal);
-        Assert.DoesNotContain("Getting started", home, StringComparison.Ordinal);
+        Assert.Contains("Getting started", home, StringComparison.Ordinal);
 
         var switched = await Switch(browser, home, "Full", "/sales?show=estimates");
         Assert.Equal("/sales?show=estimates", switched.Headers.Location?.OriginalString);

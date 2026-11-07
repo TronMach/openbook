@@ -46,7 +46,7 @@
                     else
                     {
                         <td>
-                            <SearchSelect Options="ItemOptions" Value="line.ItemId" OnChange="e => PickItem(line, e)" EmptyText="(note only)" Placeholder="Find a product or service…" AriaLabel="Product or service" />
+                            <SearchSelect Options="ItemOptions" Value="line.ItemId" OnChange="e => PickItem(line, e)" ItemAdded="ItemCallback" EmptyText="(note only)" Placeholder="Find a product or service…" AriaLabel="Product or service" />
                         </td>
                         <td>
                             <input @bind="line.Description" aria-label="Description" />
@@ -168,6 +168,21 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<Item> Items { get; set; } = [];
 
+    /// <summary>Lets the line picker add an item: this puts it in <see cref="Items"/>.</summary>
+    [Parameter]
+    public EventCallback<Item> OnItemAdded { get; set; }
+
+    private EventCallback<Item> ItemCallback => OnItemAdded.HasDelegate ? EventCallback.Factory.Create<Item>(this, ItemAddedAsync) : default;
+
+    // The picker chooses a new item at once, before the parent has rendered it into Items.
+    private Item? _justAdded;
+
+    private Task ItemAddedAsync(Item item)
+    {
+        _justAdded = item;
+        return OnItemAdded.InvokeAsync(item);
+    }
+
     /// <summary>Raised after an edit that changes the total, so the parent can re-render what depends on it.</summary>
     [Parameter]
     public EventCallback OnChange { get; set; }
@@ -283,7 +298,7 @@
     private Task PickItem(SalesLineModel line, ChangeEventArgs e)
     {
         line.ItemId = Guid.TryParse(e.Value as string, out var id) ? id : null;
-        if (Items.FirstOrDefault(i => i.Id == line.ItemId) is { } item)
+        if ((_justAdded?.Id == line.ItemId ? _justAdded : Items.FirstOrDefault(i => i.Id == line.ItemId)) is { } item)
         {
             line.Description = item.Description ?? item.Name;
             line.Rate = item.Rate;

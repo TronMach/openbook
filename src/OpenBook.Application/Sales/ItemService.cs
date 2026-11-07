@@ -1,6 +1,7 @@
 using System.Text.Json;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Inventory;
+using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
@@ -44,6 +45,40 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         store.Add(Audit(AuditAction.Created, item, before: null));
         await store.SaveChangesAsync(ct);
         return item;
+    }
+
+    /// <summary>Active income accounts, in chart order.</summary>
+    public async Task<IReadOnlyList<Account>> IncomeAccountsAsync(CancellationToken ct = default) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
+
+    /// <summary>
+    /// A service or a product not counted in stock, made from a picker while filling in a form. With no account given
+    /// it goes to the first income account, and a chart without one gets a "Sales" account.
+    /// </summary>
+    public async Task<Item> CreateQuickAsync(string name, ItemType type, decimal rate, bool taxable, Guid? incomeAccountId, CancellationToken ct = default)
+    {
+        var account = incomeAccountId;
+        if (account is null)
+        {
+            var income = await IncomeAccountsAsync(ct);
+            account = income.Count > 0 ? income[0].Id : (await accounts.CreateUsualAsync(new CreateAccountCommand("Sales", AccountType.Income), ct)).Id;
+        }
+
+        return await CreateAsync(new ItemDetails(name, type, account.Value, rate, Taxable: taxable), ct);
+    }
+
+    /// <summary>
+    /// "Services", for a new company that sells them, so a first invoice has something to put on a line at once: the
+    /// income account with "Service" in its name, else the first. Nothing when there are items or no income account.
+    /// </summary>
+    public async Task<Item?> CreateStarterServiceAsync(CancellationToken ct = default)
+    {
+        if ((await store.ListItemsAsync(ct)).Count > 0)
+            return null;
+        var income = await IncomeAccountsAsync(ct);
+        var account = income.FirstOrDefault(a => a.Name.Contains("Service", StringComparison.OrdinalIgnoreCase)) ?? (income.Count > 0 ? income[0] : null);
+        return account is null ? null : await CreateAsync(new ItemDetails("Services", ItemType.Service, account.Id), ct);
     }
 
     public async Task<Item> UpdateAsync(Guid id, ItemDetails details, CancellationToken ct = default)

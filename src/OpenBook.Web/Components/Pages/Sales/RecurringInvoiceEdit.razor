@@ -29,10 +29,6 @@
     {
         <div class="card"><p>That recurring invoice doesn't exist. <a href="/sales/recurring">Back to recurring invoices</a>.</p></div>
     }
-    else if (_loaded && (_customers.Count == 0 || _items.Count == 0))
-    {
-        <div class="card"><p>@L["Recurring invoices need a customer and at least one product or service."]</p></div>
-    }
     else if (_loaded)
     {
         @if (!_active)
@@ -48,7 +44,7 @@
                 </div>
                 <div class="field">
                     <label for="customer">@L["Customer"]</label>
-                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" @bind-Value="_customerId" Placeholder="Choose a customer…" />
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" @bind-Value="_customerId" Placeholder="Choose a customer…" />
                 </div>
             </div>
             <div class="row">
@@ -91,7 +87,7 @@
             </div>
             <TagChecks Options="_segments" Value="_tags" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="CompanyTime.Today" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="CompanyTime.Today" />
             <p class="hint">@L["Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting."]</p>
 
             <div class="field" style="margin-top: 1rem">

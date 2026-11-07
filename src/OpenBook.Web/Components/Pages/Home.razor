@@ -10,6 +10,7 @@
 {
     <h1>@_company.Name</h1>
     <WorkflowHome F="_figures" User="HttpContext.User" Edition="_company.Edition" />
+    <TodoList User="HttpContext.User" Company="_company" BesideWorkflow="true" />
 }
 else if (_company is not null)
 {
@@ -55,7 +56,7 @@ else if (_company is not null)
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
-    // Set in the simple view only, which shows the workflow instead of the shortcuts and getting started.
+    // Set in the simple view only, which shows the workflow instead of the shortcuts.
     private WorkflowFigures? _figures;
 
     protected override async Task OnInitializedAsync()

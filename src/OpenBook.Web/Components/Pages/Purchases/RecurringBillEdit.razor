@@ -29,10 +29,6 @@
     {
         <div class="card"><p>That recurring bill doesn't exist. <a href="/purchases/recurring">Back to recurring bills</a>.</p></div>
     }
-    else if (_loaded && _vendors.Count == 0)
-    {
-        <div class="card"><p>Recurring bills need a vendor. <ActionLink Href="/vendors/new">Add one</ActionLink> first.</p></div>
-    }
     else if (_loaded)
     {
         @if (!_active)
@@ -48,7 +44,7 @@
                 </div>
                 <div class="field">
                     <label for="vendor">@L["Vendor"]</label>
-                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" VendorAdded="v => _vendors = [.. _vendors, v]" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
                 </div>
             </div>
             <div class="row">

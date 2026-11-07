@@ -7,35 +7,39 @@
 @inject IServiceProvider Services
 @inject OpenBookStorage Storage
 
-@* The full view's home page: what's waiting (each line links to where it's done, and only shows when there's something
-   to do and the person can open that page), then a getting-started checklist that ticks itself off from the books and
-   leaves once everything is done. *@
-<section class="card">
-    <h2>@L["To do"]</h2>
-    @if (_todos.Count == 0)
-    {
-        <p class="muted">@L["Nothing is waiting: no overdue invoices, bills due, bank lines to review or accounts to reconcile."]</p>
-    }
-    else
-    {
-        <ul class="todo-list">
-            @foreach (var todo in _todos)
-            {
-                <li class="@(todo.Urgent ? "urgent" : null)">
-                    <a href="@todo.Href">@todo.Text</a>
-                    @if (todo.ShowCount)
-                    {
-                        <span class="badge">@todo.Count</span>
-                    }
-                    @if (todo.Detail is not null)
-                    {
-                        <span class="muted">@todo.Detail</span>
-                    }
-                </li>
-            }
-        </ul>
-    }
-</section>
+@* The home page's list: what's waiting (each line links to where it's done, and only shows when there's something to
+   do and the person can open that page), then a getting-started checklist that ticks itself off from the books and
+   leaves once everything is done. Beside the simple view's workflow it leaves out what the steps already count, and
+   draws nothing when nothing else is waiting. *@
+@if (_todos.Count > 0 || !BesideWorkflow)
+{
+    <section class="card">
+        <h2>@L["To do"]</h2>
+        @if (_todos.Count == 0)
+        {
+            <p class="muted">@L["Nothing is waiting: no overdue invoices, bills due, bank lines to review or accounts to reconcile."]</p>
+        }
+        else
+        {
+            <ul class="todo-list">
+                @foreach (var todo in _todos)
+                {
+                    <li class="@(todo.Urgent ? "urgent" : null)">
+                        <a href="@todo.Href">@todo.Text</a>
+                        @if (todo.ShowCount)
+                        {
+                            <span class="badge">@todo.Count</span>
+                        }
+                        @if (todo.Detail is not null)
+                        {
+                            <span class="muted">@todo.Detail</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
 
 @if (_steps.Count > 0 && _steps.Any(s => !s.Done))
 {
@@ -71,6 +75,10 @@
     [Parameter, EditorRequired]
     public Company Company { get; set; } = default!;
 
+    /// <summary>Under the simple view's workflow, whose steps show overdue invoices, deposits, bills, estimates and orders.</summary>
+    [Parameter]
+    public bool BesideWorkflow { get; set; }
+
     private sealed record Todo(int Count, string Text, string Href, string? Detail, bool Urgent, bool ShowCount);
 
     private sealed record Step(bool Done, string Text, string Href, string Hint);
@@ -83,9 +91,13 @@
         var feed = Get<BankFeedService>();
         var bills = await Get<IPurchasesStore>().ListOpenBillsAsync(null, default);
 
-        Add(figures.OverdueInvoices, L["Overdue invoices"], "/reports/ar-aging", L["Remind the customers, or record payments that came in"], urgent: true);
-        Add(figures.PaymentsToDeposit, L["Payments to deposit"], "/banking/deposits/new", L["{0} waiting to go into the bank", Labels.Amount(figures.ToDeposit)]);
-        Add(figures.BillsDueSoon, L["Bills due within a week"], "/purchases/pay-bills", L["Including any overdue"], urgent: bills.Any(b => b.CanBePaid && b.IsOverdue(today)));
+        if (!BesideWorkflow)
+        {
+            Add(figures.OverdueInvoices, L["Overdue invoices"], "/reports/ar-aging", L["Remind the customers, or record payments that came in"], urgent: true);
+            Add(figures.PaymentsToDeposit, L["Payments to deposit"], "/banking/deposits/new", L["{0} waiting to go into the bank", Labels.Amount(figures.ToDeposit)]);
+            Add(figures.BillsDueSoon, L["Bills due within a week"], "/purchases/pay-bills", L["Including any overdue"], urgent: bills.Any(b => b.CanBePaid && b.IsOverdue(today)));
+        }
+
         Add(bills.Count(b => b.Approval == OpenBook.Domain.Purchases.BillApproval.Pending), L["Bills waiting for approval"], "/purchases/approvals");
         Add((await Get<OpenBook.Application.Reporting.ReportSubscriptionService>().ListAsync()).Count(r => r.IsActive && r.LastRunFailed),
             L["Scheduled reports that failed"], "/reports/schedules", urgent: true);
@@ -103,8 +115,12 @@
 
         if (Get<OpenBook.Web.Diagnostics.BooksCheckStatus>().Last is { Problems: > 0 } check)
             Add(check.Problems, L["Figures in the books that don't agree"], "/accountant/check", L["Found by the daily check of the books"], urgent: true);
-        Add(figures.OpenEstimates, L["Estimates waiting for an answer"], "/sales?show=estimates");
-        Add(figures.OrdersToReceive, L["Purchase orders still to receive"], "/purchases/orders");
+        if (!BesideWorkflow)
+        {
+            Add(figures.OpenEstimates, L["Estimates waiting for an answer"], "/sales?show=estimates");
+            Add(figures.OrdersToReceive, L["Purchase orders still to receive"], "/purchases/orders");
+        }
+
         if (figures.StockItems > 0)
             Add((await Get<ReorderService>().DueAsync()).Count, L["Items to reorder"], "/purchases/reorder", L["Counting what's on order and promised to customers"]);
         Add(await Get<OpenBook.Application.Documents.DocumentCaptureService>().NewCountAsync(),

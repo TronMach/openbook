@@ -16,17 +16,13 @@
         <div class="alert error" role="alert">@_error</div>
     }
 
-    @if (_loaded && _vendors.Count == 0)
-    {
-        <div class="card"><p>Bills need a vendor. <ActionLink Href="/vendors/new">Add one</ActionLink> first.</p></div>
-    }
-    else if (_loaded)
+    @if (_loaded)
     {
         <div class="card">
             <div class="row">
                 <div class="field">
                     <label for="vendor">Vendor</label>
-                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" Value="_vendor?.Id" OnChange="PickVendor" Placeholder="Choose a vendor…" />
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" VendorAdded="v => _vendors = [.. _vendors, v]" Value="_vendor?.Id" OnChange="PickVendor" Placeholder="Choose a vendor…" />
                 </div>
                 <div class="field">
                     <label for="reference">Bill no. <span class="muted">(the vendor's invoice number, optional)</span></label>

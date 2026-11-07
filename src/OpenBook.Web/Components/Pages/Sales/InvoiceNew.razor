@@ -16,24 +16,13 @@
         <div class="alert error" role="alert">@_error</div>
     }
 
-    @if (_loaded && (_customers.Count == 0 || _items.Count == 0))
-    {
-        <div class="card">
-            <p>
-                Invoices need a customer and at least one product or service.
-                @if (_customers.Count == 0) { <ActionLink Href="/customers/new">Add a customer</ActionLink> }
-                @if (_customers.Count == 0 && _items.Count == 0) { <span> and </span> }
-                @if (_items.Count == 0) { <ActionLink Href="/items/new">add a product or service</ActionLink> }.
-            </p>
-        </div>
-    }
-    else if (_loaded)
+    @if (_loaded)
     {
         <div class="card">
             <div class="row">
                 <div class="field">
                     <label for="customer">@L["Customer"]</label>
-                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" Value="_customerId" OnChange="PickCustomer" Placeholder="Choose a customer…" />
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" Value="_customerId" OnChange="PickCustomer" Placeholder="Choose a customer…" />
                     @if (_customer?.BillingAddress is { } address)
                     {
                         <span class="hint" style="white-space: pre-line">@address</span>
@@ -57,7 +46,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" CustomerCodeOff="@(TaxCustomer?.TaxCodeId is { } own && _taxCodes.All(c => c.Code.Id != own))" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="TickedLines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="TickedLines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             @if (_billable.Count > 0)
             {

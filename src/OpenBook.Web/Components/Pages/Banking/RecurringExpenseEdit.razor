@@ -60,7 +60,7 @@
             <div class="row">
                 <div class="field">
                     <label for="vendor">Vendor <span class="muted">(optional)</span></label>
-                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" @bind-Value="_vendorId" EmptyText="No vendor" Placeholder="Choose a vendor…" />
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" VendorAdded="v => _vendors = [.. _vendors, v]" @bind-Value="_vendorId" EmptyText="No vendor" Placeholder="Choose a vendor…" />
                 </div>
                 <div class="field">
                     <label for="payee">Payee <span class="muted">(optional; defaults to the vendor's name)</span></label>

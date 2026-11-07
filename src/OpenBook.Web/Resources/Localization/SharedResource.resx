@@ -50,6 +50,18 @@
   <data name="(switched off)" xml:space="preserve">
     <value>(switched off)</value>
   </data>
+  <data name="+ Add a new customer" xml:space="preserve">
+    <value>+ Add a new customer</value>
+  </data>
+  <data name="+ Add a new product or service" xml:space="preserve">
+    <value>+ Add a new product or service</value>
+  </data>
+  <data name="+ Add a new vendor" xml:space="preserve">
+    <value>+ Add a new vendor</value>
+  </data>
+  <data name="+ Add “{0}”" xml:space="preserve">
+    <value>+ Add “{0}”</value>
+  </data>
   <data name="1 add-in" xml:space="preserve">
     <value>1 add-in</value>
   </data>
@@ -58,6 +70,9 @@
   </data>
   <data name="1 field" xml:space="preserve">
     <value>1 field</value>
+  </data>
+  <data name="1 item" xml:space="preserve">
+    <value>1 item</value>
   </data>
   <data name="1 rule" xml:space="preserve">
     <value>1 rule</value>
@@ -86,8 +101,14 @@
   <data name="A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role." xml:space="preserve">
     <value>A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role.</value>
   </data>
+  <data name="A product, not counted in stock" xml:space="preserve">
+    <value>A product, not counted in stock</value>
+  </data>
   <data name="a receipt is for sales paid on the spot" xml:space="preserve">
     <value>a receipt is for sales paid on the spot</value>
+  </data>
+  <data name="A service" xml:space="preserve">
+    <value>A service</value>
   </data>
   <data name="A shorter menu and a home page that shows each step of the work" xml:space="preserve">
     <value>A shorter menu and a home page that shows each step of the work</value>
@@ -143,8 +164,14 @@
   <data name="Add a customer" xml:space="preserve">
     <value>Add a customer</value>
   </data>
+  <data name="Add a product or service" xml:space="preserve">
+    <value>Add a product or service</value>
+  </data>
   <data name="Add a rate" xml:space="preserve">
     <value>Add a rate</value>
+  </data>
+  <data name="Add a vendor" xml:space="preserve">
+    <value>Add a vendor</value>
   </data>
   <data name="Add landed costs" xml:space="preserve">
     <value>Add landed costs</value>
@@ -446,6 +473,9 @@
   <data name="Chapters" xml:space="preserve">
     <value>Chapters</value>
   </data>
+  <data name="Charge sales tax on it" xml:space="preserve">
+    <value>Charge sales tax on it</value>
+  </data>
   <data name="Chart of Accounts" xml:space="preserve">
     <value>Chart of Accounts</value>
   </data>
@@ -725,6 +755,9 @@
   <data name="Enter a bill" xml:space="preserve">
     <value>Enter a bill</value>
   </data>
+  <data name="Enter a name." xml:space="preserve">
+    <value>Enter a name.</value>
+  </data>
   <data name="Enter Bills" xml:space="preserve">
     <value>Enter Bills</value>
   </data>
@@ -881,6 +914,9 @@
   <data name="For other kinds of business" xml:space="preserve">
     <value>For other kinds of business</value>
   </data>
+  <data name="For something you keep in stock, use Items: it asks about stock and costs." xml:space="preserve">
+    <value>For something you keep in stock, use Items: it asks about stock and costs.</value>
+  </data>
   <data name="For whoever keeps the books." xml:space="preserve">
     <value>For whoever keeps the books.</value>
   </data>
@@ -985,6 +1021,9 @@
   </data>
   <data name="Including any overdue" xml:space="preserve">
     <value>Including any overdue</value>
+  </data>
+  <data name="Income account" xml:space="preserve">
+    <value>Income account</value>
   </data>
   <data name="Income and expenses by month" xml:space="preserve">
     <value>Income and expenses by month</value>
@@ -1802,9 +1841,6 @@
   <data name="Recurring invoices" xml:space="preserve">
     <value>Recurring invoices</value>
   </data>
-  <data name="Recurring invoices need a customer and at least one product or service." xml:space="preserve">
-    <value>Recurring invoices need a customer and at least one product or service.</value>
-  </data>
   <data name="Recurring journal entries" xml:space="preserve">
     <value>Recurring journal entries</value>
   </data>
@@ -2186,6 +2222,9 @@
   <data name="Terms" xml:space="preserve">
     <value>Terms</value>
   </data>
+  <data name="Terms and everything else can be added on their page later." xml:space="preserve">
+    <value>Terms and everything else can be added on their page later.</value>
+  </data>
   <data name="Thank donors" xml:space="preserve">
     <value>Thank donors</value>
   </data>
@@ -2455,6 +2494,12 @@
   </data>
   <data name="What" xml:space="preserve">
     <value>What</value>
+  </data>
+  <data name="What do you sell it for?" xml:space="preserve">
+    <value>What do you sell it for?</value>
+  </data>
+  <data name="What is it?" xml:space="preserve">
+    <value>What is it?</value>
   </data>
   <data name="What You Owe" xml:space="preserve">
     <value>What You Owe</value>

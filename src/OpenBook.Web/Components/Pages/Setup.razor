@@ -9,6 +9,7 @@
 @inject MigrationSetupService MigrationSetup
 @inject SetupState State
 @inject ChartTemplates Templates
+@inject ItemService Items
 @inject NavigationManager Navigation
 
 <PageTitle>Set up your company · OpenBook</PageTitle>
@@ -394,6 +395,8 @@
         {
             var template = Input.Edition == Edition.Nonprofit ? "nonprofit" : ChartTemplates.ForBusinessType(Input.BusinessType).Key;
             await Templates.ApplyAsync(template, new StarterAnswers(Input.Sells ?? StarterSales.Both, Input.KeepsStock), HttpContext.RequestAborted);
+            if (Input.Sells != StarterSales.Products)
+                await Items.CreateStarterServiceAsync(HttpContext.RequestAborted);
             return true;
         }
         catch (DomainException)

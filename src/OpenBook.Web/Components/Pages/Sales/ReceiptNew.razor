@@ -17,17 +17,13 @@
         <div class="alert error" role="alert">@_error</div>
     }
 
-    @if (_loaded && _items.Count == 0)
-    {
-        <div class="card"><p>Add a <ActionLink Href="/items/new">product or service</ActionLink> first.</p></div>
-    }
-    else if (_loaded)
+    @if (_loaded)
     {
         <div class="card">
             <div class="row">
                 <div class="field">
                     <label for="customer">Customer <span class="muted">(optional)</span></label>
-                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" @bind-Value="_customerId" @bind-Value:after="DefaultTaxCode" EmptyText="No customer" Placeholder="Type a name or leave blank" />
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" @bind-Value="_customerId" @bind-Value:after="DefaultTaxCode" EmptyText="No customer" Placeholder="Type a name or leave blank" />
                 </div>
                 <div class="field">
                     <label for="number">Receipt number</label>
@@ -48,7 +44,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" CustomerCodeOff="@(TaxCustomer?.TaxCodeId is { } own && _taxCodes.All(c => c.Code.Id != own))" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             <MoreOptions Open="@(_depositAccountId != _defaultDepositId || _locationId is not null || _warehouseId is not null)">
                 <div class="field">

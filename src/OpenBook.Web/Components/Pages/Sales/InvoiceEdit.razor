@@ -55,7 +55,7 @@
 
             @if (!_allLocked)
             {
-                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
             }
 
             @if (_locked.Count > 0)

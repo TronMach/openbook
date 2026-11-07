@@ -1,0 +1,161 @@
+@using OpenBook.Domain.Accounts
+@using OpenBook.Domain.Purchases
+@using OpenBook.Domain.Sales
+@inject Operations Ops
+
+@* Adds a customer, vendor or simple item from a picker without leaving the form being filled in, which keeps everything
+   typed so far. It asks only what's needed to carry on; the record's own page has the rest. A plain panel over the page
+   rather than a <dialog>, so it needs no script, and it sits outside any table's scrolling. *@
+<div class="quick-add-backdrop">
+    <div class="card quick-add" role="dialog" aria-modal="true" aria-labelledby="@_titleId" @onkeydown="KeyAsync">
+        <h2 id="@_titleId">@Title</h2>
+        @if (_error is not null)
+        {
+            <div class="alert error" role="alert">@_error</div>
+        }
+        <div class="field">
+            <label for="@($"{_titleId}-name")">@L["Name"]</label>
+            <input id="@($"{_titleId}-name")" @ref="_first" @bind="_name" @bind:event="oninput" @onkeydown="EnterAsync" maxlength="200" autocomplete="off" />
+        </div>
+        @if (Kind == QuickAddKind.Item)
+        {
+            <div class="field">
+                <label for="@($"{_titleId}-type")">@L["What is it?"]</label>
+                <select id="@($"{_titleId}-type")" @bind="_type">
+                    <option value="@ItemType.Service">@L["A service"]</option>
+                    <option value="@ItemType.NonInventory">@L["A product, not counted in stock"]</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="@($"{_titleId}-rate")">@L["What do you sell it for?"]</label>
+                <input id="@($"{_titleId}-rate")" class="amount" type="number" step="any" min="0" @bind="_rate" @bind:event="oninput" @onkeydown="EnterAsync" />
+            </div>
+            @if (_incomeAccounts.Count > 1)
+            {
+                <div class="field">
+                    <label for="@($"{_titleId}-income")">@L["Income account"]</label>
+                    <select id="@($"{_titleId}-income")" @bind="_incomeAccountId">
+                        @foreach (var account in _incomeAccounts)
+                        {
+                            <option value="@account.Id">@account.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+            <label class="check"><input type="checkbox" @bind="_taxable" /> <span>@L["Charge sales tax on it"]</span></label>
+            <p class="hint">@L["For something you keep in stock, use Items: it asks about stock and costs."]</p>
+        }
+        else
+        {
+            <div class="field">
+                <label for="@($"{_titleId}-email")">@L["Email"] <span class="muted">@L["(optional)"]</span></label>
+                <input id="@($"{_titleId}-email")" type="email" @bind="_email" @bind:event="oninput" @onkeydown="EnterAsync" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="@($"{_titleId}-address")">@L["Address"] <span class="muted">@L["(optional)"]</span></label>
+                <textarea id="@($"{_titleId}-address")" rows="3" @bind="_address" @bind:event="oninput"></textarea>
+            </div>
+            <p class="hint">@L["Terms and everything else can be added on their page later."]</p>
+        }
+        <div class="actions">
+            <button type="button" disabled="@_busy" @onclick="SaveAsync">@L["Add"]</button>
+            <button type="button" class="secondary" @onclick="() => OnCancel.InvokeAsync()">@L["Cancel"]</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly string _titleId = $"quick-add-{Guid.NewGuid():N}";
+    private ElementReference _first;
+    private string? _error;
+    private bool _busy;
+    private string _name = string.Empty;
+    private string? _email;
+    private string? _address;
+    private ItemType _type = ItemType.Service;
+    private decimal? _rate;
+    private bool _taxable = true;
+    private Guid? _incomeAccountId;
+    private IReadOnlyList<Account> _incomeAccounts = [];
+
+    [Parameter, EditorRequired]
+    public QuickAddKind Kind { get; set; }
+
+    /// <summary>What was typed in the picker, to start the name with.</summary>
+    [Parameter]
+    public string? Name { get; set; }
+
+    [Parameter]
+    public EventCallback<QuickAdded> OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private string Title => Kind switch
+    {
+        QuickAddKind.Customer => L["Add a customer"],
+        QuickAddKind.Vendor => L["Add a vendor"],
+        _ => L["Add a product or service"],
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _name = Name ?? string.Empty;
+        if (Kind != QuickAddKind.Item)
+            return;
+        _incomeAccounts = await Ops.RunAsync<ItemService, IReadOnlyList<Account>>(s => s.IncomeAccountsAsync());
+        _incomeAccountId = _incomeAccounts.FirstOrDefault()?.Id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await _first.FocusAsync();
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await OnCancel.InvokeAsync();
+    }
+
+    private async Task EnterAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy)
+            return;
+        var name = _name.Trim();
+        if (name.Length == 0)
+        {
+            _error = L["Enter a name."];
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim();
+            var address = string.IsNullOrWhiteSpace(_address) ? null : _address.Trim();
+            await OnSaved.InvokeAsync(Kind switch
+            {
+                QuickAddKind.Customer => new QuickAdded(await Ops.RunAsync<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails(name, Email: email, BillingAddress: address)))),
+                QuickAddKind.Vendor => new QuickAdded(await Ops.RunAsync<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails(name, Email: email, Address: address)))),
+                _ => new QuickAdded(await Ops.RunAsync<ItemService, Item>(s => s.CreateQuickAsync(name, _type, _rate ?? 0m, _taxable, _incomeAccountId))),
+            });
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

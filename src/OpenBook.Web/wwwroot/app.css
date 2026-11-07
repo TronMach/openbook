@@ -446,6 +446,12 @@ table.entry select[aria-label="Class"] { min-width: 8rem; }
 .search-option[aria-selected="true"] { font-weight: 600; }
 .search-group { padding: 0.4rem 0.6rem 0.15rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .search-empty { padding: 0.35rem 0.6rem; }
+.search-add { color: var(--accent); border-top: 1px solid var(--border); }
+.quick-add-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1rem; background: rgb(0 0 0 / 0.4); }
+.quick-add { width: min(26rem, 100%); max-height: 100%; overflow-y: auto; margin: 0; text-align: left; white-space: normal; }
+.quick-add h2 { margin-top: 0; }
+.quick-add .field { margin-bottom: 0.75rem; }
+.quick-add .field input, .quick-add .field select, .quick-add .field textarea { width: 100%; }
 table.entry .search-select { min-width: 14rem; }
 /* An open picker list must not be clipped by the scrolling line table around it. */
 .table-wrap:has(.search-list:not([hidden])) { overflow: visible; }

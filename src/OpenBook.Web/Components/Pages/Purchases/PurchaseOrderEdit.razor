@@ -21,17 +21,13 @@
     {
         <div class="card"><p>That purchase order doesn't exist, isn't open, or has goods received or bills. <a href="/purchases/orders">Back to purchase orders</a>.</p></div>
     }
-    else if (_loaded && _vendors.Count == 0)
-    {
-        <div class="card"><p>Purchase orders need a vendor. <ActionLink Href="/vendors/new">Add one</ActionLink>.</p></div>
-    }
     else if (_loaded)
     {
         <div class="card">
             <div class="row">
                 <div class="field">
                     <label for="vendor">Vendor</label>
-                    <SearchSelect Id="vendor" Options="_vendorOptions" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
+                    <SearchSelect Id="vendor" Options="_vendorOptions" VendorAdded="AddVendor" @bind-Value="_vendorId" Placeholder="Choose a vendor…" />
                 </div>
                 <div class="field">
                     <label for="number">Order number</label>
@@ -111,6 +107,12 @@
     private IReadOnlyList<Vendor> _vendors = [];
     private IReadOnlyList<Item> _items = [];
     private IReadOnlyList<PickerOption> _vendorOptions = [];
+
+    private void AddVendor(Vendor vendor)
+    {
+        _vendors = [.. _vendors, vendor];
+        _vendorOptions = PickerOptions.Vendors(_vendors);
+    }
     private IReadOnlyList<PickerOption> _itemOptions = [];
     private IReadOnlyList<PickerOption> _categoryOptions = [];
     private IReadOnlyList<Warehouse> _warehouses = [];

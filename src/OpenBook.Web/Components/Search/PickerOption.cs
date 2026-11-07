@@ -14,6 +14,33 @@ public sealed record PickerOption(Guid Id, string Label, string? Detail = null, 
     internal string Haystack { get; } = string.Join(' ', new[] { Label, Detail, Keywords }.Where(s => !string.IsNullOrEmpty(s)));
 }
 
+/// <summary>What a <see cref="SearchSelect"/> can add without leaving the form.</summary>
+public enum QuickAddKind
+{
+    Customer,
+    Vendor,
+    Item,
+}
+
+/// <summary>A record <see cref="QuickAdd"/> made.</summary>
+public sealed record QuickAdded(Guid Id, string Label, object Record)
+{
+    public QuickAdded(Customer customer)
+        : this(customer?.Id ?? Guid.Empty, customer?.DisplayName ?? string.Empty, customer!)
+    {
+    }
+
+    public QuickAdded(Vendor vendor)
+        : this(vendor?.Id ?? Guid.Empty, vendor?.DisplayName ?? string.Empty, vendor!)
+    {
+    }
+
+    public QuickAdded(Item item)
+        : this(item?.Id ?? Guid.Empty, item?.Name ?? string.Empty, item!)
+    {
+    }
+}
+
 /// <summary>Search-as-you-type matching and the option lists the forms use.</summary>
 public static class PickerOptions
 {

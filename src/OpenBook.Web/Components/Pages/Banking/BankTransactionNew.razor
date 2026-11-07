@@ -20,11 +20,11 @@
     {
         <div class="card">
             <p class="muted">@(_kind == BankTransactionKind.Spend ? "From" : "Into") <strong>@_accountName</strong></p>
-            @if (_kind == BankTransactionKind.Spend && _vendors.Count > 0)
+            @if (_kind == BankTransactionKind.Spend)
             {
                 <div class="field">
                     <label for="vendor">Vendor <span class="muted">(optional)</span></label>
-                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" Value="_vendorId" OnChange="PickVendor" EmptyText="None" Placeholder="Type a name or leave blank" />
+                    <SearchSelect Id="vendor" Options="PickerOptions.Vendors(_vendors)" VendorAdded="v => _vendors = [.. _vendors, v]" Value="_vendorId" OnChange="PickVendor" EmptyText="None" Placeholder="Type a name or leave blank" />
                     <span class="hint">Shows the expense on the vendor's page and fills in their default category.</span>
                 </div>
             }
