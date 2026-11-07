@@ -19,7 +19,7 @@
 
 **Inventory**: Inventory valuation, Inventory stock status, Physical inventory worksheet, Purchases by product (quantity, amount and average cost bought in a period).
 
-**Taxes**: 1099 summary and detail, Sales tax liability, Tax summary (your accounts' totals by tax form line, ending at net profit; on Schedule C, half of meals comes off for the 50% limit, line 30 is there for the business use of your home, and the mileage log's standard mileage deduction is shown under **Not in the books**, for line 9 if you use the standard rate).
+**Taxes**: 1099 summary and detail, Sales tax liability, Tax summary (your accounts' totals by tax form line, ending at net profit; on Schedule C, half of meals comes off for the 50% limit, line 30 is there for the business use of your home, and the mileage log's standard mileage deduction is shown under **Not in the books**, for line 9 if you use the standard rate). For a partnership or S corporation, accounts can go on **Schedule K** lines (interest, dividends, capital gains, other income, section 179, charitable contributions), which stay out of page 1's ordinary business income; a **Meals** line takes half off on Forms 1065, 1120-S and 1120; and a **books to return** worksheet (Schedule M-1) shows how the net income per books becomes the income on the return. The balance sheet report is your starting point for Schedule L.
 
 **Accountant**: Account list, Trial balance, General ledger, Journal, Trial balance worksheet, Adjusting journal entries.
 

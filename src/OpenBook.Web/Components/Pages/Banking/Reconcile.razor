@@ -170,7 +170,7 @@
                 await sp.GetRequiredService<ReconciliationService>().ListAsync(AccountId),
                 (await sp.GetRequiredService<BankingService>().ListAccountsAsync()).FirstOrDefault(a => a.Account.Id == AccountId)));
             _account = chart.Get(AccountId);
-            BankingRules.EnsureBankingAccount(_account);
+            BankingRules.EnsureReconcilable(_account);
             _accountName = chart.FullName(AccountId);
             _lastStatementDate = summary?.LastReconciledDate;
             _beginning = summary?.ReconciledBalance ?? 0m;

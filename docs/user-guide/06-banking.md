@@ -73,7 +73,7 @@ Most lines repeat: the same utility company every month, the same software subsc
 
 Reconciling checks your books against the bank's statement, line by line, so you know they agree. Do it every month when the statement arrives.
 
-1. On the Banking page, select **Reconcile** on the account.
+1. On the Banking page, select **Reconcile** on the account. (An investment or other asset account reconciles the same way, from **Reconcile to a statement** on its register.)
 2. Enter the **statement ending date** and the **statement ending balance** (for a card, the amount owed), then **Start reconciling**. The beginning balance is where your last reconciliation ended.
 3. Tick each transaction that appears on the statement. Lines the bank feed already added or matched, dated by the statement, start out ticked: the bank has said those cleared. The **difference** at the top goes down as you go. Your ticks are saved as you make them, so you can stop and come back.
 4. When the difference is zero, select **Finish reconciliation**.

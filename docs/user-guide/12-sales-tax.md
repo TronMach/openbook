@@ -36,7 +36,9 @@ A project or other sub-customer billed with its parent is covered by the parent'
 
 The **Sales tax** page lists each agency with **Owed today** and the **period to file**.
 
-**Reports → Sales tax liability** shows, for a period, each agency and rate: total sales, non-taxable, exempt and taxable amounts, and the tax. Use it to fill in your return. Credit memos are subtracted. If your state lets you report on the **cash basis** (tax when you're paid), choose **Cash** for the basis: each invoice counts in proportion to what was paid on it in the period, sales receipts count on their date, credit memos count as they're refunded, and what's owed is what you've collected less what you've paid.
+**Reports → Sales tax liability** shows, for a period, each agency and rate: total sales, non-taxable, exempt and taxable amounts, and the tax. Use it to fill in your return. Credit memos are subtracted. **Selling into other states**: **Sales tax → Nexus thresholds** keeps each state's economic nexus threshold (the sales a year, and a number of transactions where the state has one) as you get them from the state or your adviser. **Reports → Sales by state** sets all your sales against them: invoices and receipts less credit memos, by the customer's shipping address (else billing), and sales channels by the state shipped to. A state past its threshold over the last twelve months with no tax agency set up for it shows on the home page's to-do list. OpenBook doesn't know the states' rules.
+
+If your state lets you report on the **cash basis** (tax when you're paid), choose **Cash** for the basis: each invoice counts in proportion to what was paid on it in the period, sales receipts count on their date, credit memos count as they're refunded, and what's owed is what you've collected less what you've paid.
 
 ## Paying the tax
 

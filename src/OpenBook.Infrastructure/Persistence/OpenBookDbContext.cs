@@ -137,6 +137,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<TaxRate> TaxRates => Set<TaxRate>();
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
     public DbSet<SalesTaxPayment> SalesTaxPayments => Set<SalesTaxPayment>();
+    public DbSet<NexusThreshold> NexusThresholds => Set<NexusThreshold>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
@@ -1147,6 +1148,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Segment>().WithMany().HasForeignKey(r => r.ClassId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NexusThreshold>(b =>
+        {
+            b.ToTable("NexusThresholds");
+            b.HasKey(t => t.Id);
+            b.HasIndex(t => t.Region).IsUnique();
+            b.Property(t => t.Region).HasMaxLength(10);
+            b.Property(t => t.SalesAmount).HasColumnName("SalesAmountMinor").HasConversion(MinorUnits);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.Donation>(b =>

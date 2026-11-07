@@ -1,0 +1,68 @@
+@page "/sales-tax/nexus"
+@using OpenBook.Domain.SalesTax
+@inject NexusService Nexus
+
+<PageTitle>@L["Nexus thresholds"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Nexus thresholds"]</h1>
+        <ActionLink Class="button secondary" Href="/reports/sales-by-state">@L["Sales by state"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales-tax">@L["Sales tax"]</ActionLink>
+    </div>
+    <p class="muted">
+        Selling into a state past its economic nexus threshold can mean registering and collecting its sales tax there. Keep each
+        state's threshold here, from the state's rules or your adviser: the sales a year and, where the state has one, a number of
+        transactions. <strong>Sales by state</strong> sets your sales against them, and the home page's to-do list names any state
+        past its threshold over the last twelve months with no tax agency set up for it. OpenBook doesn't know the states' rules.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_thresholds.Count > 0)
+    {
+        <table class="data">
+            <thead><tr><th>@L["State"]</th><th class="num">@L["Sales"]</th><th class="num">@L["Transactions"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _thresholds)
+                {
+                    <tr>
+                        <td>@t.Region</td>
+                        <td class="num">@Labels.Amount(t.SalesAmount)</td>
+                        <td class="num">@(t.Transactions?.ToString("N0", System.Globalization.CultureInfo.CurrentCulture) ?? "")</td>
+                        <td>
+                            <PostForm Action="/sales-tax/nexus/remove" class="inline" data-enhance="false">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="region" value="@t.Region" />
+                                <button type="submit" class="link">@L["Remove"]</button>
+                            </PostForm>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Add or change a state"]</h2>
+        <PostForm Action="/sales-tax/nexus" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field"><label for="nexus-region">@L["State"]</label><input id="nexus-region" name="region" class="short" required maxlength="10" placeholder="TX" /></div>
+                <div class="field"><label for="nexus-amount">@L["Sales a year"]</label><input id="nexus-amount" name="amount" class="amount" inputmode="decimal" required placeholder="100000.00" /></div>
+                <div class="field"><label for="nexus-count">@L["Or transactions"] <span class="muted">@L["(optional)"]</span></label><input id="nexus-count" name="transactions" class="short" inputmode="numeric" placeholder="200" /></div>
+            </div>
+            <div class="actions"><button type="submit">@L["Save"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<NexusThreshold> _thresholds = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() => _thresholds = await Nexus.ThresholdsAsync();
+}

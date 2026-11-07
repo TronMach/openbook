@@ -50,7 +50,7 @@ public sealed class ReconciliationService(IBankingStore bank, AccountService acc
     public async Task<Reconciliation> StartAsync(Guid accountId, DateOnly statementDate, decimal statementEndingBalance, CancellationToken ct = default)
     {
         var account = (await accounts.GetChartAsync(ct)).Get(accountId);
-        BankingRules.EnsureBankingAccount(account);
+        BankingRules.EnsureReconcilable(account);
 
         var existing = await bank.ListReconciliationsAsync(accountId, ct);
         if (existing.Any(r => r.Status == ReconciliationStatus.InProgress))

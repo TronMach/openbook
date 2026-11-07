@@ -7,12 +7,15 @@ Number,Account,Type,Donor restricted,Tax line,Description
 1300,Prepaid Expenses,Other Current Asset,,,
 1500,Equipment,Fixed Asset,,,
 1510,Equipment:Accumulated Depreciation,Fixed Asset,,,
+1600,Investments,Other Asset,,,Brokerage and endowment holdings at market value; reconcile to the statements
 2000,Accounts Payable,Accounts Payable,,,
 2100,Organization Credit Card,Credit Card,,,
 2300,Payroll Liabilities,Other Current Liability,,,
 2400,Deferred Revenue,Other Current Liability,,,Payments received for future programs
 3000,Net Assets Without Donor Restrictions,Equity,,,Opening net assets free of donor restrictions
+3050,Board-Designated Net Assets,Equity,,,Unrestricted net assets the board has set aside (a reserve or quasi-endowment)
 3100,Net Assets With Donor Restrictions,Equity,Yes,,Opening net assets donors restricted to a purpose or time
+3150,Endowment Net Assets,Equity,Yes,,Gifts donors require to be held as an endowment
 3900,Retained Earnings,Equity,,,Prior years' change in net assets
 4000,Contributions,Income,,n.8.1,Individual and corporate gifts
 4010,Contributions:Unrestricted,Income,,,
@@ -24,6 +27,7 @@ Number,Account,Type,Donor restricted,Tax line,Description
 4300,Special Events,Income,,n.8.11,
 4400,Membership Dues,Income,,n.8.1,
 4500,In-kind Contributions,Income,,n.8.1,
+4600,Investment Return,Other Income,,n.8.3,Interest dividends and gains or losses on investments net of fees
 4900,Net Assets Released from Restrictions,Income,,,Moves restricted amounts to unrestricted once the purpose is met
 4910,Net Assets Released from Restrictions:Released From Restricted,Income,Yes,,
 4920,Net Assets Released from Restrictions:Released To Unrestricted,Income,,,

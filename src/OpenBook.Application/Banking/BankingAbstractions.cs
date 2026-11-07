@@ -139,6 +139,16 @@ public static class BankingRules
         _ => document?.Payee ?? line.EntryMemo ?? line.LineMemo ?? $"Journal entry {line.EntryNumber}",
     };
 
+    /// <summary>Accounts with statements to reconcile: bank and card accounts, and investment or other asset accounts a broker reports on.</summary>
+    public static bool IsReconcilable(AccountType type) =>
+        BankTransaction.IsBankingAccount(type) || type is AccountType.OtherCurrentAsset or AccountType.OtherAsset;
+
+    public static void EnsureReconcilable(Account account)
+    {
+        if (!IsReconcilable(account.Type))
+            throw new Domain.Common.DomainException("bank.not_reconcilable", $"'{account.Name}' isn't an account with statements to reconcile: a bank, credit card, investment or other asset account.");
+    }
+
     public static void EnsureBankingAccount(Account account)
     {
         if (!BankTransaction.IsBankingAccount(account.Type))

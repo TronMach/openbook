@@ -6505,6 +6505,32 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("ScheduledEmails", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.NexusThreshold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<long>("SalesAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("SalesAmountMinor");
+
+                    b.Property<int?>("Transactions")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Region")
+                        .IsUnique();
+
+                    b.ToTable("NexusThresholds", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxPayment", b =>
                 {
                     b.Property<Guid>("Id")

@@ -143,6 +143,9 @@
         Add(await Get<ReceiptService>().NewCountAsync(), L["Receipts to record"], "/purchases/receipts");
         if (Company.Edition == Edition.Nonprofit)
             Add(await Get<GiftService>().UnthankedCountAsync(), L["Gifts not yet thanked"], "/nonprofit/thanks");
+        var unregistered = await Get<OpenBook.Application.SalesTax.NexusService>().UnregisteredAsync(today);
+        Add(unregistered.Count, L["States past their sales tax threshold"], "/reports/sales-by-state",
+            unregistered.Count > 0 ? L["{0}: no tax agency set up there. Check whether to register.", string.Join(", ", unregistered.Select(s => s.Region))].Value : null, urgent: true);
         var grants = await Get<GrantService>().RemindersAsync(today);
         if (grants.Reports.Count > 0)
             Add(grants.Reports.Count, L["Grant reports due"], $"/nonprofit/grants/{grants.Reports[0].Grant.Id}#reports-due",

@@ -91,6 +91,48 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_partnerships_tax_summary_keeps_schedule_k_apart_halves_meals_and_ties_books_to_the_return()
+    {
+        await _db.InScope(async sp =>
+        {
+            var settings = sp.GetRequiredService<CompanySettingsService>();
+            var c = await settings.GetAsync();
+            return await settings.UpdateAsync(new UpdateCompanySettingsCommand(c.Name, OpenBook.Domain.Companies.BusinessType.Partnership, c.LegalName, c.Email, c.Phone,
+                c.Address, c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis));
+        });
+        var sales = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var interest = await _db.CreateAccount("Interest Earned", AccountType.OtherIncome, "7000");
+        var meals = await _db.CreateAccount("Meals", AccountType.Expense, "6400");
+        var charity = await _db.CreateAccount("Donations Given", AccountType.Expense, "6800");
+        var misc = await _db.CreateAccount("Sundry", AccountType.Expense, "6900");
+        await In<OpenBook.Application.Accounts.AccountService, int>(s => s.MapTaxLinesAsync(new Dictionary<Guid, string?>
+        {
+            [sales.Id] = "p.1a", [interest.Id] = "p.k5", [meals.Id] = "p.meals", [_rent.Id] = "p.13", [charity.Id] = "p.k13a",
+        }));
+        Task Post(Account debit, Account credit, decimal amount) => In<OpenBook.Application.Ledger.PostingEngine, OpenBook.Domain.Ledger.JournalEntry>(s =>
+            s.PostAsync(new OpenBook.Application.Ledger.PostJournalEntryCommand(Mar1, [OpenBook.Domain.Ledger.JournalLineDraft.Dr(debit.Id, amount), OpenBook.Domain.Ledger.JournalLineDraft.Cr(credit.Id, amount)])));
+        await Post(_checking, sales, 1_000m);
+        await Post(_checking, interest, 20m);
+        await Post(_rent, _checking, 300m);
+        await Post(meals, _checking, 100m);
+        await Post(charity, _checking, 30m);
+        await Post(misc, _checking, 10m);
+
+        var table = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("tax-summary", ReportParameters.Parse("preset=Custom&from=2026-03-01&to=2026-03-31")));
+        decimal? Row(string label) => table.Rows.FirstOrDefault(r => r.Cells[0].Value as string == label)?.Cells[1].Value as decimal?;
+        // Page 1: 1,000 less 300 rent and 100 meals, half of which comes back.
+        Assert.Equal(650m, Row("Ordinary business income on tax lines (page 1)"));
+        Assert.Equal(-50m, Row("Less half of meals (50% of most business meals is deductible)"));
+        Assert.Contains(table.Rows, r => (r.Cells[0].Value as string)?.EndsWith("Schedule K line 5: Interest income", StringComparison.Ordinal) == true);
+        // Books: 1,020 in, 440 out = 580; back to the return through the items that differ.
+        Assert.Equal(580m, Row("Net income per books (accounts on tax lines and not)"));
+        Assert.Equal(-20m, Row("Less income stated apart on Schedule K"));
+        Assert.Equal(30m, Row("Plus deductions stated apart on Schedule K"));
+        Assert.Equal(10m, Row("Less accounts not on a tax line (map them, or adjust by hand)"));
+        Assert.Equal(650m, Row("Income per return (page 1)"));
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";

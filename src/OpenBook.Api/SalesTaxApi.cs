@@ -35,6 +35,8 @@ public sealed record SalesTaxPaymentResponse(
 }
 
 /// <param name="CreateCode">Also create a tax code of the same name charging just this rate.</param>
+public sealed record NexusThresholdRequest(string Region, decimal SalesAmount, int? Transactions = null);
+
 public sealed record CreateTaxRateRequest(string Name, Guid AgencyId, decimal Percent, bool CreateCode = true);
 
 public sealed record TaxLiabilityAgencyResponse(
@@ -109,6 +111,27 @@ internal static class SalesTaxApi
             return new TaxLiabilityResponse(report.From, report.To,
                 report.Agencies.Select(a => new TaxLiabilityAgencyResponse(a.Agency.Id, a.Agency.Name, a.Rates, a.Tax, a.OwedAtStart, a.Paid, a.OwedAtEnd)).ToList(),
                 report.UntaxedSales);
+        });
+        tax.MapGet("/nexus", async (NexusService s, CancellationToken ct) =>
+            (await s.ThresholdsAsync(ct)).Select(t => new NexusThresholdRequest(t.Region, t.SalesAmount, t.Transactions)));
+        tax.MapPut("/nexus", async (NexusThresholdRequest r, NexusService s, CancellationToken ct) =>
+        {
+            var t = await s.SaveAsync(r.Region, r.SalesAmount, r.Transactions, ct);
+            return new NexusThresholdRequest(t.Region, t.SalesAmount, t.Transactions);
+        });
+        tax.MapDelete("/nexus/{region}", async (string region, NexusService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(region, ct);
+            return Results.NoContent();
+        });
+        tax.MapGet("/sales-by-state", async (DateOnly from, DateOnly to, NexusService s, CancellationToken ct) =>
+        {
+            var report = await s.SalesByStateAsync(from, to, ct);
+            return new
+            {
+                report.From, report.To, report.Unknown,
+                States = report.States.Select(x => new { x.Region, x.Sales, x.Transactions, Threshold = x.Threshold?.SalesAmount, TransactionsThreshold = x.Threshold?.Transactions, x.OverThreshold, x.HasAgency }),
+            };
         });
         tax.MapGet("/exempt-customers", async (SalesTaxReports s, CancellationToken ct) =>
             (await s.ExemptCustomersAsync(ct)).Select(x => new

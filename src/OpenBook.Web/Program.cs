@@ -163,6 +163,7 @@ app.MapGet("/healthz", async (OpenBook.Infrastructure.Persistence.OpenBookDbCont
     await db.Database.CanConnectAsync(ct) ? Results.Ok("ok") : Results.StatusCode(StatusCodes.Status503ServiceUnavailable)).AllowAnonymous();
 app.MapOpenBookApi();
 app.MapAccountEndpoints();
+app.MapNexusEndpoints();
 app.MapSingleSignOn();
 app.MapAttachmentEndpoints();
 app.MapCheckEndpoints();

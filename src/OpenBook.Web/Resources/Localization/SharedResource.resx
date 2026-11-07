@@ -176,6 +176,9 @@
   <data name="Add landed costs" xml:space="preserve">
     <value>Add landed costs</value>
   </data>
+  <data name="Add or change a state" xml:space="preserve">
+    <value>Add or change a state</value>
+  </data>
   <data name="Add the first one" xml:space="preserve">
     <value>Add the first one</value>
   </data>
@@ -1388,6 +1391,9 @@
   <data name="Next: {0}, {1}, due {2}" xml:space="preserve">
     <value>Next: {0}, {1}, due {2}</value>
   </data>
+  <data name="Nexus thresholds" xml:space="preserve">
+    <value>Nexus thresholds</value>
+  </data>
   <data name="No API keys." xml:space="preserve">
     <value>No API keys.</value>
   </data>
@@ -1609,6 +1615,9 @@
   </data>
   <data name="Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device." xml:space="preserve">
     <value>Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device.</value>
+  </data>
+  <data name="Or transactions" xml:space="preserve">
+    <value>Or transactions</value>
   </data>
   <data name="Or with your OpenBook username and password:" xml:space="preserve">
     <value>Or with your OpenBook username and password:</value>
@@ -2000,6 +2009,9 @@
   <data name="Reminders are on" xml:space="preserve">
     <value>Reminders are on</value>
   </data>
+  <data name="Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
   <data name="Remove access" xml:space="preserve">
     <value>Remove access</value>
   </data>
@@ -2066,6 +2078,9 @@
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>
   </data>
+  <data name="Sales a year" xml:space="preserve">
+    <value>Sales a year</value>
+  </data>
   <data name="Sales and getting paid" xml:space="preserve">
     <value>Sales and getting paid</value>
   </data>
@@ -2077,6 +2092,9 @@
   </data>
   <data name="Sales by Item" xml:space="preserve">
     <value>Sales by Item</value>
+  </data>
+  <data name="Sales by state" xml:space="preserve">
+    <value>Sales by state</value>
   </data>
   <data name="Sales channels" xml:space="preserve">
     <value>Sales channels</value>
@@ -2308,6 +2326,9 @@
   </data>
   <data name="Statement" xml:space="preserve">
     <value>Statement</value>
+  </data>
+  <data name="States past their sales tax threshold" xml:space="preserve">
+    <value>States past their sales tax threshold</value>
   </data>
   <data name="Status" xml:space="preserve">
     <value>Status</value>
@@ -2914,6 +2935,9 @@
   </data>
   <data name="{0} · year starts in {1} · {2} menu" xml:space="preserve">
     <value>{0} · year starts in {1} · {2} menu</value>
+  </data>
+  <data name="{0}: no tax agency set up there. Check whether to register." xml:space="preserve">
+    <value>{0}: no tax agency set up there. Check whether to register.</value>
   </data>
   <data name="{0}s are off" xml:space="preserve">
     <value>{0}s are off</value>

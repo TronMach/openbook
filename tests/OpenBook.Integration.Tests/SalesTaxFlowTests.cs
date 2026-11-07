@@ -75,6 +75,29 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sales_by_state_meet_the_thresholds_kept_and_flag_states_without_an_agency()
+    {
+        var texan = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Lone Star Co", ShippingAddress: "9 Elm St\nAustin, TX 78701")));
+        var ohioan = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Buckeye Co", BillingAddress: "1 Oak Ave\nColumbus OH 43004")));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(texan.Id, Mar1, [new SalesLineDraft(_labor.Id, null, 40m, 50m)])));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(texan.Id, Mar1, [new SalesLineDraft(_labor.Id, null, 20m, 50m)])));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(ohioan.Id, Mar1, [new SalesLineDraft(_labor.Id, null, 2m, 50m)])));
+        await In<NexusService, NexusThreshold>(s => s.SaveAsync("tx", 2_500m, null));
+        await In<NexusService, NexusThreshold>(s => s.SaveAsync("OH", 100_000m, 200));
+        Assert.Equal("nexus.amount_invalid", (await Assert.ThrowsAsync<DomainException>(() => In<NexusService, NexusThreshold>(s => s.SaveAsync("CA", 0m, null)))).Code);
+
+        var report = await In<NexusService, SalesByState>(s => s.SalesByStateAsync(Mar1, new DateOnly(2026, 12, 31)));
+        var tx = report.States.Single(s => s.Region == "TX");
+        Assert.Equal((3_000m, 2, true, false), (tx.Sales, tx.Transactions, tx.OverThreshold, tx.HasAgency));
+        Assert.False(report.States.Single(s => s.Region == "OH").OverThreshold);
+        Assert.Equal("TX", Assert.Single(await In<NexusService, IReadOnlyList<StateSales>>(s => s.UnregisteredAsync(new DateOnly(2026, 6, 1)))).Region);
+
+        // An agency for Texas settles it.
+        await Tax(s => s.CreateAgencyAsync(new TaxAgencyDetails("Texas Comptroller", Region: "TX")));
+        Assert.Empty(await In<NexusService, IReadOnlyList<StateSales>>(s => s.UnregisteredAsync(new DateOnly(2026, 6, 1))));
+    }
+
+    [Fact]
     public async Task On_the_cash_basis_tax_counts_as_invoices_are_paid()
     {
         var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(_widget.Id, null, 10m, 100m)])));

@@ -24,6 +24,10 @@
         {
             <ActionLink Class="button secondary" Href="@($"/banking/{_account.Id}")">Banking register</ActionLink>
         }
+        else if (OpenBook.Application.Banking.BankingRules.IsReconcilable(_account.Type))
+        {
+            <ActionLink Class="button secondary" Href="@($"/banking/{_account.Id}/reconcile")">Reconcile to a statement</ActionLink>
+        }
         <ActionLink Class="button secondary" Href="@($"/accounts/{_account.Id}")">Account</ActionLink>
         <form method="get" data-enhance="false" class="inline">
             <label for="from" class="muted">From</label>

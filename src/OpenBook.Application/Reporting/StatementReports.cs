@@ -41,8 +41,11 @@ public sealed record TaxSummaryLine(TaxLine? Line, IReadOnlyList<TaxSummaryAccou
 
 public sealed record TaxSummary(DateOnly From, DateOnly To, ReportBasis Basis, TaxForm Form, IReadOnlyList<TaxSummaryLine> Lines, TaxSummaryLine Unassigned)
 {
-    public decimal Income => Lines.Where(l => l.Line!.IsIncome).Sum(l => l.Total);
-    public decimal Deductions => Lines.Where(l => !l.Line!.IsIncome && l.Line.Key != TaxLines.NonDeductibleKey).Sum(l => l.Total);
+    /// <summary>Page 1 income: Schedule K items aside.</summary>
+    public decimal Income => Lines.Where(l => l.Line!.IsIncome && !l.Line.SeparatelyStated).Sum(l => l.Total);
+
+    /// <summary>Page 1 deductions, meals in full (the summary takes half off): Schedule K items and what isn't deductible aside.</summary>
+    public decimal Deductions => Lines.Where(l => !l.Line!.IsIncome && !l.Line.SeparatelyStated && l.Line.Key != TaxLines.NonDeductibleKey).Sum(l => l.Total);
 }
 
 /// <summary>Statements beyond <see cref="FinancialReports"/>: comparisons, cash flow, budget vs. actual and the tax summary.</summary>
@@ -387,13 +390,43 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
 
         rows.Add(new ReportTableRow(["Income on tax lines", summary.Income], 0, ReportRowStyle.Total));
         rows.Add(new ReportTableRow(["Deductions on tax lines", summary.Deductions], 0, ReportRowStyle.Total));
-        // Business meals are generally deductible at half (Schedule C line 24b); the account holds what was spent.
-        var meals = summary.Lines.FirstOrDefault(l => l.Line!.Form == TaxForm.ScheduleC && l.Line.Line == "24b")?.Total ?? 0m;
+        // Business meals are generally deductible at half; the account holds what was spent.
+        var meals = summary.Lines.Where(l => l.Line!.HalfDeductible || (l.Line.Form == TaxForm.ScheduleC && l.Line.Line == "24b")).Sum(l => l.Total);
         var mealsLimit = decimal.Round(meals / 2m, 2, MidpointRounding.AwayFromZero);
         if (mealsLimit != 0m)
-            rows.Add(new ReportTableRow(["Less half of meals (line 24b allows 50% of most business meals)", -mealsLimit], 0, ReportRowStyle.Subtotal));
-        rows.Add(new ReportTableRow([summary.Form == TaxForm.ScheduleC ? "Net profit on tax lines (line 31)" : "Net income on tax lines",
-            summary.Income - summary.Deductions + mealsLimit], 0, ReportRowStyle.Total));
+            rows.Add(new ReportTableRow([summary.Form == TaxForm.ScheduleC ? "Less half of meals (line 24b allows 50% of most business meals)" : "Less half of meals (50% of most business meals is deductible)", -mealsLimit], 0, ReportRowStyle.Subtotal));
+        var ordinary = summary.Income - summary.Deductions + mealsLimit;
+        rows.Add(new ReportTableRow([summary.Form switch
+        {
+            TaxForm.ScheduleC => "Net profit on tax lines (line 31)",
+            TaxForm.Form1065 or TaxForm.Form1120S => "Ordinary business income on tax lines (page 1)",
+            _ => "Net income on tax lines",
+        }, ordinary], 0, ReportRowStyle.Total));
+
+        // Books to return (Schedule M-1), for the forms that have one: what the books say, and what makes the difference.
+        if (summary.Form is TaxForm.Form1065 or TaxForm.Form1120S or TaxForm.Form1120)
+        {
+            var separateIncome = summary.Lines.Where(l => l.Line!.SeparatelyStated && l.Line.IsIncome).Sum(l => l.Total);
+            var separateDeductions = summary.Lines.Where(l => l.Line!.SeparatelyStated && !l.Line.IsIncome).Sum(l => l.Total);
+            var nonDeductible = summary.Lines.Where(l => l.Line!.Key == TaxLines.NonDeductibleKey).Sum(l => l.Total);
+            // Not on a tax line: income adds to the books' net income, expenses take from it.
+            var chart = await accounts.GetChartAsync(ct);
+            var unassigned = summary.Unassigned.Accounts.Sum(a => chart.Find(a.AccountId)?.Type.IsDebitNormal() == true ? -a.Amount : a.Amount);
+            var books = summary.Income + separateIncome - summary.Deductions - separateDeductions - nonDeductible + unassigned;
+            rows.Add(Row.Section("Books to return (a Schedule M-1 worksheet)", 2));
+            rows.Add(new ReportTableRow(["Net income per books (accounts on tax lines and not)", books], 1));
+            if (nonDeductible != 0m)
+                rows.Add(new ReportTableRow(["Plus expenses not deductible", nonDeductible], 1));
+            if (mealsLimit != 0m)
+                rows.Add(new ReportTableRow(["Plus the half of meals not deductible", mealsLimit], 1));
+            if (separateIncome != 0m)
+                rows.Add(new ReportTableRow(["Less income stated apart on Schedule K", -separateIncome], 1));
+            if (separateDeductions != 0m)
+                rows.Add(new ReportTableRow(["Plus deductions stated apart on Schedule K", separateDeductions], 1));
+            if (unassigned != 0m)
+                rows.Add(new ReportTableRow(["Less accounts not on a tax line (map them, or adjust by hand)", -unassigned], 1));
+            rows.Add(new ReportTableRow(["Income per return (page 1)", ordinary], 0, ReportRowStyle.Subtotal));
+        }
 
         // What the books don't hold: the standard mileage deduction, worked out from the mileage log.
         if (summary.Form == TaxForm.ScheduleC)

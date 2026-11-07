@@ -206,6 +206,28 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Investments_reconcile_and_board_designated_net_assets_show_apart()
+    {
+        var investments = await _db.CreateAccount("Investments", AccountType.OtherAsset, "1600");
+        var board = await _db.CreateAccount("Board-Designated Reserve", AccountType.Equity, "3050");
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Jan5,
+            [JournalLineDraft.Dr(investments.Id, 1_000m), JournalLineDraft.Cr(_income.Id, 1_000m)], "Bought shares")));
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Jan5,
+            [JournalLineDraft.Dr(_ap.Id, 400m), JournalLineDraft.Cr(board.Id, 400m)], "Board reserve")));
+
+        // A brokerage statement reconciles like a bank's.
+        var reconciliation = await In<OpenBook.Application.Banking.ReconciliationService, Domain.Banking.Reconciliation>(s => s.StartAsync(investments.Id, Mar31, 1_000m));
+        Assert.Equal(investments.Id, reconciliation.AccountId);
+        Assert.Equal("bank.not_reconcilable", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<OpenBook.Application.Banking.ReconciliationService, Domain.Banking.Reconciliation>(s => s.StartAsync(_rent.Id, Mar31, 0m)))).Code);
+
+        var position = await Report("statement-of-financial-position", "asOf=2026-03-31");
+        Assert.Equal(400m, Amount(position, "Without donor restrictions: board-designated", 1));
+        Assert.NotNull(Amount(position, "Without donor restrictions: undesignated", 1));
+        Assert.True(OpenBook.Application.Nonprofit.NonprofitReports.IsBoardDesignated("Net Assets:Board designated fund"));
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();

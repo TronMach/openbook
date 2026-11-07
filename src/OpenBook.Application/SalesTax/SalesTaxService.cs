@@ -39,6 +39,13 @@ public interface ISalesTaxStore
     void Add(SalesTaxPayment payment);
     void Add(AuditRecord record);
 
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<NexusThreshold>> ListNexusThresholdsAsync(CancellationToken ct);
+
+    void Add(NexusThreshold threshold);
+
+    void Remove(NexusThreshold threshold);
+
     Task SaveChangesAsync(CancellationToken ct);
 }
 

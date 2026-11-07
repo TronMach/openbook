@@ -86,16 +86,21 @@ public sealed class NonprofitReports(
         };
 
         var columnLines = dates.Select(d => (IReadOnlyList<LedgerLine>)lines.Where(l => l.Date <= d).ToList()).ToList();
+        var boardDesignated = chart.All.Where(a => a.Type == AccountType.Equity && !a.DonorRestricted && IsBoardDesignated(chart.FullName(a.Id))).Select(a => a.Id).ToHashSet();
+        var anyDesignated = boardDesignated.Count > 0 && columnLines.Any(c => c.Any(l => boardDesignated.Contains(l.AccountId)));
         var show = Active([.. columnLines.Select(l => (IReadOnlyDictionary<Guid, decimal>)FinancialReports.Sum(l))]);
         var columns = dates.Select((d, i) =>
         {
             var sheet = FinancialReports.BuildBalanceSheet(d, reportBasis, company.FiscalYearStart(d), chart, columnLines[i], show);
             var (free, held) = NetAssets(chart, columnLines[i]);
-            sheet = sheet with
-            {
-                Equity = new ReportSection("Net assets",
-                    [new ReportRow(null, Without, 1, free, RowKind.Computed), new ReportRow(null, With, 1, held, RowKind.Computed)], free + held),
-            };
+            // Board-designated: what the board set aside out of unrestricted net assets (an equity account named for it).
+            var designated = -columnLines[i].Where(l => boardDesignated.Contains(l.AccountId)).Sum(l => l.Amount);
+            List<ReportRow> equityRows = anyDesignated
+                ? [new ReportRow(null, $"{Without}: undesignated", 1, free - designated, RowKind.Computed),
+                    new ReportRow(null, $"{Without}: board-designated", 1, designated, RowKind.Computed),
+                    new ReportRow(null, With, 1, held, RowKind.Computed)]
+                : [new ReportRow(null, Without, 1, free, RowKind.Computed), new ReportRow(null, With, 1, held, RowKind.Computed)];
+            sheet = sheet with { Equity = new ReportSection("Net assets", equityRows, free + held) };
             return new StatementColumn<BalanceSheet>($"{d:MMM d, yyyy}", sheet, null, d);
         }).ToList();
         return new ReportTable(
@@ -104,8 +109,14 @@ public sealed class NonprofitReports(
             StatementTables.Columns("", columns, []),
             StatementTables.BalanceSheet(columns, []).Select(Relabel).ToList(),
             reportBasis,
-            "Net assets with donor restrictions are what donors restricted to a purpose or time and hasn't been released yet.");
+            "Net assets with donor restrictions are what donors restricted to a purpose or time and hasn't been released yet."
+            + (anyDesignated ? " Board-designated net assets are unrestricted money the board set aside (equity accounts named \"Board-designated…\")." : ""));
     }
+
+    /// <summary>An equity account (or one under it) whose name starts "Board-designated" or "Board designated".</summary>
+    public static bool IsBoardDesignated(string fullName) =>
+        fullName.Split(Account.PathSeparator).Any(part => part.Trim().StartsWith("Board-designated", StringComparison.OrdinalIgnoreCase)
+            || part.Trim().StartsWith("Board designated", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Expenses by natural account (rows) and by function (columns): a column for each program, their total,

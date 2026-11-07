@@ -223,6 +223,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Taxes", ReportInputs.Year),
         new("sales-tax", "Sales tax liability", "Taxable, non-taxable and exempt sales and the tax charged, by agency and rate, with what you owe.",
             "Taxes", ReportInputs.Period | ReportInputs.Basis, DatePreset.LastQuarter),
+        new("sales-by-state", "Sales by state", "All sales by the state they went to, against the economic nexus thresholds you keep, with whether a tax agency is set up there.",
+            "Taxes", ReportInputs.Period, DatePreset.ThisFiscalYearToDate),
         new("tax-summary", "Tax summary", "Income and expenses totalled by the lines of your income tax return.",
             "Taxes", ReportInputs.Period | ReportInputs.Basis, DatePreset.LastFiscalYear),
         new("project-profitability", "Project profitability", "Each project's income, costs (expenses, labor, mileage) and profit, with its cost budget and what's not billed yet.",
@@ -339,6 +341,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "1099" => Summary1099(company, await Get<PayablesService>().Report1099Async(p.GetYear("year") ?? today.Year - 1, p.GetAmount("threshold"), ct)),
             "1099-detail" => await Get<ActivityReports>().Detail1099Async(p.GetYear("year") ?? today.Year - 1, ct),
             "sales-tax" => SalesTax(company, await Get<SalesTaxReports>().LiabilityAsync(from, range.To, basis, ct)),
+            "sales-by-state" => StatesTable(company, await Get<NexusService>().SalesByStateAsync(from, range.To, ct)),
             "tax-summary" => await Get<StatementReports>().TaxSummaryTableAsync(from, range.To, basis, ct),
             "budget-vs-actual" => await BudgetVsActualAsync(p, basis, ct),
             "builder" => await Get<ReportBuilder>().RunAsync(from, range.To, basis, segments, BuilderOptions.Parse(p), ct),
@@ -573,6 +576,25 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         ],
         Note: "Counts bill payments and expenses dated in the year. Card payments are left out (Form 1099-K), and so is what's paid for accounts marked not reportable on 1099s (materials, merchandise). "
             + (report.RefundsNetted ? "Refunds are taken off, as chosen in the purchasing settings." : "Refunds are shown but not taken off; the purchasing settings can change that."));
+
+    private static ReportTable StatesTable(Company company, SalesByState report) => new(
+        "Sales by state",
+        [company.Name, Comparisons.Describe(report.From, report.To)],
+        [new("State"), new("Sales", ColumnFormat.Money), new("Transactions", ColumnFormat.Number), new("Threshold", ColumnFormat.Money),
+            new("Transactions threshold", ColumnFormat.Number), new("Status")],
+        [
+            .. report.States.Select(s => new ReportTableRow(
+            [
+                s.Region, s.Sales, (decimal)s.Transactions,
+                new ReportCell(s.Threshold?.SalesAmount), new ReportCell(s.Threshold?.Transactions is { } count ? (decimal)count : null),
+                s.Threshold is null ? (s.HasAgency ? "Agency set up" : "")
+                    : s.OverThreshold ? (s.HasAgency ? "Over the threshold; agency set up" : "Over the threshold: check whether to register")
+                    : $"{(s.Threshold.SalesAmount == 0m ? 0m : decimal.Round(s.Sales / s.Threshold.SalesAmount * 100m, 0)):0}% of the threshold",
+            ])),
+            new ReportTableRow(["No state in the address", report.Unknown, null, null, null, null]),
+            new ReportTableRow(["Total", report.States.Sum(s => s.Sales) + report.Unknown, (decimal)report.States.Sum(s => s.Transactions), null, null, null], 0, ReportRowStyle.Total),
+        ],
+        Note: "Posted sales before tax: invoices and receipts less credit memos by the customer's shipping (else billing) address, and sales channels by the state shipped to. Thresholds are the ones kept under Sales tax → Nexus thresholds; states count different things, so check with the state or an adviser.");
 
     private static ReportTable SalesTax(Company company, TaxLiabilityReport report)
     {

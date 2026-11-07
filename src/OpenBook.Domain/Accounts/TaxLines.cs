@@ -24,9 +24,11 @@ public enum TaxForm
 /// <param name="Key">Stable identifier stored on accounts, e.g. "c.8".</param>
 /// <param name="Line">The line as printed on the form, e.g. "8" or "16a".</param>
 /// <param name="IsIncome">Income lines come first in the tax summary and are shown credit-positive.</param>
-public sealed record TaxLine(string Key, TaxForm Form, string Line, string Name, bool IsIncome)
+/// <param name="SeparatelyStated">A Schedule K item (partnerships and S corporations): reported to the owners apart, so not in page 1's ordinary income.</param>
+/// <param name="HalfDeductible">Meals: half is deductible, so the tax summary takes half off.</param>
+public sealed record TaxLine(string Key, TaxForm Form, string Line, string Name, bool IsIncome, bool SeparatelyStated = false, bool HalfDeductible = false)
 {
-    public string Label => Line.Length == 0 ? Name : $"Line {Line}: {Name}";
+    public string Label => SeparatelyStated ? $"Schedule K line {Line}: {Name}" : Line.Length == 0 ? Name : $"Line {Line}: {Name}";
 }
 
 /// <summary>
@@ -74,6 +76,11 @@ public static class TaxLines
             ("17", "Taxes and licenses", false), ("18", "Interest", false), ("19", "Charitable contributions", false),
             ("20", "Depreciation", false), ("22", "Advertising", false), ("23", "Pension and profit-sharing plans", false),
             ("24", "Employee benefit programs", false), ("26", "Other deductions", false)),
+        .. ScheduleK(TaxForm.Form1065, "p"),
+        .. ScheduleK(TaxForm.Form1120S, "s"),
+        new("p.meals", TaxForm.Form1065, "21", "Meals (in other deductions, 50% deductible)", false, HalfDeductible: true),
+        new("s.meals", TaxForm.Form1120S, "20", "Meals (in other deductions, 50% deductible)", false, HalfDeductible: true),
+        new("k.meals", TaxForm.Form1120, "26", "Meals (in other deductions, 50% deductible)", false, HalfDeductible: true),
         .. Form(TaxForm.Form990, "n",
             ("VIII 1", "Contributions, gifts and grants", true), ("VIII 2", "Program service revenue", true),
             ("VIII 3", "Investment income", true), ("VIII 11", "Other revenue", true),
@@ -141,6 +148,22 @@ public static class TaxLines
         TaxForm.Form1120 => "Form 1120",
         _ => "Form 990",
     };
+
+    /// <summary>The Schedule K items most books hold, kept out of page 1: keys "p.k5", "s.k13a".</summary>
+    private static IEnumerable<TaxLine> ScheduleK(TaxForm form, string prefix) =>
+        (form == TaxForm.Form1065
+            ? new (string Line, string Name, bool IsIncome)[]
+            {
+                ("5", "Interest income", true), ("6a", "Ordinary dividends", true), ("8", "Net short-term capital gain (loss)", true),
+                ("9a", "Net long-term capital gain (loss)", true), ("11", "Other income (loss)", true), ("12", "Section 179 deduction", false),
+                ("13a", "Charitable contributions", false),
+            }
+            : [
+                ("4", "Interest income", true), ("5a", "Ordinary dividends", true), ("7", "Net short-term capital gain (loss)", true),
+                ("8a", "Net long-term capital gain (loss)", true), ("10", "Other income (loss)", true), ("11", "Section 179 deduction", false),
+                ("12a", "Charitable contributions", false),
+            ])
+         .Select(l => new TaxLine($"{prefix}.k{l.Line}", form, l.Line, l.Name, l.IsIncome, SeparatelyStated: true));
 
     private static IEnumerable<TaxLine> Form(TaxForm form, string prefix, params (string Line, string Name, bool IsIncome)[] lines) =>
         lines.Select(l => new TaxLine($"{prefix}.{l.Line.Replace("VIII ", "8.", StringComparison.Ordinal).Replace("IX ", "9.", StringComparison.Ordinal)}", form, l.Line, l.Name, l.IsIncome));
