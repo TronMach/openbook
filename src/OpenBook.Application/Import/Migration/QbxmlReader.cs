@@ -38,7 +38,7 @@ internal static class QbxmlReader
             var typeCode = a.Text("AccountType") ?? "";
             var skip = typeCode.Equals("NonPosting", StringComparison.OrdinalIgnoreCase) ? "Non-posting accounts (estimates, orders) aren't part of the books." : null;
             data.Accounts.Add(new SourceAccount(MigrationReaders.LineOf(a), a.Text("FullName") ?? a.Text("Name") ?? "", typeCode,
-                Types.TryGetValue(typeCode, out var t) ? t : null, a.Text("AccountNumber"), a.Text("Desc"), skip));
+                Types.TryGetValue(typeCode, out var t) ? t : null, a.Text("AccountNumber"), a.Text("Desc"), skip, TaxLine: a.Child("TaxLineInfoRet").Text("TaxLineName")));
         }
 
         foreach (var c in document.Named("CustomerRet"))

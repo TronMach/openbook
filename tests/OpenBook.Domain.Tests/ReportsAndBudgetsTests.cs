@@ -9,6 +9,17 @@ public class ReportsAndBudgetsTests
 {
     private static readonly DateTimeOffset Now = new(2026, 1, 31, 9, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData("Sch C: Gross receipts or sales", "c.1")]
+    [InlineData("Sch C: Legal and professional fees", "c.17")]
+    [InlineData("Sch C: Meals and entertainment", "c.24b")]
+    [InlineData("Sch C: Wages paid", "c.26")]
+    [InlineData("Sch C: Rent or lease-other bus. prop.", null)]
+    [InlineData("B/S-Assets: Cash", null)]
+    [InlineData("<Unassigned>", null)]
+    public void Quickbooks_tax_line_names_map_to_the_forms_lines_only_when_one_clearly_fits(string name, string? key) =>
+        Assert.Equal(key, OpenBook.Domain.Accounts.TaxLines.FromName(name, OpenBook.Domain.Accounts.TaxForm.ScheduleC)?.Key);
+
     [Fact]
     public void Tax_line_keys_are_unique_and_every_form_offers_lines()
     {

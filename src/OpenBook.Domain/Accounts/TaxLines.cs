@@ -100,6 +100,30 @@ public static class TaxLines
     public static TaxLine? Equivalent(string? key, TaxForm form) =>
         Find(key) is { } line && line.Key != NonDeductibleKey ? All.FirstOrDefault(l => l.Form == form && l.Name == line.Name) : null;
 
+    /// <summary>
+    /// The line of <paramref name="form"/> another program's tax line name means, such as QuickBooks' "Sch C: Advertising"
+    /// or "Form 1120S: Rents": the part after the colon, matched by its words. Null when no line clearly fits.
+    /// </summary>
+    public static TaxLine? FromName(string? name, TaxForm form)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.StartsWith("B/S", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var text = name[(name.LastIndexOf(':') + 1)..];
+        static HashSet<string> Words(string s) =>
+            [.. s.ToUpperInvariant().Split([' ', '-', '/', ',', '.', '(', ')', '&'], StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length >= 4 && w is not "OTHER" and not "PAID" and not "FEES" and not "EXPENSES" and not "EXPENSE")
+                .Select(w => w.TrimEnd('S'))];
+        var wanted = Words(text);
+        if (wanted.Count == 0)
+            return null;
+        var exact = For(form).FirstOrDefault(l => string.Equals(l.Name, text.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+            return exact;
+        var scored = For(form).Select(l => (Line: l, Score: Words(l.Name).Intersect(wanted).Count())).Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ToList();
+        return scored.Count > 0 && (scored.Count == 1 || scored[0].Score > scored[1].Score) ? scored[0].Line : null;
+    }
+
     public static TaxForm FormFor(BusinessType type) => type switch
     {
         BusinessType.MultiMemberLlc or BusinessType.Partnership => TaxForm.Form1065,

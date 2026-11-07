@@ -126,7 +126,7 @@ public sealed class MigrationFlowTests : IAsyncLifetime
             <QBXML><QBXMLMsgsRs>
               <AccountQueryRs statusCode="0">
                 <AccountRet><Name>Checking</Name><FullName>Checking</FullName><Sublevel>0</Sublevel><AccountType>Bank</AccountType><AccountNumber>1000</AccountNumber></AccountRet>
-                <AccountRet><Name>Consulting</Name><FullName>Consulting</FullName><Sublevel>0</Sublevel><AccountType>Income</AccountType></AccountRet>
+                <AccountRet><Name>Consulting</Name><FullName>Consulting</FullName><Sublevel>0</Sublevel><AccountType>Income</AccountType><TaxLineInfoRet><TaxLineID>1</TaxLineID><TaxLineName>Sch C: Gross receipts or sales</TaxLineName></TaxLineInfoRet></AccountRet>
                 <AccountRet><Name>Estimates</Name><FullName>Estimates</FullName><Sublevel>0</Sublevel><AccountType>NonPosting</AccountType></AccountRet>
               </AccountQueryRs>
               <CustomerQueryRs statusCode="0">
@@ -156,6 +156,7 @@ public sealed class MigrationFlowTests : IAsyncLifetime
         Assert.True((await _db.InDb(db => db.Vendors.AsNoTracking().SingleAsync())).Track1099);
         Assert.Equal(150m, (await _db.InDb(db => db.Items.AsNoTracking().SingleAsync())).Rate);
         Assert.Equal("Journal entry JE-7 · Opening cash", Assert.Single(await Imported()).Memo);
+        Assert.Equal("c.1", (await _db.InDb(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Name == "Consulting"))).TaxLineKey);
     }
 
     [Fact]

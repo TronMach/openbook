@@ -32,8 +32,10 @@ public enum MigrationSource
 
 /// <param name="Type">Null when the source type has no OpenBook equivalent (an error), or when <paramref name="SkipReason"/> is set.</param>
 /// <param name="SkipReason">Set for accounts that aren't part of the books (non-posting accounts); transactions using them are skipped too.</param>
+/// <param name="TaxLine">The tax line the old program gave it, by name ("Sch C: Advertising"); matched to the company's form on import.</param>
 public sealed record SourceAccount(
-    int Line, string FullName, string TypeLabel, AccountType? Type, string? Number = null, string? Description = null, string? SkipReason = null, string? Note = null);
+    int Line, string FullName, string TypeLabel, AccountType? Type, string? Number = null, string? Description = null, string? SkipReason = null, string? Note = null,
+    string? TaxLine = null);
 
 /// <param name="Parent">A job's customer, by the source's full name ("Acme" or "Acme:Kitchen"): it comes in as a sub-customer billed with them.</param>
 /// <param name="Inactive">Inactive in the old program: it comes in, then is made inactive.</param>

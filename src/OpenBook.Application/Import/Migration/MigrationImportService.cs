@@ -131,13 +131,20 @@ public sealed class MigrationImportService(
         await using var transaction = await unitOfWork.BeginAsync(ct);
 
         // Parents before children; each new account is saved so the next can refer to it.
+        var taxLines = new Dictionary<Guid, string?>();
         foreach (var a in plan.Accounts.OrderBy(a => a.FullName.Count(c => c == Account.PathSeparator)))
         {
             var chart = await accounts.GetChartAsync(ct);
             var cut = a.FullName.LastIndexOf(Account.PathSeparator);
             var parent = cut < 0 ? null : chart.FindByFullName(a.FullName[..cut]);
-            await accounts.CreateAsync(new CreateAccountCommand(a.FullName[(cut + 1)..], a.Type, a.Number, parent?.Id, a.Description), ct);
+            var made = await accounts.CreateAsync(new CreateAccountCommand(a.FullName[(cut + 1)..], a.Type, a.Number, parent?.Id, a.Description), ct);
+            if (a.TaxLine is not null)
+                taxLines[made.Id] = a.TaxLine;
         }
+
+        // The tax lines the old program gave them, where one of this company's form fits.
+        if (taxLines.Count > 0)
+            await accounts.MapTaxLinesAsync(taxLines, ct);
 
         // Parents before their jobs. A job's parent is new in this file, or already in the books.
         var madeCustomers = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -198,7 +205,7 @@ public sealed class MigrationImportService(
 
     private async Task<string> HomeCurrencyAsync(CancellationToken ct) => (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency.Code;
 
-    private sealed record PlannedAccount(string FullName, AccountType Type, string? Number, string? Description);
+    private sealed record PlannedAccount(string FullName, AccountType Type, string? Number, string? Description, string? TaxLine = null);
 
     private sealed record PlannedCustomer(CustomerDetails Details, string FullName, string? Parent);
 
@@ -221,6 +228,7 @@ public sealed class MigrationImportService(
         var warnings = data.Warnings.ToList();
         var chart = await accounts.GetChartAsync(ct);
         var company = await companies.GetRequiredCompanyAsync(ct);
+        var form = TaxLines.FormFor(company.BusinessType);
 
         // Accounts: what the file adds, so later rows can refer to them.
         var plannedAccounts = new List<PlannedAccount>();
@@ -273,7 +281,7 @@ public sealed class MigrationImportService(
                 error = "This account appears twice.";
             if (error is null)
             {
-                plannedAccounts.Add(new PlannedAccount(name, a.Type!.Value, number, a.Description));
+                plannedAccounts.Add(new PlannedAccount(name, a.Type!.Value, number, a.Description, a.Type!.Value.IsBalanceSheet() ? null : TaxLines.FromName(a.TaxLine, form)?.Key));
                 types[name] = a.Type;
             }
 

@@ -36,6 +36,8 @@ Importing accounts, journal entries and whole companies needs the accountant rol
 
 Files can be up to 20 MB; export larger books in parts (lists, then transactions by year).
 
+What the old program says about each record comes over where the file has it: inactive customers, vendors, items come in inactive (QuickBooks Desktop and Online), payment terms (QuickBooks Desktop), whether an item is taxable, and from QuickBooks Desktop's qbXML each income and expense account's tax line, when one of your return's lines clearly matches its name ("Sch C: Advertising" becomes Schedule C line 8). Check the mapping under **Reports → Tax summary** afterwards.
+
 ### QuickBooks Desktop company files (.QBW, .QBM, .QBB)
 
 OpenBook can't open a QuickBooks company file itself: the format is Intuit's own, and only QuickBooks reads it. The **QuickBooks export helper** asks QuickBooks for everything instead and saves it as files OpenBook imports. It brings the whole history: every transaction QuickBooks has posted, of any type, comes from QuickBooks' journal.
