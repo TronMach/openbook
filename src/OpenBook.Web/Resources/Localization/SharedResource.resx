@@ -1130,6 +1130,9 @@
   <data name="Kept in the invoice's history and the audit log." xml:space="preserve">
     <value>Kept in the invoice's history and the audit log.</value>
   </data>
+  <data name="Key" xml:space="preserve">
+    <value>Key</value>
+  </data>
   <data name="Keys that let other programs use OpenBook as you." xml:space="preserve">
     <value>Keys that let other programs use OpenBook as you.</value>
   </data>
@@ -1162,6 +1165,9 @@
   </data>
   <data name="Last sent" xml:space="preserve">
     <value>Last sent</value>
+  </data>
+  <data name="Last used" xml:space="preserve">
+    <value>Last used</value>
   </data>
   <data name="Late fee on" xml:space="preserve">
     <value>Late fee on</value>
@@ -1219,6 +1225,9 @@
   </data>
   <data name="Locks the books up to a date so nobody changes a period you've finished, with an optional password; also the year-end close." xml:space="preserve">
     <value>Locks the books up to a date so nobody changes a period you've finished, with an optional password; also the year-end close.</value>
+  </data>
+  <data name="Made" xml:space="preserve">
+    <value>Made</value>
   </data>
   <data name="Make a deposit" xml:space="preserve">
     <value>Make a deposit</value>
@@ -1342,6 +1351,9 @@
   </data>
   <data name="Next" xml:space="preserve">
     <value>Next</value>
+  </data>
+  <data name="No API keys." xml:space="preserve">
+    <value>No API keys.</value>
   </data>
   <data name="No approval needed" xml:space="preserve">
     <value>No approval needed</value>
@@ -1984,6 +1996,15 @@
   </data>
   <data name="Retainers" xml:space="preserve">
     <value>Retainers</value>
+  </data>
+  <data name="Revoke" xml:space="preserve">
+    <value>Revoke</value>
+  </data>
+  <data name="Revoke this key? Programs using it stop working at once." xml:space="preserve">
+    <value>Revoke this key? Programs using it stop working at once.</value>
+  </data>
+  <data name="Revoked {0}" xml:space="preserve">
+    <value>Revoked {0}</value>
   </data>
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>

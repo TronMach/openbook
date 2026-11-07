@@ -142,6 +142,13 @@ internal static class AccessApi
         invites.MapDelete("/{id:guid}", async (Guid id, InviteService s, IClock clock, CancellationToken ct) =>
             InviteResponse.From(await s.RevokeAsync(id, ct), clock.UtcNow));
         users.MapDelete("/{id:guid}/two-factor", async (Guid id, UserService s, CancellationToken ct) => UserResponse.From(await s.ResetTwoFactorAsync(id, ct)));
+        // An admin's view of someone's keys, and revoking one (a leaver's, or one in the wrong hands).
+        users.MapGet("/{id:guid}/api-keys", async (Guid id, ApiKeyService s, CancellationToken ct) => (await s.ListAsync(id, ct)).Select(ApiKeyResponse.From));
+        users.MapDelete("/{id:guid}/api-keys/{keyId:guid}", async (Guid id, Guid keyId, ApiKeyService s, CancellationToken ct) =>
+        {
+            await s.RevokeAsync(keyId, id, ct);
+            return Results.NoContent();
+        });
 
         var signIn = api.MapGroup("/settings/sign-in");
         signIn.MapGet("/", async (TwoFactorService s, CancellationToken ct) => SignInSettingsResponse.From(await s.SettingsAsync(ct)));

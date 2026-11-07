@@ -2,6 +2,7 @@
 @using OpenBook.Domain.Companies
 @inject UserService UserService
 @inject SingleSignOnService SingleSignOn
+@inject ApiKeyService Keys
 @inject NavigationManager Navigation
 
 <PageTitle>@(_user?.Username ?? "User") · OpenBook</PageTitle>
@@ -46,6 +47,42 @@
             <button type="submit">@L["Save"]</button>
         </form>
 
+        <h2>@L["API keys"]</h2>
+        @if (_keys.Count == 0)
+        {
+            <p class="muted">@L["No API keys."]</p>
+        }
+        else
+        {
+            <table class="data">
+                <thead><tr><th>@L["Name"]</th><th>@L["Key"]</th><th>@L["Made"]</th><th>@L["Last used"]</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var key in _keys)
+                    {
+                        <tr class="@(key.RevokedAt is null ? null : "muted")">
+                            <td>@key.Name</td>
+                            <td><code>@key.Hint</code></td>
+                            <td>@key.CreatedAt.InCompanyTime().ToString("d")</td>
+                            <td>@(key.LastUsedAt?.InCompanyTime().ToString("g") ?? "")</td>
+                            <td>
+                                @if (key.RevokedAt is { } revoked)
+                                {
+                                    @L["Revoked {0}", revoked.InCompanyTime().ToString("d")]
+                                }
+                                else
+                                {
+                                    <form method="post" @formname="@($"revoke-key-{key.Id}")" @onsubmit="() => RevokeKeyAsync(key.Id)" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary" data-confirm="@L["Revoke this key? Programs using it stop working at once."]">@L["Revoke"]</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
         <h2>@L["Single sign-on"]</h2>
         @if (_user.ExternalLogin is null)
         {
@@ -74,7 +111,20 @@
     [SupplyParameterFromForm(Name = "Email")] private string? PostedEmail { get; set; }
     [SupplyParameterFromForm(Name = "AccessEndsOn")] private string? PostedEnd { get; set; }
 
-    protected override async Task OnInitializedAsync() => _user = await UserService.GetAsync(Id);
+    private IReadOnlyList<ApiKey> _keys = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await UserService.GetAsync(Id);
+        _keys = _user is null ? [] : await Keys.ListAsync(_user.Id);
+    }
+
+    /// <summary>An admin revoking someone else's key (a leaver's, or one in the wrong hands).</summary>
+    private async Task RevokeKeyAsync(Guid keyId)
+    {
+        await Keys.RevokeAsync(keyId, null);
+        Navigation.NavigateTo($"/settings/users/{Id}");
+    }
 
     private async Task UnlinkAsync()
     {

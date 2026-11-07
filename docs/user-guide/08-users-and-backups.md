@@ -41,7 +41,7 @@ The **Invitations** list shows each one as waiting, accepted, expired or withdra
 
 ### Email and end of access
 
-Select a username on the Users page to set their **Email** and **Access ends on**. From the day access ends, they can't sign in, their API keys stop working, and within the hour they're made inactive (signed out everywhere). Clear the date to keep them on. You can't end your own access, and there must always be an administrator whose access doesn't end.
+Select a username on the Users page to set their **Email** and **Access ends on**. From the day access ends, they can't sign in, their API keys stop working, and within the hour they're made inactive (signed out everywhere). Clear the date to keep them on. You can't end your own access, and there must always be an administrator whose access doesn't end. The same page lists their **API keys** (name, the key's last characters, when it was made and last used): **Revoke** one that's in the wrong hands, or a leaver's, and programs using it stop at once.
 
 ### Permission sets
 
