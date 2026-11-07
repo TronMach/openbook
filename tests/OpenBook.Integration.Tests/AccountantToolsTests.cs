@@ -48,6 +48,16 @@ public sealed class AccountantToolsTests : IAsyncLifetime
         In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(date, [JournalLineDraft.Dr(debit.Id, amount), JournalLineDraft.Cr(credit.Id, amount)], memo)));
 
     [Fact]
+    public async Task The_forecast_pays_open_purchase_orders_on_their_expected_date()
+    {
+        var vendor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Mill")));
+        await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(vendor.Id, Mar1,
+            [new PurchaseOrderLineDraft(null, _contractors.Id, "Cloth", 1m, 300m)], Mar1.AddDays(10))));
+        var forecast = await In<ForecastService, CashForecast>(s => s.ForecastAsync(Mar1, 4));
+        Assert.Equal(-300m, forecast.Weeks[1].Bills);
+    }
+
+    [Fact]
     public async Task The_forecast_collects_invoices_pays_bills_and_loans_and_applies_a_scenario()
     {
         var item = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Advice", ItemType.Service, _fees.Id, 500m)));

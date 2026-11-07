@@ -34,7 +34,8 @@ public sealed record CashForecast(DateOnly AsOf, decimal Opening, ForecastScenar
 /// </summary>
 public sealed class ForecastService(
     IReportingStore store, ReportLedger ledger, AccountService accounts, ReceivablesService receivables, PayablesService payables,
-    LoanService loans, ICompanyStore companies, IClock clock, ICurrentUser user)
+    LoanService loans, ICompanyStore companies, IClock clock, ICurrentUser user,
+    Purchases.IPurchasesStore purchases, Purchases.PurchaseOrderService orders, Channels.IChannelStore channels)
 {
     public const string EntityType = "forecast_scenario";
     public const int MaxWeeks = 52;
@@ -120,6 +121,19 @@ public sealed class ForecastService(
                 bills[WeekOf(expected)] -= bill.Balance;
         }
 
+        // What open purchase orders still have to be billed for, paid on their expected date (else the order date) plus
+        // the payment delay; and sales channel payouts waiting to be posted, arriving at once.
+        foreach (var order in await purchases.ListOpenPurchaseOrdersAsync(ct))
+        {
+            var toBill = (await orders.ProgressAsync(order, ct)).Lines.Sum(l => l.Line.IsItem ? l.ToBill * l.Line.UnitCost : l.ToBill);
+            var expected = (order.ExpectedDate ?? order.Date).AddDays(scenario?.PaymentDelayDays ?? 0);
+            if (toBill > 0m && expected <= end)
+                bills[WeekOf(expected)] -= decimal.Round(toBill, 2, MidpointRounding.AwayFromZero);
+        }
+
+        foreach (var payout in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Pending))
+            collections[WeekOf(payout.Date)] += payout.Net;
+
         foreach (var loan in await loans.ListAsync(ct))
         {
             foreach (var installment in LoanService.RemainingSchedule(loan).Where(i => i.Date <= end))
@@ -163,7 +177,7 @@ public sealed class ForecastService(
                 new("Bills", ColumnFormat.Money), new("Loans", ColumnFormat.Money), new("Scenario", ColumnFormat.Money), new("Closing", ColumnFormat.Money),
             ],
             rows,
-            Note: "Open invoices are collected on their due dates and open bills paid on theirs (overdue ones in the first week), shifted by the scenario's delays. Recurring templates aren't included; add them to a scenario.");
+            Note: "Open invoices are collected on their due dates and open bills paid on theirs (overdue ones in the first week), shifted by the scenario's delays. What open purchase orders still have to be billed for counts with the bills, on the order's expected date; sales channel payouts waiting to be posted count with the collections. Recurring templates aren't included; add them to a scenario.");
     }
 
     private AuditRecord Audit(AuditAction action, ForecastScenario s, string? before) =>
