@@ -301,6 +301,35 @@ public sealed class NonprofitReports(
     }
 
     /// <summary>Net assets from every line through a date: equity plus all income less expenses, split by the accounts' restriction.</summary>
+    /// <summary>
+    /// For the auditor: net assets without and with donor restrictions at the start of the period, the change from
+    /// activities, what releases moved from one to the other, and the end.
+    /// </summary>
+    public async Task<ReportTable> NetAssetRollForwardAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var reportBasis = basis ?? company.DefaultReportBasis;
+        var chart = await accounts.GetChartAsync(ct);
+        var lines = await ledger.LinesAsync(reportBasis, null, to, ct);
+        var (openFree, openHeld) = NetAssets(chart, lines.Where(l => l.Date < from));
+        var (endFree, endHeld) = NetAssets(chart, lines);
+        var released = lines.Where(l => l.Date >= from && l.Source == RestrictionRelease.Source && chart.Get(l.AccountId).DonorRestricted).Sum(l => l.Amount);
+        List<ReportTableRow> rows =
+        [
+            new(["Net assets at the start", openFree, openHeld, openFree + openHeld]),
+            new(["Change from activities, before releases", endFree - openFree - released, endHeld - openHeld + released, endFree + endHeld - openFree - openHeld], 1),
+            new(["Released from restrictions", released, -released, 0m], 1),
+            new(["Net assets at the end", endFree, endHeld, endFree + endHeld], 0, ReportRowStyle.Total),
+        ];
+        return new ReportTable(
+            "Net asset roll-forward",
+            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}"],
+            [new(""), new(Without, ColumnFormat.Money), new(With, ColumnFormat.Money), new("Total", ColumnFormat.Money)],
+            rows,
+            reportBasis,
+            "Ties to the statement of financial position at both dates and to the statement of activities for the change.");
+    }
+
     private static (decimal Without, decimal With) NetAssets(ChartOfAccounts chart, IEnumerable<LedgerLine> lines)
     {
         decimal free = 0m, held = 0m;

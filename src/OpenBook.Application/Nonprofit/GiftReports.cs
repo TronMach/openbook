@@ -134,6 +134,24 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
             Note: "The general rule of Form 990 Schedule B. Some organizations use the 2% special rule instead, and the schedule's names aren't made public for most: check with your preparer.");
     }
 
+    /// <summary>In-kind gifts in a period, for the auditor and Form 990 Schedule M: donor, what was given, its recorded value and where it went.</summary>
+    public async Task<ReportTable> InKindGiftsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var names = await NamesAsync(ct);
+        var gifts = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Kind == GiftKind.InKind && d.Date >= from && d.Date <= to)
+            .OrderBy(d => d.Date).ThenBy(d => d.Number).ToList();
+        var rows = gifts.Select(d => new ReportTableRow([new ReportCell($"{d.Number} · {names.GetValueOrDefault(d.DonorId, "?")}", new ReportLink("donation", d.Id)),
+            d.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture), d.Description, d.Amount])).ToList();
+        rows.Add(new ReportTableRow([$"{gifts.Count} gift(s)", null, null, gifts.Sum(d => d.Amount)], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "In-kind gifts",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Gift"), new("Date"), new("What was given"), new("Recorded value", ColumnFormat.Money)],
+            rows,
+            Note: "Goods and services given instead of money, at the fair value recorded. Donated services count only when they meet the rules for recognizing them.");
+    }
+
     /// <summary>Pledges as of a date: promised, paid by then and what's left, oldest first.</summary>
     public async Task<ReportTable> PledgesAsync(DateOnly asOf, CancellationToken ct = default)
     {

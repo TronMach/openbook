@@ -244,6 +244,27 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_net_asset_roll_forward_adds_up_and_in_kind_gifts_list_what_was_given()
+    {
+        var restricted = await _db.CreateAccount("Restricted Gifts", AccountType.Income, "4020");
+        await In<OpenBook.Application.Accounts.AccountService, Account>(s => s.UpdateAsync(new OpenBook.Application.Accounts.UpdateAccountCommand(
+            restricted.Id, restricted.Name, restricted.Type, restricted.Number, null, null, DonorRestricted: true)));
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Jan5,
+            [JournalLineDraft.Dr(_checking.Id, 900m), JournalLineDraft.Cr(_income.Id, 600m), JournalLineDraft.Cr(restricted.Id, 300m)], "Gifts")));
+        await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(_acme.Id, Mar31, 250m, _rent.Id, GiftKind.InKind, Description: "Office chairs")));
+
+        var roll = await Report("net-asset-rollforward", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        decimal Cell(int row, int col) => (decimal)roll.Rows[row].Cells[col].Value!;
+        Assert.Equal((0m, 0m), (Cell(0, 1), Cell(0, 2)));
+        Assert.Equal(Cell(0, 3) + Cell(1, 3) + Cell(2, 3), Cell(3, 3));
+        Assert.Equal(300m, Cell(3, 2));
+
+        var inKind = await Report("in-kind-gifts", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        Assert.Equal("Office chairs", inKind.Rows[0].Cells[2].Value);
+        Assert.Equal(250m, inKind.Rows[^1].Cells[3].Value);
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();

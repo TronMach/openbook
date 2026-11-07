@@ -131,6 +131,7 @@ In the **Nonprofit** group:
 - **Statement of financial position**: the balance sheet with net assets split into without and with donor restrictions. Money the board has set aside (a reserve, a quasi-endowment) shows on its own line when it's in an equity account whose name starts "Board-designated"; the nonprofit starter chart has **Board-Designated Net Assets**, **Endowment Net Assets** (donor restricted), **Investments** and **Investment Return**. Record the month's market change with a journal entry, and reconcile the investment account to the broker's statement with **Reconcile to a statement** on its register.
 - **Statement of functional expenses**: expenses by account and function, with a column per program.
 - **Restricted net assets by purpose**: what each purpose holds.
+- **Net asset roll-forward** (net assets without and with donor restrictions from the start of a period to its end, with releases between them) and **In-kind gifts** (what was given and its recorded value), for the audit and Schedule M; the open pledges and grants reports are the pledges and grants schedules.
 - **Schedule B contributors**: donors whose gifts in a calendar year came to $5,000 or more, money and in kind, with their addresses (the general rule of Form 990 Schedule B).
 - **Giving by donor**, **Giving by campaign**, **Lapsed donors** (gave last fiscal year but not yet this one; with a fiscal year starting in July, "2026" is July 2026 to June 2027) and **Open pledges**.
 - **Grants**: awards, spending, recognized income and what funders still owe.
