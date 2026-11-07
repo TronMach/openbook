@@ -960,6 +960,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(a => a.Cost).HasColumnName("CostMinor").HasConversion(MinorUnits);
             b.Property(a => a.Salvage).HasColumnName("SalvageMinor").HasConversion(MinorUnits);
             b.Property(a => a.PriorDepreciation).HasColumnName("PriorDepreciationMinor").HasConversion(MinorUnits);
+            b.Property(a => a.FirstYearAmount).HasColumnName("FirstYearAmountMinor").HasConversion(MinorUnits);
             b.Property(a => a.Proceeds).HasColumnName("ProceedsMinor").HasConversion(MinorUnits);
             b.Property(a => a.DisposalDepreciation).HasColumnName("DisposalDepreciationMinor").HasConversion(MinorUnits);
             b.Property(a => a.DecliningPercent).HasColumnName("DecliningPercentTenThousandths").HasConversion(TenThousandths);

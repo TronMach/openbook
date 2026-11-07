@@ -154,7 +154,10 @@ public static class AssetEndpoints
             Date(form["priorThrough"]),
             form["number"],
             form["description"],
-            Id(form["classId"]));
+            Id(form["classId"]),
+            form["firstYearAll"] == "true"
+                ? (method == DepreciationMethod.Macrs ? Number(form["cost"]) ?? 0m : (Number(form["cost"]) ?? 0m) - (Number(form["salvage"]) ?? 0m))
+                : Number(form["firstYearAmount"]) ?? 0m);
     }
 
     private static async Task<IResult> Back<T>(string page, Func<Task<T>> change)

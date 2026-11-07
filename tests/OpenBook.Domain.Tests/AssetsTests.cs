@@ -11,6 +11,30 @@ public class AssetsTests
         FixedAsset.Create(new FixedAssetDetails("Van", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), inService, cost, method, lifeMonths, salvage,
             MacrsClass: macrs, PriorDepreciation: prior, PriorThrough: priorThrough), DateTimeOffset.UnixEpoch);
 
+    private static FixedAsset WithFirstYear(DepreciationMethod method, decimal cost, decimal first, int lifeMonths = 0, decimal salvage = 0m, MacrsClass? macrs = null) =>
+        FixedAsset.Create(new FixedAssetDetails("Saw", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 3, 10), cost, method, lifeMonths, salvage,
+            MacrsClass: macrs, FirstYearAmount: first), DateTimeOffset.UnixEpoch);
+
+    [Fact]
+    public void A_first_year_write_off_comes_in_the_first_month_and_the_method_spreads_the_rest()
+    {
+        var part = Depreciation.Schedule(WithFirstYear(DepreciationMethod.StraightLine, 3_000m, 1_200m, 36));
+        Assert.Equal((36, 1_250m, 50m, 3_000m), (part.Count, part[0].Amount, part[1].Amount, part.Sum(p => p.Amount)));
+        Assert.Equal(new DateOnly(2026, 3, 31), part[0].PeriodEnd);
+
+        // The whole cost: one month, no life needed.
+        var all = Depreciation.Schedule(WithFirstYear(DepreciationMethod.StraightLine, 900m, 900m));
+        Assert.Equal(900m, Assert.Single(all).Amount);
+
+        // MACRS on what's left: 5-year, first year 20% of the rest spread over March to December.
+        var macrs = Depreciation.Schedule(WithFirstYear(DepreciationMethod.Macrs, 10_000m, 6_000m, macrs: MacrsClass.Year5));
+        Assert.Equal(10_000m, macrs.Sum(p => p.Amount));
+        Assert.Equal(6_800m, macrs.Where(p => p.PeriodEnd.Year == 2026).Sum(p => p.Amount));
+
+        Assert.Equal("asset.first_year_invalid", Assert.Throws<DomainException>(() => WithFirstYear(DepreciationMethod.StraightLine, 1_000m, 950m, 12, salvage: 100m)).Code);
+        Assert.Equal("asset.life_invalid", Assert.Throws<DomainException>(() => WithFirstYear(DepreciationMethod.StraightLine, 1_000m, 500m)).Code);
+    }
+
     [Fact]
     public void Straight_line_spreads_cost_less_salvage_over_the_months_to_the_cent()
     {

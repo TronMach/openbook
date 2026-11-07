@@ -20,6 +20,7 @@ Record the purchase as usual: a bill, an expense or a journal entry, to a **Fixe
   - **Declining balance**: a **declining rate %** of what's left each year, so more early on.
   - **MACRS (US tax)**: the IRS tables for the **MACRS class** (3 to 20 years with the half-year convention, 27.5 and 39 years for real estate with mid-month; 39-year buildings use the published percentages of Table A-7a, so the yearly figures match a preparer working from the table). Salvage is ignored, as the IRS does.
   - **Not depreciated (land)**.
+- **Section 179 or bonus depreciation**: an amount **written off in the first month**, the month it's placed in service; the method spreads the rest (MACRS on the reduced basis). Tick **Write off the whole cost now** for a tool, computer or vehicle written off in the year you buy it: one month takes it all, and no useful life is needed. Your tax preparer decides the figure; OpenBook keeps one schedule, so if your books and tax return depreciate differently, keep the tax schedule with your preparer.
 - **Accumulated depreciation account** and **depreciation expense account**: leave them on the defaults ("Accumulated Depreciation" and "Depreciation Expense", created when first needed) unless your chart has its own.
 - **Depreciation already recorded** **through** a date, for an asset bought before you started with OpenBook. Depreciation carries on from the schedule after that date, and if what you enter differs from the schedule, the last month takes the difference, so the asset still ends at its full depreciable amount.
 

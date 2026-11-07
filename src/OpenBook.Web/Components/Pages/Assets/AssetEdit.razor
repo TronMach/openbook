@@ -108,6 +108,20 @@
                     </div>
                 </div>
                 <fieldset>
+                    <legend>Section 179 or bonus depreciation</legend>
+                    <div class="row">
+                        <div class="field">
+                            <label for="firstYear">Written off in the first month</label>
+                            <input id="firstYear" name="firstYearAmount" class="amount" inputmode="decimal" value="@(_asset is { FirstYearAmount: > 0 } f ? f.FirstYearAmount.ToString("0.00") : "")" />
+                        </div>
+                        <label class="check">
+                            <input type="checkbox" name="firstYearAll" value="true" checked="@(_asset is { FirstYearAmount: > 0 } all && all.FirstYearAmount == all.Base)" />
+                            <span>Write off the whole cost now</span>
+                        </label>
+                    </div>
+                    <p class="hint">For a tool, a computer or a vehicle written off in the year it's bought (section 179, or 100% bonus), tick the box. A part is taken in the month it's placed in service and the method spreads the rest. Your tax preparer decides the figure; with the whole cost, no useful life is needed.</p>
+                </fieldset>
+                <fieldset>
                     <legend>Bought before you started with OpenBook?</legend>
                     <div class="row">
                         <div class="field">

@@ -138,6 +138,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ExpenseAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("FirstYearAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("FirstYearAmountMinor");
+
                     b.Property<DateOnly>("InServiceDate")
                         .HasColumnType("TEXT");
 

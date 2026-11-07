@@ -62,7 +62,8 @@ public sealed record FixedAssetDetails(
     DateOnly? PriorThrough = null,
     string? Number = null,
     string? Description = null,
-    Guid? ClassId = null);
+    Guid? ClassId = null,
+    decimal FirstYearAmount = 0m);
 
 /// <summary>
 /// Something the business owns and uses for more than a year. The asset record posts nothing when created (the
@@ -153,7 +154,9 @@ public sealed class FixedAsset
             throw new DomainException("asset.salvage_invalid", "Salvage value is from zero up to less than the cost.");
         if (!Enum.IsDefined(details.Method))
             throw new DomainException("asset.method_invalid", "Choose a depreciation method.");
-        if (details.Method is DepreciationMethod.StraightLine or DepreciationMethod.DecliningBalance && details.LifeMonths is < 1 or > 1200)
+        // Written off whole in the first year, it needs no life.
+        var allAtOnce = details.FirstYearAmount > 0m && details.FirstYearAmount == details.Cost - (details.Method == DepreciationMethod.Macrs ? 0m : details.Salvage);
+        if (details.Method is DepreciationMethod.StraightLine or DepreciationMethod.DecliningBalance && !allAtOnce && details.LifeMonths is < 1 or > 1200)
             throw new DomainException("asset.life_invalid", "Enter a useful life from 1 month to 100 years.");
         if (details.Method == DepreciationMethod.DecliningBalance && (details.DecliningPercent is <= 100m or > 300m || decimal.Round(details.DecliningPercent, 2) != details.DecliningPercent))
             throw new DomainException("asset.declining_invalid", "The declining balance rate is above 100% and at most 300% (200% is double declining).");
@@ -163,6 +166,17 @@ public sealed class FixedAsset
             throw new DomainException("asset.prior_invalid", "Depreciation to date is from zero up to the cost.");
         if (details.PriorDepreciation > 0m && details.PriorThrough is null)
             throw new DomainException("asset.prior_date_required", "Say what date the depreciation to date runs through.");
+        Money.EnsureCents(details.FirstYearAmount);
+        var basis = details.Method switch
+        {
+            DepreciationMethod.None => 0m,
+            DepreciationMethod.Macrs => details.Cost,
+            _ => details.Cost - details.Salvage,
+        };
+        if (details.FirstYearAmount < 0m || details.FirstYearAmount > basis)
+            throw new DomainException("asset.first_year_invalid", details.Method == DepreciationMethod.None
+                ? "An asset that isn't depreciated has no first-year write-off."
+                : $"The first-year write-off (section 179 or bonus) is from zero up to {basis:N2}, what's depreciated in all.");
         if (details.PriorThrough is { } through && through < details.InServiceDate)
             throw new DomainException("asset.prior_date_invalid", "Depreciation to date can't run through a date before the asset was in service.");
 
@@ -181,8 +195,15 @@ public sealed class FixedAsset
         MacrsClass = details.Method == DepreciationMethod.Macrs ? details.MacrsClass : null;
         PriorDepreciation = details.PriorDepreciation;
         PriorThrough = details.PriorDepreciation > 0m || details.PriorThrough is not null ? details.PriorThrough : null;
+        FirstYearAmount = details.FirstYearAmount;
         ClassId = details.ClassId;
     }
+
+    /// <summary>
+    /// Section 179 or bonus depreciation: taken in the month the asset is placed in service, with the method spreading
+    /// the rest. All of <see cref="Base"/> writes the asset off in its first month (a tool, a vehicle).
+    /// </summary>
+    public decimal FirstYearAmount { get; private set; }
 
     /// <summary>The class its depreciation is posted to (a program, a department); null for none. Changes only later runs.</summary>
     public Guid? ClassId { get; private set; }
@@ -290,13 +311,23 @@ public static class Depreciation
         ArgumentNullException.ThrowIfNull(asset);
         var start = new DateOnly(asset.InServiceDate.Year, asset.InServiceDate.Month, 1);
         DateOnly MonthEnd(int index) => start.AddMonths(index + 1).AddDays(-1);
-        var amounts = asset.Method switch
+        // A first-year write-off comes off the top; the method spreads what's left (MACRS on the reduced basis, as the IRS has it).
+        var first = asset.FirstYearAmount;
+        List<decimal> amounts = asset.Base - first <= 0m ? [] : asset.Method switch
         {
-            DepreciationMethod.StraightLine => Even(asset.Base, asset.LifeMonths),
-            DepreciationMethod.DecliningBalance => Declining(asset.Cost, asset.Salvage, asset.LifeMonths, asset.DecliningPercent),
-            DepreciationMethod.Macrs => Macrs(asset.Cost, asset.MacrsClass!.Value, asset.InServiceDate.Month),
+            DepreciationMethod.StraightLine => Even(asset.Base - first, asset.LifeMonths),
+            DepreciationMethod.DecliningBalance => Declining(asset.Cost - first, asset.Salvage, asset.LifeMonths, asset.DecliningPercent),
+            DepreciationMethod.Macrs => Macrs(asset.Cost - first, asset.MacrsClass!.Value, asset.InServiceDate.Month),
             _ => [],
         };
+        if (first > 0m)
+        {
+            if (amounts.Count == 0)
+                amounts.Add(first);
+            else
+                amounts[0] += first;
+        }
+
         return amounts.Select((a, i) => new DepreciationPeriod(MonthEnd(i), a)).ToList();
     }
 

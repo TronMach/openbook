@@ -143,6 +143,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("ExpenseAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("FirstYearAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("FirstYearAmountMinor");
+
                     b.Property<DateOnly>("InServiceDate")
                         .HasColumnType("date");
 
