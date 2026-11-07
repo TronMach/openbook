@@ -198,6 +198,16 @@ public sealed class InventoryAdjustmentService(
         if (adjustment.Status == DocumentStatus.Voided)
             throw new DomainException("inventory.adjustment_voided", "This adjustment is already voided.");
 
+        // A write-down's value went with whatever left its layers since: putting it back then would leave value with no units.
+        var own = await store.ListMovementsForSourceAsync(EntityType, id, ct);
+        foreach (var down in own.Where(m => !m.IsReceipt && m.Quantity == 0m && m.ReversalOf is null))
+        {
+            var history = await store.ListMovementsAsync(down.ItemId, ct);
+            var undone = history.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
+            if (history.Any(m => m.LayerId == down.LayerId && m.SourceId != id && !m.IsReceipt && (m.Date >= down.Date || m.CreatedAt > down.CreatedAt) && m.ReversalOf is null && !undone.Contains(m.Id)))
+                throw new DomainException("inventory.write_down_moved", "Stock written down here has been sold, used, moved or adjusted since, so the write-down can't be voided. Void those first, or write the value back up with a new adjustment.");
+        }
+
         var plan = await inventory.PlanReversalAsync(EntityType, id, adjustment.Date, "this adjustment", ct);
         var before = Snapshot(adjustment);
         await engine.StageVoidAsync(adjustment.JournalEntryId, reason, fromDocument: true, ct);

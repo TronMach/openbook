@@ -292,6 +292,13 @@ public sealed class GapReportsTests : IAsyncLifetime
         stock = (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!;
         Assert.Equal((10m, 100m), (stock.Quantity, stock.Value));
         Assert.Equal(0, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Problems);
+
+        // Once some of it has gone, the write-down stays.
+        var again = await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Mar31,
+            [new InventoryAdjustmentLineDraft(_widget.Id, 0m, ValueChange: -40m)])));
+        await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Mar31, [new InventoryAdjustmentLineDraft(_widget.Id, -2m)])));
+        Assert.Equal("inventory.write_down_moved", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<InventoryAdjustmentService, InventoryAdjustment>(s => s.VoidAsync(again.Id, "Too late")))).Code);
     }
 
     [Fact]
