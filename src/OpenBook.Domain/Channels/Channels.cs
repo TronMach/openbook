@@ -53,7 +53,8 @@ public sealed record ChannelDetails(
     Guid? ClearingAccountId = null,
     bool? MarketplaceCollectsTax = null,
     Guid? ClassId = null,
-    Guid? LocationId = null);
+    Guid? LocationId = null,
+    Guid? WarehouseId = null);
 
 /// <summary>
 /// A place you sell (a Shopify store, an Amazon seller account, an Etsy shop…) and the accounts its payouts post to.
@@ -109,6 +110,12 @@ public sealed class SalesChannel
 
     public Guid? LocationId { get; private set; }
 
+    /// <summary>
+    /// Where its orders are shipped from and returns go back to (a marketplace's own warehouse, say); null for the
+    /// default warehouse. Stored like documents store it: the default is null.
+    /// </summary>
+    public Guid? WarehouseId { get; private set; }
+
     /// <summary>The channel's class on lines that don't have one.</summary>
     public IReadOnlyList<Ledger.JournalLineDraft> Classed(IEnumerable<Ledger.JournalLineDraft> lines) =>
         [.. lines.Select(l => l.ClassId is null && ClassId is { } c ? l with { ClassId = c } : l)];
@@ -140,7 +147,7 @@ public sealed class SalesChannel
         AdjustmentsAccountId = details.AdjustmentsAccountId;
         ClearingAccountId = details.ClearingAccountId == Guid.Empty ? null : details.ClearingAccountId;
         MarketplaceCollectsTax = details.MarketplaceCollectsTax ?? Kind is ChannelKind.Amazon or ChannelKind.Ebay or ChannelKind.Etsy;
-        (ClassId, LocationId) = (details.ClassId, details.LocationId);
+        (ClassId, LocationId, WarehouseId) = (details.ClassId, details.LocationId, details.WarehouseId);
         if (!CanConnect(Kind))
             Disconnect();
     }

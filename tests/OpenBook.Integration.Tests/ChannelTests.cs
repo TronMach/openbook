@@ -450,6 +450,23 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_channel_ships_from_its_own_warehouse()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income);
+        var mug = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Blue mug", Domain.Sales.ItemType.Inventory, sales.Id, 40m, Barcode: "MUG-1")));
+        var fba = await In<WarehouseService, Domain.Inventory.Warehouse>(s => s.CreateAsync("Amazon FBA"));
+        await In<InventoryAdjustmentService, Domain.Inventory.InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(new DateOnly(2026, 3, 1),
+            [new Domain.Inventory.InventoryAdjustmentLineDraft(mug.Id, 10m, 5m, new Domain.Inventory.StockPlace(fba.Id, null))])));
+        var amazon = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Amazon US", ChannelKind.Amazon, _checking.Id, WarehouseId: fba.Id)));
+        Assert.Equal(fba.Id, amazon.WarehouseId);
+
+        var imported = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)));
+        await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(imported.Saved.Single(b => b.Date == new DateOnly(2026, 3, 2)).Id));
+        var there = (await In<InventoryService, IReadOnlyList<StockAt>>(s => s.StockByPlaceAsync(mug.Id))).Where(p => p.Place.WarehouseId == fba.Id).Sum(p => p.Quantity);
+        Assert.Equal(8m, there);
+    }
+
+    [Fact]
     public async Task Posting_orders_moves_stock_once_every_sku_is_mapped()
     {
         var sales = await _db.CreateAccount("Sales", AccountType.Income);

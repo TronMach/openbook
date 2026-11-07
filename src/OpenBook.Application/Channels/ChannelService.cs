@@ -37,7 +37,7 @@ public sealed record PayoutImportResult(IReadOnlyList<PayoutData> New, IReadOnly
 /// Sales channels and their payouts. A report is read by <see cref="ChannelReports"/>; payouts not seen before (by the
 /// channel's id for them) wait as Pending until posted, each as one journal entry (<see cref="ChannelPayout.Source"/>).
 /// </summary>
-public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies, SalesTax.ISalesTaxStore taxes, Nonprofit.INonprofitStore gifts)
+public sealed partial class ChannelService(IChannelStore store, IChannelOrderStore orders, AccountService accounts, PostingEngine engine, Sales.ISalesStore sales, IClock clock, ICurrentUser user, OpenBook.Application.Companies.ICompanyStore companies, SalesTax.ISalesTaxStore taxes, Nonprofit.INonprofitStore gifts, Inventory.WarehouseService warehouses)
 {
     public const string ChannelEntity = "sales_channel";
     public const string PayoutEntity = "channel_payout";
@@ -331,6 +331,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
     /// <summary>Empty account ids become the usual accounts (created on first use); chosen ones are checked.</summary>
     private async Task<ChannelDetails> ResolveAsync(ChannelDetails d, CancellationToken ct)
     {
+        // The warehouse it ships from, in the stored form (the default is null).
+        d = d with { WarehouseId = await warehouses.CheckAsync(d.WarehouseId, ct) };
         var chart = await accounts.GetChartAsync(ct);
 
         async Task<Guid> Pick(Guid id, string name, AccountType type, string description, string role, params AccountType[] allowed)
@@ -388,6 +390,7 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         c.Name,
         c.ClassId,
         c.LocationId,
+        c.WarehouseId,
         Kind = c.Kind.ToString(),
         c.DepositAccountId,
         c.SalesAccountId,

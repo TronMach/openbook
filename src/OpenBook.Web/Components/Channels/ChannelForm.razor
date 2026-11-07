@@ -1,4 +1,5 @@
 @inject OpenBook.Application.Segments.SegmentService Segments
+@inject OpenBook.Application.Inventory.WarehouseService WarehouseService
 @* The fields of a sales channel, for the new channel form and the channel page (static forms posting to ChannelEndpoints). *@
 @using OpenBook.Domain.Accounts
 @using OpenBook.Domain.Channels
@@ -37,6 +38,18 @@
         <input type="checkbox" name="marketplaceTax" value="true" checked="@Channel.MarketplaceCollectsTax" />
         <span>The marketplace collects and pays sales tax on these orders</span>
     </label>
+}
+@if (_warehouses.Count > 1)
+{
+    <div class="field">
+        <label for="channel-warehouse">Ships from <span class="muted">(its orders take stock from here, and returns come back here)</span></label>
+        <select id="channel-warehouse" name="warehouseId">
+            @foreach (var w in _warehouses)
+            {
+                <option value="@w.Id" selected="@(Channel?.WarehouseId is { } chosen ? w.Id == chosen : w.IsDefault)">@w.Name</option>
+            }
+        </select>
+    </div>
 }
 @if (_classes.Count > 0 || _locations.Count > 0)
 {
@@ -110,11 +123,13 @@
     private IEnumerable<Account> Accounts => Chart.Ordered(includeInactive: false).Select(x => x.Account);
 
     private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+    private IReadOnlyList<OpenBook.Domain.Inventory.Warehouse> _warehouses = [];
     private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _locations = [];
 
     protected override async Task OnInitializedAsync()
     {
         _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
+        _warehouses = (await WarehouseService.ListAsync()).Where(w => w.IsActive).ToList();
         _locations = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location, includeInactive: false);
     }
 

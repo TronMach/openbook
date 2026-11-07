@@ -315,7 +315,7 @@ public sealed class ChannelOrderService(
         var items = await sales.GetItemsAsync(stocked.Select(s => s.ItemId).ToList(), ct);
         var lines = stocked.Select((s, i) => SalesLine.Create(i + 1, new SalesLineDraft(s.ItemId, null, s.Quantity, 0m), items.GetValueOrDefault(s.ItemId))).ToList();
         var before = Snapshot(batch, channel);
-        var plan = lines.Count == 0 ? InventoryPlan.None : await inventory.PlanSaleAsync(lines, batch.Date, null, ct);
+        var plan = lines.Count == 0 ? InventoryPlan.None : await inventory.PlanSaleAsync(lines, batch.Date, channel.WarehouseId, ct);
         Guid? entryId = null;
         if (plan.Postings.Count > 0)
         {
@@ -399,7 +399,7 @@ public sealed class ChannelOrderService(
 
         var id = Guid.CreateVersion7();
         ChannelReturn.Create(id, channel.Id, batch.Id, date, wanted, memo, null, clock.UtcNow); // checks before anything is staged
-        var plan = salesLines.Count == 0 ? InventoryPlan.None : await inventory.PlanReturnAsync(salesLines, date, null, ct);
+        var plan = salesLines.Count == 0 ? InventoryPlan.None : await inventory.PlanReturnAsync(salesLines, date, channel.WarehouseId, ct);
         Guid? entryId = null;
         if (plan.Postings.Count > 0)
             entryId = (await engine.StageAsync(new PostJournalEntryCommand(date, channel.Classed(plan.Postings), $"{channel.Name} returns", ChannelReturn.Source, id, LocationId: channel.LocationId), ct)).Id;

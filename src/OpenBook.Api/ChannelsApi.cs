@@ -26,11 +26,11 @@ public sealed record VoidPayoutRequest(string? Reason);
 public sealed record ChannelRequest(
     string Name, ChannelKind Kind, Guid DepositAccountId, Guid? SalesAccountId = null, Guid? ShippingAccountId = null, Guid? RefundsAccountId = null,
     Guid? FeesAccountId = null, Guid? TaxAccountId = null, Guid? AdjustmentsAccountId = null, Guid? ClearingAccountId = null, bool? MarketplaceCollectsTax = null,
-    Guid? ClassId = null, Guid? LocationId = null)
+    Guid? ClassId = null, Guid? LocationId = null, Guid? WarehouseId = null)
 {
     public ChannelDetails ToDetails() => new(
         Name, Kind, DepositAccountId, SalesAccountId ?? Guid.Empty, ShippingAccountId ?? Guid.Empty, RefundsAccountId ?? Guid.Empty, FeesAccountId ?? Guid.Empty,
-        TaxAccountId ?? Guid.Empty, AdjustmentsAccountId ?? Guid.Empty, ClearingAccountId, MarketplaceCollectsTax, ClassId, LocationId);
+        TaxAccountId ?? Guid.Empty, AdjustmentsAccountId ?? Guid.Empty, ClearingAccountId, MarketplaceCollectsTax, ClassId, LocationId, WarehouseId);
 }
 
 public sealed record ConnectChannelRequest(string Credential, string? ShopDomain = null);

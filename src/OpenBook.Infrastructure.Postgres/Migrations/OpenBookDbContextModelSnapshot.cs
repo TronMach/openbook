@@ -1250,6 +1250,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("TaxAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AdjustmentsAccountId");

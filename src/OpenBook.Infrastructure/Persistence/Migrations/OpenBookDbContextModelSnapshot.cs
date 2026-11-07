@@ -1243,6 +1243,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("TaxAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AdjustmentsAccountId");
