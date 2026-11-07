@@ -5355,6 +5355,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("CreditLimitMinor");
 
+                    b.Property<long>("DefaultMarkupPercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("DefaultMarkupTenThousandths");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)

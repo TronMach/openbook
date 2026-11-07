@@ -78,6 +78,22 @@ public sealed class ProjectService(IProjectStore store, ISalesStore sales, Custo
         return customer;
     }
 
+    /// <summary>The client's usual markup on costs passed on, audited <c>Updated</c> on the customer.</summary>
+    public async Task<Customer> SetDefaultMarkupAsync(Guid customerId, decimal percent, CancellationToken ct = default)
+    {
+        var customer = await sales.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
+        var before = customer.DefaultMarkupPercent;
+        customer.SetDefaultMarkup(percent);
+        if (before != percent)
+        {
+            sales.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "customer", customer.Id,
+                System.Text.Json.JsonSerializer.Serialize(new { DefaultMarkupPercent = before }), System.Text.Json.JsonSerializer.Serialize(new { DefaultMarkupPercent = percent })));
+            await sales.SaveChangesAsync(ct);
+        }
+
+        return customer;
+    }
+
     /// <summary>How billed time shows on the client's invoices, audited <c>Updated</c> on the customer.</summary>
     public async Task<Customer> SetTimeBillingFormatAsync(Guid customerId, TimeBillingFormat format, CancellationToken ct = default)
     {

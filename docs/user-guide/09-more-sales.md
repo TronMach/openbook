@@ -97,7 +97,7 @@ Month-end dates stay at month end: a template that starts on 31 January bills on
 When you pay for something on a customer's behalf, such as materials for a job or a travel cost, you can pass it on to them.
 
 1. Enter the bill or expense as usual.
-2. On its page, the **Billable to customers and project costs** panel lists its lines. Choose the customer for a line, a markup percentage if you add one, and **Mark** it.
+2. On its page, the **Billable to customers and project costs** panel lists its lines. Choose the customer for a line, a markup percentage if you add one, and **Mark** it. With several lines, **Mark them all** bills every line not marked yet to one customer. A markup left blank takes the customer's **Usual markup on costs** (in the **Projects and time** card on their page; none unless set).
 3. The cost waits on **Sales → Billable expenses**. When you next create an invoice for that customer, it's listed on the form; tick it to add it as a "Billable Expenses" line.
 
 Voiding the invoice puts the costs back on the waiting list. A bill or expense whose cost has been invoiced can't be voided until that invoice is.

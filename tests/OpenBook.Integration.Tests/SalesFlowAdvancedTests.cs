@@ -62,6 +62,19 @@ public sealed class SalesFlowAdvancedTests : IAsyncLifetime
     // ---- Sales orders ----
 
     [Fact]
+    public async Task Every_line_is_billed_to_a_client_at_their_usual_markup()
+    {
+        await In<OpenBook.Application.Projects.ProjectService, Customer>(s => s.SetDefaultMarkupAsync(_acme.Id, 15m));
+        var vendor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Hotel")));
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(vendor.Id, Mar1,
+            [new BillLineDraft(_travel.Id, 200m, "Two nights"), new BillLineDraft(_travel.Id, 40m, "Parking")])));
+        Assert.Equal(2, await In<BillableExpenseService, int>(s => s.MarkAllAsync(BillableSource.Bill, bill.Id, _acme.Id)));
+        var open = await In<BillableExpenseService, IReadOnlyList<BillableExpense>>(s => s.OpenAsync(_acme.Id));
+        Assert.Equal([230m, 46m], open.Select(b => b.Amount).Order().Reverse());
+        Assert.Equal("billable.nothing_left", await Refused(() => In<BillableExpenseService, int>(s => s.MarkAllAsync(BillableSource.Bill, bill.Id, _acme.Id))));
+    }
+
+    [Fact]
     public async Task Sales_orders_invoice_in_parts_and_close_when_everything_is_billed()
     {
         var order = await In<SalesOrderService, SalesOrder>(s => s.CreateAsync(new SaveSalesOrderCommand(_acme.Id, Mar1,

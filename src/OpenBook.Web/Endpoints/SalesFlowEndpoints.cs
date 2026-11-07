@@ -121,8 +121,25 @@ public static class SalesFlowEndpoints
                     || !int.TryParse(form["lineNumber"], NumberStyles.None, CultureInfo.InvariantCulture, out var lineNumber))
                     throw new DomainException("billable.line_invalid", "That line can't be billed.");
                 var customerId = Id(form["customerId"]) ?? throw new DomainException("billable.customer_required", "Choose the customer to bill.");
-                await billables.MarkAsync(new MarkBillableCommand(kind, documentId, lineNumber, customerId, FormNumbers.Number(form["markup"]) ?? 0m,
+                await billables.MarkAsync(new MarkBillableCommand(kind, documentId, lineNumber, customerId, FormNumbers.Number(form["markup"]),
                     Billable: form["billable"] == "true"), ct);
+                return Results.Redirect($"{back}#billable");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}?billableError={Uri.EscapeDataString(ex.Message)}#billable");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/sales/billable/all", async (IFormCollection form, BillableExpenseService billables, CancellationToken ct) =>
+        {
+            var back = BackTo(form);
+            try
+            {
+                if (!Enum.TryParse<BillableSource>(form["kind"], out var kind) || Id(form["documentId"]) is not { } documentId)
+                    throw new DomainException("billable.line_invalid", "That document's lines can't be billed.");
+                var customerId = Id(form["customerId"]) ?? throw new DomainException("billable.customer_required", "Choose the customer to bill.");
+                await billables.MarkAllAsync(kind, documentId, customerId, FormNumbers.Number(form["markup"]), form["billable"] == "true", ct);
                 return Results.Redirect($"{back}#billable");
             }
             catch (DomainException ex)

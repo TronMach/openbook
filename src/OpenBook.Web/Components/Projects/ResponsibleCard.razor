@@ -5,7 +5,7 @@
 @using OpenBook.Domain.Sales
 
 @* The person responsible for a client or project; a project without one has its client's (or parent's). Shown once there are people. *@
-@if (_people.Count > 0)
+@if (_customer is not null)
 {
     <section class="card no-print" id="responsible">
         <h2>Projects and time</h2>
@@ -15,6 +15,8 @@
             {
                 <input type="hidden" name="back" value="@Back" />
             }
+            @if (_people.Count > 0)
+            {
             <label for="responsible-person">Responsible</label>
             <select id="responsible-person" name="workerId">
                 <option value="">@(_inherited is { } i ? $"As above: {Name(i)}" : "Nobody chosen")</option>
@@ -23,6 +25,7 @@
                     <option value="@w.Id" selected="@(w.Id == _own)">@w.Name@(w.IsActive ? "" : " (inactive)")</option>
                 }
             </select>
+            }
             <label for="time-format">Time on invoices</label>
             <select id="time-format" name="timeFormat">
                 <option value="EachEntry" selected="@(_format == TimeBillingFormat.EachEntry)">A line per entry (date, person, notes)</option>
@@ -30,9 +33,11 @@
                 <option value="ByService" selected="@(_format == TimeBillingFormat.ByService)">A line per service</option>
                 <option value="OneLine" selected="@(_format == TimeBillingFormat.OneLine)">One sum per service</option>
             </select>
+            <label for="markup">Usual markup on costs (%)</label>
+            <input id="markup" name="markup" class="short" inputmode="decimal" value="@_customer.DefaultMarkupPercent.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
             <button type="submit" class="secondary">Save</button>
         </PostForm>
-        <p class="hint">Responsible is the partner or manager answering for this work. The project profitability and unbilled work reports can show one person's. Projects below this one take the same person unless they name their own. Time on invoices is how billed time shows on invoices addressed to this customer; the invoice also says how many hours it bills.</p>
+        <p class="hint">Responsible is the partner or manager answering for this work. The project profitability and unbilled work reports can show one person's. Projects below this one take the same person unless they name their own. Time on invoices is how billed time shows on invoices addressed to this customer; the invoice also says how many hours it bills. The usual markup goes on costs passed on to them when none is given.</p>
     </section>
 }
 
@@ -41,6 +46,7 @@
     private Guid? _own;
     private Guid? _inherited;
     private TimeBillingFormat _format;
+    private Customer? _customer;
 
     [Parameter, EditorRequired] public Guid CustomerId { get; set; }
 
@@ -50,10 +56,9 @@
     protected override async Task OnInitializedAsync()
     {
         _people = await Workers.ListAsync(includeInactive: true);
-        if (_people.Count == 0)
-            return;
+        _customer = await Customers.GetAsync(CustomerId);
         var (own, effective) = await Projects.ResponsibleForAsync(CustomerId);
-        _format = (await Customers.GetAsync(CustomerId))?.TimeBillingFormat ?? TimeBillingFormat.EachEntry;
+        _format = _customer?.TimeBillingFormat ?? TimeBillingFormat.EachEntry;
         _own = own;
         _inherited = own is null ? effective : null;
     }

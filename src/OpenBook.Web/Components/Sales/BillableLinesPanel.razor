@@ -9,10 +9,30 @@
     <div class="card no-print" id="billable" style="margin-top: 1.5rem">
         <h2>Billable to customers and project costs</h2>
         <p class="muted">Pass a cost on to a customer: it waits under "billable expenses" until you add it to one of their invoices.
-            Untick "bill it" to count it as a project's cost without billing it.</p>
+            Untick "bill it" to count it as a project's cost without billing it. A blank markup takes the customer's usual one (set on their page).</p>
         @if (Error is not null)
         {
             <div class="alert error" role="alert">@Error</div>
+        }
+        @if (Active && _lines.Count(l => l.Billable is null) > 1)
+        {
+            <PostForm Action="/sales/billable/all" data-enhance="false" class="inline-actions">
+                <AntiforgeryToken />
+                <input type="hidden" name="kind" value="@Kind" />
+                <input type="hidden" name="documentId" value="@DocumentId" />
+                <input type="hidden" name="back" value="@Back" />
+                <span>Every line not marked yet:</span>
+                <select name="customerId" aria-label="Customer for every line" data-search required>
+                    <option value="">Customer…</option>
+                    @foreach (var c in _customers)
+                    {
+                        <option value="@c.Customer.Id">@c.FullName</option>
+                    }
+                </select>
+                <input name="markup" class="short" inputmode="decimal" placeholder="usual" aria-label="Markup percent for every line" /> <span>% markup</span>
+                <label class="inline"><input type="checkbox" name="billable" value="true" checked /> Bill it</label>
+                <button type="submit" class="secondary">Mark them all</button>
+            </PostForm>
         }
         <table class="data">
             <thead><tr><th>Line</th><th class="num">Cost</th><th>Billable to</th></tr></thead>
@@ -62,7 +82,7 @@
                                             <option value="@c.Customer.Id">@c.FullName</option>
                                         }
                                     </select>
-                                    <input name="markup" class="short" inputmode="decimal" placeholder="0" aria-label="Markup percent" /> <span>% markup</span>
+                                    <input name="markup" class="short" inputmode="decimal" placeholder="usual" aria-label="Markup percent" /> <span>% markup</span>
                                     <label class="inline"><input type="checkbox" name="billable" value="true" checked /> Bill it</label>
                                     <button type="submit" class="secondary">Mark</button>
                                 </PostForm>

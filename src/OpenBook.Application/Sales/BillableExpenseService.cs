@@ -14,8 +14,9 @@ namespace OpenBook.Application.Sales;
 /// <summary>A category line of a bill or expense that could be billed to a customer, and whether it is.</summary>
 public sealed record BillableLine(int LineNumber, Guid AccountId, string Description, decimal Cost, BillableExpense? Billable);
 
+/// <param name="MarkupPercent">Null takes the customer's default markup.</param>
 /// <param name="Billable">False marks the cost to the customer or project for profitability only.</param>
-public sealed record MarkBillableCommand(BillableSource Kind, Guid DocumentId, int LineNumber, Guid CustomerId, decimal MarkupPercent = 0m, bool Billable = true);
+public sealed record MarkBillableCommand(BillableSource Kind, Guid DocumentId, int LineNumber, Guid CustomerId, decimal? MarkupPercent = null, bool Billable = true);
 
 /// <summary>
 /// Billable expenses: costs on bills and expenses marked to be passed on to a customer, then added to one of their
@@ -62,11 +63,38 @@ public sealed class BillableExpenseService(
             throw new DomainException("billable.already_marked", "That line is already billable.");
 
         var billable = BillableExpense.Create(command.Kind, command.DocumentId, command.LineNumber, customer.Id, date,
-            $"{prefix}: {line.Description}", line.Cost, command.MarkupPercent, clock.UtcNow, command.Billable);
+            $"{prefix}: {line.Description}", line.Cost, command.MarkupPercent ?? customer.DefaultMarkupPercent, clock.UtcNow, command.Billable);
         store.Add(billable);
         store.Add(Audit(AuditAction.Created, billable, null));
         await store.SaveChangesAsync(ct);
         return billable;
+    }
+
+    /// <summary>
+    /// Marks every line of the document not marked yet to one customer, in one save (null markup = the customer's
+    /// default). Returns how many lines were marked.
+    /// </summary>
+    public async Task<int> MarkAllAsync(BillableSource kind, Guid documentId, Guid customerId, decimal? markupPercent = null, bool billable = true, CancellationToken ct = default)
+    {
+        var customer = await store.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
+        if (!customer.IsActive)
+            throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
+        var (date, prefix, lines) = await DocumentAsync(kind, documentId, ct);
+        var marked = (await store.ListBillableForDocumentAsync(kind, documentId, ct)).Select(b => b.LineNumber).ToHashSet();
+        var count = 0;
+        foreach (var line in lines.Where(l => !marked.Contains(l.LineNumber)))
+        {
+            var mark = BillableExpense.Create(kind, documentId, line.LineNumber, customer.Id, date, $"{prefix}: {line.Description}", line.Cost,
+                markupPercent ?? customer.DefaultMarkupPercent, clock.UtcNow, billable);
+            store.Add(mark);
+            store.Add(Audit(AuditAction.Created, mark, null));
+            count++;
+        }
+
+        if (count == 0)
+            throw new DomainException("billable.nothing_left", "Every line here is already marked.");
+        await store.SaveChangesAsync(ct);
+        return count;
     }
 
     /// <summary>Stops a line being billable; refused once it's on an invoice.</summary>

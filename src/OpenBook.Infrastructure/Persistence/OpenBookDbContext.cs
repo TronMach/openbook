@@ -1525,6 +1525,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.EmailCc).HasMaxLength(1000);
             b.Property(c => c.EmailPdf).HasConversion<string>().HasMaxLength(10);
             b.Property(c => c.TimeBillingFormat).HasConversion<string>().HasMaxLength(20);
+            b.Property(c => c.DefaultMarkupPercent).HasColumnName("DefaultMarkupTenThousandths").HasConversion(TenThousandths);
             b.HasOne<Customer>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
         });
 

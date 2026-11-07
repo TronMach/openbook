@@ -59,6 +59,13 @@ public sealed class Customer
 
     public void SetTimeBillingFormat(TimeBillingFormat format) => TimeBillingFormat = format;
 
+    /// <summary>The markup on costs passed on to this client when none is given (percent, up to 4 decimals).</summary>
+    public decimal DefaultMarkupPercent { get; private set; }
+
+    public void SetDefaultMarkup(decimal percent) => DefaultMarkupPercent = percent is >= 0m and <= 1000m && decimal.Round(percent, 4) == percent
+        ? percent
+        : throw new DomainException("customer.markup", "A markup is 0 to 1,000 percent, to four decimals.");
+
     /// <summary>
     /// A sub-customer whose invoices the parent pays: the parent's payments and credits can settle them, and
     /// they appear on the parent's statement.

@@ -5348,6 +5348,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("CreditLimitMinor");
 
+                    b.Property<long>("DefaultMarkupPercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DefaultMarkupTenThousandths");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)
