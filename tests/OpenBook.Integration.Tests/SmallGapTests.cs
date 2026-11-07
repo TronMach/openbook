@@ -5,6 +5,7 @@ using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Import;
 using OpenBook.Application.Nonprofit;
+using OpenBook.Application.Reporting;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
@@ -49,6 +50,44 @@ public sealed class SmallGapTests : IAsyncLifetime
         using var file = new MemoryStream("Thank you"u8.ToArray());
         await In<AttachmentService, OpenBook.Domain.Attachments.Attachment>(s => s.AddAsync("donation", gift.Id, "letter.txt", file));
         Assert.Single(await In<AttachmentService, IReadOnlyList<OpenBook.Domain.Attachments.Attachment>>(s => s.ListAsync("donation", gift.Id)));
+    }
+
+    [Fact]
+    public async Task Gifts_carry_a_campaign_reported_by_campaign_and_lapsed_donors_follow_the_fiscal_year()
+    {
+        var pat = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat")));
+        var sam = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Sam")));
+        await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(pat.Id, new DateOnly(2025, 8, 1), 50m, _checking.Id, Campaign: "Year-end letter")));
+        var second = await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(sam.Id, Mar1, 30m, _checking.Id, Campaign: "Gala")));
+        await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(sam.Id, Mar31, 20m, _checking.Id)));
+        Assert.Equal(["Gala", "Year-end letter"], await In<GiftService, IReadOnlyList<string>>(s => s.CampaignsAsync()));
+        Assert.Equal("Spring appeal", (await In<GiftService, Donation>(s => s.SetCampaignAsync(second.Id, "Spring appeal"))).Campaign);
+
+        // A batch's campaign, and the import's column, go on each gift.
+        var batch = await In<GiftService, IReadOnlyList<Donation>>(s => s.RecordBatchAsync(new GiftBatchCommand(Mar31,
+            new GiftBatchDefaults(_checking.Id, Campaign: "Gala"), [new GiftBatchRow(pat.Id, 10m)])));
+        Assert.Equal("Gala", Assert.Single(batch).Campaign);
+        await In<GiftImportService, GiftImportResult>(s => s.ImportAsync("Date,Donor,Amount,Appeal\n2026-03-15,Sam,15.00,Gala\n", new GiftBatchDefaults(_checking.Id)));
+        Assert.Equal(2, (await In<GiftService, IReadOnlyList<Donation>>(s => s.ListAsync())).Count(d => d.Campaign == "Gala"));
+
+        var table = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("giving-by-campaign", new ReportParameters(new Dictionary<string, string?>
+        {
+            ["preset"] = "Custom", ["from"] = "2026-01-01", ["to"] = "2026-12-31",
+        }), CancellationToken.None));
+        Assert.Equal(["Spring appeal", "Gala", "No campaign", "Total"], table.Rows.Select(r => r.Cells[0].Value?.ToString()));
+        Assert.Equal((30m, 25m), (table.Rows[0].Cells[3].Value, table.Rows[1].Cells[3].Value));
+
+        // With a fiscal year from July, both gave in the year that started July 2025 (Sam in March), and not yet in the next.
+        await _db.InScope(async sp =>
+        {
+            var settings = sp.GetRequiredService<OpenBook.Application.Companies.CompanySettingsService>();
+            var c = await settings.GetAsync();
+            return await settings.UpdateAsync(new OpenBook.Application.Companies.UpdateCompanySettingsCommand(
+                c.Name, c.BusinessType, c.LegalName, c.Email, c.Phone, c.Address, 7, c.UseAccountNumbers, c.DefaultReportBasis));
+        });
+        var lapsed = await In<OpenBook.Application.Nonprofit.GiftReports, ReportTable>(s => s.LapsedDonorsAsync(2026));
+        Assert.StartsWith("Gave in Jul 2025", lapsed.Rows[0].Cells[0].Value?.ToString(), StringComparison.Ordinal);
+        Assert.Equal(["Pat", "Sam"], lapsed.Rows.Skip(1).Take(2).Select(r => r.Cells[0].Value?.ToString()).Order());
     }
 
     [Fact]

@@ -88,6 +88,16 @@
                     <label for="reference">Reference <span class="muted">(optional)</span></label>
                     <input id="reference" name="reference" maxlength="@Donation.MaxReferenceLength" placeholder="Check number" />
                 </div>
+                <div class="field">
+                    <label for="campaign">Campaign or appeal <span class="muted">(optional)</span></label>
+                    <input id="campaign" name="campaign" maxlength="@Donation.MaxCampaignLength" list="campaigns" placeholder="Year-end letter" />
+                    <datalist id="campaigns">
+                        @foreach (var c in _campaigns)
+                        {
+                            <option value="@c"></option>
+                        }
+                    </datalist>
+                </div>
             </div>
             <div class="row">
                 <div class="field">
@@ -159,6 +169,7 @@
     private List<PledgeBalance> _pledges = [];
     private PledgeBalance? _pledge;
     private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<string> _campaigns = [];
 
     [SupplyParameterFromQuery] private Guid? Donor { get; set; }
     [SupplyParameterFromQuery] private Guid? Pledge { get; set; }
@@ -180,5 +191,6 @@
         _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
         _pledges = (await Gifts.ListPledgesAsync()).Where(p => p.Balance > 0m).ToList();
         _pledge = _pledges.FirstOrDefault(p => p.Pledge.Id == Pledge);
+        _campaigns = await Gifts.CampaignsAsync();
     }
 }

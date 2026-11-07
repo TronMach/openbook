@@ -13,13 +13,15 @@ public sealed record ReleaseResponse(Guid Id, DateOnly Date, Guid? ClassId, deci
     public static ReleaseResponse From(RestrictionRelease r) => new(r.Id, r.Date, r.ClassId, r.Amount, r.Memo, r.Status, r.JournalEntryId);
 }
 
+public sealed record CampaignRequest(string? Campaign);
+
 public sealed record GiftResponse(
     Guid Id, int Number, Guid DonorId, DateOnly Date, GiftKind Kind, decimal Amount, Guid DebitAccountId, Guid IncomeAccountId, Guid? PledgeId,
     Guid? ClassId, string? Reference, string? Memo, string? Description, decimal GoodsValue, string? GoodsDescription, decimal Deductible,
-    DocumentStatus Status, Guid JournalEntryId, DateTimeOffset? AcknowledgedAt)
+    DocumentStatus Status, Guid JournalEntryId, DateTimeOffset? AcknowledgedAt, string? Campaign)
 {
     public static GiftResponse From(Donation d) => new(d.Id, d.Number, d.DonorId, d.Date, d.Kind, d.Amount, d.DebitAccountId, d.IncomeAccountId, d.PledgeId,
-        d.ClassId, d.Reference, d.Memo, d.Description, d.GoodsValue, d.GoodsDescription, d.Deductible, d.Status, d.JournalEntryId, d.AcknowledgedAt);
+        d.ClassId, d.Reference, d.Memo, d.Description, d.GoodsValue, d.GoodsDescription, d.Deductible, d.Status, d.JournalEntryId, d.AcknowledgedAt, d.Campaign);
 }
 
 public sealed record PledgeResponse(
@@ -88,10 +90,10 @@ internal static class NonprofitApi
             (await s.ListAsync(from, to, donorId, ct)).Select(GiftResponse.From));
         nonprofit.MapPost("/gifts/batch", async (GiftBatchCommand r, GiftService s, CancellationToken ct) =>
             (await s.RecordBatchAsync(r, ct)).Select(GiftResponse.From));
-        nonprofit.MapPost("/gifts/import", async (HttpRequest request, Guid accountId, Guid? incomeAccountId, Guid? classId, bool? dryRun, GiftImportService s, CancellationToken ct) =>
+        nonprofit.MapPost("/gifts/import", async (HttpRequest request, Guid accountId, Guid? incomeAccountId, Guid? classId, bool? dryRun, string? campaign, GiftImportService s, CancellationToken ct) =>
         {
             var csv = await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
-            return dryRun == true ? await s.PreviewAsync(csv, ct) : await s.ImportAsync(csv, new GiftBatchDefaults(accountId, incomeAccountId, classId), ct);
+            return dryRun == true ? await s.PreviewAsync(csv, ct) : await s.ImportAsync(csv, new GiftBatchDefaults(accountId, incomeAccountId, classId, Campaign: campaign), ct);
         }).Accepts<string>("text/csv");
         nonprofit.MapGet("/allocations/rules", (AllocationService s, CancellationToken ct) => s.RulesAsync(ct));
         nonprofit.MapPost("/allocations/rules", async (AllocationRuleDetails r, AllocationService s, CancellationToken ct) => await s.SaveAsync(null, r, ct));
@@ -106,6 +108,8 @@ internal static class NonprofitApi
             var gift = await s.RecordAsync(r, ct);
             return Results.Created($"/api/nonprofit/gifts/{gift.Id}", GiftResponse.From(gift));
         });
+        nonprofit.MapPut("/gifts/{id:guid}/campaign", async (Guid id, CampaignRequest r, GiftService s, CancellationToken ct) =>
+            GiftResponse.From(await s.SetCampaignAsync(id, r.Campaign, ct)));
         nonprofit.MapPost("/gifts/{id:guid}/void", async (Guid id, VoidRequest r, GiftService s, CancellationToken ct) =>
             GiftResponse.From(await s.VoidAsync(id, r.Reason, ct)));
         nonprofit.MapPost("/gifts/acknowledged", async (AcknowledgedRequest r, GiftService s, CancellationToken ct) =>

@@ -80,13 +80,27 @@ public static class NonprofitEndpoints
                     form["description"],
                     Number(form["goodsValue"]) ?? 0m,
                     form["goodsDescription"],
-                    Enum.TryParse<OpenBook.Domain.Sales.PaymentMethod>(form["method"], out var method) ? method : null), ct);
+                    Enum.TryParse<OpenBook.Domain.Sales.PaymentMethod>(form["method"], out var method) ? method : null,
+                    form["campaign"]), ct);
                 return Results.Redirect($"/nonprofit/gifts/{gift.Id}");
             }
             catch (DomainException ex)
             {
                 var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
                 return Results.Redirect($"/nonprofit/gifts/new?donor={form["donorId"]}&pledge={form["pledgeId"]}&kind={form["kind"]}&error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/gifts/{id:guid}/campaign", async (Guid id, IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        {
+            try
+            {
+                await gifts.SetCampaignAsync(id, form["campaign"], ct);
+                return Results.Redirect($"/nonprofit/gifts/{id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/gifts/{id}?error={Uri.EscapeDataString(ex.Message)}");
             }
         }).RequireAuthorization();
 

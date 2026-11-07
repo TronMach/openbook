@@ -40,13 +40,15 @@ OpenBook keeps all of these on the line's class, so plan the tree once: function
 - **Paying a pledge**: choose the pledge, and the gift takes its account and purpose.
 - **Did the donor receive anything in return?** For a gala ticket or a thank-you gift, enter **its fair value** and **what it was**. The deductible amount on the letter is the gift less that value.
 
+- **Campaign or appeal** (optional): the letter, event or drive the gift answered, such as "Year-end letter 2026". Earlier campaigns are suggested as you type. It's kept beside the books, so it can be changed on the gift's page at any time; **Giving by campaign** totals gifts by it.
+
 Gifts can be voided from their page.
 
 ### Many gifts at once
 
-**Enter a batch** (on the Gifts page) is for a day's mail or an event. Set the date, where the money went and, if you like, the purpose, and type in the **Batch total** from your deposit slip; then add a row per gift. Someone new? Type the name in the donor box and choose **+ Add**. The form shows how far the gifts are from the total, and **Record** saves all of them or none.
+**Enter a batch** (on the Gifts page) is for a day's mail or an event. Set the date, where the money went and, if you like, the purpose and campaign, and type in the **Batch total** from your deposit slip; then add a row per gift. Someone new? Type the name in the donor box and choose **+ Add**. The form shows how far the gifts are from the total, and **Record** saves all of them or none.
 
-**Import gifts** reads a CSV with **Date**, **Donor** and **Amount** columns, and uses a check or reference number, a memo and a purpose (a class, by its full name) when they're there. It shows what it found first. Donors who aren't on your list are added, a gift already in the books with the same donor, date, amount and reference is skipped, and nothing comes in unless every row is good.
+**Import gifts** reads a CSV with **Date**, **Donor** and **Amount** columns, and uses a check or reference number, a memo, a purpose (a class, by its full name) and a **Campaign** (or **Appeal**) when they're there. It shows what it found first. Donors who aren't on your list are added, a gift already in the books with the same donor, date, amount and reference is skipped, and nothing comes in unless every row is good.
 
 ### Seeing what a donor has given
 
@@ -69,6 +71,8 @@ Gifts cleared this way don't wait to be deposited, and can't be voided until the
 ### Recurring gifts
 
 **Nonprofit → Recurring gifts** for monthly card gifts, standing transfers or pledges paid in installments: donor, amount, deposited to, **every** so often, **starting** and **ending** (or after a number of gifts). Each becomes an ordinary gift on its date, automatically within the hour, or by hand with **Record what's due**. **Stop** ends one. On a pledge, the last gift is whatever's left of it, and the recurring gift then stops by itself.
+
+A recurring gift is recorded on its date whether or not the money came: OpenBook can't see the donor's card or bank. Check each one against the bank (reconciling does this), and void any that didn't arrive, or the books and the donor's statement will show money you never received.
 
 ## Thanking donors
 
@@ -124,7 +128,7 @@ In the **Nonprofit** group:
 - **Statement of financial position**: the balance sheet with net assets split into without and with donor restrictions.
 - **Statement of functional expenses**: expenses by account and function, with a column per program.
 - **Restricted net assets by purpose**: what each purpose holds.
-- **Giving by donor**, **Lapsed donors** (gave last year but not yet this year) and **Open pledges**.
+- **Giving by donor**, **Giving by campaign**, **Lapsed donors** (gave last fiscal year but not yet this one; with a fiscal year starting in July, "2026" is July 2026 to June 2027) and **Open pledges**.
 - **Grants**: awards, spending, recognized income and what funders still owe.
 - **Form 990 Part IX expenses**: expenses by 990 line and function, from your accounts' tax lines.
 

@@ -22,6 +22,7 @@ public sealed class Donation
     public const string Source = "nonprofit.donation";
     public const int MaxTextLength = 500;
     public const int MaxReferenceLength = 50;
+    public const int MaxCampaignLength = 100;
 
     private Donation()
     {
@@ -53,6 +54,12 @@ public sealed class Donation
     public OpenBook.Domain.Sales.PaymentMethod? Method { get; private set; }
 
     public void SetMethod(OpenBook.Domain.Sales.PaymentMethod? method) => Method = OpenBook.Domain.Sales.PaymentMethods.Valid(method);
+
+    /// <summary>The appeal or campaign that brought it in (a year-end letter, a gala); free text, changeable at any time, beside the books.</summary>
+    public string? Campaign { get; private set; }
+
+    public void SetCampaign(string? campaign) =>
+        Campaign = Text.Optional(campaign, MaxCampaignLength, "donation.campaign_too_long", "Campaign");
 
     /// <summary>Reclassifying the income line: the letter names the new purpose.</summary>
     public void SetClass(Guid? classId) => ClassId = classId == Guid.Empty ? null : classId;

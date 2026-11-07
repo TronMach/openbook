@@ -32,7 +32,8 @@ public sealed record RecordGiftCommand(
     string? Description = null,
     decimal GoodsValue = 0m,
     string? GoodsDescription = null,
-    PaymentMethod? Method = null);
+    PaymentMethod? Method = null,
+    string? Campaign = null);
 
 /// <param name="IncomeAccountId">Null: "Contributions", created on first use.</param>
 public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null, DateOnly? DueDate = null, string? Memo = null);
@@ -143,7 +144,8 @@ public sealed class GiftService(
             try
             {
                 gifts.Add(await RecordAsync(new RecordGiftCommand(row.DonorId, command.Date, row.Amount, command.Defaults.DebitAccountId, IncomeAccountId: command.Defaults.IncomeAccountId,
-                    ClassId: row.ClassId ?? command.Defaults.ClassId, Reference: row.Reference, Memo: row.Memo, Method: command.Defaults.Method), ct));
+                    ClassId: row.ClassId ?? command.Defaults.ClassId, Reference: row.Reference, Memo: row.Memo, Method: command.Defaults.Method,
+                    Campaign: command.Defaults.Campaign), ct));
             }
             catch (DomainException ex) when (ex is not ConcurrencyConflictException)
             {
@@ -218,11 +220,30 @@ public sealed class GiftService(
         var donation = Donation.Create(id, number, donor.Id, command.Date, command.Kind, command.Amount, debit.Id, incomeId, pledge?.Id, classId,
             command.Reference, command.Memo, command.Description, command.GoodsValue, command.GoodsDescription, entry.Id, cash?.Id, clock.UtcNow);
         donation.SetMethod(command.Kind == GiftKind.Cash ? command.Method : null);
+        donation.SetCampaign(command.Campaign);
         store.Add(donation);
         store.Add(Audit(AuditAction.Posted, donation, null));
         await store.SaveChangesAsync(ct);
         return donation;
     }
+
+    /// <summary>Changes the campaign a gift is credited to (posts nothing; a voided gift too, for the record).</summary>
+    public async Task<Donation> SetCampaignAsync(Guid id, string? campaign, CancellationToken ct = default)
+    {
+        var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
+        var before = Snapshot(donation);
+        donation.SetCampaign(campaign);
+        store.Add(Audit(AuditAction.Updated, donation, before));
+        await store.SaveChangesAsync(ct);
+        return donation;
+    }
+
+    /// <summary>The campaigns gifts have been credited to, for the forms' suggestions; the most recently used first.</summary>
+    public async Task<IReadOnlyList<string>> CampaignsAsync(CancellationToken ct = default) =>
+        [.. (await store.ListDonationsAsync(ct)).Where(d => d.Campaign is not null)
+            .GroupBy(d => d.Campaign!, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Max(d => d.Date)).ThenBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase)
+            .Select(g => g.OrderByDescending(d => d.Date).First().Campaign!)];
 
     public async Task<Donation> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {
@@ -558,6 +579,7 @@ public sealed class GiftService(
         d.Description,
         d.GoodsValue,
         d.GoodsDescription,
+        d.Campaign,
         Status = d.Status.ToString(),
         d.AcknowledgedAt,
     });

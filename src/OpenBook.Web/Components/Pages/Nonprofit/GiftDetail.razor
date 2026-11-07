@@ -68,6 +68,20 @@
                 <dt>Memo</dt><dd>@memo</dd>
             }
             <dt>Thanked</dt><dd>@(_gift.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime)) : "Not yet")</dd>
+            <dt>Campaign</dt>
+            <dd>
+                <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/campaign")" class="inline" data-enhance="false">
+                    <AntiforgeryToken />
+                    <input name="campaign" aria-label="Campaign or appeal" value="@_gift.Campaign" maxlength="@Donation.MaxCampaignLength" list="campaigns" placeholder="None" />
+                    <datalist id="campaigns">
+                        @foreach (var c in _campaigns)
+                        {
+                            <option value="@c"></option>
+                        }
+                    </datalist>
+                    <button type="submit" class="secondary">Save</button>
+                </PostForm>
+            </dd>
         </dl>
 
         @if (_gift.Status == DocumentStatus.Posted)
@@ -116,8 +130,11 @@
     [SupplyParameterFromQuery] private bool Password { get; set; }
     [SupplyParameterFromQuery] private bool Sent { get; set; }
 
+    private IReadOnlyList<string> _campaigns = [];
+
     protected override async Task OnInitializedAsync()
     {
+        _campaigns = await GiftService.CampaignsAsync();
         _gift = await GiftService.GetAsync(Id);
         if (_gift is null)
             return;

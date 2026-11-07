@@ -49,6 +49,16 @@
                     </div>
                 }
                 <div class="field">
+                    <label for="campaign">Campaign or appeal <span class="muted">(optional)</span></label>
+                    <input id="campaign" maxlength="@OpenBook.Domain.Nonprofit.Donation.MaxCampaignLength" list="campaigns" @bind="_campaign" @bind:event="oninput" />
+                    <datalist id="campaigns">
+                        @foreach (var c in _campaigns)
+                        {
+                            <option value="@c"></option>
+                        }
+                    </datalist>
+                </div>
+                <div class="field">
                     <label for="control">Batch total <span class="muted">(optional, from the deposit slip)</span></label>
                     <input id="control" class="amount" type="number" step="0.01" min="0" @bind="_control" @bind:event="oninput" />
                 </div>
@@ -117,7 +127,7 @@
 
 @code {
     // What's typed so far, kept in the tab in case the connection goes.
-    internal sealed record Draft(DateOnly Date, Guid AccountId, Guid? ClassId, decimal? Control, List<Row> Rows);
+    internal sealed record Draft(DateOnly Date, Guid AccountId, Guid? ClassId, decimal? Control, List<Row> Rows, string? Campaign = null);
 
     internal sealed class Row
     {
@@ -136,6 +146,8 @@
     private DateOnly _date = CompanyTime.Today;
     private Guid _accountId;
     private Guid? _classId;
+    private string? _campaign;
+    private IReadOnlyList<string> _campaigns = [];
     private decimal? _control;
     private List<Row> _rows = [new(), new(), new()];
     private bool _loaded;
@@ -151,11 +163,11 @@
 
     private bool CanSave => Ready.Count > 0 && Ready.Count == _rows.Count(r => r.DonorId is not null || r.Amount is not null) && _accountId != Guid.Empty;
 
-    private Draft? TakeDraft() => Ready.Count == 0 ? null : new Draft(_date, _accountId, _classId, _control, _rows);
+    private Draft? TakeDraft() => Ready.Count == 0 ? null : new Draft(_date, _accountId, _classId, _control, _rows, _campaign);
 
     private void Restore(Draft draft)
     {
-        (_date, _classId, _control) = (draft.Date, draft.ClassId, draft.Control);
+        (_date, _classId, _control, _campaign) = (draft.Date, draft.ClassId, draft.Control, draft.Campaign);
         _accountId = _accounts.Any(a => a.Id == draft.AccountId) ? draft.AccountId : _accountId;
         _rows = draft.Rows.Count > 0 ? draft.Rows : [new()];
     }
@@ -169,6 +181,7 @@
         _accounts = chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).OrderBy(a => a.Type != AccountType.OtherCurrentAsset).ToList();
         _accountId = _accounts.FirstOrDefault(a => a.Name == "Undeposited Funds")?.Id ?? _accounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        _campaigns = await Ops.RunAsync<GiftService, IReadOnlyList<string>>(s => s.CampaignsAsync());
         _loaded = true;
     }
 
@@ -188,7 +201,7 @@
         try
         {
             var rows = Ready.Select(r => new GiftBatchRow(r.DonorId!.Value, r.Amount!.Value, r.Reference, r.Memo, r.ClassId)).ToList();
-            var command = new GiftBatchCommand(_date, new GiftBatchDefaults(_accountId, null, _classId), rows, _control);
+            var command = new GiftBatchCommand(_date, new GiftBatchDefaults(_accountId, null, _classId, Campaign: _campaign), rows, _control);
             var gifts = await Ops.RunAsync<GiftService, IReadOnlyList<OpenBook.Domain.Nonprofit.Donation>>(s => s.RecordBatchAsync(command), _closingPassword);
             await _draft!.ClearAsync();
             _message = $"Recorded {gifts.Count} {(gifts.Count == 1 ? "gift" : "gifts")} for {Labels.Amount(gifts.Sum(g => g.Amount))}.";

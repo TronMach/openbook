@@ -3121,6 +3121,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountMinor");
 
+                    b.Property<string>("Campaign")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("CashEntryId")
                         .HasColumnType("TEXT");
 

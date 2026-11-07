@@ -1161,6 +1161,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(d => d.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
             b.Property(d => d.GoodsValue).HasColumnName("GoodsValueMinor").HasConversion(MinorUnits);
             b.Property(d => d.Reference).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxReferenceLength);
+            b.Property(d => d.Campaign).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxCampaignLength);
             b.Property(d => d.Method).HasConversion<string>().HasMaxLength(20);
             b.Property(d => d.Memo).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);
             b.Property(d => d.Description).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);

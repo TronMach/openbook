@@ -42,35 +42,71 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
     /// Donors who haven't given yet this year: "last year but not this year" (LYBUNT) and "some earlier year but not
     /// last year or this year" (SYBUNT), with their latest gift and lifetime giving.
     /// </summary>
-    public async Task<ReportTable> LapsedDonorsAsync(int year, CancellationToken ct = default)
+    /// <summary>
+    /// Donors with no gift in a fiscal year (the one starting in <paramref name="year"/>; null = this one) who gave before it.
+    /// With a fiscal year starting in January these are calendar years.
+    /// </summary>
+    public async Task<ReportTable> LapsedDonorsAsync(int? year, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
+        var startMonth = company.FiscalYearStartMonth;
+        int Fiscal(DateOnly date) => date.Month >= startMonth ? date.Year : date.Year - 1;
+        string Label(int y) => startMonth == 1 ? y.ToString(System.Globalization.CultureInfo.CurrentCulture)
+            : $"{new DateOnly(y, startMonth, 1):MMM yyyy}–{new DateOnly(y, startMonth, 1).AddYears(1).AddDays(-1):MMM yyyy}";
+        var fy = year ?? Fiscal(CompanyTime.Today);
         var names = await NamesAsync(ct);
-        var posted = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Date.Year <= year).ToList();
-        var byDonor = posted.GroupBy(d => d.DonorId).Where(g => g.All(d => d.Date.Year < year)).ToList();
+        var posted = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && Fiscal(d.Date) <= fy).ToList();
+        var byDonor = posted.GroupBy(d => d.DonorId).Where(g => g.All(d => Fiscal(d.Date) < fy)).ToList();
         var rows = new List<ReportTableRow>();
-        foreach (var (title, lastYear) in new[] { ($"Gave in {year - 1}, not yet in {year}", true), ($"Gave before {year - 1}, not since", false) })
+        foreach (var (title, lastYear) in new[] { ($"Gave in {Label(fy - 1)}, not yet in {Label(fy)}", true), ($"Gave before {Label(fy - 1)}, not since", false) })
         {
-            var part = byDonor.Where(g => g.Any(d => d.Date.Year == year - 1) == lastYear)
+            var part = byDonor.Where(g => g.Any(d => Fiscal(d.Date) == fy - 1) == lastYear)
                 .OrderByDescending(g => g.Max(d => d.Date)).ToList();
             rows.Add(Row.Section(title, 5));
             foreach (var donor in part)
             {
                 rows.Add(new ReportTableRow([new ReportCell(names.GetValueOrDefault(donor.Key, "?"), new ReportLink("customer", donor.Key)),
                     donor.Max(d => d.Date).ToString("d", System.Globalization.CultureInfo.CurrentCulture),
-                    donor.Where(d => d.Date.Year == year - 1).Sum(d => d.Amount), donor.Sum(d => d.Amount), (decimal)donor.Count()], 1));
+                    donor.Where(d => Fiscal(d.Date) == fy - 1).Sum(d => d.Amount), donor.Sum(d => d.Amount), (decimal)donor.Count()], 1));
             }
 
-            rows.Add(new ReportTableRow([$"{part.Count} donor(s)", null, part.Sum(g => g.Where(d => d.Date.Year == year - 1).Sum(d => d.Amount)),
+            rows.Add(new ReportTableRow([$"{part.Count} donor(s)", null, part.Sum(g => g.Where(d => Fiscal(d.Date) == fy - 1).Sum(d => d.Amount)),
                 part.Sum(g => g.Sum(d => d.Amount)), null], 0, ReportRowStyle.Subtotal));
         }
 
         return new ReportTable(
             "Lapsed donors",
-            [company.Name, $"For {year}"],
-            [new("Donor"), new("Latest gift"), new($"Given in {year - 1}", ColumnFormat.Money), new("Lifetime giving", ColumnFormat.Money), new("Gifts", ColumnFormat.Number)],
+            [company.Name, startMonth == 1 ? $"For {fy}" : $"For the fiscal year {Label(fy)}"],
+            [new("Donor"), new("Latest gift"), new($"Given in {Label(fy - 1)}", ColumnFormat.Money), new("Lifetime giving", ColumnFormat.Money), new("Gifts", ColumnFormat.Number)],
             rows,
-            Note: "Donors with no gift dated in the year, by how recently they gave: the people to ask first.");
+            Note: "Donors with no gift dated in the fiscal year, by how recently they gave: the people to ask first. A year is the fiscal year starting in it.");
+    }
+
+    /// <summary>Gifts in a period by the campaign they answered: how many, from how many donors, the total and the average; gifts with none last.</summary>
+    public async Task<ReportTable> GivingByCampaignAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var gifts = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Date >= from && d.Date <= to).ToList();
+        var rows = new List<ReportTableRow>();
+        foreach (var campaign in gifts.GroupBy(d => d.Campaign ?? "", StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(g => g.Key.Length == 0).ThenByDescending(g => g.Sum(d => d.Amount)))
+        {
+            var total = campaign.Sum(d => d.Amount);
+            rows.Add(new ReportTableRow([campaign.Key.Length == 0 ? "No campaign" : campaign.First().Campaign, (decimal)campaign.Count(),
+                (decimal)campaign.Select(d => d.DonorId).Distinct().Count(), total, decimal.Round(total / campaign.Count(), 2, MidpointRounding.AwayFromZero),
+                campaign.Max(d => d.Date).ToString("d", System.Globalization.CultureInfo.CurrentCulture)]));
+        }
+
+        var all = gifts.Sum(d => d.Amount);
+        rows.Add(new ReportTableRow(["Total", (decimal)gifts.Count, (decimal)gifts.Select(d => d.DonorId).Distinct().Count(), all,
+            gifts.Count == 0 ? 0m : decimal.Round(all / gifts.Count, 2, MidpointRounding.AwayFromZero), null], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Giving by campaign",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Campaign"), new("Gifts", ColumnFormat.Number), new("Donors", ColumnFormat.Number), new("Total", ColumnFormat.Money),
+                new("Average gift", ColumnFormat.Money), new("Latest gift")],
+            rows,
+            Note: "Posted gifts dated in the period, by the campaign or appeal on each. A donor who answered two campaigns counts in each.");
     }
 
     /// <summary>Pledges as of a date: promised, paid by then and what's left, oldest first.</summary>
