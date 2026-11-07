@@ -10,6 +10,8 @@ A project in OpenBook *is* a customer record, usually a sub-customer of the clie
 
 The project's page has its **status** (and dates) and **budgets** for revenue, cost and hours, then its time, expenses and mileage, with income, costs and what's still unbilled.
 
+Once costs or hours reach 90% of their budget the page says so, and again when they go past it. A project with projects below it (phases set up as sub-projects of a job, say) also shows the figures with all of them added in. A **Completed** or **Cancelled** project takes no new time or trips; set it back to **In progress** first.
+
 ## People and rates
 
 **Time → People and rates** (`/time/people`) lists who records time:

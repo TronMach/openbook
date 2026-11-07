@@ -30,6 +30,44 @@ public sealed record ProjectFigures(
     public decimal? Margin => Income == 0m ? null : decimal.Round(Profit / Income * 100m, 1, MidpointRounding.AwayFromZero);
 
     public decimal Unbilled => UnbilledTime + UnbilledExpenses + UnbilledMileage;
+
+    /// <summary>These figures with another project's added (sub-projects rolling up into their parent).</summary>
+    public ProjectFigures Plus(ProjectFigures other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return this with
+        {
+            Income = Income + other.Income,
+            ExpenseCost = ExpenseCost + other.ExpenseCost,
+            LaborCost = LaborCost + other.LaborCost,
+            MileageCost = MileageCost + other.MileageCost,
+            Hours = Hours + other.Hours,
+            UnbilledTime = UnbilledTime + other.UnbilledTime,
+            UnbilledExpenses = UnbilledExpenses + other.UnbilledExpenses,
+            UnbilledMileage = UnbilledMileage + other.UnbilledMileage,
+        };
+    }
+
+    /// <summary>Share of a budget used from which the project page warns.</summary>
+    public const decimal WarnAtPercent = 90m;
+
+    /// <summary>Budgets this project has reached <see cref="WarnAtPercent"/> of, or gone past.</summary>
+    public IReadOnlyList<string> BudgetWarnings()
+    {
+        var warnings = new List<string>();
+        void Check(string what, decimal? budget, decimal used, Func<decimal, string> format)
+        {
+            if (budget is not { } b || b <= 0m || used * 100m < b * WarnAtPercent)
+                return;
+            warnings.Add(used > b
+                ? $"{what} is over its budget: {format(used)} against {format(b)}."
+                : $"{what} has used {decimal.Round(used / b * 100m, 0, MidpointRounding.AwayFromZero)}% of its budget: {format(used)} of {format(b)}.");
+        }
+
+        Check("Cost", Project.Project.BudgetCost, Cost, a => a.ToString("N2", System.Globalization.CultureInfo.CurrentCulture));
+        Check("Time", Project.Project.BudgetHours, Hours, h => h.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture) + " hours");
+        return warnings;
+    }
 }
 
 public sealed class ProjectReports(
@@ -42,6 +80,31 @@ public sealed class ProjectReports(
         foreach (var project in list)
             result.Add(await FiguresAsync(project, from, to, ct));
         return result;
+    }
+
+    /// <summary>
+    /// The project's figures with every project below it in the customer tree added in (a client's projects under a
+    /// parent project, phases under a job); null when it has none.
+    /// </summary>
+    public async Task<ProjectFigures?> WithSubProjectsAsync(ProjectFigures own, DateOnly? from, DateOnly to, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(own);
+        var customers = await sales.ListCustomersAsync(ct);
+        var below = new HashSet<Guid>();
+        var frontier = new Queue<Guid>([own.Project.Customer.Id]);
+        while (frontier.TryDequeue(out var parent))
+        {
+            foreach (var child in customers.Where(c => c.ParentId == parent && below.Add(c.Id)))
+                frontier.Enqueue(child.Id);
+        }
+
+        var subProjects = (await projects.ListAsync(includeClosed: true, ct)).Where(p => below.Contains(p.Customer.Id)).ToList();
+        if (subProjects.Count == 0)
+            return null;
+        var total = own;
+        foreach (var sub in subProjects)
+            total = total.Plus(await FiguresAsync(sub, from, to, ct));
+        return total;
     }
 
     public async Task<ProjectFigures> FiguresAsync(ProjectSummary project, DateOnly? from, DateOnly to, CancellationToken ct = default)

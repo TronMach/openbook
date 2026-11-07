@@ -85,6 +85,27 @@ public sealed class ProjectsTests : IAsyncLifetime
         Assert.Equal(240m, figures.Single(f => f.Project.Project.Id == second.Id).Income);
     }
 
+    [Fact]
+    public async Task Sub_projects_roll_up_budgets_warn_and_a_completed_project_takes_no_new_time()
+    {
+        var job = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(BudgetHours: 10m), "Office fit-out", _acme.Id)));
+        var phase = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), "Phase 1", job.CustomerId)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 9.5m, job.CustomerId, _consulting.Id, true)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 4m, phase.CustomerId, _consulting.Id, true)));
+
+        var summary = (await In<ProjectService, ProjectSummary?>(s => s.GetAsync(job.Id)))!;
+        var own = await In<ProjectReports, ProjectFigures>(s => s.FiguresAsync(summary, null, new DateOnly(2026, 3, 31)));
+        var all = (await In<ProjectReports, ProjectFigures?>(s => s.WithSubProjectsAsync(own, null, new DateOnly(2026, 3, 31))))!;
+        Assert.Equal((9.5m, 13.5m), (own.Hours, all.Hours));
+        Assert.Contains("95%", Assert.Single(own.BudgetWarnings()), StringComparison.Ordinal);
+        var phaseSummary = (await In<ProjectService, ProjectSummary?>(s => s.GetAsync(phase.Id)))!;
+        Assert.Null(await In<ProjectReports, ProjectFigures?>(async s => await s.WithSubProjectsAsync(await s.FiguresAsync(phaseSummary, null, new DateOnly(2026, 3, 31)), null, new DateOnly(2026, 3, 31))));
+
+        await In<ProjectService, Project>(s => s.UpdateAsync(phase.Id, new ProjectDetails(ProjectStatus.Completed)));
+        Assert.Equal("project.closed_for_work", await Refused(() => In<TimeService, TimeEntry>(s =>
+            s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m, phase.CustomerId, _consulting.Id, true)))));
+    }
+
     private Task<T> In<TService, T>(Func<TService, Task<T>> work) where TService : notnull =>
         _db.InScope(sp => work(sp.GetRequiredService<TService>()));
 

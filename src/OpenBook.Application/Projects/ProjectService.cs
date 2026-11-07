@@ -42,6 +42,14 @@ public sealed class ProjectService(IProjectStore store, ISalesStore sales, Custo
 
     public Task<Project?> ForCustomerAsync(Guid customerId, CancellationToken ct = default) => store.GetProjectForCustomerAsync(customerId, ct);
 
+    /// <summary>New time and trips go only on a project still under way: a completed or cancelled one is reopened first.</summary>
+    internal static async Task EnsureOpenForWorkAsync(IProjectStore store, Customer customer, CancellationToken ct)
+    {
+        if (await store.GetProjectForCustomerAsync(customer.Id, ct) is { Status: ProjectStatus.Completed or ProjectStatus.Cancelled } project)
+            throw new DomainException("project.closed_for_work",
+                $"{customer.DisplayName} is {(project.Status == ProjectStatus.Completed ? "completed" : "cancelled")}. Set the project back to in progress to add time or trips to it.");
+    }
+
     public async Task<Project> CreateAsync(CreateProjectCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -445,6 +453,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
             var customer = await sales.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
             if (!customer.IsActive)
                 throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
+            await ProjectService.EnsureOpenForWorkAsync(store, customer, ct);
         }
 
         Item? item = null;
@@ -584,6 +593,7 @@ public sealed class MileageService(IProjectStore store, ISalesStore sales, ICloc
             var customer = await sales.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
             if (!customer.IsActive)
                 throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
+            await ProjectService.EnsureOpenForWorkAsync(store, customer, ct);
         }
 
         if (details.WorkerId is { } workerId && existing?.WorkerId != workerId)

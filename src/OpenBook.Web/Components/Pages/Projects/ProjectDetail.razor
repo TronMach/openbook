@@ -46,6 +46,10 @@
             </p>
         }
 
+        @foreach (var warning in _figures.BudgetWarnings())
+        {
+            <div class="alert notice" role="status">@warning</div>
+        }
         <table class="data">
             <thead><tr><th></th><th class="num">Actual</th><th class="num">Budget</th><th class="num">Left</th></tr></thead>
             <tbody>
@@ -58,6 +62,10 @@
                 <tr><td>Hours</td><td class="num">@Labels.Quantity(_figures.Hours)</td>@Hours(p.BudgetHours, _figures.Hours)</tr>
             </tbody>
         </table>
+        @if (_withSubProjects is { } all)
+        {
+            <p>With its sub-projects: income @Labels.Amount(all.Income), costs @Labels.Amount(all.Cost), profit @Labels.Amount(all.Profit), @Labels.Quantity(all.Hours) hours, @Labels.Amount(all.Unbilled) not billed yet.</p>
+        }
         @if (_figures.Unbilled > 0m)
         {
             <p>Not billed yet: @Labels.Amount(_figures.Unbilled) (time @Labels.Amount(_figures.UnbilledTime), expenses @Labels.Amount(_figures.UnbilledExpenses), mileage @Labels.Amount(_figures.UnbilledMileage)). <ActionLink Href="@($"/sales/invoices/new?customer={_project.Customer.Id}")">Put it on an invoice</ActionLink>.</p>
@@ -152,6 +160,7 @@
 
     private ProjectSummary? _project;
     private ProjectFigures? _figures;
+    private ProjectFigures? _withSubProjects;
     private IReadOnlyList<TimeEntry> _time = [];
     private IReadOnlyList<BillableExpense> _expenses = [];
     private IReadOnlyList<MileageTrip> _trips = [];
@@ -166,6 +175,7 @@
         if (_project is null)
             return;
         _figures = await Reports.FiguresAsync(_project, null, DateOnly.MaxValue);
+        _withSubProjects = await Reports.WithSubProjectsAsync(_figures, null, DateOnly.MaxValue);
         _worked = (await TimeService.ListAsync(new TimeFilter(CustomerId: _project.Customer.Id))).Where(t => !t.IsRunning).Sum(t => t.Worked);
         var customerId = _project.Customer.Id;
         _time = await TimeService.ListAsync(new TimeFilter(CustomerId: customerId));
