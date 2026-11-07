@@ -52,6 +52,22 @@ public sealed class PurchasingControlsTests : IAsyncLifetime
     // ---- Purchase orders and 3-way match ----
 
     [Fact]
+    public async Task A_landed_cost_on_a_bill_from_an_order_reaches_stock_received_before_the_bill()
+    {
+        await In<BillApprovalService, PurchasingSettings>(s => s.SaveSettingsAsync(new PurchasingSettingsCommand(null, 0m, false, false, ReceiveIntoStock: true)));
+        var order = await Order();
+        await In<PurchaseOrderService, int>(s => s.ReceiveAsync(order.Id, new ReceiveGoodsCommand(Mar1.AddDays(2), [new ReceiveLine(1, 6m)])));
+        var bill = await In<PurchaseOrderService, Bill>(s => s.CreateBillAsync(order.Id, new BillFromOrderCommand(Mar1.AddDays(5), "INV-10", [new BillOrderLine(1, 6m, 5m)])));
+
+        // The bill's lines are all accrued (the stock came in with the delivery), yet the freight still lands on it.
+        var candidate = Assert.Single(await In<LandedCostService, IReadOnlyList<LandedCostCandidate>>(s => s.CandidatesAsync()), c => c.Bill.Id == bill.Id);
+        Assert.Equal(6m, candidate.StockQuantity);
+        await In<LandedCostService, OpenBook.Domain.Inventory.LandedCost>(s => s.CreateAsync(new CreateLandedCostCommand(Mar1.AddDays(6), 12m, [bill.Id])));
+        var stock = (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!;
+        Assert.Equal((6m, 42m), (stock.Quantity, stock.Value));
+    }
+
+    [Fact]
     public async Task Received_goods_go_into_stock_and_the_bill_clears_received_not_billed()
     {
         await In<BillApprovalService, PurchasingSettings>(s => s.SaveSettingsAsync(new PurchasingSettingsCommand(null, 0m, false, false, ReceiveIntoStock: true)));

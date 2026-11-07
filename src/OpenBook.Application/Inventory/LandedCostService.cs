@@ -47,11 +47,16 @@ public sealed class LandedCostService(
     {
         var receipts = Received(await store.ListMovementsAsync(null, ct)).ToLookup(m => m.SourceId);
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
-        return (await purchases.ListBillsAsync(null, ct))
-            .Where(b => b.Status == DocumentStatus.Posted && receipts[b.Id].Any())
-            .OrderByDescending(b => b.Date)
-            .Select(b => new LandedCostCandidate(b, vendors.GetValueOrDefault(b.VendorId) ?? "", receipts[b.Id].Sum(m => m.Quantity), receipts[b.Id].Sum(m => m.Cost)))
-            .ToList();
+        var candidates = new List<LandedCostCandidate>();
+        foreach (var b in (await purchases.ListBillsAsync(null, ct)).Where(b => b.Status == DocumentStatus.Posted).OrderByDescending(b => b.Date))
+        {
+            // A bill from an order also reaches the stock its order's deliveries brought in before it.
+            var layers = receipts[b.Id].Concat((await DeliveriesAsync(b, ct)).SelectMany(id => receipts[id])).ToList();
+            if (layers.Count > 0)
+                candidates.Add(new LandedCostCandidate(b, vendors.GetValueOrDefault(b.VendorId) ?? "", layers.Sum(m => m.Quantity), layers.Sum(m => m.Cost)));
+        }
+
+        return candidates;
     }
 
     /// <summary>The account landed costs come out of by default.</summary>
@@ -74,6 +79,8 @@ public sealed class LandedCostService(
 
         var bills = (await purchases.GetBillsAsync(billIds, ct)).ToDictionary(b => b.Id);
         var received = new List<InventoryMovement>();
+        // Each layer's bill: its own, or the bill from the order whose delivery received it.
+        var billOf = new Dictionary<Guid, Guid>();
         foreach (var billId in billIds)
         {
             var bill = bills.GetValueOrDefault(billId) ?? throw new EntityNotFoundException("bill", billId);
@@ -81,8 +88,14 @@ public sealed class LandedCostService(
                 throw new DomainException("landed_cost.bill_voided", $"Bill {bill.Reference ?? bill.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)} is voided.");
             if (bill.Date > command.Date)
                 throw new DomainException("landed_cost.before_bill", "The landed cost can't be dated before the bills it goes on.");
-            // A fixed order, so rounding always lands on the same line.
-            received.AddRange(Received(await store.ListMovementsForSourceAsync(InventorySources.Bill, billId, ct)).OrderBy(m => m.ItemId).ThenBy(m => m.Id));
+            // A fixed order, so rounding always lands on the same line. Stock its order's deliveries received counts too.
+            var layers = Received(await store.ListMovementsForSourceAsync(InventorySources.Bill, billId, ct)).ToList();
+            foreach (var delivery in await DeliveriesAsync(bill, ct))
+                layers.AddRange(Received(await store.ListMovementsForSourceAsync(InventorySources.PurchaseReceipt, delivery, ct)));
+            var added = layers.Where(l => received.All(r => r.Id != l.Id)).OrderBy(m => m.ItemId).ThenBy(m => m.Id).ToList();
+            foreach (var layer in added)
+                billOf[layer.Id] = billId;
+            received.AddRange(added);
         }
 
         var shares = LandedCost.Allocate(command.Amount, received.Select(r => (r.Quantity, r.Cost)).ToList(), command.Method);
@@ -112,12 +125,12 @@ public sealed class LandedCostService(
             {
                 var part = Portion(share, quantity, receipt.Quantity);
                 intoBuilds += part;
-                await CarryIntoBuildAsync(buildId, part, receipt.SourceId, command.Date, lines, postings, movements, ct);
+                await CarryIntoBuildAsync(buildId, part, billOf[receipt.Id], command.Date, lines, postings, movements, ct);
             }
 
             // Each part rounds on its own; whatever comes last can't take more than is left of the share.
             var toStock = Math.Min(Portion(share, Math.Max(0m, layer.RemainingQuantity), receipt.Quantity), share - intoBuilds);
-            lines.Add((receipt.SourceId, receipt.Id, item.Id, share - intoBuilds, toStock));
+            lines.Add((billOf[receipt.Id], receipt.Id, item.Id, share - intoBuilds, toStock));
             if (toStock != 0m)
             {
                 postings.Add(JournalLineDraft.Dr(item.InventoryAssetAccountId!.Value, toStock, $"Landed cost: {item.Name}"));
@@ -212,10 +225,16 @@ public sealed class LandedCostService(
         quantity <= 0m ? 0m : quantity >= of ? amount : decimal.Round(amount * quantity / of, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Bill receipts not undone by a void.</summary>
+    /// <summary>The stock sources of the deliveries received into stock on the bill's purchase order, if it has one.</summary>
+    private async Task<IReadOnlyList<Guid>> DeliveriesAsync(Bill bill, CancellationToken ct) =>
+        bill.PurchaseOrderId is { } orderId && await purchases.GetPurchaseOrderAsync(orderId, ct) is { } order
+            ? [.. order.Receipts.Where(r => !r.IsVoided && r.StockSourceId is not null).Select(r => r.StockSourceId!.Value).Distinct()]
+            : [];
+
     private static IEnumerable<InventoryMovement> Received(IReadOnlyList<InventoryMovement> movements)
     {
         var reversed = movements.Where(m => m.ReversalOf is not null).Select(m => m.ReversalOf!.Value).ToHashSet();
-        return movements.Where(m => m.IsReceipt && m.SourceType == InventorySources.Bill && m.ReversalOf is null && !reversed.Contains(m.Id));
+        return movements.Where(m => m.IsReceipt && m.SourceType is InventorySources.Bill or InventorySources.PurchaseReceipt && m.ReversalOf is null && !reversed.Contains(m.Id));
     }
 
     private static string Snapshot(LandedCost l) => JsonSerializer.Serialize(new
