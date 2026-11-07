@@ -37,6 +37,29 @@ public sealed class ProjectsTests : IAsyncLifetime
     public Task DisposeAsync() => _db.DisposeAsync();
 
     [Fact]
+    public async Task Rates_rise_for_the_new_year_and_unbilled_time_can_take_the_card_again()
+    {
+        await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(150m, _acme.Id)));
+        await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(130m, WorkerId: _ana.Id, StartsOn: new DateOnly(2025, 1, 1))));
+        var jan = new DateOnly(2027, 1, 1);
+        Assert.Equal(2, await In<BillingRateService, int>(s => s.RaiseAsync(4m, jan, wholeUnits: true)));
+        var card = await In<BillingRateService, IReadOnlyList<BillingRate>>(s => s.ListAsync());
+        Assert.Equal([135m, 156m], card.Where(r => r.StartsOn == jan).Select(r => r.Rate).Order());
+        Assert.Equal("rate.nothing_to_raise", (await Assert.ThrowsAsync<DomainException>(() => In<BillingRateService, int>(s => s.RaiseAsync(4m, jan)))).Code);
+
+        // Time entered in January before the rise kept the old rate; repricing brings it to the card.
+        var day = new DateOnly(2027, 1, 4);
+        var entered = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, day, 2m, _acme.Id, _consulting.Id, true)));
+        var typed = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, day, 1m, _acme.Id, _consulting.Id, true, BillRate: 99m)));
+        Assert.Equal(156m, entered.BillRate);
+        await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(170m, _acme.Id, StartsOn: day)));
+        Assert.Equal(1, await In<TimeService, int>(s => s.RerateUnbilledAsync(day)));
+        Assert.Equal(170m, (await In<TimeService, TimeEntry?>(s => s.GetAsync(entered.Id)))!.BillRate);
+        Assert.Equal(99m, (await In<TimeService, TimeEntry?>(s => s.GetAsync(typed.Id)))!.BillRate);
+        Assert.Equal(0, await In<TimeService, int>(s => s.RerateUnbilledAsync(day)));
+    }
+
+    [Fact]
     public async Task Work_billed_on_the_clients_invoice_is_the_projects_income()
     {
         var first = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), "Website", _acme.Id)));

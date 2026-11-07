@@ -276,6 +276,52 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         return entry;
     }
 
+    /// <summary>
+    /// Brings billable time not invoiced yet, dated in the range (and for one client, with its projects, when given), to
+    /// the rate the card gives now. Rates typed on the entry, time written up or down, and running timers are left; each
+    /// change is audited. Returns how many changed.
+    /// </summary>
+    public async Task<int> RerateUnbilledAsync(DateOnly from, DateOnly? to = null, Guid? customerId = null, CancellationToken ct = default)
+    {
+        var entries = (await store.ListTimeAsync(new TimeFilter(from, to), ct))
+            .Where(e => e.Billable && e.InvoiceId is null && !e.IsRunning && e.BilledAmount is null && e.RateSource != "Entered").ToList();
+        if (customerId is { } client)
+        {
+            var tree = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+            bool Under(Guid? id)
+            {
+                for (var depth = 0; id is { } current && depth < 6; depth++)
+                {
+                    if (current == client)
+                        return true;
+                    id = tree.GetValueOrDefault(current)?.ParentId;
+                }
+
+                return false;
+            }
+
+            entries = [.. entries.Where(e => Under(e.CustomerId))];
+        }
+
+        var changed = 0;
+        foreach (var listed in entries)
+        {
+            if (await store.GetTimeAsync(listed.Id, ct) is not { } entry || await store.GetWorkerAsync(entry.WorkerId, ct) is not { } worker)
+                continue;
+            var item = entry.ItemId is { } itemId ? (await sales.GetItemsAsync([itemId], ct)).GetValueOrDefault(itemId) : null;
+            var resolved = await ResolveAsync(worker, entry.CustomerId, item, entry.Date, ct);
+            if (resolved.Rate == entry.BillRate && resolved.Source == entry.RateSource)
+                continue;
+            var before = Snapshot(entry);
+            entry.Rerate(resolved.Rate, resolved.Source);
+            store.Add(Audit(AuditAction.Updated, entry, before));
+            changed++;
+        }
+
+        await store.SaveChangesAsync(ct);
+        return changed;
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);

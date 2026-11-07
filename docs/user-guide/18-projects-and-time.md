@@ -31,6 +31,8 @@ The project's page has its **status** (and dates) and **budgets** for revenue, c
 
 Among lines for the same thing, the latest that has started by the work's date wins. **Check** on the rate card answers which rate applies to a person, client, service and date.
 
+For the new year, **New rates for the new year → Raise rates** adds, for every rate in effect on the date you choose, a new line from that date a percentage higher (tick **Round to whole dollars** if you like). Time keeps the rate it was entered at; to bring billable time that isn't invoiced yet up to the card, **Reprice unbilled time** from a date. Rates typed on an entry, and time written up or down, are left alone.
+
 Time takes its rate when entered, and records where it came from ("Acme · Partner"). Changing the rate card afterwards doesn't reprice time already entered, until that entry is edited: saving one that took its rate from the card looks the rate up again.
 
 ## Recording time

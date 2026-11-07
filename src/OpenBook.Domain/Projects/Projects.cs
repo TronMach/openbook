@@ -252,6 +252,16 @@ public sealed class TimeEntry
         WrittenDownBy = BilledAmount is null ? null : by;
     }
 
+    /// <summary>A new bill rate from the rate card, for time not invoiced yet.</summary>
+    public void Rerate(decimal rate, string? source)
+    {
+        EnsureEditable();
+        if (!Billable)
+            throw new DomainException("time.not_billable", "Only billable time has a bill rate.");
+        BillRate = rate;
+        RateSource = source is { Length: > 100 } text ? text[..100] : source;
+    }
+
     /// <summary>Back to its worked value.</summary>
     public void ClearAdjustment()
     {

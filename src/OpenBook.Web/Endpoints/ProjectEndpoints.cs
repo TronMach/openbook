@@ -140,6 +140,33 @@ public static class ProjectEndpoints
         app.MapPost("/time/rates/{id:guid}", async (Guid id, IFormCollection form, BillingRateService rates, CancellationToken ct) =>
             await Back("/time/rates", async () => await rates.UpdateAsync(id, RateDetails(form), ct))).RequireAuthorization();
 
+        app.MapPost("/time/rates/raise", async (IFormCollection form, BillingRateService rates, CancellationToken ct) =>
+        {
+            try
+            {
+                var count = await rates.RaiseAsync(Number(form["percent"]) ?? throw new DomainException("rate.raise_invalid", "Enter the percent to raise rates by."),
+                    Date(form["from"]) ?? throw new DomainException("rate.raise_date", "Enter the date the new rates start."), form["whole"] == "true", ct);
+                return Results.Redirect($"/time/rates?note={Uri.EscapeDataString($"{count} new rate line(s) added.")}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/rates?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/time/rates/reprice", async (IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            try
+            {
+                var count = await time.RerateUnbilledAsync(Date(form["from"]) ?? throw new DomainException("time.reprice_date", "Enter the first date to reprice."), Date(form["to"]), ct: ct);
+                return Results.Redirect($"/time/rates?note={Uri.EscapeDataString($"{count} time entr{(count == 1 ? "y" : "ies")} repriced.")}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/rates?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/time/rates/{id:guid}/delete", async (IFormCollection _, Guid id, BillingRateService rates, CancellationToken ct) =>
             await Back("/time/rates", () => rates.DeleteAsync(id, ct))).RequireAuthorization();
 

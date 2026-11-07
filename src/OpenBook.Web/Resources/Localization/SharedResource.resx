@@ -191,6 +191,9 @@
   <data name="Address" xml:space="preserve">
     <value>Address</value>
   </data>
+  <data name="Adds, for every rate in effect on the date, a new line from that date at the higher rate. Earlier lines stay, so time before the date keeps its rate." xml:space="preserve">
+    <value>Adds, for every rate in effect on the date, a new line from that date at the higher rate. Earlier lines stay, so time before the date keeps its rate.</value>
+  </data>
   <data name="Adjust quantities" xml:space="preserve">
     <value>Adjust quantities</value>
   </data>
@@ -406,6 +409,9 @@
   </data>
   <data name="Bring it back" xml:space="preserve">
     <value>Bring it back</value>
+  </data>
+  <data name="Brings billable time that isn't invoiced yet to the rate the card gives now. Rates typed on an entry and time written up or down are left as they are." xml:space="preserve">
+    <value>Brings billable time that isn't invoiced yet to the rate the card gives now. Rates typed on an entry and time written up or down are left as they are.</value>
   </data>
   <data name="Budgets" xml:space="preserve">
     <value>Budgets</value>
@@ -1352,6 +1358,9 @@
   <data name="New permission set" xml:space="preserve">
     <value>New permission set</value>
   </data>
+  <data name="New rates for the new year" xml:space="preserve">
+    <value>New rates for the new year</value>
+  </data>
   <data name="New recovery codes" xml:space="preserve">
     <value>New recovery codes</value>
   </data>
@@ -1850,6 +1859,12 @@
   <data name="Quote a price before the work" xml:space="preserve">
     <value>Quote a price before the work</value>
   </data>
+  <data name="Raise by %" xml:space="preserve">
+    <value>Raise by %</value>
+  </data>
+  <data name="Raise rates" xml:space="preserve">
+    <value>Raise rates</value>
+  </data>
   <data name="Rate" xml:space="preserve">
     <value>Rate</value>
   </data>
@@ -2012,6 +2027,9 @@
   <data name="Reports open on" xml:space="preserve">
     <value>Reports open on</value>
   </data>
+  <data name="Reprice unbilled time" xml:space="preserve">
+    <value>Reprice unbilled time</value>
+  </data>
   <data name="Require it for" xml:space="preserve">
     <value>Require it for</value>
   </data>
@@ -2041,6 +2059,9 @@
   </data>
   <data name="Revoked {0}" xml:space="preserve">
     <value>Revoked {0}</value>
+  </data>
+  <data name="Round to whole dollars" xml:space="preserve">
+    <value>Round to whole dollars</value>
   </data>
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>
@@ -2456,11 +2477,17 @@
   <data name="Time and billing" xml:space="preserve">
     <value>Time and billing</value>
   </data>
+  <data name="Time dated from" xml:space="preserve">
+    <value>Time dated from</value>
+  </data>
   <data name="Time zone" xml:space="preserve">
     <value>Time zone</value>
   </data>
   <data name="Times" xml:space="preserve">
     <value>Times</value>
+  </data>
+  <data name="To" xml:space="preserve">
+    <value>To</value>
   </data>
   <data name="To bill someone else, void this invoice and enter a new one." xml:space="preserve">
     <value>To bill someone else, void this invoice and enter a new one.</value>

@@ -57,6 +57,10 @@ public sealed record MileageTripResponse(
 
 public sealed record MileageRateRequest(int Year, decimal Rate);
 
+public sealed record RaiseRatesRequest(decimal Percent, DateOnly From, bool WholeUnits = false);
+
+public sealed record RepriceTimeRequest(DateOnly From, DateOnly? To = null, Guid? CustomerId = null);
+
 public static class ProjectsApi
 {
     /// <summary>Whether this caller sees what people cost: those who may change the rates.</summary>
@@ -135,6 +139,10 @@ public static class ProjectsApi
             return Results.NoContent();
         });
         projects.MapGet("/rates", async (BillingRateService s, CancellationToken ct) => await s.ListAsync(ct));
+        projects.MapPost("/rates/raise", async (RaiseRatesRequest r, BillingRateService s, CancellationToken ct) =>
+            new { Added = await s.RaiseAsync(r.Percent, r.From, r.WholeUnits, ct) });
+        projects.MapPost("/time/reprice", async (RepriceTimeRequest r, TimeService s, CancellationToken ct) =>
+            new { Repriced = await s.RerateUnbilledAsync(r.From, r.To, r.CustomerId, ct) });
         projects.MapPost("/rates", async (BillingRateDetails r, BillingRateService s, CancellationToken ct) =>
         {
             var rate = await s.CreateAsync(r, ct);

@@ -61,6 +61,36 @@ public sealed class BillingRateService(IProjectStore store, ISalesStore sales, I
         await store.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// A yearly rise: for every rate in effect on <paramref name="from"/> (the latest line of each client, person, role and
+    /// service started by then), a new line from that date at <paramref name="percent"/> more, to the cent or the whole
+    /// unit. A slot that already has a line starting that day is left. Time already entered keeps its rate.
+    /// </summary>
+    public async Task<int> RaiseAsync(decimal percent, DateOnly from, bool wholeUnits = false, CancellationToken ct = default)
+    {
+        if (percent is <= -50m or > 100m || decimal.Round(percent, 2) != percent)
+            throw new DomainException("rate.raise_invalid", "Raise rates by a percent from just above -50 to 100.");
+        var lines = await store.ListBillingRatesAsync(ct);
+        var current = lines.Where(r => (r.StartsOn ?? DateOnly.MinValue) <= from)
+            .GroupBy(r => (r.CustomerId, r.WorkerId, Role: r.Role?.ToUpperInvariant(), r.ItemId))
+            .Select(g => g.OrderByDescending(r => r.StartsOn ?? DateOnly.MinValue).First())
+            .Where(r => !lines.Any(o => o.SameSlot(r) && o.StartsOn == from))
+            .ToList();
+        if (current.Count == 0)
+            throw new DomainException("rate.nothing_to_raise", "There are no rates in effect on that date to raise.");
+        foreach (var r in current)
+        {
+            var raised = r.Rate * (1m + percent / 100m);
+            raised = wholeUnits ? decimal.Round(raised, 0, MidpointRounding.AwayFromZero) : decimal.Round(raised, 2, MidpointRounding.AwayFromZero);
+            var line = BillingRate.Create(new BillingRateDetails(raised, r.CustomerId, r.WorkerId, r.Role, r.ItemId, from), clock.UtcNow);
+            store.Add(line);
+            store.Add(Audit(AuditAction.Created, line, null));
+        }
+
+        await store.SaveChangesAsync(ct);
+        return current.Count;
+    }
+
     private async Task CheckAsync(BillingRate rate, CancellationToken ct)
     {
         if (rate.CustomerId is { } customerId && await sales.GetCustomerAsync(customerId, ct) is null)

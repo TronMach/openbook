@@ -17,11 +17,15 @@
         Hourly rates for clients, people, roles and services. Time takes the most specific rate when it's entered: a rate for the client
         (or a project's client) with the person, their role or the service comes first, then the client's own rate, then rates for every
         client by person, role or service, then the person's bill rate, then the service's price. A rate with a start date applies to
-        time from that date, so a yearly increase is a new line, not a change. Changing the card doesn't reprice time already entered.
+        time from that date, so a yearly increase is a new line, not a change (<strong>Raise rates</strong> below adds them all at once). Changing the card doesn't reprice time already entered unless you ask (<strong>Reprice unbilled time</strong>).
     </p>
     @if (Error is not null)
     {
         <div class="alert error" role="alert">@Error</div>
+    }
+    else if (Note is not null)
+    {
+        <div class="notice" role="status">@Note</div>
     }
 
     @if (_rates.Count > 0)
@@ -116,6 +120,29 @@
     </div>
 
     <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["New rates for the new year"]</h2>
+        <PostForm Action="/time/rates/raise" data-enhance="false">
+            <AntiforgeryToken />
+            <p class="muted">@L["Adds, for every rate in effect on the date, a new line from that date at the higher rate. Earlier lines stay, so time before the date keeps its rate."]</p>
+            <div class="row">
+                <div class="field"><label for="raise-percent">@L["Raise by %"]</label><input id="raise-percent" name="percent" class="short" inputmode="decimal" required placeholder="5" /></div>
+                <div class="field"><label for="raise-from">@L["From"]</label><input id="raise-from" name="from" type="date" required value="@($"{CompanyTime.Today.Year + 1}-01-01")" /></div>
+                <label class="check"><input type="checkbox" name="whole" value="true" /> <span>@L["Round to whole dollars"]</span></label>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">@L["Raise rates"]</button></div>
+        </PostForm>
+        <PostForm Action="/time/rates/reprice" data-enhance="false" style="margin-top: 1rem">
+            <AntiforgeryToken />
+            <p class="muted">@L["Brings billable time that isn't invoiced yet to the rate the card gives now. Rates typed on an entry and time written up or down are left as they are."]</p>
+            <div class="row">
+                <div class="field"><label for="reprice-from">@L["Time dated from"]</label><input id="reprice-from" name="from" type="date" required /></div>
+                <div class="field"><label for="reprice-to">@L["To"] <span class="muted">@L["(optional)"]</span></label><input id="reprice-to" name="to" type="date" /></div>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">@L["Reprice unbilled time"]</button></div>
+        </PostForm>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
         <h2>@L["Which rate applies?"]</h2>
         <form method="get" action="/time/rates" data-enhance="false">
             <div class="row">
@@ -173,6 +200,7 @@
 
     [SupplyParameterFromQuery] private Guid? Edit { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
     [SupplyParameterFromQuery] private Guid? TryWorker { get; set; }
     [SupplyParameterFromQuery] private Guid? TryCustomer { get; set; }
     [SupplyParameterFromQuery] private Guid? TryItem { get; set; }
