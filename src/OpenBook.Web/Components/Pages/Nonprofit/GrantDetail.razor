@@ -242,6 +242,59 @@
             </div>
         }
 
+        @if (g.Status != GrantStatus.Voided)
+        {
+            <div class="card" style="margin-top: 1.5rem" id="reports-due">
+                <h2>Reports due to the funder</h2>
+                @if (g.ReportsDue.Count > 0)
+                {
+                    <table class="data">
+                        <thead><tr><th>Due</th><th>Report</th><th>Sent</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in g.ReportsDue.OrderBy(r => r.DueOn))
+                            {
+                                <tr class="@(r.SentOn is null && r.DueOn < CompanyTime.Today ? "warn" : r.SentOn is not null ? "muted" : "")">
+                                    <td>@Labels.Date(r.DueOn)</td>
+                                    <td>@r.Title</td>
+                                    <td>
+                                        <PostForm Action="@($"/nonprofit/grants/{g.Id}/reports/{r.LineNumber}/sent")" class="inline" data-enhance="false">
+                                            <AntiforgeryToken />
+                                            @if (r.SentOn is { } sent)
+                                            {
+                                                <span>@Labels.Date(sent)</span>
+                                                <input type="hidden" name="undo" value="true" />
+                                                <button type="submit" class="link">Not sent after all</button>
+                                            }
+                                            else
+                                            {
+                                                <input name="sentOn" type="date" aria-label="Sent on" value="@Iso(CompanyTime.Today)" />
+                                                <button type="submit" class="secondary">Mark sent</button>
+                                            }
+                                        </PostForm>
+                                    </td>
+                                    <td>
+                                        <PostForm Action="@($"/nonprofit/grants/{g.Id}/reports/{r.LineNumber}/remove")" class="inline" data-enhance="false">
+                                            <AntiforgeryToken />
+                                            <button type="submit" class="link">Remove</button>
+                                        </PostForm>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/reports")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="report-due">Due on</label><input id="report-due" name="dueOn" type="date" required /></div>
+                        <div class="field"><label for="report-title">Report</label><input id="report-title" name="title" required maxlength="200" placeholder="Interim narrative and financial report" /></div>
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">Add a report due</button></div>
+                </PostForm>
+                <p class="hint">Reports due within two weeks, and late ones, show on the home page's to-do list.</p>
+            </div>
+        }
+
         @if (g.Receipts.Count + g.Recognitions.Count + g.Adjustments.Count > 0)
         {
             <h2 style="margin-top: 1.5rem">Payments and income recognized</h2>

@@ -572,6 +572,9 @@
   <data name="Company name" xml:space="preserve">
     <value>Company name</value>
   </data>
+  <data name="Conditional grants with spending not yet recognized" xml:space="preserve">
+    <value>Conditional grants with spending not yet recognized</value>
+  </data>
   <data name="Confirm new password" xml:space="preserve">
     <value>Confirm new password</value>
   </data>
@@ -995,8 +998,17 @@
   <data name="Grant" xml:space="preserve">
     <value>Grant</value>
   </data>
+  <data name="Grant reports due" xml:space="preserve">
+    <value>Grant reports due</value>
+  </data>
+  <data name="Grant spending to recognize as income" xml:space="preserve">
+    <value>Grant spending to recognize as income</value>
+  </data>
   <data name="Grants" xml:space="preserve">
     <value>Grants</value>
+  </data>
+  <data name="Grants ending within 30 days" xml:space="preserve">
+    <value>Grants ending within 30 days</value>
   </data>
   <data name="Gross margin" xml:space="preserve">
     <value>Gross margin</value>
@@ -1363,6 +1375,9 @@
   </data>
   <data name="Next" xml:space="preserve">
     <value>Next</value>
+  </data>
+  <data name="Next: {0}, {1}, due {2}" xml:space="preserve">
+    <value>Next: {0}, {1}, due {2}</value>
   </data>
   <data name="No API keys." xml:space="preserve">
     <value>No API keys.</value>
@@ -2797,6 +2812,9 @@
   </data>
   <data name="{0} due within a week" xml:space="preserve">
     <value>{0} due within a week</value>
+  </data>
+  <data name="{0} ends {1}" xml:space="preserve">
+    <value>{0} ends {1}</value>
   </data>
   <data name="{0} fields" xml:space="preserve">
     <value>{0} fields</value>

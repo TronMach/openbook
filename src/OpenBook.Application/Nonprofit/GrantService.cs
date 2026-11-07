@@ -50,6 +50,9 @@ public sealed record GrantPosition(Grant Grant, string Funder, string ClassName,
 }
 
 /// <summary>Grants: awards, their budgets, spending against them (by class), money from funders and, for conditional grants, income as it's earned.</summary>
+/// <summary>What the grants need doing soon, for the to-do list.</summary>
+public sealed record GrantReminders(IReadOnlyList<(Grant Grant, GrantReportDue Report)> Reports, IReadOnlyList<Grant> Ending, IReadOnlyList<Grant> ToRecognize, bool AnyOverdue);
+
 public sealed class GrantService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, ReportLedger ledger, PostingEngine engine,
     IUnitOfWork unitOfWork, OpenBook.Application.Companies.ICompanyStore companies, Forms.IFormRenderer renderer, Forms.FormDesignService designs, IClock clock, ICurrentUser user)
@@ -396,6 +399,36 @@ public sealed class GrantService(
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
+    }
+
+    public Task<Grant> AddReportDueAsync(Guid id, DateOnly dueOn, string? title, CancellationToken ct = default) =>
+        ChangeAsync(id, AuditAction.Updated, g => g.AddReportDue(dueOn, title), ct);
+
+    /// <summary>Marks a report sent on the date (null: still to do).</summary>
+    public Task<Grant> MarkReportSentAsync(Guid id, int line, DateOnly? on, CancellationToken ct = default) =>
+        ChangeAsync(id, AuditAction.Updated, g => g.Report(line).MarkSent(on), ct);
+
+    public Task<Grant> RemoveReportDueAsync(Guid id, int line, CancellationToken ct = default) =>
+        ChangeAsync(id, AuditAction.Updated, g => g.RemoveReportDue(line), ct);
+
+    /// <summary>
+    /// For the to-do list: reports due within <paramref name="days"/> (or overdue) and not sent, active grants ending within
+    /// 30 days, and conditional grants with spending waiting to be recognized.
+    /// </summary>
+    public async Task<GrantReminders> RemindersAsync(DateOnly today, int days = 14, CancellationToken ct = default)
+    {
+        var grants = (await store.ListGrantsAsync(ct)).Where(g => g.Status == GrantStatus.Active).ToList();
+        var reports = grants.SelectMany(g => g.ReportsDue.Where(r => r.SentOn is null && r.DueOn <= today.AddDays(days)).Select(r => (Grant: g, Report: r)))
+            .OrderBy(x => x.Report.DueOn).ToList();
+        var ending = grants.Where(g => g.EndsOn >= today && g.EndsOn <= today.AddDays(30)).OrderBy(g => g.EndsOn).ToList();
+        var toRecognize = new List<Grant>();
+        foreach (var g in grants.Where(g => g.Conditional))
+        {
+            if ((await PositionAsync(g.Id, today, ct))?.ReadyToRecognize > 0m)
+                toRecognize.Add(g);
+        }
+
+        return new GrantReminders(reports, ending, toRecognize, reports.Any(r => r.Report.DueOn < today));
     }
 
     public Task<Grant> CloseAsync(Guid id, CancellationToken ct = default) => ChangeAsync(id, AuditAction.Updated, g => g.Close(), ct);

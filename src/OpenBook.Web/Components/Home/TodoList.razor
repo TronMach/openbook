@@ -143,6 +143,14 @@
         Add(await Get<ReceiptService>().NewCountAsync(), L["Receipts to record"], "/purchases/receipts");
         if (Company.Edition == Edition.Nonprofit)
             Add(await Get<GiftService>().UnthankedCountAsync(), L["Gifts not yet thanked"], "/nonprofit/thanks");
+        var grants = await Get<GrantService>().RemindersAsync(today);
+        if (grants.Reports.Count > 0)
+            Add(grants.Reports.Count, L["Grant reports due"], $"/nonprofit/grants/{grants.Reports[0].Grant.Id}#reports-due",
+                L["Next: {0}, {1}, due {2}", grants.Reports[0].Report.Title, grants.Reports[0].Grant.Name, Labels.Date(grants.Reports[0].Report.DueOn)], urgent: grants.AnyOverdue);
+        Add(grants.Ending.Count, L["Grants ending within 30 days"], "/nonprofit/grants",
+            grants.Ending.Count > 0 ? L["{0} ends {1}", grants.Ending[0].Name, Labels.Date(grants.Ending[0].EndsOn)].Value : null);
+        Add(grants.ToRecognize.Count, L["Grant spending to recognize as income"], grants.ToRecognize.Count == 1 ? $"/nonprofit/grants/{grants.ToRecognize[0].Id}" : "/nonprofit/grants",
+            L["Conditional grants with spending not yet recognized"]);
 
         var sales = Get<ISalesStore>();
         var email = await Get<EmailService>().GetSettingsAsync();

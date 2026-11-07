@@ -36,6 +36,26 @@ public sealed class Grant
     private readonly List<GrantRequest> _requests = [];
     private readonly List<GrantRecognition> _recognitions = [];
     private readonly List<GrantAdjustment> _adjustments = [];
+    private readonly List<GrantReportDue> _reportsDue = [];
+
+    /// <summary>Reports the funder asks for, by due date; marked sent when they go.</summary>
+    public IReadOnlyList<GrantReportDue> ReportsDue => _reportsDue;
+
+    public GrantReportDue AddReportDue(DateOnly dueOn, string? title)
+    {
+        if (Status == GrantStatus.Voided)
+            throw new DomainException("grant.not_active", "This grant is voided.");
+        if (_reportsDue.Count(r => r.SentOn is null) >= 50)
+            throw new DomainException("grant.too_many_reports", "A grant can have up to 50 reports waiting.");
+        var report = new GrantReportDue(_reportsDue.Select(r => r.LineNumber).DefaultIfEmpty(0).Max() + 1, dueOn, title);
+        _reportsDue.Add(report);
+        return report;
+    }
+
+    public GrantReportDue Report(int line) =>
+        _reportsDue.FirstOrDefault(r => r.LineNumber == line) ?? throw new DomainException("grant.report_unknown", "There's no such report.");
+
+    public void RemoveReportDue(int line) => _reportsDue.Remove(Report(line));
 
     private Grant()
     {
@@ -442,6 +462,30 @@ public sealed class GrantReceipt
             throw new DomainException("grant.receipt_voided", "This payment is already voided.");
         IsVoided = true;
     }
+}
+
+/// <summary>A report the funder wants by a date (interim, final, financial); a reminder, posting nothing.</summary>
+public sealed class GrantReportDue
+{
+    private GrantReportDue()
+    {
+    }
+
+    internal GrantReportDue(int lineNumber, DateOnly dueOn, string? title)
+    {
+        LineNumber = lineNumber;
+        DueOn = dueOn;
+        Title = Text.Optional(title, 200, "grant.report_title_too_long", "Report") ?? throw new DomainException("grant.report_title_required", "Say which report is due.");
+    }
+
+    public int LineNumber { get; private set; }
+    public DateOnly DueOn { get; private set; }
+    public string Title { get; private set; } = string.Empty;
+
+    /// <summary>When it went to the funder; null while it's still to do.</summary>
+    public DateOnly? SentOn { get; private set; }
+
+    public void MarkSent(DateOnly? on) => SentOn = on;
 }
 
 public enum GrantAdjustmentKind

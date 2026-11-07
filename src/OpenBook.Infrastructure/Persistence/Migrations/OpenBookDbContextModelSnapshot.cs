@@ -8520,6 +8520,34 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("GrantId");
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantReportDue", "ReportsDue", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<DateOnly>("DueOn")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly?>("SentOn")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Title")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.ToTable("GrantReportsDue", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Nonprofit.GrantRequest", "Requests", b1 =>
                         {
                             b1.Property<Guid>("GrantId")
@@ -8563,6 +8591,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Navigation("Receipts");
 
                     b.Navigation("Recognitions");
+
+                    b.Navigation("ReportsDue");
 
                     b.Navigation("Requests");
                 });

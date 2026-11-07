@@ -1267,6 +1267,14 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(g => g.Adjustments).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(g => g.ReportsDue, l =>
+            {
+                l.ToTable("GrantReportsDue");
+                l.WithOwner().HasForeignKey("GrantId");
+                l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantReportDue.LineNumber));
+                l.Property(x => x.Title).HasMaxLength(200);
+            });
+            b.Navigation(g => g.ReportsDue).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.RecurringGift>(b =>

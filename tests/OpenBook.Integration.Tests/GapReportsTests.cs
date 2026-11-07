@@ -183,6 +183,29 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Grant_reports_due_endings_and_spending_to_recognize_are_reminders()
+    {
+        var grant = await GrantWithSpending();
+        var today = new DateOnly(2026, 12, 10);
+        await In<GrantService, Grant>(s => s.AddReportDueAsync(grant.Id, new DateOnly(2026, 12, 1), "Interim report"));
+        await In<GrantService, Grant>(s => s.AddReportDueAsync(grant.Id, new DateOnly(2026, 12, 20), "Financial report"));
+        await In<GrantService, Grant>(s => s.AddReportDueAsync(grant.Id, new DateOnly(2027, 2, 1), "Final report"));
+        Assert.Equal("grant.report_title_required", (await Assert.ThrowsAsync<DomainException>(() => In<GrantService, Grant>(s => s.AddReportDueAsync(grant.Id, today, " ")))).Code);
+
+        var reminders = await In<GrantService, GrantReminders>(s => s.RemindersAsync(today));
+        Assert.Equal(["Interim report", "Financial report"], reminders.Reports.Select(r => r.Report.Title));
+        Assert.True(reminders.AnyOverdue);
+        Assert.Equal(grant.Id, Assert.Single(reminders.Ending).Id);
+        Assert.Equal(grant.Id, Assert.Single(reminders.ToRecognize).Id);
+
+        await In<GrantService, Grant>(s => s.MarkReportSentAsync(grant.Id, 1, today));
+        await In<GrantService, Grant>(s => s.RemoveReportDueAsync(grant.Id, 2));
+        reminders = await In<GrantService, GrantReminders>(s => s.RemindersAsync(today));
+        Assert.Empty(reminders.Reports);
+        Assert.Equal(new DateOnly?(today), (await In<GrantService, Grant?>(s => s.GetAsync(grant.Id)))!.ReportsDue.Single(r => r.LineNumber == 1).SentOn);
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();

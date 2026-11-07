@@ -315,6 +315,16 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/grants/{id}", () => grants.VoidReceiptAsync(id, line, Reason(form), ct));
         }).RequireAuthorization();
 
+        app.MapPost("/nonprofit/grants/{id:guid}/reports", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.AddReportDueAsync(id,
+                Date(form["dueOn"]) ?? throw new DomainException("grant.report_date_required", "Enter the date it's due."), form["title"], ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/reports/{line:int}/sent", async (Guid id, int line, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.MarkReportSentAsync(id, line, form["undo"] == "true" ? null : Date(form["sentOn"]) ?? CompanyTime.Today, ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/reports/{line:int}/remove", async (Guid id, int line, IFormCollection _, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.RemoveReportDueAsync(id, line, ct))).RequireAuthorization();
+
         app.MapPost("/nonprofit/grants/{id:guid}/reduce", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
