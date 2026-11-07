@@ -76,6 +76,65 @@ public sealed class InventoryReports(
     }
 
     /// <summary>
+    /// Dead and slow stock: each item's value on hand split by how long ago it came in (from the FIFO layers left, so what
+    /// sells first is what's oldest), with the last day any of it was sold. Average-cost items age by their layers too,
+    /// valued at the average.
+    /// </summary>
+    public async Task<ReportTable> AgingAsync(DateOnly asOf, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var stock = (await inventory.StockAsync(asOf, ct)).Where(s => s.Quantity > 0m).ToList();
+        var movements = (await store.ListMovementsAsync(null, ct)).Where(m => m.Date <= asOf).ToList();
+        string[] sales = [InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.ChannelOrders];
+        var lastSold = movements.Where(m => m.Quantity < 0m && sales.Contains(m.SourceType)).GroupBy(m => m.ItemId).ToDictionary(g => g.Key, g => g.Max(m => m.Date));
+        int[] limits = [90, 180, 365];
+        var totals = new decimal[limits.Length + 1];
+        var rows = new List<ReportTableRow>();
+        foreach (var s in stock.OrderBy(s => lastSold.TryGetValue(s.Item.Id, out var d) ? d : DateOnly.MinValue).ThenBy(s => s.Item.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var buckets = new decimal[limits.Length + 1];
+            var layers = Fifo.Layers(movements.Where(m => m.ItemId == s.Item.Id)).Where(l => l.RemainingQuantity > 0m).ToList();
+            var layerQuantity = layers.Sum(l => l.RemainingQuantity);
+            foreach (var layer in layers)
+            {
+                var age = asOf.DayNumber - layer.Date.DayNumber;
+                var bucket = Array.FindIndex(limits, l => age <= l) is var i and >= 0 ? i : limits.Length;
+                // Average-cost layers' own costs aren't meaningful one by one: their share of the value on hand is.
+                buckets[bucket] += s.Item.CostMethod == InventoryCostMethod.Average && layerQuantity != 0m
+                    ? decimal.Round(s.Value * layer.RemainingQuantity / layerQuantity, 2, MidpointRounding.AwayFromZero)
+                    : layer.RemainingCost;
+            }
+
+            // Rounding of shares lands on the oldest bucket used, so each row adds up to the item's value.
+            var drift = s.Value - buckets.Sum();
+            if (drift != 0m)
+                buckets[Array.FindLastIndex(buckets, b => b != 0m) is var last and >= 0 ? last : 0] += drift;
+            for (var i = 0; i < buckets.Length; i++)
+                totals[i] += buckets[i];
+            var sold = lastSold.TryGetValue(s.Item.Id, out var on) ? on : (DateOnly?)null;
+            rows.Add(new ReportTableRow(
+            [
+                new ReportCell(s.Item.Name, new ReportLink("item", s.Item.Id)), new ReportCell(s.Quantity), s.Value,
+                buckets[0], buckets[1], buckets[2], buckets[3],
+                new ReportCell(sold), new ReportCell(sold is { } d ? asOf.DayNumber - d.DayNumber : (int?)null),
+            ]));
+        }
+
+        rows.Add(new ReportTableRow(["Total", null, totals.Sum(), totals[0], totals[1], totals[2], totals[3], null, null], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Inventory aging",
+            [company.Name, $"As of {asOf:MMM d, yyyy} · by how long ago what's on hand came in"],
+            [
+                new("Item"), new("On hand", ColumnFormat.Number), new("Value", ColumnFormat.Money),
+                new("Up to 90 days", ColumnFormat.Money), new("91–180 days", ColumnFormat.Money), new("181–365 days", ColumnFormat.Money), new("Over a year", ColumnFormat.Money),
+                new("Last sold", ColumnFormat.Date), new("Days since", ColumnFormat.Number),
+            ],
+            rows,
+            ReportBasis.Accrual,
+            "Items not sold for longest come first. Value is at FIFO cost (weighted average for average-cost items), from what's left of each receipt.");
+    }
+
+    /// <summary>
     /// What happened to the value of stock in a period, for a tax return's cost of goods sold: what was there, what came
     /// in, what went out, and what's left. Every movement counts on its own date.
     /// </summary>

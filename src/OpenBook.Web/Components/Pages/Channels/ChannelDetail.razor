@@ -24,6 +24,10 @@
         {
             <div class="alert error" role="alert">@Error</div>
         }
+        @if (Done is not null)
+        {
+            <div class="alert notice" role="status">@Done</div>
+        }
         @if (Imported is not null)
         {
             <div class="alert notice" role="status">
@@ -129,12 +133,20 @@
                 <div class="field"><input type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
                 <div class="actions"><button type="submit" class="secondary" disabled="@(!_channel.IsActive)">@L["Import orders"]</button></div>
             </PostForm>
+            @if (_batches.Count(b => b.Status == PayoutStatus.Pending) is var waiting and > 0)
+            {
+                <PostForm Action="@($"/sales/channels/{_channel.Id}/orders/post-waiting")" data-enhance="false" class="actions">
+                    <AntiforgeryToken />
+                    <button type="submit">Post all waiting (@waiting)</button>
+                    <span class="hint">Each batch posts its stock and cost on its own; one that can't (an unmapped SKU, say) is left waiting with the reason.</span>
+                </PostForm>
+            }
             @if (_batches.Count > 0)
             {
                 <table class="data" style="margin-top: 1rem">
                     <thead><tr><th>@L["Date"]</th><th class="num">@L["Orders"]</th><th class="num">@L["Items"]</th><th class="num">@L["Sales"]</th><th>@L["Status"]</th></tr></thead>
                     <tbody>
-                        @foreach (var b in _batches.Take(60))
+                        @foreach (var b in _batches.Where(b => b.Status == PayoutStatus.Pending).Concat(_batches.Where(b => b.Status != PayoutStatus.Pending).Take(60)))
                         {
                             <tr class="@(b.Status == PayoutStatus.Dismissed ? "muted" : "")">
                                 <td><a href="/sales/channels/orders/@b.Id">@Labels.Date(b.Date)</a></td>
@@ -214,6 +226,7 @@
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
     [SupplyParameterFromQuery] private int? Imported { get; set; }
     [SupplyParameterFromQuery] private int Skipped { get; set; }
     [SupplyParameterFromQuery] private string? Note { get; set; }

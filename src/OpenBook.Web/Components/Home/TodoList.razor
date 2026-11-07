@@ -103,6 +103,10 @@
             L["Scheduled reports that failed"], "/reports/schedules", urgent: true);
         Add(await Get<ISalesStore>().CountFailedScheduledEmailsAsync(default),
             L["Invoice emails that failed"], "/sales/scheduled-emails", urgent: true);
+        var waitingBatches = (await Get<OpenBook.Application.Channels.ChannelOrderService>().BatchesAsync()).Count(b => b.Status == OpenBook.Domain.Channels.PayoutStatus.Pending);
+        Add(waitingBatches, L["Channel orders waiting to be posted"], "/sales/channels", L["Their stock and cost aren't in the books until they are"]);
+        var waitingPayouts = (await Get<OpenBook.Application.Channels.ChannelService>().PayoutsAsync()).Count(p => p.Status == OpenBook.Domain.Channels.PayoutStatus.Pending);
+        Add(waitingPayouts, L["Channel payouts waiting to be posted"], "/sales/channels", L["Their sales and fees aren't in the books until they are"]);
         var notices = await Get<OnlinePaymentService>().NoticesAsync(openOnly: true);
         if (notices.Count > 0)
             Add(notices.Count, L["Refunds and disputes made at Stripe"], $"/sales/invoices/{notices[0].InvoiceId}#online", L["On invoices paid online: record them in the books"], urgent: true);

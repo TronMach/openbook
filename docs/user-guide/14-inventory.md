@@ -123,3 +123,4 @@ The part for stock still on hand raises its cost; the part for stock already sol
 - **Inventory valuation**: quantity and value on hand as of a date, per item, or in detail by layer, bin and lot, with a line checking it against the asset accounts. Can be limited to one warehouse.
 - **Physical inventory worksheet**: the count sheet (above).
 - **Inventory stock status**: on hand, on purchase orders and on sales orders, what's available, and what to reorder, with a suggested quantity.
+- **Inventory aging**: the value on hand split by how long ago it came in (up to 90 days, 91–180, 181–365, over a year) and the day each item last sold, the items unsold longest first: where money sits in dead or slow stock.

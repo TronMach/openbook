@@ -1,6 +1,8 @@
 @page "/settings/close-books"
 @using System.ComponentModel.DataAnnotations
 @inject CloseBooksService Closing
+@inject OpenBook.Application.Channels.ChannelOrderService Orders
+@inject OpenBook.Application.Channels.ChannelService Payouts
 @inject ClosedPeriodOverride ClosingOverride
 @inject NavigationManager Navigation
 
@@ -25,6 +27,14 @@
     @if (_status.ClosingDate is { } far && far > CompanyTime.Today.AddYears(1))
     {
         <div class="alert notice" role="status">The closing date is more than a year from now, so almost anything entered today counts as closed. Check the year.</div>
+    }
+
+    @if (_waitingChannel > 0)
+    {
+        <div class="alert notice" role="status">
+            @_waitingChannel channel order batches or payouts are still waiting to be posted, the oldest dated @Labels.Date(_oldestWaiting!.Value).
+            Post them (<a href="/sales/channels">Sales channels</a>) before closing a period they fall in, or their sales, stock and fees stay out of it.
+        </div>
     }
 
     <div class="card">
@@ -139,8 +149,15 @@
     [SupplyParameterFromQuery(Name = "saved")]
     private string? Saved { get; set; }
 
+    private int _waitingChannel;
+    private DateOnly? _oldestWaiting;
+
     protected override async Task OnInitializedAsync()
     {
+        var batches = (await Orders.BatchesAsync()).Where(b => b.Status == OpenBook.Domain.Channels.PayoutStatus.Pending).Select(b => b.Date);
+        var payouts = (await Payouts.PayoutsAsync()).Where(p => p.Status == OpenBook.Domain.Channels.PayoutStatus.Pending).Select(p => p.Date);
+        var waiting = batches.Concat(payouts).ToList();
+        (_waitingChannel, _oldestWaiting) = (waiting.Count, waiting.Count > 0 ? waiting.Min() : null);
         await LoadAsync();
         Input ??= new() { ClosingDate = _status.ClosingDate };
         _message ??= Saved switch

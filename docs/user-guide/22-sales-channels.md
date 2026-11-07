@@ -66,7 +66,7 @@ Payouts carry the money; they don't say which products were sold. If you track i
 
 Each import makes an order batch. Before it can be posted, every **SKU** must be mapped to one of your items, or marked as not stocked: **Map SKUs to items** on the channel's page lists them. A SKU that equals an item's barcode or name is matched by itself.
 
-**Post stock** takes the items out of stock at cost (no revenue). **Put the stock back** reverses it.
+**Post stock** takes the items out of stock at cost (no revenue). **Put the stock back** reverses it. On the channel's page, **Post all waiting** posts every waiting batch at once, oldest first; one that can't be posted (an unmapped SKU, say) stays waiting and the message says why. Waiting batches and payouts are on the home page's to-do list, and **Close the books** warns about them, since their stock, sales and fees aren't in the books until they're posted.
 
 ### Returns
 

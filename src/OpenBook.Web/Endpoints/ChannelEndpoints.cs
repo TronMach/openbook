@@ -106,6 +106,28 @@ public static class ChannelEndpoints
             return await Back($"/sales/channels/{id}/skus", () => orders.MapSkuAsync(id, form["sku"].ToString(), Guid.TryParse(choice, out var item) ? item : null, ct));
         }).RequireAuthorization();
 
+        app.MapPost("/sales/channels/{id:guid}/orders/post-waiting", async (Guid id, IFormCollection _, ChannelOrderService orders, IServiceScopeFactory scopes, CancellationToken ct) =>
+        {
+            var waiting = (await orders.BatchesAsync(id, ct)).Where(b => b.Status == PayoutStatus.Pending).OrderBy(b => b.Date).Select(b => (b.Id, b.Date)).ToList();
+            var (posted, refused) = (0, new List<string>());
+            foreach (var (batchId, date) in waiting)
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                try
+                {
+                    await scope.ServiceProvider.GetRequiredService<ChannelOrderService>().PostAsync(batchId, ct);
+                    posted++;
+                }
+                catch (DomainException ex)
+                {
+                    refused.Add($"{date:MMM d}: {ex.Message}");
+                }
+            }
+
+            var done = $"Posted {posted} of {waiting.Count} waiting order batches." + (refused.Count > 0 ? $" Not posted: {string.Join("; ", refused.Take(5))}" : "");
+            return Results.Redirect($"/sales/channels/{id}?done={Uri.EscapeDataString(done)}#orders");
+        }).RequireAuthorization();
+
         app.MapPost("/sales/channels/orders/{id:guid}/post", async (IFormCollection _, Guid id, ChannelOrderService orders, CancellationToken ct) =>
             await Back($"/sales/channels/orders/{id}", () => orders.PostAsync(id, ct))).RequireAuthorization();
 

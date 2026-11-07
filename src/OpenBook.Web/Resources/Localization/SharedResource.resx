@@ -476,6 +476,12 @@
   <data name="Channel orders" xml:space="preserve">
     <value>Channel orders</value>
   </data>
+  <data name="Channel orders waiting to be posted" xml:space="preserve">
+    <value>Channel orders waiting to be posted</value>
+  </data>
+  <data name="Channel payouts waiting to be posted" xml:space="preserve">
+    <value>Channel payouts waiting to be posted</value>
+  </data>
   <data name="Channel return" xml:space="preserve">
     <value>Channel return</value>
   </data>
@@ -2341,6 +2347,12 @@
   </data>
   <data name="The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look." xml:space="preserve">
     <value>The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look.</value>
+  </data>
+  <data name="Their sales and fees aren't in the books until they are" xml:space="preserve">
+    <value>Their sales and fees aren't in the books until they are</value>
+  </data>
+  <data name="Their stock and cost aren't in the books until they are" xml:space="preserve">
+    <value>Their stock and cost aren't in the books until they are</value>
   </data>
   <data name="Theme" xml:space="preserve">
     <value>Theme</value>
