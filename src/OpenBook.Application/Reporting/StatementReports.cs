@@ -369,6 +369,46 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
         return new TaxSummary(from, to, reportBasis, TaxLines.FormFor(company.BusinessType), lines, new TaxSummaryLine(null, unassigned));
     }
 
+    /// <summary>
+    /// A worksheet for an owner's estimated tax: for each of the IRS's four payment periods of the year, the net profit in
+    /// it, a set-aside at <paramref name="percent"/> of that, and what was paid (debits to equity accounts named for
+    /// estimated tax). A rough guide: the real figure depends on the owner's whole return.
+    /// </summary>
+    public async Task<ReportTable> EstimatedTaxAsync(int year, decimal percent = 25m, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var paidInto = chart.All.Where(a => a.Type == AccountType.Equity && chart.FullName(a.Id).Contains("Estimated Tax", StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.Id).ToHashSet();
+        (string Label, DateOnly From, DateOnly To, DateOnly Due)[] periods =
+        [
+            ("January to March", new(year, 1, 1), new(year, 3, 31), new(year, 4, 15)),
+            ("April to May", new(year, 4, 1), new(year, 5, 31), new(year, 6, 15)),
+            ("June to August", new(year, 6, 1), new(year, 8, 31), new(year, 9, 15)),
+            ("September to December", new(year, 9, 1), new(year, 12, 31), new(year + 1, 1, 15)),
+        ];
+        var lines = await ledger.LinesAsync(company.DefaultReportBasis, periods[0].From, periods[^1].To, ct);
+        var rows = new List<ReportTableRow>();
+        decimal totalProfit = 0m, totalAside = 0m, totalPaid = 0m;
+        foreach (var (label, from, to, due) in periods)
+        {
+            var inPeriod = lines.Where(l => l.Date >= from && l.Date <= to).ToList();
+            var profit = -inPeriod.Where(l => chart.Find(l.AccountId) is { } a && !a.Type.IsBalanceSheet()).Sum(l => l.Amount);
+            var aside = decimal.Round(Math.Max(0m, profit) * percent / 100m, 2, MidpointRounding.AwayFromZero);
+            var paid = inPeriod.Where(l => paidInto.Contains(l.AccountId)).Sum(l => l.Amount);
+            rows.Add(new ReportTableRow([label, due.ToString("d", System.Globalization.CultureInfo.CurrentCulture), profit, aside, paid, aside - paid]));
+            (totalProfit, totalAside, totalPaid) = (totalProfit + profit, totalAside + aside, totalPaid + paid);
+        }
+
+        rows.Add(new ReportTableRow(["Year", null, totalProfit, totalAside, totalPaid, totalAside - totalPaid], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Estimated tax worksheet",
+            [company.Name, $"{year} · set aside at {percent:0.##}% of net profit"],
+            [new("Period"), new("Payment due"), new("Net profit", ColumnFormat.Money), new("Set aside", ColumnFormat.Money), new("Paid", ColumnFormat.Money), new("Still to pay", ColumnFormat.Money)],
+            rows,
+            Note: "A rough guide, not a tax calculation: what the owner owes depends on their whole return. Payments count when recorded to an equity account named for estimated tax (the sole proprietor chart has Owner's Equity:Estimated Tax Payments), never as a business expense.");
+    }
+
     public async Task<ReportTable> TaxSummaryTableAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);

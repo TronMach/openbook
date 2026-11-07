@@ -13,6 +13,7 @@ Number,Account,Type,Description,Tax line
 3000,Owner's Equity,Equity,,
 3010,Owner's Equity:Owner Contributions,Equity,Money the owner puts in,
 3020,Owner's Equity:Owner Draws,Equity,Money the owner takes out,
+3030,Owner's Equity:Estimated Tax Payments,Equity,The owner's federal and state estimated income tax (not a business expense),
 3900,Retained Earnings,Equity,Prior years' net income,
 4000,Service Revenue,Income,,c.1
 4100,Product Sales,Income,,c.1
