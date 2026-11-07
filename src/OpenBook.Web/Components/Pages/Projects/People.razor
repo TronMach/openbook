@@ -1,5 +1,6 @@
 @page "/time/people"
 @inject WorkerService WorkerService
+@inject OpenBook.Application.Segments.SegmentService Segments
 @inject VendorService VendorService
 @inject UserService UserService
 
@@ -84,6 +85,19 @@
                     <label for="weekly">Hours a week <span class="muted">(optional, for utilization)</span></label>
                     <input id="weekly" name="weeklyHours" class="amount" inputmode="decimal" value="@_editing?.WeeklyHours?.ToString("0.##")" />
                 </div>
+                @if (_classes.Count > 0)
+                {
+                    <div class="field">
+                        <label for="worker-class">Class <span class="muted">(their billed time's income)</span></label>
+                        <select id="worker-class" name="classId">
+                            <option value="">None</option>
+                            @foreach (var c in _classes)
+                            {
+                                <option value="@c.Segment.Id" selected="@(c.Segment.Id == _editing?.ClassId)">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                }
             </div>
             <div class="row">
                 <div class="field">
@@ -131,8 +145,11 @@
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+
     protected override async Task OnInitializedAsync()
     {
+        _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
         _seesCosts = AuthState is not null && (await AuthState).User.CanPost("/time/people");
         _workers = await WorkerService.ListAsync(includeInactive: true);
         _editing = _workers.FirstOrDefault(w => w.Id == Edit);

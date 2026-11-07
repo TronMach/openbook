@@ -115,7 +115,8 @@ public sealed class Project
 /// <param name="Role">Their role for billing ("Partner", "Associate"): rate card lines can be for a role.</param>
 /// <param name="WeeklyHours">Hours they're available a week, for the utilization report; null leaves them out of it.</param>
 public sealed record WorkerDetails(
-    string Name, decimal CostRate = 0m, decimal? BillRate = null, string? Username = null, Guid? VendorId = null, string? Role = null, decimal? WeeklyHours = null);
+    string Name, decimal CostRate = 0m, decimal? BillRate = null, string? Username = null, Guid? VendorId = null, string? Role = null, decimal? WeeklyHours = null,
+    Guid? ClassId = null);
 
 /// <summary>Someone whose time is tracked: an employee, an owner or a contractor (optionally linked to their vendor record).</summary>
 public sealed class Worker
@@ -131,6 +132,9 @@ public sealed class Worker
     public string? Username { get; private set; }
     public Guid? VendorId { get; private set; }
     public string? Role { get; private set; }
+
+    /// <summary>The class (department) their billed time's income goes to; null for none.</summary>
+    public Guid? ClassId { get; private set; }
     public decimal? WeeklyHours { get; private set; }
     public bool IsActive { get; private set; }
 
@@ -151,6 +155,7 @@ public sealed class Worker
             TimeEntry.CheckRate(bill, "Bill rate");
         CostRate = details.CostRate;
         BillRate = details.BillRate;
+        ClassId = details.ClassId == Guid.Empty ? null : details.ClassId;
         if (details.WeeklyHours is { } weekly && (weekly <= 0m || weekly > 168m || decimal.Round(weekly, 2) != weekly))
             throw new DomainException("worker.weekly_hours_invalid", "Hours a week are above 0 and at most 168, with at most 2 decimals.");
         Username = Text.Optional(details.Username, 100, "worker.username_too_long", "User");

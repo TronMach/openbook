@@ -37,6 +37,16 @@ public sealed class ProjectsTests : IAsyncLifetime
     public Task DisposeAsync() => _db.DisposeAsync();
 
     [Fact]
+    public async Task Billed_time_takes_the_persons_class()
+    {
+        var design = await In<OpenBook.Application.Segments.SegmentService, OpenBook.Domain.Segments.Segment>(s => s.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Class, "Design"));
+        var bo = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Bo", CostRate: 30m, BillRate: 90m, ClassId: design.Id)));
+        var time = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(bo.Id, Mar2, 2m, _acme.Id, _consulting.Id, true)));
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [], TimeEntryIds: [time.Id])));
+        Assert.Equal(design.Id, invoice.Lines.Single(l => l.Kind == SalesLineKind.Item).ClassId);
+    }
+
+    [Fact]
     public async Task Rates_rise_for_the_new_year_and_unbilled_time_can_take_the_card_again()
     {
         await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(150m, _acme.Id)));

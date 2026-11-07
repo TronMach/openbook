@@ -3992,6 +3992,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("BillRateTenThousandths");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("CostRate")
                         .HasColumnType("bigint")
                         .HasColumnName("CostRateTenThousandths");

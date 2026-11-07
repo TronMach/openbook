@@ -76,7 +76,7 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
             var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
             drafts.AddRange(charges.Time.Select(t => new SalesLineDraft(
                 t.ItemId, Domain.Common.TextCleaning.Cut($"{t.Date:MMM d, yyyy} · {workers[t.WorkerId].Name}{(t.Notes is { } n ? ": " + n : "")}", 1000), t.Hours, t.RateBilled,
-                PriceSource: TimePriceSource, Group: Group(t.CustomerId), OwnerCustomerId: groups is null ? null : t.CustomerId)));
+                PriceSource: TimePriceSource, ClassId: workers[t.WorkerId].ClassId, Group: Group(t.CustomerId), OwnerCustomerId: groups is null ? null : t.CustomerId)));
         }
 
         if (charges.Mileage.Count > 0)

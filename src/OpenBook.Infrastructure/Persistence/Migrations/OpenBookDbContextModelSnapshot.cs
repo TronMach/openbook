@@ -3985,6 +3985,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("BillRateTenThousandths");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CostRate")
                         .HasColumnType("INTEGER")
                         .HasColumnName("CostRateTenThousandths");

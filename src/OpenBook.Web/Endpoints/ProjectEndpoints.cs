@@ -276,7 +276,8 @@ public static class ProjectEndpoints
         Text(form["username"]),
         Id(form["vendorId"]),
         Text(form["role"]),
-        Number(form["weeklyHours"]));
+        Number(form["weeklyHours"]),
+        Id(form["classId"]));
 
     /// <summary>The "for" field is one choice: worker:{id}, role:{name}, item:{id}, or blank for the client alone.</summary>
     private static BillingRateDetails RateDetails(IFormCollection form)

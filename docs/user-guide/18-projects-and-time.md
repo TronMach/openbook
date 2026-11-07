@@ -14,7 +14,7 @@ The project's page has its **status** (and dates) and **budgets** for revenue, c
 
 **Time → People and rates** (`/time/people`) lists who records time:
 
-- **Name**, **cost rate per hour** (what an hour of theirs costs you, for profitability; only accountants and admins see it, and only they can change this page) and **bill rate per hour** (what you charge, unless the rate card says otherwise).
+- **Name**, **cost rate per hour** (what an hour of theirs costs you, for profitability; only accountants and admins see it, and only they can change this page) and **bill rate per hour** (what you charge, unless the rate card says otherwise). When you use classes, a **Class** for the person (their department) goes on the invoice lines their time is billed on, so income by class shows it.
 - **Role**, for setting rates by role, such as Partner or Associate.
 - **Hours a week**, for the utilization report.
 - **OpenBook user**: link the person to their sign-in, so their time is entered as them.
