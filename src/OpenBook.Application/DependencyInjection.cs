@@ -154,6 +154,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Projects.ProjectService>();
         services.AddScoped<OpenBook.Application.Projects.WorkerService>();
         services.AddScoped<OpenBook.Application.Projects.TimeService>();
+        services.AddScoped<OpenBook.Application.Projects.BilledTimeService>();
         services.AddScoped<OpenBook.Application.Projects.MileageService>();
         services.AddScoped<OpenBook.Application.Projects.BillingRateService>();
         services.AddScoped<OpenBook.Application.Channels.ChannelService>();

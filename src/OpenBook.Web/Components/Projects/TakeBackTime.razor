@@ -1,0 +1,64 @@
+@using OpenBook.Application.Projects
+@inject TimeService Time
+@inject WorkerService Workers
+
+@* Billed time on a posted invoice, any of which can come back off it by a credit memo (when the invoice can't simply be
+   changed, because a payment is on it, say), to be billed again or written off. Posts /sales/invoices/{id}/take-back-time. *@
+@if (_entries.Count > 0)
+{
+    <div class="card no-print" id="take-back-time" style="margin-top: 1.5rem">
+        <h2>Take time back off this invoice</h2>
+        <p class="muted">For time billed by mistake, or billed in full when it shouldn't have been. A credit memo takes it off at what it was billed and settles what the invoice still owes (the rest is the customer's credit). If the invoice has nothing applied to it, Change it instead.</p>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <PostForm Action="@($"/sales/invoices/{InvoiceId}/take-back-time")" data-enhance="false">
+            <AntiforgeryToken />
+            <table class="data">
+                <thead><tr><th></th><th>Date</th><th>Person</th><th>Notes</th><th class="num">Hours</th><th class="num">Billed</th></tr></thead>
+                <tbody>
+                    @foreach (var e in _entries)
+                    {
+                        <tr>
+                            <td><input type="checkbox" name="entry" value="@e.Id" aria-label="Take this time back" /></td>
+                            <td>@Labels.Date(e.Date)</td>
+                            <td>@_names.GetValueOrDefault(e.WorkerId)</td>
+                            <td>@e.Notes</td>
+                            <td class="num">@Labels.Quantity(e.Hours)</td>
+                            <td class="num">@Labels.Amount(e.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="row">
+                <div class="field">
+                    <label for="take-back-date">Date</label>
+                    <input id="take-back-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                </div>
+                <div class="field">
+                    <label for="take-back-reason">Why</label>
+                    <input id="take-back-reason" name="reason" required maxlength="200" />
+                </div>
+            </div>
+            <label class="check"><input type="checkbox" name="writeOff" value="true" /> <span>Write it off (don't bill it again)</span></label>
+            <ClosedPeriodPassword Visible="false" Interactive="false" />
+            <div class="actions"><button type="submit" class="secondary">Take the ticked time back</button></div>
+        </PostForm>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<OpenBook.Domain.Projects.TimeEntry> _entries = [];
+    private Dictionary<Guid, string> _names = [];
+
+    [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _entries = (await Time.ListForInvoiceAsync(InvoiceId)).OrderBy(e => e.Date).ToList();
+        if (_entries.Count > 0)
+            _names = (await Workers.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
+    }
+}

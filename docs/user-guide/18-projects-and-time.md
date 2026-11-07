@@ -65,6 +65,8 @@ An invoice for a client can include the work of all its projects billed with it.
 
 Voiding the invoice puts everything back on the unbilled list.
 
+An invoice with a payment or credit on it can't be voided or have its time lines changed. To take some of its time back anyway, use **Take time back off this invoice** on the invoice's page: tick the entries, give the date and **Why**, and choose whether to **Write it off**. OpenBook makes a credit memo for that time at what it was billed (with the invoice's sales tax), applies it to what the invoice still owes (anything more is the customer's credit, for a refund or their next invoice), and the time either goes back with unbilled work or is written off.
+
 ## Project costs
 
 Bill and expense lines can be charged to a project for its profitability without being billed to the client: in the **Billable to customers and project costs** panel on the bill or expense page, choose the project for the line and untick **Bill it**.

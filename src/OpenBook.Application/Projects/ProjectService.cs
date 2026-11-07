@@ -276,6 +276,9 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         return through;
     }
 
+    /// <summary>The time billed on an invoice.</summary>
+    public Task<IReadOnlyList<TimeEntry>> ListForInvoiceAsync(Guid invoiceId, CancellationToken ct = default) => store.ListTimeForInvoiceAsync(invoiceId, ct);
+
     public async Task<DateOnly?> LockedThroughAsync(CancellationToken ct = default) => (await companies.GetRequiredCompanyAsync(ct)).TimeLockedThrough;
 
     private async Task EnsureUnlockedAsync(DateOnly date, CancellationToken ct)

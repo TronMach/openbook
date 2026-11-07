@@ -1,4 +1,5 @@
 using System.Globalization;
+using OpenBook.Application.Ledger;
 using OpenBook.Application.Projects;
 using OpenBook.Application;
 using OpenBook.Domain.Common;
@@ -159,6 +160,21 @@ public static class ProjectEndpoints
 
         app.MapPost("/time/rates/{id:guid}", async (Guid id, IFormCollection form, BillingRateService rates, CancellationToken ct) =>
             await Back("/time/rates", async () => await rates.UpdateAsync(id, RateDetails(form), ct))).RequireAuthorization();
+
+        app.MapPost("/sales/invoices/{id:guid}/take-back-time", async (Guid id, IFormCollection form, BilledTimeService billed, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                var ids = form["entry"].Select(v => Guid.TryParse(v, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList();
+                var memo = await billed.TakeBackAsync(new TakeBackTimeCommand(id, ids, Date(form["date"]) ?? CompanyTime.Today, form["reason"].ToString(), form["writeOff"] == "true"), ct);
+                return Results.Redirect($"/sales/credit-memos/{memo.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/sales/invoices/{id}?timeError={Uri.EscapeDataString(ex.Message)}#take-back-time");
+            }
+        }).RequireAuthorization();
 
         app.MapPost("/time/lock", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {

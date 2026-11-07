@@ -305,6 +305,7 @@
     @if (_invoice.Status == DocumentStatus.Posted)
     {
         <RetainerOffer InvoiceId="_invoice.Id" CustomerId="_invoice.CustomerId" Balance="_invoice.Balance" />
+        <OpenBook.Web.Components.Projects.TakeBackTime InvoiceId="_invoice.Id" Error="@TimeError" />
     }
 
     <EntryTags EntryId="_invoice.JournalEntryId" />
@@ -334,6 +335,7 @@
     private IReadOnlyList<DocumentChange> _changes = [];
 
     [SupplyParameterFromQuery(Name = "error")] private string? EmailError { get; set; }
+    [SupplyParameterFromQuery(Name = "timeError")] private string? TimeError { get; set; }
     private Guid? _billTo;
     private bool _needsClosingPassword;
 

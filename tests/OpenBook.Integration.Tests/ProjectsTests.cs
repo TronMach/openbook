@@ -208,6 +208,30 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Billed_time_comes_back_off_a_paid_invoice_by_a_credit_memo()
+    {
+        var bank = await _db.CreateAccount("Checking", AccountType.Bank);
+        var one = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1m, _acme.Id, _consulting.Id, true)));
+        var two = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 2m, _acme.Id, _consulting.Id, true)));
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [], TimeEntryIds: [one.Id, two.Id])));
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Mar2.AddDays(5), bank.Id, [new ApplyToInvoice(invoice.Id, 100m)])));
+
+        var memo = await In<BilledTimeService, CreditMemo>(s => s.TakeBackAsync(new TakeBackTimeCommand(invoice.Id, [two.Id], Mar2.AddDays(6), "Billed twice")));
+        Assert.Equal(two.Amount, memo.Total);
+        var after = (await In<InvoiceService, Invoice?>(s => s.GetAsync(invoice.Id)))!;
+        Assert.Equal(invoice.Total - 100m - two.Amount, after.Balance);
+        var back = (await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.ListAsync(new TimeFilter(CustomerId: _acme.Id)))).Single(e => e.Id == two.Id);
+        Assert.Null(back.InvoiceId);
+        Assert.False(back.WrittenOff);
+
+        Assert.Equal("time.not_on_invoice", await Refused(() => In<BilledTimeService, CreditMemo>(s =>
+            s.TakeBackAsync(new TakeBackTimeCommand(invoice.Id, [two.Id], Mar2.AddDays(6), "Again")))));
+        await In<BilledTimeService, CreditMemo>(s => s.TakeBackAsync(new TakeBackTimeCommand(invoice.Id, [one.Id], Mar2.AddDays(6), "Not billable", WriteOff: true)));
+        Assert.True((await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.ListAsync(new TimeFilter(CustomerId: _acme.Id)))).Single(e => e.Id == one.Id).WrittenOff);
+        Assert.Equal(0, (await In<OpenBook.Application.Ledger.BooksCheckService, OpenBook.Application.Ledger.BooksCheckReport>(s => s.RunAsync())).Problems);
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);
