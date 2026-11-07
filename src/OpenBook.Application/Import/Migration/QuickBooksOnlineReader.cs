@@ -107,7 +107,7 @@ internal static class QuickBooksOnlineReader
 
                     var account = Str(detail, "AccountRef", "value") is { } id && accountNames.TryGetValue(id, out var name) ? name : Str(detail, "AccountRef", "name") ?? "";
                     var sign = string.Equals(Str(detail, "PostingType"), "Credit", StringComparison.OrdinalIgnoreCase) ? -1m : 1m;
-                    lines.Add(new SourceLine(account, sign * amount.Value, Str(l, "Description")));
+                    lines.Add(new SourceLine(account, sign * amount.Value, Str(l, "Description"), Str(detail, "ClassRef", "name")));
                 }
 
                 var currency = Str(e, "CurrencyRef", "value");

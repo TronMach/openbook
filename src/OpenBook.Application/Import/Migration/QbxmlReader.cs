@@ -108,7 +108,7 @@ internal static class QbxmlReader
                 }
 
                 var sign = l.Name.LocalName == "JournalDebitLine" ? 1m : -1m;
-                lines.Add(new SourceLine(l.Child("AccountRef").Text("FullName") ?? "", sign * amount.Value, l.Text("Memo")));
+                lines.Add(new SourceLine(l.Child("AccountRef").Text("FullName") ?? "", sign * amount.Value, l.Text("Memo"), l.Child("ClassRef").Text("FullName")));
             }
 
             var dateText = j.Text("TxnDate");

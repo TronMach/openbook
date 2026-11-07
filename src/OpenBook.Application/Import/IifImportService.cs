@@ -97,7 +97,7 @@ public sealed class IifImportService(MigrationImportService migration)
                 if (!StatementValues.TryParseAmount(x.Get("AMOUNT") ?? "0", out var value))
                     errors.Add($"line {x.Line}: the amount can't be read");
                 else
-                    lines.Add(new SourceLine(x.Get("ACCNT") ?? string.Empty, value, x.Get("MEMO") ?? x.Get("NAME")));
+                    lines.Add(new SourceLine(x.Get("ACCNT") ?? string.Empty, value, x.Get("MEMO") ?? x.Get("NAME"), x.Get("CLASS")));
             }
 
             var memo = string.Join(" · ", new[] { label, t.Trns.Get("NAME"), t.Trns.Get("MEMO") }.Where(s => !string.IsNullOrWhiteSpace(s)));

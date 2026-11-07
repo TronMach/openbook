@@ -63,7 +63,8 @@ public sealed class MigrationImportService(
     ICompanyStore companies,
     IUnitOfWork unitOfWork,
     Inventory.OpeningStockService openingStock,
-    Plugins.PluginRegistry plugins)
+    Plugins.PluginRegistry plugins,
+    Segments.SegmentService segments)
 {
     /// <summary>Largest export accepted (decompressed).</summary>
     public const int MaxBytes = 20 * 1024 * 1024;
@@ -172,12 +173,16 @@ public sealed class MigrationImportService(
         }
 
 
+        // The old program's classes: found by full name, else created (parents first), and class tracking turned on.
+        var classes = await ClassesAsync(plan.Transactions.SelectMany(t => t.Lines).Select(l => l.Class), ct);
+        Guid? ClassOf(SourceLine l) => l.Class is { Length: > 0 } c && classes.TryGetValue(c.Trim(), out var id) ? id : null;
+
         var batch = Guid.CreateVersion7();
         foreach (var t in plan.Transactions)
         {
             var lines = t.Lines.Select(l => l.Amount > 0m
-                ? JournalLineDraft.Dr(final.FindByFullName(l.Account)!.Id, l.Amount, LineMemo(l.Memo))
-                : JournalLineDraft.Cr(final.FindByFullName(l.Account)!.Id, -l.Amount, LineMemo(l.Memo))).ToList();
+                ? JournalLineDraft.Dr(final.FindByFullName(l.Account)!.Id, l.Amount, LineMemo(l.Memo), ClassOf(l))
+                : JournalLineDraft.Cr(final.FindByFullName(l.Account)!.Id, -l.Amount, LineMemo(l.Memo), ClassOf(l))).ToList();
             await engine.StageAsync(new PostJournalEntryCommand(t.Date, lines, JournalEntry.Fit(t.Memo), JournalEntry.ImportSource, batch), ct);
         }
 
@@ -201,6 +206,35 @@ public sealed class MigrationImportService(
 
         await transaction.CommitAsync(ct);
         return plan.Result;
+    }
+
+    private async Task<Dictionary<string, Guid>> ClassesAsync(IEnumerable<string?> names, CancellationToken ct)
+    {
+        var wanted = names.OfType<string>().Select(n => n.Trim()).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var known = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        if (wanted.Count == 0)
+            return known;
+        foreach (var c in await segments.ListAsync(Domain.Segments.SegmentKind.Class, ct: ct))
+            known[c.FullName] = c.Segment.Id;
+        foreach (var full in wanted)
+        {
+            var parts = full.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            Guid? parent = null;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var path = string.Join(':', parts[..(i + 1)]);
+                if (!known.TryGetValue(path, out var id))
+                    known[path] = id = (await segments.CreateAsync(Domain.Segments.SegmentKind.Class, parts[i], parent, ct)).Id;
+                parent = id;
+            }
+
+            known[full] = parent!.Value;
+        }
+
+        var tracking = await segments.GetTrackingAsync(ct);
+        if (!tracking.Classes)
+            await segments.SetTrackingAsync(tracking with { Classes = true }, ct);
+        return known;
     }
 
     private async Task<string> HomeCurrencyAsync(CancellationToken ct) => (await companies.GetRequiredCompanyAsync(ct)).HomeCurrency.Code;

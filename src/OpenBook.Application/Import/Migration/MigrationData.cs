@@ -51,7 +51,8 @@ public sealed record SourceItem(int Line, string Name, string KindLabel, ItemTyp
     bool Inactive = false, bool? Taxable = null);
 
 /// <param name="Amount">Positive is a debit, negative a credit.</param>
-public sealed record SourceLine(string Account, decimal Amount, string? Memo);
+/// <param name="Class">The line's class by full name ("Programs:Literacy"), when the old program had one; created on import.</param>
+public sealed record SourceLine(string Account, decimal Amount, string? Memo, string? Class = null);
 
 /// <param name="Errors">Problems the reader found (dates or amounts it couldn't read).</param>
 public sealed record SourceTransaction(

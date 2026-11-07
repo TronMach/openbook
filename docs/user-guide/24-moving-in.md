@@ -36,7 +36,7 @@ Importing accounts, journal entries and whole companies needs the accountant rol
 
 Files can be up to 20 MB; export larger books in parts (lists, then transactions by year).
 
-What the old program says about each record comes over where the file has it: inactive customers, vendors, items come in inactive (QuickBooks Desktop and Online), payment terms (QuickBooks Desktop), whether an item is taxable, and from QuickBooks Desktop's qbXML each income and expense account's tax line, when one of your return's lines clearly matches its name ("Sch C: Advertising" becomes Schedule C line 8). Check the mapping under **Reports → Tax summary** afterwards.
+What the old program says about each record comes over where the file has it: inactive customers, vendors, items come in inactive (QuickBooks Desktop and Online), payment terms (QuickBooks Desktop), whether an item is taxable, and from QuickBooks Desktop's qbXML each income and expense account's tax line, when one of your return's lines clearly matches its name ("Sch C: Advertising" becomes Schedule C line 8). Check the mapping under **Reports → Tax summary** afterwards. Classes on QuickBooks transactions come over too (IIF, qbXML and QuickBooks Online): missing classes are made, with their parents, and class tracking is turned on, so program and grant history keeps its classes.
 
 ### QuickBooks Desktop company files (.QBW, .QBM, .QBB)
 

@@ -100,6 +100,25 @@ public sealed class MoveInDepthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Classes_on_quickbooks_transactions_come_over_and_are_created()
+    {
+        var tab = "\t";
+        await MoveIn(Iif(
+            string.Join(tab, "!TRNS", "TRNSTYPE", "DATE", "ACCNT", "AMOUNT", "MEMO", "CLASS"),
+            string.Join(tab, "!SPL", "TRNSTYPE", "DATE", "ACCNT", "AMOUNT", "MEMO", "CLASS"),
+            "!ENDTRNS",
+            string.Join(tab, "TRNS", "GENERAL JOURNAL", "03/01/2026", "Rent", "100", "Hall", "Programs:Literacy"),
+            string.Join(tab, "SPL", "GENERAL JOURNAL", "03/01/2026", "Sales", "-100", "Hall", ""),
+            "ENDTRNS"));
+
+        var classes = await In<OpenBook.Application.Segments.SegmentService, IReadOnlyList<OpenBook.Application.Segments.SegmentChoice>>(s => s.ListAsync(Domain.Segments.SegmentKind.Class));
+        var literacy = Assert.Single(classes, c => c.FullName == "Programs:Literacy");
+        Assert.Contains(classes, c => c.FullName == "Programs");
+        Assert.True((await In<OpenBook.Application.Segments.SegmentService, OpenBook.Application.Segments.SegmentTracking>(s => s.GetTrackingAsync())).Classes);
+        Assert.Equal(1, await _db.InDb(db => Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(db.LineSegments, l => l.ClassId == literacy.Segment.Id, default)));
+    }
+
+    [Fact]
     public async Task Inventory_parts_come_in_tracked_with_their_stock()
     {
         await MoveIn(Iif("!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\tQNTY\tCOST", "INVITEM\tWidget\tPART\tSales\t25\t8\t10"));

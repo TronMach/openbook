@@ -75,7 +75,7 @@ internal static partial class QbxmlJournal
                 continue;
             }
 
-            current.Lines.Add(new SourceLine(account(name), amount, values.GetValueOrDefault("Memo") ?? values.GetValueOrDefault("Name")));
+            current.Lines.Add(new SourceLine(account(name), amount, values.GetValueOrDefault("Memo") ?? values.GetValueOrDefault("Name"), values.GetValueOrDefault("Class")));
         }
 
         Add(current, data);

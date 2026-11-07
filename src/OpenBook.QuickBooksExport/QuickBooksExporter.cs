@@ -30,7 +30,7 @@ public sealed class QuickBooksExporter(IQuickBooksSession session, TextWriter lo
     private static readonly decimal Newest = 16.0m;
 
     /// <summary>The Journal report's columns OpenBook's reader uses.</summary>
-    public static readonly string[] JournalColumns = ["TxnID", "TxnNumber", "TxnType", "Date", "RefNumber", "Name", "Memo", "Account", "Debit", "Credit"];
+    public static readonly string[] JournalColumns = ["TxnID", "TxnNumber", "TxnType", "Date", "RefNumber", "Name", "Memo", "Account", "Class", "Debit", "Credit"];
 
     private string _version = "";
     private int _requestId;
