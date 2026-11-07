@@ -3317,6 +3317,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("FunderId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("FundingSharePercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("FundingShareTenThousandths");
+
                     b.Property<Guid>("IncomeAccountId")
                         .HasColumnType("uuid");
 

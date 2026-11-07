@@ -151,6 +151,20 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_matching_grant_recognizes_only_the_funders_share_of_spending()
+    {
+        var grant = await GrantWithSpending();
+        var plain = await In<GrantService, Grant>(s => s.CreateAsync(new GrantCommand("Roof", _acme.Id, 1_000m, Jan5, Jan5, new DateOnly(2026, 12, 31))));
+        Assert.Equal("grant.share_unconditional", (await Assert.ThrowsAsync<DomainException>(() => In<GrantService, Grant>(s => s.SetFundingShareAsync(plain.Id, 50m)))).Code);
+
+        await In<GrantService, Grant>(s => s.SetFundingShareAsync(grant.Id, 75m));
+        var position = (await In<GrantService, GrantPosition?>(s => s.PositionAsync(grant.Id, Mar31)))!;
+        Assert.Equal((187.50m, 62.50m), (position.ReadyToRecognize, position.Match));
+        var recognized = await In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, Mar31));
+        Assert.Equal(187.50m, recognized.Recognized);
+    }
+
+    [Fact]
     public async Task A_grant_is_reduced_when_the_funder_wont_pay_and_an_advance_is_paid_back()
     {
         async Task NoProblems(string when)

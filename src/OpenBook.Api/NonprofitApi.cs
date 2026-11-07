@@ -237,6 +237,11 @@ internal static class NonprofitApi
             await s.VoidRecognitionAsync(id, line, r.Reason, ct);
             return await Position(s, id, ct);
         });
+        nonprofit.MapPut("/grants/{id:guid}/share", async (Guid id, GrantShareRequest r, GrantService s, CancellationToken ct) =>
+        {
+            var g = await s.SetFundingShareAsync(id, r.Percent, ct);
+            return new { g.Id, g.FundingSharePercent };
+        });
         nonprofit.MapPost("/grants/{id:guid}/amend", async (Guid id, GrantReduceRequest r, GrantService s, CancellationToken ct) =>
         {
             await s.AmendAsync(id, r.Date, r.Amount, r.Reason, ct);
@@ -280,3 +285,5 @@ internal static class NonprofitApi
     private static async Task<GrantResponse> Position(GrantService s, Guid id, CancellationToken ct) =>
         GrantResponse.From((await s.PositionAsync(id, CompanyTime.Today, ct))!);
 }
+
+public sealed record GrantShareRequest(decimal Percent);

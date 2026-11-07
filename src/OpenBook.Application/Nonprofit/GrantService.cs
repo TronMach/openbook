@@ -41,10 +41,13 @@ public sealed record GrantBudgetRow(Guid AccountId, string Account, decimal Budg
 /// <summary>A grant with what's been spent on its class in its period (through a date).</summary>
 public sealed record GrantPosition(Grant Grant, string Funder, string ClassName, decimal Spent, IReadOnlyList<GrantBudgetRow> Rows)
 {
-    /// <summary>A conditional grant's spending not yet recognized as income, up to the award.</summary>
+    /// <summary>A conditional grant's spending (the funder's share of it) not yet recognized as income, up to the award.</summary>
     public decimal ReadyToRecognize => Grant.Conditional && Grant.Status == GrantStatus.Active
-        ? Math.Max(0m, Math.Min(Spent, Grant.NetAward) - Grant.Recognized)
+        ? Math.Max(0m, Math.Min(Grant.FunderShareOf(Spent), Grant.NetAward) - Grant.Recognized)
         : 0m;
+
+    /// <summary>What the organization's own match has covered of the spending.</summary>
+    public decimal Match => Spent - Grant.FunderShareOf(Spent);
 
     public decimal Unspent => Grant.NetAward - Spent;
 }
@@ -276,6 +279,17 @@ public sealed class GrantService(
     }
 
     /// <summary>Conditional grants: income for what's been spent through the date and not recognized yet, up to the award.</summary>
+    /// <summary>Sets a conditional grant's funding share (percent of spending the funder pays), audited on the grant.</summary>
+    public async Task<Grant> SetFundingShareAsync(Guid id, decimal percent, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        var before = Snapshot(grant);
+        grant.SetFundingShare(percent);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
     public async Task<Grant> RecognizeAsync(Guid id, DateOnly through, CancellationToken ct = default)
     {
         var position = await PositionAsync(id, through, ct) ?? throw new EntityNotFoundException(EntityType, id);
@@ -576,6 +590,7 @@ public sealed class GrantService(
 
     private static string Snapshot(Grant g) => JsonSerializer.Serialize(new
     {
+        g.FundingSharePercent,
         g.Name,
         g.FunderId,
         g.Reference,

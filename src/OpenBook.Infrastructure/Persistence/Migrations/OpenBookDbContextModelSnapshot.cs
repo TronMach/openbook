@@ -3310,6 +3310,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("FunderId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("FundingSharePercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("FundingShareTenThousandths");
+
                     b.Property<Guid>("IncomeAccountId")
                         .HasColumnType("TEXT");
 

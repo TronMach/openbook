@@ -42,6 +42,10 @@
             <dt>Class</dt><dd><a href="/segments/@g.ClassId">@_position.ClassName</a></dd>
             <dt>Income account</dt><dd>@_chart.FullName(g.IncomeAccountId)</dd>
             <dt>Income so far</dt><dd>@Labels.Amount(g.Recognized)</dd>
+            @if (g.Conditional && g.FundingSharePercent != 100m)
+            {
+                <dt>Funder's share</dt><dd>@g.FundingSharePercent.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)% of spending; your match so far @Labels.Amount(_position.Match)</dd>
+            }
             <dt>Received</dt><dd>@Labels.Amount(g.Received)</dd>
             <dt>Due from funder</dt><dd>@Labels.Amount(Math.Max(0m, g.Due))</dd>
             @if (g.Advance > 0m)
@@ -211,6 +215,16 @@
                     <div class="field"><label for="edit-terms">Terms</label><textarea id="edit-terms" name="terms" rows="3" maxlength="@Grant.MaxTextLength">@g.Terms</textarea></div>
                     <div class="actions"><button type="submit" class="secondary">Save changes</button></div>
                 </PostForm>
+                @if (g.Conditional)
+                {
+                    <PostForm Action="@($"/nonprofit/grants/{g.Id}/share")" data-enhance="false" class="inline-actions" style="margin-top: 1rem">
+                        <AntiforgeryToken />
+                        <label for="share">Funder pays (% of spending)</label>
+                        <input id="share" name="percent" class="short" inputmode="decimal" value="@g.FundingSharePercent.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                        <button type="submit" class="secondary">Save</button>
+                        <span class="hint">For a matching grant: recognition counts only this share of what's spent; the rest is your match.</span>
+                    </PostForm>
+                }
                 <PostForm Action="@($"/nonprofit/grants/{g.Id}/amend")" data-enhance="false" style="margin-top: 1rem">
                     <AntiforgeryToken />
                     <p class="muted">@(g.Conditional ? "An amendment raises the award, so more can be recognized and paid. Nothing posts." : "An amendment raises the award: the extra is income and receivable on the date.")</p>

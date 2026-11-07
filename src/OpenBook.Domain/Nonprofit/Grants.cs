@@ -188,6 +188,25 @@ public sealed class Grant
     /// </summary>
     public bool CashOnReceipt { get; private set; }
 
+    /// <summary>
+    /// The funder's share of the spending on a matching grant, in percent (100 = all of it): recognition counts only this
+    /// share of what's spent, so the organization's own match stays off the grant's income.
+    /// </summary>
+    public decimal FundingSharePercent { get; private set; } = 100m;
+
+    public void SetFundingShare(decimal percent)
+    {
+        if (!Conditional)
+            throw new DomainException("grant.share_unconditional", "A funding share is for conditional grants, which are earned as money is spent.");
+        FundingSharePercent = percent is > 0m and <= 100m && decimal.Round(percent, 4) == percent
+            ? percent
+            : throw new DomainException("grant.share", "The funder's share is above 0 and up to 100 percent, to four decimals.");
+    }
+
+    /// <summary>The funder's part of an amount spent, to the cent.</summary>
+    public decimal FunderShareOf(decimal spent) =>
+        FundingSharePercent == 100m ? spent : decimal.Round(spent * FundingSharePercent / 100m, 2, MidpointRounding.AwayFromZero);
+
     public static Grant Create(
         Guid id, string name, Guid funderId, string? reference, decimal amount, DateOnly awardedOn, DateOnly startsOn, DateOnly endsOn,
         Guid classId, Guid incomeAccountId, Guid receivableAccountId, bool conditional, string? terms, Guid? awardEntryId, DateTimeOffset createdAt)

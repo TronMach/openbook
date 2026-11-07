@@ -1244,6 +1244,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.Grant>(b =>
         {
+            b.Property(g => g.FundingSharePercent).HasColumnName("FundingShareTenThousandths").HasConversion(TenThousandths);
             b.ToTable("Grants");
             b.HasKey(g => g.Id);
             b.Property(g => g.Name).HasMaxLength(OpenBook.Domain.Nonprofit.Grant.MaxNameLength);
