@@ -75,6 +75,27 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task On_the_cash_basis_tax_counts_as_invoices_are_paid()
+    {
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [new SalesLineDraft(_widget.Id, null, 10m, 100m)])));
+        Assert.Equal(1_082.50m, invoice.Total);
+        var half = invoice.Total / 2m;
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Mar1.AddDays(9), _checking.Id, [new ApplyToInvoice(invoice.Id, half)])));
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, new DateOnly(2026, 4, 10), _checking.Id, [new ApplyToInvoice(invoice.Id, half)])));
+
+        Task<TaxLiabilityReport> Report(DateOnly from, DateOnly to, ReportBasis basis) => In<SalesTaxReports, TaxLiabilityReport>(s => s.LiabilityAsync(from, to, basis));
+        decimal StateTax(TaxLiabilityReport r) => r.Agencies.Single(a => a.Agency.Id == _stateDor.Id).Tax;
+        var march = new DateOnly(2026, 3, 31);
+        Assert.Equal(62.50m, StateTax(await Report(Mar1, march, ReportBasis.Accrual)));
+        var cash = await Report(Mar1, march, ReportBasis.Cash);
+        Assert.Equal((31.25m, ReportBasis.Cash), (StateTax(cash), cash.Basis));
+        Assert.Equal(500m, cash.Agencies.Single(a => a.Agency.Id == _stateDor.Id).Rates.Single().Taxable);
+        Assert.Equal(31.25m, StateTax(await Report(new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30), ReportBasis.Cash)));
+        // What's owed at the end of March on the cash basis is what was collected by then.
+        Assert.Equal(31.25m, cash.Agencies.Single(a => a.Agency.Id == _stateDor.Id).OwedAtEnd);
+    }
+
+    [Fact]
     public async Task Agencies_get_their_own_liability_account_under_sales_tax_payable()
     {
         var accounts = await _db.InDb(db => db.Accounts.AsNoTracking().ToListAsync());

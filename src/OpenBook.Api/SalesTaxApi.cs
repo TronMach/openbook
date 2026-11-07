@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.SalesTax;
 using OpenBook.Application;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Api;
@@ -49,7 +50,7 @@ internal static class SalesTaxApi
 
         tax.MapGet("/agencies", async (DateOnly? asOf, SalesTaxService s, SalesTaxPaymentService p, CancellationToken ct) =>
         {
-            var owed = await p.OwedAsync(asOf ?? CompanyTime.Today, ct);
+            var owed = await p.OwedAsync(asOf ?? CompanyTime.Today, ct: ct);
             return (await s.ListAgenciesAsync(ct)).Select(a => TaxAgencyResponse.From(a, owed.GetValueOrDefault(a.Id)));
         });
         tax.MapGet("/agencies/{id:guid}", async (Guid id, SalesTaxService s, CancellationToken ct) =>
@@ -102,9 +103,9 @@ internal static class SalesTaxApi
         tax.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, SalesTaxPaymentService s, CancellationToken ct) =>
             SalesTaxPaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
-        tax.MapGet("/liability", async (DateOnly from, DateOnly to, SalesTaxReports s, CancellationToken ct) =>
+        tax.MapGet("/liability", async (DateOnly from, DateOnly to, string? basis, SalesTaxReports s, CancellationToken ct) =>
         {
-            var report = await s.LiabilityAsync(from, to, ct);
+            var report = await s.LiabilityAsync(from, to, string.Equals(basis, "cash", StringComparison.OrdinalIgnoreCase) ? ReportBasis.Cash : ReportBasis.Accrual, ct);
             return new TaxLiabilityResponse(report.From, report.To,
                 report.Agencies.Select(a => new TaxLiabilityAgencyResponse(a.Agency.Id, a.Agency.Name, a.Rates, a.Tax, a.OwedAtStart, a.Paid, a.OwedAtEnd)).ToList(),
                 report.UntaxedSales);

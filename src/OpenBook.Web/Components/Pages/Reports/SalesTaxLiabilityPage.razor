@@ -7,7 +7,7 @@
 
 <div class="wide">
     <div class="toolbar">
-        <ReportFilter Action="/reports/sales-tax" Query="_query" Basis="_query.Basis" ShowBasis="false" />
+        <ReportFilter Action="/reports/sales-tax" Query="_query" Basis="_query.Basis" />
     </div>
 
     <ReportActions Key="sales-tax" />
@@ -15,7 +15,7 @@
     <div class="report-heading">
         <h1>Sales tax liability</h1>
         <p>@_companyName</p>
-        <p>@_query.Describe() · Accrual basis</p>
+        <p>@_query.Describe() · @(_query.Basis == ReportBasis.Cash ? "Cash basis: invoices as they're paid" : "Accrual basis")</p>
     </div>
 
     @if (_error is not null)
@@ -97,15 +97,16 @@
     [SupplyParameterFromQuery] private string? Preset { get; set; }
     [SupplyParameterFromQuery] private DateOnly? From { get; set; }
     [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+    [SupplyParameterFromQuery] private string? Basis { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         var company = await Settings.GetAsync();
         _companyName = company.Name;
-        _query = ReportQuery.From(company, Preset, From, To, null, DatePreset.LastQuarter);
+        _query = ReportQuery.From(company, Preset, From, To, Basis, DatePreset.LastQuarter);
         try
         {
-            _report = await Reports.LiabilityAsync(_query.Range.From ?? DateRanges.Beginning, _query.Range.To);
+            _report = await Reports.LiabilityAsync(_query.Range.From ?? DateRanges.Beginning, _query.Range.To, _query.Basis);
         }
         catch (DomainException ex)
         {

@@ -1,5 +1,6 @@
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
 
@@ -20,7 +21,7 @@ public sealed record TaxLiabilityAgency(TaxAgency Agency, IReadOnlyList<TaxLiabi
 }
 
 /// <param name="UntaxedSales">Sales on documents with no tax code.</param>
-public sealed record TaxLiabilityReport(DateOnly From, DateOnly To, IReadOnlyList<TaxLiabilityAgency> Agencies, decimal UntaxedSales);
+public sealed record TaxLiabilityReport(DateOnly From, DateOnly To, IReadOnlyList<TaxLiabilityAgency> Agencies, decimal UntaxedSales, ReportBasis Basis = ReportBasis.Accrual);
 
 /// <summary>A tax-exempt customer, for checking certificates.</summary>
 public sealed record ExemptCustomer(Customer Customer, bool Expired, bool ExpiresSoon);
@@ -33,25 +34,51 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
     /// Tax charged by rate and agency on invoices, sales receipts and credit memos (subtracted) dated in the
     /// period: accrual, from the documents, which is how most states want it filed.
     /// </summary>
-    public async Task<TaxLiabilityReport> LiabilityAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    /// <param name="basis">
+    /// Accrual: each invoice, receipt and credit memo dated in the period. Cash: receipts as they are, invoices in
+    /// proportion to what was paid on them in the period (payments on their date, retainers applied), and credit memos
+    /// as they're refunded; a credit applied to an invoice brings no money, so it counts on neither side.
+    /// </param>
+    public async Task<TaxLiabilityReport> LiabilityAsync(DateOnly from, DateOnly to, ReportBasis basis = ReportBasis.Accrual, CancellationToken ct = default)
     {
         if (to < from)
             throw new DomainException("report.range_invalid", "The end date can't be before the start date.");
 
         bool InRange(DateOnly d) => d >= from && d <= to;
-        var documents = new List<(IReadOnlyList<SalesLine> Lines, bool Exempt, int Sign)>();
-        documents.AddRange((await sales.ListInvoicesAsync(null, ct)).Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date))
-            .Select(i => (i.Lines, i.TaxExemption is not null, 1)));
+        var documents = new List<(IReadOnlyList<SalesLine> Lines, bool Exempt, decimal Sign)>();
+        var invoices = (await sales.ListInvoicesAsync(null, ct)).Where(i => i.Status == DocumentStatus.Posted).ToList();
+        var memos = (await sales.ListCreditMemosAsync(null, ct)).Where(c => c.Status == DocumentStatus.Posted).ToList();
+        if (basis == ReportBasis.Cash)
+        {
+            var settled = new Dictionary<Guid, decimal>();
+            foreach (var p in (await sales.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InRange(p.Date) && p.StandsOn(to)))
+                foreach (var a in p.Applications)
+                    settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Settled;
+            foreach (var r in await sales.ListRetainersAsync(null, ct))
+                foreach (var a in r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)))
+                    settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Amount;
+            documents.AddRange(invoices.Where(i => settled.ContainsKey(i.Id) && i.Total != 0m)
+                .Select(i => (i.Lines, i.TaxExemption is not null, Math.Min(1m, settled[i.Id] / i.Total))));
+            var refunded = (await sales.ListRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && r.CreditMemoId is not null && InRange(r.Date))
+                .GroupBy(r => r.CreditMemoId!.Value).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+            documents.AddRange(memos.Where(c => refunded.ContainsKey(c.Id) && c.Total != 0m)
+                .Select(c => (c.Lines, c.TaxExemption is not null, -Math.Min(1m, refunded[c.Id] / c.Total))));
+        }
+        else
+        {
+            documents.AddRange(invoices.Where(i => InRange(i.Date)).Select(i => (i.Lines, i.TaxExemption is not null, 1m)));
+            documents.AddRange(memos.Where(c => InRange(c.Date)).Select(c => (c.Lines, c.TaxExemption is not null, -1m)));
+        }
+
         documents.AddRange((await sales.ListReceiptsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date))
-            .Select(r => (r.Lines, r.TaxExemption is not null, 1)));
-        documents.AddRange((await sales.ListCreditMemosAsync(null, ct)).Where(c => c.Status == DocumentStatus.Posted && InRange(c.Date))
-            .Select(c => (c.Lines, c.TaxExemption is not null, -1)));
+            .Select(r => (r.Lines, r.TaxExemption is not null, 1m)));
+        static decimal Cents(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
 
         var rows = new Dictionary<(Guid Rate, decimal Percent), (decimal Total, decimal NonTaxable, decimal Exempt, decimal Taxable, decimal Tax)>();
         var untaxed = 0m;
         foreach (var (lines, exempt, sign) in documents)
         {
-            var total = sign * TaxCalculator.SalesAmount(lines);
+            var total = Cents(sign * TaxCalculator.SalesAmount(lines));
             var taxLines = lines.Where(l => l.Kind == SalesLineKind.Tax && l.TaxRateId is not null).ToList();
             if (taxLines.Count == 0)
             {
@@ -59,7 +86,7 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
                 continue;
             }
 
-            var taxable = sign * TaxCalculator.TaxableAmount(lines);
+            var taxable = Cents(sign * TaxCalculator.TaxableAmount(lines));
             foreach (var line in taxLines)
             {
                 // By the percent charged: a rate that changed is two rows, and a past period keeps the percent it had.
@@ -70,7 +97,7 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
                     row.NonTaxable + total - taxable,
                     row.Exempt + (exempt ? taxable : 0m),
                     row.Taxable + (exempt ? 0m : taxable),
-                    row.Tax + sign * line.Amount);
+                    row.Tax + Cents(sign * line.Amount));
             }
         }
 
@@ -88,8 +115,8 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
         }
 
         var rates = await store.ListRatesAsync(ct);
-        var startOwed = await payments.OwedAsync(from.AddDays(-1), ct);
-        var endOwed = await payments.OwedAsync(to, ct);
+        var startOwed = await payments.OwedAsync(from.AddDays(-1), basis, ct);
+        var endOwed = await payments.OwedAsync(to, basis, ct);
         var paid = (await store.ListPaymentsAsync(null, ct))
             .Where(p => p.Status == DocumentStatus.Posted && InRange(p.Date))
             .GroupBy(p => p.AgencyId)
@@ -111,7 +138,7 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
             .Where(a => a.Agency.IsActive || a.Rates.Count > 0 || a.OwedAtStart != 0m || a.OwedAtEnd != 0m || a.Paid != 0m)
             .ToList();
 
-        return new TaxLiabilityReport(from, to, agencies, untaxed);
+        return new TaxLiabilityReport(from, to, agencies, untaxed, basis);
     }
 
     /// <summary>Customers with an exemption certificate, expired and soon-to-expire ones first.</summary>

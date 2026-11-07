@@ -41,10 +41,11 @@ public sealed class SalesTaxPaymentService(
     public Task<IReadOnlyList<SalesTaxPayment>> ListAsync(Guid? agencyId = null, CancellationToken ct = default) => store.ListPaymentsAsync(agencyId, ct);
 
     /// <summary>What's owed to each agency as of a date: its liability account's balance in the books (accrual).</summary>
-    public async Task<IReadOnlyDictionary<Guid, decimal>> OwedAsync(DateOnly asOf, CancellationToken ct = default)
+    /// <param name="basis">Cash: what's been collected (the ledger's cash-basis lines) less what's been paid.</param>
+    public async Task<IReadOnlyDictionary<Guid, decimal>> OwedAsync(DateOnly asOf, ReportBasis basis = ReportBasis.Accrual, CancellationToken ct = default)
     {
         var agencies = await store.ListAgenciesAsync(ct);
-        var balances = (await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct))
+        var balances = (await ledger.LinesAsync(basis, null, asOf, ct))
             .GroupBy(l => l.AccountId)
             .ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
         return agencies.ToDictionary(a => a.Id, a => -balances.GetValueOrDefault(a.LiabilityAccountId));
@@ -56,7 +57,7 @@ public sealed class SalesTaxPaymentService(
     /// </summary>
     public async Task<IReadOnlyDictionary<Guid, decimal>> OwedForPeriodAsync(DateOnly periodEnd, CancellationToken ct = default)
     {
-        var owed = await OwedAsync(periodEnd, ct);
+        var owed = await OwedAsync(periodEnd, ct: ct);
         var paid = (await store.ListPaymentsAsync(null, ct))
             .Where(p => p.Status == DocumentStatus.Posted && p.PeriodEnd == periodEnd && p.Date > periodEnd)
             .GroupBy(p => p.AgencyId)
