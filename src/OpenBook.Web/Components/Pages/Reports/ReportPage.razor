@@ -48,6 +48,19 @@
                     </select>
                 </div>
             }
+            @if (Has(ReportInputs.Person) && _people.Count > 0)
+            {
+                <div class="field">
+                    <label for="person">Person</label>
+                    <select id="person" name="workerId">
+                        <option value="">Everyone</option>
+                        @foreach (var w in _people)
+                        {
+                            <option value="@w.Id" selected="@(w.Id == _parameters.GetId("workerId"))">@w.Name</option>
+                        }
+                    </select>
+                </div>
+            }
             @if (Has(ReportInputs.Responsible) && _people.Count > 0)
             {
                 <div class="field">
@@ -226,7 +239,7 @@
         if (Has(ReportInputs.Grant))
             _grants = await Grants.ListAsync();
 
-        if (Has(ReportInputs.Responsible))
+        if (Has(ReportInputs.Responsible) || Has(ReportInputs.Person))
             _people = await People.ListAsync(includeInactive: true);
 
         if (Has(ReportInputs.Budget))

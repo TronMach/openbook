@@ -153,6 +153,21 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Unbilled_work_ages_by_when_it_was_done_and_time_reports_by_person()
+    {
+        var bo = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Bo", CostRate: 30m, BillRate: 50m)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, new DateOnly(2026, 1, 5), 1m, _acme.Id, _consulting.Id, true, BillRate: 100m)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(bo.Id, new DateOnly(2026, 3, 20), 2m, _acme.Id, _consulting.Id, true)));
+
+        var aging = await In<ProjectReports, OpenBook.Application.Reporting.ReportTable>(s => s.UnbilledAgingAsync(new DateOnly(2026, 3, 31)));
+        var total = aging.Rows[^1].Cells.Skip(1).Select(c => (decimal)c.Value!).ToArray();
+        Assert.Equal([100m, 0m, 100m, 0m, 200m], total);
+
+        var bosTime = await In<ProjectReports, OpenBook.Application.Reporting.ReportTable>(s => s.TimeDetailAsync(null, new DateOnly(2026, 3, 31), bo.Id));
+        Assert.Equal(2m, (decimal)bosTime.Rows[^1].Cells[4].Value!);
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);

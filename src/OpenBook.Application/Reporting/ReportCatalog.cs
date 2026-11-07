@@ -61,6 +61,9 @@ public enum ReportInputs
 
     /// <summary>responsibleId: only clients and projects that person is responsible for (blank for all).</summary>
     Responsible = 8192,
+
+    /// <summary>workerId: only that person's time (blank for everyone).</summary>
+    Person = 16384,
 }
 
 public sealed record ReportDefinition(
@@ -235,7 +238,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("project-profitability", "Project profitability", "Each project's income, costs (expenses, labor, mileage) and profit, with its cost budget and what's not billed yet.",
             "Projects and time", ReportInputs.Period | ReportInputs.Responsible),
         new("time-by-customer", "Time by customer", "Hours worked for each customer and project, by whom, and whether they're billed.",
-            "Projects and time", ReportInputs.Period, DatePreset.ThisMonth),
+            "Projects and time", ReportInputs.Period | ReportInputs.Person | ReportInputs.Responsible, DatePreset.ThisMonth),
         new("mileage-log", "Mileage log", "Business trips in a year with miles driven and their value at the standard mileage rate.",
             "Projects and time", ReportInputs.Year),
         new("channel-sales", "Sales by channel", "What each online channel's posted payouts came to: sales, shipping, refunds, fees and sales tax.",
@@ -244,6 +247,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Taxes", ReportInputs.Period, DatePreset.LastQuarter),
         new("unbilled-work", "Unbilled work", "Billable time, mileage and expenses not invoiced yet, by client and project, with the oldest work waiting.",
             "Projects and time", ReportInputs.AsOf | ReportInputs.Detail | ReportInputs.Responsible),
+        new("unbilled-aging", "Unbilled work by age", "Billable work not invoiced yet, per client, by how long ago it was done: 0-30, 31-60, 61-90 and over 90 days.",
+            "Projects and time", ReportInputs.AsOf | ReportInputs.Responsible),
         new("utilization", "Utilization", "Each person's billable and other hours, against the hours they're available, with what the billable time is worth.",
             "Projects and time", ReportInputs.Period, DatePreset.LastMonth),
         new("fixed-assets", "Fixed asset register", "Each fixed asset's cost, accumulated depreciation and book value on a date.",
@@ -366,7 +371,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "depreciation-schedule" => await Get<Assets.AssetReports>().ScheduleAsync(p.GetYear("year") ?? today.Year, ct),
             "loans" => await Get<Assets.AssetReports>().LoansAsync(asOf, ct),
             "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, p.GetId("responsibleId"), ct),
-            "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
+            "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, p.GetId("workerId"), p.GetId("responsibleId"), ct),
+            "unbilled-aging" => await Get<Projects.ProjectReports>().UnbilledAgingAsync(asOf, p.GetId("responsibleId"), ct),
             "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetYear("year") ?? today.Year, ct),
             "channel-sales" => await Get<Channels.ChannelSalesReport>().TableAsync(from, range.To, ct),
             "statement-of-activities" => await Get<Nonprofit.NonprofitReports>().ActivitiesAsync(from, range.To, basis, Compare(p, definition), segments, ct),

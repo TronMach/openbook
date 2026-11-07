@@ -192,10 +192,14 @@ public sealed class ProjectReports(
             Note: "Income is invoices and sales receipts less credit memos, without sales tax. Labor is hours at each person's cost rate; mileage at the standard rate. Unbilled is billable time, expenses and mileage not yet invoiced, whatever their date.");
     }
 
-    public async Task<ReportTable> TimeDetailAsync(DateOnly? from, DateOnly to, CancellationToken ct = default)
+    /// <param name="workerId">Only that person's time.</param>
+    /// <param name="responsibleId">Only time for clients and projects that person is responsible for.</param>
+    public async Task<ReportTable> TimeDetailAsync(DateOnly? from, DateOnly to, Guid? workerId = null, Guid? responsibleId = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var entries = (await store.ListTimeAsync(new TimeFilter(from, to), ct)).Where(t => !t.IsRunning).ToList();
+        var mine = await ResponsibleFilterAsync(responsibleId, ct);
+        var entries = (await store.ListTimeAsync(new TimeFilter(from, to, workerId), ct))
+            .Where(t => !t.IsRunning && (responsibleId is null || (t.CustomerId is { } c && mine(c)))).ToList();
         var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
         var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
         var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);
@@ -221,7 +225,7 @@ public sealed class ProjectReports(
         rows.Add(new ReportTableRow(["Total", null, null, null, new ReportCell(entries.Sum(e => e.Hours)), entries.Sum(e => e.Amount), null], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Time by customer",
-            [company.Name, Describe(from, to)],
+            [company.Name, Describe(from, to), .. new[] { workerId is { } w && workers.TryGetValue(w, out var person) ? $"Person: {person.Name}" : null, await ResponsibleNameAsync(responsibleId, ct) }.OfType<string>()],
             [
                 new("Date", ColumnFormat.Date), new("Person"), new("Service"), new("Notes"), new("Hours", ColumnFormat.Number),
                 new("Billable amount", ColumnFormat.Money), new("Invoiced"),
@@ -318,26 +322,7 @@ public sealed class ProjectReports(
     public async Task<ReportTable> UnbilledWorkAsync(DateOnly asOf, bool detail, Guid? responsibleId = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var mine = await ResponsibleFilterAsync(responsibleId, ct);
-        // Fixed fees are billed as the fee, and written-off time won't be billed: neither is work in progress.
-        var fixedFee = (await store.ListProjectsAsync(ct)).Where(p => p.Arrangement == BillingArrangement.FixedFee).Select(p => p.CustomerId).ToHashSet();
-        var time = (await store.ListTimeAsync(new TimeFilter(To: asOf), ct)).Where(t => t.Billable && !t.IsRunning && t.CustomerId is { } c && !fixedFee.Contains(c) && !t.WrittenOff).ToList();
-        var trips = (await store.ListMileageAsync(null, asOf, null, ct)).Where(t => t.Billable && t.CustomerId is not null).ToList();
-        var expenses = (await sales.ListBillableExpensesAsync(null, ct)).Where(e => e.IsBillable && e.Date <= asOf).ToList();
-        var invoiceIds = time.Select(t => t.InvoiceId).Concat(trips.Select(t => t.InvoiceId)).Concat(expenses.Select(e => e.InvoiceId)).OfType<Guid>().Distinct().ToList();
-        var invoiceDates = (await sales.GetInvoicesAsync(invoiceIds, ct)).ToDictionary(i => i.Id, i => i.Date);
-        bool Waiting(Guid? invoiceId) => invoiceId is not { } id || invoiceDates.GetValueOrDefault(id, DateOnly.MaxValue) > asOf;
-
-        var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
-        var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
-        var pieces = time.Where(t => Waiting(t.InvoiceId))
-            .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{workers[t.WorkerId].Name}{(t.Notes is null ? "" : ": " + t.Notes)}", t.Hours, t.Amount, 0m, 0m))
-            .Concat(trips.Where(t => Waiting(t.InvoiceId))
-                .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{t.Miles:0.#} miles: {t.Purpose}", 0m, 0m, t.Amount, 0m)))
-            .Concat(expenses.Where(e => Waiting(e.InvoiceId))
-                .Select(e => new UnbilledPiece(e.CustomerId, e.Date, e.Description, 0m, 0m, 0m, e.Amount)))
-            .Where(x => mine(x.CustomerId))
-            .ToList();
+        var (pieces, customers) = await UnbilledPiecesAsync(asOf, responsibleId, ct);
 
         var rows = new List<ReportTableRow>();
         foreach (var group in pieces.GroupBy(x => x.CustomerId).OrderBy(g => customers.GetValueOrDefault(g.Key, ""), StringComparer.OrdinalIgnoreCase))
@@ -376,6 +361,65 @@ public sealed class ProjectReports(
             Note: "Billable time, mileage and expenses (with markup) not on an invoice dated on or before this date, at the rates they'll be billed at. Retainers held aren't subtracted.");
 
         static ReportCell Money(decimal amount) => amount == 0m ? ReportCell.Empty : new ReportCell(amount);
+    }
+
+    /// <summary>
+    /// Work in progress by age: unbilled time, mileage and expenses as of a date, per client, in buckets by how long
+    /// ago the work was done.
+    /// </summary>
+    public async Task<ReportTable> UnbilledAgingAsync(DateOnly asOf, Guid? responsibleId = null, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var (pieces, customers) = await UnbilledPiecesAsync(asOf, responsibleId, ct);
+        static int Bucket(int days) => days <= 30 ? 0 : days <= 60 ? 1 : days <= 90 ? 2 : 3;
+        decimal[] Spread(IEnumerable<UnbilledPiece> some)
+        {
+            var b = new decimal[4];
+            foreach (var x in some)
+                b[Bucket(asOf.DayNumber - x.Date.DayNumber)] += x.Total;
+            return b;
+        }
+
+        var rows = new List<ReportTableRow>();
+        foreach (var group in pieces.GroupBy(x => x.CustomerId).OrderBy(g => customers.GetValueOrDefault(g.Key, ""), StringComparer.OrdinalIgnoreCase))
+        {
+            var b = Spread(group);
+            rows.Add(new ReportTableRow([new ReportCell(customers.GetValueOrDefault(group.Key, "Unknown client"), new ReportLink("customer", group.Key)), b[0], b[1], b[2], b[3], b.Sum()]));
+        }
+
+        var all = Spread(pieces);
+        rows.Add(new ReportTableRow(["Total", all[0], all[1], all[2], all[3], all.Sum()], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Unbilled work by age",
+            [company.Name, $"As of {asOf:MMM d, yyyy}", .. new[] { await ResponsibleNameAsync(responsibleId, ct) }.OfType<string>()],
+            [new("Client"), new("0-30 days", ColumnFormat.Money), new("31-60 days", ColumnFormat.Money), new("61-90 days", ColumnFormat.Money), new("Over 90 days", ColumnFormat.Money), new("Total", ColumnFormat.Money)],
+            rows,
+            Note: "Billable work not on an invoice dated by this date, by how long before it the work was done, at the amounts it'll be billed at.");
+    }
+
+    private async Task<(List<UnbilledPiece> Pieces, IReadOnlyDictionary<Guid, string> Customers)> UnbilledPiecesAsync(DateOnly asOf, Guid? responsibleId, CancellationToken ct)
+    {
+        var mine = await ResponsibleFilterAsync(responsibleId, ct);
+        // Fixed fees are billed as the fee, and written-off time won't be billed: neither is work in progress.
+        var fixedFee = (await store.ListProjectsAsync(ct)).Where(p => p.Arrangement == BillingArrangement.FixedFee).Select(p => p.CustomerId).ToHashSet();
+        var time = (await store.ListTimeAsync(new TimeFilter(To: asOf), ct)).Where(t => t.Billable && !t.IsRunning && t.CustomerId is { } c && !fixedFee.Contains(c) && !t.WrittenOff).ToList();
+        var trips = (await store.ListMileageAsync(null, asOf, null, ct)).Where(t => t.Billable && t.CustomerId is not null).ToList();
+        var expenses = (await sales.ListBillableExpensesAsync(null, ct)).Where(e => e.IsBillable && e.Date <= asOf).ToList();
+        var invoiceIds = time.Select(t => t.InvoiceId).Concat(trips.Select(t => t.InvoiceId)).Concat(expenses.Select(e => e.InvoiceId)).OfType<Guid>().Distinct().ToList();
+        var invoiceDates = (await sales.GetInvoicesAsync(invoiceIds, ct)).ToDictionary(i => i.Id, i => i.Date);
+        bool Waiting(Guid? invoiceId) => invoiceId is not { } id || invoiceDates.GetValueOrDefault(id, DateOnly.MaxValue) > asOf;
+
+        var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
+        var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
+        var pieces = time.Where(t => Waiting(t.InvoiceId))
+            .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{workers[t.WorkerId].Name}{(t.Notes is null ? "" : ": " + t.Notes)}", t.Hours, t.Amount, 0m, 0m))
+            .Concat(trips.Where(t => Waiting(t.InvoiceId))
+                .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{t.Miles:0.#} miles: {t.Purpose}", 0m, 0m, t.Amount, 0m)))
+            .Concat(expenses.Where(e => Waiting(e.InvoiceId))
+                .Select(e => new UnbilledPiece(e.CustomerId, e.Date, e.Description, 0m, 0m, 0m, e.Amount)))
+            .Where(x => mine(x.CustomerId))
+            .ToList();
+        return (pieces, customers);
     }
 
     /// <summary>
