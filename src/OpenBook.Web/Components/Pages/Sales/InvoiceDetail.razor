@@ -9,6 +9,7 @@
 @inject WriteOffService WriteOffs
 @inject ReminderService Reminders
 @inject ScheduledEmailService ScheduledEmails
+@inject RetainerService RetainerService
 
 <PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
 
@@ -87,6 +88,10 @@
                 @if (_invoice.EstimateId is { } estimateId)
                 {
                     <dt class="no-print">@L["From"]</dt><dd class="no-print"><a href="/sales/estimates/@estimateId">@L["Estimate"]</a></dd>
+                }
+                @if (_invoice.SalesOrderId is { } orderId)
+                {
+                    <dt class="no-print">@L["From"]</dt><dd class="no-print"><a href="/sales/orders/@orderId">@L["Sales order"]</a></dd>
                 }
                 @if (_lateFees.Count > 0)
                 {
@@ -208,6 +213,26 @@
         </div>
     }
 
+    @if (_retainerApplications.Count > 0)
+    {
+        <div class="no-print">
+            <h2>@L["Retainers applied"]</h2>
+            <table class="data">
+                <thead><tr><th>@L["Retainer"]</th><th>@L["Applied on"]</th><th class="num">@L["Applied to this invoice"]</th></tr></thead>
+                <tbody>
+                    @foreach (var (retainer, application) in _retainerApplications)
+                    {
+                        <tr>
+                            <td><a href="/sales/retainers/@retainer.Id">@L["Received {0}", Labels.Date(retainer.Date)]</a></td>
+                            <td>@Labels.Date(application.AppliedOn)</td>
+                            <td class="num">@Labels.Amount(application.Amount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
     @if (_writeOffs.Count > 0)
     {
         <div class="no-print">
@@ -295,6 +320,7 @@
 
 @code {
     private IReadOnlyList<Invoice> _lateFees = [];
+    private List<(Retainer Retainer, RetainerApplication Application)> _retainerApplications = [];
     private Func<StockPlace, string> _place = _ => "";
     private Invoice? _invoice;
     private Customer? _customer;
@@ -326,6 +352,10 @@
         if (_invoice is null)
             return;
         _customer = await CustomerService.GetAsync(_invoice.CustomerId);
+        // A retainer of the customer, or of the parent it's billed with, may have paid part of it.
+        _retainerApplications = [.. (await RetainerService.AvailableForInvoiceAsync(_invoice.CustomerId)).Concat(await RetainerService.ListAsync(_invoice.CustomerId))
+            .DistinctBy(r => r.Id)
+            .SelectMany(r => r.Applications.Where(a => !a.IsVoided && a.InvoiceId == _invoice.Id).Select(a => (r, a)))];
         _company = await Settings.GetAsync();
         _payments = await Invoices.ListPaymentsAsync(Id);
         _credits = await Invoices.ListCreditsAsync(Id);

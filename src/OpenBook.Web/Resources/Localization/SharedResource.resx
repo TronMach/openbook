@@ -1862,6 +1862,9 @@
   <data name="Received on an order" xml:space="preserve">
     <value>Received on an order</value>
   </data>
+  <data name="Received {0}" xml:space="preserve">
+    <value>Received {0}</value>
+  </data>
   <data name="Reconcile" xml:space="preserve">
     <value>Reconcile</value>
   </data>
@@ -1996,6 +1999,9 @@
   </data>
   <data name="Retainers" xml:space="preserve">
     <value>Retainers</value>
+  </data>
+  <data name="Retainers applied" xml:space="preserve">
+    <value>Retainers applied</value>
   </data>
   <data name="Revoke" xml:space="preserve">
     <value>Revoke</value>
