@@ -58,6 +58,8 @@ A sale whose shortfall has since been filled can't be voided directly, because t
 
 The value of the change goes to the adjustment account. An adjustment can be voided, unless stock it added has since been sold.
 
+To write stock down without losing units (it's gone out of date, or is worth less than it cost), leave **Quantity change** blank and enter the amount in **Write value down by**. The value comes off what's on hand on the date, spread over its purchases by their value, and goes to the adjustment account; the quantity stays. It can't be more than the stock's value then, and it goes on a line of its own. Voiding it puts the value back.
+
 ### Counting stock
 
 For a full stock count, **Inventory → Count sheet** prints the **Physical inventory worksheet**: every inventory product with what the books hold in a warehouse and blank **Counted** and **Difference** columns to write in (lot and serial items list each lot).

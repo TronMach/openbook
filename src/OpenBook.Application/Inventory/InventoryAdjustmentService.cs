@@ -76,10 +76,30 @@ public sealed class InventoryAdjustmentService(
             var place = await warehouses.CheckAsync(draft.Place ?? StockPlace.Default, ct);
             if (!histories.TryGetValue(item.Id, out var history))
                 histories[item.Id] = history = (await store.ListMovementsAsync(item.Id, ct)).ToList();
-            var named = LotText.Parse(draft.Lots, item.Tracking, Math.Abs(draft.QuantityChange), item.Name);
-
             decimal value;
             string? lots;
+            if (draft.QuantityChange == 0m && draft.ValueChange is { } writeDown)
+            {
+                // Value only: what's on hand on the date loses value, layer by layer in proportion; the units stay.
+                var onHand = Fifo.Layers(history.Where(m => m.Date <= command.Date)).Where(l => l.RemainingQuantity > 0m && l.RemainingCost > 0m).ToList();
+                var available = onHand.Sum(l => l.RemainingCost);
+                if (-writeDown > available)
+                    throw new DomainException("inventory.write_down_too_much", $"{item.Name} has {available:N2} of stock on hand on that date to write down.");
+                var shares = Shares.ByWeight(-writeDown, [.. onHand.Select(l => l.RemainingCost)]);
+                for (var k = 0; k < onHand.Count; k++)
+                {
+                    if (shares[k] == 0m)
+                        continue;
+                    var (layerId, share) = (onHand[k].LayerId, shares[k]);
+                    movements.Add((type, id, at) => InventoryMovement.CostAdjustment(layerId, item.Id, command.Date, -share, type, id, at));
+                }
+
+                lines.Add((item.Id, 0m, writeDown, place, null));
+                postings.Add(JournalLineDraft.Cr(item.InventoryAssetAccountId!.Value, -writeDown, $"{item.Name}: written down"));
+                continue;
+            }
+
+            var named = LotText.Parse(draft.Lots, item.Tracking, Math.Abs(draft.QuantityChange), item.Name);
             if (draft.QuantityChange > 0m)
             {
                 var received = InventoryService.Required(named, item);

@@ -62,7 +62,7 @@
                     {
                         <th>Where</th>
                     }
-                    <th class="num">On hand</th><th class="num">Quantity change</th><th class="num">Unit cost (increases)</th>
+                    <th class="num">On hand</th><th class="num">Quantity change</th><th class="num">Unit cost (increases)</th><th class="num">Write value down by</th>
                     @if (_tracksLots)
                     {
                         <th>Lots or serials</th>
@@ -97,6 +97,7 @@
                         <td class="num muted">@(Input.Lines[index].ItemId is { } id && _stock.FirstOrDefault(s => s.Item.Id == id) is { } level ? Labels.Quantity(level.Quantity) : "")</td>
                         <td><InputNumber class="amount" step="any" @bind-Value="Input.Lines[index].QuantityChange" aria-label="@($"Quantity change {index + 1}")" /></td>
                         <td><InputNumber class="amount" step="any" @bind-Value="Input.Lines[index].UnitCost" aria-label="@($"Unit cost {index + 1}")" /></td>
+                        <td><InputNumber class="amount" step="any" @bind-Value="Input.Lines[index].WriteDown" aria-label="@($"Write value down by {index + 1}")" /></td>
                         @if (_tracksLots)
                         {
                             <td><InputText @bind-Value="Input.Lines[index].Lots" aria-label="@($"Lots or serials {index + 1}")" placeholder="A-1 x 3; B-2 x 2 or SN1, SN2" /></td>
@@ -156,8 +157,8 @@
         try
         {
             var lines = Input.Lines
-                .Where(l => l.ItemId is not null || l.QuantityChange is not null)
-                .Select(l => new InventoryAdjustmentLineDraft(l.ItemId ?? Guid.Empty, l.QuantityChange ?? 0m, l.UnitCost, _places.Parse(l.Place), l.Lots))
+                .Where(l => l.ItemId is not null || l.QuantityChange is not null || l.WriteDown is not null)
+                .Select(l => new InventoryAdjustmentLineDraft(l.ItemId ?? Guid.Empty, l.QuantityChange ?? 0m, l.UnitCost, _places.Parse(l.Place), l.Lots, l.WriteDown is { } w && w != 0m ? -Math.Abs(w) : null))
                 .ToList();
             ClosingOverride.Password = Input.ClosingPassword;
             var adjustment = await Adjustments.CreateAsync(new CreateInventoryAdjustmentCommand(Input.Date, lines, Input.AccountId, Input.Reference, Input.Memo));
@@ -185,6 +186,7 @@
         public Guid? ItemId { get; set; }
         public decimal? QuantityChange { get; set; }
         public decimal? UnitCost { get; set; }
+        public decimal? WriteDown { get; set; }
         public string? Place { get; set; }
         public string? Lots { get; set; }
     }

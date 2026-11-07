@@ -7,7 +7,8 @@ namespace OpenBook.Domain.Inventory;
 /// <param name="UnitCost">Increases only; null takes the item's purchase cost.</param>
 /// <param name="Place">Where: increases arrive there (outside bins unless a bin is given); decreases come from that bin, or any bin in the warehouse.</param>
 /// <param name="Lots">Lot or serial numbers: required for increases of tracked items; decreases take the oldest when blank.</param>
-public sealed record InventoryAdjustmentLineDraft(Guid ItemId, decimal QuantityChange, decimal? UnitCost = null, StockPlace? Place = null, string? Lots = null);
+/// <param name="ValueChange">With no quantity change: a write-down of what's on hand (negative, to the cent), spread over its layers by their value.</param>
+public sealed record InventoryAdjustmentLineDraft(Guid ItemId, decimal QuantityChange, decimal? UnitCost = null, StockPlace? Place = null, string? Lots = null, decimal? ValueChange = null);
 
 public sealed class InventoryAdjustmentLine
 {
@@ -76,6 +77,16 @@ public sealed class InventoryAdjustment
         {
             if (draft.ItemId == Guid.Empty)
                 throw new DomainException("inventory.adjustment_item_required", $"Line {index}: choose an item.");
+            if (draft.QuantityChange != 0m && draft.ValueChange is not null)
+                throw new DomainException("inventory.write_down_invalid", $"Line {index}: write the value down on a line of its own, with no change in quantity.");
+
+            if (draft.QuantityChange == 0m && draft.ValueChange is { } writeDown)
+            {
+                if (writeDown >= 0m || decimal.Round(writeDown, 2) != writeDown)
+                    throw new DomainException("inventory.write_down_invalid", $"Line {index}: a change in value alone is a write-down: an amount below zero, to the cent.");
+                continue;
+            }
+
             if (draft.QuantityChange == 0m || decimal.Round(draft.QuantityChange, SalesLine.Precision) != draft.QuantityChange)
                 throw new DomainException("inventory.quantity_invalid", $"Line {index}: enter a quantity change other than zero, with up to 4 decimal places.");
             if (draft.UnitCost is { } cost && (cost < 0m || decimal.Round(cost, SalesLine.Precision) != cost))

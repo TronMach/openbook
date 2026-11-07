@@ -278,6 +278,23 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Stock_is_written_down_in_value_without_losing_units()
+    {
+        await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Jan5, [new InventoryAdjustmentLineDraft(_widget.Id, 10m, 10m)])));
+        Assert.Equal("inventory.write_down_too_much", (await Assert.ThrowsAsync<DomainException>(() => In<InventoryAdjustmentService, InventoryAdjustment>(s =>
+            s.CreateAsync(new CreateInventoryAdjustmentCommand(Mar31, [new InventoryAdjustmentLineDraft(_widget.Id, 0m, ValueChange: -101m)]))))).Code);
+        var down = await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Mar31,
+            [new InventoryAdjustmentLineDraft(_widget.Id, 0m, ValueChange: -40m)], Reference: "Obsolete")));
+        var stock = (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!;
+        Assert.Equal((10m, 60m), (stock.Quantity, stock.Value));
+
+        await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.VoidAsync(down.Id, "Written down by mistake"));
+        stock = (await In<InventoryService, StockLevel?>(s => s.StockForAsync(_widget.Id)))!;
+        Assert.Equal((10m, 100m), (stock.Quantity, stock.Value));
+        Assert.Equal(0, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Problems);
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();
