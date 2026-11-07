@@ -192,6 +192,21 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_progress_invoice_shows_where_the_contract_stands()
+    {
+        var sales = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var work = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Build", ItemType.Service, sales.Id, 1_000m)));
+        var client = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Builder Co")));
+        var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(client.Id, Mar1, [new SalesLineDraft(work.Id, null, 1m, 1_000m)])));
+        await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar1, Percent: 30m)));
+        var second = await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar31, Percent: 40m)));
+        var form = await In<OpenBook.Application.Forms.FormService, OpenBook.Application.Forms.SalesForm>(s => s.BuildAsync(OpenBook.Application.Forms.FormKind.Invoice, second.Id));
+        var facts = form.Facts.ToDictionary(f => f.Item1, f => f.Item2);
+        var n2 = 300m.ToString("N2", System.Globalization.CultureInfo.CurrentCulture);
+        Assert.Equal((n2, n2), (facts["Billed before"], facts["Left after this"]));
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";

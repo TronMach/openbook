@@ -28,7 +28,7 @@ If a customer accepted or declined an estimate online and you then change its cu
 On the estimate's page, **Invoice** offers three choices:
 
 - **Everything that's left**: one invoice for the whole estimate. The estimate shows as **Invoiced** (closed).
-- **This percentage of every line**: progress billing, for example 30% now. Each invoice bills that share of every line's quantity.
+- **This percentage of every line**: progress billing, for example 30% now. Each invoice bills that share of every line's quantity. An invoice made from an estimate prints where the contract stands: the estimate's total, what was billed before it, and what's left after it.
 - **The quantities entered above**: bill only some lines, or part of a line's quantity.
 
 Choose the **invoice date** and **Create invoice**. The estimate keeps track of what's been invoiced, and closes when everything has been. Invoices keep the estimate's prices, so later price changes don't affect them. Tax is worked out again on each invoice.

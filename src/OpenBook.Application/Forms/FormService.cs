@@ -108,6 +108,18 @@ public sealed class FormService(
             ("Terms", new PaymentTerms(invoice.DueDate.DayNumber - invoice.Date.DayNumber, invoice.EarlyPaymentDiscountPercent,
                 invoice.EarlyPaymentDiscountDate is { } d ? d.DayNumber - invoice.Date.DayNumber : 0).Label),
         };
+        // A progress bill shows where the contract stands: its total, billed before this invoice, this one, and what's left.
+        if ((invoice.EstimateId is { } estimateId ? await store.GetEstimateAsync(estimateId, ct) : null) is { } estimate)
+        {
+            var before = (await store.ListInvoicesAsync(invoice.CustomerId, ct))
+                .Where(i => i.EstimateId == estimate.Id && i.Status == DocumentStatus.Posted && i.Id != invoice.Id
+                    && (i.Date < invoice.Date || (i.Date == invoice.Date && i.CreatedAt < invoice.CreatedAt)))
+                .Sum(i => i.Total);
+            facts.Add(("Contract", $"Estimate {estimate.Number}: {estimate.Total:N2}"));
+            facts.Add(("Billed before", before.ToString("N2", CultureInfo.CurrentCulture)));
+            facts.Add(("Left after this", (estimate.Total - before - invoice.Total).ToString("N2", CultureInfo.CurrentCulture)));
+        }
+
         var totals = TaxTotals(invoice.Lines, invoice.TaxCodeId, invoice.TaxExemption);
         totals.Add(new FormTotal("Total", invoice.Total));
         if (invoice.AmountPaid > 0m)
