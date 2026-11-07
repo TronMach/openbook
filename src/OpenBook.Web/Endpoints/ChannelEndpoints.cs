@@ -184,7 +184,9 @@ public static class ChannelEndpoints
             Id("taxAccountId"),
             Id("adjustmentsAccountId"),
             Id("clearingAccountId") is var clearing && clearing != Guid.Empty ? clearing : null,
-            form.ContainsKey("taxSet") ? form["marketplaceTax"] == "true" : null);
+            form.ContainsKey("taxSet") ? form["marketplaceTax"] == "true" : null,
+            Id("classId") is var cls && cls != Guid.Empty ? cls : null,
+            Id("locationId") is var loc && loc != Guid.Empty ? loc : null);
     }
 
     private static async Task<IResult> Back(string page, Func<Task> change)

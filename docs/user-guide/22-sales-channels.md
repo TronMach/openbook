@@ -75,4 +75,5 @@ On a posted batch, enter the quantities that came back under **Returns** and **P
 ## Reports
 
 - **Sales by channel**: what each channel's posted payouts came to: sales, shipping, refunds, fees and sales tax.
+- **Profit by channel**: give each channel a **class** or **location** in its settings (when you use them). Its payouts, orders and returns carry it from then on, so **Profit and loss by class** (or by location) shows each channel's sales, fees and cost of goods sold side by side. Entries posted before keep what they had; reclassify them under **Classes and locations** if you need the past too.
 - **Sales tax by state (online orders)**: sales, shipping and tax on channel orders by ship-to state, with what you collected apart from what marketplaces collected.

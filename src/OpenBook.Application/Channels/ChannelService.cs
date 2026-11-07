@@ -229,7 +229,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var postings = payout.Postings(channel, taxAccounts);
         if (postings.Count < 2)
             throw new DomainException("channel.payout_zero", "Everything in this payout nets to zero; there's nothing to post. Dismiss it instead.");
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(payout.Date, postings, $"{channel.Name} payout {payout.ExternalId}", ChannelPayout.Source, payout.Id), ct);
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(payout.Date, channel.Classed(postings), $"{channel.Name} payout {payout.ExternalId}", ChannelPayout.Source, payout.Id,
+            LocationId: channel.LocationId), ct);
         payout.Posted(entry.Id);
         foreach (var gift in recordedGifts)
         {
@@ -385,6 +386,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
     private static string Snapshot(SalesChannel c) => JsonSerializer.Serialize(new
     {
         c.Name,
+        c.ClassId,
+        c.LocationId,
         Kind = c.Kind.ToString(),
         c.DepositAccountId,
         c.SalesAccountId,

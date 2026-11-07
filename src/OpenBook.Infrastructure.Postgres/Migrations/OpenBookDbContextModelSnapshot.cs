@@ -1168,6 +1168,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("AdjustmentsAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ClearingAccountId")
                         .HasColumnType("uuid");
 
@@ -1197,6 +1200,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<bool>("LastSyncFailed")
                         .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("MarketplaceCollectsTax")
                         .HasColumnType("boolean");

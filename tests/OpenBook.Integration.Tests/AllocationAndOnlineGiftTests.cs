@@ -136,4 +136,16 @@ public sealed class AllocationAndOnlineGiftTests : IAsyncLifetime
         var row = Assert.Single(plan.Rows);
         Assert.Equal(("Pat", 100m, "ch_77"), (row.Donor, row.Amount, row.Reference));
     }
+
+    [Fact]
+    public async Task A_channels_class_and_location_go_on_its_payouts()
+    {
+        var shop = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Location, "Online shop"));
+        var channel = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Etsy", ChannelKind.Etsy, _bank.Id, ClassId: _food.Id, LocationId: shop.Id)));
+        var payout = await Payout(channel, new ChannelLineDraft(Mar31, ChannelLineType.Sale, 200m), new ChannelLineDraft(Mar31, ChannelLineType.Fee, -12m));
+        await In<ChannelService, ChannelPayout>(s => s.PostAsync(payout.Id));
+
+        var lines = (await Lines()).Where(l => l.Source == ChannelPayout.Source).ToList();
+        Assert.All(lines, l => Assert.Equal((_food.Id, shop.Id), (l.ClassId!.Value, l.LocationId!.Value)));
+    }
 }

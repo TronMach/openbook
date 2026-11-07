@@ -1161,6 +1161,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AdjustmentsAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ClearingAccountId")
                         .HasColumnType("TEXT");
 
@@ -1190,6 +1193,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("LastSyncFailed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("MarketplaceCollectsTax")
                         .HasColumnType("INTEGER");

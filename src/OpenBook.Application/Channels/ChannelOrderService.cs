@@ -219,8 +219,8 @@ public sealed class ChannelOrderService(
         Guid? entryId = null;
         if (plan.Postings.Count > 0)
         {
-            var entry = await engine.StageAsync(new PostJournalEntryCommand(batch.Date, plan.Postings, $"{channel.Name} orders {batch.Date:MMM d, yyyy}",
-                ChannelOrderBatch.Source, batch.Id), ct);
+            var entry = await engine.StageAsync(new PostJournalEntryCommand(batch.Date, channel.Classed(plan.Postings), $"{channel.Name} orders {batch.Date:MMM d, yyyy}",
+                ChannelOrderBatch.Source, batch.Id, LocationId: channel.LocationId), ct);
             entryId = entry.Id;
         }
 
@@ -302,7 +302,7 @@ public sealed class ChannelOrderService(
         var plan = salesLines.Count == 0 ? InventoryPlan.None : await inventory.PlanReturnAsync(salesLines, date, null, ct);
         Guid? entryId = null;
         if (plan.Postings.Count > 0)
-            entryId = (await engine.StageAsync(new PostJournalEntryCommand(date, plan.Postings, $"{channel.Name} returns", ChannelReturn.Source, id), ct)).Id;
+            entryId = (await engine.StageAsync(new PostJournalEntryCommand(date, channel.Classed(plan.Postings), $"{channel.Name} returns", ChannelReturn.Source, id, LocationId: channel.LocationId), ct)).Id;
         inventory.Apply(plan, InventorySources.ChannelReturn, id);
         var channelReturn = ChannelReturn.Create(id, channel.Id, batch.Id, date, wanted, memo, entryId, clock.UtcNow);
         store.Add(channelReturn);

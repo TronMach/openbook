@@ -51,7 +51,9 @@ public sealed record ChannelDetails(
     Guid TaxAccountId = default,
     Guid AdjustmentsAccountId = default,
     Guid? ClearingAccountId = null,
-    bool? MarketplaceCollectsTax = null);
+    bool? MarketplaceCollectsTax = null,
+    Guid? ClassId = null,
+    Guid? LocationId = null);
 
 /// <summary>
 /// A place you sell (a Shopify store, an Amazon seller account, an Etsy shop…) and the accounts its payouts post to.
@@ -101,6 +103,15 @@ public sealed class SalesChannel
     /// state report shows it as theirs. Defaults on for Amazon, eBay and Etsy.
     /// </summary>
     public bool MarketplaceCollectsTax { get; private set; }
+
+    /// <summary>The class and location its entries (payouts, orders, returns) carry, so profit by class or location reads per channel.</summary>
+    public Guid? ClassId { get; private set; }
+
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>The channel's class on lines that don't have one.</summary>
+    public IReadOnlyList<Ledger.JournalLineDraft> Classed(IEnumerable<Ledger.JournalLineDraft> lines) =>
+        [.. lines.Select(l => l.ClassId is null && ClassId is { } c ? l with { ClassId = c } : l)];
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>Accounts are resolved (and created if needed) by the service before this is called.</summary>
@@ -129,6 +140,7 @@ public sealed class SalesChannel
         AdjustmentsAccountId = details.AdjustmentsAccountId;
         ClearingAccountId = details.ClearingAccountId == Guid.Empty ? null : details.ClearingAccountId;
         MarketplaceCollectsTax = details.MarketplaceCollectsTax ?? Kind is ChannelKind.Amazon or ChannelKind.Ebay or ChannelKind.Etsy;
+        (ClassId, LocationId) = (details.ClassId, details.LocationId);
         if (!CanConnect(Kind))
             Disconnect();
     }

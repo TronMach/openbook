@@ -1,3 +1,4 @@
+@inject OpenBook.Application.Segments.SegmentService Segments
 @* The fields of a sales channel, for the new channel form and the channel page (static forms posting to ChannelEndpoints). *@
 @using OpenBook.Domain.Accounts
 @using OpenBook.Domain.Channels
@@ -37,6 +38,38 @@
         <span>The marketplace collects and pays sales tax on these orders</span>
     </label>
 }
+@if (_classes.Count > 0 || _locations.Count > 0)
+{
+    <div class="row">
+        @if (_classes.Count > 0)
+        {
+            <div class="field">
+                <label for="channel-class">Class <span class="muted">(optional)</span></label>
+                <select id="channel-class" name="classId">
+                    <option value="">None</option>
+                    @foreach (var c in _classes)
+                    {
+                        <option value="@c.Segment.Id" selected="@(c.Segment.Id == Channel?.ClassId)">@c.FullName</option>
+                    }
+                </select>
+            </div>
+        }
+        @if (_locations.Count > 0)
+        {
+            <div class="field">
+                <label for="channel-location">Location <span class="muted">(optional)</span></label>
+                <select id="channel-location" name="locationId">
+                    <option value="">None</option>
+                    @foreach (var l in _locations)
+                    {
+                        <option value="@l.Segment.Id" selected="@(l.Segment.Id == Channel?.LocationId)">@l.FullName</option>
+                    }
+                </select>
+            </div>
+        }
+        <span class="hint">Payouts, orders and returns from now on carry them, so profit and loss by class or location shows this channel's sales, fees and cost of goods sold.</span>
+    </div>
+}
 <details open="@(Channel is not null)">
     <summary>Accounts for each part of a payout</summary>
     <div class="row">
@@ -75,6 +108,15 @@
     public ChartOfAccounts Chart { get; set; } = new([]);
 
     private IEnumerable<Account> Accounts => Chart.Ordered(includeInactive: false).Select(x => x.Account);
+
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _locations = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
+        _locations = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location, includeInactive: false);
+    }
 
     private IEnumerable<(string Name, string Label, string Usual, Guid? Value)> Parts =>
     [
