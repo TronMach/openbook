@@ -122,4 +122,33 @@ public sealed class SmallGapTests : IAsyncLifetime
             s => s.PostYearToDateAsync(june30, [new(_checking.Id, 1m)])));
         Assert.Equal("opening.year_to_date_account", refused.Code);
     }
+
+    [Fact]
+    public async Task A_bank_line_pays_an_open_invoice_or_bill_and_is_matched_in_one_go()
+    {
+        await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var item = await _db.InScope(sp => sp.GetRequiredService<ItemService>().CreateQuickAsync("Work", ItemType.Service, 100m, false, null));
+        var customer = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Acme")));
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(customer.Id, Mar1, [new SalesLineDraft(item.Id, null, 3m, 100m)])));
+        var vendor = await In<OpenBook.Application.Purchases.VendorService, OpenBook.Domain.Purchases.Vendor>(s => s.CreateAsync(new OpenBook.Domain.Purchases.VendorDetails("Landlord")));
+        var bill = await In<OpenBook.Application.Purchases.BillService, OpenBook.Domain.Purchases.Bill>(s => s.CreateAsync(
+            new OpenBook.Application.Purchases.CreateBillCommand(vendor.Id, Mar1, [new OpenBook.Domain.Purchases.BillLineDraft(_rent.Id, 950m)])));
+        await In<BankFeedService, FeedImportResult>(s => s.QueueAsync(_checking.Id,
+            [new FeedLine(new DateOnly(2026, 3, 8), 300m, "ACME CORP", "CHK 1042", null, "P1"), new FeedLine(new DateOnly(2026, 3, 9), -950m, "LANDLORD", null, null, "P2")]));
+        var pending = await In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(_checking.Id, BankFeedStatus.Pending));
+
+        var candidates = await In<FeedDocumentService, IReadOnlyDictionary<Guid, IReadOnlyList<FeedDocument>>>(s => s.CandidatesAsync(_checking.Id, [.. pending.Select(p => p.Item)]));
+        var paysInvoice = pending.Single(p => p.Item.FitId == "P1").Item;
+        var paysBill = pending.Single(p => p.Item.FitId == "P2").Item;
+        Assert.Equal(invoice.Id, Assert.Single(candidates[paysInvoice.Id]).Id);
+        Assert.Equal(bill.Id, Assert.Single(candidates[paysBill.Id]).Id);
+
+        await In<FeedDocumentService, Guid>(s => s.ApplyAsync(paysInvoice.Id, FeedDocumentKind.Invoice, invoice.Id));
+        await In<FeedDocumentService, Guid>(s => s.ApplyAsync(paysBill.Id, FeedDocumentKind.Bill, bill.Id));
+
+        Assert.Equal(0m, (await In<InvoiceService, Invoice?>(s => s.GetAsync(invoice.Id)))!.Balance);
+        Assert.Equal(0m, (await In<OpenBook.Application.Purchases.BillService, OpenBook.Domain.Purchases.Bill?>(s => s.GetAsync(bill.Id)))!.Balance);
+        Assert.Equal(2, (await In<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(_checking.Id, BankFeedStatus.Matched))).Count);
+        Assert.Equal("feed.not_pending", (await Assert.ThrowsAsync<DomainException>(() => In<FeedDocumentService, Guid>(s => s.ApplyAsync(paysInvoice.Id, FeedDocumentKind.Invoice, invoice.Id)))).Code);
+    }
 }

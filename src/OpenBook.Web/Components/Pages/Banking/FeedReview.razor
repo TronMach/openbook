@@ -87,6 +87,19 @@
                                     </div>
                                     <div class="muted">or add it as a new transaction:</div>
                                 }
+                                @if (row.Documents.Count > 0)
+                                {
+                                    <div class="inline">
+                                        <select aria-label="Pays" @bind="row.DocumentKey">
+                                            @foreach (var d in row.Documents)
+                                            {
+                                                <option value="@($"{d.Kind}:{d.Id}")">@d.Label · @d.Party · due @Labels.Date(d.DueDate)</option>
+                                            }
+                                        </select>
+                                        <button type="button" @onclick="() => PayDocumentAsync(row)" disabled="@_busy">@(item.IsMoneyIn ? "Receive payment and match" : "Pay bill and match")</button>
+                                    </div>
+                                    <div class="muted">or:</div>
+                                }
                                 @if (row.Choosing)
                                 {
                                     <fieldset class="feed-several">
@@ -258,6 +271,7 @@
     private async Task LoadAsync()
     {
         var review = await Ops.RunAsync<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(AccountId, _status));
+        var documents = await Ops.RunAsync<FeedDocumentService, IReadOnlyDictionary<Guid, IReadOnlyList<FeedDocument>>>(s => s.CandidatesAsync(AccountId, [.. review.Select(r => r.Item)]));
         // What's been chosen on other lines stays: acting on one line mustn't lose the rest.
         var chosen = _rows.ToDictionary(r => r.Item.Id);
         _rows = review.Select(r => new Row(r.Item, r.Matches, r.PartMatches)
@@ -270,6 +284,8 @@
             Payee = chosen.GetValueOrDefault(r.Item.Id)?.Payee ?? r.Suggestion?.Payee,
             RuleName = r.Suggestion?.Rule.Name,
             MatchEntryId = chosen.GetValueOrDefault(r.Item.Id)?.MatchEntryId ?? r.Matches.FirstOrDefault()?.JournalEntryId,
+            Documents = documents.GetValueOrDefault(r.Item.Id) ?? [],
+            DocumentKey = documents.GetValueOrDefault(r.Item.Id)?.FirstOrDefault() is { } first ? $"{first.Kind}:{first.Id}" : null,
         }).ToList();
         _loaded = true;
     }
@@ -344,6 +360,14 @@
         _message = $"Added {added} {(added == 1 ? "transaction" : "transactions")}.";
     });
 
+    private Task PayDocumentAsync(Row row) => RunAsync(async () =>
+    {
+        if (row.DocumentKey?.Split(':') is not [var kindText, var idText] || !Enum.TryParse<FeedDocumentKind>(kindText, out var kind) || !Guid.TryParse(idText, out var id))
+            return;
+        await Ops.RunAsync<FeedDocumentService, Guid>(s => s.ApplyAsync(row.Item.Id, kind, id), _closingPassword);
+        _message = kind == FeedDocumentKind.Invoice ? "Payment received and matched." : "Bill paid and matched.";
+    });
+
     /// <summary>Runs an action, then reloads the queue; a refusal shows as an error and stops there.</summary>
     private async Task RunAsync(Func<Task> action)
     {
@@ -406,5 +430,11 @@
         public string? Payee { get; set; }
         public string? RuleName { get; set; }
         public Guid? MatchEntryId { get; set; }
+
+        /// <summary>Open invoices or bills owing exactly this line's amount.</summary>
+        public IReadOnlyList<FeedDocument> Documents { get; init; } = [];
+
+        /// <summary>The one chosen, as "Kind:id".</summary>
+        public string? DocumentKey { get; set; }
     }
 }

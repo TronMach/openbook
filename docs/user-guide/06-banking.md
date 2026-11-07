@@ -50,6 +50,7 @@ Instead of downloading files, an accountant can connect accounts through SimpleF
 Select **Review** (or **… to review**) on the account. Each pending line can be:
 
 - **Matched** to a transaction already in OpenBook with the same amount within 7 days: a check you wrote through Pay bills, a deposit you made from Undeposited Funds. When there are possible matches, a list shows them (pick the right one if there are several); select **Match**. Nothing new is posted, and the two are linked.
+- **Paid to an open invoice or bill**: when money in matches what an open invoice still owes, or money out what an open bill owes, the invoice or bill is offered. **Receive payment and match** (or **Pay bill and match**) records the payment into this account on the line's date, with its reference, and matches the line to it in one step. So a customer's transfer doesn't have to be received, deposited and matched separately, and isn't added as income a second time.
 - **Added** as a new transaction: choose a **category** (and optionally a vendor or payee), then **Add**. Lines a bank rule recognized arrive with their category filled in and a "Rule" badge. Lines with a category and no match can all be added at once with the button above the list.
 - **Excluded**, for duplicates or lines that don't belong in your books.
 

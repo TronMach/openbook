@@ -62,6 +62,11 @@ internal static class BankFeedApi
             await s.MatchAsync(id, r.JournalEntryIds ?? [r.JournalEntryId ?? Guid.Empty], ct);
             return Results.NoContent();
         });
+        // A line that pays an open invoice or bill: the payment is recorded and the line matched to it in one go.
+        banking.MapGet("/accounts/{id:guid}/feed/documents", async (Guid id, IBankingStore store, FeedDocumentService s, CancellationToken ct) =>
+            await s.CandidatesAsync(id, await store.ListFeedItemsAsync(id, ct), ct));
+        banking.MapPost("/feed/{id:guid}/pay-document", async (Guid id, FeedDocumentRequest r, FeedDocumentService s, CancellationToken ct) =>
+            new { JournalEntryId = await s.ApplyAsync(id, r.Kind, r.DocumentId, ct) });
         banking.MapPost("/feed/{id:guid}/exclude", async (Guid id, BankFeedService s, CancellationToken ct) =>
         {
             await s.ExcludeAsync(id, ct);
@@ -105,6 +110,8 @@ public sealed record ConnectRequest(string SetupToken, string? Name);
 public sealed record LinkConnectionAccountRequest(Guid? AccountId, DateOnly? ImportFrom);
 
 public sealed record RenameConnectionRequest(string Name);
+
+public sealed record FeedDocumentRequest(FeedDocumentKind Kind, Guid DocumentId);
 
 public sealed record BankConnectionResponse(
     Guid Id, BankConnectionProvider Provider, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastSyncAt,

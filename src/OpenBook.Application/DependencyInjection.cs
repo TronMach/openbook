@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<BankImportService>();
         services.AddScoped<ReconciliationService>();
         services.AddScoped<BankFeedService>();
+        services.AddScoped<FeedDocumentService>();
         services.AddScoped<BankRuleService>();
         services.AddScoped<CheckService>();
         services.AddScoped<BankConnectionService>();
