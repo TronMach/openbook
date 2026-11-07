@@ -237,6 +237,11 @@ internal static class NonprofitApi
             await s.VoidRecognitionAsync(id, line, r.Reason, ct);
             return await Position(s, id, ct);
         });
+        nonprofit.MapPost("/grants/{id:guid}/amend", async (Guid id, GrantReduceRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.AmendAsync(id, r.Date, r.Amount, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
         nonprofit.MapPost("/grants/{id:guid}/reduce", async (Guid id, GrantReduceRequest r, GrantService s, CancellationToken ct) =>
         {
             await s.ReduceAsync(id, r.Date, r.Amount, r.Reason, ct);

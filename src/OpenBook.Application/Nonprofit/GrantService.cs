@@ -357,6 +357,35 @@ public sealed class GrantService(
         return grant;
     }
 
+    /// <summary>
+    /// An amendment raising the award: on an unconditional grant Dr receivable / Cr income on the date (accrual only when
+    /// it counts income on receipt); on a conditional one nothing posts, more can then be recognized and paid.
+    /// </summary>
+    public async Task<Grant> AmendAsync(Guid id, DateOnly date, decimal amount, string? reason, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        if (amount <= 0m)
+            grant.AddIncrease(date, amount, null, reason); // throws with the reason
+        var before = Snapshot(grant);
+        Guid? entryId = null;
+        if (!grant.Conditional)
+        {
+            var memo = $"Grant increased: {grant.Name}";
+            entryId = (await engine.StageAsync(new PostJournalEntryCommand(date,
+                [JournalLineDraft.Dr(grant.ReceivableAccountId, amount, memo, grant.ClassId), JournalLineDraft.Cr(grant.IncomeAccountId, amount, memo, grant.ClassId)],
+                memo, Grant.AdjustmentSource, grant.Id, grant.CashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct)).Id;
+        }
+        else
+        {
+            engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), date, "amending a grant");
+        }
+
+        grant.AddIncrease(date, amount, entryId, reason);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
     /// <summary>Pays advance money back to the funder: Dr the refundable advance / Cr the bank (and, counting income on receipt, the cash-basis income back out).</summary>
     public async Task<Grant> ReturnAdvanceAsync(Guid id, DateOnly date, decimal amount, Guid bankAccountId, string? reason, CancellationToken ct = default)
     {

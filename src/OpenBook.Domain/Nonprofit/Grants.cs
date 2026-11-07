@@ -142,18 +142,23 @@ public sealed class Grant
 
     private decimal ReducedBy(DateOnly date) => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.Reduction && a.Date <= date).Sum(a => a.Amount);
 
+    /// <summary>What amendments have added to the award.</summary>
+    public decimal Increased => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.Increase).Sum(a => a.Amount);
+
+    private decimal IncreasedBy(DateOnly date) => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.Increase && a.Date <= date).Sum(a => a.Amount);
+
     /// <summary>Advance money paid back to the funder.</summary>
     public decimal Returned => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.AdvanceReturn).Sum(a => a.Amount);
 
     /// <summary>The award less reductions: what the grant is now worth.</summary>
-    public decimal NetAward => Amount - Reduced;
+    public decimal NetAward => Amount - Reduced + Increased;
 
     /// <summary>What the funder had paid by the date.</summary>
     public decimal ReceivedBy(DateOnly date) => _receipts.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount);
 
     /// <summary>Income so far on the date.</summary>
     public decimal RecognizedBy(DateOnly date) =>
-        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : Amount - ReducedBy(date);
+        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : Amount - ReducedBy(date) + IncreasedBy(date);
 
     /// <summary>Income so far: the award (unconditional) or what's been recognized (conditional).</summary>
     public decimal Recognized => Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount) : NetAward;
@@ -315,6 +320,19 @@ public sealed class Grant
         return adjustment;
     }
 
+    /// <summary>An amendment raising the award (a larger grant, an extension with more money).</summary>
+    public GrantAdjustment AddIncrease(DateOnly date, decimal amount, Guid? entryId, string? reason)
+    {
+        if (Status == GrantStatus.Voided)
+            throw new DomainException("grant.not_active", "This grant is voided.");
+        Money.EnsureCents(amount);
+        if (amount <= 0m || NetAward + amount > Money.MaxAmount)
+            throw new DomainException("grant.increase_amount", "Enter the amount the award goes up by.");
+        var adjustment = new GrantAdjustment(_adjustments.Count + 1, GrantAdjustmentKind.Increase, date, amount, null, entryId, null, reason);
+        _adjustments.Add(adjustment);
+        return adjustment;
+    }
+
     public GrantAdjustment AddAdvanceReturn(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId, Guid? cashEntryId, string? reason)
     {
         if (Status == GrantStatus.Voided)
@@ -336,6 +354,13 @@ public sealed class Grant
         {
             adjustment.Unvoid();
             throw new DomainException("grant.advance_used", "The advance this paid back has been earned or returned again since.");
+        }
+
+        // Taking an increase back can't leave the award below what's been paid or recognized.
+        if (adjustment.Kind == GrantAdjustmentKind.Increase && (NetAward < Received - Returned || NetAward < Recognized || Receivable < 0m))
+        {
+            adjustment.Unvoid();
+            throw new DomainException("grant.increase_used", "Income or payments since count on this increase. Void those first.");
         }
 
         return adjustment;
@@ -495,6 +520,9 @@ public enum GrantAdjustmentKind
 
     /// <summary>Advance money paid back to the funder: Dr the refundable advance / Cr the bank.</summary>
     AdvanceReturn,
+
+    /// <summary>An amendment raising the award. Unconditional grants post Dr receivable / Cr income.</summary>
+    Increase,
 }
 
 /// <summary>A change to a grant after the award: a reduction, or an advance paid back.</summary>

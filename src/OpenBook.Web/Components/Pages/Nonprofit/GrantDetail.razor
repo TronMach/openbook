@@ -37,7 +37,7 @@
             {
                 <dt>Award number</dt><dd>@reference</dd>
             }
-            <dt>Awarded</dt><dd>@Labels.Amount(g.Amount) on @Labels.Date(g.AwardedOn)@(g.Conditional ? " (conditional)" : "")</dd>
+            <dt>Awarded</dt><dd>@Labels.Amount(g.Amount) on @Labels.Date(g.AwardedOn)@(g.Conditional ? " (conditional)" : "")@(g.NetAward != g.Amount ? $"; now {Labels.Amount(g.NetAward)} after amendments" : "")</dd>
             <dt>Period</dt><dd>@Labels.Date(g.StartsOn) – @Labels.Date(g.EndsOn)</dd>
             <dt>Class</dt><dd><a href="/segments/@g.ClassId">@_position.ClassName</a></dd>
             <dt>Income account</dt><dd>@_chart.FullName(g.IncomeAccountId)</dd>
@@ -196,6 +196,35 @@
             </div>
         }
 
+        @if (g.Status != GrantStatus.Voided)
+        {
+            <details class="card" style="margin-top: 1.5rem">
+                <summary>Change the grant: name, period, terms, or an amendment</summary>
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/edit")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field"><label for="edit-name">Name</label><input id="edit-name" name="name" required maxlength="@Grant.MaxNameLength" value="@g.Name" /></div>
+                        <div class="field"><label for="edit-ref">Award number</label><input id="edit-ref" name="reference" maxlength="100" value="@g.Reference" /></div>
+                        <div class="field"><label for="edit-start">Period starts</label><input id="edit-start" name="startsOn" type="date" value="@Iso(g.StartsOn)" /></div>
+                        <div class="field"><label for="edit-end">Ends</label><input id="edit-end" name="endsOn" type="date" value="@Iso(g.EndsOn)" /></div>
+                    </div>
+                    <div class="field"><label for="edit-terms">Terms</label><textarea id="edit-terms" name="terms" rows="3" maxlength="@Grant.MaxTextLength">@g.Terms</textarea></div>
+                    <div class="actions"><button type="submit" class="secondary">Save changes</button></div>
+                </PostForm>
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/amend")" data-enhance="false" style="margin-top: 1rem">
+                    <AntiforgeryToken />
+                    <p class="muted">@(g.Conditional ? "An amendment raises the award, so more can be recognized and paid. Nothing posts." : "An amendment raises the award: the extra is income and receivable on the date.")</p>
+                    <div class="row">
+                        <div class="field"><label for="amend-amount">Raise the award by</label><input id="amend-amount" name="amount" class="amount" inputmode="decimal" required /></div>
+                        <div class="field"><label for="amend-date">Date</label><input id="amend-date" name="date" type="date" value="@Iso(CompanyTime.Today)" /></div>
+                        <div class="field"><label for="amend-reason">Reason</label><input id="amend-reason" name="reason" required maxlength="500" placeholder="Amendment 2" /></div>
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="secondary">Amend the award</button></div>
+                </PostForm>
+            </details>
+        }
+
         @if (g.Status != GrantStatus.Voided && (g.Reducible > 0m || g.Advance > 0m))
         {
             <div class="card" style="margin-top: 1.5rem">
@@ -326,15 +355,15 @@
                             <td>
                                 @if (a.EntryId is { } entry)
                                 {
-                                    <a href="/journal/@entry">@(a.Kind == GrantAdjustmentKind.Reduction ? "Award reduced" : "Advance paid back")</a>
+                                    <a href="/journal/@entry">@(a.Kind switch { GrantAdjustmentKind.Reduction => "Award reduced", GrantAdjustmentKind.Increase => "Award increased", _ => "Advance paid back" })</a>
                                 }
                                 else
                                 {
-                                    <span>Award reduced</span>
+                                    <span>@(a.Kind == GrantAdjustmentKind.Increase ? "Award increased" : "Award reduced")</span>
                                 }
                                 <span class="muted">· @a.Reason</span>@(a.IsVoided ? " (voided)" : "")
                             </td>
-                            <td class="num">@Labels.Amount(-a.Amount)</td>
+                            <td class="num">@Labels.Amount(a.Kind == GrantAdjustmentKind.Increase ? a.Amount : -a.Amount)</td>
                             <td>@if (!a.IsVoided) { <VoidLine Action="@($"/nonprofit/grants/{g.Id}/adjustments/{a.LineNumber}/void")" Password="Password" /> }</td>
                         </tr>
                     }

@@ -228,6 +228,22 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_grant_is_amended_upward_and_its_details_change_on_its_page()
+    {
+        var grant = await In<GrantService, Grant>(s => s.CreateAsync(new GrantCommand("Library", _acme.Id, 1_000m, Jan5, Jan5, new DateOnly(2026, 12, 31))));
+        var renamed = await In<GrantService, Grant>(s => s.UpdateAsync(grant.Id, new GrantDetailsCommand("Library and archive", "AW-7", Jan5, new DateOnly(2027, 6, 30), "Extended")));
+        Assert.Equal(("Library and archive", new DateOnly(2027, 6, 30)), (renamed.Name, renamed.EndsOn));
+
+        var amended = await In<GrantService, Grant>(s => s.AmendAsync(grant.Id, Mar31, 500m, "Amendment 1"));
+        Assert.Equal((1_500m, 1_500m, 1_500m), (amended.NetAward, amended.Recognized, amended.Receivable));
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, Mar31, 1_200m, _checking.Id));
+        // The funder has paid more than the original award, so the amendment can't be taken back now.
+        Assert.Equal("grant.increase_used", (await Assert.ThrowsAsync<DomainException>(() => In<GrantService, Grant>(s => s.VoidAdjustmentAsync(grant.Id, 1, "Mistake")))).Code);
+        var report = await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync());
+        Assert.Equal(0, report.Problems);
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();
