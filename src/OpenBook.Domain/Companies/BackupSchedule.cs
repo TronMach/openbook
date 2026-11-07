@@ -128,8 +128,39 @@ public sealed class BackupSchedule
         return new DateTimeOffset(slot, offset);
     }
 
-    /// <summary>Due when enabled and nothing has run since the latest slot (so the first backup runs right away).</summary>
-    public bool IsDue(DateTimeOffset now, TimeZoneInfo zone) => Enabled && (LastAttemptAt is not { } last || last < LatestSlot(now, zone));
+    /// <summary>How long after a failed run the next try comes, and how many tries follow a slot that failed.</summary>
+    public static readonly TimeSpan RetryAfter = TimeSpan.FromHours(1);
+
+    public const int Retries = 5;
+
+    /// <summary>
+    /// Due when enabled and nothing has run since the latest slot (so the first backup runs right away), or when the last run
+    /// failed, an hour has passed, and fewer than <see cref="Retries"/> tries have followed the slot: a full disk or a bucket
+    /// down for a while shouldn't leave the books unsaved until the next day, or the next week.
+    /// </summary>
+    public bool IsDue(DateTimeOffset now, TimeZoneInfo zone)
+    {
+        if (!Enabled)
+            return false;
+        if (LastAttemptAt is not { } last)
+            return true;
+        var slot = LatestSlot(now, zone);
+        return last < slot || (LastError is not null && now - last >= RetryAfter && last < slot + RetryAfter * Retries);
+    }
+
+    /// <summary>
+    /// Whether someone should look: the last run failed, or the last good backup is older than two of the schedule's periods
+    /// (a day longer for slack), or none has ever worked a day after the first try.
+    /// </summary>
+    public bool IsFailing(DateTimeOffset now)
+    {
+        if (!Enabled || LastAttemptAt is not { } attempted)
+            return false;
+        if (LastError is not null)
+            return true;
+        var period = Frequency == BackupFrequency.Weekly ? TimeSpan.FromDays(7) : TimeSpan.FromDays(1);
+        return LastSuccessAt is { } good ? now - good > period * 2 + TimeSpan.FromDays(1) : now - attempted > TimeSpan.FromDays(1);
+    }
 
     public void Started(DateTimeOffset at) => LastAttemptAt = at.ToUniversalTime();
 

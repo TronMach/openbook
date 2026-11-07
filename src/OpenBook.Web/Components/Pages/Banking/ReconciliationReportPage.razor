@@ -63,6 +63,11 @@
 
     @ItemTable("Cleared transactions", _report.Cleared)
     @ItemTable($"Uncleared transactions as of {Labels.Date(r.StatementDate)}", _report.Outstanding)
+
+    <div class="no-print">
+        <Attachments EntityType="reconciliation" EntityId="r.Id" />
+        <Notes EntityType="reconciliation" EntityId="r.Id" />
+    </div>
 </div>
 
 @code {

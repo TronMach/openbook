@@ -287,6 +287,9 @@
   <data name="Audit log" xml:space="preserve">
     <value>Audit log</value>
   </data>
+  <data name="Automatic backups aren't working" xml:space="preserve">
+    <value>Automatic backups aren't working</value>
+  </data>
   <data name="Back to journal" xml:space="preserve">
     <value>Back to journal</value>
   </data>
@@ -863,6 +866,15 @@
   <data name="Extra ways to slice reports: by department, branch, project or anything you choose." xml:space="preserve">
     <value>Extra ways to slice reports: by department, branch, project or anything you choose.</value>
   </data>
+  <data name="Failing" xml:space="preserve">
+    <value>Failing</value>
+  </data>
+  <data name="Failing · last good backup {0}" xml:space="preserve">
+    <value>Failing · last good backup {0}</value>
+  </data>
+  <data name="Failing · no backup has worked yet" xml:space="preserve">
+    <value>Failing · no backup has worked yet</value>
+  </data>
   <data name="Fees" xml:space="preserve">
     <value>Fees</value>
   </data>
@@ -1381,6 +1393,9 @@
   </data>
   <data name="None" xml:space="preserve">
     <value>None</value>
+  </data>
+  <data name="None has worked yet" xml:space="preserve">
+    <value>None has worked yet</value>
   </data>
   <data name="None installed" xml:space="preserve">
     <value>None installed</value>
@@ -2284,6 +2299,9 @@
   </data>
   <data name="The guide isn't installed with this copy of OpenBook. You can read it online:" xml:space="preserve">
     <value>The guide isn't installed with this copy of OpenBook. You can read it online:</value>
+  </data>
+  <data name="The last good one was {0}" xml:space="preserve">
+    <value>The last good one was {0}</value>
   </data>
   <data name="The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording." xml:space="preserve">
     <value>The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording.</value>

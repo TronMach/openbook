@@ -138,6 +138,9 @@
                 <tfoot><tr><td colspan="2">Total</td><td class="num">@Labels.Amount(_remaining.Sum(i => i.Payment))</td><td class="num">@Labels.Amount(_remaining.Sum(i => i.Interest))</td><td class="num">@Labels.Amount(_remaining.Sum(i => i.Principal))</td><td></td></tr></tfoot>
             </table>
         }
+
+        <Attachments EntityType="loan" EntityId="_loan.Id" />
+        <Notes EntityType="loan" EntityId="_loan.Id" />
     }
 </div>
 

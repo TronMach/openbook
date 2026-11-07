@@ -65,6 +65,22 @@ internal sealed class SqliteBackupService(
         return new BackupFile(path, $"{Slug(companyName)}-{clock.UtcNow:yyyyMMdd-HHmmss}.openbook.db");
     }
 
+    public async Task CheckAsync(string backupPath, CancellationToken ct)
+    {
+        IReadOnlySet<string> known;
+        await using (var context = new OpenBookDbContext(dbOptions))
+            known = context.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
+        try
+        {
+            await ValidateAsync(FileConnectionString(backupPath, readOnly: true), known, storage.Encrypted, ct);
+        }
+        finally
+        {
+            // The caller deletes the file next; a pooled connection would hold it open.
+            SqliteConnection.ClearAllPools();
+        }
+    }
+
     /// <summary>
     /// The backup is brought up to date and checked as a copy, and only then replaces the live file, so a migration that
     /// fails (or a closed browser) leaves the books as they were.

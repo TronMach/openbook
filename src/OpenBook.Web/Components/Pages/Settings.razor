@@ -251,7 +251,7 @@
             [
                 new("/backup", L["Backups"],
                     L["Copies of your company file: download one now, schedule them, or restore one."],
-                    await Status("/backup", BackupStatus, attentionWhen: s => s.StartsWith(L["No automatic"].Value, StringComparison.Ordinal)),
+                    await Status("/backup", BackupStatus, attentionWhen: s => s.StartsWith(L["No automatic"].Value, StringComparison.Ordinal) || s.StartsWith(L["Failing"].Value, StringComparison.Ordinal)),
                     Keywords: "backup restore copy schedule export"),
                 new("/import/migrate", L["Move in from another program"], L["QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks."], Keywords: "import quickbooks migrate"),
                 new("/journal/import", L["Import transactions"], L["Journal entries or opening balances from a spreadsheet (CSV)."], Keywords: "csv import"),
@@ -325,6 +325,10 @@
         var schedule = await Get<ScheduledBackupService>().GetAsync();
         if (!schedule.Enabled)
             return L["No automatic backups"];
+        if (schedule.IsFailing(DateTimeOffset.UtcNow))
+            return schedule.LastSuccessAt is { } good
+                ? L["Failing · last good backup {0}", Labels.Date(DateOnly.FromDateTime(good.InCompanyTime().DateTime))].Value
+                : L["Failing · no backup has worked yet"].Value;
         var when = schedule.Frequency == BackupFrequency.Daily
             ? L["Every day at {0:00}:00", schedule.Hour].Value
             : L["Every {0} at {1:00}:00", schedule.Weekday, schedule.Hour].Value;

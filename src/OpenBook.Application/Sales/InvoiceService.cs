@@ -75,6 +75,13 @@ public sealed class InvoiceService(
 {
     private const string EntityType = "invoice";
 
+    /// <summary>Invoices and credit memos share one sequence, so a number is taken by either.</summary>
+    private async Task EnsureNotCreditMemoAsync(string number, CancellationToken ct)
+    {
+        if ((await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
+            throw new DomainException("invoice.number_taken", $"Number {number} is already used by a credit memo.");
+    }
+
     /// <summary>Invoices and credit memos share one number sequence, as in QuickBooks.</summary>
     public async Task<string> SuggestNumberAsync(CancellationToken ct = default) =>
         SalesAccounts.NextNumber([.. await store.ListInvoiceNumbersAsync(ct), .. await store.ListCreditMemoNumbersAsync(ct)]);
@@ -163,6 +170,7 @@ public sealed class InvoiceService(
         var number = Invoice.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
+        await EnsureNotCreditMemoAsync(number, ct);
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
@@ -246,6 +254,8 @@ public sealed class InvoiceService(
         if (!string.Equals(number, invoice.Number, StringComparison.OrdinalIgnoreCase)
             && (await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
+        if (!string.Equals(number, invoice.Number, StringComparison.OrdinalIgnoreCase))
+            await EnsureNotCreditMemoAsync(number, ct);
 
         var drafts = command.Lines.ToList();
         EnsureLockedLinesKept(invoice, drafts);

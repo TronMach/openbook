@@ -35,7 +35,7 @@ Download transactions from your bank's website and import them, instead of typin
 1. On the Banking page, select **Import** on the account.
 2. Choose the **statement file**. OpenBook reads:
    - **OFX, QFX or QBO** files (often called "Quicken", "Money" or "QuickBooks Web Connect" downloads). These are the most reliable.
-   - **CSV** files, with a date, a description and either one amount column or separate money-out and money-in columns.
+   - **CSV** files, with a date, a description and either one amount column or separate money-out and money-in columns. Lines some banks put above the column headings (the account name, a balance, the dates covered) are skipped.
 3. **Check how the file was read.** For CSV files OpenBook shows which columns it used, how it read the dates and which sign it took as money out. If every date in the file would make sense both month-first and day-first, it says so; check a few dates against your statement. Amounts it can't read with certainty are flagged rather than guessed.
 4. Untick any lines you don't want, then **Send to review**.
 
@@ -70,7 +70,7 @@ Reconciling checks your books against the bank's statement, line by line, so you
 
 1. On the Banking page, select **Reconcile** on the account.
 2. Enter the **statement ending date** and the **statement ending balance** (for a card, the amount owed), then **Start reconciling**. The beginning balance is where your last reconciliation ended.
-3. Tick each transaction that appears on the statement. The **difference** at the top goes down as you go. Your ticks are saved as you make them, so you can stop and come back.
+3. Tick each transaction that appears on the statement. Lines the bank feed already added or matched, dated by the statement, start out ticked: the bank has said those cleared. The **difference** at the top goes down as you go. Your ticks are saved as you make them, so you can stop and come back.
 4. When the difference is zero, select **Finish reconciliation**.
 
 If the difference won't reach zero:

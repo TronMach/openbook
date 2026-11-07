@@ -68,7 +68,12 @@ public sealed class BankImportService(IBankingStore bank, AccountService account
         ArgumentNullException.ThrowIfNull(options);
         BankingRules.EnsureBankingAccount((await accounts.GetChartAsync(ct)).Get(accountId));
 
-        var records = Csv.Parse(csv);
+        // A bank may put its own lines (account, balance, dates) above the header: start at the first that looks like one.
+        var records = Csv.FromHeader(Csv.Parse(csv), fields =>
+        {
+            var names = fields.Select(Csv.Normalize).ToHashSet();
+            return DateHeaders.Any(names.Contains) && (AmountHeaders.Any(names.Contains) || (OutHeaders.Any(names.Contains) && InHeaders.Any(names.Contains)));
+        });
         if (records.Count < 2)
             throw new DomainException("import.empty", "The file needs a header row and at least one transaction.");
         if (records.Count - 1 > MaxRows)

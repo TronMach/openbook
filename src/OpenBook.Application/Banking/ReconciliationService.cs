@@ -69,10 +69,32 @@ public sealed class ReconciliationService(IBankingStore bank, AccountService acc
             completed.Count == 0 ? null : completed.Max(r => r.StatementDate),
             clock.UtcNow,
             user.Actor);
+
+        // What the bank has already told us cleared: lines added from the feed or matched to it, up to the statement date.
+        foreach (var lineId in await FromFeedAsync(accountId, statementDate, lines, reconciledIds, ct))
+            reconciliation.SetCleared(lineId, true);
         bank.Add(reconciliation);
         bank.Add(Audit(AuditAction.Created, reconciliation, before: null));
         await bank.SaveChangesAsync(ct);
         return reconciliation;
+    }
+
+    /// <summary>
+    /// The account's ledger lines that a bank feed line stands for (added from it, or matched to it) dated by the statement,
+    /// standing and not reconciled before: the bank has said these cleared, so reconciling starts with them ticked.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> FromFeedAsync(Guid accountId, DateOnly statementDate, IReadOnlyList<AccountLine> lines, HashSet<Guid> reconciledIds, CancellationToken ct)
+    {
+        var feed = (await bank.ListFeedItemsAsync(accountId, ct)).Where(i => i.Date <= statementDate).ToList();
+        if (feed.Count == 0)
+            return [];
+        var entries = feed.Where(i => i.Status == BankFeedStatus.Matched).SelectMany(i => i.MatchedEntryIds).ToHashSet();
+        var transactions = feed.Where(i => i.Status == BankFeedStatus.Added && i.BankTransactionId is not null).Select(i => i.BankTransactionId!.Value).ToHashSet();
+        return lines
+            .Where(l => l.Date <= statementDate && !l.IsVoidPair && l.EntryStatus == Domain.Ledger.JournalEntryStatus.Posted && !reconciledIds.Contains(l.JournalLineId))
+            .Where(l => entries.Contains(l.JournalEntryId) || (l.SourceId is { } source && l.Source.StartsWith("bank.", StringComparison.Ordinal) && transactions.Contains(source)))
+            .Select(l => l.JournalLineId)
+            .ToList();
     }
 
     public async Task<ReconciliationWorksheet> GetWorksheetAsync(Guid reconciliationId, CancellationToken ct = default)

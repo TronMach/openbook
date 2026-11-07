@@ -54,7 +54,7 @@ An *invoice* records a sale the customer will pay for later. It increases what t
 **Sales → New invoice** (or `n` then `i`):
 
 1. Choose the **customer**. Their terms fill in the **due date**, and their tax code is selected. Someone new? Type the name and choose **+ Add "name"**: a small box takes the name, email and address and you carry on with the invoice. Products and services work the same way on a line (for something you keep in stock, add it under **Items**, which asks about stock and costs). Bills, expenses and purchase orders do this for vendors.
-2. The **invoice number** is suggested (the next in sequence); change it if you need to. Set the **invoice date**.
+2. The **invoice number** is suggested (the next in sequence, keeping any letters before the digits and their zeros: after INV-0042 comes INV-0043); change it if you need to. Invoices and credit memos share the sequence, so a number used by either is refused for the other. Set the **invoice date**.
 3. Add lines. For each, choose a **product or service**, then the **quantity** and **rate**. The rate fills in from the item's price, or from the customer's price level or a price rule when they apply; type a different rate to override it. A line with only a description and no item is a note.
 4. Add **discount** lines if you need them: a percentage of the item lines above it, or a fixed amount.
 5. Sales tax is calculated from the tax code and shown under the subtotal.

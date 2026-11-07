@@ -349,12 +349,37 @@ public sealed class SalesAccounts(AccountService accounts)
         return account;
     }
 
-    /// <summary>One more than the highest numeric number in use, or 1001 to start.</summary>
+    /// <summary>
+    /// The number in use whose trailing digits are highest, plus one, keeping what comes before them and their width
+    /// ("INV-0042" → "INV-0043", "0099" → "0100"), passing over any already taken; 1001 to start. Numbers without
+    /// trailing digits are ignored.
+    /// </summary>
     public static string NextNumber(IEnumerable<string> numbers)
     {
-        var max = numbers
-            .Select(n => long.TryParse(n, NumberStyles.None, CultureInfo.InvariantCulture, out var v) ? v : (long?)null)
-            .Max();
-        return ((max ?? 1000) + 1).ToString(CultureInfo.InvariantCulture);
+        ArgumentNullException.ThrowIfNull(numbers);
+        var used = new HashSet<string>(numbers, StringComparer.OrdinalIgnoreCase);
+        (string Prefix, string Digits, long Value)? best = null;
+        foreach (var number in used)
+        {
+            var start = number.Length;
+            while (start > 0 && char.IsAsciiDigit(number[start - 1]))
+                start--;
+            // At most 18 digits, so the value fits; a longer run is someone's reference, not a counter.
+            if (start == number.Length || number.Length - start > 18)
+                continue;
+            var digits = number[start..];
+            var value = long.Parse(digits, NumberStyles.None, CultureInfo.InvariantCulture);
+            if (best is not { } b || value > b.Value || (value == b.Value && string.CompareOrdinal(number[..start], b.Prefix) > 0))
+                best = (number[..start], digits, value);
+        }
+
+        if (best is not { } last)
+            return "1001";
+        for (var next = last.Value + 1; ; next++)
+        {
+            var text = last.Prefix + next.ToString(CultureInfo.InvariantCulture).PadLeft(last.Digits.Length, '0');
+            if (!used.Contains(text))
+                return text;
+        }
     }
 }

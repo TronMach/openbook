@@ -59,7 +59,7 @@ Use notes for things like "Prefers calls after 3pm", "Disputed line 2, credit pr
 
 ## Attachments
 
-Documents, customers, vendors and many other records have **Attachments**: the receipt, the vendor's bill, a signed contract, a tax-exemption certificate.
+Documents, customers, vendors and many other records have **Attachments**: the receipt, the vendor's bill, a signed contract, a tax-exemption certificate. Gifts, pledges and grants (an award letter), fixed assets and loans (the purchase invoice, the loan note), projects, stock transfers and reconciliations (the bank statement) take them too.
 
 **Attach** a file: PDF, images, text, CSV, Word or Excel, up to 10 MB. Files are kept inside the company file, so they're in every backup. PDFs and images open in the browser; other files download. Web pages and scripts are refused for safety.
 

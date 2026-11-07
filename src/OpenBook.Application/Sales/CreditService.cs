@@ -116,6 +116,8 @@ public sealed class CreditService(
         var number = CreditMemo.NormalizeNumber(command.Number ?? await invoices.SuggestNumberAsync(ct));
         if ((await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("creditmemo.number_taken", $"Credit memo number {number} is already used.");
+        if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
+            throw new DomainException("creditmemo.number_taken", $"Number {number} is already used by an invoice.");
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
@@ -161,8 +163,9 @@ public sealed class CreditService(
 
         var number = CreditMemo.NormalizeNumber(command.Number ?? credit.Number);
         if (!string.Equals(number, credit.Number, StringComparison.OrdinalIgnoreCase)
-            && (await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("creditmemo.number_taken", $"Credit memo number {number} is already used.");
+            && ((await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase)
+                || (await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase)))
+            throw new DomainException("creditmemo.number_taken", $"Number {number} is already used by an invoice or another credit memo.");
 
         var drafts = command.Lines.ToList();
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,

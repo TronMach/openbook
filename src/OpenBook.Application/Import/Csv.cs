@@ -102,11 +102,62 @@ public static class Csv
     public static string Normalize(string value) =>
         new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
+    /// <summary>
+    /// The records from the first of the first <paramref name="scan"/> that <paramref name="isHeader"/> takes for the header
+    /// (given its fields), so lines a bank puts above it (account name, balance, a title) are left out; unchanged when none is.
+    /// </summary>
+    public static IReadOnlyList<CsvRecord> FromHeader(IReadOnlyList<CsvRecord> records, Func<IReadOnlyList<string>, bool> isHeader, int scan = 20)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(isHeader);
+        for (var i = 0; i < Math.Min(scan, records.Count); i++)
+        {
+            if (isHeader(records[i].Fields))
+                return i == 0 ? records : records.Skip(i).ToList();
+        }
+
+        return records;
+    }
+
+    /// <summary>
+    /// The candidate found most often, outside quotes, on any of the first 20 lines: the header has the most columns, and
+    /// lines a bank puts above it (an account name, a balance) have fewer. Ties go to the comma, then the semicolon.
+    /// </summary>
     private static char DetectDelimiter(string text)
     {
-        var end = text.IndexOfAny(['\r', '\n']);
-        var header = end < 0 ? text : text[..end];
         char[] candidates = [',', ';', '\t'];
-        return candidates.OrderByDescending(d => header.Count(c => c == d)).First();
+        var best = new int[candidates.Length];
+        var counts = new int[candidates.Length];
+        var lines = 0;
+        var inQuotes = false;
+        foreach (var c in text)
+        {
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+            }
+            else if (!inQuotes && (c == '\r' || c == '\n'))
+            {
+                for (var k = 0; k < candidates.Length; k++)
+                    best[k] = Math.Max(best[k], counts[k]);
+                Array.Clear(counts);
+                if (c == '\n' && ++lines >= 20)
+                    break;
+            }
+            else if (!inQuotes && Array.IndexOf(candidates, c) is var k and >= 0)
+            {
+                counts[k]++;
+            }
+        }
+
+        var pick = 0;
+        for (var k = 0; k < candidates.Length; k++)
+        {
+            best[k] = Math.Max(best[k], counts[k]);
+            if (best[k] > best[pick])
+                pick = k;
+        }
+
+        return candidates[pick];
     }
 }

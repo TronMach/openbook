@@ -135,6 +135,8 @@ public sealed class ScheduledBackupService(
                 ? secrets.Unprotect(protectedKey) ?? throw new DomainException("backup.secret_unreadable", "The secret access key can't be read on this computer. Enter it again on the Backup page.")
                 : null;
             file = await backups.CreateAsync(ct);
+            // Before anything is sent or rotated out: a damaged copy must not push out the good ones.
+            await backups.CheckAsync(file.Path, ct);
             // The company in the name: two companies, or a trial restore, can share a destination without deleting each other's.
             var own = $"{prefix}{(await store.GetRequiredCompanyAsync(ct)).Id.ToString("N")[..8]}-";
             var name = $"{own}{now.UtcDateTime.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.openbook.db";

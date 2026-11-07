@@ -107,6 +107,12 @@ public interface IBackupService
     Task<BackupFile> CreateAsync(CancellationToken ct);
 
     /// <summary>
+    /// Checks a backup made by <see cref="CreateAsync"/> as a restore would (integrity, migrations, triggers, company, a balanced
+    /// ledger), so a company file damaged on disk is caught before its copies replace older good ones.
+    /// </summary>
+    Task CheckAsync(string backupPath, CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>
     /// Validates <paramref name="backupPath"/>, saves a safety copy of the current data, then replaces
     /// the current data with the backup.
     /// </summary>

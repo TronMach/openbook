@@ -122,6 +122,8 @@ Set OpenBook to back itself up:
 
 **Save schedule**, then **Back up now** to check it works. The page shows the outcome of the last run. The first scheduled backup runs within 15 minutes of saving.
 
+Each backup is checked the way a restore would check it before it's saved and before older ones are deleted, so a damaged company file can't push out your good copies. When a run fails, OpenBook tries again every hour, up to five times. Until one works, **Settings** shows the backup line as **Failing** and the home page's to-do list shows **Automatic backups aren't working**. The same happens when the last good backup is more than two periods old.
+
 On **OpenBook Desktop** this is already on: every day from noon to the `Backups` folder beside your company file (`Documents\OpenBook\Backups`), keeping 14. Backups only run while OpenBook is running; if the computer was off at noon, the next start makes one. Change it like any schedule, and consider a folder on another drive or one your cloud storage syncs.
 
 ### Restoring on a new computer

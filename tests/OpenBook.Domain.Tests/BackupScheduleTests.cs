@@ -28,6 +28,30 @@ public sealed class BackupScheduleTests
     }
 
     [Fact]
+    public void A_failed_run_is_tried_again_hourly_a_few_times_and_shows_as_failing()
+    {
+        var schedule = Schedule();
+        schedule.Started(At(10, 2));
+        schedule.Failed("Disk full");
+        Assert.True(schedule.IsFailing(At(10, 2)));
+        Assert.False(schedule.IsDue(At(10, 2).AddMinutes(59), TimeZoneInfo.Utc));
+        for (var hour = 3; hour < 2 + BackupSchedule.Retries + 1; hour++)
+        {
+            Assert.True(schedule.IsDue(At(10, hour), TimeZoneInfo.Utc));
+            schedule.Started(At(10, hour));
+            schedule.Failed("Disk full");
+        }
+
+        Assert.False(schedule.IsDue(At(10, 23), TimeZoneInfo.Utc));
+        Assert.True(schedule.IsDue(At(11, 2), TimeZoneInfo.Utc));
+
+        schedule.Started(At(11, 2));
+        schedule.Succeeded(At(11, 2), "a.openbook.db");
+        Assert.False(schedule.IsFailing(At(12, 2)));
+        Assert.True(schedule.IsFailing(At(14, 3)));
+    }
+
+    [Fact]
     public void Weekly_backups_wait_for_their_weekday()
     {
         // 2026-03-09 is a Monday.
