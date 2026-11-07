@@ -494,6 +494,7 @@ public sealed class AccessRulesTests
     [InlineData("/time/rates", "POST", UserRole.Accountant)]
     [InlineData("/time/people", "GET", UserRole.ViewOnly)]
     [InlineData("/time/people", "POST", UserRole.Accountant)]
+    [InlineData("/time/lock", "POST", UserRole.Accountant)]
     [InlineData("/time/people/abc", "POST", UserRole.Accountant)]
     [InlineData("/api/projects/workers", "GET", UserRole.ViewOnly)]
     [InlineData("/api/projects/workers", "POST", UserRole.Accountant)]

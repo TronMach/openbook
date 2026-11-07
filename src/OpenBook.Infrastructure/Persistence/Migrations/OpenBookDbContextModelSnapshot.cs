@@ -1478,6 +1478,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("TaxId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("TimeLockedThrough")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TimeZoneId")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");

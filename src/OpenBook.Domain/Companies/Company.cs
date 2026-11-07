@@ -203,6 +203,11 @@ public sealed class Company
 
     public void SetAllowSellingShort(bool allow) => AllowSellingShort = allow;
 
+    /// <summary>Time dated on or before this can't be added, changed or deleted (billing it still works); null = nothing locked.</summary>
+    public DateOnly? TimeLockedThrough { get; private set; }
+
+    public void SetTimeLock(DateOnly? through) => TimeLockedThrough = through;
+
     /// <summary>The view people get until they choose their own (<see cref="ViewPreference"/>).</summary>
     public ViewMode DefaultViewMode { get; private set; }
 

@@ -188,6 +188,26 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Locked_time_stays_as_it_is_and_missing_hours_are_listed()
+    {
+        var monday = new DateOnly(2026, 3, 2);
+        var cy = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Cy", CostRate: 30m, WeeklyHours: 40m)));
+        var entry = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(cy.Id, monday, 8m)));
+        var missing = Assert.Single(await In<TimeService, IReadOnlyList<(Worker, decimal)>>(s => s.MissingAsync(monday)));
+        Assert.Equal((cy.Id, 8m), (missing.Item1.Id, missing.Item2));
+
+        await In<TimeService, DateOnly?>(s => s.SetLockAsync(monday.AddDays(6)));
+        Assert.Equal("time.locked", await Refused(() => In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(cy.Id, monday.AddDays(1), 8m)))));
+        Assert.Equal("time.locked", await Refused(() => In<TimeService, bool>(async s => { await s.DeleteAsync(entry.Id); return true; })));
+        Assert.Equal("time.locked", await Refused(() => In<TimeService, int>(s => s.SaveWeekAsync(cy.Id, monday,
+            [new WeekRow(null, null, false, [9m, null, null, null, null, null, null])]))));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(cy.Id, monday.AddDays(7), 8m)));
+
+        await In<TimeService, DateOnly?>(s => s.SetLockAsync(null));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(cy.Id, monday.AddDays(1), 8m)));
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);

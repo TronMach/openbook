@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -238,8 +239,49 @@ public sealed class WorkerService(IProjectStore store, IClock clock, ICurrentUse
 /// Time tracking: entries by hand or by timer. Time posts nothing; billable time is added to the customer's
 /// invoice (<see cref="CreateInvoiceCommand.TimeEntryIds"/>) and can't be changed while it's there.
 /// </summary>
-public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock clock, ICurrentUser user)
+public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock clock, ICurrentUser user, Companies.ICompanyStore companies)
 {
+    /// <summary>
+    /// Locks time through a date (null unlocks): hours dated then can't be added, changed or deleted, so a billing
+    /// period's time stays as reviewed. Audited <c>Updated</c> on the company.
+    /// </summary>
+    public async Task<DateOnly?> SetLockAsync(DateOnly? through, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var before = company.TimeLockedThrough;
+        company.SetTimeLock(through);
+        if (before != through)
+        {
+            companies.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "company", company.Id,
+                System.Text.Json.JsonSerializer.Serialize(new { TimeLockedThrough = before }), System.Text.Json.JsonSerializer.Serialize(new { TimeLockedThrough = through })));
+            await companies.SaveChangesAsync(ct);
+        }
+
+        return through;
+    }
+
+    public async Task<DateOnly?> LockedThroughAsync(CancellationToken ct = default) => (await companies.GetRequiredCompanyAsync(ct)).TimeLockedThrough;
+
+    private async Task EnsureUnlockedAsync(DateOnly date, CancellationToken ct)
+    {
+        if (await LockedThroughAsync(ct) is { } locked && date <= locked)
+            throw new DomainException("time.locked", $"Time is locked through {locked:MMM d, yyyy}, so time on {date:MMM d, yyyy} can't be added, changed or deleted.");
+    }
+
+    /// <summary>
+    /// People expected to work (weekly hours set) who entered fewer hours than that in the week starting
+    /// <paramref name="monday"/>, with what they entered.
+    /// </summary>
+    public async Task<IReadOnlyList<(Worker Worker, decimal Hours)>> MissingAsync(DateOnly monday, CancellationToken ct = default)
+    {
+        var time = (await store.ListTimeAsync(new TimeFilter(monday, monday.AddDays(6)), ct)).Where(t => !t.IsRunning).ToLookup(t => t.WorkerId);
+        return [.. (await store.ListWorkersAsync(ct))
+            .Where(w => w.IsActive && w.WeeklyHours is > 0m)
+            .Select(w => (w, time[w.Id].Sum(t => t.Hours)))
+            .Where(x => x.Item2 < x.w.WeeklyHours!.Value)
+            .OrderBy(x => x.w.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
     public const string EntityType = "time_entry";
 
     public Task<IReadOnlyList<TimeEntry>> ListAsync(TimeFilter filter, CancellationToken ct = default) => store.ListTimeAsync(filter, ct);
@@ -387,6 +429,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        await EnsureUnlockedAsync(entry.Date, ct);
         entry.EnsureEditable();
         store.Remove(entry);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, EntityType, entry.Id, Snapshot(entry), null));
@@ -427,6 +470,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
                 var cell = entries.Where(e => e.Date == date && e.CustomerId == row.CustomerId && e.ItemId == row.ItemId && e.Billable == row.Billable).ToList();
                 if (cell.Sum(e => e.Hours) == target)
                     continue;
+                await EnsureUnlockedAsync(date, ct);
                 if (cell.Count == 0)
                 {
                     var details = new TimeEntryDetails(workerId, date, target, row.CustomerId, row.ItemId, row.Billable, Notes: string.IsNullOrWhiteSpace(row.Notes) ? null : row.Notes.Trim());
@@ -512,6 +556,9 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
 
     private async Task<(decimal Bill, decimal Cost, string? Source)> RatesAsync(TimeEntryDetails details, CancellationToken ct, TimeEntry? existing = null)
     {
+        await EnsureUnlockedAsync(details.Date, ct);
+        if (existing is not null && existing.Date != details.Date)
+            await EnsureUnlockedAsync(existing.Date, ct);
         var worker = await store.GetWorkerAsync(details.WorkerId, ct) ?? throw new EntityNotFoundException(WorkerService.EntityType, details.WorkerId);
         if (!worker.IsActive && existing?.WorkerId != worker.Id)
             throw new DomainException("worker.inactive", $"{worker.Name} is inactive.");

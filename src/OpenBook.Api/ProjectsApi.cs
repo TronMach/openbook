@@ -77,6 +77,14 @@ public static class ProjectsApi
         });
 
         var projects = api.MapGroup("/projects");
+        projects.MapGet("/time/lock", async (TimeService s, CancellationToken ct) => new { LockedThrough = await s.LockedThroughAsync(ct) });
+        projects.MapPut("/time/lock", async (TimeLockRequest r, TimeService s, CancellationToken ct) => new { LockedThrough = await s.SetLockAsync(r.Through, ct) });
+        projects.MapGet("/time/missing", async (DateOnly? week, TimeService s, CancellationToken ct) =>
+        {
+            var day = week ?? CompanyTime.Today.AddDays(-7);
+            var monday = day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+            return (await s.MissingAsync(monday, ct)).Select(m => new { WorkerId = m.Worker.Id, m.Worker.Name, m.Hours, Expected = m.Worker.WeeklyHours });
+        });
 
         projects.MapGet("", async (bool? includeClosed, ProjectService s, CancellationToken ct) =>
             (await s.ListAsync(includeClosed ?? true, ct)).Select(ProjectResponse.From));
@@ -178,3 +186,5 @@ public static class ProjectsApi
 }
 
 public sealed record ResponsibleRequest(Guid? WorkerId, OpenBook.Domain.Sales.TimeBillingFormat? TimeBillingFormat = null);
+
+public sealed record TimeLockRequest(DateOnly? Through);

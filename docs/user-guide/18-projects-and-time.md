@@ -49,6 +49,8 @@ Time takes its rate when entered, and records where it came from ("Acme · Partn
 
 Billable time needs a customer or project and a service. A **rate per hour** typed in overrides the rate card. Time posts nothing to the books by itself; it's income only once invoiced. Time can be edited or deleted until it's invoiced.
 
+**Missing time last week** on the Time page lists people with **hours a week** set (on **People and rates**) who entered fewer than that last week, each linking to their week grid. Once a period's hours are reviewed, **Lock time** (accountant role) through its last day: time dated then can't be added, changed or deleted any more, though it can still be billed, written down or repriced. Leave the date blank to unlock.
+
 ## Mileage
 
 **Mileage** (`/mileage`) records trips: **date**, **miles**, **business purpose**, from, to, vehicle and driver. Add a **customer or project** and a **bill per mile** amount to bill it on.

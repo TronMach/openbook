@@ -157,6 +157,12 @@ public static class ProjectEndpoints
         app.MapPost("/time/rates/{id:guid}", async (Guid id, IFormCollection form, BillingRateService rates, CancellationToken ct) =>
             await Back("/time/rates", async () => await rates.UpdateAsync(id, RateDetails(form), ct))).RequireAuthorization();
 
+        app.MapPost("/time/lock", async (IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            await time.SetLockAsync(Date(form["through"]), ct);
+            return Results.Redirect("/time#lock");
+        }).RequireAuthorization();
+
         app.MapPost("/time/rates/raise", async (IFormCollection form, BillingRateService rates, CancellationToken ct) =>
         {
             try

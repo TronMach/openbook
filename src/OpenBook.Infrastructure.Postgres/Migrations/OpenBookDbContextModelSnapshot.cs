@@ -1485,6 +1485,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("TaxId")
                         .HasColumnType("text");
 
+                    b.Property<DateOnly?>("TimeLockedThrough")
+                        .HasColumnType("date");
+
                     b.Property<string>("TimeZoneId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");

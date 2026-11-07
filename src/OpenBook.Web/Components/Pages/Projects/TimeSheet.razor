@@ -20,6 +20,34 @@
         <div class="alert error" role="alert">@Error</div>
     }
 
+    @if (_missing.Count > 0)
+    {
+        <div class="card">
+            <h2>Missing time last week</h2>
+            <p class="muted">People with weekly hours set who entered fewer than that in the week of @Labels.Date(_lastMonday):</p>
+            <ul>
+                @foreach (var (w, hours) in _missing)
+                {
+                    <li><a href="/time/week?worker=@w.Id&week=@_lastMonday.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)">@w.Name</a>: @Labels.Quantity(hours) of @Labels.Quantity(w.WeeklyHours ?? 0m) hours</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (_workers.Count > 0)
+    {
+        <div class="card" id="lock">
+            <h2>Lock time</h2>
+            <p class="muted">@(_locked is { } l ? $"Time is locked through {Labels.Date(l)}: hours dated then can't be added, changed or deleted. Billing it still works." : "Nothing is locked. Lock time once a period's hours are reviewed, so they can't change afterwards.")</p>
+            <PostForm Action="/time/lock" data-enhance="false" class="inline-actions">
+                <AntiforgeryToken />
+                <label>Lock through <input type="date" name="through" value="@(_locked?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))" /></label>
+                <button type="submit" class="secondary">Save</button>
+                <span class="hint">Leave the date blank to unlock.</span>
+            </PostForm>
+        </div>
+    }
+
     @if (_workers.Count == 0)
     {
         <div class="card"><p>Time is tracked per person. <a href="/time/people">Add the people</a> who do the work first.</p></div>
@@ -168,6 +196,9 @@
 
 @code {
     private IReadOnlyList<Worker> _workers = [];
+    private IReadOnlyList<(Worker Worker, decimal Hours)> _missing = [];
+    private DateOnly _lastMonday;
+    private DateOnly? _locked;
     private Worker? _me;
     private IReadOnlyList<TimeEntry> _running = [];
     private IReadOnlyList<TimeEntry> _entries = [];
@@ -192,6 +223,9 @@
         _from = DateOnly.TryParse(From, out var f) ? f : monday;
         _to = DateOnly.TryParse(To, out var t) ? t : monday.AddDays(6);
         _workers = await WorkerService.ListAsync();
+        _lastMonday = monday.AddDays(-7);
+        _missing = await TimeService.MissingAsync(_lastMonday);
+        _locked = await TimeService.LockedThroughAsync();
         _allWorkers = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
         _me = await WorkerService.ForCurrentUserAsync();
         _running = await TimeService.RunningAsync();
