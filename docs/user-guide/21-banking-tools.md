@@ -16,7 +16,7 @@ OpenBook then fetches posted transactions every six hours (or **Sync now**) into
 
 ## Printing checks
 
-Payments from bank accounts (bill payments and checks written as expenses) can be printed on standard **voucher check stock**: the check at the top and two stubs below, with the bank details, MICR line and signature line already printed on the stock.
+Payments from bank accounts (bill payments, checks written as expenses, and refunds to customers, of credit or of a retainer) can be printed on standard **voucher check stock**: the check at the top and two stubs below, with the bank details, MICR line and signature line already printed on the stock.
 
 **Banking → Print checks**: choose the **account** (or all), show checks **not printed yet** or all, tick the ones to print and **Print selected**. The PDF opens in a new tab. Payments with a check number start ticked. Payments sent by ACH aren't listed, nor are spends that came from your bank's lines, because that money has already left.
 
@@ -24,7 +24,7 @@ Payments from bank accounts (bill payments and checks written as expenses) can b
 - Print at **100% ("actual size")**, not "fit to page".
 - Reload the page afterwards to see them marked as printed.
 
-A single check can also be printed from its payment or expense page. The amount is written out in words.
+A single check can also be printed from its payment, expense or refund page (a retainer's refunds have the button on the retainer). Refund check numbers count toward the next number suggested, like any other check. The amount is written out in words.
 
 ## Positive pay
 
@@ -36,7 +36,7 @@ Many banks protect business accounts from check fraud with *positive pay*: you s
 2. Under **Issue file**, fill in the **account number at the bank**, the **date format** your bank wants, and whether to **include a header row**. OpenBook remembers these for the account.
 3. **Download CSV** and upload it to your bank.
 
-The file has the account number, check number, issue date, amount, payee and void flag on each line. Spending that came from a statement or bank feed isn't listed, whatever its reference says: that money has already left. The first file for an account goes back 90 days, because older checks have long cleared; use the dates to send older ones.
+The file has the account number, check number, issue date, amount, payee and void flag on each line; customer and retainer refunds by check are on it too. Spending that came from a statement or bank feed isn't listed, whatever its reference says: that money has already left. The first file for an account goes back 90 days, because older checks have long cleared; use the dates to send older ones.
 
 ## Petty cash
 

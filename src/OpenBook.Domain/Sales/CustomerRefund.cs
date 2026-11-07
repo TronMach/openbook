@@ -77,4 +77,26 @@ public sealed class CustomerRefund
             throw new DomainException("refund.already_voided", "This refund is already voided.");
         Status = DocumentStatus.Voided;
     }
+
+    /// <summary>When the check was last printed; null if never.</summary>
+    public DateTimeOffset? PrintedAt { get; private set; }
+
+    /// <summary>When positive pay first told the bank of this check.</summary>
+    public DateTimeOffset? PositivePaySentAt { get; private set; }
+
+    /// <summary>When positive pay told the bank it's void.</summary>
+    public DateTimeOffset? PositivePayVoidSentAt { get; private set; }
+
+    public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
+
+    /// <summary>Records that a positive pay file carried this check, or its void.</summary>
+    public void MarkSentToBank(DateTimeOffset at, bool asVoid)
+    {
+        PositivePaySentAt ??= at.ToUniversalTime();
+        if (asVoid)
+            PositivePayVoidSentAt ??= at.ToUniversalTime();
+    }
+
+    /// <summary>Whether the next positive pay file should carry it: new, or void now and the bank doesn't know.</summary>
+    public bool NeedsSendingToBank(bool isVoid) => isVoid ? PositivePaySentAt is not null && PositivePayVoidSentAt is null : PositivePaySentAt is null;
 }

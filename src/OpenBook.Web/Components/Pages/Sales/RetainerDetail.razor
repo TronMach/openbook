@@ -78,6 +78,10 @@
                         <td>Refunded from @_chart.FullName(f.PaymentAccountId) @f.Reference @(f.IsVoided ? "(voided)" : "")</td>
                         <td class="num">@Labels.Amount(f.Amount)</td>
                         <td>
+                            @if (!f.IsVoided && _chart.Find(f.PaymentAccountId)?.Type == AccountType.Bank)
+                            {
+                                <PrintCheckButton Kind="CheckKind.RetainerRefund" Id="f.Id" PrintedAt="f.PrintedAt" />
+                            }
                             @if (!f.IsVoided)
                             {
                                 <PostForm Action="@($"/sales/retainers/{_retainer.Id}/refunds/{f.Id}/void")" data-enhance="false" class="inline">

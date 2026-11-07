@@ -5521,6 +5521,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("PaymentAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("PositivePaySentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PrintedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("uuid");
 
@@ -10515,6 +10524,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.Property<Guid>("PaymentAccountId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<DateTimeOffset?>("PositivePaySentAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<DateTimeOffset?>("PrintedAt")
+                                .HasColumnType("timestamp with time zone");
 
                             b1.Property<string>("Reference")
                                 .HasMaxLength(30)

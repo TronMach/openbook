@@ -98,6 +98,15 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
                 .Where(p => p.PaymentAccountId == accountId && p.Reference != null)
                 .Select(p => p.Reference!)
                 .ToListAsync(ct),
+            .. await db.CustomerRefunds
+                .Where(r => r.PaymentAccountId == accountId && r.Reference != null)
+                .Select(r => r.Reference!)
+                .ToListAsync(ct),
+            .. await db.Retainers
+                .SelectMany(r => r.Refunds)
+                .Where(f => f.PaymentAccountId == accountId && f.Reference != null)
+                .Select(f => f.Reference!)
+                .ToListAsync(ct),
         ];
 
     public async Task<(DateOnly? LastCompleted, Guid? InProgress)> GetReconciliationStateAsync(Guid accountId, CancellationToken ct)

@@ -28,6 +28,7 @@ public sealed record PositivePayOptions(string? BankAccountNumber, PositivePayDa
 public sealed class PositivePayService(
     IBankingStore bank,
     IPurchasesStore purchases,
+    Sales.ISalesStore sales,
     AccountService accounts,
     IClock clock,
     ICurrentUser user)
@@ -75,7 +76,18 @@ public sealed class PositivePayService(
                 && wanted(p.Date, p.NeedsSendingToBank(p.Status == DocumentStatus.Voided)))
             .Select(p => new PositivePayCheck(CheckKind.BillPayment, p.Id, p.Date, p.Reference!.Trim(), p.Amount,
                 vendors.GetValueOrDefault(p.VendorId) ?? string.Empty, p.Status == DocumentStatus.Voided));
-        return expenses.Concat(payments)
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
+        var refunds = (await sales.ListRefundsAsync(null, ct))
+            .Where(r => r.PaymentAccountId == accountId && IsCheckNumber(r.Reference) && wanted(r.Date, r.NeedsSendingToBank(r.Status == DocumentStatus.Voided)))
+            .Select(r => new PositivePayCheck(CheckKind.CustomerRefund, r.Id, r.Date, r.Reference!.Trim(), r.Amount,
+                customers.GetValueOrDefault(r.CustomerId) ?? string.Empty, r.Status == DocumentStatus.Voided));
+        var retainerRefunds = (await sales.ListRetainersAsync(null, ct))
+            .SelectMany(r => r.Refunds.Select(f => (Retainer: r, Refund: f)))
+            .Where(x => x.Refund.PaymentAccountId == accountId && IsCheckNumber(x.Refund.Reference)
+                && wanted(x.Refund.Date, x.Refund.NeedsSendingToBank(x.Refund.IsVoided)))
+            .Select(x => new PositivePayCheck(CheckKind.RetainerRefund, x.Refund.Id, x.Refund.Date, x.Refund.Reference!.Trim(), x.Refund.Amount,
+                customers.GetValueOrDefault(x.Retainer.CustomerId) ?? string.Empty, x.Refund.IsVoided));
+        return expenses.Concat(payments).Concat(refunds).Concat(retainerRefunds)
             .OrderBy(c => c.Date)
             .ThenBy(c => c.Number.Length)
             .ThenBy(c => c.Number, StringComparer.Ordinal)
@@ -119,10 +131,21 @@ public sealed class PositivePayService(
         var now = clock.UtcNow;
         foreach (var check in checks)
         {
-            if (check.Kind == CheckKind.Expense)
-                (await bank.GetTransactionAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
-            else
-                (await purchases.GetPaymentAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+            switch (check.Kind)
+            {
+                case CheckKind.Expense:
+                    (await bank.GetTransactionAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+                    break;
+                case CheckKind.CustomerRefund:
+                    (await sales.GetRefundAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+                    break;
+                case CheckKind.RetainerRefund:
+                    (await sales.GetRetainerByRefundAsync(check.Id, ct))!.Refunds.Single(f => f.Id == check.Id).MarkSentToBank(now, check.Void);
+                    break;
+                default:
+                    (await purchases.GetPaymentAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+                    break;
+            }
         }
 
         settings.Exported(now, to ?? today);

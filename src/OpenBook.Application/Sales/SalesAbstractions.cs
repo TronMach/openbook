@@ -221,6 +221,9 @@ public interface ISalesStore
     /// <summary>Tracked, with applications and refunds.</summary>
     Task<Retainer?> GetRetainerAsync(Guid id, CancellationToken ct);
 
+    /// <summary>The retainer one of whose refunds has this id, tracked.</summary>
+    Task<Retainer?> GetRetainerByRefundAsync(Guid refundId, CancellationToken ct);
+
     /// <summary>Untracked, newest first; all customers when null.</summary>
     Task<IReadOnlyList<Retainer>> ListRetainersAsync(Guid? customerId, CancellationToken ct);
 

@@ -170,4 +170,24 @@ public sealed class PaymentReturnTests : IAsyncLifetime
         Assert.Equal("deposit.extra_receivable", await Refused(() => In<DepositService, BankDeposit>(s => s.ChangeAsync(deposit.Id, new MakeDepositCommand(_checking.Id, Mar10,
             [(DepositedKind.Payment, first.Id)], Extras: [new DepositExtraDraft(first.ReceivableAccountId, -6m)]), "A/R"))));
     }
+
+    [Fact]
+    public async Task A_refund_by_check_prints_goes_to_positive_pay_and_counts_toward_the_next_number()
+    {
+        var prepaid = await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Mar1, _checking.Id, [], Amount: 500m)));
+        var refund = await In<CreditService, CustomerRefund>(s => s.RefundAsync(new RefundCreditCommand(CreditKind.Payment, prepaid.Id, Mar5, _checking.Id, 120m, Reference: "2041")));
+
+        var listed = await In<OpenBook.Application.Banking.CheckService, IReadOnlyList<OpenBook.Application.Banking.PrintableCheck>>(s => s.ListAsync(_checking.Id));
+        Assert.Contains(listed, c => c.Kind == OpenBook.Application.Banking.CheckKind.CustomerRefund && c.Id == refund.Id && c.Payee == "Acme Corp");
+        var printed = await In<OpenBook.Application.Banking.CheckService, OpenBook.Application.Banking.PrintedChecks>(s => s.PrintAsync([(OpenBook.Application.Banking.CheckKind.CustomerRefund, refund.Id)]));
+        Assert.Equal(1, printed.Count);
+        Assert.NotNull((await In<CreditService, CustomerRefund?>(s => s.GetRefundAsync(refund.Id)))!.PrintedAt);
+
+        Assert.Equal("2042", await In<OpenBook.Application.Banking.BankingService, string?>(s => s.SuggestCheckNumberAsync(_checking.Id)));
+        var unsent = await In<OpenBook.Application.Banking.PositivePayService, IReadOnlyList<OpenBook.Application.Banking.PositivePayCheck>>(s => s.ListAsync(_checking.Id, Mar1, Mar31));
+        Assert.Contains(unsent, c => c.Kind == OpenBook.Application.Banking.CheckKind.CustomerRefund && c.Number == "2041" && c.Amount == 120m);
+        await In<OpenBook.Application.Banking.PositivePayService, OpenBook.Application.Banking.PositivePayFile>(s => s.ExportAsync(_checking.Id, Mar1, Mar31,
+            new OpenBook.Application.Banking.PositivePayOptions("123456789", OpenBook.Domain.Banking.PositivePayDateFormat.MonthDayYear, true)));
+        Assert.NotNull((await In<CreditService, CustomerRefund?>(s => s.GetRefundAsync(refund.Id)))!.PositivePaySentAt);
+    }
 }

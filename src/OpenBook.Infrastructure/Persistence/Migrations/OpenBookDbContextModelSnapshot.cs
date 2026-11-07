@@ -5514,6 +5514,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("PaymentAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("PositivePaySentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("PrintedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("TEXT");
 
@@ -10451,6 +10460,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasColumnType("TEXT");
 
                             b1.Property<Guid>("PaymentAccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTimeOffset?>("PositivePaySentAt")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTimeOffset?>("PositivePayVoidSentAt")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTimeOffset?>("PrintedAt")
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("Reference")

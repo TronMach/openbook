@@ -15,9 +15,16 @@ public enum CheckKind
     /// <summary>A spend (check or payment) recorded in banking or as an expense.</summary>
     Expense,
     BillPayment,
+
+    /// <summary>Credit paid back to a customer (<c>CustomerRefund</c>).</summary>
+    CustomerRefund,
+
+    /// <summary>Part of a retainer paid back (<c>RetainerRefund</c>).</summary>
+    RetainerRefund,
 }
 
-public sealed record PrintableCheck(CheckKind Kind, Guid Id, Guid AccountId, DateOnly Date, string? Number, string Payee, decimal Amount, DateTimeOffset? PrintedAt);
+/// <param name="OwnerId">The record a row of belongs to: the retainer, for a retainer refund.</param>
+public sealed record PrintableCheck(CheckKind Kind, Guid Id, Guid AccountId, DateOnly Date, string? Number, string Payee, decimal Amount, DateTimeOffset? PrintedAt, Guid? OwnerId = null);
 
 public sealed record PrintedChecks(string FileName, byte[] Pdf, int Count);
 
@@ -25,6 +32,7 @@ public sealed record PrintedChecks(string FileName, byte[] Pdf, int Count);
 public sealed class CheckService(
     IBankingStore bank,
     IPurchasesStore purchases,
+    Sales.ISalesStore sales,
     AccountService accounts,
     ICompanyStore companies,
     IFormRenderer renderer,
@@ -50,7 +58,18 @@ public sealed class CheckService(
             .Select(p => new PrintableCheck(CheckKind.BillPayment, p.Id, p.PaymentAccountId, p.Date, p.Reference,
                 vendors.GetValueOrDefault(p.VendorId) ?? "(unknown vendor)", p.Amount, p.PrintedAt));
 
-        return expenses.Concat(payments)
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
+        var refunds = (await sales.ListPostedRefundsAsync(null, DateOnly.MaxValue, ct))
+            .Where(r => IsBank(r.PaymentAccountId))
+            .Select(r => new PrintableCheck(CheckKind.CustomerRefund, r.Id, r.PaymentAccountId, r.Date, r.Reference,
+                customers.GetValueOrDefault(r.CustomerId) ?? "(unknown customer)", r.Amount, r.PrintedAt));
+        var retainerRefunds = (await sales.ListRetainersAsync(null, ct))
+            .Where(r => r.Status == DocumentStatus.Posted)
+            .SelectMany(r => r.Refunds.Where(f => !f.IsVoided && IsBank(f.PaymentAccountId))
+                .Select(f => new PrintableCheck(CheckKind.RetainerRefund, f.Id, f.PaymentAccountId, f.Date, f.Reference,
+                    customers.GetValueOrDefault(r.CustomerId) ?? "(unknown customer)", f.Amount, f.PrintedAt, r.Id)));
+
+        return expenses.Concat(payments).Concat(refunds).Concat(retainerRefunds)
             .Where(c => !unprintedOnly || c.PrintedAt is null)
             .OrderByDescending(c => c.Date)
             .ThenByDescending(c => c.Number, StringComparer.Ordinal)
@@ -85,6 +104,31 @@ public sealed class CheckService(
                 var before = Snapshot(t.PrintedAt);
                 t.MarkPrinted(now);
                 bank.Add(AuditRecord.Create(now, user.Actor, AuditAction.Updated, "bank_transaction", t.Id, before, Snapshot(t.PrintedAt)));
+            }
+            else if (kind == CheckKind.CustomerRefund)
+            {
+                var r = await sales.GetRefundAsync(id, ct) ?? throw new EntityNotFoundException("refund", id);
+                if (r.Status != DocumentStatus.Posted || chart.Get(r.PaymentAccountId).Type != AccountType.Bank)
+                    throw new DomainException("check.not_printable", "Only posted payments from a bank account can be printed as checks.");
+                var customer = await sales.GetCustomerAsync(r.CustomerId, ct);
+                forms.Add(Form(company, chart.Get(r.PaymentAccountId).Name, r.Reference, r.Date,
+                    new FormParty(customer?.DisplayName ?? "", customer?.BillingAddress), r.Amount, r.Memo, [(r.Memo ?? "Refund", r.Amount)]));
+                var before = Snapshot(r.PrintedAt);
+                r.MarkPrinted(now);
+                bank.Add(AuditRecord.Create(now, user.Actor, AuditAction.Updated, "refund", r.Id, before, Snapshot(r.PrintedAt)));
+            }
+            else if (kind == CheckKind.RetainerRefund)
+            {
+                var retainer = await sales.GetRetainerByRefundAsync(id, ct) ?? throw new EntityNotFoundException("retainer", id);
+                var f = retainer.Refunds.Single(x => x.Id == id);
+                if (f.IsVoided || retainer.Status != DocumentStatus.Posted || chart.Get(f.PaymentAccountId).Type != AccountType.Bank)
+                    throw new DomainException("check.not_printable", "Only posted payments from a bank account can be printed as checks.");
+                var customer = await sales.GetCustomerAsync(retainer.CustomerId, ct);
+                forms.Add(Form(company, chart.Get(f.PaymentAccountId).Name, f.Reference, f.Date,
+                    new FormParty(customer?.DisplayName ?? "", customer?.BillingAddress), f.Amount, "Retainer refund", [("Retainer refund", f.Amount)]));
+                var before = Snapshot(f.PrintedAt);
+                f.MarkPrinted(now);
+                bank.Add(AuditRecord.Create(now, user.Actor, AuditAction.Updated, "retainer", retainer.Id, before, Snapshot(f.PrintedAt)));
             }
             else
             {

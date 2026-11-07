@@ -61,7 +61,7 @@
                                 <td>@Labels.Date(c.Date)</td>
                                 <td>@c.Number</td>
                                 <td>
-                                    <a href="@(c.Kind == CheckKind.BillPayment ? $"/purchases/payments/{c.Id}" : $"/banking/transactions/{c.Id}")">@c.Payee</a>
+                                    <a href="@(c.Kind switch { CheckKind.BillPayment => $"/purchases/payments/{c.Id}", CheckKind.CustomerRefund => $"/sales/refunds/{c.Id}", CheckKind.RetainerRefund => $"/sales/retainers/{c.OwnerId}", _ => $"/banking/transactions/{c.Id}" })">@c.Payee</a>
                                 </td>
                                 <td class="muted">@_chart.FullName(c.AccountId)</td>
                                 <td class="num">@Labels.Amount(c.Amount)</td>

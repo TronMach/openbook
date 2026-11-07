@@ -23,6 +23,10 @@
         }
         <ActionLink Class="button secondary" Href="@($"/customers/{_refund.CustomerId}")">Customer</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_refund.Id}")">History</ActionLink>
+        @if (_refund.Status == DocumentStatus.Posted && _chart.Find(_refund.PaymentAccountId)?.Type == AccountType.Bank)
+        {
+            <PrintCheckButton Kind="CheckKind.CustomerRefund" Id="_refund.Id" PrintedAt="_refund.PrintedAt" />
+        }
     </div>
 
     @if (_error is not null)
