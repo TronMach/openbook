@@ -174,7 +174,8 @@ public sealed class BillPaymentService(
         if (IsIssued(payment) && (moneyChanged || !string.Equals(reference, payment.Reference, StringComparison.Ordinal)))
             throw new DomainException("payment.check_issued",
                 "This payment has been printed as a check, sent by ACH or in a positive pay file, so its amount, account and number stay. Void it and pay again instead.");
-        var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.PaymentAccountId, payment.JournalEntryId, null, ct);
+        var oldEntry = payment.JournalEntryId;
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.PaymentAccountId, oldEntry, null, ct);
         if (feed.Count > 0 && moneyChanged)
             throw new DomainException("payment.feed_matched", "This payment is matched to a line from the bank feed, so its amount and account stay. Undo the match first to change them.");
 
@@ -198,7 +199,7 @@ public sealed class BillPaymentService(
         foreach (var application in payment.Applications)
             bills[application.BillId].ApplyPayment(application.Amount);
         foreach (var item in feed)
-            item.FollowEntry(entry.Id);
+            item.FollowEntry(oldEntry, entry.Id);
 
         foreach (var bill in bills.Values.Where(b => BillService.Snapshot(b) != billsBefore[b.Id]))
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, BillService.EntityType, bill.Id, billsBefore[bill.Id], BillService.Snapshot(bill)));

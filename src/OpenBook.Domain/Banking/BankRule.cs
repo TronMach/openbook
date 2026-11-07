@@ -43,6 +43,11 @@ public sealed class BankRule
     /// <summary>For money out: the vendor it's an expense for.</summary>
     public Guid? VendorId { get; private set; }
 
+    /// <summary>The class and location the line goes in; a form can change them.</summary>
+    public Guid? ClassId { get; private set; }
+
+    public Guid? LocationId { get; private set; }
+
     /// <summary>Add matching lines straight to the books instead of suggesting.</summary>
     public bool AutoAdd { get; private set; }
 
@@ -81,6 +86,8 @@ public sealed class BankRule
         CategoryAccountId = details.CategoryAccountId;
         Payee = Text.Optional(details.Payee, 200, "rule.payee_too_long", "Payee");
         VendorId = details.VendorId;
+        ClassId = details.ClassId;
+        LocationId = details.LocationId;
         AutoAdd = details.AutoAdd;
     }
 
@@ -117,4 +124,6 @@ public sealed record BankRuleDetails(
     string? Payee = null,
     Guid? VendorId = null,
     bool AutoAdd = false,
-    int Priority = 100);
+    int Priority = 100,
+    Guid? ClassId = null,
+    Guid? LocationId = null);

@@ -84,7 +84,7 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
     // Checks are written both as expenses and as bill payments; both count toward the next number.
     public async Task<IReadOnlyList<BankFeedItem>> ListFeedItemsTiedToEntryAsync(Guid entryId, CancellationToken ct) =>
         await db.BankFeedItems
-            .Where(i => (i.Status == BankFeedStatus.Matched && i.MatchedJournalEntryId == entryId)
+            .Where(i => (i.Status == BankFeedStatus.Matched && (i.MatchedJournalEntryId == entryId || i.MoreEntries.Any(m => m.JournalEntryId == entryId)))
                 || (i.Status == BankFeedStatus.Added && db.BankTransactions.Any(t => t.Id == i.BankTransactionId && t.JournalEntryId == entryId)))
             .ToListAsync(ct);
 

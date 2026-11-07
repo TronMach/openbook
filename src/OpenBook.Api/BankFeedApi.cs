@@ -11,7 +11,7 @@ namespace OpenBook.Api;
 
 public sealed record QueueFeedRequest(IReadOnlyList<FeedLine> Lines);
 
-public sealed record MatchFeedItemRequest(Guid JournalEntryId);
+public sealed record MatchFeedItemRequest(Guid? JournalEntryId = null, IReadOnlyCollection<Guid>? JournalEntryIds = null);
 
 public sealed record FeedItemResponse(
     Guid Id, Guid AccountId, DateOnly Date, decimal Amount, string? Payee, string? Reference, string? Memo, string? FitId,
@@ -23,10 +23,10 @@ public sealed record FeedItemResponse(
 
 public sealed record BankRuleResponse(
     Guid Id, string Name, int Priority, Guid? AccountId, RuleDirection Direction, string Contains, decimal? MinAmount, decimal? MaxAmount,
-    Guid CategoryAccountId, string? Payee, Guid? VendorId, bool AutoAdd, bool IsActive)
+    Guid CategoryAccountId, string? Payee, Guid? VendorId, bool AutoAdd, bool IsActive, Guid? ClassId, Guid? LocationId)
 {
     public static BankRuleResponse From(BankRule r) => new(
-        r.Id, r.Name, r.Priority, r.AccountId, r.Direction, r.Contains, r.MinAmount, r.MaxAmount, r.CategoryAccountId, r.Payee, r.VendorId, r.AutoAdd, r.IsActive);
+        r.Id, r.Name, r.Priority, r.AccountId, r.Direction, r.Contains, r.MinAmount, r.MaxAmount, r.CategoryAccountId, r.Payee, r.VendorId, r.AutoAdd, r.IsActive, r.ClassId, r.LocationId);
 }
 
 public sealed record PrintChecksRequest(IReadOnlyList<CheckRef> Checks);
@@ -51,14 +51,15 @@ internal static class BankFeedApi
             (await s.ReviewAsync(id, status ?? BankFeedStatus.Pending, ct)).Select(r => new
             {
                 Item = FeedItemResponse.From(r.Item),
-                Suggestion = r.Suggestion is { } x ? new { x.CategoryAccountId, x.Payee, x.VendorId, RuleId = x.Rule.Id, RuleName = x.Rule.Name } : null,
+                Suggestion = r.Suggestion is { } x ? new { x.CategoryAccountId, x.Payee, x.VendorId, x.ClassId, x.LocationId, RuleId = x.Rule.Id, RuleName = x.Rule.Name } : null,
                 r.Matches,
+                r.PartMatches,
             }));
         banking.MapPost("/feed/{id:guid}/add", async (Guid id, AddFeedItemCommand r, BankFeedService s, CancellationToken ct) =>
             BankTransactionResponse.From(await s.AddAsync(id, r, ct)));
         banking.MapPost("/feed/{id:guid}/match", async (Guid id, MatchFeedItemRequest r, BankFeedService s, CancellationToken ct) =>
         {
-            await s.MatchAsync(id, r.JournalEntryId, ct);
+            await s.MatchAsync(id, r.JournalEntryIds ?? [r.JournalEntryId ?? Guid.Empty], ct);
             return Results.NoContent();
         });
         banking.MapPost("/feed/{id:guid}/exclude", async (Guid id, BankFeedService s, CancellationToken ct) =>

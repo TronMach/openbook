@@ -153,7 +153,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
     {
         var banks = (await store.ListVendorBankAccountsAsync(ct)).ToDictionary(b => b.VendorId);
         var vendors = (await store.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
-        var cleared = (await bank.ListFeedItemsAsync(accountId, ct)).Where(i => i.MatchedJournalEntryId is not null).Select(i => i.MatchedJournalEntryId!.Value).ToHashSet();
+        var cleared = (await bank.ListFeedItemsAsync(accountId, ct)).SelectMany(i => i.MatchedEntryIds).ToHashSet();
         var ready = (await store.ListPaymentsAsync(null, ct))
             .Where(p => p.PaymentAccountId == accountId && p.Status == DocumentStatus.Posted && p.AchBatchId is null && p.PrintedAt is null
                 && banks.ContainsKey(p.VendorId) && !cleared.Contains(p.JournalEntryId))

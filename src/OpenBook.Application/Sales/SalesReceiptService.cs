@@ -159,7 +159,8 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.after_deposit", $"Sales receipt {receipt.Number} went into a bank deposit on {deposit.Date:yyyy-MM-dd}, so it can't be dated after that.");
 
         // A feed line matched to the receipt is what the bank reported, so the money into that account stays.
-        var feed = await Banking.BankFeedService.TiedToAsync(bank, receipt.DepositAccountId, receipt.JournalEntryId, null, ct);
+        var oldEntry = receipt.JournalEntryId;
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, receipt.DepositAccountId, oldEntry, null, ct);
         if (feed.Count > 0 && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))
             throw new DomainException("receipt.feed_matched",
                 $"Sales receipt {receipt.Number} is matched to a line from the bank feed, so its total and deposit account stay. Undo the match first to change them.");
@@ -199,7 +200,7 @@ public sealed class SalesReceiptService(
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
         foreach (var item in feed)
-            item.FollowEntry(entry.Id);
+            item.FollowEntry(oldEntry, entry.Id);
 
         // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
         await customFields.MoveLinesAsync(EntityType, receipt.Id, drafts.Count, command.FromLines, ct);

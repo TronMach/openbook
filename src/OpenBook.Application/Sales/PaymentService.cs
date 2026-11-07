@@ -178,7 +178,8 @@ public sealed class PaymentService(
             throw new DomainException("payment.after_deposit", $"This payment went into a bank deposit on {deposit.Date:yyyy-MM-dd}, so it can't be dated after that.");
         if (payment.PayoutId is not null && moneyChanged)
             throw new DomainException("payment.in_payout", "A sales channel payout brought this money in, so its amount and deposit account stay. Void the payout first to change them.");
-        var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.DepositAccountId, payment.JournalEntryId, null, ct);
+        var oldEntry = payment.JournalEntryId;
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, payment.DepositAccountId, oldEntry, null, ct);
         if (feed.Count > 0 && moneyChanged)
             throw new DomainException("payment.feed_matched", "This payment is matched to a line from the bank feed, so its amount and deposit account stay. Undo the match first to change them.");
         // Found by the payment, not its invoices: it may have moved to another since, or landed as credit.
@@ -211,7 +212,7 @@ public sealed class PaymentService(
         foreach (var application in payment.Applications)
             invoices[application.InvoiceId].ApplyPayment(application.Settled);
         foreach (var item in feed)
-            item.FollowEntry(entry.Id);
+            item.FollowEntry(oldEntry, entry.Id);
 
         foreach (var invoice in invoices.Values.Where(i => InvoiceService.Snapshot(i) != invoicesBefore[i.Id]))
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", invoice.Id, invoicesBefore[invoice.Id], InvoiceService.Snapshot(invoice)));

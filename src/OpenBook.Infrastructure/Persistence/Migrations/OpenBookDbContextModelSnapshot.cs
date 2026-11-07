@@ -510,6 +510,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CategoryAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Contains")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -522,6 +525,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("MaxAmount")
                         .HasColumnType("INTEGER")
@@ -6781,6 +6787,32 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("RuleId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Banking.BankFeedMatch", "MoreEntries", b1 =>
+                        {
+                            b1.Property<Guid>("BankFeedItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid>("JournalEntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("BankFeedItemId", "JournalEntryId");
+
+                            b1.HasIndex("JournalEntryId");
+
+                            b1.ToTable("BankFeedItemEntries", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("BankFeedItemId");
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("JournalEntryId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+                        });
+
+                    b.Navigation("MoreEntries");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Banking.BankRule", b =>

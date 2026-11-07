@@ -119,7 +119,7 @@ public sealed class PostingEngine(
         if (sameMoney)
         {
             foreach (var line in feedLines)
-                line.FollowEntry(replacement.Id);
+                line.FollowEntry(entry.Id, replacement.Id);
         }
 
         // The entry's files and notes go on with it (the voided one keeps its own).

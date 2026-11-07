@@ -87,17 +87,77 @@
                                     </div>
                                     <div class="muted">or add it as a new transaction:</div>
                                 }
+                                @if (row.Choosing)
+                                {
+                                    <fieldset class="feed-several">
+                                        <legend>Tick what this line paid for</legend>
+                                        @foreach (var m in row.Matches.Concat(row.PartMatches))
+                                        {
+                                            <label class="check">
+                                                <input type="checkbox" checked="@row.Chosen.Contains(m.JournalEntryId)" @onchange="e => Toggle(row, m.JournalEntryId, e)" />
+                                                <span>@Labels.Date(m.Date) · @m.Description · @Labels.Amount(Math.Abs(m.Amount))</span>
+                                            </label>
+                                        }
+                                        <p class="muted">Ticked @Labels.Amount(row.ChosenTotal) of @Labels.Amount(Math.Abs(item.Amount))</p>
+                                        <button type="button" @onclick="() => MatchSeveralAsync(row)" disabled="@(row.ChosenTotal != Math.Abs(item.Amount) || _busy)">Match</button>
+                                        <button type="button" class="link" @onclick="() => row.Choosing = false">Close</button>
+                                    </fieldset>
+                                }
+                                else if (row.PartMatches.Count > 1)
+                                {
+                                    <div><button type="button" class="link" @onclick="() => row.Choosing = true">Match several transactions</button></div>
+                                }
                                 <div class="inline">
-                                    <SearchSelect AriaLabel="Category" Options="_categoryOptions" @bind-Value="row.CategoryId" Placeholder="Category…" />
+                                    @if (row.Splits is null)
+                                    {
+                                        <SearchSelect AriaLabel="Category" Options="_categoryOptions" @bind-Value="row.CategoryId" Placeholder="Category…" />
+                                        @if (_segments.ClassColumn is { } classes)
+                                        {
+                                            <ClassSelect Classes="classes" Value="row.ClassId" ValueChanged="v => row.ClassId = v" />
+                                        }
+                                    }
                                     @if (!item.IsMoneyIn)
                                     {
                                         <SearchSelect AriaLabel="Vendor" Options="_vendorOptions" @bind-Value="row.VendorId" EmptyText="No vendor" Placeholder="Vendor…" />
                                     }
+                                    @if (_segments.Locations.Count > 0)
+                                    {
+                                        <select aria-label="@_segments.LocationLabel" value="@row.LocationId" @onchange="e => row.LocationId = Guid.TryParse(e.Value as string, out var l) ? l : null">
+                                            <option value="">@_segments.LocationLabel…</option>
+                                            @foreach (var l in _segments.Locations)
+                                            {
+                                                <option value="@l.Segment.Id">@(new string(' ', l.Depth * 3))@l.Segment.Name</option>
+                                            }
+                                        </select>
+                                    }
                                     <input aria-label="Payee" placeholder="Payee" @bind="row.Payee" class="short-text" />
-                                    <button type="button" class="secondary" @onclick="() => AddAsync(row)" disabled="@(row.CategoryId is null || _busy)">Add</button>
+                                    <button type="button" class="secondary" @onclick="() => AddAsync(row)" disabled="@(!row.CanAdd || _busy)">Add</button>
+                                    <button type="button" class="link" @onclick="() => ToggleSplit(row)">@(row.Splits is null ? "Split" : "One category")</button>
                                     <button type="button" class="link" @onclick="() => ExcludeAsync(row)" disabled="@_busy">Exclude</button>
                                     <a class="link" href="@RuleLink(row)" target="_blank" title="Make a rule for lines like this">Rule…</a>
                                 </div>
+                                @if (row.Splits is { } splits)
+                                {
+                                    <div class="feed-splits">
+                                        @foreach (var split in splits)
+                                        {
+                                            <div class="inline" @key="split">
+                                                <SearchSelect AriaLabel="Category" Options="_categoryOptions" @bind-Value="split.AccountId" Placeholder="Category…" />
+                                                <input class="amount" type="number" step="0.01" min="0" aria-label="Amount" @bind="split.Amount" @bind:event="oninput" />
+                                                @if (_segments.ClassColumn is { } splitClasses)
+                                                {
+                                                    <ClassSelect Classes="splitClasses" Value="split.ClassId" ValueChanged="v => split.ClassId = v" />
+                                                }
+                                                @if (splits.Count > 2)
+                                                {
+                                                    <button type="button" class="remove" title="Remove line" aria-label="Remove line" @onclick="() => splits.Remove(split)">×</button>
+                                                }
+                                            </div>
+                                        }
+                                        <button type="button" class="link" @onclick="() => splits.Add(new SplitRow())">Add a line</button>
+                                        <span class="muted">Left to assign: @Labels.Amount(Math.Abs(item.Amount) - row.SplitTotal)</span>
+                                    </div>
+                                }
                             </td>
                         </tr>
                     }
@@ -155,6 +215,7 @@
     private string? _closingPassword;
     private bool _needsClosingPassword;
     private string? _message;
+    private SegmentOptions _segments = SegmentOptions.None;
 
     [Parameter]
     public Guid AccountId { get; set; }
@@ -165,6 +226,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         (_chart, _useNumbers, var vendors) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
@@ -198,8 +260,11 @@
         var review = await Ops.RunAsync<BankFeedService, IReadOnlyList<FeedReviewItem>>(s => s.ReviewAsync(AccountId, _status));
         // What's been chosen on other lines stays: acting on one line mustn't lose the rest.
         var chosen = _rows.ToDictionary(r => r.Item.Id);
-        _rows = review.Select(r => new Row(r.Item, r.Matches)
+        _rows = review.Select(r => new Row(r.Item, r.Matches, r.PartMatches)
         {
+            ClassId = chosen.GetValueOrDefault(r.Item.Id)?.ClassId ?? r.Suggestion?.ClassId,
+            LocationId = chosen.GetValueOrDefault(r.Item.Id)?.LocationId ?? r.Suggestion?.LocationId,
+            Splits = chosen.GetValueOrDefault(r.Item.Id)?.Splits,
             CategoryId = chosen.GetValueOrDefault(r.Item.Id)?.CategoryId ?? r.Suggestion?.CategoryAccountId,
             VendorId = chosen.GetValueOrDefault(r.Item.Id)?.VendorId ?? r.Suggestion?.VendorId,
             Payee = chosen.GetValueOrDefault(r.Item.Id)?.Payee ?? r.Suggestion?.Payee,
@@ -209,9 +274,40 @@
         _loaded = true;
     }
 
+    private static AddFeedItemCommand CommandFor(Row row) => new(
+        row.Splits is { } splits ? splits[0].AccountId!.Value : row.CategoryId!.Value, row.Payee, row.VendorId, null, row.ClassId, row.LocationId,
+        row.Splits?.Select(s => new BankSplit(s.AccountId!.Value, s.Amount!.Value, null, s.ClassId)).ToList());
+
+    private static void ToggleSplit(Row row)
+    {
+        if (row.Splits is not null)
+        {
+            row.Splits = null;
+            return;
+        }
+
+        var size = Math.Abs(row.Item.Amount);
+        row.Splits = [new SplitRow { AccountId = row.CategoryId, Amount = size, ClassId = row.ClassId }, new SplitRow()];
+    }
+
+    private static void Toggle(Row row, Guid entryId, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            row.Chosen.Add(entryId);
+        else
+            row.Chosen.Remove(entryId);
+    }
+
+    private Task MatchSeveralAsync(Row row) => RunAsync(async () =>
+    {
+        IReadOnlyCollection<Guid> entries = [.. row.Chosen];
+        await Ops.RunAsync<BankFeedService, bool>(async s => { await s.MatchAsync(row.Item.Id, entries); return true; }, _closingPassword);
+        _message = "Matched.";
+    });
+
     private Task AddAsync(Row row) => RunAsync(async () =>
     {
-        var command = new AddFeedItemCommand(row.CategoryId!.Value, row.Payee, row.VendorId);
+        var command = CommandFor(row);
         await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command), _closingPassword);
         _message = $"Added {Labels.Amount(Math.Abs(row.Item.Amount))} {(row.Item.IsMoneyIn ? "from" : "to")} {row.Payee ?? row.Item.Payee}.";
     });
@@ -238,9 +334,9 @@
     private Task AddAllReadyAsync() => RunAsync(async () =>
     {
         var added = 0;
-        foreach (var row in _rows.Where(r => r.CategoryId is not null && r.Matches.Count == 0).ToList())
+        foreach (var row in _rows.Where(r => r.CanAdd && r.Matches.Count == 0).ToList())
         {
-            var command = new AddFeedItemCommand(row.CategoryId!.Value, row.Payee, row.VendorId);
+            var command = CommandFor(row);
             await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command), _closingPassword);
             added++;
         }
@@ -281,10 +377,30 @@
         return $"/banking/rules/new?{query}";
     }
 
-    private sealed class Row(BankFeedItem item, IReadOnlyList<FeedMatch> matches)
+    private sealed class SplitRow
+    {
+        public Guid? AccountId { get; set; }
+        public decimal? Amount { get; set; }
+        public Guid? ClassId { get; set; }
+    }
+
+    private sealed class Row(BankFeedItem item, IReadOnlyList<FeedMatch> matches, IReadOnlyList<FeedMatch> partMatches)
     {
         public BankFeedItem Item { get; } = item;
         public IReadOnlyList<FeedMatch> Matches { get; } = matches;
+        public IReadOnlyList<FeedMatch> PartMatches { get; } = partMatches;
+        public bool Choosing { get; set; }
+        public HashSet<Guid> Chosen { get; } = [];
+        public decimal ChosenTotal => Math.Abs(Matches.Concat(PartMatches).Where(m => Chosen.Contains(m.JournalEntryId)).Sum(m => m.Amount));
+        public Guid? ClassId { get; set; }
+        public Guid? LocationId { get; set; }
+        public List<SplitRow>? Splits { get; set; }
+        public decimal SplitTotal => Splits?.Sum(s => s.Amount ?? 0m) ?? 0m;
+
+        public bool CanAdd => Splits is null
+            ? CategoryId is not null
+            : Splits.All(s => s.AccountId is not null && s.Amount > 0m) && SplitTotal == Math.Abs(Item.Amount);
+
         public Guid? CategoryId { get; set; }
         public Guid? VendorId { get; set; }
         public string? Payee { get; set; }

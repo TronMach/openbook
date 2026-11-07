@@ -178,7 +178,8 @@ public sealed class DepositService(
         if (items.Count == 0)
             throw new DomainException("deposit.empty", "Choose at least one payment to deposit. To undo the whole deposit, void it.");
 
-        var feed = await Banking.BankFeedService.TiedToAsync(bank, deposit.BankAccountId, deposit.JournalEntryId, null, ct);
+        var oldEntry = deposit.JournalEntryId;
+        var feed = await Banking.BankFeedService.TiedToAsync(bank, deposit.BankAccountId, oldEntry, null, ct);
         if (feed.Count > 0 && (command.BankAccountId != deposit.BankAccountId || items.Sum(i => i.Amount) != deposit.Total))
             throw new DomainException("deposit.feed_amount",
                 $"This deposit is matched to a line from the bank feed, so it stays {deposit.Total:N2} in the same account. Undo the match first to change that.");
@@ -198,7 +199,7 @@ public sealed class DepositService(
         await MarkAsync(added, deposit.Id, ct);
         deposit.Change(account.Id, command.Date, items, entry.Id, command.Memo);
         foreach (var item in feed.Where(i => i.Status == Domain.Banking.BankFeedStatus.Matched))
-            item.FollowEntry(entry.Id);
+            item.FollowEntry(oldEntry, entry.Id);
 
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, id, before, DocumentChanges.WithReason(Snapshot(deposit), reason)));
         await store.SaveChangesAsync(ct);

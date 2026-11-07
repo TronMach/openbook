@@ -234,7 +234,8 @@ public sealed class BankingService(
         await EnsureNotReceivablesAsync(command.Splits, await SplitAccountsAsync(transaction, ct), ct);
         var postings = BankTransaction.SplitPostings(transaction.Kind, transaction.AccountId, command.Splits);
         var amount = command.Splits.Sum(s => s.Amount);
-        var feed = await BankFeedService.TiedToAsync(bank, transaction.AccountId, transaction.JournalEntryId, transaction.Id, ct);
+        var oldEntry = transaction.JournalEntryId;
+        var feed = await BankFeedService.TiedToAsync(bank, transaction.AccountId, oldEntry, transaction.Id, ct);
         if (feed.Count > 0 && amount != transaction.Amount)
             throw new DomainException("bank.feed_amount",
                 $"This transaction stands for a line from the bank feed, so its amount stays {transaction.Amount:N2}. Undo the feed line first to change it.");
@@ -262,7 +263,7 @@ public sealed class BankingService(
         transaction.Change(command.Date, amount, entry.Id, payee, command.Reference, command.Memo, command.VendorId);
         transaction.SetLocation(command.LocationId);
         foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))
-            item.FollowEntry(entry.Id);
+            item.FollowEntry(oldEntry, entry.Id);
         bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, transaction.Id, before,
             DocumentChanges.WithReason(Snapshot(transaction), command.Reason)));
         await bank.SaveChangesAsync(ct);
@@ -294,6 +295,7 @@ public sealed class BankingService(
         Money.EnsureCents(command.Amount);
         var postings = BankTransaction.TransferPostings(from.Id, to.Id, command.Amount);
 
+        var oldEntry = transaction.JournalEntryId;
         var feed = new List<BankFeedItem>();
         foreach (var accountId in new[] { transaction.AccountId, transaction.TransferAccountId!.Value })
             feed.AddRange(await BankFeedService.TiedToAsync(bank, accountId, transaction.JournalEntryId, transaction.Id, ct));
@@ -309,7 +311,7 @@ public sealed class BankingService(
 
         transaction.ChangeTransfer(from.Id, to.Id, command.Date, command.Amount, entry.Id, command.Memo);
         foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))
-            item.FollowEntry(entry.Id);
+            item.FollowEntry(oldEntry, entry.Id);
         bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, transaction.Id, before,
             DocumentChanges.WithReason(Snapshot(transaction), command.Reason)));
         await bank.SaveChangesAsync(ct);

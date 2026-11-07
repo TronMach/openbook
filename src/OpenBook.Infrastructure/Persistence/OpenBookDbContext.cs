@@ -525,6 +525,16 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<BankTransaction>().WithMany().HasForeignKey(i => i.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(i => i.MatchedJournalEntryId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<BankRule>().WithMany().HasForeignKey(i => i.RuleId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(i => i.MoreEntries, m =>
+            {
+                m.ToTable("BankFeedItemEntries");
+                m.Property<Guid>("BankFeedItemId");
+                m.WithOwner().HasForeignKey("BankFeedItemId");
+                m.HasKey("BankFeedItemId", nameof(BankFeedMatch.JournalEntryId));
+                m.HasIndex(x => x.JournalEntryId);
+                m.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(i => i.MoreEntries).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<BankConnection>(b =>

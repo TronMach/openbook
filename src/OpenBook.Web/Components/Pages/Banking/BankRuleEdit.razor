@@ -5,6 +5,7 @@
 @inject AccountService AccountService
 @inject VendorService VendorService
 @inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <PageTitle>@(Id is null ? "New bank rule" : "Bank rule") · OpenBook</PageTitle>
 
@@ -115,6 +116,32 @@
                             }
                         </InputSelect>
                     </div>
+                    @if (_segments.Classes.Count > 0)
+                    {
+                        <div class="field">
+                            <label for="class">Class <span class="muted">(optional)</span></label>
+                            <InputSelect id="class" @bind-Value="Input.ClassId">
+                                <option value="">None</option>
+                                @foreach (var c in _segments.Classes)
+                                {
+                                    <option value="@c.Segment.Id">@(new string(' ', c.Depth * 3))@c.Segment.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    }
+                    @if (_segments.Locations.Count > 0)
+                    {
+                        <div class="field">
+                            <label for="location">@_segments.LocationLabel <span class="muted">(optional)</span></label>
+                            <InputSelect id="location" @bind-Value="Input.LocationId">
+                                <option value="">None</option>
+                                @foreach (var l in _segments.Locations)
+                                {
+                                    <option value="@l.Segment.Id">@(new string(' ', l.Depth * 3))@l.Segment.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    }
                 </div>
                 <label class="check">
                     <InputCheckbox @bind-Value="Input.AutoAdd" />
@@ -137,6 +164,8 @@
 </div>
 
 @code {
+    private SegmentOptions _segments = SegmentOptions.None;
+
     private BankRule? _rule;
     private ChartOfAccounts _chart = new([]);
     private List<Account> _banks = [];
@@ -158,6 +187,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _segments = await SegmentOptions.LoadAsync(Services);
         _chart = await AccountService.GetChartAsync();
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _banks = active.Where(a => BankTransaction.IsBankingAccount(a.Type)).ToList();
@@ -179,7 +209,7 @@
             {
                 Name = _rule.Name, Priority = _rule.Priority, Contains = _rule.Contains, Direction = _rule.Direction, AccountId = _rule.AccountId,
                 MinAmount = _rule.MinAmount, MaxAmount = _rule.MaxAmount, CategoryAccountId = _rule.CategoryAccountId, Payee = _rule.Payee,
-                VendorId = _rule.VendorId, AutoAdd = _rule.AutoAdd,
+                VendorId = _rule.VendorId, AutoAdd = _rule.AutoAdd, ClassId = _rule.ClassId, LocationId = _rule.LocationId,
             };
         }
         else
@@ -200,7 +230,7 @@
         try
         {
             var details = new BankRuleDetails(Input.Name, Input.Contains, Input.CategoryAccountId ?? Guid.Empty, Input.Direction, Input.AccountId,
-                Input.MinAmount, Input.MaxAmount, Input.Payee, Input.VendorId, Input.AutoAdd, Input.Priority ?? 100);
+                Input.MinAmount, Input.MaxAmount, Input.Payee, Input.VendorId, Input.AutoAdd, Input.Priority ?? 100, Input.ClassId, Input.LocationId);
             if (Id is { } id)
                 await Rules.UpdateAsync(id, details);
             else
@@ -221,6 +251,10 @@
 
     private sealed class RuleModel
     {
+        public Guid? ClassId { get; set; }
+
+        public Guid? LocationId { get; set; }
+
         [Required(ErrorMessage = "Give the rule a name.")]
         [StringLength(100)]
         public string Name { get; set; } = "";

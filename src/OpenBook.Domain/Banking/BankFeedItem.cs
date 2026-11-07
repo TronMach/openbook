@@ -23,6 +23,8 @@ public enum BankFeedStatus
 /// </summary>
 public sealed class BankFeedItem
 {
+    private readonly List<BankFeedMatch> _moreEntries = [];
+
     private BankFeedItem() => DedupeKey = string.Empty;
 
     public Guid Id { get; private set; }
@@ -54,6 +56,13 @@ public sealed class BankFeedItem
 
     /// <summary>The journal entry it was matched to (<see cref="BankFeedStatus.Matched"/>).</summary>
     public Guid? MatchedJournalEntryId { get; private set; }
+
+    /// <summary>The other entries it stands for: one debit from the bank can pay several bills.</summary>
+    public IReadOnlyCollection<BankFeedMatch> MoreEntries => _moreEntries;
+
+    /// <summary>Every entry it's matched to.</summary>
+    public IReadOnlyList<Guid> MatchedEntryIds =>
+        MatchedJournalEntryId is { } first ? [first, .. _moreEntries.Select(m => m.JournalEntryId)] : [];
 
     /// <summary>The rule that added it or suggested its category.</summary>
     public Guid? RuleId { get; private set; }
@@ -113,19 +122,28 @@ public sealed class BankFeedItem
         (ResolvedAt, ResolvedBy) = (at.ToUniversalTime(), actor);
     }
 
-    public void MarkMatched(Guid journalEntryId, DateTimeOffset at, string actor)
+    public void MarkMatched(IReadOnlyList<Guid> journalEntryIds, DateTimeOffset at, string actor)
     {
+        ArgumentNullException.ThrowIfNull(journalEntryIds);
         EnsurePending();
-        (Status, MatchedJournalEntryId) = (BankFeedStatus.Matched, journalEntryId);
+        (Status, MatchedJournalEntryId) = (BankFeedStatus.Matched, journalEntryIds[0]);
+        _moreEntries.AddRange(journalEntryIds.Skip(1).Select(id => new BankFeedMatch(id)));
         (ResolvedAt, ResolvedBy) = (at.ToUniversalTime(), actor);
     }
 
-    /// <summary>The matched document was corrected and its entry replaced: the match follows it to the new entry.</summary>
-    public void FollowEntry(Guid journalEntryId)
+    /// <summary>A matched document was corrected and its entry replaced: the match follows it to the new entry.</summary>
+    public void FollowEntry(Guid from, Guid to)
     {
         if (Status != BankFeedStatus.Matched)
             throw new DomainException("feed.not_matched", "This line isn't matched to a transaction.");
-        MatchedJournalEntryId = journalEntryId;
+        if (MatchedJournalEntryId == from)
+        {
+            MatchedJournalEntryId = to;
+            return;
+        }
+
+        if (_moreEntries.RemoveAll(m => m.JournalEntryId == from) > 0)
+            _moreEntries.Add(new BankFeedMatch(to));
     }
 
     public void Exclude(DateTimeOffset at, string actor)
@@ -142,6 +160,7 @@ public sealed class BankFeedItem
             throw new DomainException("feed.already_pending", "This item is already waiting for review.");
         (Status, BankTransactionId, MatchedJournalEntryId, RuleId, ResolvedAt, ResolvedBy) =
             (BankFeedStatus.Pending, null, null, null, null, null);
+        _moreEntries.Clear();
     }
 
     public void SuggestedBy(Guid? ruleId)
@@ -164,3 +183,6 @@ public sealed class BankFeedItem
         return text.Length <= max ? text : text[..max];
     }
 }
+
+/// <summary>Another entry a bank line is matched to (<see cref="BankFeedItem.MoreEntries"/>).</summary>
+public sealed record BankFeedMatch(Guid JournalEntryId);

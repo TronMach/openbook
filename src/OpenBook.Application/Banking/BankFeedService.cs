@@ -21,15 +21,26 @@ public sealed record FeedLine(DateOnly Date, decimal Amount, string? Payee, stri
 public sealed record FeedImportResult(int Queued, int AutoAdded, int Skipped, string? NotAdded = null);
 
 /// <summary>What a rule says to do with a line.</summary>
-public sealed record FeedSuggestion(Guid CategoryAccountId, string? Payee, Guid? VendorId, BankRule Rule);
+public sealed record FeedSuggestion(Guid CategoryAccountId, string? Payee, Guid? VendorId, BankRule Rule, Guid? ClassId = null, Guid? LocationId = null);
 
 /// <summary>A transaction already in the books that looks like the line: same amount, within a week.</summary>
 public sealed record FeedMatch(Guid JournalEntryId, long EntryNumber, DateOnly Date, decimal Amount, string Description, string Source, Guid? SourceId);
 
-public sealed record FeedReviewItem(BankFeedItem Item, FeedSuggestion? Suggestion, IReadOnlyList<FeedMatch> Matches);
+/// <param name="Matches">Entries for exactly this amount.</param>
+/// <param name="PartMatches">Smaller entries near it, the same way round, that several of could add up to it.</param>
+public sealed record FeedReviewItem(BankFeedItem Item, FeedSuggestion? Suggestion, IReadOnlyList<FeedMatch> Matches, IReadOnlyList<FeedMatch> PartMatches);
 
 /// <summary>Add a line as a new spend or receive in this category.</summary>
-public sealed record AddFeedItemCommand(Guid CategoryAccountId, string? Payee = null, Guid? VendorId = null, string? Memo = null);
+/// <param name="Splits">Instead of one category: lines adding up to the bank line.</param>
+public sealed record AddFeedItemCommand(
+    Guid CategoryAccountId,
+    string? Payee = null,
+    Guid? VendorId = null,
+    string? Memo = null,
+    Guid? ClassId = null,
+    Guid? LocationId = null,
+    IReadOnlyCollection<BankSplit>? Splits = null,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 /// <summary>
 /// The bank feed: imported statement lines wait in a review queue, where each is added as a new transaction,
@@ -46,6 +57,7 @@ public sealed class BankFeedService(
 {
     internal const string EntityType = "bank_feed_item";
     public const int MatchWindowDays = 7;
+    private const int MostPartMatches = 30;
 
     /// <summary>Reads a CSV or OFX/QFX/QBO statement and flags lines already imported or already in the books.</summary>
     public async Task<BankImportPreview> PreviewAsync(Guid accountId, string text, BankImportOptions options, CancellationToken ct = default)
@@ -137,7 +149,7 @@ public sealed class BankFeedService(
                 // One line a rule can't post (a closed period, a category switched off since) waits for review and stops nothing else.
                 try
                 {
-                    var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId)), batchId, ct);
+                    var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId, ClassId: rule.ClassId, LocationId: rule.LocationId)), batchId, ct);
                     item.MarkAdded(transaction.Id, rule.Id, clock.UtcNow, user.Actor);
                     autoAdded++;
                 }
@@ -170,12 +182,17 @@ public sealed class BankFeedService(
         return items.Select(item =>
         {
             var rule = item.Status == BankFeedStatus.Pending ? rules.FirstOrDefault(r => r.Fits(item)) : null;
-            var suggestion = rule is null ? null : new FeedSuggestion(rule.CategoryAccountId, rule.Payee, rule.VendorId, rule);
+            var suggestion = rule is null ? null : new FeedSuggestion(rule.CategoryAccountId, rule.Payee, rule.VendorId, rule, rule.ClassId, rule.LocationId);
             var matches = item.Status == BankFeedStatus.Pending
                 ? candidates.Where(c => c.Amount == item.Amount && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays)
                     .OrderBy(c => Math.Abs(c.Date.DayNumber - item.Date.DayNumber)).Take(5).ToList()
                 : [];
-            return new FeedReviewItem(item, suggestion, matches);
+            var parts = item.Status == BankFeedStatus.Pending
+                ? candidates.Where(c => c.Amount != item.Amount && Math.Sign(c.Amount) == Math.Sign(item.Amount) && Math.Abs(c.Amount) < Math.Abs(item.Amount)
+                        && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays)
+                    .OrderBy(c => c.Date).ThenBy(c => c.EntryNumber).Take(MostPartMatches).ToList()
+                : [];
+            return new FeedReviewItem(item, suggestion, matches, parts);
         }).ToList();
     }
 
@@ -206,18 +223,27 @@ public sealed class BankFeedService(
     }
 
     /// <summary>The line is already in the books (a deposit, a check, a bill payment): link it rather than adding it again.</summary>
-    public async Task MatchAsync(Guid itemId, Guid journalEntryId, CancellationToken ct = default)
+    public Task MatchAsync(Guid itemId, Guid journalEntryId, CancellationToken ct = default) => MatchAsync(itemId, [journalEntryId], ct);
+
+    /// <summary>One line from the bank standing for several entries (a batch of bill payments, a day's card takings): they must add up to it.</summary>
+    public async Task MatchAsync(Guid itemId, IReadOnlyCollection<Guid> journalEntryIds, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(journalEntryIds);
+        var ids = journalEntryIds.Distinct().ToList();
+        if (ids.Count == 0)
+            throw new DomainException("feed.match_not_found", "Choose what this line matches.");
         var item = await PendingAsync(itemId, ct);
-        var candidate = (await MatchCandidatesAsync(item.AccountId, ct)).FirstOrDefault(c => c.JournalEntryId == journalEntryId)
-            ?? throw new DomainException("feed.match_not_found", "That transaction isn't on this account, is voided, or is already matched.");
-        if (candidate.Amount != item.Amount)
-            throw new DomainException("feed.match_amount", $"That transaction is for {candidate.Amount:N2}, not {item.Amount:N2}.");
-        if (Math.Abs(candidate.Date.DayNumber - item.Date.DayNumber) > MatchWindowDays)
+        var available = (await MatchCandidatesAsync(item.AccountId, ct)).ToDictionary(c => c.JournalEntryId);
+        var chosen = ids.Select(id => available.GetValueOrDefault(id)
+            ?? throw new DomainException("feed.match_not_found", "That transaction isn't on this account, is voided, or is already matched.")).ToList();
+        var total = chosen.Sum(c => c.Amount);
+        if (total != item.Amount)
+            throw new DomainException("feed.match_amount", $"{(chosen.Count == 1 ? "That transaction is" : "Those transactions add up to")} {total:N2}, not {item.Amount:N2}.");
+        if (chosen.Any(c => Math.Abs(c.Date.DayNumber - item.Date.DayNumber) > MatchWindowDays))
             throw new DomainException("feed.match_window", $"That transaction is more than {MatchWindowDays} days from this line. Add the line, or change the transaction's date first.");
 
         var before = Snapshot(item);
-        item.MarkMatched(journalEntryId, clock.UtcNow, user.Actor);
+        item.MarkMatched(ids, clock.UtcNow, user.Actor);
         bank.Add(Audit(item, before));
         await bank.SaveChangesAsync(ct);
     }
@@ -253,11 +279,22 @@ public sealed class BankFeedService(
         item.IsMoneyIn ? BankTransactionKind.Receive : BankTransactionKind.Spend,
         item.AccountId,
         item.Date,
-        [new BankSplit(command.CategoryAccountId, Math.Abs(item.Amount))],
+        Splits(item, command),
         Clean(command.Payee) ?? (command.VendorId is null ? item.Payee : null),
         item.Reference,
         Clean(command.Memo) ?? item.Memo,
-        item.IsMoneyIn ? null : command.VendorId);
+        item.IsMoneyIn ? null : command.VendorId,
+        command.LocationId,
+        command.TagIds);
+
+    private static IReadOnlyCollection<BankSplit> Splits(BankFeedItem item, AddFeedItemCommand command)
+    {
+        if (command.Splits is not { Count: > 0 } splits)
+            return [new BankSplit(command.CategoryAccountId, Math.Abs(item.Amount), null, command.ClassId)];
+        if (splits.Sum(s => s.Amount) != Math.Abs(item.Amount))
+            throw new DomainException("feed.split_total", $"The lines add up to {splits.Sum(s => s.Amount):N2}, not {Math.Abs(item.Amount):N2}.");
+        return splits;
+    }
 
     private async Task<BankFeedItem> PendingAsync(Guid itemId, CancellationToken ct)
     {
@@ -309,7 +346,7 @@ public sealed class BankFeedService(
     /// </summary>
     internal static async Task<IReadOnlyList<BankFeedItem>> TiedToAsync(IBankingStore bank, Guid accountId, Guid entryId, Guid? transactionId, CancellationToken ct) =>
         (await bank.ListFeedItemsAsync(accountId, ct))
-            .Where(i => i.Status == BankFeedStatus.Matched && i.MatchedJournalEntryId == entryId
+            .Where(i => i.Status == BankFeedStatus.Matched && i.MatchedEntryIds.Contains(entryId)
                 || i.Status == BankFeedStatus.Added && transactionId is not null && i.BankTransactionId == transactionId)
             .ToList();
 
@@ -324,7 +361,7 @@ public sealed class BankFeedService(
     {
         var chart = await accounts.GetChartAsync(ct);
         var matched = (await bank.ListFeedItemsAsync(accountId, ct))
-            .Where(i => i.Status == BankFeedStatus.Matched && i.MatchedJournalEntryId is not null).Select(i => i.MatchedJournalEntryId!.Value)
+            .Where(i => i.Status == BankFeedStatus.Matched).SelectMany(i => i.MatchedEntryIds)
             .Concat((await bank.ListFeedItemsAsync(accountId, ct)).Where(i => i.Status == BankFeedStatus.Added && i.BankTransactionId is not null)
                 .Select(i => i.BankTransactionId!.Value))
             .ToHashSet();
@@ -361,6 +398,7 @@ public sealed class BankFeedService(
         Status = i.Status.ToString(),
         i.BankTransactionId,
         i.MatchedJournalEntryId,
+        MoreEntries = i.MoreEntries.Select(m => m.JournalEntryId).ToList(),
         i.RuleId,
     });
 }
