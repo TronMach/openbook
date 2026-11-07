@@ -225,7 +225,8 @@ public static class NonprofitEndpoints
                     Id(form["incomeAccountId"]),
                     form["conditional"] == "true",
                     form["reference"],
-                    form["terms"]), ct);
+                    form["terms"],
+                    Id(form["parentClassId"])), ct);
                 return Results.Redirect($"/nonprofit/grants/{grant.Id}");
             }
             catch (DomainException ex)

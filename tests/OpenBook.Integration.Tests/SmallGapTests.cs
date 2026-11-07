@@ -213,4 +213,15 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.Equal(300m, lines.Where(l => l.ClassId == program.Id && l.Source == OpenBook.Domain.Assets.DepreciationRun.Source).Sum(l => l.Amount));
         Assert.Equal(60m, lines.Where(l => l.ClassId == program.Id && l.Source == OpenBook.Domain.Assets.Loan.PaymentSource).Sum(l => l.Amount));
     }
+
+    [Fact]
+    public async Task A_grants_new_class_can_go_under_the_program_it_pays_for()
+    {
+        await _db.CreateAccount("Grants", AccountType.Income, "4300");
+        var program = await In<OpenBook.Application.Segments.SegmentService, OpenBook.Domain.Segments.Segment>(s => s.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Class, "Food pantry"));
+        var funder = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("County")));
+        var grant = await In<GrantService, Grant>(s => s.CreateAsync(new GrantCommand("USDA", funder.Id, 5_000m, Mar1, Mar1, Mar31, ParentClassId: program.Id)));
+        var made = await In<OpenBook.Application.Segments.SegmentService, OpenBook.Domain.Segments.Segment?>(s => s.GetAsync(grant.ClassId));
+        Assert.Equal(program.Id, made!.ParentId);
+    }
 }

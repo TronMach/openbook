@@ -54,6 +54,17 @@
                     </select>
                     <span class="hint">Expenses on this class (and its subclasses) in the grant period count against the grant.</span>
                 </div>
+                <div class="field" data-shown-by="#class" data-shown-for="">
+                    <label for="parent">New class goes under <span class="muted">(optional)</span></label>
+                    <select id="parent" name="parentClassId" data-search>
+                        <option value="">(the top: a program of its own)</option>
+                        @foreach (var c in _classes)
+                        {
+                            <option value="@c.Segment.Id">@c.FullName</option>
+                        }
+                    </select>
+                    <span class="hint">For a grant that pays for part of an existing program, put its class under the program: the grant's spending is tracked on its own and still counts in the program's column.</span>
+                </div>
                 <div class="field">
                     <label for="income">Income account <span class="muted">(optional)</span></label>
                     <select id="income" name="incomeAccountId" data-search>

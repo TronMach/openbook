@@ -218,7 +218,10 @@ public sealed class NonprofitReports(
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = (await ledger.LinesAsync(reportBasis, from, to, ct)).Where(l => chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense).ToList();
+        var expenses = (await ledger.LinesAsync(reportBasis, from, to, ct)).Where(l => chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense).ToList();
+        // Cost of goods sold comes off sales in Part VIII (line 10b), so it isn't a functional expense.
+        var lines = expenses.Where(l => chart.Get(l.AccountId).Type != AccountType.CostOfGoodsSold).ToList();
+        var costOfGoods = expenses.Where(l => chart.Get(l.AccountId).Type == AccountType.CostOfGoodsSold).ToList();
         var classes = (await segments.ListAsync(SegmentKind.Class, includeInactive: true, ct)).ToDictionary(c => c.Segment.Id, c => c.Segment);
 
         TaxLine? LineOf(Account a) => TaxLines.Find(a.TaxLineKey) ?? (a.ParentId is { } p && chart.Find(p) is { } parent ? LineOf(parent) : null);
@@ -243,6 +246,8 @@ public sealed class NonprofitReports(
         if (other.Count > 0)
             rows.Add(RowOf("Not on a Form 990 line", other));
         rows.Add(RowOf("25 Total functional expenses", lines, ReportRowStyle.Total));
+        if (costOfGoods.Sum(l => l.Amount) != 0m)
+            rows.Add(RowOf("Not in Part IX: cost of goods sold (Part VIII, line 10b)", costOfGoods));
 
         return new ReportTable(
             "Form 990 Part IX: statement of functional expenses",

@@ -27,7 +27,8 @@ public sealed record GrantCommand(
     Guid? IncomeAccountId = null,
     bool Conditional = false,
     string? Reference = null,
-    string? Terms = null);
+    string? Terms = null,
+    Guid? ParentClassId = null);
 
 public sealed record GrantDetailsCommand(string Name, string? Reference, DateOnly StartsOn, DateOnly EndsOn, string? Terms);
 
@@ -123,8 +124,10 @@ public sealed class GrantService(
         }
         else
         {
-            var created = await segments.CreateAsync(SegmentKind.Class, command.Name.Trim(), null, ct);
-            await segments.SetFunctionalAreaAsync(created.Id, FunctionalArea.Program, ct);
+            // Under a program class, the grant takes that program's area and rolls up into its column; at the top it's a program of its own.
+            var created = await segments.CreateAsync(SegmentKind.Class, command.Name.Trim(), command.ParentClassId, ct);
+            if (command.ParentClassId is null)
+                await segments.SetFunctionalAreaAsync(created.Id, FunctionalArea.Program, ct);
             // Spending counts by class, so forms have to offer one.
             if (await segments.GetTrackingAsync(ct) is { Classes: false } tracking)
                 await segments.SetTrackingAsync(tracking with { Classes = true }, ct);

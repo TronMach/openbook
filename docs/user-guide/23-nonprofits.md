@@ -25,6 +25,10 @@ Nonprofits report expenses by function: **program services**, **management and g
 
 On the Nonprofit page, **Set up the usual classes** adds "Programs", "Management and General" and "Fundraising" with their areas, and turns class tracking on. Add each program as a class under "Programs", then put a class on every expense line.
 
+### One class tree for programs, functions, grants and purposes
+
+OpenBook keeps all of these on the line's class, so plan the tree once: functions at the top ("Programs", "Management and General", "Fundraising"), each program under "Programs", and a grant or a donor-restricted purpose under the program it pays for. Then a line on "Programs:Food pantry:USDA grant" counts toward the grant, the food pantry's column and program services all at once, and restricted money for the pantry is released by what's spent there. What the tree can't hold is one grant paying for two programs: give it a class of its own at the top, or split the costs to each program's own grant class. Fixed assets and loans take a class too, so depreciation and interest land in the right column.
+
 ## Gifts
 
 **Nonprofit → Record a gift** (`/nonprofit/gifts/new`):
@@ -95,7 +99,7 @@ A *pledge* is a promise to give. On accrual basis it's income when made; on cash
 **Nonprofit → Grants → Add a grant**:
 
 - **Name**, **funder** (a customer record), **award number**, **amount awarded**, **awarded on**, and the **grant period** (starts, ends).
-- **Class**: expenses on this class (and its subclasses) during the grant period count against the grant. Leave it empty to create a class named after the grant.
+- **Class**: expenses on this class (and its subclasses) during the grant period count against the grant. Leave it empty to create a class named after the grant, at the top as a program of its own, or under the program it pays for with **New class goes under**.
 - **Income account**: most grants are for a purpose or period, so choose a restricted account.
 - **Conditional**: tick for grants that are income only as the condition is met, such as cost reimbursement or matching grants.
 - **Terms**: allowed costs, reports due, conditions, for your own reference.
