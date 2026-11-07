@@ -234,6 +234,7 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         i.Barcode,
         i.PreferredVendorId,
         i.ReorderQuantity,
+        i.LeadTimeDays,
         Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });

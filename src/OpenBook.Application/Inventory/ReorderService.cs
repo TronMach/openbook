@@ -10,7 +10,8 @@ namespace OpenBook.Application.Inventory;
 /// <summary>A tracked item's stock beside what's on order from vendors and still to deliver on customers' sales orders.</summary>
 /// <param name="OnPurchaseOrders">Units on open purchase orders that haven't come into stock yet.</param>
 /// <param name="OnSalesOrders">Units on open sales orders not invoiced yet (bundles count as their components).</param>
-public sealed record StockOutlook(Item Item, decimal OnHand, decimal OnPurchaseOrders, decimal OnSalesOrders)
+/// <param name="SoldPerMonth">Units sold per 30 days over the last <see cref="ReorderService.SalesDays"/> days (sales less returns).</param>
+public sealed record StockOutlook(Item Item, decimal OnHand, decimal OnPurchaseOrders, decimal OnSalesOrders, decimal SoldPerMonth = 0m)
 {
     /// <summary>On hand less what's promised to customers.</summary>
     public decimal Available => OnHand - OnSalesOrders;
@@ -18,11 +19,22 @@ public sealed record StockOutlook(Item Item, decimal OnHand, decimal OnPurchaseO
     /// <summary>What stock comes to once the open orders on both sides are filled.</summary>
     public decimal Projected => OnHand + OnPurchaseOrders - OnSalesOrders;
 
-    /// <summary>At or below the reorder point once open orders are counted.</summary>
-    public bool NeedsReorder => Item.ReorderPoint is { } point && Projected <= point;
+    /// <summary>What it sells over the lead time: stock below this runs out before a new order arrives.</summary>
+    public decimal LeadTimeDemand => Item.LeadTimeDays is { } days ? SoldPerMonth * days / 30m : 0m;
 
-    /// <summary>The item's reorder quantity, else enough whole units to bring it back above the reorder point; 0 when it needn't be ordered.</summary>
-    public decimal Suggested => !NeedsReorder ? 0m : Item.ReorderQuantity ?? Math.Floor(Item.ReorderPoint!.Value - Projected) + 1m;
+    /// <summary>Days what's available lasts at the rate it sells; null when it hasn't sold lately.</summary>
+    public decimal? CoverDays => SoldPerMonth > 0m ? decimal.Round(Math.Max(0m, Available) * 30m / SoldPerMonth, 0, MidpointRounding.AwayFromZero) : null;
+
+    /// <summary>At or below the reorder point once open orders are counted, or (with a lead time) not enough to last until a new order arrives.</summary>
+    public bool NeedsReorder => (Item.ReorderPoint is { } point && Projected <= point) || (LeadTimeDemand > 0m && Projected <= LeadTimeDemand);
+
+    /// <summary>
+    /// The item's reorder quantity, else enough whole units to bring it back above the reorder point, or with a lead time
+    /// and sales, to last the lead time and a month more, whichever is more; 0 when it needn't be ordered.
+    /// </summary>
+    public decimal Suggested => !NeedsReorder ? 0m : Item.ReorderQuantity ?? Math.Max(
+        Item.ReorderPoint is { } point ? Math.Floor(point - Projected) + 1m : 0m,
+        LeadTimeDemand > 0m ? Math.Ceiling(LeadTimeDemand + SoldPerMonth - Projected) : 0m);
 }
 
 /// <summary>One item to order: from whom, how many and at what unit cost (null for the item's purchase cost).</summary>
@@ -33,9 +45,18 @@ public sealed record ReorderLine(Guid ItemId, Guid VendorId, decimal Quantity, d
 /// counted, and making one purchase order per vendor for them in one go.
 /// </summary>
 public sealed class ReorderService(
-    InventoryService inventory, IPurchasesStore purchases, ISalesStore sales, PurchaseOrderService orders, SalesOrderService salesOrders, IUnitOfWork unitOfWork)
+    InventoryService inventory, IPurchasesStore purchases, ISalesStore sales, PurchaseOrderService orders, SalesOrderService salesOrders, IUnitOfWork unitOfWork,
+    IInventoryStore movements, IClock clock)
 {
     public const int MaxLines = 500;
+
+    /// <summary>How far back the sales rate looks.</summary>
+    public const int SalesDays = 90;
+
+    private static readonly HashSet<string> SaleSources = new(StringComparer.Ordinal)
+    {
+        InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.CreditMemo, InventorySources.ChannelOrders, InventorySources.ChannelReturn,
+    };
 
     /// <summary>Every active tracked item's outlook, by name; with a warehouse, only its stock and the orders for it.</summary>
     public async Task<IReadOnlyList<StockOutlook>> OutlookAsync(Warehouse? warehouse = null, CancellationToken ct = default)
@@ -84,8 +105,16 @@ public sealed class ReorderService(
                     Promise(line.ItemId!.Value, left);
         }
 
+        // Units sold lately, net of returns and voids (each void moves the stock back under the same source).
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
+        var since = today.AddDays(-SalesDays + 1);
+        var sold = (await movements.ListMovementsAsync(null, ct))
+            .Where(m => SaleSources.Contains(m.SourceType) && m.Date >= since && m.Date <= today && Counts(m.WarehouseId))
+            .GroupBy(m => m.ItemId).ToDictionary(g => g.Key, g => Math.Max(0m, -g.Sum(m => m.Quantity)));
+
         return stock
-            .Select(s => new StockOutlook(s.Item, there is null ? s.Quantity : there.GetValueOrDefault(s.Item.Id), onOrder.GetValueOrDefault(s.Item.Id), promised.GetValueOrDefault(s.Item.Id)))
+            .Select(s => new StockOutlook(s.Item, there is null ? s.Quantity : there.GetValueOrDefault(s.Item.Id), onOrder.GetValueOrDefault(s.Item.Id), promised.GetValueOrDefault(s.Item.Id),
+                decimal.Round(sold.GetValueOrDefault(s.Item.Id) * 30m / SalesDays, 2, MidpointRounding.AwayFromZero)))
             .OrderBy(s => s.Item.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
@@ -93,7 +122,7 @@ public sealed class ReorderService(
     /// <summary>Inventory products (not assemblies, which are built) that need ordering, with the suggested quantity.</summary>
     public async Task<IReadOnlyList<StockOutlook>> DueAsync(CancellationToken ct = default) =>
         // Asked on every visit to the home page: without a reorder point on anything, there's nothing to work out.
-        (await sales.ListItemsAsync(ct)).Any(i => i.IsActive && i.IsInventory && i.ReorderPoint is not null)
+        (await sales.ListItemsAsync(ct)).Any(i => i.IsActive && i.IsInventory && (i.ReorderPoint is not null || i.LeadTimeDays is not null))
             ? (await OutlookAsync(null, ct)).Where(s => s.NeedsReorder && !s.Item.IsAssembly).ToList()
             : [];
 

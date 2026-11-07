@@ -50,11 +50,11 @@ public sealed record ItemResponse(
     Guid? InventoryAssetAccountId = null, Guid? CostAccountId = null, decimal? ReorderPoint = null, decimal PurchaseCost = 0m,
     IReadOnlyList<QuantityBreakDto>? QuantityBreaks = null, InventoryCostMethod CostMethod = InventoryCostMethod.Fifo, IReadOnlyList<ItemComponent>? Components = null,
     OpenBook.Domain.Inventory.ItemTracking Tracking = OpenBook.Domain.Inventory.ItemTracking.None, string? Barcode = null, bool AutoBuild = false,
-    ShortStock SellShort = ShortStock.Company, Guid? PreferredVendorId = null, decimal? ReorderQuantity = null)
+    ShortStock SellShort = ShortStock.Company, Guid? PreferredVendorId = null, decimal? ReorderQuantity = null, int? LeadTimeDays = null)
 {
     public static ItemResponse From(Item i) => new(
         i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost,
-        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild, i.SellShort) { PreferredVendorId = i.PreferredVendorId, ReorderQuantity = i.ReorderQuantity };
+        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild, i.SellShort) { PreferredVendorId = i.PreferredVendorId, ReorderQuantity = i.ReorderQuantity, LeadTimeDays = i.LeadTimeDays };
 }
 
 /// <param name="Rate">For a tax line, the percentage charged.</param>

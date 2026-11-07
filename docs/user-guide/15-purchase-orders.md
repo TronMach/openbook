@@ -36,6 +36,8 @@ To correct a bill entered from a PO, use **Change** on the bill. It lists the or
 
 **Purchases → Reorder stock** (also on the Inventory page) lists the inventory products at or below their reorder point once open orders are counted: what's on hand, plus what's on purchase orders and not in stock yet, less what open sales orders still have to deliver. Each line suggests the item's **reorder quantity**, or enough to bring it back above the reorder point, and the item's **preferred vendor** and purchase cost (both set on the item's page).
 
+Each line also shows what the item **sold a month** over the last 90 days and how many days what's available **lasts** at that rate. Give an item a **lead time in days** (how long a new order takes to arrive) and it's listed as soon as what's left wouldn't last that long, whatever its reorder point; with no reorder quantity set, it suggests enough for the lead time and a month more.
+
 Tick the items to order, change vendors, quantities or costs if you like, choose the **order date** (and an **expected by** date), then **Make purchase orders**. OpenBook makes one purchase order per vendor, with the memo "Reorder"; if any of them can't be made, none are. **Every inventory product** lists items that don't need ordering too, so you can add them. Assemblies aren't listed: you build them.
 
 ## The 3-way match and approvals

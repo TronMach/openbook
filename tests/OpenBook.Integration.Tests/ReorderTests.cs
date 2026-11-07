@@ -49,6 +49,32 @@ public sealed class ReorderTests : IAsyncLifetime
         });
 
     [Fact]
+    public async Task With_a_lead_time_what_sells_decides_when_and_how_much_to_reorder()
+    {
+        _db.Clock.UtcNow = new DateTimeOffset(2026, 3, 31, 12, 0, 0, TimeSpan.Zero);
+        var gadget = await _db.InScope(async sp =>
+        {
+            var item = await sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails("Gadget", ItemType.Inventory, _sales, 20m, PurchaseCost: 4m, LeadTimeDays: 30));
+            await sp.GetRequiredService<InventoryAdjustmentService>().CreateAsync(new CreateInventoryAdjustmentCommand(Mar1, [new(item.Id, 100m, 4m)]));
+            return item;
+        });
+        Task Sell(decimal quantity, DateOnly date) =>
+            In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_customer.Id, date, [new SalesLineDraft(gadget.Id, null, quantity, 20m)])));
+
+        // 45 sold over the last 90 days is 15 a month: 55 on hand lasts well past the 30 days a new order takes.
+        await Sell(45m, Mar1.AddDays(9));
+        var outlook = Assert.Single(await In<ReorderService, IReadOnlyList<StockOutlook>>(s => s.OutlookAsync()));
+        Assert.Equal((15m, 15m, false, 110m), (outlook.SoldPerMonth, outlook.LeadTimeDemand, outlook.NeedsReorder, outlook.CoverDays));
+
+        // 90 sold is 30 a month; 10 left won't last the 30 days, so order for the lead time and a month more.
+        await Sell(45m, Mar1.AddDays(20));
+        outlook = Assert.Single(await In<ReorderService, IReadOnlyList<StockOutlook>>(s => s.DueAsync()));
+        Assert.Equal((30m, true, 50m, 10m), (outlook.SoldPerMonth, outlook.NeedsReorder, outlook.Suggested, outlook.CoverDays));
+        Assert.Equal("item.lead_time_invalid", (await Assert.ThrowsAsync<DomainException>(() => In<ItemService, Item>(s => s.CreateAsync(
+            new ItemDetails("Bad", ItemType.Inventory, _sales, 1m, LeadTimeDays: 400))))).Code);
+    }
+
+    [Fact]
     public async Task Open_orders_count_towards_what_needs_reordering()
     {
         var widget = await Stocked("Widget", 10m, 5m, _parts.Id);

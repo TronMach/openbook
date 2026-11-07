@@ -116,6 +116,9 @@ public sealed class Item
     /// </summary>
     public decimal? ReorderQuantity { get; private set; }
 
+    /// <summary>Days from ordering to having it in stock; with what it sells, reordering starts early enough not to run out.</summary>
+    public int? LeadTimeDays { get; private set; }
+
     /// <summary>Whether stock on hand and its cost are tracked: inventory products and assemblies.</summary>
     public bool IsInventory => IsTracked(Type);
 
@@ -196,7 +199,7 @@ public sealed class Item
             _components.Clear();
         if (!IsInventory)
         {
-            (InventoryAssetAccountId, CostAccountId, ReorderPoint, ReorderQuantity) = (null, null, null, null);
+            (InventoryAssetAccountId, CostAccountId, ReorderPoint, ReorderQuantity, LeadTimeDays) = (null, null, null, null, null);
             CostMethod = InventoryCostMethod.Fifo;
             Tracking = Inventory.ItemTracking.None;
             AutoBuild = false;
@@ -237,6 +240,12 @@ public sealed class Item
             <= 0m => throw new DomainException("item.reorder_quantity_invalid", "The quantity to reorder must be more than zero (leave it blank to order back up to the reorder point)."),
             { } q when decimal.Round(q, SalesLine.Precision) != q => throw new DomainException("item.reorder_quantity_invalid", "The quantity to reorder can have up to 4 decimal places."),
             { } q => q,
+        };
+        LeadTimeDays = details.LeadTimeDays switch
+        {
+            null => null,
+            < 0 or > 365 => throw new DomainException("item.lead_time_invalid", "The lead time is from 0 to 365 days."),
+            { } d => d,
         };
     }
 
@@ -311,4 +320,5 @@ public sealed record ItemDetails(
     bool AutoBuild = false,
     ShortStock SellShort = ShortStock.Company,
     Guid? PreferredVendorId = null,
-    decimal? ReorderQuantity = null);
+    decimal? ReorderQuantity = null,
+    int? LeadTimeDays = null);

@@ -127,6 +127,11 @@
                     <span class="hint">Suggested when reordering. Leave blank to order back up to the reorder point.</span>
                 </div>
                 <div class="field">
+                    <label for="lead-time">@(_simple ? "Days it takes to arrive" : "Lead time in days") <span class="muted">(optional)</span></label>
+                    <InputNumber id="lead-time" @bind-Value="Input.LeadTimeDays" />
+                    <span class="hint">With what it sold over the last 90 days, it's flagged for reordering while there's still enough to last until a new order arrives.</span>
+                </div>
+                <div class="field">
                     <label for="preferred-vendor">@(_simple ? "Who do you buy it from?" : "Preferred vendor") <span class="muted">(optional)</span></label>
                     <InputSelect id="preferred-vendor" @bind-Value="Input.PreferredVendorId" data-search>
                         <option value="">None</option>
@@ -546,7 +551,7 @@
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
                 CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
-                PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity,
+                PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity, LeadTimeDays = _item.LeadTimeDays,
             };
         Input.Version ??= opened;
         _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).Select(v => v.Vendor)
@@ -586,7 +591,7 @@
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
                 asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort,
-                Input.PreferredVendorId, Input.ReorderQuantity);
+                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays);
             await Versions.EnsureUnchangedAsync<Item>(_item?.Id ?? Guid.Empty, Input.Version);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
@@ -647,5 +652,7 @@
         public Guid? PreferredVendorId { get; set; }
 
         public decimal? ReorderQuantity { get; set; }
+
+        public int? LeadTimeDays { get; set; }
     }
 }

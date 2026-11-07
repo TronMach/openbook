@@ -76,7 +76,7 @@
                     <thead>
                         <tr>
                             <th class="check"></th><th>Item</th><th class="num">On hand</th><th class="num">On purchase orders</th><th class="num">On sales orders</th>
-                            <th class="num">Reorder point</th><th>Vendor</th><th class="num">Quantity</th><th class="num">Unit cost</th>
+                            <th class="num">Reorder point</th><th class="num" title="Units sold per month over the last 90 days">Sold a month</th><th class="num" title="Days what's available lasts at that rate">Lasts</th><th>Vendor</th><th class="num">Quantity</th><th class="num">Unit cost</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -90,6 +90,8 @@
                                 <td class="num">@(o.OnPurchaseOrders == 0m ? "" : Labels.Quantity(o.OnPurchaseOrders))</td>
                                 <td class="num">@(o.OnSalesOrders == 0m ? "" : Labels.Quantity(o.OnSalesOrders))</td>
                                 <td class="num">@(o.Item.ReorderPoint is { } point ? Labels.Quantity(point) : "")</td>
+                                <td class="num">@(o.SoldPerMonth == 0m ? "" : Labels.Quantity(o.SoldPerMonth))</td>
+                                <td class="num">@(o.CoverDays is { } days ? $"{days:0} days" : "")@(o.Item.LeadTimeDays is { } lead ? $" (arrives in {lead})" : "")</td>
                                 <td>
                                     <select name="vendor:@id" aria-label="Vendor for @o.Item.Name" data-search data-options="#vendor-list">
                                         <option value="">Choose a vendor</option>
