@@ -32,14 +32,14 @@
             <tbody>
                 @foreach (var p in _assets)
                 {
-                    <tr class="@(p.Asset.IsDisposed ? "muted" : "")">
+                    <tr class="@(p.Asset.Status != FixedAssetStatus.Active ? "muted" : "")">
                         <td><a href="/assets/@p.Asset.Id">@(p.Asset.Number is { } n ? $"{n} " : "")@p.Asset.Name</a></td>
                         <td>@Labels.Date(p.Asset.InServiceDate)</td>
                         <td>@AssetReports.Method(p.Asset)</td>
                         <td class="num">@Labels.Amount(p.Asset.Cost)</td>
                         <td class="num">@Labels.Amount(p.Accumulated)</td>
                         <td class="num">@(p.Asset.IsDisposed ? "" : Labels.Amount(p.BookValue))</td>
-                        <td>@(p.Asset.IsDisposed ? $"Disposed {Labels.Date(p.Asset.DisposedOn!.Value)}" : "Active")</td>
+                        <td>@(p.Asset.IsDisposed ? $"Disposed {Labels.Date(p.Asset.DisposedOn!.Value)}" : p.Asset.IsRemoved ? "Removed" : "Active")</td>
                     </tr>
                 }
             </tbody>

@@ -25,7 +25,7 @@ Record the purchase as usual: a bill, an expense or a journal entry, to a **Fixe
 
 - **Class** (when you use classes): the program or department its depreciation is posted to, so a nonprofit's functional expense statement or a profit and loss by class has it in the right column without reclassifying each run.
 
-The asset's page shows its **schedule**, a row a year, adding up exactly to its cost less salvage. Once depreciation has been posted, only the name, number, description and class can be changed; a new class applies from the next run.
+The asset's page shows its **schedule**, a row a year, adding up exactly to its cost less salvage. Once depreciation has been posted, only the name, number, description and class can be changed; a new class applies from the next run. An asset entered by mistake, before any depreciation was posted for it, can be taken off with **Remove from the register**: it leaves the register, the reports and depreciation runs, keeps its files and notes, and **Put back on the register** undoes it.
 
 ### Running depreciation
 

@@ -62,6 +62,17 @@ public static class AssetsApi
             await s.UpdateAsync(id, r, ct);
             return FixedAssetResponse.From((await s.GetAsync(id, ct))!);
         });
+        // An asset entered by mistake, before anything posted for it: off the register, and back.
+        assets.MapPost("/{id:guid}/remove", async (Guid id, FixedAssetService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(id, ct);
+            return FixedAssetResponse.From((await s.GetAsync(id, ct))!);
+        });
+        assets.MapPost("/{id:guid}/put-back", async (Guid id, FixedAssetService s, CancellationToken ct) =>
+        {
+            await s.PutBackAsync(id, ct);
+            return FixedAssetResponse.From((await s.GetAsync(id, ct))!);
+        });
         assets.MapPost("/{id:guid}/dispose", async (Guid id, DisposeAssetCommand r, FixedAssetService s, CancellationToken ct) =>
         {
             await s.DisposeAsync(id, r, ct);

@@ -27,7 +27,7 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
         var company = await companies.GetRequiredCompanyAsync(ct);
         var runs = (await store.ListRunsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
         var assets = (await store.ListAssetsAsync(ct))
-            .Where(a => a.InServiceDate <= asOf && !(a.DisposedOn is { } d && d <= asOf))
+            .Where(a => !a.IsRemoved && a.InServiceDate <= asOf && !(a.DisposedOn is { } d && d <= asOf))
             .OrderBy(a => a.Number ?? "￿", StringComparer.OrdinalIgnoreCase).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var rows = new List<ReportTableRow>();

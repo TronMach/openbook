@@ -231,4 +231,22 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.Equal((new DateOnly(2026, 7, 1), new DateOnly(2026, 12, 31)), OpenBook.Domain.SalesTax.FilingPeriods.Containing(OpenBook.Domain.SalesTax.FilingFrequency.Semiannually, new DateOnly(2026, 8, 15)));
         Assert.Equal((new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)), OpenBook.Domain.SalesTax.FilingPeriods.LastCompleted(OpenBook.Domain.SalesTax.FilingFrequency.Semiannually, new DateOnly(2026, 8, 15)));
     }
+
+    [Fact]
+    public async Task An_asset_entered_by_mistake_comes_off_the_register_until_depreciation_posts()
+    {
+        var equipment = await _db.CreateAccount("Equipment", AccountType.FixedAsset, "1500");
+        OpenBook.Domain.Assets.FixedAssetDetails Details(string name) =>
+            new(name, equipment.Id, Guid.Empty, Guid.Empty, new DateOnly(2026, 1, 1), 1_200m, OpenBook.Domain.Assets.DepreciationMethod.StraightLine, 12);
+        var wrong = await In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.CreateAsync(Details("Typo")));
+        var real = await In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.CreateAsync(Details("Laptop")));
+
+        await In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.RemoveAsync(wrong.Id));
+        var run = await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Assets.DepreciationService>().RunAsync(Mar31));
+        Assert.Equal([real.Id], run.Lines.Select(l => l.AssetId).Distinct());
+        var refused = await Assert.ThrowsAsync<DomainException>(() => In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.RemoveAsync(real.Id)));
+        Assert.Equal("asset.depreciated", refused.Code);
+        Assert.Equal(OpenBook.Domain.Assets.FixedAssetStatus.Active,
+            (await In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.PutBackAsync(wrong.Id))).Status);
+    }
 }

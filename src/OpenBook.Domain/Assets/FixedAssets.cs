@@ -38,6 +38,9 @@ public enum FixedAssetStatus
 {
     Active,
     Disposed,
+
+    /// <summary>Taken off the register before anything was posted for it (entered by mistake); it can be put back.</summary>
+    Removed,
 }
 
 /// <param name="LifeMonths">Useful life for straight-line and declining balance.</param>
@@ -104,6 +107,22 @@ public sealed class FixedAsset
     public DateTimeOffset CreatedAt { get; private set; }
 
     public bool IsDisposed => Status == FixedAssetStatus.Disposed;
+
+    public bool IsRemoved => Status == FixedAssetStatus.Removed;
+
+    public void Remove()
+    {
+        if (Status != FixedAssetStatus.Active)
+            throw new DomainException("asset.not_active", $"{Name} is disposed or already removed.");
+        Status = FixedAssetStatus.Removed;
+    }
+
+    public void PutBack()
+    {
+        if (Status != FixedAssetStatus.Removed)
+            throw new DomainException("asset.not_removed", $"{Name} isn't removed.");
+        Status = FixedAssetStatus.Active;
+    }
 
     /// <summary>What's depreciated in total: cost less salvage (MACRS ignores salvage).</summary>
     public decimal Base => Method switch

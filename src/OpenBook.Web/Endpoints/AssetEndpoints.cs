@@ -46,6 +46,12 @@ public static class AssetEndpoints
                 Date(form["date"]) ?? Today(), Number(form["proceeds"]) ?? 0m, Id(form["proceedsAccountId"])), ct));
         }).RequireAuthorization();
 
+        app.MapPost("/assets/{id:guid}/remove", async (Guid id, IFormCollection _, FixedAssetService assets, CancellationToken ct) =>
+            await Back($"/assets/{id}", () => assets.RemoveAsync(id, ct))).RequireAuthorization();
+
+        app.MapPost("/assets/{id:guid}/put-back", async (Guid id, IFormCollection _, FixedAssetService assets, CancellationToken ct) =>
+            await Back($"/assets/{id}", () => assets.PutBackAsync(id, ct))).RequireAuthorization();
+
         app.MapPost("/assets/{id:guid}/undispose", async (Guid id, IFormCollection form, FixedAssetService assets, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

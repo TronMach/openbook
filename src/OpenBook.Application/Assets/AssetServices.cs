@@ -126,6 +126,8 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
     {
         ArgumentNullException.ThrowIfNull(details);
         var asset = await store.GetAssetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (asset.IsRemoved)
+            throw new DomainException("asset.removed", $"{asset.Name} is removed from the register. Put it back first.");
         var before = Snapshot(asset);
         if (asset.IsDisposed || Posted(asset, await store.ListRunsAsync(ct)) > 0m)
         {
@@ -207,6 +209,32 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
         return asset;
     }
 
+    /// <summary>
+    /// Takes an asset entered by mistake off the register (nothing posts), refused once depreciation has been posted for it
+    /// or it was disposed: those are undone first. Its files and notes stay; <see cref="PutBackAsync"/> undoes it.
+    /// </summary>
+    public async Task<FixedAsset> RemoveAsync(Guid id, CancellationToken ct = default)
+    {
+        var asset = await store.GetAssetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (Posted(asset, await store.ListRunsAsync(ct)) > 0m)
+            throw new DomainException("asset.depreciated", $"{asset.Name} has depreciation posted. Void the depreciation runs first.");
+        var before = Snapshot(asset);
+        asset.Remove();
+        store.Add(Audit(AuditAction.Updated, asset, before));
+        await store.SaveChangesAsync(ct);
+        return asset;
+    }
+
+    public async Task<FixedAsset> PutBackAsync(Guid id, CancellationToken ct = default)
+    {
+        var asset = await store.GetAssetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(asset);
+        asset.PutBack();
+        store.Add(Audit(AuditAction.Updated, asset, before));
+        await store.SaveChangesAsync(ct);
+        return asset;
+    }
+
     public async Task<FixedAsset> UndoDisposalAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var asset = await store.GetAssetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
@@ -277,7 +305,7 @@ public sealed class DepreciationService(IAssetStore store, PostingEngine engine,
     {
         var runs = await store.ListRunsAsync(ct);
         return (await store.ListAssetsAsync(ct))
-            .Where(a => !a.IsDisposed && a.Method != DepreciationMethod.None && a.InServiceDate <= through)
+            .Where(a => a.Status == FixedAssetStatus.Active && a.Method != DepreciationMethod.None && a.InServiceDate <= through)
             .Select(a => new DepreciationDue(a, Depreciation.ScheduledThrough(a, through) - a.PriorDepreciation - FixedAssetService.Posted(a, runs)))
             .Where(d => d.Amount > 0m)
             .OrderBy(d => d.Asset.Name, StringComparer.OrdinalIgnoreCase)

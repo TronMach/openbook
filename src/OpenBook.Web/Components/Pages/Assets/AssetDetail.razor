@@ -16,9 +16,24 @@
         var a = _position.Asset;
         <div class="toolbar">
             <h1>@(a.Number is { } n ? $"{n} " : "")@a.Name</h1>
-            @if (!a.IsDisposed)
+            @if (a.Status == FixedAssetStatus.Active)
             {
                 <ActionLink Class="button secondary" Href="@($"/assets/{a.Id}/edit")">Edit</ActionLink>
+            }
+            @if (a.IsRemoved)
+            {
+                <span class="badge">Removed</span>
+                <PostForm Action="@($"/assets/{a.Id}/put-back")" data-enhance="false" class="inline-form">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary">Put back on the register</button>
+                </PostForm>
+            }
+            else if (a.Status == FixedAssetStatus.Active && _position.Accumulated == a.PriorDepreciation && _runs.Count == 0)
+            {
+                <PostForm Action="@($"/assets/{a.Id}/remove")" data-enhance="false" class="inline-form">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary" data-confirm="Take @a.Name off the register? Nothing has been posted for it, and it can be put back.">Remove from the register</button>
+                </PostForm>
             }
             <ActionLink Class="button secondary" Href="/assets">Fixed assets</ActionLink>
         </div>
