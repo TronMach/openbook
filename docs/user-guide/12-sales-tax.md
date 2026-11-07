@@ -12,7 +12,7 @@ OpenBook works out sales tax on invoices, sales receipts, estimates and credit m
 
 ## Setting up
 
-1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly, twice a year or annually; this sets the period OpenBook suggests you report) and your **permit or account number** with it.
+1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly, twice a year or annually; this sets the period OpenBook suggests you report) your **permit or account number** with it, and how many days after a period ends its return is due (**Returns due**, 20 unless you change it).
 2. **Add its rates**: **name**, **rate (%)** (up to four decimals) and **paid to** (the agency). Leave **Also make a tax code that charges just this rate** ticked unless you'll only use it combined with others.
 3. If you charge several rates together, **add a tax code**, give it a name, and tick its rates. They print in the order they're listed there.
 4. On each **customer**, choose their **tax code**. New invoices, receipts and estimates for them start with it.
@@ -34,7 +34,7 @@ A project or other sub-customer billed with its parent is covered by the parent'
 
 ## What you owe
 
-The **Sales tax** page lists each agency with **Owed today** and the **period to file**.
+The **Sales tax** page lists each agency with **Owed today** and the **period to file**. Once a period ends, the home page's to-do list shows **Sales tax returns to file** for each agency with tax owed for it, with the next due date (marked urgent once it's past), until the payment for that period is recorded.
 
 **Reports → Sales tax liability** shows, for a period, each agency and rate: total sales, non-taxable, exempt and taxable amounts, and the tax. Use it to fill in your return. Credit memos are subtracted. **Selling into other states**: **Sales tax → Nexus thresholds** keeps each state's economic nexus threshold (the sales a year, and a number of transactions where the state has one) as you get them from the state or your adviser. **Reports → Sales by state** sets all your sales against them: invoices and receipts less credit memos, by the customer's shipping address (else billing), and sales channels by the state shipped to. A state past its threshold over the last twelve months with no tax agency set up for it shows on the home page's to-do list. OpenBook doesn't know the states' rules.
 

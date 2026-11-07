@@ -6646,6 +6646,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("DueDays")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("FilingFrequency")
                         .IsRequired()
                         .HasMaxLength(20)

@@ -365,6 +365,20 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_return_is_due_after_its_period_until_paid()
+    {
+        await Tax(s => s.UpdateAgencyAsync(_stateDor.Id, new TaxAgencyDetails("State Department of Revenue", FilingFrequency.Monthly, "ST-1", DueDays: 15)));
+        await Invoice(_acme, Mar1, null, Widgets(1));
+        var periodEnd = new DateOnly(2026, 3, 31);
+        var today = new DateOnly(2026, 4, 3);
+
+        var due = (await In<SalesTaxPaymentService, IReadOnlyList<ReturnDue>>(s => s.ReturnsDueAsync(today))).Single(r => r.Agency.Id == _stateDor.Id);
+        Assert.Equal((periodEnd, new DateOnly(2026, 4, 15)), (due.To, due.DueOn));
+        await In<SalesTaxPaymentService, SalesTaxPayment>(s => s.PayAsync(new PaySalesTaxCommand(_stateDor.Id, today, _checking.Id, due.Owed, PeriodEnd: periodEnd)));
+        Assert.DoesNotContain(await In<SalesTaxPaymentService, IReadOnlyList<ReturnDue>>(s => s.ReturnsDueAsync(today)), r => r.Agency.Id == _stateDor.Id);
+    }
+
+    [Fact]
     public async Task A_paid_period_has_nothing_left_to_pay()
     {
         await Invoice(_acme, Mar1, null, Widgets(1));

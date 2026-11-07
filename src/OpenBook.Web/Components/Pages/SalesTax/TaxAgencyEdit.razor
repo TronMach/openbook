@@ -57,6 +57,10 @@
                     <InputText id="registration" @bind-Value="Input.RegistrationNumber" />
                 </div>
                 <div class="field">
+                    <label for="due-days">Returns due (days after the period ends)</label>
+                    <InputNumber id="due-days" @bind-Value="Input.DueDays" min="1" max="120" style="width: 6rem" />
+                </div>
+                <div class="field">
                     <label for="region">State for online sales <span class="muted">(optional)</span></label>
                     <InputText id="region" @bind-Value="Input.Region" maxlength="50" placeholder="e.g. TX" />
                     <span class="hint">Sales tax on sales channels' orders shipped there goes to this agency.</span>
@@ -95,7 +99,7 @@
             _agency = await Taxes.GetAgencyAsync(id);
             if (_agency is null)
                 return;
-            Input ??= new AgencyModel { Name = _agency.Name, FilingFrequency = _agency.FilingFrequency, RegistrationNumber = _agency.RegistrationNumber, Region = _agency.Region };
+            Input ??= new AgencyModel { Name = _agency.Name, FilingFrequency = _agency.FilingFrequency, RegistrationNumber = _agency.RegistrationNumber, Region = _agency.Region, DueDays = _agency.DueDays };
         }
         else
         {
@@ -107,7 +111,7 @@
     {
         try
         {
-            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber, Input.Region);
+            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber, Input.Region, Input.DueDays);
             if (Id is { } id)
                 await Taxes.UpdateAgencyAsync(id, details);
             else
@@ -140,6 +144,7 @@
         public string Name { get; set; } = "";
 
         public FilingFrequency FilingFrequency { get; set; } = FilingFrequency.Quarterly;
+        public int DueDays { get; set; } = 20;
 
         [StringLength(50)]
         public string? RegistrationNumber { get; set; }

@@ -49,7 +49,8 @@ public interface ISalesTaxStore
     Task SaveChangesAsync(CancellationToken ct);
 }
 
-public sealed record TaxAgencyDetails(string Name, FilingFrequency FilingFrequency = FilingFrequency.Quarterly, string? RegistrationNumber = null, string? Region = null);
+/// <param name="DueDays">Days after a period ends that its return is due; null keeps the agency's (20 for a new one).</param>
+public sealed record TaxAgencyDetails(string Name, FilingFrequency FilingFrequency = FilingFrequency.Quarterly, string? RegistrationNumber = null, string? Region = null, int? DueDays = null);
 
 /// <summary>A tax code ready to charge: its rates' current percentages and where each one's tax is owed.</summary>
 public sealed record TaxCodeChoice(TaxCode Code, IReadOnlyList<TaxComponent> Components)
@@ -86,6 +87,8 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         var account = await LiabilityAccountAsync(name, agencies, ct);
         EnsureRegionFree(agencies, Guid.Empty, details.Region);
         var agency = TaxAgency.Create(name, account.Id, details.FilingFrequency, details.RegistrationNumber, details.Region);
+        if (details.DueDays is { } days)
+            agency.SetDueDays(days);
         store.Add(agency);
         store.Add(Audit(AuditAction.Created, AgencyEntity, agency.Id, null, Snapshot(agency)));
         await store.SaveChangesAsync(ct);
@@ -110,6 +113,8 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         EnsureRegionFree(agencies, id, details.Region);
         var before = Snapshot(agency);
         agency.Update(name, details.FilingFrequency, details.RegistrationNumber, details.Region);
+        if (details.DueDays is { } days)
+            agency.SetDueDays(days);
         store.Add(Audit(AuditAction.Updated, AgencyEntity, id, before, Snapshot(agency)));
         await store.SaveChangesAsync(ct);
         return agency;

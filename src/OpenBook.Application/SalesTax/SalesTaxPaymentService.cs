@@ -24,6 +24,9 @@ public sealed record PaySalesTaxCommand(
     string? Reference = null,
     string? Memo = null);
 
+/// <summary>A sales tax return still to file: the agency, its period, when it's due and what's owed for it.</summary>
+public sealed record ReturnDue(TaxAgency Agency, DateOnly From, DateOnly To, DateOnly DueOn, decimal Owed);
+
 /// <summary>Paying collected sales tax to an agency, and what's owed to each.</summary>
 public sealed class SalesTaxPaymentService(
     ISalesTaxStore store,
@@ -63,6 +66,24 @@ public sealed class SalesTaxPaymentService(
             .GroupBy(p => p.AgencyId)
             .ToDictionary(g => g.Key, g => g.Sum(p => p.LiabilitySettled));
         return owed.ToDictionary(o => o.Key, o => o.Value - paid.GetValueOrDefault(o.Key));
+    }
+
+    /// <summary>
+    /// Returns still to file: for each active agency, the last whole filing period if anything is owed for it, with the
+    /// date it's due (the period's end plus the agency's due days), soonest first.
+    /// </summary>
+    public async Task<IReadOnlyList<ReturnDue>> ReturnsDueAsync(DateOnly today, CancellationToken ct = default)
+    {
+        var due = new List<ReturnDue>();
+        foreach (var agency in (await store.ListAgenciesAsync(ct)).Where(a => a.IsActive))
+        {
+            var (from, to) = FilingPeriods.LastCompleted(agency.FilingFrequency, today);
+            var owed = (await OwedForPeriodAsync(to, ct)).GetValueOrDefault(agency.Id);
+            if (owed > 0m)
+                due.Add(new ReturnDue(agency, from, to, agency.DueOn(to), owed));
+        }
+
+        return [.. due.OrderBy(d => d.DueOn).ThenBy(d => d.Agency.Name, StringComparer.OrdinalIgnoreCase)];
     }
 
     public async Task<SalesTaxPayment> PayAsync(PaySalesTaxCommand command, CancellationToken ct = default)

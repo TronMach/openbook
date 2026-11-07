@@ -25,6 +25,16 @@ public sealed class TaxAgency
     public string? Region { get; private set; }
 
     public FilingFrequency FilingFrequency { get; private set; }
+
+    /// <summary>Days after a filing period ends that its return and payment are due.</summary>
+    public int DueDays { get; private set; } = 20;
+
+    public void SetDueDays(int days) => DueDays = days is >= 1 and <= 120
+        ? days
+        : throw new DomainException("tax.due_days", "A return is due 1 to 120 days after its period ends.");
+
+    /// <summary>When the return for the period ending <paramref name="periodEnd"/> is due.</summary>
+    public DateOnly DueOn(DateOnly periodEnd) => periodEnd.AddDays(DueDays);
     public bool IsActive { get; private set; }
 
     public static TaxAgency Create(string name, Guid liabilityAccountId, FilingFrequency frequency, string? registrationNumber = null, string? region = null)

@@ -1388,6 +1388,9 @@
   <data name="Next" xml:space="preserve">
     <value>Next</value>
   </data>
+  <data name="Next: {0}, due {1}" xml:space="preserve">
+    <value>Next: {0}, due {1}</value>
+  </data>
   <data name="Next: {0}, {1}, due {2}" xml:space="preserve">
     <value>Next: {0}, {1}, due {2}</value>
   </data>
@@ -2125,6 +2128,9 @@
   </data>
   <data name="Sales tax" xml:space="preserve">
     <value>Sales tax</value>
+  </data>
+  <data name="Sales tax returns to file" xml:space="preserve">
+    <value>Sales tax returns to file</value>
   </data>
   <data name="Sales this month" xml:space="preserve">
     <value>Sales this month</value>

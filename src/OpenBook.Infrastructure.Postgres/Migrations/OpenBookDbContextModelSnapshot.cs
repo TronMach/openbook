@@ -6653,6 +6653,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("DueDays")
+                        .HasColumnType("integer");
+
                     b.Property<string>("FilingFrequency")
                         .IsRequired()
                         .HasMaxLength(20)
