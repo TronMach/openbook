@@ -199,6 +199,15 @@ public sealed class RetainerRefund
 
     public void MarkPrinted(DateTimeOffset at) => PrintedAt = at.ToUniversalTime();
 
+    /// <summary>The number of a check printed without one, from the print run: only while it has none.</summary>
+    public void AssignCheckNumber(string number)
+    {
+        if (Reference is not null)
+            throw new DomainException("check.has_number", $"This check already has number {Reference}.");
+        Reference = number;
+    }
+
+
     /// <summary>Records that a positive pay file carried this check, or its void.</summary>
     public void MarkSentToBank(DateTimeOffset at, bool asVoid)
     {

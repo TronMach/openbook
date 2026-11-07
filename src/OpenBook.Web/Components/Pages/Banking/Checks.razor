@@ -1,6 +1,7 @@
 @page "/banking/checks"
 @inject CheckService CheckService
 @inject AccountService AccountService
+@inject BankingService Banking
 
 <PageTitle>Print checks · OpenBook</PageTitle>
 
@@ -71,6 +72,11 @@
                     </tbody>
                 </table>
             </div>
+            <div class="field">
+                <label for="first-number">First check number <span class="muted">(for ticked checks without one)</span></label>
+                <input id="first-number" name="firstNumber" inputmode="numeric" maxlength="15" placeholder="@_suggested" />
+                <span class="hint">Checks with no number are numbered from this in the order printed, and keep those numbers. Leave it empty to print them unnumbered.</span>
+            </div>
             <div class="actions">
                 <button type="submit">Print selected</button>
                 <span class="muted">Opens the PDF in a new tab. Reload this page afterwards to see them marked as printed.</span>
@@ -83,6 +89,7 @@
     private IReadOnlyList<PrintableCheck> _checks = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _banks = [];
+    private string? _suggested;
 
     [SupplyParameterFromQuery] private Guid? Account { get; set; }
     [SupplyParameterFromQuery] private bool All { get; set; }
@@ -93,5 +100,7 @@
         _chart = await AccountService.GetChartAsync();
         _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Bank).ToList();
         _checks = await CheckService.ListAsync(Account, unprintedOnly: !All);
+        // The next number on the chosen account, as a hint; with all accounts there's no one sequence.
+        _suggested = Account is { } account ? await Banking.SuggestCheckNumberAsync(account) : null;
     }
 }

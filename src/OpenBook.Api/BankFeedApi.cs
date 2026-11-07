@@ -29,7 +29,8 @@ public sealed record BankRuleResponse(
         r.Id, r.Name, r.Priority, r.AccountId, r.Direction, r.Contains, r.MinAmount, r.MaxAmount, r.CategoryAccountId, r.Payee, r.VendorId, r.AutoAdd, r.IsActive, r.ClassId, r.LocationId);
 }
 
-public sealed record PrintChecksRequest(IReadOnlyList<CheckRef> Checks);
+/// <param name="FirstNumber">For checks without a number: the first to give them, in order.</param>
+public sealed record PrintChecksRequest(IReadOnlyList<CheckRef> Checks, string? FirstNumber = null);
 
 public sealed record CheckRef(CheckKind Kind, Guid Id);
 
@@ -98,7 +99,7 @@ internal static class BankFeedApi
             await s.ListAsync(accountId, unprinted ?? false, ct));
         banking.MapPost("/checks/print", async (PrintChecksRequest r, HttpContext http, CheckService s, CancellationToken ct) =>
         {
-            var printed = await s.PrintAsync((r.Checks ?? []).Select(c => (c.Kind, c.Id)).ToList(), ct);
+            var printed = await s.PrintAsync((r.Checks ?? []).Select(c => (c.Kind, c.Id)).ToList(), r.FirstNumber, ct);
             http.Response.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("inline") { FileNameStar = printed.FileName }.ToString();
             return Results.File(printed.Pdf, "application/pdf");
         });

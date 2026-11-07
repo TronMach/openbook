@@ -20,7 +20,7 @@ public static class CheckEndpoints
                 .ToList();
             try
             {
-                var printed = await service.PrintAsync(chosen, ct);
+                var printed = await service.PrintAsync(chosen, form["firstNumber"].ToString(), ct);
                 http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("inline") { FileNameStar = printed.FileName }.ToString();
                 return Results.File(printed.Pdf, "application/pdf");
             }

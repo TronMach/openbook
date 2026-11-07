@@ -20,6 +20,7 @@ Payments from bank accounts (bill payments, checks written as expenses, and refu
 
 **Banking → Print checks**: choose the **account** (or all), show checks **not printed yet** or all, tick the ones to print and **Print selected**. The PDF opens in a new tab. Payments with a check number start ticked. Payments sent by ACH aren't listed, nor are spends that came from your bank's lines, because that money has already left.
 
+- Ticked checks with no number get one if you fill in **First check number** (the next one on the account is suggested): they're numbered in order from it and keep those numbers.
 - Load the stock face up.
 - Print at **100% ("actual size")**, not "fit to page".
 - Reload the page afterwards to see them marked as printed.

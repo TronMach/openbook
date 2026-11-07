@@ -268,4 +268,17 @@ public sealed class SmallGapTests : IAsyncLifetime
         var refused = await Assert.ThrowsAsync<DomainException>(() => In<OpenBook.Application.Inventory.LabelService, byte[]>(s => s.RenderAsync([(longCode.Id, 1)], showPrice: false)));
         Assert.Equal("label.barcode_too_long", refused.Code);
     }
+
+    [Fact]
+    public async Task Checks_printed_without_a_number_are_numbered_from_the_first_given()
+    {
+        var first = await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(_rent.Id, 50m)], Payee: "A")));
+        var second = await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(_rent.Id, 60m)], Payee: "B")));
+        var numbered = await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(_rent.Id, 70m)], Payee: "C", Reference: "900")));
+
+        await In<CheckService, PrintedChecks>(s => s.PrintAsync([(CheckKind.Expense, first.Id), (CheckKind.Expense, numbered.Id), (CheckKind.Expense, second.Id)], "0042"));
+
+        Assert.Equal(("0042", "900", "0043"), ((await In<BankingService, BankTransaction?>(s => s.GetAsync(first.Id)))!.Reference,
+            (await In<BankingService, BankTransaction?>(s => s.GetAsync(numbered.Id)))!.Reference, (await In<BankingService, BankTransaction?>(s => s.GetAsync(second.Id)))!.Reference));
+    }
 }

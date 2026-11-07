@@ -53,6 +53,15 @@ public sealed class BankTransaction
     /// <summary>Check number or other reference from the bank.</summary>
     public string? Reference { get; private set; }
 
+    /// <summary>The number of a check printed without one, from the print run: only while it has none.</summary>
+    public void AssignCheckNumber(string number)
+    {
+        if (Reference is not null)
+            throw new Common.DomainException("check.has_number", $"This check already has number {Reference}.");
+        Reference = number;
+    }
+
+
     public string? Memo { get; private set; }
 
     /// <summary>Total moved, always positive; <see cref="Kind"/> says which way.</summary>

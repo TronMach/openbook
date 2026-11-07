@@ -77,8 +77,22 @@ public sealed class CheckService(
     }
 
     /// <summary>Renders the checks (one per page, in the order given) and records that they were printed.</summary>
-    public async Task<PrintedChecks> PrintAsync(IReadOnlyList<(CheckKind Kind, Guid Id)> checks, CancellationToken ct = default)
+    /// <param name="firstNumber">For checks printed without a number: the first to give them, in the order printed (digits, counting up, keeping zeros).</param>
+    public async Task<PrintedChecks> PrintAsync(IReadOnlyList<(CheckKind Kind, Guid Id)> checks, string? firstNumber = null, CancellationToken ct = default)
     {
+        long? next = firstNumber?.Trim() is { Length: > 0 } first
+            ? long.TryParse(first, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && first.Length <= 15
+                ? n : throw new DomainException("check.first_number_invalid", "The first check number is digits only.")
+            : null;
+        var width = firstNumber?.Trim().Length ?? 0;
+        string? Next(string? current)
+        {
+            if (current is not null || next is not { } number)
+                return null;
+            next = number + 1;
+            return number.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(width, '0');
+        }
+
         ArgumentNullException.ThrowIfNull(checks);
         if (checks.Count == 0)
             throw new DomainException("check.none", "Choose at least one check to print.");
@@ -99,6 +113,8 @@ public sealed class CheckService(
                     throw new DomainException("check.not_printable", "Only posted payments from a bank account can be printed as checks.");
                 var vendor = t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null;
                 var lines = await ExpenseLinesAsync(t, chart, ct);
+                if (Next(t.Reference) is { } assigned)
+                    t.AssignCheckNumber(assigned);
                 forms.Add(Form(company, chart.Get(t.AccountId).Name, t.Reference, t.Date,
                     new FormParty(t.Payee ?? vendor?.DisplayName ?? "", vendor?.Address), t.Amount, t.Memo ?? vendor?.AccountNumber, lines));
                 var before = Snapshot(t.PrintedAt);
@@ -111,6 +127,8 @@ public sealed class CheckService(
                 if (r.Status != DocumentStatus.Posted || chart.Get(r.PaymentAccountId).Type != AccountType.Bank)
                     throw new DomainException("check.not_printable", "Only posted payments from a bank account can be printed as checks.");
                 var customer = await sales.GetCustomerAsync(r.CustomerId, ct);
+                if (Next(r.Reference) is { } assigned)
+                    r.AssignCheckNumber(assigned);
                 forms.Add(Form(company, chart.Get(r.PaymentAccountId).Name, r.Reference, r.Date,
                     new FormParty(customer?.DisplayName ?? "", customer?.BillingAddress), r.Amount, r.Memo, [(r.Memo ?? "Refund", r.Amount)]));
                 var before = Snapshot(r.PrintedAt);
@@ -124,6 +142,8 @@ public sealed class CheckService(
                 if (f.IsVoided || retainer.Status != DocumentStatus.Posted || chart.Get(f.PaymentAccountId).Type != AccountType.Bank)
                     throw new DomainException("check.not_printable", "Only posted payments from a bank account can be printed as checks.");
                 var customer = await sales.GetCustomerAsync(retainer.CustomerId, ct);
+                if (Next(f.Reference) is { } assigned)
+                    f.AssignCheckNumber(assigned);
                 forms.Add(Form(company, chart.Get(f.PaymentAccountId).Name, f.Reference, f.Date,
                     new FormParty(customer?.DisplayName ?? "", customer?.BillingAddress), f.Amount, "Retainer refund", [("Retainer refund", f.Amount)]));
                 var before = Snapshot(f.PrintedAt);
@@ -142,6 +162,8 @@ public sealed class CheckService(
                 var lines = p.Applications
                     .Select(a => (bills.GetValueOrDefault(a.BillId) is { } b ? $"Bill {b.Reference ?? b.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture)}" : "Bill", a.Amount))
                     .ToList();
+                if (Next(p.Reference) is { } assigned)
+                    p.AssignCheckNumber(assigned);
                 forms.Add(Form(company, chart.Get(p.PaymentAccountId).Name, p.Reference, p.Date,
                     new FormParty(vendor?.DisplayName ?? "", vendor?.Address), p.Amount, p.Memo, lines));
                 var before = Snapshot(p.PrintedAt);
