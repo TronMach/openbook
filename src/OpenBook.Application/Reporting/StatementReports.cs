@@ -285,7 +285,7 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         if (budgets.Count == 0)
-            return new ReportTable("Budget by program", [company.Name], [new("")], [], reportBasis, "No budget for this fiscal year is for a class. Make one for each program under Budgets.");
+            return new ReportTable("Budget by program", [company.Name], [new("")], [new(["No budget for this fiscal year is for a class. Make one for each program under Budgets."])], reportBasis);
         var chart = await accounts.GetChartAsync(ct);
         var from = budgets.Min(b => b.FiscalYearStart);
 

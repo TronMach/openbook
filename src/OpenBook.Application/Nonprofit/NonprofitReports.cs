@@ -171,7 +171,7 @@ public sealed class NonprofitReports(
         var all = await grants.ListAsync(ct);
         var grant = grantId is { } id ? all.FirstOrDefault(g => g.Id == id) : all.Where(g => g.Status == GrantStatus.Active).MaxBy(g => g.AwardedOn);
         if (grant is null)
-            return new ReportTable("Grant budget vs. actual", [company.Name], [new("")], [], ReportBasis.Accrual, "There's no grant to report on. Add one under Nonprofit, Grants.");
+            return new ReportTable("Grant budget vs. actual", [company.Name], [new("")], [new(["There's no grant to report on. Add one under Nonprofit, Grants."])], ReportBasis.Accrual);
         var atStart = await grants.PositionAsync(grant.Id, from.AddDays(-1), ct);
         var atEnd = await grants.PositionAsync(grant.Id, to, ct);
         var before = atStart!.Rows.ToDictionary(r => r.AccountId, r => r.Spent);
