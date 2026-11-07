@@ -85,6 +85,8 @@ OpenBook's own two-factor code isn't asked for after single sign-on: the provide
 
 ### Working at the same time
 
+If a page sits open while someone else changes that record, saving it says so and saves nothing, however long ago it was opened. Open the record again to see their change, then make yours. This covers correcting documents and payments, estimates and orders, recurring templates, customers, vendors and items.
+
 Several people can work in the books at once. If two of you save a change to the same thing at the same moment (say, both receive a payment on one invoice, both post the same bank line, or both sell the last units of a product), OpenBook usually tries yours again with the other change included, so it still checks for overpayments, stock that's run out and anything already done. If it still can't save yours, you see "Someone else saved a change to this at the same moment, so nothing was saved. Try again." Reload the page to see what changed, then enter it again if it's still needed. Something that goes out in several steps, such as a run of recurring entries or an email already sent, may have got part of the way, so check before repeating it.
 
 ## Closing the books

@@ -1,6 +1,7 @@
 @page "/vendors/new"
 @page "/vendors/{Id:guid}"
 @using System.ComponentModel.DataAnnotations
+@inject OpenBook.Application.IRecordVersions Versions
 @inject VendorService VendorService
 @inject BillService Bills
 @inject BillPaymentService Payments
@@ -98,6 +99,7 @@
     <div class="card" style="margin-top: 1.5rem">
         <h2>Details</h2>
         <EditForm Model="Input" FormName="vendor" OnValidSubmit="SaveAsync" method="post">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -232,6 +234,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var opened = Id is { } version ? await Versions.GetAsync<Vendor>(version) : null;
         _chart = await AccountService.GetChartAsync();
         _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type is not (AccountType.AccountsPayable or AccountType.AccountsReceivable)).ToList();
@@ -261,6 +264,7 @@
                 Track1099 = _vendor.Track1099,
                 Form1099Box = _vendor.Form1099Box,
             };
+        Input.Version ??= opened;
     }
 
     private async Task SaveAsync()
@@ -270,6 +274,7 @@
             var details = new VendorDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone, Input.Address,
                 Input.AccountNumber, Input.PaymentTermsDays, Input.DefaultExpenseAccountId, Input.Notes, Input.Track1099,
                 Input.ClearTaxId ? "" : string.IsNullOrWhiteSpace(Input.TaxId) ? null : Input.TaxId, Input.Form1099Box);
+            await Versions.EnsureUnchangedAsync<Vendor>(_vendor?.Id ?? Guid.Empty, Input.Version);
             var saved = _vendor is null ? await VendorService.CreateAsync(details) : await VendorService.UpdateAsync(_vendor.Id, details);
             Navigation.NavigateTo($"/vendors/{saved.Id}");
         }
@@ -294,6 +299,9 @@
 
     private sealed class VendorModel
     {
+        /// <summary>The record's version when the form opened.</summary>
+        public int? Version { get; set; }
+
         [Required(ErrorMessage = "Enter the vendor's name.")]
         [StringLength(200)]
         public string DisplayName { get; set; } = string.Empty;

@@ -270,6 +270,35 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_customer_form_left_open_is_told_someone_else_changed_it()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await SetUp(browser);
+        Guid acme;
+        await using (var scope = _app.Services.CreateAsyncScope())
+            acme = (await scope.ServiceProvider.GetRequiredService<CustomerService>().CreateAsync(new CustomerDetails("Acme"))).Id;
+
+        var page = await browser.GetStringAsync($"/customers/{acme}");
+        var version = Regex.Match(page, "name=\"Input.Version\" value=\"(\\d+)\"").Groups[1].Value;
+        Assert.NotEmpty(version);
+
+        await using (var scope = _app.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<CustomerService>().UpdateAsync(acme, new CustomerDetails("Acme Ltd"));
+
+        var post = await browser.PostAsync($"/customers/{acme}", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["_handler"] = "customer",
+            ["__RequestVerificationToken"] = TokenIn(page),
+            ["Input.DisplayName"] = "Acme Stale",
+            ["Input.PaymentTermsDays"] = "30",
+            ["Input.Version"] = version,
+        }));
+        Assert.Contains("changed by someone else", await post.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        await using var check = _app.Services.CreateAsyncScope();
+        Assert.Equal("Acme Ltd", (await check.ServiceProvider.GetRequiredService<CustomerService>().GetAsync(acme))!.DisplayName);
+    }
+
+    [Fact]
     public async Task The_customer_center_shows_the_chosen_customer_and_their_transactions()
     {
         var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

@@ -109,6 +109,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     [Parameter]
     public Guid Id { get; set; }
 
@@ -146,6 +149,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Ops.VersionAsync<Invoice>(Id);
         _invoice = await Ops.RunAsync<InvoiceService, Invoice?>(s => s.GetAsync(Id));
         if (_invoice is not null)
         {
@@ -205,7 +209,7 @@
             var from = editable.Select(l => l.OriginalLine).Concat(_locked.Select(l => (int?)l.LineNumber)).ToList();
             var command = new ChangeInvoiceCommand(_date, drafts, _reason!, _dueDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
                 WarehouseId: _warehouseId, FromLines: from);
-            await Ops.RunAsync<InvoiceService, Invoice>(s => s.ChangeAsync(Id, command), _closingPassword);
+            await Ops.ChangeAsync<Invoice, InvoiceService, Invoice>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{Id}");
         }
         catch (DomainException ex)

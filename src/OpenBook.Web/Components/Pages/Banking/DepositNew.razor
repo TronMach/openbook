@@ -106,6 +106,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     private List<Row> _items = [];
     private List<Account> _banks = [];
     private ChartOfAccounts _chart = new([]);
@@ -128,6 +131,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Change is { } versionOf)
+            _version = await Ops.VersionAsync<BankDeposit>(versionOf);
         var (items, chart, deposit, contents) = await Ops.RunAsync(async sp =>
         {
             var deposits = sp.GetRequiredService<DepositService>();
@@ -176,7 +181,7 @@
         try
         {
             var command = new MakeDepositCommand(_bankAccountId, _date, _items.Where(i => i.Selected).Select(i => (i.Item.Kind, i.Item.Id)).ToList(), _memo);
-            var deposit = await Ops.RunAsync<DepositService, BankDeposit>(s => Change is { } id ? s.ChangeAsync(id, command, _reason ?? "") : s.DepositAsync(command), _closingPassword);
+            var deposit = await Ops.ChangeAsync<BankDeposit, DepositService, BankDeposit>(Change ?? Guid.Empty, _version, s => Change is { } id ? s.ChangeAsync(id, command, _reason ?? "") : s.DepositAsync(command), _closingPassword);
             Navigation.NavigateTo($"/banking/deposits/{deposit.Id}");
         }
         catch (DomainException ex)

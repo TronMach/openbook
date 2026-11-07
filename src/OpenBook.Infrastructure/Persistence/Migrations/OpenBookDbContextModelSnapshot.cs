@@ -622,6 +622,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("VendorId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ImportBatchId");
@@ -4385,6 +4389,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Track1099")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DefaultExpenseAccountId");
@@ -4831,6 +4839,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BankAccountId");
@@ -5121,6 +5133,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("TaxCodeId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

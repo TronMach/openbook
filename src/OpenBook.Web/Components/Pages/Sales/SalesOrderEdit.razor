@@ -69,6 +69,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private IReadOnlyList<Warehouse> _warehouses = [];
@@ -111,6 +114,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Id is { } versionOf)
+            _version = await Ops.VersionAsync<SalesOrder>(versionOf);
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
         _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
@@ -170,7 +175,7 @@
         {
             var command = new SaveSalesOrderCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expectedDate, _number, _customerReference, _memo,
                 _taxCodeId ?? Guid.Empty, _locationId, _warehouseId);
-            var order = await Ops.RunAsync<SalesOrderService, SalesOrder>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            var order = await Ops.ChangeAsync<SalesOrder, SalesOrderService, SalesOrder>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
             Navigation.NavigateTo($"/sales/orders/{order.Id}");
         }
         catch (DomainException ex)

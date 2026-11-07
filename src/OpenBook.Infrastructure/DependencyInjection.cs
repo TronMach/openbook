@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Forms.IBundledFonts, Forms.BundledFonts>();
         services.TryAddSingleton<OpenBook.Application.Forms.IGoogleFonts>(_ => new Forms.GoogleFontsClient());
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddScoped<IRecordVersions, EfRecordVersions>();
         services.AddScoped<Application.Lists.IRecordMerger, EfRecordMerger>();
         services.AddScoped<IDataExporter, DataExporter>();
         services.TryAddSingleton(new Net.OutboundPolicy());

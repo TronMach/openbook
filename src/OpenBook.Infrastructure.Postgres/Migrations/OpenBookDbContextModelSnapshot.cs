@@ -629,6 +629,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("VendorId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ImportBatchId");
@@ -4392,6 +4396,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("Track1099")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DefaultExpenseAccountId");
@@ -4838,6 +4846,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("TotalMinor");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BankAccountId");
@@ -5128,6 +5140,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid?>("TaxCodeId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

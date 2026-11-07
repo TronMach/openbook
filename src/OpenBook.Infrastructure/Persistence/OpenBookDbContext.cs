@@ -179,7 +179,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(Domain.Nonprofit.Donation), typeof(Domain.Nonprofit.Pledge), typeof(Domain.Nonprofit.Grant), typeof(Domain.Nonprofit.RecurringGift),
         typeof(Domain.Assets.Loan),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
-        typeof(Item),
+        typeof(Item), typeof(Customer), typeof(Vendor), typeof(BankTransaction), typeof(BankDeposit),
     ];
 
     /// <summary>Whether anything has been saved through this context, so an operation that then hit a conflict can't simply be run again.</summary>

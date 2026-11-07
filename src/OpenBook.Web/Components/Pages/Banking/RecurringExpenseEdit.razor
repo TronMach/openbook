@@ -130,6 +130,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     private IReadOnlyList<Vendor> _vendors = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _categories = [];
@@ -164,6 +167,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Id is { } versionOf)
+            _version = await Ops.VersionAsync<RecurringExpense>(versionOf);
         RecurringExpense? template;
         (_vendors, _chart, _useNumbers, template) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(CompanyTime.Today)).Select(s => s.Vendor).ToList(),
@@ -223,7 +228,8 @@
                 _vendorId, _payee, _memo, _locationId, _tags.ToList());
             if (Id is { } id)
             {
-                Show(await Ops.RunAsync<RecurringExpenseService, RecurringExpense>(s => s.UpdateAsync(id, details)));
+                Show(await Ops.ChangeAsync<RecurringExpense, RecurringExpenseService, RecurringExpense>(id, _version, s => s.UpdateAsync(id, details)));
+                _version = await Ops.VersionAsync<RecurringExpense>(id);
                 _saved = true;
             }
             else

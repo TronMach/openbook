@@ -3,6 +3,7 @@
 @using System.ComponentModel.DataAnnotations
 @using OpenBook.Application.Inventory
 @using OpenBook.Domain.Inventory
+@inject OpenBook.Application.IRecordVersions Versions
 @inject ItemService ItemService
 @inject VendorService VendorService
 @inject AccountService AccountService
@@ -37,6 +38,8 @@
     }
 
     <EditForm Model="Input" FormName="item" OnValidSubmit="SaveAsync" method="post">
+
+        <input type="hidden" name="Input.Version" value="@Input.Version" />
         <DataAnnotationsValidator />
         <div class="row">
             <div class="field">
@@ -510,6 +513,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var opened = Id is { } version ? await Versions.GetAsync<Item>(version) : null;
         _simple = (await Views.CurrentAsync()).Mode == OpenBook.Domain.Companies.ViewMode.Simple;
         _sellShortAllowed = (await Companies.GetCompanyAsync(default))?.AllowSellingShort ?? false;
         _chart = await AccountService.GetChartAsync();
@@ -544,6 +548,7 @@
                 CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
                 PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity,
             };
+        Input.Version ??= opened;
         _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).Select(v => v.Vendor)
             .Where(v => v.IsActive || v.Id == _item?.PreferredVendorId).ToList();
     }
@@ -582,6 +587,7 @@
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
                 asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort,
                 Input.PreferredVendorId, Input.ReorderQuantity);
+            await Versions.EnsureUnchangedAsync<Item>(_item?.Id ?? Guid.Empty, Input.Version);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
             Navigation.NavigateTo(_item is null && Item.HasComponents(saved.Type) ? $"/items/{saved.Id}#components" : "/items");
@@ -600,6 +606,9 @@
 
     private sealed class ItemModel
     {
+        /// <summary>The record's version when the form opened.</summary>
+        public int? Version { get; set; }
+
         [Required(ErrorMessage = "Enter a name.")]
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;

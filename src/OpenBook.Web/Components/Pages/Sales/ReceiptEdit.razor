@@ -87,6 +87,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     [Parameter]
     public Guid Id { get; set; }
 
@@ -127,6 +130,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Ops.VersionAsync<SalesReceipt>(Id);
         _receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt?>(s => s.GetAsync(Id));
         if (_receipt is not null)
         {
@@ -175,7 +179,7 @@
             var lines = _lines.Where(l => !l.IsBlank).ToList();
             var command = new ChangeSalesReceiptCommand(_date, SalesLineModel.Drafts(lines), _reason!, _customerId, _depositAccountId, _number,
                 _reference ?? "", _memo, _taxCodeId ?? Guid.Empty, _locationId, WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList(), Method: _method);
-            await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.ChangeAsync(Id, command), _closingPassword);
+            await Ops.ChangeAsync<SalesReceipt, SalesReceiptService, SalesReceipt>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/receipts/{Id}");
         }
         catch (DomainException ex)

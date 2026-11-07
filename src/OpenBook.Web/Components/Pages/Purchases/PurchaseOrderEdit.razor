@@ -104,6 +104,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     private IReadOnlyList<Vendor> _vendors = [];
     private IReadOnlyList<Item> _items = [];
     private IReadOnlyList<PickerOption> _vendorOptions = [];
@@ -142,6 +145,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Id is { } versionOf)
+            _version = await Ops.VersionAsync<PurchaseOrder>(versionOf);
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
         ChartOfAccounts chart;
@@ -229,7 +234,7 @@
                 .Select(l => new PurchaseOrderLineDraft(l.ItemId, l.ItemId is null ? l.AccountId : null, l.Description, l.Quantity ?? 1m, l.UnitCost ?? 0m))
                 .ToList();
             var command = new SavePurchaseOrderCommand(_vendorId!.Value, _date, drafts, _expectedDate, _number, _memo, _warehouseId, _locationId);
-            var order = await Ops.RunAsync<PurchaseOrderService, PurchaseOrder>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            var order = await Ops.ChangeAsync<PurchaseOrder, PurchaseOrderService, PurchaseOrder>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
             Navigation.NavigateTo($"/purchases/orders/{order.Id}");
         }
         catch (DomainException ex)

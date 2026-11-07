@@ -115,6 +115,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private bool _loaded;
@@ -147,6 +150,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Id is { } versionOf)
+            _version = await Ops.VersionAsync<RecurringInvoice>(versionOf);
         RecurringInvoice? template;
         (_customers, _items, template) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(CompanyTime.Today)).Select(s => s.Customer).ToList(),
@@ -200,7 +205,8 @@
                 _endDate, _maxOccurrences, _autoCreate, _autoEmail, _memo, _locationId, _tags.ToList());
             if (Id is { } id)
             {
-                Show(await Ops.RunAsync<RecurringInvoiceService, RecurringInvoice>(s => s.UpdateAsync(id, details)));
+                Show(await Ops.ChangeAsync<RecurringInvoice, RecurringInvoiceService, RecurringInvoice>(id, _version, s => s.UpdateAsync(id, details)));
+                _version = await Ops.VersionAsync<RecurringInvoice>(id);
                 _saved = true;
             }
             else

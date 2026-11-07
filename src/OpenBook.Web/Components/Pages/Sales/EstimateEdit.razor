@@ -70,6 +70,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     // What's typed so far, kept in the tab in case the connection goes (new estimates only).
     internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly? ExpirationDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, List<SalesLineModel> Lines);
 
@@ -137,6 +140,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Id is { } versionOf)
+            _version = await Ops.VersionAsync<Estimate>(versionOf);
 
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         Estimate? estimate;
@@ -193,7 +198,7 @@
         try
         {
             var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId);
-            var estimate = await Ops.RunAsync<EstimateService, Estimate>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            var estimate = await Ops.ChangeAsync<Estimate, EstimateService, Estimate>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
             if (_draft is not null)
                 await _draft.ClearAsync();
             Navigation.NavigateTo($"/sales/estimates/{estimate.Id}");

@@ -92,6 +92,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     [Parameter]
     public Guid Id { get; set; }
 
@@ -122,6 +125,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Ops.VersionAsync<Bill>(Id);
         _bill = await Ops.RunAsync<BillService, Bill?>(s => s.GetAsync(Id));
         if (_bill is not null)
         {
@@ -175,7 +179,7 @@
             var filled = _lines.Where(BillLineModel.IsFilledLine).ToList();
             var command = new ChangeBillCommand(_date, BillLineModel.Drafts(filled), _reason!, _dueDate, _reference ?? "", _memo, _locationId,
                 WarehouseId: _warehouseId, FromLines: filled.Select(l => l.OriginalLine).ToList());
-            await Ops.RunAsync<BillService, Bill>(s => s.ChangeAsync(Id, command), _closingPassword);
+            await Ops.ChangeAsync<Bill, BillService, Bill>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/purchases/bills/{Id}");
         }
         catch (DomainException ex)

@@ -51,6 +51,19 @@ internal sealed partial class Operations(IServiceScopeFactory scopes, CircuitUse
     public Task<T> RunAsync<TService, T>(Func<TService, Task<T>> work, string? closingPassword = null) where TService : notnull =>
         RunAsync(sp => work(sp.GetRequiredService<TService>()), closingPassword);
 
+    /// <summary>The record's version, noted when an edit form opens, before it loads the record.</summary>
+    public Task<int?> VersionAsync<TRecord>(Guid id) where TRecord : class =>
+        RunAsync<IRecordVersions, int?>(versions => versions.GetAsync<TRecord>(id));
+
+    /// <summary>Saves an edit form: refused when the record has moved on from the version it opened at.</summary>
+    public Task<T> ChangeAsync<TRecord, TService, T>(Guid id, int? opened, Func<TService, Task<T>> work, string? closingPassword = null)
+        where TRecord : class where TService : notnull =>
+        RunAsync(async sp =>
+        {
+            await sp.GetRequiredService<IRecordVersions>().EnsureUnchangedAsync<TRecord>(id, opened);
+            return await work(sp.GetRequiredService<TService>());
+        }, closingPassword);
+
     // In a scope of its own: recording the session's last use counts as a save, and a save stops conflict retries.
     private async Task EnsureSignedInAsync()
     {

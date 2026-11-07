@@ -1,5 +1,6 @@
 @page "/banking/transfers/{Id:guid}/edit"
 @using System.ComponentModel.DataAnnotations
+@inject OpenBook.Application.IRecordVersions Versions
 @inject BankingService BankingService
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
@@ -23,6 +24,8 @@
         }
 
         <EditForm Model="Input" FormName="change-transfer" OnValidSubmit="SaveAsync" method="post">
+
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -90,6 +93,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var opened = await Versions.GetAsync<BankTransaction>(Id);
         _transaction = await BankingService.GetAsync(Id);
         _accounts = await BankingService.ListAccountsAsync();
         Input ??= _transaction is null ? new() : new ChangeModel
@@ -100,6 +104,7 @@
             Date = _transaction.Date,
             Memo = _transaction.Memo,
         };
+        Input.Version ??= opened;
     }
 
     private async Task SaveAsync()
@@ -107,6 +112,7 @@
         try
         {
             ClosingOverride.Password = Input.ClosingPassword;
+            await Versions.EnsureUnchangedAsync<BankTransaction>(Id, Input.Version);
             await BankingService.ChangeTransferAsync(Id, new ChangeTransferCommand(Input.FromAccountId!.Value, Input.ToAccountId!.Value, Input.Date,
                 Input.Amount!.Value, Input.Reason, Input.Memo));
             Navigation.NavigateTo($"/banking/transactions/{Id}");
@@ -120,6 +126,9 @@
 
     private sealed class ChangeModel
     {
+        /// <summary>The record's version when the form opened.</summary>
+        public int? Version { get; set; }
+
         [Required(ErrorMessage = "Choose the account the money leaves.")]
         public Guid? FromAccountId { get; set; }
 

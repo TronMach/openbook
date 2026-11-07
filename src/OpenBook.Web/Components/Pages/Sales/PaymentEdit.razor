@@ -129,6 +129,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     [Parameter]
     public Guid Id { get; set; }
 
@@ -158,6 +161,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Ops.VersionAsync<CustomerPayment>(Id);
         _payment = await Ops.RunAsync<PaymentService, CustomerPayment?>(s => s.GetAsync(Id));
         if (_payment is not null)
         {
@@ -217,7 +221,7 @@
                 _rows.Where(r => (r.Amount ?? 0m) > 0m || (r.Discount ?? 0m) > 0m)
                     .Select(r => new ApplyToInvoice(r.Invoice.Id, r.Amount ?? 0m, r.Discount ?? 0m)).ToList(),
                 _reason!, _amount ?? 0m, _depositAccountId, _reference ?? "", _memo, _method);
-            await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ChangeAsync(Id, command), _closingPassword);
+            await Ops.ChangeAsync<CustomerPayment, PaymentService, CustomerPayment>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/payments/{Id}");
         }
         catch (DomainException ex)

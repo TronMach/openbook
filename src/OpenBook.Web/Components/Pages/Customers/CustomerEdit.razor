@@ -1,6 +1,7 @@
 @page "/customers/new"
 @page "/customers/{Id:guid}"
 @using System.ComponentModel.DataAnnotations
+@inject OpenBook.Application.IRecordVersions Versions
 @inject CustomerService CustomerService
 @inject OpenBook.Application.Companies.ICompanyStore Companies
 @inject InvoiceService Invoices
@@ -115,6 +116,7 @@
     <div class="card" style="margin-top: 1.5rem">
         <h2>Details</h2>
         <EditForm Model="Input" FormName="customer" OnValidSubmit="SaveAsync" method="post">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -341,6 +343,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var opened = Id is { } version ? await Versions.GetAsync<Customer>(version) : null;
         _terms = await Editions.TermsAsync(Companies);
         _taxCodes = await Taxes.ListCodesAsync();
         _levels = await Pricing.ListLevelsAsync();
@@ -383,6 +386,7 @@
                 NoReminders = _customer.NoReminders,
                 NoLateFees = _customer.NoLateFees,
             };
+        Input.Version ??= opened;
     }
 
     private async Task SaveAsync()
@@ -394,6 +398,7 @@
                 Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
                 Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty,
                 Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees);
+            await Versions.EnsureUnchangedAsync<Customer>(_customer?.Id ?? Guid.Empty, Input.Version);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
         }
@@ -420,6 +425,9 @@
 
     private sealed class CustomerModel
     {
+        /// <summary>The record's version when the form opened.</summary>
+        public int? Version { get; set; }
+
         [Required(ErrorMessage = "Enter the customer's name.")]
         [StringLength(200)]
         public string DisplayName { get; set; } = string.Empty;

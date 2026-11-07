@@ -145,6 +145,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     private List<Account> _accounts = [];
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
@@ -176,6 +179,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Id is { } versionOf)
+            _version = await Ops.VersionAsync<RecurringEntry>(versionOf);
         (_chart, _useNumbers) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
@@ -231,7 +236,8 @@
                 _locationId, _tags.ToList());
             if (Id is { } id)
             {
-                Show(await Ops.RunAsync<RecurringEntryService, RecurringEntry>(s => s.UpdateAsync(id, details)));
+                Show(await Ops.ChangeAsync<RecurringEntry, RecurringEntryService, RecurringEntry>(id, _version, s => s.UpdateAsync(id, details)));
+                _version = await Ops.VersionAsync<RecurringEntry>(id);
                 _saved = true;
             }
             else

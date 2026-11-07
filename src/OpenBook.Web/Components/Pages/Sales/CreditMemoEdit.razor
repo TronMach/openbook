@@ -72,6 +72,9 @@
 </div>
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     [Parameter]
     public Guid Id { get; set; }
 
@@ -104,6 +107,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Ops.VersionAsync<CreditMemo>(Id);
         _credit = await Ops.RunAsync<CreditService, CreditMemo?>(s => s.GetCreditMemoAsync(Id));
         if (_credit is not null)
         {
@@ -142,7 +146,7 @@
             var lines = _lines.Where(l => !l.IsBlank).ToList();
             var command = new ChangeCreditMemoCommand(_date, SalesLineModel.Drafts(lines), _reason!, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
                 WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList());
-            await Ops.RunAsync<CreditService, CreditMemo>(s => s.ChangeCreditMemoAsync(Id, command), _closingPassword);
+            await Ops.ChangeAsync<CreditMemo, CreditService, CreditMemo>(Id, _version, s => s.ChangeCreditMemoAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/credit-memos/{Id}");
         }
         catch (DomainException ex)

@@ -89,6 +89,9 @@ else if (_error is not null)
 }
 
 @code {
+    // Noted when the form opens, so a save can tell if the record has moved on.
+    private int? _version;
+
     [Parameter, EditorRequired]
     public Guid BillId { get; set; }
 
@@ -112,6 +115,7 @@ else if (_error is not null)
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Ops.VersionAsync<Bill>(BillId);
         try
         {
             (_bill, _parts, _chart, _useNumbers) = await Ops.RunAsync(async sp => (
@@ -158,7 +162,7 @@ else if (_error is not null)
                 .ToList();
             var extra = BillLineModel.Drafts(_extra.Where(BillLineModel.IsFilledLine).ToList());
             var command = new ChangeBillFromOrderCommand(_date, lines, _reason!, _reference ?? "", _dueDate, _memo, extra);
-            await Ops.RunAsync<PurchaseOrderService, Bill>(s => s.ChangeBillAsync(BillId, command), _closingPassword);
+            await Ops.ChangeAsync<Bill, PurchaseOrderService, Bill>(BillId, _version, s => s.ChangeBillAsync(BillId, command), _closingPassword);
             Navigation.NavigateTo($"/purchases/bills/{BillId}");
         }
         catch (DomainException ex)
