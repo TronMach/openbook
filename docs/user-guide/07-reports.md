@@ -15,7 +15,7 @@
 
 **Sales and customers**: Sales by customer, Sales by product or service, Open invoices, A/R aging (who owes you, by how overdue), Customer balance summary, Customer contact list, Product and service list, Open sales orders (what's still to invoice), Estimates by customer (with their status), Deposit detail (each bank deposit with the payments in it), Price list, Discounts given.
 
-**Expenses and vendors**: Expenses by vendor, Unpaid bills, A/P aging (what you owe, by how overdue), Vendor balance summary, Vendor contact list, Open purchase orders (what's still to receive and bill).
+**Expenses and vendors**: Expenses by vendor, Unpaid bills, A/P aging (what you owe, by how overdue), Vendor balance summary, Vendor contact list, Open purchase orders (what's still to receive and bill), Received not billed (goods in from purchase orders the vendor hasn't billed yet, beside the Received Not Billed account).
 
 **Inventory**: Inventory valuation, Inventory stock status, Physical inventory worksheet, Purchases by product (quantity, amount and average cost bought in a period).
 
