@@ -1,7 +1,9 @@
 @page "/login"
 @attribute [AllowAnonymous]
 @using System.ComponentModel.DataAnnotations
+@using Microsoft.Extensions.Logging
 @inject AuthService Auth
+@inject ILogger<Login> Log
 @inject TwoFactorService TwoFactor
 @inject TwoFactorCookies TwoFactorCookies
 @inject SingleSignOnService SingleSignOn
@@ -86,7 +88,14 @@
 
     private async Task SignInAsync()
     {
-        var result = await Auth.SignInAsync(Input.Username, Input.Password, HttpContext.Connection.RemoteIpAddress?.ToString(), HttpContext.RequestAborted);
+        var address = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await Auth.SignInAsync(Input.Username, Input.Password, address, HttpContext.RequestAborted);
+        // The username as typed (cut short, one line), the address and the outcome; never the password.
+        var who = SignInLog.Name(Input.Username);
+        if (result.Status is SignInStatus.InvalidCredentials or SignInStatus.LockedOut)
+            Log.LogWarning("Sign-in refused for {Username} from {Address}: {Outcome}", who, address, result.Status == SignInStatus.LockedOut ? "paused after too many tries" : "wrong username or password");
+        else
+            Log.LogInformation("Password accepted for {Username} from {Address} ({Outcome})", who, address, result.Status);
         switch (result.Status)
         {
             case SignInStatus.Succeeded:

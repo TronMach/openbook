@@ -76,6 +76,10 @@ Reports go out in the background within the hour. If OpenBook was off at the tim
 - **A/R aging matches the books** and **A/P aging matches the books**: the aging totals, for all dates, equal the accounts receivable and accounts payable accounts.
 - **Undeposited funds match what's waiting**: holding accounts such as Undeposited Funds hold exactly the payments, receipts, retainers and gifts waiting for **Make deposit**.
 - **Stock value matches the books**: the cost of everything in stock equals the inventory asset accounts.
+- **Customer deposits match the retainers**: what customers paid ahead and haven't had applied or refunded equals the account retainers are kept in.
+- **Pledges receivable match the open pledges** (nonprofits): promised, less cancelled and paid.
+- **Accumulated depreciation matches the asset register**: the depreciation posted for each asset still held. Depreciation from before OpenBook, entered as a journal entry, shows as a note.
+- **Loan balances match the books**: what's left on each loan by its payments equals the loan accounts.
 - **Reconciliations still add up**: each finished reconciliation starts where the last ended and its cleared transactions still reach the statement's balance.
 - **No stock below zero unless allowed**.
 

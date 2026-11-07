@@ -21,9 +21,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Excluded1099",
-                table: "Accounts");
+            // Native, not EF's DropColumn: rebuilding Accounts would lose IX_Accounts_SiblingName (raw SQL, not in the model).
+            migrationBuilder.Sql("ALTER TABLE \"Accounts\" DROP COLUMN \"Excluded1099\";");
         }
     }
 }

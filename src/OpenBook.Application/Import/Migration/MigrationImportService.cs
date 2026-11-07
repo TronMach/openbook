@@ -149,14 +149,17 @@ public sealed class MigrationImportService(
             madeCustomers[c.FullName] = created.Id;
         }
 
+        var madeVendors = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         foreach (var v in plan.Vendors)
-            await vendors.CreateAsync(v, ct);
+            madeVendors[v.DisplayName] = (await vendors.CreateAsync(v, ct)).Id;
 
         var final = await accounts.GetChartAsync(ct);
+        var madeItems = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var stock = new List<Inventory.OpeningStockLine>();
         foreach (var (details, incomeAccount, quantity) in plan.Items)
         {
             var item = await items.CreateAsync(details with { IncomeAccountId = final.FindByFullName(incomeAccount)!.Id }, ct);
+            madeItems[item.Name] = item.Id;
             if (quantity > 0m)
                 stock.Add(new Inventory.OpeningStockLine(item.Id, quantity, details.PurchaseCost));
         }
@@ -177,6 +180,18 @@ public sealed class MigrationImportService(
         // Stock on hand: on the last date of the history, whose inventory account already holds its value.
         if (stock.Count > 0)
             await openingStock.RecordAsync(plan.Transactions.Count > 0 ? plan.Transactions.Max(t => t.Date) : CompanyTime.Today, stock, alreadyInBooks: plan.Transactions.Count > 0, ct);
+
+        // Inactive ones last, jobs before their customers (a customer with active jobs stays active).
+        foreach (var c in plan.Customers.Where(c => plan.Inactive.Contains(("c", c.Details.DisplayName))).OrderByDescending(c => c.FullName.Count(x => x == ':')))
+            await customers.SetActiveAsync(madeCustomers[c.FullName], false, ct);
+        foreach (var (kind, name) in plan.Inactive)
+        {
+            if (kind == "v" && madeVendors.TryGetValue(name, out var vendorId))
+                await vendors.SetActiveAsync(vendorId, false, ct);
+            else if (kind == "i" && madeItems.TryGetValue(name, out var itemId))
+                await items.SetActiveAsync(itemId, false, ct);
+        }
+
         await transaction.CommitAsync(ct);
         return plan.Result;
     }
@@ -197,7 +212,8 @@ public sealed class MigrationImportService(
         List<PlannedCustomer> Customers,
         List<VendorDetails> Vendors,
         List<(ItemDetails Details, string IncomeAccount, decimal Quantity)> Items,
-        List<PlannedTransaction> Transactions);
+        List<PlannedTransaction> Transactions,
+        HashSet<(string Kind, string Name)> Inactive);
 
     private async Task<Plan> PlanAsync(MigrationData data, CancellationToken ct)
     {
@@ -274,6 +290,8 @@ public sealed class MigrationImportService(
         bool Known(string name) => types.ContainsKey(name) || chart.FindByFullName(name) is not null;
 
         // Customers and vendors: new names only.
+        // What was inactive in the old program comes in, then is made inactive, so its history still has somewhere to go.
+        var inactive = new HashSet<(string Kind, string Name)>();
         var existingCustomers = (await sales.ListCustomersAsync(ct)).Select(c => c.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var plannedCustomers = new List<PlannedCustomer>();
         foreach (var c in data.Customers)
@@ -303,7 +321,12 @@ public sealed class MigrationImportService(
 
             var error = Try(() => Customer.Create(c.Details with { DisplayName = name }));
             if (error is null)
+            {
                 plannedCustomers.Add(new PlannedCustomer(c.Details with { DisplayName = name.Trim() }, fullName, c.Parent));
+                if (c.Inactive)
+                    inactive.Add(("c", name.Trim()));
+            }
+
             rows.Add(new MigrationRow(MigrationKind.Customer, c.Line, name, c.Parent is null ? c.Details.CompanyName : $"Job of {c.Parent}", error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error));
         }
 
@@ -326,7 +349,12 @@ public sealed class MigrationImportService(
 
             var error = Try(() => Vendor.Create(v.Details));
             if (error is null)
+            {
                 plannedVendors.Add(v.Details with { DisplayName = name.Trim() });
+                if (v.Inactive)
+                    inactive.Add(("v", name.Trim()));
+            }
+
             rows.Add(new MigrationRow(MigrationKind.Vendor, v.Line, name, v.Details.CompanyName, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error));
         }
 
@@ -362,7 +390,13 @@ public sealed class MigrationImportService(
                 ?? Try(() => SalesLine.ValidRate(i.Price))
                 ?? Try(() => Item.Create(new ItemDetails(name, i.Type.Value, Guid.NewGuid(), i.Price, i.Description, InventoryAssetAccountId: Guid.NewGuid(), CostAccountId: Guid.NewGuid())));
             if (error is null)
-                plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description, PurchaseCost: Math.Max(i.UnitCost, 0m)), income, Math.Max(i.Quantity, 0m)));
+            {
+                plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description, PurchaseCost: Math.Max(i.UnitCost, 0m), Taxable: i.Taxable ?? true),
+                    income, Math.Max(i.Quantity, 0m)));
+                if (i.Inactive)
+                    inactive.Add(("i", name));
+            }
+
             rows.Add(new MigrationRow(MigrationKind.Item, i.Line, name, i.KindLabel, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? i.Note));
         }
 
@@ -433,7 +467,9 @@ public sealed class MigrationImportService(
         if (plannedTransactions.Any(t => t.Lines.Any(l => TypeOf(l.Account) is AccountType.AccountsReceivable or AccountType.AccountsPayable)))
             warnings.Add("Some transactions post to A/R or A/P. They come in as journal entries, so they change balances but won't appear as open invoices or bills in aging and statements.");
 
-        return new Plan(new MigrationResult(rows, warnings), plannedAccounts, plannedCustomers, plannedVendors, plannedItems, plannedTransactions);
+        if (inactive.Count > 0)
+            warnings.Add($"{inactive.Count} customer(s), vendor(s) or item(s) were inactive in the old program; they come in inactive.");
+        return new Plan(new MigrationResult(rows, warnings), plannedAccounts, plannedCustomers, plannedVendors, plannedItems, plannedTransactions, inactive);
     }
 
     private static string? ValidateAccountName(string fullName)

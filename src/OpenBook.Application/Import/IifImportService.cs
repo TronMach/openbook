@@ -52,12 +52,14 @@ public sealed class IifImportService(MigrationImportService migration)
             // A job is written "Customer:Job".
             var full = r.Get("NAME") ?? string.Empty;
             var cut = full.LastIndexOf(':');
-            data.Customers.Add(new SourceCustomer(r.Line, new CustomerDetails(full[(cut + 1)..], r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR")), Parent: cut < 0 ? null : full[..cut]));
+            data.Customers.Add(new SourceCustomer(r.Line, new CustomerDetails(full[(cut + 1)..], r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR"),
+                    PaymentTermsDays: MigrationReaders.TermsDays(r.Get("TERMS"))), Parent: cut < 0 ? null : full[..cut], Inactive: MigrationReaders.Yes(r.Get("HIDDEN"))));
         }
 
         foreach (var r in records.Where(r => r.Type == "VEND"))
             data.Vendors.Add(new SourceVendor(r.Line, new VendorDetails(r.Get("NAME") ?? string.Empty, r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("ADDR"),
-                AccountNumber: r.Get("ACCNUM"), Track1099: string.Equals(r.Get("1099"), "Y", StringComparison.OrdinalIgnoreCase))));
+                PaymentTermsDays: MigrationReaders.TermsDays(r.Get("TERMS")), AccountNumber: r.Get("ACCNUM"), Track1099: string.Equals(r.Get("1099"), "Y", StringComparison.OrdinalIgnoreCase)),
+                Inactive: MigrationReaders.Yes(r.Get("HIDDEN"))));
 
         foreach (var r in records.Where(r => r.Type == "INVITEM"))
         {
@@ -73,7 +75,8 @@ public sealed class IifImportService(MigrationImportService migration)
                 : null;
             var rate = MigrationReaders.Price(r.Get("PRICE") ?? "0") ?? 0m;
             data.Items.Add(new SourceItem(r.Line, r.Get("NAME") ?? string.Empty, kind, rate < 0m ? null : type, r.Get("ACCNT"), Math.Max(rate, 0m), r.Get("DESC"), rate < 0m ? MigrationReaders.NegativePrice : note,
-                MigrationReaders.Price(r.Get("QNTY") ?? "0") ?? 0m, MigrationReaders.Price(r.Get("COST") ?? "0") ?? 0m));
+                MigrationReaders.Price(r.Get("QNTY") ?? "0") ?? 0m, MigrationReaders.Price(r.Get("COST") ?? "0") ?? 0m,
+                MigrationReaders.Yes(r.Get("HIDDEN")), r.Get("TAXABLE") is { Length: > 0 } taxable ? MigrationReaders.Yes(taxable) : null));
         }
 
         // A child before its parent would be refused for a parent that isn't there yet.

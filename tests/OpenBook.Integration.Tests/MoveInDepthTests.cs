@@ -81,6 +81,25 @@ public sealed class MoveInDepthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Inactive_records_terms_and_taxable_come_over_from_quickbooks()
+    {
+        await MoveIn(Iif(
+            "!CUST	NAME	TERMS	HIDDEN", "CUST	Acme	Net 15	N", "CUST	Old Co	Due on receipt	Y", "CUST	Old Co:Job		Y",
+            "!VEND	NAME	TERMS	HIDDEN", "VEND	Paper Co	Net 45	Y",
+            "!INVITEM	NAME	INVITEMTYPE	ACCNT	PRICE	TAXABLE	HIDDEN", "INVITEM	Advice	SERV	Sales	90	N	N", "INVITEM	Retired	SERV	Sales	10	Y	Y"));
+
+        var customers = (await Customers()).ToDictionary(c => c.DisplayName);
+        Assert.Equal((15, true), (customers["Acme"].PaymentTermsDays, customers["Acme"].IsActive));
+        Assert.Equal((0, false), (customers["Old Co"].PaymentTermsDays, customers["Old Co"].IsActive));
+        Assert.False(customers["Job"].IsActive);
+        var vendor = Assert.Single(await _db.InScope(sp => sp.GetRequiredService<IPurchasesStore>().ListVendorsAsync(default)));
+        Assert.Equal((45, false), (vendor.PaymentTermsDays, vendor.IsActive));
+        var items = (await _db.InScope(sp => sp.GetRequiredService<ISalesStore>().ListItemsAsync(default))).ToDictionary(i => i.Name);
+        Assert.Equal((false, true), (items["Advice"].Taxable, items["Advice"].IsActive));
+        Assert.Equal((true, false), (items["Retired"].Taxable, items["Retired"].IsActive));
+    }
+
+    [Fact]
     public async Task Inventory_parts_come_in_tracked_with_their_stock()
     {
         await MoveIn(Iif("!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\tQNTY\tCOST", "INVITEM\tWidget\tPART\tSales\t25\t8\t10"));

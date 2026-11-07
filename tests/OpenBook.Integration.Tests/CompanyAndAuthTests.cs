@@ -135,6 +135,27 @@ public sealed class AuthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_pause_after_wrong_passwords_and_a_sign_in_from_a_new_device_are_audited()
+    {
+        for (var i = 0; i < User.MaxFailedLogins; i++)
+            await SignIn("wrong password");
+        Task<List<string?>> Notes() => _db.InDb(db => db.AuditRecords.AsNoTracking().Where(r => r.EntityType == "user").Select(r => r.After).ToListAsync());
+        Assert.Single(await Notes(), n => n!.Contains("sign-in from it paused", StringComparison.Ordinal));
+        Assert.DoesNotContain(await Notes(), n => n!.Contains("wrong password", StringComparison.Ordinal) && n.Contains("Password\"", StringComparison.Ordinal));
+
+        _db.Clock.UtcNow += User.LockoutDuration + TimeSpan.FromSeconds(1);
+        var user = (await SignIn(LedgerDatabase.OwnerPassword)).User!;
+        Task<Guid> Start(string device) => _db.InScope(sp => sp.GetRequiredService<AuthService>().StartSessionAsync(user, device, "203.0.113.7"));
+        await Start("Firefox on Windows");
+        await Start("Firefox on Windows");
+        Assert.DoesNotContain(await Notes(), n => n!.Contains("new device", StringComparison.Ordinal));
+        await Start("Safari on iPhone");
+        Assert.Single(await Notes(), n => n!.Contains("new device", StringComparison.Ordinal) && n.Contains("Safari on iPhone", StringComparison.Ordinal));
+        // What the log keeps of a typed username: one line, cut short.
+        Assert.Equal(("ab", 61), (OpenBook.Web.Security.SignInLog.Name("a\r\nb"), OpenBook.Web.Security.SignInLog.Name(new string('x', 70)).Length));
+    }
+
+    [Fact]
     public async Task Password_reconfirmation_failures_count_toward_lockout()
     {
         for (var i = 0; i < User.MaxFailedLogins; i++)

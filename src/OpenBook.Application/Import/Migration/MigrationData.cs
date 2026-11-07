@@ -36,14 +36,17 @@ public sealed record SourceAccount(
     int Line, string FullName, string TypeLabel, AccountType? Type, string? Number = null, string? Description = null, string? SkipReason = null, string? Note = null);
 
 /// <param name="Parent">A job's customer, by the source's full name ("Acme" or "Acme:Kitchen"): it comes in as a sub-customer billed with them.</param>
-public sealed record SourceCustomer(int Line, CustomerDetails Details, string? SkipReason = null, string? Parent = null);
+/// <param name="Inactive">Inactive in the old program: it comes in, then is made inactive.</param>
+public sealed record SourceCustomer(int Line, CustomerDetails Details, string? SkipReason = null, string? Parent = null, bool Inactive = false);
 
-public sealed record SourceVendor(int Line, VendorDetails Details, string? SkipReason = null);
+public sealed record SourceVendor(int Line, VendorDetails Details, string? SkipReason = null, bool Inactive = false);
 
 /// <param name="Type">Null skips the item, with <paramref name="Note"/> saying why.</param>
 /// <param name="Quantity">Stock on hand, for an inventory product.</param>
 /// <param name="UnitCost">What it cost per unit, for an inventory product.</param>
-public sealed record SourceItem(int Line, string Name, string KindLabel, ItemType? Type, string? IncomeAccount, decimal Price, string? Description, string? Note = null, decimal Quantity = 0m, decimal UnitCost = 0m);
+/// <param name="Taxable">Whether sales tax applies to it, when the export says; null keeps OpenBook's default (taxable).</param>
+public sealed record SourceItem(int Line, string Name, string KindLabel, ItemType? Type, string? IncomeAccount, decimal Price, string? Description, string? Note = null, decimal Quantity = 0m, decimal UnitCost = 0m,
+    bool Inactive = false, bool? Taxable = null);
 
 /// <param name="Amount">Positive is a debit, negative a credit.</param>
 public sealed record SourceLine(string Account, decimal Amount, string? Memo);

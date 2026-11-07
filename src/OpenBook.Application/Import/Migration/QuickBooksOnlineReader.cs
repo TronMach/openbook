@@ -60,14 +60,15 @@ internal static class QuickBooksOnlineReader
                 var job = c.TryGetProperty("Job", out var j) && j.ValueKind == JsonValueKind.True;
                 var full = Str(c, "FullyQualifiedName") ?? details.DisplayName;
                 var cut = full.LastIndexOf(':');
-                data.Customers.Add(new SourceCustomer(++index, job && cut > 0 ? details with { DisplayName = full[(cut + 1)..] } : details, Parent: job && cut > 0 ? full[..cut] : null));
+                data.Customers.Add(new SourceCustomer(++index, job && cut > 0 ? details with { DisplayName = full[(cut + 1)..] } : details, Parent: job && cut > 0 ? full[..cut] : null,
+                    Inactive: IsFalse(c, "Active")));
             }
 
             foreach (var v in Get(lists, "Vendor"))
             {
                 data.Vendors.Add(new SourceVendor(++index, new VendorDetails(Str(v, "DisplayName") ?? "", Str(v, "CompanyName"), Str(v, "PrimaryEmailAddr", "Address"),
                     Str(v, "PrimaryPhone", "FreeFormNumber"), Address(v, "BillAddr"), AccountNumber: Str(v, "AcctNum"),
-                    Track1099: v.TryGetProperty("Vendor1099", out var t) && t.ValueKind == JsonValueKind.True)));
+                    Track1099: v.TryGetProperty("Vendor1099", out var t) && t.ValueKind == JsonValueKind.True), Inactive: IsFalse(v, "Active")));
             }
 
             foreach (var i in Get(lists, "Item"))
@@ -85,7 +86,8 @@ internal static class QuickBooksOnlineReader
                     : null;
                 var price = decimal.Round(Number(i, "UnitPrice") ?? 0m, 4, MidpointRounding.AwayFromZero);
                 data.Items.Add(new SourceItem(++index, Str(i, "FullyQualifiedName") ?? Str(i, "Name") ?? "", kind, price < 0m ? null : type, income,
-                    Math.Max(price, 0m), Str(i, "Description"), price < 0m ? MigrationReaders.NegativePrice : note, Number(i, "QtyOnHand") ?? 0m, Number(i, "PurchaseCost") ?? 0m));
+                    Math.Max(price, 0m), Str(i, "Description"), price < 0m ? MigrationReaders.NegativePrice : note, Number(i, "QtyOnHand") ?? 0m, Number(i, "PurchaseCost") ?? 0m,
+                    IsFalse(i, "Active"), i.TryGetProperty("Taxable", out var tx) && tx.ValueKind is JsonValueKind.True or JsonValueKind.False ? tx.ValueKind == JsonValueKind.True : null));
             }
 
             foreach (var e in Get(lists, "JournalEntry"))
@@ -222,6 +224,8 @@ internal static class QuickBooksOnlineReader
     }
 
     private static List<JsonElement> Get(Dictionary<string, List<JsonElement>> lists, string name) => lists.GetValueOrDefault(name) ?? [];
+
+    private static bool IsFalse(JsonElement element, string name) => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.False;
 
     private static string? Str(JsonElement element, params string[] path)
     {

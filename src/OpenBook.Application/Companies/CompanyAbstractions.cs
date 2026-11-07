@@ -77,6 +77,9 @@ public interface ICompanyStore
     /// <summary>Tracked; the user's sessions not yet ended.</summary>
     Task<IReadOnlyList<UserSession>> ListOpenSessionsAsync(Guid userId, CancellationToken ct);
 
+    /// <summary>The devices the user's sessions, ended or not, were started from (as <see cref="UserSession.Device"/> describes them).</summary>
+    Task<IReadOnlyList<string?>> ListSessionDevicesAsync(Guid userId, CancellationToken ct);
+
     /// <summary>Tracked; null while the user follows the company's default view.</summary>
     Task<ViewPreference?> GetViewPreferenceAsync(string username, CancellationToken ct);
 

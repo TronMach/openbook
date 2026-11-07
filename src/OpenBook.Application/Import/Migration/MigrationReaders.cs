@@ -57,6 +57,24 @@ public static class MigrationReaders
     }
 
     /// <summary>An item's price: to 4 decimals as prices are kept, a dollar sign and commas allowed. Null when it can't be read.</summary>
+    /// <summary>"Y", "Yes", "True" or "1"; anything else is no.</summary>
+    internal static bool Yes(string? text) => text?.Trim().ToUpperInvariant() is "Y" or "YES" or "TRUE" or "1";
+
+    /// <summary>The due days of terms such as "Net 30" or "Due on receipt"; the usual 30 when there are none or they can't be read.</summary>
+    internal static int TermsDays(string? terms)
+    {
+        if (string.IsNullOrWhiteSpace(terms))
+            return 30;
+        try
+        {
+            return Sales.CustomerImportService.ParseTerms(terms).DueDays;
+        }
+        catch (Domain.Common.DomainException)
+        {
+            return 30;
+        }
+    }
+
     internal static decimal? Price(string? text) =>
         decimal.TryParse(text?.Trim().TrimStart('$').Replace(",", "", StringComparison.Ordinal), NumberStyles.Number, CultureInfo.InvariantCulture, out var price)
             ? decimal.Round(price, 4, MidpointRounding.AwayFromZero)

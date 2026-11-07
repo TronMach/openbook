@@ -98,6 +98,10 @@ public sealed class BooksCheckService(
             await PayablesTieAsync(data, ct),
             await UndepositedTieAsync(data, ct),
             await InventoryTieAsync(data, ct),
+            CustomerDepositsTie(data),
+            await PledgesTieAsync(data, ct),
+            await DepreciationTieAsync(data, ct),
+            await LoansTieAsync(data, ct),
             await ReconciliationsAsync(data, ct),
             await StockBelowZeroAsync(ct),
         };
@@ -474,6 +478,68 @@ public sealed class BooksCheckService(
         return Compare("inventory", "Stock value matches the books",
             "The cost of everything in stock equals the inventory asset accounts.",
             stock.Sum(s => s.Value), lines.Sum(l => l.Amount), others, "Stock on hand at cost", "the inventory asset accounts");
+    }
+
+    /// <summary>The lines on these accounts, with those from other sources set apart (they explain a difference).</summary>
+    private static (List<LedgerLine> Lines, List<LedgerLine> Others) On(Data d, HashSet<Guid> accountIds, params string[] sources)
+    {
+        var lines = d.Accrual.Where(l => accountIds.Contains(l.AccountId)).ToList();
+        return (lines, lines.Where(l => !sources.Contains(l.Source, StringComparer.Ordinal)).ToList());
+    }
+
+    private static string Names(Data d, IEnumerable<Guid> accountIds, string none) =>
+        accountIds.Select(id => d.Chart.Find(id)?.Name).OfType<string>().Order(StringComparer.CurrentCultureIgnoreCase).ToList() is { Count: > 0 } names
+            ? string.Join(", ", names) : none;
+
+    private static CheckResult CustomerDepositsTie(Data d)
+    {
+        var accountIds = d.Retainers.Select(r => r.LiabilityAccountId).ToHashSet();
+        var (lines, others) = On(d, accountIds, Retainer.Source, Retainer.ApplicationSource, Retainer.RefundSource);
+        return Compare("customer-deposits", "Customer deposits match the retainers",
+            "What customers paid ahead (retainers not yet applied or refunded) equals the account the retainers are kept in.",
+            -d.Retainers.Where(r => r.Status == DocumentStatus.Posted).Sum(r => r.Balance), lines.Sum(l => l.Amount), others,
+            "Retainers still held", Names(d, accountIds, "the customer deposits account"), credit: true);
+    }
+
+    private async Task<CheckResult> PledgesTieAsync(Data d, CancellationToken ct)
+    {
+        var pledges = await nonprofit.ListPledgesAsync(ct);
+        var accountIds = pledges.Select(p => p.ReceivableAccountId).ToHashSet();
+        var (lines, others) = On(d, accountIds, Domain.Nonprofit.Pledge.Source, Domain.Nonprofit.Pledge.CancelSource, Domain.Nonprofit.Donation.Source);
+        var standing = pledges.Where(p => p.Status == DocumentStatus.Posted).Select(p => p.Id).ToHashSet();
+        var promised = pledges.Where(p => standing.Contains(p.Id)).Sum(p => p.Amount - p.CancelledAmount);
+        var paid = d.Gifts.Where(g => g.Status == DocumentStatus.Posted && g.PledgeId is { } id && standing.Contains(id)).Sum(g => g.Amount);
+        return Compare("pledges", "Pledges receivable match the open pledges",
+            "What's still to come on pledges (promised, less cancelled and paid) equals the pledges receivable account, on the accrual basis.",
+            promised - paid, lines.Sum(l => l.Amount), others, "Open pledges", Names(d, accountIds, "the pledges receivable account"));
+    }
+
+    private async Task<CheckResult> DepreciationTieAsync(Data d, CancellationToken ct)
+    {
+        var assetList = (await assets.ListAssetsAsync(ct)).Where(a => !a.IsRemoved).ToList();
+        var runs = (await assets.ListRunsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted).ToList();
+        var posted = runs.SelectMany(r => r.Lines).GroupBy(l => l.AssetId).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+        var accountIds = assetList.Select(a => a.AccumulatedAccountId).ToHashSet();
+        var (lines, others) = On(d, accountIds, Domain.Assets.DepreciationRun.Source, Domain.Assets.FixedAsset.DisposalSource);
+        // OpenBook's own lines: each run credits its depreciation; a disposal debits all that was accumulated, including any
+        // depreciation from before OpenBook (which came in some other way, so it's counted with the other lines).
+        var expected = assetList.Sum(a => a.IsDisposed ? a.PriorDepreciation : -posted.GetValueOrDefault(a.Id));
+        return Compare("depreciation", "Accumulated depreciation matches the asset register",
+            "The depreciation posted for each asset still held (and taken out for each one sold or disposed of) equals the accumulated depreciation accounts. Depreciation from before OpenBook, entered as a journal entry or opening balance, is counted separately.",
+            expected, lines.Sum(l => l.Amount), others, "The asset register", Names(d, accountIds, "the accumulated depreciation accounts"), credit: true);
+    }
+
+    private async Task<CheckResult> LoansTieAsync(Data d, CancellationToken ct)
+    {
+        var loans = await assets.ListLoansAsync(ct);
+        var accountIds = loans.Select(l => l.LiabilityAccountId).ToHashSet();
+        var (lines, others) = On(d, accountIds, Domain.Assets.Loan.Source, Domain.Assets.Loan.PaymentSource);
+        // A loan whose money was entered with it credits the principal; otherwise it's in the books some other way.
+        var expected = loans.Where(l => !l.IsVoided)
+            .Sum(l => (l.ProceedsAccountId is null ? 0m : -l.Principal) + l.PaymentsMade.Where(p => !p.IsVoided).Sum(p => p.Principal));
+        return Compare("loans", "Loan balances match the books",
+            "What's left to repay on each loan, by its payments, equals the loan accounts. A loan entered without its money (already in the books) is counted from the entry that put it there.",
+            expected, lines.Sum(l => l.Amount), others, "The loans' balances", Names(d, accountIds, "the loan accounts"), credit: true);
     }
 
     private async Task<CheckResult> ReconciliationsAsync(Data d, CancellationToken ct)

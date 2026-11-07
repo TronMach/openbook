@@ -80,6 +80,9 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
     public async Task<IReadOnlyList<UserSession>> ListOpenSessionsAsync(Guid userId, CancellationToken ct) =>
         await db.UserSessions.Where(s => s.UserId == userId && s.EndedAt == null).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<string?>> ListSessionDevicesAsync(Guid userId, CancellationToken ct) =>
+        await db.UserSessions.AsNoTracking().Where(s => s.UserId == userId).Select(s => s.Device).Distinct().ToListAsync(ct);
+
     public void Add(UserSession session) => db.UserSessions.Add(session);
 
     public Task<SignInSettings?> GetSignInSettingsAsync(CancellationToken ct) => db.SignInSettings.SingleOrDefaultAsync(ct);

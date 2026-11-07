@@ -61,7 +61,7 @@ public sealed class BooksCheckTests : IAsyncLifetime
     private static void AssertAgrees(BooksCheckReport report, string when)
     {
         Assert.True(report.Problems == 0, $"{when}:{Environment.NewLine}{Describe(report)}");
-        Assert.Equal(10, report.Results.Count);
+        Assert.Equal(14, report.Results.Count);
     }
 
     private Task<Invoice> Invoice(Customer customer, decimal hours, DateOnly date) =>
@@ -82,6 +82,53 @@ public sealed class BooksCheckTests : IAsyncLifetime
         Assert.All(report.Results, r => Assert.Equal(CheckOutcome.Ok, r.Outcome));
         // 300 invoiced less 100 applied and 50 unapplied credit, plus the widget invoice's 100.
         Assert.Equal(250m, (await In<ReceivablesService, AgingReport>(s => s.AgingAsync(DateOnly.MaxValue))).Totals.Total);
+    }
+
+    [Fact]
+    public async Task Retainers_pledges_assets_and_loans_tie_to_their_accounts()
+    {
+        // A retainer, half applied to an invoice.
+        var invoice = await Invoice(_customers[0], 2m, Start);
+        var retainer = await In<RetainerService, Retainer>(s => s.ReceiveAsync(new ReceiveRetainerCommand(_customers[0].Id, Start, _checking.Id, 500m)));
+        await In<RetainerService, RetainerApplication>(s => s.ApplyAsync(retainer.Id, new ApplyRetainerCommand(invoice.Id, Start.AddDays(2), 150m)));
+
+        // A pledge, partly paid.
+        var donor = _customers[1];
+        var pledge = await In<OpenBook.Application.Nonprofit.GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new OpenBook.Application.Nonprofit.PledgeCommand(donor.Id, Start, 1_000m)));
+        await In<OpenBook.Application.Nonprofit.GiftService, Domain.Nonprofit.Donation>(s => s.RecordAsync(new OpenBook.Application.Nonprofit.RecordGiftCommand(donor.Id, Start.AddDays(5), 400m, _checking.Id, PledgeId: pledge.Id)));
+
+        // Two assets, depreciated; one with depreciation from before OpenBook, entered by hand, then sold.
+        var equipment = await _db.CreateAccount("Equipment", AccountType.FixedAsset, "1500");
+        var van = await In<OpenBook.Application.Assets.FixedAssetService, Domain.Assets.FixedAsset>(s => s.CreateAsync(new Domain.Assets.FixedAssetDetails(
+            "Van", equipment.Id, Guid.Empty, Guid.Empty, Start, 3_600m, Domain.Assets.DepreciationMethod.StraightLine, 36)));
+        var old = await In<OpenBook.Application.Assets.FixedAssetService, Domain.Assets.FixedAsset>(s => s.CreateAsync(new Domain.Assets.FixedAssetDetails(
+            "Old press", equipment.Id, van.AccumulatedAccountId, van.ExpenseAccountId, Start.AddYears(-1), 1_200m, Domain.Assets.DepreciationMethod.StraightLine, 12,
+            PriorDepreciation: 1_100m, PriorThrough: Start.AddDays(-1))));
+        var equity = await _db.CreateAccount("Owner's Equity", AccountType.Equity, "3000");
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Start.AddDays(-1),
+            [JournalLineDraft.Dr(equity.Id, 1_100m), JournalLineDraft.Cr(van.AccumulatedAccountId, 1_100m)], "Depreciation before OpenBook")));
+        await In<OpenBook.Application.Assets.DepreciationService, Domain.Assets.DepreciationRun>(s => s.RunAsync(new DateOnly(2026, 3, 31)));
+        await In<OpenBook.Application.Assets.FixedAssetService, Domain.Assets.FixedAsset>(s => s.DisposeAsync(old.Id,
+            new OpenBook.Application.Assets.DisposeAssetCommand(new DateOnly(2026, 4, 15), 50m, _checking.Id)));
+
+        // A loan with its money, one payment made.
+        var loanAccount = await _db.CreateAccount("Truck Loan", AccountType.LongTermLiability, "2700");
+        var loan = await In<OpenBook.Application.Assets.LoanService, Domain.Assets.Loan>(s => s.CreateAsync(new OpenBook.Application.Assets.CreateLoanCommand(
+            new Domain.Assets.LoanDetails("Truck", loanAccount.Id, Guid.Empty, 12_000m, 6m, 36, Start.AddMonths(1)), _checking.Id, Start)));
+        await In<OpenBook.Application.Assets.LoanService, Domain.Assets.LoanPayment>(s => s.PayAsync(loan.Id, new OpenBook.Application.Assets.LoanPaymentCommand(Start.AddMonths(1), _checking.Id)));
+
+        var report = await Check();
+        AssertAgrees(report, "with retainers, pledges, assets and loans");
+        foreach (var key in new[] { "customer-deposits", "pledges", "loans" })
+            Assert.Equal(CheckOutcome.Ok, report.Results.Single(r => r.Key == key).Outcome);
+        // The depreciation entered by hand is counted with the entry.
+        Assert.Equal(CheckOutcome.Note, report.Results.Single(r => r.Key == "depreciation").Outcome);
+
+        // Money put in customer deposits by hand is a note, not a problem.
+        var deposits = (await In<RetainerService, Retainer?>(s => s.GetAsync(retainer.Id)))!.LiabilityAccountId;
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Start,
+            [JournalLineDraft.Dr(equity.Id, 25m), JournalLineDraft.Cr(deposits, 25m)], "Deposit from before")));
+        Assert.Equal(CheckOutcome.Note, (await Check()).Results.Single(r => r.Key == "customer-deposits").Outcome);
     }
 
     [Fact]

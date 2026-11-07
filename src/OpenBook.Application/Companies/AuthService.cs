@@ -151,6 +151,12 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
     {
         ArgumentNullException.ThrowIfNull(user);
         var session = UserSession.Start(user.Id, user.SecurityStamp, device, address, clock.UtcNow);
+        // A sign-in from a device the user has never signed in from is worth a line in the audit log (and a webhook, for alerts);
+        // their very first sign-in isn't news.
+        var devices = await store.ListSessionDevicesAsync(user.Id, ct);
+        if (devices.Count > 0 && !devices.Contains(session.Device, StringComparer.Ordinal))
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Username, AuditAction.Updated, "user", user.Id, null,
+                JsonSerializer.Serialize(new { Note = "Signed in from a new device", session.Device, session.Address })));
         store.Add(session);
         await store.SaveChangesAsync(ct);
         return session.Id;
@@ -294,6 +300,13 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
         if (check == PasswordCheck.Failed)
         {
             throttle.RecordFailure(user.Id, address, now);
+            if (throttle.BlockedUntil(user.Id, address, now) is { } paused)
+            {
+                // One address has had its tries; sign-in from there pauses (it wasn't paused before this one).
+                store.Add(AuditRecord.Create(now, "system", AuditAction.Updated, "user", user.Id, null,
+                    JsonSerializer.Serialize(new { Note = $"{User.MaxFailedLogins} wrong passwords from one address: sign-in from it paused until {paused:u}", Address = address })));
+            }
+
             await store.CountFailedLoginAsync(user, ct);
             user.LockIfOverLimit(now, User.MaxFailedLoginsEverywhere);
             if (user.IsLockedOut(now))

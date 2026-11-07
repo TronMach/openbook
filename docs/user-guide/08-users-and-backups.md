@@ -25,6 +25,8 @@ Two-factor sign-in asks for a 6-digit code from an authenticator app (Google Aut
 
 **Signing in:** after your password, enter the code your app shows for OpenBook, or one of your recovery codes. Tick **Remember this browser for 30 days** on a computer or phone that's yours, to skip the code there. Changing your password or **Sign out all other sessions** forgets every remembered browser. Wrong codes count like wrong passwords: after five in a row the account is locked for five minutes.
 
+**Keeping watch:** when five wrong passwords from one address pause sign-in there, and when someone signs in from a device they haven't used before, the user's history in the **Audit log** says so (with the address and device), and a webhook for user changes hears of it. Each refused sign-in is also written to the log files with the username and address (never the password); an administrator sees them on **Settings → System**.
+
 On the same page you can **Make new recovery codes** (the old ones stop working) or **Turn off two-factor sign-in**; both ask for your password and a code. To move to a new phone, turn it off and set it up again.
 
 **Lost your phone and your recovery codes?** An administrator can select **Turn off** in the **Two-factor** column on **Settings → Users and invitations**; that also signs you out everywhere. If no administrator can sign in, the `reset-password` command with `--clear-two-factor` does it (see [Forgotten password](01-getting-started.md#forgotten-password)).

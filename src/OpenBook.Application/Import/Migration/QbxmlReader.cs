@@ -45,17 +45,17 @@ internal static class QbxmlReader
         {
             var job = int.TryParse(c.Text("Sublevel"), out var level) && level > 0;
             var details = new CustomerDetails(c.Text("Name") ?? "", c.Text("CompanyName"), c.Text("Email"), c.Text("Phone"),
-                Address(c.Child("BillAddress")), Address(c.Child("ShipAddress")));
+                Address(c.Child("BillAddress")), Address(c.Child("ShipAddress")), PaymentTermsDays: MigrationReaders.TermsDays(c.Child("TermsRef").Text("FullName")));
             var full = c.Text("FullName") ?? details.DisplayName;
             var cut = full.LastIndexOf(':');
-            data.Customers.Add(new SourceCustomer(MigrationReaders.LineOf(c), details, Parent: job && cut > 0 ? full[..cut] : null));
+            data.Customers.Add(new SourceCustomer(MigrationReaders.LineOf(c), details, Parent: job && cut > 0 ? full[..cut] : null, Inactive: Inactive(c)));
         }
 
         foreach (var v in document.Named("VendorRet"))
         {
             data.Vendors.Add(new SourceVendor(MigrationReaders.LineOf(v), new VendorDetails(v.Text("Name") ?? "", v.Text("CompanyName"), v.Text("Email"), v.Text("Phone"),
-                Address(v.Child("VendorAddress")), AccountNumber: v.Text("AccountNumber"),
-                Track1099: string.Equals(v.Text("IsVendorEligibleFor1099"), "true", StringComparison.OrdinalIgnoreCase))));
+                Address(v.Child("VendorAddress")), PaymentTermsDays: MigrationReaders.TermsDays(v.Child("TermsRef").Text("FullName")), AccountNumber: v.Text("AccountNumber"),
+                Track1099: string.Equals(v.Text("IsVendorEligibleFor1099"), "true", StringComparison.OrdinalIgnoreCase)), Inactive: Inactive(v)));
         }
 
         foreach (var i in document.Descendants().Where(e => e.Name.LocalName.StartsWith("Item", StringComparison.Ordinal) && e.Name.LocalName.EndsWith("Ret", StringComparison.Ordinal)))
@@ -76,7 +76,8 @@ internal static class QbxmlReader
                 : null;
             data.Items.Add(new SourceItem(MigrationReaders.LineOf(i), i.Text("FullName") ?? i.Text("Name") ?? "", kind, price < 0m ? null : type, income, Math.Max(price, 0m),
                 terms.Text("Desc") ?? terms.Text("SalesDesc") ?? i.Text("SalesDesc"), price < 0m ? MigrationReaders.NegativePrice : note,
-                MigrationReaders.Price(i.Text("QuantityOnHand")) ?? 0m, MigrationReaders.Price(i.Text("AverageCost") ?? i.Text("PurchaseCost")) ?? 0m));
+                MigrationReaders.Price(i.Text("QuantityOnHand")) ?? 0m, MigrationReaders.Price(i.Text("AverageCost") ?? i.Text("PurchaseCost")) ?? 0m,
+                Inactive(i), i.Child("SalesTaxCodeRef").Text("FullName") is { Length: > 0 } code ? !string.Equals(code, "Non", StringComparison.OrdinalIgnoreCase) : null));
         }
 
         var journals = document.Named("ReportRet").Where(QbxmlJournal.IsJournal).ToList();
@@ -141,6 +142,9 @@ internal static class QbxmlReader
         return new SourceCompany(c.Text("CompanyName"), c.Text("LegalCompanyName"), c.Text("Email"), c.Text("Phone"),
             Address(c.Child("Address")) ?? Address(c.Child("LegalAddress")), SourceCompany.Month(c.Text("FirstMonthFiscalYear")), null, type);
     }
+
+    // A list record's IsActive is "true" unless it was made inactive.
+    private static bool Inactive(XElement record) => string.Equals(record.Text("IsActive"), "false", StringComparison.OrdinalIgnoreCase);
 
     private static string? Address(XElement? address) => address is null ? null : MigrationReaders.Address(
         address.Text("Addr1"), address.Text("Addr2"), address.Text("Addr3"), address.Text("Addr4"), address.Text("Addr5"),
