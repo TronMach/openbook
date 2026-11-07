@@ -85,6 +85,8 @@ If you're moving from other books, enter the balances you're bringing over: **Se
 
 Whatever doesn't balance goes to an equity account named "Opening Balance Equity". Your accountant can move it to the right equity accounts later.
 
+**Starting part-way through your year?** The balances already hold this year's profit, but your profit and loss and tax summary would start on the day you started. Under **Year to date so far** on the same page, set **Through** to the same day as the opening balances and enter what each income and expense account came to this year in your old books (from their profit and loss report), then **Post year to date**. The year's reports are then whole, and Opening Balance Equity ends up as equity at the start of the year.
+
 **Leave accounts receivable and payable out.** Enter each unpaid customer invoice and vendor bill individually instead, dated when it was issued. That way you can receive payments and pay bills against them as usual.
 
 Opening balances for many accounts can also be imported from a CSV file on **Settings → Import transactions**.

@@ -7,7 +7,7 @@ There are two ways to bring your books into OpenBook. Which suits you depends on
 | **Start fresh** from a date | Opening balances, open invoices and bills, your lists | Most small businesses. Clean, quick, and your old program keeps the history |
 | **Import the history** | Accounts, customers, vendors, items and every past transaction | When you want past years' reports inside OpenBook |
 
-Either way, pick a start date at a period end (a month, quarter or ideally a year end) and keep your old program, or exports from it, for the years before.
+Either way, pick a start date at a period end (a month, quarter or ideally a year end) and keep your old program, or exports from it, for the years before. Starting fresh part-way through a year, also enter the year's income and expenses so far (**Year to date so far** on the opening balances page, chapter 3), or this year's reports and tax summary will start on your start date.
 
 Importing accounts, journal entries and whole companies needs the accountant role; customers, vendors and items need the standard role.
 

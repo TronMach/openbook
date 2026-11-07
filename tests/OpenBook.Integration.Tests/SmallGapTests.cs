@@ -101,4 +101,25 @@ public sealed class SmallGapTests : IAsyncLifetime
             [new SalesLineDraft(item.Id, null, 1m, 100m)], Number: "5000"))));
         Assert.Equal("invoice.number_taken", refused.Code);
     }
+
+    [Fact]
+    public async Task Starting_mid_year_the_year_to_date_step_makes_the_years_profit_whole()
+    {
+        var income = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var june30 = new DateOnly(2026, 6, 30);
+        // Bank 15,000 on June 30: 5,000 brought from last year and 10,000 profit since January.
+        await In<OpenBook.Application.Ledger.OpeningBalanceService, OpenBook.Domain.Ledger.JournalEntry>(s => s.PostAsync(june30, [new(_checking.Id, 15_000m)]));
+        await In<OpenBook.Application.Ledger.OpeningBalanceService, OpenBook.Domain.Ledger.JournalEntry>(s => s.PostYearToDateAsync(june30, [new(income.Id, 25_000m), new(_rent.Id, 15_000m)]));
+
+        var lines = await In<OpenBook.Application.Reporting.ReportLedger, IReadOnlyList<LedgerLine>>(s => s.LinesAsync(OpenBook.Domain.Ledger.ReportBasis.Accrual, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31)));
+        Assert.Equal(-25_000m, lines.Where(l => l.AccountId == income.Id).Sum(l => l.Amount));
+        Assert.Equal(15_000m, lines.Where(l => l.AccountId == _rent.Id).Sum(l => l.Amount));
+        var equity = (await In<OpenBook.Application.Accounts.AccountService, OpenBook.Domain.Accounts.ChartOfAccounts>(s => s.GetChartAsync()))
+            .FindByFullName(OpenBook.Application.Ledger.OpeningBalanceService.EquityAccountName)!;
+        Assert.Equal(-5_000m, lines.Where(l => l.AccountId == equity.Id).Sum(l => l.Amount));
+
+        var refused = await Assert.ThrowsAsync<DomainException>(() => In<OpenBook.Application.Ledger.OpeningBalanceService, OpenBook.Domain.Ledger.JournalEntry>(
+            s => s.PostYearToDateAsync(june30, [new(_checking.Id, 1m)])));
+        Assert.Equal("opening.year_to_date_account", refused.Code);
+    }
 }

@@ -58,6 +58,12 @@ internal static class LedgerToolsApi
             var entry = await s.PostAsync(r.AsOf, r.Balances ?? [], ct);
             return Results.Created($"/api/journal-entries/{entry.Id}", JournalEntryResponse.From(entry));
         });
+        // Income and expenses so far this year, for a business starting part-way through it ("as of" = the day before starting).
+        api.MapPost("/opening-balances/year-to-date", async (OpeningBalancesRequest r, OpeningBalanceService s, CancellationToken ct) =>
+        {
+            var entry = await s.PostYearToDateAsync(r.AsOf, r.Balances ?? [], ct);
+            return Results.Created($"/api/journal-entries/{entry.Id}", JournalEntryResponse.From(entry));
+        });
 
         api.MapGet("/chart-templates", () => ChartTemplates.All);
         api.MapPost("/chart-templates/{key}/apply", async (string key, bool? dryRun, ChartTemplates t, CancellationToken ct) =>

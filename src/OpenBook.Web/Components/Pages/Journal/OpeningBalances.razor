@@ -83,6 +83,44 @@
                 <button type="button" @onclick="PostAsync" disabled="@(_busy || !_rows.Any(r => r.Balance is { } b && b != 0m))">Post opening balances</button>
             </div>
         </div>
+
+        @if (_ytd.Count > 0)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>Year to date so far</h2>
+                <p class="muted">
+                    Starting part-way through your year? Enter what each income and expense account came to in your old books since
+                    @Labels.Date(_yearStart), from their profit and loss report, so this year's profit and loss and tax summary are complete.
+                    Use the same date as the opening balances: they already hold this year's profit in what you own and owe.
+                </p>
+                <div class="field">
+                    <label for="ytd-through">Through</label>
+                    <input id="ytd-through" type="date" @bind="_through" />
+                </div>
+                <div class="table-wrap">
+                    <table class="data entry">
+                        <thead><tr><th>Account</th><th>Type</th><th class="num">So far this year</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in _ytd)
+                            {
+                                <tr @key="row.Account.Id">
+                                    <td>@Labels.AccountName(_chart, row.Account.Id, _useNumbers)</td>
+                                    <td class="muted">@Labels.For(row.Account.Type)</td>
+                                    <td><input class="amount" type="number" step="0.01" aria-label="So far this year for @row.Account.Name" @bind="row.Balance" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr><td colspan="2">Net income so far</td><td class="num">@Labels.Amount(NetSoFar)</td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="hint">Income earned and expenses spent are positive; use a minus sign for a refund or credit.</p>
+                <div class="actions">
+                    <button type="button" @onclick="PostYearToDateAsync" disabled="@(_busy || !_ytd.Any(r => r.Balance is { } b && b != 0m))">Post year to date</button>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -97,6 +135,12 @@
     private bool _needsClosingPassword;
     private string? _closingPassword;
     private DateOnly _asOf;
+    private List<Row> _ytd = [];
+    private DateOnly _through;
+    private DateOnly _yearStart;
+
+    /// <summary>Income less expenses entered for the year so far.</summary>
+    private decimal NetSoFar => _ytd.Sum(r => (r.Balance ?? 0m) * (r.Account.Type.ClassOf() == AccountClass.Income ? 1m : -1m));
 
     /// <summary>Assets less liabilities and other equity entered: what "Opening Balance Equity" will show.</summary>
     private decimal EquityAmount => _rows.Sum(r => (r.Balance ?? 0m) * r.Account.Type.ClassOf() switch
@@ -107,11 +151,15 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var (chart, company, eligible, existing) = await Ops.RunAsync(async sp => (
+        var (chart, company, eligible, existing, ytd) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             await sp.GetRequiredService<CompanySettingsService>().GetAsync(),
             await sp.GetRequiredService<OpeningBalanceService>().EligibleAccountsAsync(),
-            await sp.GetRequiredService<OpeningBalanceService>().ExistingAsync()));
+            await sp.GetRequiredService<OpeningBalanceService>().ExistingAsync(),
+            await sp.GetRequiredService<OpeningBalanceService>().YearToDateAccountsAsync()));
+        _ytd = ytd.Select(a => new Row(a)).ToList();
+        _yearStart = company.FiscalYearStart(CompanyTime.Today);
+        _through = CompanyTime.Today.AddDays(-1) < _yearStart ? _yearStart : CompanyTime.Today.AddDays(-1);
         _chart = chart;
         _useNumbers = company.UseAccountNumbers;
         _rows = eligible.Select(a => new Row(a)).ToList();
@@ -131,6 +179,29 @@
         {
             var balances = _rows.Where(r => r.Balance is { } b && b != 0m).Select(r => new OpeningBalance(r.Account.Id, r.Balance!.Value)).ToList();
             var entry = await Ops.RunAsync<OpeningBalanceService, JournalEntry>(s => s.PostAsync(_asOf, balances), _closingPassword);
+            Navigation.NavigateTo($"/journal/{entry.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PostYearToDateAsync()
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var amounts = _ytd.Where(r => r.Balance is { } b && b != 0m).Select(r => new OpeningBalance(r.Account.Id, r.Balance!.Value)).ToList();
+            var entry = await Ops.RunAsync<OpeningBalanceService, JournalEntry>(s => s.PostYearToDateAsync(_through, amounts), _closingPassword);
             Navigation.NavigateTo($"/journal/{entry.Id}");
         }
         catch (DomainException ex)
