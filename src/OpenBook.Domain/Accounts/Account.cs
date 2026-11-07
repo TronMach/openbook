@@ -94,6 +94,14 @@ public sealed partial class Account
     /// </summary>
     public bool DonorRestricted { get; private set; }
 
+    /// <summary>
+    /// Payments to 1099 vendors for what's kept in this account aren't reportable (materials, merchandise, freight): bill
+    /// lines and expense categories on it come off the vendor's 1099 total.
+    /// </summary>
+    public bool Excluded1099 { get; private set; }
+
+    public void SetExcluded1099(bool excluded) => Excluded1099 = excluded;
+
     public static bool CanBeRestricted(AccountType type) => type is AccountType.Income or AccountType.OtherIncome or AccountType.Equity;
 
     public static Account Create(string name, AccountType type, string? number = null, Guid? parentId = null, string? description = null) =>

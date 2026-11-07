@@ -24,7 +24,8 @@ public sealed record PayablesAgingReport(DateOnly AsOf, IReadOnlyList<VendorAgin
 /// <param name="MeetsThreshold">Whether a 1099 is due.</param>
 /// <param name="Refunds">Refunds the vendor made in the year.</param>
 /// <param name="Prior">Paid before OpenBook (<see cref="Prior1099Payment"/>), included in <paramref name="Total"/>.</param>
-public sealed record Vendor1099(Vendor Vendor, decimal Total, decimal CardPayments, bool MeetsThreshold, decimal Refunds = 0m, decimal Prior = 0m);
+/// <param name="NotReportable">Paid by cash, check or bank for what's kept in accounts marked not reportable on 1099s, left out of <paramref name="Total"/>.</param>
+public sealed record Vendor1099(Vendor Vendor, decimal Total, decimal CardPayments, bool MeetsThreshold, decimal Refunds = 0m, decimal Prior = 0m, decimal NotReportable = 0m);
 
 /// <param name="Year">The tax year.</param>
 /// <param name="Threshold">The reporting threshold used.</param>
@@ -118,16 +119,50 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
         bool InYear(DateOnly d) => d.Year == year;
 
         var paid = new Dictionary<Guid, (decimal Reportable, decimal Card)>();
-        void Add(Guid vendorId, Guid accountId, decimal amount)
+        var notReportable = new Dictionary<Guid, decimal>();
+        void Add(Guid vendorId, Guid accountId, decimal amount, decimal excluded = 0m)
         {
             var (reportable, card) = paid.GetValueOrDefault(vendorId);
-            paid[vendorId] = IsCard(accountId) ? (reportable, card + amount) : (reportable + amount, card);
+            if (IsCard(accountId))
+            {
+                paid[vendorId] = (reportable, card + amount);
+                return;
+            }
+
+            paid[vendorId] = (reportable + amount - excluded, card);
+            if (excluded != 0m)
+                notReportable[vendorId] = notReportable.GetValueOrDefault(vendorId) + excluded;
         }
 
-        foreach (var p in (await store.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InYear(p.Date)))
-            Add(p.VendorId, p.PaymentAccountId, p.Amount);
+        // A payment's share for accounts marked not reportable: each bill it pays, in proportion to the bill's lines on them.
+        var excludedAccounts = chart.All.Where(a => a.Excluded1099).Select(a => a.Id).ToHashSet();
+        var payments = (await store.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InYear(p.Date)).ToList();
+        var excludedShare = new Dictionary<Guid, decimal>();
+        if (excludedAccounts.Count > 0)
+        {
+            var paidBills = payments.SelectMany(p => p.Applications.Select(a => a.BillId)).ToHashSet();
+            foreach (var bill in (await store.ListBillsAsync(null, ct)).Where(b => paidBills.Contains(b.Id)))
+            {
+                var total = bill.Lines.Sum(l => l.Amount);
+                var excluded = bill.Lines.Where(l => excludedAccounts.Contains(l.AccountId)).Sum(l => l.Amount);
+                if (total > 0m && excluded > 0m)
+                    excludedShare[bill.Id] = Math.Min(1m, excluded / total);
+            }
+        }
+
+        foreach (var p in payments)
+        {
+            var excluded = decimal.Round(p.Applications.Sum(a => a.Amount * excludedShare.GetValueOrDefault(a.BillId)), 2, MidpointRounding.AwayFromZero);
+            Add(p.VendorId, p.PaymentAccountId, p.Amount, Math.Min(excluded, p.Amount));
+        }
+
         foreach (var e in (await store.ListExpensesAsync(null, ct)).Where(e => e.Status == BankTransactionStatus.Posted && e.VendorId is not null && InYear(e.Date)))
-            Add(e.VendorId!.Value, e.AccountId, e.Amount);
+        {
+            var excluded = 0m;
+            if (excludedAccounts.Count > 0 && await ledger.GetEntryAsync(e.JournalEntryId, ct) is { } entry)
+                excluded = Math.Clamp(entry.Lines.Where(l => l.LineNumber > 1 && excludedAccounts.Contains(l.AccountId)).Sum(l => l.Amount), 0m, e.Amount);
+            Add(e.VendorId!.Value, e.AccountId, e.Amount, excluded);
+        }
 
         var refundsInYear = (await store.ListVendorRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && InYear(r.Date)).ToList();
         var refunds = refundsInYear.GroupBy(r => r.VendorId).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
@@ -151,7 +186,8 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             {
                 var (reportable, card) = paid.GetValueOrDefault(v.Id);
                 (reportable, card) = (Math.Max(0m, reportable), Math.Max(0m, card));
-                return new Vendor1099(v, reportable, card, reportable >= limit && reportable > 0m, refunds.GetValueOrDefault(v.Id), prior.GetValueOrDefault(v.Id));
+                return new Vendor1099(v, reportable, card, reportable >= limit && reportable > 0m, refunds.GetValueOrDefault(v.Id), prior.GetValueOrDefault(v.Id),
+                    notReportable.GetValueOrDefault(v.Id));
             })
             .ToList();
         return new Report1099(year, limit, vendors, net, imported);

@@ -50,6 +50,40 @@ public sealed class Filing1099Tests : IAsyncLifetime
             Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "pw", false, "books@studio.test", "Studio", null, null)));
 
     [Fact]
+    public async Task Materials_in_accounts_marked_not_reportable_come_off_the_1099_total()
+    {
+        var materials = await _db.CreateAccount("Materials", AccountType.CostOfGoodsSold, "5100");
+        await In<OpenBook.Application.Accounts.AccountService, Account>(s => s.UpdateAsync(new OpenBook.Application.Accounts.UpdateAccountCommand(
+            materials.Id, materials.Name, materials.Type, materials.Number, null, null, Excluded1099: true)));
+
+        // An expense with labor and parts on one check, and a bill of 600 labor + 400 parts paid half.
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1,
+            [new BankSplit(_contractors.Id, 300m), new BankSplit(materials.Id, 200m)], VendorId: _dana.Id)));
+        var bill = await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_dana.Id, Mar1,
+            [new BillLineDraft(_contractors.Id, 600m), new BillLineDraft(materials.Id, 400m)], Reference: "D-1")));
+        await In<BillPaymentService, IReadOnlyList<BillPayment>>(s => s.PayAsync(new PayBillsCommand(Mar1.AddDays(10), _checking.Id, [new ApplyToBill(bill.Id, 500m)])));
+
+        var row = (await In<PayablesService, Report1099>(s => s.Report1099Async(2025))).Vendors.Single(v => v.Vendor.Id == _dana.Id);
+        Assert.Equal((5_000m + 300m + 300m, 200m + 200m), (row.Total, row.NotReportable));
+    }
+
+    [Fact]
+    public async Task The_vendor_import_sets_1099_tracking_the_tax_id_and_the_box_and_never_shows_the_number()
+    {
+        const string csv = "Vendor,Eligible for 1099,Tax ID,1099 box\nLandlord LLC,Yes,98-7654321,MISC 1 Rents\nLawyer & Co,,11-2223334,Attorney\nPlain Supply,No,,\n";
+        var preview = await In<VendorImportService, OpenBook.Application.Sales.ImportResult<VendorImportRow>>(s => s.PreviewAsync(csv));
+        Assert.All(preview.Rows, r => Assert.Equal(OpenBook.Application.Accounts.ImportRowStatus.New, r.Status));
+        Assert.Equal("•••••4321", preview.Rows[0].Details!.TaxId);
+        await In<VendorImportService, OpenBook.Application.Sales.ImportResult<VendorImportRow>>(s => s.ImportAsync(csv));
+
+        var vendors = (await In<VendorService, IReadOnlyList<VendorSummary>>(s => s.ListAsync(Mar1))).Select(v => v.Vendor).ToDictionary(v => v.DisplayName);
+        Assert.Equal((true, "98-7654321", Form1099Box.MiscRents), (vendors["Landlord LLC"].Track1099, vendors["Landlord LLC"].TaxId, vendors["Landlord LLC"].Form1099Box));
+        Assert.Equal((true, Form1099Box.MiscAttorney), (vendors["Lawyer & Co"].Track1099, vendors["Lawyer & Co"].Form1099Box));
+        Assert.False(vendors["Plain Supply"].Track1099);
+        Assert.Equal("import.1099_box", Assert.Throws<DomainException>(() => VendorImportService.ParseBox("Box 99")).Code);
+    }
+
+    [Fact]
     public async Task Paid_before_OpenBook_counts_toward_the_total_and_can_be_taken_away()
     {
         await In<Filing1099Service, int>(async s => { await s.SetPriorAsync(_noNumber.Id, 2025, 1_400m, "Old books"); return 0; });

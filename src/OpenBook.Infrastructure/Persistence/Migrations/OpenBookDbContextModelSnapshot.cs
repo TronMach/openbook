@@ -30,6 +30,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("DonorRestricted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("Excluded1099")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 

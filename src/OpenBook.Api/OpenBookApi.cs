@@ -90,13 +90,13 @@ public static class OpenBookApi
 
         api.MapPost("/accounts", async (CreateAccountRequest r, AccountService accounts, CancellationToken ct) =>
         {
-            var account = await accounts.CreateAsync(new CreateAccountCommand(r.Name, r.Type, r.Number, r.ParentId, r.Description, r.DonorRestricted), ct);
+            var account = await accounts.CreateAsync(new CreateAccountCommand(r.Name, r.Type, r.Number, r.ParentId, r.Description, r.DonorRestricted, r.Excluded1099), ct);
             return Results.Created($"/api/accounts/{account.Id}", AccountResponse.From(account, await accounts.GetChartAsync(ct)));
         });
 
         api.MapPut("/accounts/{id:guid}", async (Guid id, UpdateAccountRequest r, AccountService accounts, CancellationToken ct) =>
         {
-            var account = await accounts.UpdateAsync(new UpdateAccountCommand(id, r.Name, r.Type, r.Number, r.ParentId, r.Description, r.DonorRestricted), ct);
+            var account = await accounts.UpdateAsync(new UpdateAccountCommand(id, r.Name, r.Type, r.Number, r.ParentId, r.Description, r.DonorRestricted, r.Excluded1099), ct);
             return AccountResponse.From(account, await accounts.GetChartAsync(ct));
         });
 

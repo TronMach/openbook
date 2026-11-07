@@ -61,6 +61,9 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
         var terms = cols.Find("terms", "paymentterms");
         var expense = cols.Find("expenseaccount", "defaultexpenseaccount", "category", "defaultcategory");
         var notes = cols.Find("notes", "note");
+        var track = cols.Find("track1099", "1099", "eligiblefor1099", "vendoreligiblefor1099", "trackpaymentsfor1099", "is1099", "1099vendor");
+        var taxId = cols.Find("taxid", "ein", "ssn", "tin", "taxidnumber", "businessidno", "businessid", "taxpayerid", "federalid");
+        var box = cols.Find("1099box", "form1099box", "box", "1099form");
 
         var chart = await accounts.GetChartAsync(ct);
         var existing = (await store.ListVendorsAsync(ct)).Select(v => v.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -83,6 +86,9 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
                     Bill.EnsureCategoryAccount(expenseAccount);
                 }
 
+                var boxText = F(box)?.Trim();
+                var form1099Box = boxText is { Length: > 0 } ? ParseBox(boxText) : Form1099Box.NecNonemployeeCompensation;
+                var tracked = F(track)?.Trim() is { Length: > 0 } flag ? ParseYes(flag) : boxText is { Length: > 0 };
                 var details = new VendorDetails(
                     displayName ?? string.Empty,
                     F(company),
@@ -92,13 +98,16 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
                     F(accountNumber),
                     F(terms) is { } t ? CustomerImportService.ParseTerms(t).DueDays : 30,
                     expenseAccount?.Id,
-                    F(notes));
+                    F(notes),
+                    tracked,
+                    Vendor.NormalizeTaxId(F(taxId)),
+                    form1099Box);
                 var accountName = expenseAccount is null ? null : chart.FullName(expenseAccount.Id);
 
                 var custom = fieldColumns.Read(r);
                 if (displayName is not null && existing.Contains(displayName.Trim()))
                 {
-                    rows.Add(new VendorImportRow(r.Line, details, accountName, ImportRowStatus.Exists, null));
+                    rows.Add(new VendorImportRow(r.Line, Masked(details), accountName, ImportRowStatus.Exists, null));
                     continue;
                 }
 
@@ -108,7 +117,7 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
                 var made = Vendor.Create(details);
                 created.Add(made);
                 fieldValues[made.Id] = custom;
-                rows.Add(new VendorImportRow(r.Line, details, accountName, ImportRowStatus.New, null));
+                rows.Add(new VendorImportRow(r.Line, Masked(details), accountName, ImportRowStatus.New, null));
             }
             catch (DomainException ex)
             {
@@ -117,5 +126,33 @@ public sealed class VendorImportService(IPurchasesStore store, VendorService ven
         }
 
         return (SalesImport.Result(rows, r => r.Status), created, fieldColumns, fieldValues);
+    }
+
+    // The preview and the API never show a tax ID in full.
+    private static VendorDetails Masked(VendorDetails details) =>
+        details.TaxId is { Length: >= 4 } id ? details with { TaxId = $"•••••{id[^4..]}" } : details;
+
+    private static bool ParseYes(string text) => text.Trim().ToUpperInvariant() switch
+    {
+        "YES" or "Y" or "TRUE" or "1" or "X" or "ON" or "ELIGIBLE" => true,
+        "NO" or "N" or "FALSE" or "0" or "" or "OFF" => false,
+        _ => throw new DomainException("import.1099_flag", $"'{text}' isn't yes or no for 1099 tracking."),
+    };
+
+    /// <summary>"NEC", "1099-NEC box 1", "MISC 1" or "rents", "MISC 3", "MISC 6" or "medical", "MISC 10" or "attorney", or the box's own name.</summary>
+    public static Form1099Box ParseBox(string text)
+    {
+        var t = new string(text.ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+        if (!t.All(char.IsDigit) && Enum.TryParse<Form1099Box>(text.Trim(), ignoreCase: true, out var named) && Enum.IsDefined(named))
+            return named;
+        return t switch
+        {
+            _ when t.Contains("NEC", StringComparison.Ordinal) || t.Contains("NONEMPLOYEE", StringComparison.Ordinal) => Form1099Box.NecNonemployeeCompensation,
+            _ when t.Contains("RENT", StringComparison.Ordinal) || t is "MISC1" or "1099MISC1" or "1099MISCBOX1" or "MISCBOX1" => Form1099Box.MiscRents,
+            _ when t.Contains("MEDICAL", StringComparison.Ordinal) || t.Contains("HEALTH", StringComparison.Ordinal) || t.EndsWith("MISC6", StringComparison.Ordinal) || t.EndsWith("BOX6", StringComparison.Ordinal) => Form1099Box.MiscMedical,
+            _ when t.Contains("ATTORNEY", StringComparison.Ordinal) || t.EndsWith("MISC10", StringComparison.Ordinal) || t.EndsWith("BOX10", StringComparison.Ordinal) => Form1099Box.MiscAttorney,
+            _ when t.Contains("OTHER", StringComparison.Ordinal) || t.EndsWith("MISC3", StringComparison.Ordinal) || t.EndsWith("BOX3", StringComparison.Ordinal) => Form1099Box.MiscOtherIncome,
+            _ => throw new DomainException("import.1099_box", $"'{text}' isn't a 1099 box OpenBook knows (NEC, or MISC 1, 3, 6 or 10)."),
+        };
     }
 }

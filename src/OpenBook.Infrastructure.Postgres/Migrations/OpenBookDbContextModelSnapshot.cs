@@ -35,6 +35,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("DonorRestricted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("Excluded1099")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 

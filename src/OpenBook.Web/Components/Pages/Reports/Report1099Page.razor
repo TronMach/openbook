@@ -76,7 +76,7 @@
                                 <td><a href="/vendors/@v.Vendor.Id">@v.Vendor.DisplayName</a></td>
                                 <td>@(v.Vendor.MaskedTaxId ?? "Missing")</td>
                                 <td>@Labels.For(v.Vendor.Form1099Box)</td>
-                                <td class="num">@Labels.Amount(v.Total)@if (v.Prior > 0m) { <br /><span class="muted">incl. @Labels.Amount(v.Prior) before OpenBook</span> }</td>
+                                <td class="num">@Labels.Amount(v.Total)@if (v.Prior > 0m) { <br /><span class="muted">incl. @Labels.Amount(v.Prior) before OpenBook</span> }@if (v.NotReportable > 0m) { <br /><span class="muted">not counting @Labels.Amount(v.NotReportable) for materials and the like</span> }</td>
                                 <td class="num">@Labels.AmountOrBlank(v.CardPayments)</td>
                                 <td class="num">@Labels.AmountOrBlank(v.Refunds)</td>
                                 <td>

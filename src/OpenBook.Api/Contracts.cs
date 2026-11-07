@@ -6,10 +6,12 @@ using OpenBook.Domain.Ledger;
 
 namespace OpenBook.Api;
 
-public sealed record CreateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool DonorRestricted = false);
+public sealed record CreateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool DonorRestricted = false,
+    bool Excluded1099 = false);
 
 /// <param name="DonorRestricted">Null keeps the current setting.</param>
-public sealed record UpdateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool? DonorRestricted = null);
+public sealed record UpdateAccountRequest(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool? DonorRestricted = null,
+    bool? Excluded1099 = null);
 
 public sealed record AccountResponse(
     Guid Id,
@@ -23,10 +25,11 @@ public sealed record AccountResponse(
     string? Description,
     bool IsActive,
     string? TaxLine,
-    bool DonorRestricted = false)
+    bool DonorRestricted = false,
+    bool Excluded1099 = false)
 {
     public static AccountResponse From(Account a, ChartOfAccounts chart) =>
-        new(a.Id, a.Number, a.Name, chart.FullName(a.Id), chart.Depth(a.Id), a.Type, a.Type.ClassOf(), a.ParentId, a.Description, a.IsActive, a.TaxLineKey, a.DonorRestricted);
+        new(a.Id, a.Number, a.Name, chart.FullName(a.Id), chart.Depth(a.Id), a.Type, a.Type.ClassOf(), a.ParentId, a.Description, a.IsActive, a.TaxLineKey, a.DonorRestricted, a.Excluded1099);
 }
 
 public sealed record ChartImportResponse(int New, int Existing, int Errors, bool Imported, IReadOnlyList<ChartImportRow> Rows)

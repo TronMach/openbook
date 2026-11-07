@@ -99,6 +99,10 @@
                 <span class="hint">Nonprofits: restricted gifts and grants, or restricted net assets. The nonprofit statements show this account in the "with donor restrictions" column. Income, other income and equity accounts only.</span>
             </div>
         }
+        <div class="field">
+            <label><InputCheckbox @bind-Value="Input.Excluded1099" /> Not reportable on 1099s</label>
+            <span class="hint">For materials, merchandise or freight bought from vendors you track for 1099s: bill lines and expenses in this account come off their 1099 totals, so a check paying for labor and parts reports only the labor.</span>
+        </div>
         <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
         <div class="actions">
             <button type="submit">@(_account is null ? "Create account" : "Save changes")</button>
@@ -169,6 +173,7 @@
                 Description = _account.Description,
                 TaxLine = _account.TaxLineKey,
                 DonorRestricted = _account.DonorRestricted,
+                Excluded1099 = _account.Excluded1099,
             };
     }
 
@@ -185,8 +190,8 @@
             ClosingOverride.Password = Input.ClosingPassword;
             var restricted = Input.DonorRestricted && Account.CanBeRestricted(Input.Type);
             var saved = _account is null
-                ? await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted))
-                : await AccountService.UpdateAsync(new UpdateAccountCommand(_account.Id, Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted));
+                ? await AccountService.CreateAsync(new CreateAccountCommand(Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted, Input.Excluded1099))
+                : await AccountService.UpdateAsync(new UpdateAccountCommand(_account.Id, Input.Name, Input.Type, NumberToSave(), Input.ParentId, Input.Description, restricted, Input.Excluded1099));
             if (!saved.Type.IsBalanceSheet())
                 await AccountService.MapTaxLinesAsync(new Dictionary<Guid, string?> { [saved.Id] = Input.TaxLine });
             Navigation.NavigateTo("/accounts");
@@ -239,6 +244,8 @@
         public string? TaxLine { get; set; }
 
         public bool DonorRestricted { get; set; }
+
+        public bool Excluded1099 { get; set; }
 
         public string? ClosingPassword { get; set; }
     }

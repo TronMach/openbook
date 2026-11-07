@@ -556,7 +556,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
     private static ReportTable Summary1099(Company company, Report1099 report) => new(
         $"1099 summary for {report.Year}",
         [company.Name, $"Vendors tracked for 1099s · threshold {report.Threshold:N2}"],
-        [new("Vendor"), new("Tax ID"), new("Form and box"), new("Paid by cash, check or bank", ColumnFormat.Money), new("Paid by card (1099-K)", ColumnFormat.Money), new("Refunds received", ColumnFormat.Money), new("File a 1099?")],
+        [new("Vendor"), new("Tax ID"), new("Form and box"), new("Paid by cash, check or bank", ColumnFormat.Money), new("Paid by card (1099-K)", ColumnFormat.Money), new("Refunds received", ColumnFormat.Money), new("File a 1099?"), new("Not reportable (accounts marked)", ColumnFormat.Money)],
         [
             .. report.Vendors.Select(v => new ReportTableRow(
             [
@@ -567,10 +567,11 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
                 new ReportCell(v.CardPayments == 0m ? null : v.CardPayments),
                 new ReportCell(v.Refunds == 0m ? null : v.Refunds),
                 v.MeetsThreshold ? v.Vendor.TaxId is null ? "Yes, tax ID needed" : "Yes" : "Below threshold",
+                new ReportCell(v.NotReportable == 0m ? null : v.NotReportable),
             ])),
-            new ReportTableRow(["Total reportable", null, null, report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total), null, null, null], 0, ReportRowStyle.Total),
+            new ReportTableRow(["Total reportable", null, null, report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total), null, null, null, null], 0, ReportRowStyle.Total),
         ],
-        Note: "Counts bill payments and expenses dated in the year. Card payments are left out (Form 1099-K). "
+        Note: "Counts bill payments and expenses dated in the year. Card payments are left out (Form 1099-K), and so is what's paid for accounts marked not reportable on 1099s (materials, merchandise). "
             + (report.RefundsNetted ? "Refunds are taken off, as chosen in the purchasing settings." : "Refunds are shown but not taken off; the purchasing settings can change that."));
 
     private static ReportTable SalesTax(Company company, TaxLiabilityReport report)

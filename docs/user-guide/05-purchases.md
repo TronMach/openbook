@@ -25,7 +25,7 @@ Use one or the other for the same purchase, never both, or it will be counted tw
 - **Default category** is the account their bills and expenses start with, for example "Rent" for your landlord.
 - **1099**: tick **Track payments for a 1099** for contractors, landlords, attorneys and others you report to the IRS, choose the form and box, and enter their **tax ID** from their W-9. After saving, the tax ID is only shown masked (last four digits).
 
-Vendors with unpaid bills can't be made inactive. Vendors can be imported from a CSV file with **Vendors → Import CSV**.
+Vendors with unpaid bills can't be made inactive. Vendors can be imported from a CSV file with **Vendors → Import CSV**. Besides names and contact details it reads a **1099** (or **Eligible for 1099**) yes/no column, a **Tax ID** and a **1099 box** (NEC, or MISC 1 rents, 3 other income, 6 medical, 10 attorney); a box alone turns tracking on. The preview shows only the last four digits of a tax ID.
 
 ## Bills
 
@@ -103,7 +103,7 @@ To correct a vendor credit, use **Change** at the top of its page: the credit nu
 
 - The **Purchases** page lists recent bills, payments, expenses and vendor credits. **Unpaid bills** shows every unpaid one; the other lists show the newest 100, with **Show 100 more** below.
 - **Reports → A/P aging** shows what you owe and how overdue it is; **Unpaid bills** lists each one.
-- **Reports → 1099 summary** totals what each tracked vendor was paid in a year (bill payments and expenses, not card payments, which the card company reports).
+- **Reports → 1099 summary** totals what each tracked vendor was paid in a year (bill payments and expenses, not card payments, which the card company reports). Paying for labor and materials on one check? Tick **Not reportable on 1099s** on the materials account (or merchandise, freight): bill lines and expense categories on it come off the vendor's total, a bill payment in proportion to the bill's lines, and the summary shows what was left out.
   Refunds a vendor made in the year show in their own column. They aren't taken off the total unless you tick **Take refunds from a vendor off what's reported for them on 1099s** in the purchasing settings (**Bills to approve → Settings**): whether to report the net figure is a question for your tax adviser. The filing data on **Accountant tools** takes a threshold for years whose figure has been published, and warns about vendors over it with no tax ID.
   **Copies and filing**, under the table (accountant role): **Download filing data** for the IRS's IRIS system or your filing service, **Vendors' copies (PDF)** to print, **Email vendors their copies** (only with a vendor's agreement to get it by email), and **Mark as filed** to note the date. OpenBook doesn't file with the IRS. If payments change after filing, the vendor's row shows the amount filed, so you can tell a corrected form is needed.
   **Paid before OpenBook**, under the table (accountant role): if you started using OpenBook part-way through a year, enter what each vendor was paid by cash, check or bank in your old books. It's added to their total and shown beside it; zero removes it. When history moved in from another program has journal entries dated in the year, the report says so, since payments inside them aren't counted.

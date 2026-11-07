@@ -7,10 +7,14 @@ using OpenBook.Domain.Common;
 namespace OpenBook.Application.Accounts;
 
 /// <param name="DonorRestricted">Nonprofits: the account holds amounts with donor restrictions (income, other income and equity only).</param>
-public sealed record CreateAccountCommand(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool DonorRestricted = false);
+/// <param name="Excluded1099">Payments to 1099 vendors for this account aren't reportable (materials, merchandise).</param>
+public sealed record CreateAccountCommand(string Name, AccountType Type, string? Number = null, Guid? ParentId = null, string? Description = null, bool DonorRestricted = false,
+    bool Excluded1099 = false);
 
 /// <param name="DonorRestricted">Null keeps the current setting.</param>
-public sealed record UpdateAccountCommand(Guid Id, string Name, AccountType Type, string? Number, Guid? ParentId, string? Description, bool? DonorRestricted = null);
+/// <param name="Excluded1099">Null keeps the current setting.</param>
+public sealed record UpdateAccountCommand(Guid Id, string Name, AccountType Type, string? Number, Guid? ParentId, string? Description, bool? DonorRestricted = null,
+    bool? Excluded1099 = null);
 
 /// <summary>Chart-of-accounts maintenance. Accounts are never deleted; they're made inactive.</summary>
 /// <summary>Something outside the chart that an account is needed for, so it stays active: asked before an account is made inactive.</summary>
@@ -38,6 +42,7 @@ public sealed class AccountService(ILedgerStore store, ICompanyStore companies, 
         chart.EnsureCanAdd(command.Name, command.Type, command.Number, command.ParentId);
         var account = Account.Create(command.Name, command.Type, command.Number, command.ParentId, command.Description);
         account.SetDonorRestricted(command.DonorRestricted);
+        account.SetExcluded1099(command.Excluded1099);
 
         store.Add(account);
         store.Add(Audit(AuditAction.Created, account, before: null));
@@ -72,6 +77,8 @@ public sealed class AccountService(ILedgerStore store, ICompanyStore companies, 
         account.MoveTo(command.ParentId);
         if (command.DonorRestricted is { } restricted)
             account.SetDonorRestricted(restricted);
+        if (command.Excluded1099 is { } excluded)
+            account.SetExcluded1099(excluded);
 
         store.Add(Audit(AuditAction.Updated, account, before));
         await store.SaveChangesAsync(ct);
@@ -172,5 +179,6 @@ public sealed class AccountService(ILedgerStore store, ICompanyStore companies, 
         a.IsActive,
         TaxLine = a.TaxLineKey,
         a.DonorRestricted,
+        a.Excluded1099,
     });
 }
