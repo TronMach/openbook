@@ -29,6 +29,16 @@ public sealed class SalesReceipt
     public void SetMethod(PaymentMethod? method) => Method = PaymentMethods.Valid(method);
 
     public string? Memo { get; private set; }
+
+    /// <summary>The bill-to address as it was when the document was made; null on documents from before, which print today's.</summary>
+    public string? BillToAddress { get; private set; }
+
+    /// <summary>The ship-to address as it was when the document was made; null when there was none (or on older documents).</summary>
+    public string? ShipToAddress { get; private set; }
+
+    /// <summary>Keeps the addresses it's made with, so a reprint shows what was sent.</summary>
+    public void KeepAddresses(string? billTo, string? shipTo) =>
+        (BillToAddress, ShipToAddress) = (billTo is null ? null : OpenBook.Domain.Common.TextCleaning.Cut(billTo, 2000), shipTo is null ? null : OpenBook.Domain.Common.TextCleaning.Cut(shipTo, 2000));
     public decimal Total { get; private set; }
 
     /// <summary>The tax code the document was taxed under; null for no sales tax.</summary>

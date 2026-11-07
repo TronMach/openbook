@@ -133,6 +133,7 @@ public sealed class CreditService(
         var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo, taxCodeId, exemption);
         credit.SetLocation(command.LocationId);
         credit.SetWarehouse(warehouseId);
+        await SalesAddresses.KeepAsync(store, credit.CustomerId, credit.KeepAddresses, ct);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
         await customFields.StampAsync(CreditMemoType, credit.Id, customer.Id, credit.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);

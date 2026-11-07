@@ -115,7 +115,7 @@ public sealed class FormService(
         totals.Add(new FormTotal("Balance due", invoice.Balance, Emphasis: true));
         AddSavings(totals, invoice.Lines);
         var title = invoice.Status == DocumentStatus.Voided ? "Invoice (void)" : "Invoice";
-        return (Form(company, customer, title, invoice.Number, facts, await LinesAsync(invoice.Lines, invoice.TaxCodeId, ct), totals, invoice.Memo, job), customer.Id);
+        return (Form(company, customer, title, invoice.Number, facts, await LinesAsync(invoice.Lines, invoice.TaxCodeId, ct), totals, invoice.Memo, job, invoice.BillToAddress, invoice.ShipToAddress), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> EstimateAsync(Company company, Guid id, CancellationToken ct)
@@ -127,7 +127,7 @@ public sealed class FormService(
             facts.Add(("Valid until", D(expires)));
         List<FormTotal> totals = [.. TaxTotals(estimate.Lines, estimate.TaxCodeId, estimate.TaxExemption), new FormTotal("Total", estimate.Total, Emphasis: true)];
         AddSavings(totals, estimate.Lines);
-        return (Form(company, customer, "Estimate", estimate.Number, facts, await LinesAsync(estimate.Lines, estimate.TaxCodeId, ct), totals, estimate.Memo, job), customer.Id);
+        return (Form(company, customer, "Estimate", estimate.Number, facts, await LinesAsync(estimate.Lines, estimate.TaxCodeId, ct), totals, estimate.Memo, job, estimate.BillToAddress, estimate.ShipToAddress), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> CreditMemoAsync(Company company, Guid id, CancellationToken ct)
@@ -144,7 +144,7 @@ public sealed class FormService(
             totals.Add(new FormTotal("Credit remaining", credit.Balance, Emphasis: true));
         }
 
-        return (Form(company, customer, voided ? "Credit memo (void)" : "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo, job), customer.Id);
+        return (Form(company, customer, voided ? "Credit memo (void)" : "Credit memo", credit.Number, [("Date", D(credit.Date))], await LinesAsync(credit.Lines, credit.TaxCodeId, ct), totals, credit.Memo, job, credit.BillToAddress, credit.ShipToAddress), customer.Id);
     }
 
     private async Task<(SalesForm Form, Guid CustomerId)> ReceiptAsync(Company company, Guid id, CancellationToken ct)
@@ -154,20 +154,20 @@ public sealed class FormService(
         var facts = new List<(string, string)> { ("Date", D(receipt.Date)) };
         if (receipt.Reference is not null)
             facts.Add(("Reference", receipt.Reference));
-        var party = customer is null ? new FormParty("Cash sale") : CustomerParty(customer);
+        var party = customer is null ? new FormParty("Cash sale") : CustomerParty(customer, receipt.BillToAddress);
         List<FormTotal> totals = [.. TaxTotals(receipt.Lines, receipt.TaxCodeId, receipt.TaxExemption), new FormTotal("Total paid", receipt.Total, Emphasis: true)];
         AddSavings(totals, receipt.Lines);
         var form = new SalesForm(receipt.Status == DocumentStatus.Voided ? "Sales receipt (void)" : "Sales receipt", receipt.Number, CompanyParty(company), party, facts, await LinesAsync(receipt.Lines, receipt.TaxCodeId, ct),
-            totals, receipt.Memo, company.HomeCurrency.Code, Unstyled, ShipTo: customer is null ? null : ShipToParty(customer));
+            totals, receipt.Memo, company.HomeCurrency.Code, Unstyled, ShipTo: customer is null ? null : Kept(customer, receipt.ShipToAddress) ?? ShipToParty(customer));
         return (form, customer?.Id ?? Guid.Empty);
     }
 
     /// <param name="job">The record the document is for, when <paramref name="customer"/> is billed for it: a project or job of theirs.</param>
     private static SalesForm Form(
         Company company, Customer customer, string title, string number, IReadOnlyList<(string, string)> facts,
-        IReadOnlyList<FormLine> lines, IReadOnlyList<FormTotal> totals, string? message, Customer? job = null) =>
-        new(title, number, CompanyParty(company), CustomerParty(customer), job is null || job.Id == customer.Id ? facts : [.. facts, ("For", job.DisplayName)],
-            lines, totals, message, company.HomeCurrency.Code, Unstyled, ShipTo: ShipToParty(job ?? customer) ?? ShipToParty(customer));
+        IReadOnlyList<FormLine> lines, IReadOnlyList<FormTotal> totals, string? message, Customer? job = null, string? billTo = null, string? shipTo = null) =>
+        new(title, number, CompanyParty(company), CustomerParty(customer, billTo), job is null || job.Id == customer.Id ? facts : [.. facts, ("For", job.DisplayName)],
+            lines, totals, message, company.HomeCurrency.Code, Unstyled, ShipTo: Kept(customer, shipTo) ?? ShipToParty(job ?? customer) ?? ShipToParty(customer));
 
     /// <summary>
     /// What price levels, quantity breaks and rules took off the list prices (manual prices don't count), rounded to the
@@ -256,8 +256,11 @@ public sealed class FormService(
 
     internal static FormParty CompanyParty(Company c) => new(c.LegalName ?? c.Name, c.Address, c.Email, c.Phone);
 
-    internal static FormParty CustomerParty(Customer c) =>
-        new(c.CompanyName is { } company && company != c.DisplayName ? $"{c.DisplayName}\n{company}" : c.DisplayName, c.BillingAddress, c.Email, c.Phone);
+    /// <param name="billTo">The address kept on the document when it was made; null for the customer's address today.</param>
+    internal static FormParty CustomerParty(Customer c, string? billTo = null) =>
+        new(c.CompanyName is { } company && company != c.DisplayName ? $"{c.DisplayName}\n{company}" : c.DisplayName, billTo ?? c.BillingAddress, c.Email, c.Phone);
+
+    private static FormParty? Kept(Customer c, string? shipTo) => shipTo is null ? null : new FormParty(c.CompanyName ?? c.DisplayName, shipTo);
 
     /// <summary>Forms are built with this, then <see cref="FormDesignService.ApplyAsync(SalesForm, FormDesign, FormDocuments, CancellationToken)"/> gives them their design's look.</summary>
     internal static readonly FormStyle Unstyled = new(FormTemplate.Classic, Company.DefaultAccentColor, null);

@@ -41,6 +41,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         var estimate = Estimate.Create(
             Guid.CreateVersion7(), number, customer.Id, command.Date, command.ExpirationDate, lines, clock.UtcNow, command.Memo, taxCodeId, exemption);
         estimate.SetLocation(command.LocationId);
+        await SalesAddresses.KeepAsync(store, estimate.CustomerId, estimate.KeepAddresses, ct);
         store.Add(estimate);
         store.Add(Audit(AuditAction.Created, estimate, before: null));
         await customFields.StampAsync(EntityType, estimate.Id, customer.Id, estimate.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);

@@ -106,6 +106,7 @@ public sealed class SalesReceiptService(
         receipt.SetMethod(command.Method);
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
+        await SalesAddresses.KeepAsync(store, receipt.CustomerId, receipt.KeepAddresses, ct);
         store.Add(receipt);
         store.Add(Audit(AuditAction.Created, receipt, before: null));
         await customFields.StampAsync(EntityType, receipt.Id, customer?.Id, receipt.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);

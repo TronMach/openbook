@@ -5237,6 +5237,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("AmountRefundedMinor");
 
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -5263,6 +5266,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ShipToAddress")
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -5602,6 +5608,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -5642,6 +5651,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("ResponseNote")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ShipToAddress")
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -5686,6 +5698,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<long>("AmountPaid")
                         .HasColumnType("bigint")
                         .HasColumnName("AmountPaidMinor");
+
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -5741,6 +5756,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid?>("SalesOrderId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ShipToAddress")
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -6343,6 +6361,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -6383,6 +6404,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("Reference")
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<string>("ShipToAddress")
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()

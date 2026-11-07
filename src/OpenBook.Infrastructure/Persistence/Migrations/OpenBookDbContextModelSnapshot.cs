@@ -5230,6 +5230,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountRefundedMinor");
 
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -5255,6 +5258,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("ReceivableAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShipToAddress")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -5595,6 +5601,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -5634,6 +5643,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("ResponseNote")
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShipToAddress")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -5679,6 +5691,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long>("AmountPaid")
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountPaidMinor");
+
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
@@ -5733,6 +5748,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("SalesOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShipToAddress")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -6336,6 +6354,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BillToAddress")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -6375,6 +6396,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Reference")
                         .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShipToAddress")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")

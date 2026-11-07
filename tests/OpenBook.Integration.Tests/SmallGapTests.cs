@@ -133,6 +133,26 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_reprint_shows_the_addresses_the_document_was_sent_to()
+    {
+        var sales = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var service = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Advice", ItemType.Service, sales.Id, 100m)));
+        const string oldBill = "1 Old Rd\nSpringfield, IL 62701", oldShip = "Dock 4\nSpringfield, IL 62702", newBill = "9 New St\nChicago, IL 60601";
+        var details = new CustomerDetails("Acme", BillingAddress: oldBill, ShippingAddress: oldShip);
+        var acme = await In<CustomerService, Customer>(s => s.CreateAsync(details));
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(acme.Id, Mar1, [new SalesLineDraft(service.Id, null, 1m, 100m)])));
+        Assert.Equal((oldBill, oldShip), (invoice.BillToAddress, invoice.ShipToAddress));
+
+        // They move; the invoice still prints where it was sent, and a new one goes to the new address.
+        await In<CustomerService, Customer>(s => s.UpdateAsync(acme.Id, details with { BillingAddress = newBill, ShippingAddress = null }));
+        var form = await In<OpenBook.Application.Forms.FormService, OpenBook.Application.Forms.SalesForm>(s => s.BuildAsync(OpenBook.Application.Forms.FormKind.Invoice, invoice.Id));
+        Assert.Equal((oldBill, oldShip), (form.Customer.Address, form.ShipTo?.Address));
+        var later = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(acme.Id, Mar31, [new SalesLineDraft(service.Id, null, 1m, 100m)])));
+        var laterForm = await In<OpenBook.Application.Forms.FormService, OpenBook.Application.Forms.SalesForm>(s => s.BuildAsync(OpenBook.Application.Forms.FormKind.Invoice, later.Id));
+        Assert.Equal((newBill, (string?)null), (laterForm.Customer.Address, laterForm.ShipTo?.Address));
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";

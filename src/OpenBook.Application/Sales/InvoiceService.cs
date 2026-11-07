@@ -194,6 +194,7 @@ public sealed class InvoiceService(
             invoice.MarkLateFeeFor(overdue, command.Date);
         if (source is not null)
             invoice.SetSource(source.SalesOrderId, source.Lines);
+        await SalesAddresses.KeepAsync(store, invoice.CustomerId, invoice.KeepAddresses, ct);
         store.Add(invoice);
         store.Add(Audit(AuditAction.Created, invoice, before: null));
         await customFields.StampAsync(EntityType, invoice.Id, customer.Id, invoice.Lines.Select(l => (l.LineNumber, l.ItemId)), ct,
