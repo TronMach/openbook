@@ -80,7 +80,8 @@ public static class NonprofitEndpoints
                     form["memo"],
                     form["description"],
                     Number(form["goodsValue"]) ?? 0m,
-                    form["goodsDescription"]), ct);
+                    form["goodsDescription"],
+                    Id(form["exchangeAccountId"])), ct);
                 return Results.Redirect($"/nonprofit/gifts/{id}");
             }
             catch (DomainException ex)
@@ -110,7 +111,8 @@ public static class NonprofitEndpoints
                     Number(form["goodsValue"]) ?? 0m,
                     form["goodsDescription"],
                     Enum.TryParse<OpenBook.Domain.Sales.PaymentMethod>(form["method"], out var method) ? method : null,
-                    form["campaign"]), ct);
+                    form["campaign"],
+                    Id(form["exchangeAccountId"])), ct);
                 return Results.Redirect($"/nonprofit/gifts/{gift.Id}");
             }
             catch (DomainException ex)

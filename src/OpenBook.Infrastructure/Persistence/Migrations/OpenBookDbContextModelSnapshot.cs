@@ -3171,6 +3171,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DonorId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ExchangeAccountId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("GoodsDescription")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");

@@ -38,7 +38,7 @@ OpenBook keeps all of these on the line's class, so plan the tree once: function
 - **Deposited to**: a bank account, or Undeposited Funds to include it in a deposit later.
 - **Contribution account** (default "Contributions", or a restricted account) and **purpose (class)**.
 - **Paying a pledge**: choose the pledge, and the gift takes its account and purpose.
-- **Did the donor receive anything in return?** For a gala ticket or a thank-you gift, enter **its fair value** and **what it was**. The deductible amount on the letter is the gift less that value.
+- **Did the donor receive anything in return?** For a gala ticket or a thank-you gift, enter **its fair value** and **what it was**. The deductible amount on the letter is the gift less that value. **Value received goes to** (optional) sends that value to an income account of its own, such as "Special Event Revenue", so a ticket's exchange part is earned revenue and only the rest counts as a contribution; left blank, all of it stays on the contribution account. (It isn't offered on a pledge payment.) Profit and loss by class shows an event's revenue and costs when they share its class.
 
 - **Campaign or appeal** (optional): the letter, event or drive the gift answered, such as "Year-end letter 2026". Earlier campaigns are suggested as you type. It's kept beside the books, so it can be changed on the gift's page at any time; **Giving by campaign** totals gifts by it.
 

@@ -147,6 +147,17 @@
                         <label for="goods">What it was</label>
                         <input id="goods" name="goodsDescription" maxlength="@Donation.MaxTextLength" placeholder="Gala dinner for two" />
                     </div>
+                    <div class="field">
+                        <label for="exchange">Value received goes to <span class="muted">(optional)</span></label>
+                        <select id="exchange" name="exchangeAccountId" data-search>
+                            <option value="">(the contribution account, with the rest)</option>
+                            @foreach (var a in _income.Where(a => !a.DonorRestricted))
+                            {
+                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                        <span class="hint">An event revenue account keeps a ticket's exchange part out of contributions.</span>
+                    </div>
                 </div>
                 <span class="hint">The acknowledgment then states the value and that only the rest is deductible (the IRS requires this above $75).</span>
             </fieldset>

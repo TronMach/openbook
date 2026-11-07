@@ -94,6 +94,22 @@ public sealed class DonorRecordTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_gala_tickets_value_goes_to_event_revenue_and_the_rest_is_a_contribution()
+    {
+        var events = await _db.CreateAccount("Special Event Revenue", AccountType.Income);
+        var gift = await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(_pat.Id, Mar1, 250m, _bank.Id,
+            GoodsValue: 100m, GoodsDescription: "Gala dinner", ExchangeAccountId: events.Id)));
+        Assert.Equal((100m, 150m), (gift.ExchangePart, gift.Deductible));
+        var entry = (await In<OpenBook.Application.Ledger.PostingEngine, OpenBook.Domain.Ledger.JournalEntry?>(e => e.GetAsync(gift.JournalEntryId)))!;
+        Assert.Equal(-100m, entry.Lines.Where(l => l.AccountId == events.Id).Sum(l => l.Amount));
+        Assert.Equal(-150m, entry.Lines.Where(l => l.AccountId == gift.IncomeAccountId).Sum(l => l.Amount));
+
+        // Without goods received there's nothing to split.
+        var plain = await In<GiftService, Donation>(s => s.RecordAsync(new RecordGiftCommand(_pat.Id, Mar1, 50m, _bank.Id, ExchangeAccountId: events.Id)));
+        Assert.Null(plain.ExchangeAccountId);
+    }
+
+    [Fact]
     public async Task Search_finds_gifts_by_donor_reference_and_amount()
     {
         await Gift(_pat, 123.45m, "CHK-778");

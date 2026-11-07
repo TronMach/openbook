@@ -72,6 +72,17 @@ public sealed class Donation
     /// <summary>Quid pro quo: the fair value of goods or services the donor received in return (a dinner, a gift).</summary>
     public decimal GoodsValue { get; private set; }
 
+    /// <summary>
+    /// Where the exchange part (what the donor received, up to the gift) is credited, as earned revenue such as a gala's
+    /// ticket income; null keeps all of it on the contribution account.
+    /// </summary>
+    public Guid? ExchangeAccountId { get; private set; }
+
+    /// <summary>The part credited to <see cref="ExchangeAccountId"/>: the goods' value, up to the gift; 0 without one.</summary>
+    public decimal ExchangePart => ExchangeAccountId is null ? 0m : Math.Min(GoodsValue, Amount);
+
+    public void SetExchangeAccount(Guid? accountId) => ExchangeAccountId = accountId == Guid.Empty ? null : accountId;
+
     public string? GoodsDescription { get; private set; }
     public DocumentStatus Status { get; private set; }
     public Guid JournalEntryId { get; private set; }

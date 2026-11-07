@@ -3178,6 +3178,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("DonorId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ExchangeAccountId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("GoodsDescription")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

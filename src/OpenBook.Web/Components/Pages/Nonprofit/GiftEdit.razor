@@ -106,6 +106,17 @@
                         <label for="goods">What it was</label>
                         <input id="goods" name="goodsDescription" maxlength="@Donation.MaxTextLength" value="@g.GoodsDescription" />
                     </div>
+                    <div class="field">
+                        <label for="exchange">Value received goes to <span class="muted">(optional)</span></label>
+                        <select id="exchange" name="exchangeAccountId" data-search>
+                            <option value="">(the contribution account, with the rest)</option>
+                            @foreach (var a in _income.Where(a => !a.DonorRestricted))
+                            {
+                                <option value="@a.Id" selected="@(a.Id == g.ExchangeAccountId)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                        <span class="hint">An event revenue account keeps a ticket's exchange part out of contributions.</span>
+                    </div>
                 </div>
                 <div class="field">
                     <label for="memo">Memo <span class="muted">(optional)</span></label>

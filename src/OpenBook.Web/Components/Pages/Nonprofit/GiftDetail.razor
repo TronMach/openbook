@@ -51,6 +51,10 @@
             <dt>Kind</dt><dd>@(_gift.Kind == GiftKind.InKind ? $"In kind: {_gift.Description}" : "Money")</dd>
             <dt>@(_gift.Kind == GiftKind.InKind ? "Recorded to" : "Deposited to")</dt><dd>@_chart.FullName(_gift.DebitAccountId)</dd>
             <dt>Contribution account</dt><dd>@_chart.FullName(_gift.IncomeAccountId)</dd>
+            @if (_gift.ExchangeAccountId is { } exchange && _gift.ExchangePart > 0m)
+            {
+                <dt>Value received</dt><dd>@Labels.Amount(_gift.ExchangePart) to @_chart.FullName(exchange); @Labels.Amount(_gift.Amount - _gift.ExchangePart) is the contribution</dd>
+            }
             @if (_gift.PledgeId is { } pledge)
             {
                 <dt>Pays</dt><dd><a href="/nonprofit/pledges/@pledge">pledge</a></dd>

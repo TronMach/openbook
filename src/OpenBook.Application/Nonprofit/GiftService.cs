@@ -15,9 +15,6 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Nonprofit;
 
-/// <param name="DebitAccountId">Cash: the bank account it went into. In kind: the asset or expense it was recorded to.</param>
-/// <param name="IncomeAccountId">Null: "Contributions" (cash) or "In-kind Contributions", created on first use; a pledge payment takes the pledge's.</param>
-/// <param name="ClassId">The purpose; a pledge payment takes the pledge's.</param>
 /// <summary>A gift's corrected details; the kind and any pledge stay as they are.</summary>
 public sealed record ChangeGiftCommand(
     Guid DonorId,
@@ -31,8 +28,12 @@ public sealed record ChangeGiftCommand(
     string? Memo = null,
     string? Description = null,
     decimal GoodsValue = 0m,
-    string? GoodsDescription = null);
+    string? GoodsDescription = null,
+    Guid? ExchangeAccountId = null);
 
+/// <param name="DebitAccountId">Cash: the bank account it went into. In kind: the asset or expense it was recorded to.</param>
+/// <param name="IncomeAccountId">Null: "Contributions" (cash) or "In-kind Contributions", created on first use; a pledge payment takes the pledge's.</param>
+/// <param name="ClassId">The purpose; a pledge payment takes the pledge's.</param>
 public sealed record RecordGiftCommand(
     Guid DonorId,
     DateOnly Date,
@@ -48,7 +49,8 @@ public sealed record RecordGiftCommand(
     decimal GoodsValue = 0m,
     string? GoodsDescription = null,
     PaymentMethod? Method = null,
-    string? Campaign = null);
+    string? Campaign = null,
+    Guid? ExchangeAccountId = null);
 
 /// <param name="IncomeAccountId">Null: "Contributions", created on first use.</param>
 public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null, DateOnly? DueDate = null, string? Memo = null);
@@ -215,10 +217,11 @@ public sealed class GiftService(
         var debitClass = debit.Type.ClassOf() == AccountClass.Expense ? classId : null;
         JournalEntry entry;
         JournalEntry? cash = null;
+        var exchangeId = await ExchangeAccountAsync(chart, command.ExchangeAccountId, command.GoodsValue, pledge is not null, ct);
         if (pledge is null)
         {
             entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
-                [JournalLineDraft.Dr(debit.Id, command.Amount, memo, debitClass), JournalLineDraft.Cr(incomeId, command.Amount, memo, classId)],
+                GiftLines(debit.Id, debitClass, incomeId, exchangeId, classId, command.Amount, command.GoodsValue, memo),
                 command.Memo ?? memo, Donation.Source, id), ct);
         }
         else
@@ -237,6 +240,7 @@ public sealed class GiftService(
             command.Reference, command.Memo, command.Description, command.GoodsValue, command.GoodsDescription, entry.Id, cash?.Id, clock.UtcNow);
         donation.SetMethod(command.Kind == GiftKind.Cash ? command.Method : null);
         donation.SetCampaign(command.Campaign);
+        donation.SetExchangeAccount(exchangeId);
         store.Add(donation);
         store.Add(Audit(AuditAction.Posted, donation, null));
         await store.SaveChangesAsync(ct);
@@ -303,7 +307,9 @@ public sealed class GiftService(
             : (await IncomeAccountAsync(chart, command.IncomeAccountId, donation.Kind == GiftKind.InKind ? InKindName : ContributionsName, ct)).Id;
         // What leaves the old purpose: all of it when the purpose changes, else what the amount drops by.
         var samePurpose = incomeId == donation.IncomeAccountId && classId == donation.ClassId;
-        var leaving = samePurpose ? Math.Max(0m, donation.Amount - command.Amount) : donation.Amount;
+        var contributed = donation.Amount - donation.ExchangePart;
+        var newExchange = command.ExchangeAccountId is { } x && x != Guid.Empty && command.GoodsValue > 0m ? Math.Min(command.GoodsValue, command.Amount) : 0m;
+        var leaving = samePurpose ? Math.Max(0m, contributed - (command.Amount - newExchange)) : contributed;
         if (leaving > 0m)
             await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, leaving, ct);
 
@@ -312,9 +318,11 @@ public sealed class GiftService(
         await engine.StageVoidAsync(oldEntry, $"Gift changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = $"Gift from {donor.DisplayName}";
         var debitClass = debit.Type.ClassOf() == AccountClass.Expense ? classId : null;
+        var exchangeId = await ExchangeAccountAsync(chart, command.ExchangeAccountId, command.GoodsValue, false, ct);
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
-            [JournalLineDraft.Dr(debit.Id, command.Amount, memo, debitClass), JournalLineDraft.Cr(incomeId, command.Amount, memo, classId)],
+            GiftLines(debit.Id, debitClass, incomeId, exchangeId, classId, command.Amount, command.GoodsValue, memo),
             command.Memo ?? memo, Donation.Source, donation.Id), ct);
+        donation.SetExchangeAccount(exchangeId);
         donation.Change(donor.Id, command.Date, command.Amount, debit.Id, incomeId, classId, command.Reference, command.Memo,
             command.Description, command.GoodsValue, command.GoodsDescription, entry.Id);
         foreach (var item in feed)
@@ -330,7 +338,7 @@ public sealed class GiftService(
         var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
         if (donation.Status == DocumentStatus.Voided)
             throw new DomainException("donation.already_voided", "This gift is already voided.");
-        await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount, ct);
+        await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount - donation.ExchangePart, ct);
         var before = Snapshot(donation);
         await engine.StageVoidAsync(donation.JournalEntryId, reason, fromDocument: true, ct);
         if (donation.CashEntryId is { } cash)
@@ -635,6 +643,34 @@ public sealed class GiftService(
 
     private async Task<Dictionary<Guid, string>> DonorNamesAsync(CancellationToken ct) =>
         (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
+
+    /// <summary>A gift's lines: the debit for all of it; the exchange part (goods value, up to the gift) to the exchange account when there is one, the rest to the contribution account.</summary>
+    private static List<JournalLineDraft> GiftLines(Guid debitId, Guid? debitClass, Guid incomeId, Guid? exchangeId, Guid? classId, decimal amount, decimal goodsValue, string memo)
+    {
+        var exchange = exchangeId is null ? 0m : Math.Min(goodsValue, amount);
+        var lines = new List<JournalLineDraft> { JournalLineDraft.Dr(debitId, amount, memo, debitClass) };
+        if (amount - exchange > 0m)
+            lines.Add(JournalLineDraft.Cr(incomeId, amount - exchange, memo, classId));
+        if (exchange > 0m)
+            lines.Add(JournalLineDraft.Cr(exchangeId!.Value, exchange, $"{memo}: value received", classId));
+        return lines;
+    }
+
+    /// <summary>The account for a gift's exchange part: an active income account that isn't donor-restricted, only when goods were received.</summary>
+    private static Task<Guid?> ExchangeAccountAsync(ChartOfAccounts chart, Guid? id, decimal goodsValue, bool pledgePayment, CancellationToken ct)
+    {
+        _ = ct;
+        if (id is not { } chosen || chosen == Guid.Empty || goodsValue <= 0m)
+            return Task.FromResult<Guid?>(null);
+        if (pledgePayment)
+            throw new DomainException("donation.exchange_pledge", "A pledge payment goes to the pledge; record what the donor received on a separate gift.");
+        var account = chart.Find(chosen) ?? throw new EntityNotFoundException("account", chosen);
+        if (account.Type is not (AccountType.Income or AccountType.OtherIncome) || account.DonorRestricted)
+            throw new DomainException("donation.exchange_account", $"'{account.Name}' can't take the value received: choose an income account without donor restrictions, such as special event revenue.");
+        if (!account.IsActive)
+            throw new DomainException("donation.account_inactive", $"'{account.Name}' is inactive.");
+        return Task.FromResult<Guid?>(account.Id);
+    }
 
     private async Task<Account> IncomeAccountAsync(ChartOfAccounts chart, Guid? id, string defaultName, CancellationToken ct)
     {
