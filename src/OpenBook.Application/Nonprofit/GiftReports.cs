@@ -109,6 +109,31 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
             Note: "Posted gifts dated in the period, by the campaign or appeal on each. A donor who answered two campaigns counts in each.");
     }
 
+    /// <summary>
+    /// Form 990 Schedule B, the general rule: each donor whose gifts in the calendar year came to $5,000 or more, with
+    /// their address and the money and in-kind parts. The schedule itself, and which rule applies, are for the preparer.
+    /// </summary>
+    public async Task<ReportTable> ScheduleBAsync(int year, CancellationToken ct = default)
+    {
+        const decimal threshold = 5_000m;
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var rows = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Date.Year == year)
+            .GroupBy(d => d.DonorId)
+            .Select(g => (Donor: customers.GetValueOrDefault(g.Key), Cash: g.Where(d => d.Kind == GiftKind.Cash).Sum(d => d.Amount), InKind: g.Where(d => d.Kind == GiftKind.InKind).Sum(d => d.Amount), Id: g.Key))
+            .Where(x => x.Cash + x.InKind >= threshold)
+            .OrderByDescending(x => x.Cash + x.InKind)
+            .Select(x => new ReportTableRow([new ReportCell(x.Donor?.DisplayName ?? "?", new ReportLink("customer", x.Id)), x.Donor?.BillingAddress?.Replace("\n", ", ", StringComparison.Ordinal), x.Cash, x.InKind, x.Cash + x.InKind]))
+            .ToList();
+        rows.Add(new ReportTableRow([$"{rows.Count} contributor(s)", null, rows.Sum(r => (decimal)r.Cells[2].Value!), rows.Sum(r => (decimal)r.Cells[3].Value!), rows.Sum(r => (decimal)r.Cells[4].Value!)], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Schedule B contributors",
+            [company.Name, $"Gifts dated in {year} · $5,000 or more"],
+            [new("Contributor"), new("Address"), new("Money", ColumnFormat.Money), new("In kind", ColumnFormat.Money), new("Total", ColumnFormat.Money)],
+            rows,
+            Note: "The general rule of Form 990 Schedule B. Some organizations use the 2% special rule instead, and the schedule's names aren't made public for most: check with your preparer.");
+    }
+
     /// <summary>Pledges as of a date: promised, paid by then and what's left, oldest first.</summary>
     public async Task<ReportTable> PledgesAsync(DateOnly asOf, CancellationToken ct = default)
     {
