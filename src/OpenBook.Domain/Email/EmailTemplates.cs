@@ -25,6 +25,8 @@ public enum EmailKind
 
     /// <summary>A thank-you for a customer payment, with what it paid; nothing attached.</summary>
     PaymentReceipt,
+    Form1099Copy,
+    W9Request,
 }
 
 /// <summary>How a customer gets their documents by email.</summary>
@@ -81,6 +83,8 @@ public static partial class EmailTemplates
         EmailKind.Reminder => "Payment reminder",
         EmailKind.Report => "Scheduled report",
         EmailKind.PaymentReceipt => "Payment receipt",
+        EmailKind.Form1099Copy => "1099 copy",
+        EmailKind.W9Request => "W-9 request",
         _ => kind.ToString(),
     };
 
@@ -93,6 +97,8 @@ public static partial class EmailTemplates
         EmailKind.GiftAcknowledgment => "gift-acknowledgment",
         EmailKind.GivingStatement => "giving-statement",
         EmailKind.PaymentReceipt => "payment-receipt",
+        EmailKind.Form1099Copy => "1099-copy",
+        EmailKind.W9Request => "w9-request",
         _ => kind.ToString().ToLowerInvariant(),
     };
 
@@ -127,6 +133,7 @@ public static partial class EmailTemplates
             new("due", "The due date", Sample(new DateOnly(2026, 3, 31))), new("days", "Days past the due date (0 before)", "5"),
             new("when", "\"is due on …\", \"is due today\" or \"was due on …, n days ago\"", $"was due on {Sample(new DateOnly(2026, 3, 31))}, 5 days ago"), Company,
         ],
+        EmailKind.Form1099Copy or EmailKind.W9Request => [new("vendor", "The vendor's name", "Acme Supply"), new("year", "The tax year", "2026"), Company],
         EmailKind.PaymentReceipt =>
         [
             Customer, new("amount", "The payment's amount", "1,250.00"), new("date", "The payment's date", Sample(new DateOnly(2026, 3, 1))),
@@ -173,6 +180,10 @@ public static partial class EmailTemplates
         EmailKind.GivingStatement => ("Your {year} giving statement from {company}",
             "Dear {donor},\n\nThank you for your support in {year}. Your giving statement is attached; please keep it for your tax records.\n\nWith gratitude,\n{company}"),
         EmailKind.Reminder => (Sales.CollectionSettings.DefaultSubject, Sales.CollectionSettings.DefaultBody),
+        EmailKind.Form1099Copy => ("Your {year} 1099 from {company}",
+            "Hello,\n\nYour 1099 for {year} is attached. Keep it with your tax records.\n\nThank you,\n{company}"),
+        EmailKind.W9Request => ("Please send us a W-9: {company}",
+            "Hello,\n\nWe need a Form W-9 from you for our tax records, so we can report what we paid you. The form is at https://www.irs.gov/pub/irs-pdf/fw9.pdf\n\nPlease fill it in and send it back to us.\n\nThank you,\n{company}"),
         EmailKind.PaymentReceipt => ("Payment received: thank you from {company}",
             "Hello,\n\nThank you: we received your payment of {amount} on {date}.\nPaid {paid_by}.\n\n{applied}\n\n{credit}\nYour balance with us is now {balance}.\n\nThank you,\n{company}"),
         EmailKind.Report => ("{report}",

@@ -125,6 +125,7 @@ public static class DependencyInjection
         services.AddScoped<VendorCreditService>();
         services.AddScoped<RecurringBillService>();
         services.AddScoped<PayablesService>();
+        services.AddScoped<Filing1099Service>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<NoteService>();
         services.AddScoped<OpenBook.Application.CustomFields.CustomFieldService>();

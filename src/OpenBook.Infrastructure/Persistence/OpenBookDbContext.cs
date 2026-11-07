@@ -147,6 +147,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
     public DbSet<PriceLevel> PriceLevels => Set<PriceLevel>();
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
+    public DbSet<Filing1099> Filings1099 => Set<Filing1099>();
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<LineSegment> LineSegments => Set<LineSegment>();
     public DbSet<EntryTag> EntryTags => Set<EntryTag>();
@@ -573,6 +574,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(c => new { c.FundId, c.Date });
             b.HasOne<PettyCashFund>().WithMany().HasForeignKey(c => c.FundId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<BankTransaction>().WithMany().HasForeignKey(c => c.AdjustmentTransactionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Filing1099>(b =>
+        {
+            b.ToTable("Filings1099");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Box).HasConversion<string>().HasMaxLength(40);
+            b.Property(f => f.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(f => f.FiledBy).HasMaxLength(100);
+            b.HasIndex(f => new { f.Year, f.VendorId }).IsUnique();
+            b.HasOne<Vendor>().WithMany().HasForeignKey(f => f.VendorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PositivePaySettings>(b =>

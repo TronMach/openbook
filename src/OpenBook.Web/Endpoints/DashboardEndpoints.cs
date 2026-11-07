@@ -1,4 +1,5 @@
 using System.Globalization;
+using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
 using OpenBook.Application;
 using OpenBook.Domain.Common;
@@ -101,6 +102,63 @@ public static class DashboardEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapGet("/accountant/1099/copies", async (int year, decimal? threshold, Guid? vendor, Filing1099Service filing, CancellationToken ct) =>
+        {
+            try
+            {
+                var copy = await filing.CopiesAsync(year, threshold, vendor, ct);
+                return Results.File(copy.Pdf, "application/pdf", copy.FileName);
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/reports/1099?year={year}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/1099/email-copies", async (IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
+        {
+            var year = Year(form);
+            try
+            {
+                var run = await filing.EmailCopiesAsync(year, FormNumbers.Amount(form["threshold"]), ct);
+                var notes = $"{run.Sent} sent, {run.NoEmail.Count} with no email address, {run.Failed.Count} failed";
+                return Results.Redirect($"/reports/1099?year={year}&note={Uri.EscapeDataString(notes)}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/reports/1099?year={year}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/1099/request-w9/{id:guid}", async (Guid id, IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
+        {
+            var year = Year(form);
+            try
+            {
+                await filing.RequestW9Async(id, ct);
+                return Results.Redirect($"/reports/1099?year={year}&note={Uri.EscapeDataString("W-9 request sent.")}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/reports/1099?year={year}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/1099/filed", async (IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
+        {
+            var year = Year(form);
+            var on = DateOnly.TryParse(form["on"], CultureInfo.InvariantCulture, out var date) ? date : CompanyTime.Today;
+            await filing.MarkFiledAsync(year, on, FormNumbers.Amount(form["threshold"]), ct);
+            return Results.Redirect($"/reports/1099?year={year}");
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/1099/filed/clear", async (IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
+        {
+            var year = Year(form);
+            await filing.ClearFiledAsync(year, ct);
+            return Results.Redirect($"/reports/1099?year={year}");
+        }).RequireAuthorization();
+
         app.MapGet("/accountant/1099", async (int? year, decimal? threshold, AccountantPackageService packages, CancellationToken ct) =>
         {
             var y = year ?? CompanyTime.Today.Year - 1;
@@ -116,6 +174,9 @@ public static class DashboardEndpoints
 
         return app;
     }
+
+    private static int Year(IFormCollection form) =>
+        int.TryParse(form["year"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var year) ? year : CompanyTime.Today.Year - 1;
 
     private static ForecastScenarioDetails Scenario(IFormCollection form) =>
         new(form["name"].ToString(), Delay(form["collectionDelay"]), Delay(form["paymentDelay"]), form["notes"].ToString());

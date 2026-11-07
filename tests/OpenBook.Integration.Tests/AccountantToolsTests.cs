@@ -133,7 +133,7 @@ public sealed class AccountantToolsTests : IAsyncLifetime
         var csv = Encoding.UTF8.GetString(await In<AccountantPackageService, byte[]>(s => s.Filing1099CsvAsync(2026)));
         var row = csv.Split("\r\n")[1];
         Assert.StartsWith("1099-NEC,1,\"Dana Designs\"", row.TrimStart('﻿'), StringComparison.Ordinal);
-        Assert.Contains("\"12-3456789\",EIN,\"1 Main St, Springfield\",2500.00", row, StringComparison.Ordinal);
+        Assert.Contains("\"12-3456789\",EIN,\"1 Main St, Springfield\",\"\",\"\",\"\",2500.00", row, StringComparison.Ordinal);
 
         var file = await In<AccountantPackageService, Application.ExportFile>(s => s.BuildAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31)));
         try

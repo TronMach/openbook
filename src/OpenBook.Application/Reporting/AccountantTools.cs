@@ -430,14 +430,18 @@ public sealed class AccountantPackageService(
 
         var report = await payables.Report1099Async(year, threshold, ct);
         var csv = new StringBuilder();
-        csv.Append("Form,Box,Recipient name,Recipient business name,Recipient TIN,TIN type,Recipient address,Amount,Payer name,Payer address,Tax year\r\n");
+        csv.Append("Form,Box,Recipient name,Recipient business name,Recipient TIN,TIN type,Recipient street,Recipient city,Recipient state,Recipient ZIP,Amount,Payer name,Payer TIN,Payer street,Payer city,Payer state,Payer ZIP,Tax year\r\n");
+        var payer = AddressParts.Parse(company.Address);
         foreach (var v in report.Vendors.Where(v => v.MeetsThreshold).OrderBy(v => v.Vendor.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
             var (form, box) = FormAndBox(v.Vendor.Form1099Box);
             var tin = v.Vendor.TaxId ?? "";
+            var address = AddressParts.Parse(v.Vendor.Address);
             csv.AppendJoin(',', [
-                form, box, Field(v.Vendor.DisplayName), Field(v.Vendor.CompanyName), Field(tin), TinType(tin), Field(v.Vendor.Address),
-                v.Total.ToString("0.00", CultureInfo.InvariantCulture), Field(company.Name), Field(company.Address),
+                form, box, Field(v.Vendor.DisplayName), Field(v.Vendor.CompanyName), Field(tin), TinType(tin),
+                Field(address.Street), Field(address.City), Field(address.State), Field(address.Zip),
+                v.Total.ToString("0.00", CultureInfo.InvariantCulture), Field(company.LegalName ?? company.Name), Field(company.TaxId),
+                Field(payer.Street), Field(payer.City), Field(payer.State), Field(payer.Zip),
                 year.ToString(CultureInfo.InvariantCulture),
             ]).Append("\r\n");
         }
@@ -455,6 +459,16 @@ public sealed class AccountantPackageService(
         Form1099Box.MiscMedical => ("1099-MISC", "6"),
         Form1099Box.MiscAttorney => ("1099-MISC", "10"),
         _ => ("1099-NEC", "1"),
+    };
+
+    /// <summary>What a form's box is for.</summary>
+    public static string BoxName(Form1099Box box) => box switch
+    {
+        Form1099Box.MiscRents => "Rents",
+        Form1099Box.MiscOtherIncome => "Other income",
+        Form1099Box.MiscMedical => "Medical and health care payments",
+        Form1099Box.MiscAttorney => "Gross proceeds paid to an attorney",
+        _ => "Nonemployee compensation",
     };
 
     /// <summary>EIN for a TIN written 12-3456789, SSN for 123-45-6789; blank when it can't be told.</summary>

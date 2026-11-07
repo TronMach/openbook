@@ -19,7 +19,8 @@ public sealed record UpdateCompanySettingsCommand(
     string? TimeZoneId = null,
     ViewMode? DefaultViewMode = null,
     bool? AllowSellingShort = null,
-    string? Region = null);
+    string? Region = null,
+    string? TaxId = null);
 
 /// <summary>Company details and book settings, edited after setup. Home currency is fixed.</summary>
 public sealed class CompanySettingsService(ICompanyStore store, IClock clock, ICurrentUser user)
@@ -47,6 +48,8 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
             company.SetTimeZone(zone);
         if (command.Region is { Length: > 0 } region)
             company.SetRegion(region);
+        if (command.TaxId is not null)
+            company.SetTaxId(command.TaxId);
 
         var after = Snapshot(company);
         if (after != before)
@@ -67,6 +70,7 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         c.Email,
         c.Phone,
         c.Address,
+        c.TaxId,
         c.FiscalYearStartMonth,
         c.UseAccountNumbers,
         DefaultReportBasis = c.DefaultReportBasis.ToString(),

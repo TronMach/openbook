@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
 using OpenBook.Application.Search;
 using OpenBook.Application;
@@ -147,6 +148,26 @@ internal static class ReportsApi
             await s.WorksheetAsync(asOf ?? CompanyTime.Today, basis ?? (await settings.GetAsync(ct)).DefaultReportBasis, ct));
         accountant.MapGet("/1099-filing", async (int year, decimal? threshold, AccountantPackageService s, CancellationToken ct) =>
             Results.File(await s.Filing1099CsvAsync(year, audit: true, threshold: threshold, ct: ct), "text/csv", $"1099 filing data {year}.csv"));
+
+        accountant.MapGet("/1099-copies", async (int year, decimal? threshold, Guid? vendor, Filing1099Service s, CancellationToken ct) =>
+        {
+            var copy = await s.CopiesAsync(year, threshold, vendor, ct);
+            return Results.File(copy.Pdf, "application/pdf", copy.FileName);
+        });
+        accountant.MapPost("/1099-copies/email", async (int year, decimal? threshold, Filing1099Service s, CancellationToken ct) =>
+            await s.EmailCopiesAsync(year, threshold, ct));
+        accountant.MapPost("/1099-filed", async (int year, DateOnly? on, decimal? threshold, Filing1099Service s, CancellationToken ct) =>
+            new { Added = await s.MarkFiledAsync(year, on ?? CompanyTime.Today, threshold, ct) });
+        accountant.MapDelete("/1099-filed", async (int year, Filing1099Service s, CancellationToken ct) =>
+        {
+            await s.ClearFiledAsync(year, ct);
+            return Results.NoContent();
+        });
+        accountant.MapPost("/vendors/{id:guid}/w9-request", async (Guid id, Filing1099Service s, CancellationToken ct) =>
+        {
+            await s.RequestW9Async(id, ct);
+            return Results.NoContent();
+        });
 
         var saved = api.MapGroup("/saved-reports");
         saved.MapGet("/", async (SavedReportService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(SavedReportResponse.From));

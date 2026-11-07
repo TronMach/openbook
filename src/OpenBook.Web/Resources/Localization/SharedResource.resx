@@ -275,6 +275,9 @@
   <data name="Ask for a code from an authenticator app as well as your password." xml:space="preserve">
     <value>Ask for a code from an authenticator app as well as your password.</value>
   </data>
+  <data name="Ask them for a W-9 before the end of January" xml:space="preserve">
+    <value>Ask them for a W-9 before the end of January</value>
+  </data>
   <data name="Assembly build" xml:space="preserve">
     <value>Assembly build</value>
   </data>
@@ -751,6 +754,9 @@
   </data>
   <data name="Email messages" xml:space="preserve">
     <value>Email messages</value>
+  </data>
+  <data name="Employer ID (EIN)" xml:space="preserve">
+    <value>Employer ID (EIN)</value>
   </data>
   <data name="End date" xml:space="preserve">
     <value>End date</value>
@@ -1697,6 +1703,9 @@
   <data name="Print your checks" xml:space="preserve">
     <value>Print your checks</value>
   </data>
+  <data name="Printed as the payer's number on 1099s." xml:space="preserve">
+    <value>Printed as the payer's number on 1099s.</value>
+  </data>
   <data name="Products and services" xml:space="preserve">
     <value>Products and services</value>
   </data>
@@ -2458,6 +2467,9 @@
   </data>
   <data name="Vendors" xml:space="preserve">
     <value>Vendors</value>
+  </data>
+  <data name="Vendors needing a tax ID for their 1099" xml:space="preserve">
+    <value>Vendors needing a tax ID for their 1099</value>
   </data>
   <data name="Version, database, background jobs and recent errors." xml:space="preserve">
     <value>Version, database, background jobs and recent errors.</value>

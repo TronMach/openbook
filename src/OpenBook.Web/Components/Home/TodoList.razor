@@ -113,6 +113,10 @@
                     account.LastReconciledDate is { } done ? L["Last reconciled through {0}", Labels.Date(done)] : L["Never reconciled"], showCount: false);
         }
 
+        // Forms go out by the end of January, so this is when a missing number matters.
+        if (today.Month == 1)
+            Add((await Get<Filing1099Service>().MissingTaxIdsAsync(today.Year - 1)).Count, L["Vendors needing a tax ID for their 1099"], $"/reports/1099?year={today.Year - 1}",
+                L["Ask them for a W-9 before the end of January"], urgent: true);
         if (Get<OpenBook.Web.Diagnostics.BooksCheckStatus>().Last is { Problems: > 0 } check)
             Add(check.Problems, L["Figures in the books that don't agree"], "/accountant/check", L["Found by the daily check of the books"], urgent: true);
         if (!BesideWorkflow)

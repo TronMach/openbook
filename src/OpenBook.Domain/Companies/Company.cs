@@ -79,6 +79,9 @@ public sealed class Company
     public string? Email { get; private set; }
     public string? Phone { get; private set; }
     public string? Address { get; private set; }
+
+    /// <summary>The employer ID (EIN), written 12-3456789: the payer's number on 1099s.</summary>
+    public string? TaxId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>How prices changed by levels, quantity breaks and rules are rounded, unless the deciding rule says otherwise.</summary>
@@ -147,6 +150,21 @@ public sealed class Company
         Email = Normalize(email);
         Phone = Normalize(phone);
         Address = Normalize(address);
+    }
+
+    /// <summary>Blank clears it; otherwise nine digits, however they're punctuated.</summary>
+    public void SetTaxId(string? taxId)
+    {
+        var digits = new string((taxId ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length == 0)
+        {
+            TaxId = null;
+            return;
+        }
+
+        if (digits.Length != 9)
+            throw new DomainException("company.tax_id_invalid", "An employer ID has nine digits, like 12-3456789.");
+        TaxId = $"{digits[..2]}-{digits[2..]}";
     }
 
     public void SetFiscalYearStartMonth(int month)

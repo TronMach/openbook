@@ -68,6 +68,7 @@ public static class Links
         "recurring_entry" => $"/journal/recurring/{id}",
         "sales_receipt" => $"/sales/receipts/{id}",
         "vendor" => $"/vendors/{id}",
+        "filing_1099" => "/reports/1099",
         "estimate" => $"/sales/estimates/{id}",
         "credit_memo" => $"/sales/credit-memos/{id}",
         "refund" => $"/sales/refunds/{id}",

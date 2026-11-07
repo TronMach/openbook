@@ -9,6 +9,16 @@ namespace OpenBook.Application.Purchases;
 
 public interface IPurchasesStore
 {
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<Filing1099>> ListFilings1099Async(int year, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<Filing1099?> GetFiling1099Async(Guid id, CancellationToken ct);
+
+    void Add(Filing1099 filing);
+
+    void Remove(Filing1099 filing);
+
     Task<IReadOnlyList<Vendor>> ListVendorsAsync(CancellationToken ct);
     Task<Vendor?> GetVendorAsync(Guid id, CancellationToken ct);
 

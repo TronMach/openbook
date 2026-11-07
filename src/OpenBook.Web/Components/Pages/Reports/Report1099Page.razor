@@ -1,6 +1,7 @@
 @page "/reports/1099"
 @inject PayablesService Payables
 @inject CompanySettingsService Settings
+@inject Filing1099Service Filing
 
 <PageTitle>1099 summary · OpenBook</PageTitle>
 
@@ -25,6 +26,15 @@
     </form>
 
     <ReportActions Key="1099" />
+
+    @if (Note is not null)
+    {
+        <div class="alert notice" role="status">@Note</div>
+    }
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
 
     @if (_error is not null)
     {
@@ -62,13 +72,32 @@
                                 <td class="num">@Labels.AmountOrBlank(v.CardPayments)</td>
                                 <td class="num">@Labels.AmountOrBlank(v.Refunds)</td>
                                 <td>
-                                    @if (v.MeetsThreshold)
+                                    @if (v.MeetsThreshold && _filed.GetValueOrDefault(v.Vendor.Id) is { } filing)
+                                    {
+                                        <span class="badge ok">Filed @Labels.Date(filing.FiledOn)</span>
+                                        @if (filing.Amount != v.Total)
+                                        {
+                                            <span class="badge warn" title="Payments have changed since it was filed: a corrected form may be needed">Filed @Labels.Amount(filing.Amount)</span>
+                                        }
+                                        @if (filing.CopySentAt is not null)
+                                        {
+                                            <span class="muted">copy emailed</span>
+                                        }
+                                    }
+                                    else if (v.MeetsThreshold)
                                     {
                                         <span class="badge @(v.Vendor.TaxId is null ? "warn" : "ok")">@(v.Vendor.TaxId is null ? "Yes, tax ID needed" : "Yes")</span>
                                     }
                                     else
                                     {
                                         <span class="muted">Below threshold</span>
+                                    }
+                                    @if (v.MeetsThreshold && v.Vendor.TaxId is null)
+                                    {
+                                        <PostForm Action="@($"/accountant/1099/request-w9/{v.Vendor.Id}")" Class="inline no-print">
+                                            <input type="hidden" name="year" value="@YearValue" />
+                                            <button type="submit" class="link" title="@(v.Vendor.Email is null ? "Add an email address on the vendor's page first" : null)" disabled="@(v.Vendor.Email is null)">Ask for a W-9</button>
+                                        </PostForm>
                                     }
                                 </td>
                             </tr>
@@ -84,6 +113,48 @@
                         </tr>
                     </tfoot>
                 </table>
+                @if (_report.Vendors.Any(v => v.MeetsThreshold))
+                {
+                    <section class="card no-print" style="margin-top: 1rem">
+                        <h2>Copies and filing</h2>
+                        @if (_payerTaxId is null)
+                        {
+                            <p class="alert notice">The forms need your employer ID. <ActionLink Href="/settings/company">Add it under Company details</ActionLink>.</p>
+                        }
+                        <p class="muted">OpenBook doesn't file with the IRS. Download the filing data for the IRS's IRIS system or your filing service, then note here that it's done.</p>
+                        <div class="hub-actions">
+                            <ActionLink Class="button secondary" Href="@($"/accountant/1099?year={YearValue}{ThresholdQuery}")">Download filing data</ActionLink>
+                            <ActionLink Class="button secondary" Href="@($"/accountant/1099/copies?year={YearValue}{ThresholdQuery}")">Vendors' copies (PDF)</ActionLink>
+                        </div>
+                        <PostForm Action="/accountant/1099/email-copies" Class="inline">
+                            <input type="hidden" name="year" value="@YearValue" />
+                            <input type="hidden" name="threshold" value="@ThresholdValue" />
+                            <button type="submit" class="secondary" data-confirm="Email every vendor their copy? A vendor needs to have agreed to get it by email.">Email vendors their copies</button>
+                        </PostForm>
+                        <p class="hint">Sending a copy by email needs the vendor's agreement. Otherwise print the PDF and post it by the IRS's deadline.</p>
+                        @if (_filed.Count == 0)
+                        {
+                            <PostForm Action="/accountant/1099/filed">
+                                <input type="hidden" name="year" value="@YearValue" />
+                                <input type="hidden" name="threshold" value="@ThresholdValue" />
+                                <div class="row">
+                                    <div class="field">
+                                        <label for="filed-on">Filed on</label>
+                                        <input id="filed-on" name="on" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                                    </div>
+                                </div>
+                                <button type="submit" class="secondary">Mark @YearValue as filed</button>
+                            </PostForm>
+                        }
+                        else
+                        {
+                            <PostForm Action="/accountant/1099/filed/clear" Class="inline">
+                                <input type="hidden" name="year" value="@YearValue" />
+                                <button type="submit" class="secondary" data-confirm="Take back the note that @YearValue was filed?">Take back the filed note</button>
+                            </PostForm>
+                        }
+                    </section>
+                }
                 <p class="hint">
                     Counts bill payments and expenses dated in the year. Card payments are left out because the card company reports
                     them on Form 1099-K. This summary is a starting point: check it with your tax adviser before filing.
@@ -100,16 +171,26 @@
 
     [SupplyParameterFromQuery] private int? Year { get; set; }
     [SupplyParameterFromQuery] private decimal? Threshold { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private IReadOnlyDictionary<Guid, OpenBook.Domain.Purchases.Filing1099> _filed = new Dictionary<Guid, OpenBook.Domain.Purchases.Filing1099>();
+    private string? _payerTaxId;
+
+    private string? ThresholdValue => Threshold?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    private string ThresholdQuery => Threshold is null ? "" : $"&threshold={ThresholdValue}";
 
     /// <summary>Last year by default: 1099s are filed early in the following year.</summary>
     private int YearValue => Year ?? CompanyTime.Today.Year - 1;
 
     protected override async Task OnParametersSetAsync()
     {
-        _companyName = (await Settings.GetAsync()).Name;
+        var company = await Settings.GetAsync();
+        (_companyName, _payerTaxId) = (company.Name, company.TaxId);
         try
         {
             _report = await Payables.Report1099Async(YearValue, Threshold);
+            _filed = await Filing.FiledAsync(YearValue);
         }
         catch (DomainException ex)
         {

@@ -66,6 +66,11 @@
                 <label for="address">@L["Address"] <span class="muted">@L["(optional)"]</span></label>
                 <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
             </div>
+            <div class="field">
+                <label for="tax-id">@L["Employer ID (EIN)"] <span class="muted">@L["(optional)"]</span></label>
+                <InputText id="tax-id" @bind-Value="Input.TaxId" maxlength="20" />
+                <span class="hint">@L["Printed as the payer's number on 1099s."]</span>
+            </div>
         </fieldset>
 
         <fieldset>
@@ -203,6 +208,7 @@
             Email = company.Email,
             Phone = company.Phone,
             Address = company.Address,
+            TaxId = company.TaxId,
             FiscalYearStartMonth = company.FiscalYearStartMonth,
             UseAccountNumbers = company.UseAccountNumbers,
             DefaultReportBasis = company.DefaultReportBasis,
@@ -222,7 +228,7 @@
         {
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region, TaxId: Input.TaxId ?? string.Empty));
             _saved = true;
             _regionChosen = !string.IsNullOrEmpty(Input.Region);
         }
@@ -252,6 +258,8 @@
 
         [StringLength(1000)]
         public string? Address { get; set; }
+
+        public string? TaxId { get; set; }
 
         [Range(1, 12)]
         public int FiscalYearStartMonth { get; set; } = 1;

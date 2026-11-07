@@ -11,6 +11,15 @@ namespace OpenBook.Infrastructure.Persistence;
 // SQLite can't ORDER BY DateTimeOffset, so newest-first ordering happens in memory.
 internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 {
+    public async Task<IReadOnlyList<Filing1099>> ListFilings1099Async(int year, CancellationToken ct) =>
+        await db.Filings1099.Where(f => f.Year == year).ToListAsync(ct);
+
+    public Task<Filing1099?> GetFiling1099Async(Guid id, CancellationToken ct) => db.Filings1099.FirstOrDefaultAsync(f => f.Id == id, ct);
+
+    public void Add(Filing1099 filing) => db.Filings1099.Add(filing);
+
+    public void Remove(Filing1099 filing) => db.Filings1099.Remove(filing);
+
     public async Task<IReadOnlyList<Vendor>> ListVendorsAsync(CancellationToken ct) => await db.Vendors.ToListAsync(ct);
 
     public Task<Vendor?> GetVendorAsync(Guid id, CancellationToken ct) => db.Vendors.SingleOrDefaultAsync(v => v.Id == id, ct);

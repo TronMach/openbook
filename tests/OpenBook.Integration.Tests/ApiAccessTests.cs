@@ -502,6 +502,7 @@ public sealed class AccessRulesTests
     [InlineData("/settings/plugins/sample/disable", "POST", UserRole.Admin)]
     [InlineData("/accountant/package", "GET", UserRole.Accountant)]
     [InlineData("/api/accountant/1099-filing", "GET", UserRole.Accountant)]
+    [InlineData("/api/accountant/1099-copies", "GET", UserRole.Accountant)]
     [InlineData("/reports/trial-balance-worksheet", "GET", UserRole.Accountant)]
     [InlineData("/reports/cash-forecast", "GET", UserRole.ViewOnly)]
     [InlineData("/reports/cash-forecast/scenarios", "POST", UserRole.Standard)]

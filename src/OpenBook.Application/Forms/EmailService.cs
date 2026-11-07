@@ -155,7 +155,7 @@ public sealed class EmailService(
             notes.Add($"Sample values. The {string.Join(" and ", buttons.Select(b => b[..b.IndexOf(" (", StringComparison.Ordinal)]))} button shows {string.Join("; ", buttons.Select(b => b[(b.IndexOf(" (", StringComparison.Ordinal) + 2)..^1]))}.");
         var settings = await GetSettingsAsync(ct);
         return new EmailPreview(From(settings), "pat@example.com", null, null, composed.Subject, composed.Html ?? EmailFormatter.TextPage(composed.Text),
-            composed.Text, kind is EmailKind.Report or EmailKind.Invitation or EmailKind.PaymentReceipt ? null : $"{EmailTemplates.Label(kind)}.pdf", buttons, notes);
+            composed.Text, kind is EmailKind.Report or EmailKind.Invitation or EmailKind.PaymentReceipt or EmailKind.W9Request ? null : $"{EmailTemplates.Label(kind)}.pdf", buttons, notes);
     }
 
     // ---- Writing and sending a document's email ----

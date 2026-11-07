@@ -1446,6 +1446,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<string>("TaxId")
+                        .HasColumnType("text");
+
                     b.Property<string>("TimeZoneId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -4111,6 +4114,48 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("VendorId", "Date");
 
                     b.ToTable("BillPayments", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.Filing1099", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<string>("Box")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset?>("CopySentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FiledBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("FiledOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("Year", "VendorId")
+                        .IsUnique();
+
+                    b.ToTable("Filings1099", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.PurchaseOrder", b =>
@@ -8498,6 +8543,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Applications");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Purchases.Filing1099", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Purchases.PurchaseOrder", b =>
