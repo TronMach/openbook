@@ -43,10 +43,10 @@ public sealed record GrantPosition(Grant Grant, string Funder, string ClassName,
 {
     /// <summary>A conditional grant's spending not yet recognized as income, up to the award.</summary>
     public decimal ReadyToRecognize => Grant.Conditional && Grant.Status == GrantStatus.Active
-        ? Math.Max(0m, Math.Min(Spent, Grant.Amount) - Grant.Recognized)
+        ? Math.Max(0m, Math.Min(Spent, Grant.NetAward) - Grant.Recognized)
         : 0m;
 
-    public decimal Unspent => Grant.Amount - Spent;
+    public decimal Unspent => Grant.NetAward - Spent;
 }
 
 /// <summary>Grants: awards, their budgets, spending against them (by class), money from funders and, for conditional grants, income as it's earned.</summary>
@@ -181,7 +181,7 @@ public sealed class GrantService(
         var position = await PositionAsync(id, to, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var grant = await RequiredAsync(id, ct);
         var before = Snapshot(grant);
-        grant.AddRequest(date, from, to, amount ?? Math.Min(position.Spent, grant.Amount) - Math.Max(grant.Requested, grant.Received));
+        grant.AddRequest(date, from, to, amount ?? Math.Min(position.Spent, grant.NetAward) - Math.Max(grant.Requested, grant.Received));
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -320,6 +320,79 @@ public sealed class GrantService(
         var before = Snapshot(grant);
         grant.VoidRecognition(line); // checks before the reversal is staged
         await engine.StageVoidAsync(recognition.EntryId, reason, fromDocument: true, ct);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
+    /// <summary>
+    /// Brings the award down by what the funder won't pay: on an unconditional grant Dr income / Cr receivable on the
+    /// grant's class (accrual only when it counts income on receipt); on a conditional one nothing posts, it caps what's recognized.
+    /// </summary>
+    public async Task<Grant> ReduceAsync(Guid id, DateOnly date, decimal amount, string? reason, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        if (amount <= 0m || amount > grant.Reducible)
+            grant.AddReduction(date, amount, null, reason); // throws with the reason
+        var before = Snapshot(grant);
+        Guid? entryId = null;
+        if (!grant.Conditional)
+        {
+            var memo = $"Grant reduced: {grant.Name}";
+            entryId = (await engine.StageAsync(new PostJournalEntryCommand(date,
+                [JournalLineDraft.Dr(grant.IncomeAccountId, amount, memo, grant.ClassId), JournalLineDraft.Cr(grant.ReceivableAccountId, amount, memo, grant.ClassId)],
+                memo, Grant.AdjustmentSource, grant.Id, grant.CashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct)).Id;
+        }
+        else
+        {
+            engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), date, "reducing a grant");
+        }
+
+        grant.AddReduction(date, amount, entryId, reason);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
+    /// <summary>Pays advance money back to the funder: Dr the refundable advance / Cr the bank (and, counting income on receipt, the cash-basis income back out).</summary>
+    public async Task<Grant> ReturnAdvanceAsync(Guid id, DateOnly date, decimal amount, Guid bankAccountId, string? reason, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        var bank = (await accounts.GetChartAsync(ct)).Find(bankAccountId);
+        if (bank is not { Type: AccountType.Bank, IsActive: true })
+            throw new DomainException("grant.bank", "Choose the bank account it was paid from.");
+        if (amount <= 0m || amount > grant.Advance || grant.AdvanceAccountId is null)
+            throw new DomainException("grant.return_amount", $"Up to {Math.Max(0m, grant.Advance):N2} of the advance is held to pay back.");
+        var before = Snapshot(grant);
+        var memo = $"Grant advance paid back: {grant.Name}";
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(date,
+            [JournalLineDraft.Dr(grant.AdvanceAccountId.Value, amount, memo, grant.ClassId), JournalLineDraft.Cr(bank.Id, amount, memo)],
+            memo, Grant.AdjustmentSource, grant.Id), ct);
+        Guid? cashEntry = null;
+        if (grant.CashOnReceipt)
+        {
+            cashEntry = (await engine.StageAsync(new PostJournalEntryCommand(date,
+                [JournalLineDraft.Dr(grant.IncomeAccountId, amount, memo, grant.ClassId), JournalLineDraft.Cr(grant.AdvanceAccountId.Value, amount, memo, grant.ClassId)],
+                $"{memo} (cash basis)", Grant.AdjustmentSource, grant.Id, EntryBasis.CashOnly), ct)).Id;
+        }
+
+        grant.AddAdvanceReturn(date, amount, bank.Id, entry.Id, cashEntry, reason);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
+    public async Task<Grant> VoidAdjustmentAsync(Guid id, int line, string reason, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        var before = Snapshot(grant);
+        var adjustment = grant.VoidAdjustment(line); // checks before any reversal is staged
+        if (adjustment.EntryId is { } entry)
+            await engine.StageVoidAsync(entry, reason, fromDocument: true, ct);
+        else
+            engine.EnsureOpen(await companies.GetRequiredCompanyAsync(ct), adjustment.Date, "putting a grant's reduction back");
+        if (adjustment.CashEntryId is { } cash)
+            await engine.StageVoidAsync(cash, reason, fromDocument: true, ct);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;

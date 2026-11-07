@@ -151,6 +151,38 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_grant_is_reduced_when_the_funder_wont_pay_and_an_advance_is_paid_back()
+    {
+        async Task NoProblems(string when)
+        {
+            var report = await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync());
+            Assert.True(report.Problems == 0, $"{when}: " + string.Join("; ", report.Results.Where(r => r.Outcome == CheckOutcome.Problem).SelectMany(r => r.Findings.Select(f => f.Text))));
+        }
+
+        // Unconditional: 1,000 awarded, 600 paid, the rest written off.
+        var plain = await In<GrantService, Grant>(s => s.CreateAsync(new GrantCommand("Roof", _acme.Id, 1_000m, Jan5, Jan5, new DateOnly(2026, 12, 31))));
+        await In<GrantService, Grant>(s => s.ReceiveAsync(plain.Id, Jan5.AddDays(10), 600m, _checking.Id));
+        Assert.Equal("grant.reduce_amount", (await Assert.ThrowsAsync<DomainException>(() => In<GrantService, Grant>(s => s.ReduceAsync(plain.Id, Mar31, 401m, "Too much")))).Code);
+        var reduced = await In<GrantService, Grant>(s => s.ReduceAsync(plain.Id, Mar31, 400m, "Funder closed the program"));
+        Assert.Equal((600m, 600m, 0m), (reduced.NetAward, reduced.Recognized, reduced.Receivable));
+        Assert.Equal("grant.overpaid", (await Assert.ThrowsAsync<DomainException>(() => In<GrantService, Grant>(s => s.ReceiveAsync(plain.Id, Mar31, 1m, _checking.Id)))).Code);
+        await NoProblems("after the reduction");
+        var restored = await In<GrantService, Grant>(s => s.VoidAdjustmentAsync(plain.Id, 1, "Entered by mistake"));
+        Assert.Equal(400m, restored.Receivable);
+
+        // Conditional: paid 500 ahead, 250 earned, 250 paid back, and the award brought down to what's earned.
+        var grant = await GrantWithSpending();
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, Jan5.AddDays(1), 500m, _checking.Id));
+        await In<GrantService, Grant>(s => s.RecognizeAsync(grant.Id, Mar31));
+        var returned = await In<GrantService, Grant>(s => s.ReturnAdvanceAsync(grant.Id, Mar31, 250m, _checking.Id, "Unspent"));
+        Assert.Equal((0m, 250m), (returned.Advance, returned.Returned));
+        var capped = await In<GrantService, Grant>(s => s.ReduceAsync(grant.Id, Mar31, 750m, "Project ended early"));
+        Assert.Equal((250m, 0m), (capped.NetAward, capped.Reducible));
+        Assert.Null(capped.Adjustments[^1].EntryId);
+        await NoProblems("after the advance went back");
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();

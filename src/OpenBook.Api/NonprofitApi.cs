@@ -53,15 +53,25 @@ public sealed record GrantResponse(
     Guid Id, string Name, Guid FunderId, string Funder, string? Reference, decimal Amount, DateOnly AwardedOn, DateOnly StartsOn, DateOnly EndsOn,
     Guid ClassId, Guid IncomeAccountId, bool Conditional, GrantStatus Status, decimal Recognized, decimal Received, decimal Due, decimal Spent,
     decimal ReadyToRecognize, IReadOnlyList<GrantBudgetRow> Budget,
-    IReadOnlyList<GrantRowResponse>? Receipts = null, IReadOnlyList<GrantRowResponse>? Recognitions = null, IReadOnlyList<GrantRequestResponse>? Requests = null)
+    IReadOnlyList<GrantRowResponse>? Receipts = null, IReadOnlyList<GrantRowResponse>? Recognitions = null, IReadOnlyList<GrantRequestResponse>? Requests = null,
+    decimal NetAward = 0m, IReadOnlyList<GrantAdjustmentResponse>? Adjustments = null)
 {
     public static GrantResponse From(GrantPosition p) => new(p.Grant.Id, p.Grant.Name, p.Grant.FunderId, p.Funder, p.Grant.Reference, p.Grant.Amount,
         p.Grant.AwardedOn, p.Grant.StartsOn, p.Grant.EndsOn, p.Grant.ClassId, p.Grant.IncomeAccountId, p.Grant.Conditional, p.Grant.Status,
         p.Grant.Recognized, p.Grant.Received, p.Grant.Due, p.Spent, p.ReadyToRecognize, p.Rows,
         [.. p.Grant.Receipts.Select(r => new GrantRowResponse(r.LineNumber, r.Date, r.Amount, r.EntryId, r.AdvancePart, r.IsVoided, r.BankAccountId))],
         [.. p.Grant.Recognitions.Select(r => new GrantRowResponse(r.LineNumber, r.Date, r.Amount, r.EntryId, r.AdvancePart, r.IsVoided))],
-        [.. p.Grant.Requests.Select(r => new GrantRequestResponse(r.LineNumber, r.Date, r.PeriodFrom, r.PeriodTo, r.Amount, r.ReceiptLine, r.IsVoided))]);
+        [.. p.Grant.Requests.Select(r => new GrantRequestResponse(r.LineNumber, r.Date, r.PeriodFrom, r.PeriodTo, r.Amount, r.ReceiptLine, r.IsVoided))],
+        p.Grant.NetAward,
+        [.. p.Grant.Adjustments.Select(a => new GrantAdjustmentResponse(a.LineNumber, a.Kind, a.Date, a.Amount, a.Reason, a.EntryId, a.BankAccountId, a.IsVoided))]);
 }
+
+/// <summary>A reduction of the award or an advance paid back; <paramref name="Line"/> names it in the void route.</summary>
+public sealed record GrantAdjustmentResponse(int Line, GrantAdjustmentKind Kind, DateOnly Date, decimal Amount, string Reason, Guid? EntryId, Guid? BankAccountId, bool IsVoided);
+
+public sealed record GrantReduceRequest(DateOnly Date, decimal Amount, string? Reason);
+
+public sealed record GrantReturnAdvanceRequest(DateOnly Date, decimal Amount, Guid BankAccountId, string? Reason);
 
 /// <summary>A receipt or recognition of a grant; <paramref name="Line"/> names it in the void routes.</summary>
 public sealed record GrantRowResponse(int Line, DateOnly Date, decimal Amount, Guid EntryId, decimal AdvancePart, bool IsVoided, Guid? BankAccountId = null);
@@ -225,6 +235,21 @@ internal static class NonprofitApi
         nonprofit.MapPost("/grants/{id:guid}/recognitions/{line:int}/void", async (Guid id, int line, VoidRequest r, GrantService s, CancellationToken ct) =>
         {
             await s.VoidRecognitionAsync(id, line, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/reduce", async (Guid id, GrantReduceRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.ReduceAsync(id, r.Date, r.Amount, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/return-advance", async (Guid id, GrantReturnAdvanceRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.ReturnAdvanceAsync(id, r.Date, r.Amount, r.BankAccountId, r.Reason, ct);
+            return await Position(s, id, ct);
+        });
+        nonprofit.MapPost("/grants/{id:guid}/adjustments/{line:int}/void", async (Guid id, int line, VoidRequest r, GrantService s, CancellationToken ct) =>
+        {
+            await s.VoidAdjustmentAsync(id, line, r.Reason, ct);
             return await Position(s, id, ct);
         });
         nonprofit.MapPost("/grants/{id:guid}/requests/{line:int}/void", async (Guid id, int line, GrantService s, CancellationToken ct) =>

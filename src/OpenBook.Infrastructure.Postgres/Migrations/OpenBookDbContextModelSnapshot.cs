@@ -8359,6 +8359,68 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantAdjustment", "Adjustments", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("BankAccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("CashEntryId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<Guid?>("EntryId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("boolean");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Reason")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.HasIndex("BankAccountId");
+
+                            b1.HasIndex("EntryId");
+
+                            b1.ToTable("GrantAdjustments", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("BankAccountId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("EntryId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Nonprofit.GrantBudgetLine", "Budget", b1 =>
                         {
                             b1.Property<Guid>("GrantId")
@@ -8532,6 +8594,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("GrantId");
                         });
+
+                    b.Navigation("Adjustments");
 
                     b.Navigation("Budget");
 

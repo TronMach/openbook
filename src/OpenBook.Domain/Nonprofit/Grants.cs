@@ -27,6 +27,7 @@ public sealed class Grant
     public const string AwardSource = "nonprofit.grant";
     public const string ReceiptSource = "nonprofit.grant_receipt";
     public const string RecognitionSource = "nonprofit.grant_recognition";
+    public const string AdjustmentSource = "nonprofit.grant_adjustment";
     public const int MaxNameLength = 100;
     public const int MaxTextLength = 2000;
 
@@ -34,6 +35,7 @@ public sealed class Grant
     private readonly List<GrantReceipt> _receipts = [];
     private readonly List<GrantRequest> _requests = [];
     private readonly List<GrantRecognition> _recognitions = [];
+    private readonly List<GrantAdjustment> _adjustments = [];
 
     private Grant()
     {
@@ -112,22 +114,36 @@ public sealed class Grant
 
     public decimal Received => _receipts.Where(r => !r.IsVoided).Sum(r => r.Amount);
 
+    /// <summary>Reductions of the award and advances paid back, each voidable.</summary>
+    public IReadOnlyList<GrantAdjustment> Adjustments => _adjustments;
+
+    /// <summary>What the award has been reduced by (the funder won't pay it).</summary>
+    public decimal Reduced => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.Reduction).Sum(a => a.Amount);
+
+    private decimal ReducedBy(DateOnly date) => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.Reduction && a.Date <= date).Sum(a => a.Amount);
+
+    /// <summary>Advance money paid back to the funder.</summary>
+    public decimal Returned => _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.AdvanceReturn).Sum(a => a.Amount);
+
+    /// <summary>The award less reductions: what the grant is now worth.</summary>
+    public decimal NetAward => Amount - Reduced;
+
     /// <summary>What the funder had paid by the date.</summary>
     public decimal ReceivedBy(DateOnly date) => _receipts.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount);
 
     /// <summary>Income so far on the date.</summary>
     public decimal RecognizedBy(DateOnly date) =>
-        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : Amount;
+        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : Amount - ReducedBy(date);
 
     /// <summary>Income so far: the award (unconditional) or what's been recognized (conditional).</summary>
-    public decimal Recognized => Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount) : Amount;
+    public decimal Recognized => Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount) : NetAward;
 
     /// <summary>What the funder still owes for income recognized; negative when they've paid ahead.</summary>
-    public decimal Due => Recognized - Received;
+    public decimal Due => Recognized - Received + Returned;
 
     /// <summary>Money held as a refundable advance: paid ahead and not yet earned.</summary>
     public decimal Advance =>
-        _receipts.Where(r => !r.IsVoided).Sum(r => r.AdvancePart) - _recognitions.Where(r => !r.IsVoided).Sum(r => r.AdvancePart);
+        _receipts.Where(r => !r.IsVoided).Sum(r => r.AdvancePart) - _recognitions.Where(r => !r.IsVoided).Sum(r => r.AdvancePart) - Returned;
 
     /// <summary>The receivable's balance for this grant: income recognized (or awarded) and not yet paid.</summary>
     public decimal Receivable => (Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount - r.AdvancePart) : Recognized)
@@ -217,8 +233,8 @@ public sealed class Grant
         EnsureActive();
         if (amount <= 0m || decimal.Round(amount, 2) != amount)
             throw new DomainException("grant.receipt_amount", "Enter an amount above zero, in cents.");
-        if (Received + amount > Amount)
-            throw new DomainException("grant.overpaid", $"That would be more than the {Amount:N2} awarded.");
+        if (Received - Returned + amount > NetAward)
+            throw new DomainException("grant.overpaid", $"That would be more than the {NetAward:N2} awarded.");
     }
 
     public GrantReceipt AddReceipt(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId, Guid? cashEntryId = null)
@@ -234,7 +250,7 @@ public sealed class Grant
         EnsureActive();
         if (!Conditional)
             throw new DomainException("grant.unconditional", "An unconditional grant was income when awarded.");
-        if (amount <= 0m || Recognized + amount > Amount)
+        if (amount <= 0m || Recognized + amount > NetAward)
             throw new DomainException("grant.recognize_amount", "Nothing more to recognize, or more than the award.");
         var recognition = new GrantRecognition(_recognitions.Count + 1, date, amount, entryId, AdvanceUsedBy(amount));
         _recognitions.Add(recognition);
@@ -261,6 +277,50 @@ public sealed class Grant
         recognition.Void();
     }
 
+    /// <summary>
+    /// The most the award can come down by: on an unconditional grant what's unpaid (the receivable), on a conditional
+    /// one what isn't recognized yet.
+    /// </summary>
+    public decimal Reducible => Math.Max(0m, Conditional ? NetAward - Recognized : Receivable);
+
+    public GrantAdjustment AddReduction(DateOnly date, decimal amount, Guid? entryId, string? reason)
+    {
+        if (Status == GrantStatus.Voided)
+            throw new DomainException("grant.not_active", "This grant is voided.");
+        Money.EnsureCents(amount);
+        if (amount <= 0m || amount > Reducible)
+            throw new DomainException("grant.reduce_amount", $"The award can come down by up to {Reducible:N2}: {(Conditional ? "what isn't recognized as income yet" : "what the funder hasn't paid")}.");
+        var adjustment = new GrantAdjustment(_adjustments.Count + 1, GrantAdjustmentKind.Reduction, date, amount, null, entryId, null, reason);
+        _adjustments.Add(adjustment);
+        return adjustment;
+    }
+
+    public GrantAdjustment AddAdvanceReturn(DateOnly date, decimal amount, Guid bankAccountId, Guid entryId, Guid? cashEntryId, string? reason)
+    {
+        if (Status == GrantStatus.Voided)
+            throw new DomainException("grant.not_active", "This grant is voided.");
+        Money.EnsureCents(amount);
+        if (amount <= 0m || amount > Advance)
+            throw new DomainException("grant.return_amount", $"Up to {Math.Max(0m, Advance):N2} of the advance is held to pay back.");
+        var adjustment = new GrantAdjustment(_adjustments.Count + 1, GrantAdjustmentKind.AdvanceReturn, date, amount, bankAccountId, entryId, cashEntryId, reason);
+        _adjustments.Add(adjustment);
+        return adjustment;
+    }
+
+    /// <summary>Puts a reduction back (unless income or payments since would then pass the award) or a return (unless the advance it paid back has since been earned).</summary>
+    public GrantAdjustment VoidAdjustment(int line)
+    {
+        var adjustment = _adjustments.FirstOrDefault(a => a.LineNumber == line) ?? throw new DomainException("grant.adjustment_unknown", "There's no such adjustment.");
+        adjustment.Void();
+        if (Advance < 0m)
+        {
+            adjustment.Unvoid();
+            throw new DomainException("grant.advance_used", "The advance this paid back has been earned or returned again since.");
+        }
+
+        return adjustment;
+    }
+
     public void Close()
     {
         EnsureActive();
@@ -278,8 +338,8 @@ public sealed class Grant
     {
         if (Status == GrantStatus.Voided)
             throw new DomainException("grant.already_voided", "This grant is already voided.");
-        if (_receipts.Any(r => !r.IsVoided) || _recognitions.Any(r => !r.IsVoided))
-            throw new DomainException("grant.has_activity", "Void its payments and recognized income first.");
+        if (_receipts.Any(r => !r.IsVoided) || _recognitions.Any(r => !r.IsVoided) || _adjustments.Any(a => !a.IsVoided))
+            throw new DomainException("grant.has_activity", "Void its payments, recognized income and adjustments first.");
         Status = GrantStatus.Voided;
     }
 
@@ -382,6 +442,59 @@ public sealed class GrantReceipt
             throw new DomainException("grant.receipt_voided", "This payment is already voided.");
         IsVoided = true;
     }
+}
+
+public enum GrantAdjustmentKind
+{
+    /// <summary>The award comes down: the funder won't pay the rest. Unconditional grants post Dr income / Cr receivable.</summary>
+    Reduction,
+
+    /// <summary>Advance money paid back to the funder: Dr the refundable advance / Cr the bank.</summary>
+    AdvanceReturn,
+}
+
+/// <summary>A change to a grant after the award: a reduction, or an advance paid back.</summary>
+public sealed class GrantAdjustment
+{
+    private GrantAdjustment()
+    {
+    }
+
+    internal GrantAdjustment(int lineNumber, GrantAdjustmentKind kind, DateOnly date, decimal amount, Guid? bankAccountId, Guid? entryId, Guid? cashEntryId, string? reason)
+    {
+        LineNumber = lineNumber;
+        Kind = kind;
+        Date = date;
+        Amount = amount;
+        BankAccountId = bankAccountId;
+        EntryId = entryId;
+        CashEntryId = cashEntryId;
+        Reason = Text.Optional(reason, 500, "grant.reason_too_long", "Reason") ?? throw new DomainException("grant.reason_required", "Say why.");
+    }
+
+    public int LineNumber { get; private set; }
+    public GrantAdjustmentKind Kind { get; private set; }
+    public DateOnly Date { get; private set; }
+    public decimal Amount { get; private set; }
+    public Guid? BankAccountId { get; private set; }
+
+    /// <summary>Its entry; null for a conditional grant's reduction, which posts nothing.</summary>
+    public Guid? EntryId { get; private set; }
+
+    /// <summary>A return on a grant counting income on receipt: the cash-basis entry taking that income back.</summary>
+    public Guid? CashEntryId { get; private set; }
+
+    public string Reason { get; private set; } = string.Empty;
+    public bool IsVoided { get; private set; }
+
+    public void Void()
+    {
+        if (IsVoided)
+            throw new DomainException("grant.adjustment_voided", "This is already voided.");
+        IsVoided = true;
+    }
+
+    internal void Unvoid() => IsVoided = false;
 }
 
 /// <summary>Income recognized on a conditional grant as its condition was met: Dr the advance (as far as it goes) and the receivable / Cr the grant income.</summary>

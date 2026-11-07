@@ -114,6 +114,7 @@ On the grant's page:
 
 - **Budget and spending**: enter a budget by account (**Save budget**) and compare spending against it.
 - **Money from the funder**: record each payment (**Record payment**). On a conditional grant, money received before it's earned is held as a refundable advance until spending catches up.
+- **When the funder won't pay it all**: **Reduce the award** by what won't come, with the reason. On an unconditional grant this takes that income and the receivable back out on the date; on a conditional one it posts nothing and caps what can still be recognized. **Return the advance** pays back money received ahead and not spent: out of the bank, off the refundable advance. Both show under payments and income recognized, and can be voided.
 - **Close the grant** when it ends (**Reopen** if needed), or void it; void individual payments and recognitions.
 
 ### Reporting to a funder

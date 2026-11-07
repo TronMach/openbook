@@ -196,7 +196,53 @@
             </div>
         }
 
-        @if (g.Receipts.Count + g.Recognitions.Count > 0)
+        @if (g.Status != GrantStatus.Voided && (g.Reducible > 0m || g.Advance > 0m))
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>When the funder won't pay it all</h2>
+                @if (g.Reducible > 0m)
+                {
+                    <PostForm Action="@($"/nonprofit/grants/{g.Id}/reduce")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <p class="muted">@(g.Conditional
+                            ? "Brings the award down, so no more than the rest is recognized as income. Nothing posts."
+                            : "Writes off what the funder won't pay: the income and the receivable come down on the date.") Up to @Labels.Amount(g.Reducible).</p>
+                        <div class="row">
+                            <div class="field"><label for="reduce-amount">Reduce the award by</label><input id="reduce-amount" name="amount" class="amount" inputmode="decimal" required value="@g.Reducible.ToString("0.00")" /></div>
+                            <div class="field"><label for="reduce-date">Date</label><input id="reduce-date" name="date" type="date" value="@Iso(CompanyTime.Today)" /></div>
+                            <div class="field"><label for="reduce-reason">Reason</label><input id="reduce-reason" name="reason" required maxlength="500" placeholder="Funder's letter of 3 June" /></div>
+                        </div>
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <div class="actions"><button type="submit" class="secondary">Reduce the award</button></div>
+                    </PostForm>
+                }
+                @if (g.Advance > 0m)
+                {
+                    <PostForm Action="@($"/nonprofit/grants/{g.Id}/return-advance")" data-enhance="false" style="margin-top: 1rem">
+                        <AntiforgeryToken />
+                        <p class="muted">Pays back advance money not spent on the grant: @Labels.Amount(g.Advance) is held.</p>
+                        <div class="row">
+                            <div class="field"><label for="return-amount">Paid back</label><input id="return-amount" name="amount" class="amount" inputmode="decimal" required value="@g.Advance.ToString("0.00")" /></div>
+                            <div class="field"><label for="return-date">Date</label><input id="return-date" name="date" type="date" value="@Iso(CompanyTime.Today)" /></div>
+                            <div class="field">
+                                <label for="return-bank">From</label>
+                                <select id="return-bank" name="bankAccountId">
+                                    @foreach (var a in _banks)
+                                    {
+                                        <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="field"><label for="return-reason">Reason</label><input id="return-reason" name="reason" required maxlength="500" /></div>
+                        </div>
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <div class="actions"><button type="submit" class="secondary">Return the advance</button></div>
+                    </PostForm>
+                }
+            </div>
+        }
+
+        @if (g.Receipts.Count + g.Recognitions.Count + g.Adjustments.Count > 0)
         {
             <h2 style="margin-top: 1.5rem">Payments and income recognized</h2>
             <table class="data">
@@ -218,6 +264,25 @@
                             <td><a href="/journal/@r.EntryId">Income recognized</a>@(r.IsVoided ? " (voided)" : "")</td>
                             <td class="num">@Labels.Amount(r.Amount)</td>
                             <td>@if (!r.IsVoided) { <VoidLine Action="@($"/nonprofit/grants/{g.Id}/recognitions/{r.LineNumber}/void")" Password="Password" /> }</td>
+                        </tr>
+                    }
+                    @foreach (var a in g.Adjustments)
+                    {
+                        <tr class="@(a.IsVoided ? "muted" : "")">
+                            <td>@Labels.Date(a.Date)</td>
+                            <td>
+                                @if (a.EntryId is { } entry)
+                                {
+                                    <a href="/journal/@entry">@(a.Kind == GrantAdjustmentKind.Reduction ? "Award reduced" : "Advance paid back")</a>
+                                }
+                                else
+                                {
+                                    <span>Award reduced</span>
+                                }
+                                <span class="muted">· @a.Reason</span>@(a.IsVoided ? " (voided)" : "")
+                            </td>
+                            <td class="num">@Labels.Amount(-a.Amount)</td>
+                            <td>@if (!a.IsVoided) { <VoidLine Action="@($"/nonprofit/grants/{g.Id}/adjustments/{a.LineNumber}/void")" Password="Password" /> }</td>
                         </tr>
                     }
                 </tbody>

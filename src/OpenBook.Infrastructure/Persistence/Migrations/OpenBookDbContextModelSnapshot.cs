@@ -8330,6 +8330,66 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsMany("OpenBook.Domain.Nonprofit.GrantAdjustment", "Adjustments", b1 =>
+                        {
+                            b1.Property<Guid>("GrantId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("BankAccountId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("CashEntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("EntryId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("IsVoided")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Reason")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("GrantId", "LineNumber");
+
+                            b1.HasIndex("BankAccountId");
+
+                            b1.HasIndex("EntryId");
+
+                            b1.ToTable("GrantAdjustments", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("BankAccountId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                                .WithMany()
+                                .HasForeignKey("EntryId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("GrantId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Nonprofit.GrantBudgetLine", "Budget", b1 =>
                         {
                             b1.Property<Guid>("GrantId")
@@ -8495,6 +8555,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("GrantId");
                         });
+
+                    b.Navigation("Adjustments");
 
                     b.Navigation("Budget");
 

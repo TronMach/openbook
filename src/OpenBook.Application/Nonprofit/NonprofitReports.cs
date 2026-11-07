@@ -195,9 +195,9 @@ public sealed class NonprofitReports(
         var positions = (await grants.PositionsAsync(asOf, ct)).Where(p => p.Grant.Status != GrantStatus.Voided && p.Grant.AwardedOn <= asOf).ToList();
         var rows = positions.Select(p => new ReportTableRow([
             new ReportCell($"{p.Grant.Name}{(p.Grant.Status == GrantStatus.Closed ? " (closed)" : "")}", new ReportLink("grant", p.Grant.Id)), p.Funder,
-            p.Grant.EndsOn.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Grant.Amount, p.Grant.RecognizedBy(asOf), p.Grant.ReceivedBy(asOf),
+            p.Grant.EndsOn.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Grant.NetAward, p.Grant.RecognizedBy(asOf), p.Grant.ReceivedBy(asOf),
             p.Grant.RecognizedBy(asOf) - p.Grant.ReceivedBy(asOf), p.Spent, p.Unspent])).ToList();
-        rows.Add(new ReportTableRow(["Total", null, null, positions.Sum(p => p.Grant.Amount), positions.Sum(p => p.Grant.RecognizedBy(asOf)), positions.Sum(p => p.Grant.ReceivedBy(asOf)),
+        rows.Add(new ReportTableRow(["Total", null, null, positions.Sum(p => p.Grant.NetAward), positions.Sum(p => p.Grant.RecognizedBy(asOf)), positions.Sum(p => p.Grant.ReceivedBy(asOf)),
             positions.Sum(p => p.Grant.RecognizedBy(asOf) - p.Grant.ReceivedBy(asOf)), positions.Sum(p => p.Spent), positions.Sum(p => p.Unspent)], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Grants",

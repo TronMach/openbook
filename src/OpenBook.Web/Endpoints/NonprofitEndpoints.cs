@@ -315,6 +315,25 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/grants/{id}", () => grants.VoidReceiptAsync(id, line, Reason(form), ct));
         }).RequireAuthorization();
 
+        app.MapPost("/nonprofit/grants/{id:guid}/reduce", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.ReduceAsync(id, Date(form["date"]) ?? CompanyTime.Today, Number(form["amount"]) ?? 0m, form["reason"], ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/return-advance", async (Guid id, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.ReturnAdvanceAsync(id, Date(form["date"]) ?? CompanyTime.Today, Number(form["amount"]) ?? 0m,
+                Id(form["bankAccountId"]) ?? Guid.Empty, form["reason"], ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/grants/{id:guid}/adjustments/{line:int}/void", async (Guid id, int line, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/grants/{id}", () => grants.VoidAdjustmentAsync(id, line, Reason(form), ct));
+        }).RequireAuthorization();
+
         app.MapPost("/nonprofit/grants/{id:guid}/recognitions/{line:int}/void", async (Guid id, int line, IFormCollection form, GrantService grants, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

@@ -188,6 +188,11 @@ public sealed class BooksCheckService(
 
             foreach (var r in g.Recognitions)
                 Add($"Recognition on grant {g.Name} of {r.Date:MMM d, yyyy}", "grant", g.Id, Domain.Nonprofit.Grant.RecognitionSource, r.EntryId, !r.IsVoided);
+            foreach (var a in g.Adjustments)
+            {
+                Add($"Adjustment to grant {g.Name} of {a.Date:MMM d, yyyy}", "grant", g.Id, Domain.Nonprofit.Grant.AdjustmentSource, a.EntryId, !a.IsVoided);
+                Add($"Adjustment to grant {g.Name} of {a.Date:MMM d, yyyy}, its cash-basis entry", "grant", g.Id, Domain.Nonprofit.Grant.AdjustmentSource, a.CashEntryId, !a.IsVoided);
+            }
         }
 
         foreach (var r in await sales.ListRetainersAsync(null, ct))

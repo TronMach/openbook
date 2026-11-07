@@ -106,7 +106,7 @@ public sealed class ReportBuilder(
         "Invoice", "Payment", "Sales receipt", "Credit memo", "Refund", "Deposit", "Bill", "Bill payment", "Vendor credit", "Vendor refund",
         "Expense", "Transfer", "Sales tax payment", "Inventory adjustment", "Goods received", "Assembly build", "Landed cost", "Bad debt write-off",
         "Retainer", "Retainer applied", "Retainer refund", "Depreciation", "Asset disposal", "Loan", "Loan payment", "Gift", "Pledge", "Pledge cancelled",
-        "Grant award", "Grant payment", "Grant income earned", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Journal entry",
+        "Grant award", "Grant payment", "Grant income earned", "Grant adjustment", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Journal entry",
     ];
 
     public static string Header(BuilderColumn column) => column switch
@@ -310,6 +310,7 @@ public sealed class ReportBuilder(
             Customer(Domain.Nonprofit.Grant.AwardSource, g.Id, g.FunderId);
             Customer(Domain.Nonprofit.Grant.ReceiptSource, g.Id, g.FunderId);
             Customer(Domain.Nonprofit.Grant.RecognitionSource, g.Id, g.FunderId);
+            Customer(Domain.Nonprofit.Grant.AdjustmentSource, g.Id, g.FunderId);
         }
 
         foreach (var b in await purchases.ListBillsAsync(null, ct))

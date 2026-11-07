@@ -1255,6 +1255,18 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Navigation(g => g.Budget).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Navigation(g => g.Receipts).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Navigation(g => g.Recognitions).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(g => g.Adjustments, l =>
+            {
+                l.ToTable("GrantAdjustments");
+                l.WithOwner().HasForeignKey("GrantId");
+                l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantAdjustment.LineNumber));
+                l.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Reason).HasMaxLength(500);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(g => g.Adjustments).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.RecurringGift>(b =>
