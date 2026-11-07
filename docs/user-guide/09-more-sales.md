@@ -49,6 +49,8 @@ A *retainer* is money a customer pays before you've invoiced anything. It isn't 
 
 **Sales → Retainers → New** (**Receive a retainer**): customer, amount, date, and **deposit to** (a bank account, or Undeposited Funds to include it in a deposit later). **Receive retainer**.
 
+An open invoice for that customer shows **Apply from a retainer** with each retainer they still hold and its balance: **Apply** pays the invoice from it (up to what the invoice owes) without leaving the invoice.
+
 From the retainer's page you can:
 
 - **Apply to an invoice**: pick one of the customer's open invoices and the amount. The invoice's balance goes down.

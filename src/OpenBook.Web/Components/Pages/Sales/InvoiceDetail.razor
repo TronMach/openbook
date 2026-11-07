@@ -277,6 +277,10 @@
     }
 
     <OnlinePaymentPanel InvoiceId="_invoice.Id" IsOpen="_invoice.IsOpen" />
+    @if (_invoice.Status == DocumentStatus.Posted)
+    {
+        <RetainerOffer InvoiceId="_invoice.Id" CustomerId="_invoice.CustomerId" Balance="_invoice.Balance" />
+    }
 
     <EntryTags EntryId="_invoice.JournalEntryId" />
 

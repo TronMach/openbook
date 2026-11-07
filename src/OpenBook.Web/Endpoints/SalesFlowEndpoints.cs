@@ -58,7 +58,9 @@ public static class SalesFlowEndpoints
         app.MapPost("/sales/retainers/{id:guid}/apply", async (Guid id, IFormCollection form, RetainerService retainers, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
-            return await Back($"/sales/retainers/{id}", async () =>
+            // From the invoice's own panel, back to the invoice.
+            var page = AccessRules.LocalPath(form["back"].ToString()) is { } back && back.StartsWith("/sales/invoices/", StringComparison.Ordinal) ? back : $"/sales/retainers/{id}";
+            return await Back(page, async () =>
             {
                 var invoiceId = Id(form["invoiceId"]) ?? throw new DomainException("retainer.invoice_required", "Choose the invoice.");
                 await retainers.ApplyAsync(id, new ApplyRetainerCommand(invoiceId, Date(form["date"]) ?? Today(), Amount(form["amount"])), ct);

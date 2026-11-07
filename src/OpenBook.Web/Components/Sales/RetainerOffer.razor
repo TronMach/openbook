@@ -1,0 +1,42 @@
+@* On an open invoice: retainers held from its customer (or the one it's billed with), with their balances, to apply without leaving the invoice. *@
+@inject RetainerService Retainers
+
+@if (_retainers.Count > 0)
+{
+    <div class="card no-print" id="retainers" style="margin-top: 1.5rem">
+        <h2>Apply from a retainer</h2>
+        <p class="muted">Money this customer paid ahead and still holds. Applying it pays the invoice from the retainer.</p>
+        <table class="data">
+            <thead><tr><th>Received</th><th>Reference</th><th class="num">Balance</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _retainers)
+                {
+                    <tr>
+                        <td><a href="/sales/retainers/@r.Id">@Labels.Date(r.Date)</a></td>
+                        <td>@r.Reference</td>
+                        <td class="num">@Labels.Amount(r.Balance)</td>
+                        <td>
+                            <PostForm Action="@($"/sales/retainers/{r.Id}/apply")" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="invoiceId" value="@InvoiceId" />
+                                <input type="hidden" name="back" value="@($"/sales/invoices/{InvoiceId}")" />
+                                <button type="submit" class="secondary">Apply @Labels.Amount(Math.Min(r.Balance, Balance))</button>
+                            </PostForm>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<Retainer> _retainers = [];
+
+    [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
+    [Parameter, EditorRequired] public Guid CustomerId { get; set; }
+    [Parameter] public decimal Balance { get; set; }
+
+    protected override async Task OnParametersSetAsync() =>
+        _retainers = Balance > 0m ? [.. (await Retainers.AvailableForInvoiceAsync(CustomerId)).Where(r => r.Balance > 0m)] : [];
+}
