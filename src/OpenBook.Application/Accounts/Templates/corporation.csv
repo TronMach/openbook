@@ -1,43 +1,48 @@
-Number,Account,Type,Description
-1000,Checking,Bank,Main operating account
-1010,Savings,Bank,
-1100,Accounts Receivable,Accounts Receivable,Money customers owe you
-1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited
-1300,Prepaid Expenses,Other Current Asset,
-1500,Equipment,Fixed Asset,Computers and other equipment
-1510,Equipment:Accumulated Depreciation,Fixed Asset,
-2000,Accounts Payable,Accounts Payable,Money you owe vendors
-2100,Business Credit Card,Credit Card,
-2200,Sales Tax Payable,Other Current Liability,
-2700,Loan Payable,Long Term Liability,
-2300,Payroll Liabilities,Other Current Liability,Withholding and payroll taxes owed
-2400,Income Taxes Payable,Other Current Liability,
-3000,Common Stock,Equity,
-3100,Additional Paid-in Capital,Equity,
-3200,Shareholder Distributions,Equity,Distributions to shareholders (S corp) or dividends (C corp)
-3900,Retained Earnings,Equity,Prior years' net income
-4000,Service Revenue,Income,
-4100,Product Sales,Income,
-4900,Refunds and Discounts,Income,
-6010,Officer Compensation,Expense,
-6020,Salaries and Wages,Expense,
-6030,Payroll Taxes,Expense,
-6040,Employee Benefits,Expense,
-6950,Income Tax Expense,Expense,
-5000,Cost of Goods Sold,Cost of Goods Sold,
-6000,Advertising and Marketing,Expense,
-6100,Bank Fees,Expense,
-6150,Contract Labor,Expense,
-6200,Insurance,Expense,
-6250,Meals,Expense,Business meals
-6300,Office Supplies,Expense,
-6400,Professional Fees,Expense,Accounting and legal
-6500,Rent,Expense,
-6600,Software and Subscriptions,Expense,
-6700,Travel,Expense,
-6800,Utilities,Expense,
-6810,Utilities:Electric,Expense,
-6820,Utilities:Internet and Phone,Expense,
-6900,Depreciation,Expense,
-7000,Interest Income,Other Income,
-8000,Interest Expense,Other Expense,
+Number,Account,Type,Description,Tax line
+1000,Checking,Bank,Main operating account,
+1010,Savings,Bank,,
+1100,Accounts Receivable,Accounts Receivable,Money customers owe you,
+1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited,
+1300,Prepaid Expenses,Other Current Asset,,
+1500,Equipment,Fixed Asset,Computers and other equipment,
+1510,Equipment:Accumulated Depreciation,Fixed Asset,,
+2000,Accounts Payable,Accounts Payable,Money you owe vendors,
+2100,Business Credit Card,Credit Card,,
+2200,Sales Tax Payable,Other Current Liability,,
+2700,Loan Payable,Long Term Liability,,
+2300,Payroll Liabilities,Other Current Liability,Withholding and payroll taxes owed,
+2400,Income Taxes Payable,Other Current Liability,,
+3000,Common Stock,Equity,,
+3100,Additional Paid-in Capital,Equity,,
+3200,Shareholder Distributions,Equity,Distributions to shareholders (S corp) or dividends (C corp),
+3900,Retained Earnings,Equity,Prior years' net income,
+4000,Service Revenue,Income,,s.1a
+4100,Product Sales,Income,,s.1a
+4900,Refunds and Discounts,Income,,s.1b
+6010,Officer Compensation,Expense,,s.7
+6020,Salaries and Wages,Expense,,s.8
+6030,Payroll Taxes,Expense,,s.12
+6040,Employee Benefits,Expense,,s.18
+6060,Car and Truck Expenses,Expense,Business mileage and vehicle costs,s.20
+6120,Commissions and Fees,Expense,,s.20
+6350,Supplies,Expense,Materials used up in the work,s.20
+6450,Repairs and Maintenance,Expense,,s.9
+6550,Taxes and Licenses,Expense,Business licenses and taxes other than income tax,s.12
+6950,Income Tax Expense,Expense,,nondeductible
+5000,Cost of Goods Sold,Cost of Goods Sold,,s.2
+6000,Advertising and Marketing,Expense,,s.16
+6100,Bank Fees,Expense,,s.20
+6150,Contract Labor,Expense,,s.20
+6200,Insurance,Expense,,s.20
+6250,Meals,Expense,Business meals,s.20
+6300,Office Supplies,Expense,,s.20
+6400,Professional Fees,Expense,Accounting and legal,s.20
+6500,Rent,Expense,,s.11
+6600,Software and Subscriptions,Expense,,s.20
+6700,Travel,Expense,,s.20
+6800,Utilities,Expense,,s.20
+6810,Utilities:Electric,Expense,,s.20
+6820,Utilities:Internet and Phone,Expense,,s.20
+6900,Depreciation,Expense,,s.14
+7000,Interest Income,Other Income,,s.5
+8000,Interest Expense,Other Expense,,s.13

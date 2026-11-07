@@ -1,4 +1,6 @@
 using System.Reflection;
+using OpenBook.Application.Companies;
+using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Companies;
 using OpenBook.Domain.Common;
 
@@ -21,7 +23,7 @@ public sealed record StarterAnswers(StarterSales Sells, bool KeepsStock);
 /// Starter charts of accounts by type of business, shipped as CSV files embedded in this assembly and
 /// applied through the chart import (so they follow the same rules and skip accounts that already exist).
 /// </summary>
-public sealed class ChartTemplates(ChartImportService import)
+public sealed class ChartTemplates(ChartImportService import, ICompanyStore companies)
 {
     public static IReadOnlyList<ChartTemplate> All { get; } =
     [
@@ -63,13 +65,13 @@ public sealed class ChartTemplates(ChartImportService import)
             lines.RemoveAll(l => Named(l, ProductSalesName) || Named(l, Inventory.InventoryAccounts.CostName));
         if (answers.Sells == StarterSales.Products)
             lines.RemoveAll(l => Named(l, ServiceRevenueName));
-        // Only charts with the plain four columns (the nonprofit one has more) get the row.
-        if (answers.KeepsStock && answers.Sells != StarterSales.Services && lines[0].Split(',').Length == 4
+        // Only charts starting with these columns (the nonprofit one differs) get the row.
+        if (answers.KeepsStock && answers.Sells != StarterSales.Services && lines[0].StartsWith("Number,Account,Type,Description", StringComparison.Ordinal)
             && !lines.Any(l => Named(l, Inventory.InventoryAccounts.AssetName)))
         {
             // After the other current assets, so the chart keeps its number order.
             var at = lines.FindLastIndex(l => l.Split(',') is { Length: > 2 } cells && cells[2] == "Other Current Asset");
-            lines.Insert(at < 0 ? 1 : at + 1, $"1400,{Inventory.InventoryAccounts.AssetName},Other Current Asset,What the products you keep in stock cost");
+            lines.Insert(at < 0 ? 1 : at + 1, $"1400,{Inventory.InventoryAccounts.AssetName},Other Current Asset,What the products you keep in stock cost,");
         }
 
         return string.Join('\n', lines) + "\n";
@@ -80,7 +82,24 @@ public sealed class ChartTemplates(ChartImportService import)
 
     public Task<ChartImportResult> PreviewAsync(string key, CancellationToken ct = default) => import.PreviewAsync(Csv(key), ct);
 
-    public Task<ChartImportResult> ApplyAsync(string key, StarterAnswers answers, CancellationToken ct = default) => import.ImportAsync(Csv(key, answers), ct);
+    public async Task<ChartImportResult> ApplyAsync(string key, StarterAnswers answers, CancellationToken ct = default) =>
+        await import.ImportAsync(await ForCompanyAsync(Csv(key, answers), ct), ct);
 
-    public Task<ChartImportResult> ApplyAsync(string key, CancellationToken ct = default) => import.ImportAsync(Csv(key), ct);
+    public async Task<ChartImportResult> ApplyAsync(string key, CancellationToken ct = default) =>
+        await import.ImportAsync(await ForCompanyAsync(Csv(key), ct), ct);
+
+    // The corporation chart is written for Form 1120-S: a C corporation's lines are on Form 1120.
+    private async Task<string> ForCompanyAsync(string csv, CancellationToken ct)
+    {
+        if ((await companies.GetCompanyAsync(ct))?.BusinessType is not BusinessType.CCorporation)
+            return csv;
+        var lines = csv.ReplaceLineEndings("\n").Split('\n').Select(line =>
+        {
+            var cells = line.Split(',');
+            if (cells.Length > 4 && TaxLines.Equivalent(cells[^1], TaxForm.Form1120) is { } line1120)
+                cells[^1] = line1120.Key;
+            return string.Join(',', cells);
+        });
+        return string.Join('\n', lines);
+    }
 }

@@ -1,36 +1,41 @@
-Number,Account,Type,Description
-1000,Checking,Bank,Main operating account
-1010,Savings,Bank,
-1100,Accounts Receivable,Accounts Receivable,Money customers owe you
-1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited
-1300,Prepaid Expenses,Other Current Asset,
-1500,Equipment,Fixed Asset,Computers and other equipment
-1510,Equipment:Accumulated Depreciation,Fixed Asset,
-2000,Accounts Payable,Accounts Payable,Money you owe vendors
-2100,Business Credit Card,Credit Card,
-2200,Sales Tax Payable,Other Current Liability,
-2700,Loan Payable,Long Term Liability,
-3000,Owner's Equity,Equity,
-3010,Owner's Equity:Owner Contributions,Equity,Money the owner puts in
-3020,Owner's Equity:Owner Draws,Equity,Money the owner takes out
-3900,Retained Earnings,Equity,Prior years' net income
-4000,Service Revenue,Income,
-4100,Product Sales,Income,
-4900,Refunds and Discounts,Income,
-5000,Cost of Goods Sold,Cost of Goods Sold,
-6000,Advertising and Marketing,Expense,
-6100,Bank Fees,Expense,
-6150,Contract Labor,Expense,
-6200,Insurance,Expense,
-6250,Meals,Expense,Business meals
-6300,Office Supplies,Expense,
-6400,Professional Fees,Expense,Accounting and legal
-6500,Rent,Expense,
-6600,Software and Subscriptions,Expense,
-6700,Travel,Expense,
-6800,Utilities,Expense,
-6810,Utilities:Electric,Expense,
-6820,Utilities:Internet and Phone,Expense,
-6900,Depreciation,Expense,
-7000,Interest Income,Other Income,
-8000,Interest Expense,Other Expense,
+Number,Account,Type,Description,Tax line
+1000,Checking,Bank,Main operating account,
+1010,Savings,Bank,,
+1100,Accounts Receivable,Accounts Receivable,Money customers owe you,
+1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited,
+1300,Prepaid Expenses,Other Current Asset,,
+1500,Equipment,Fixed Asset,Computers and other equipment,
+1510,Equipment:Accumulated Depreciation,Fixed Asset,,
+2000,Accounts Payable,Accounts Payable,Money you owe vendors,
+2100,Business Credit Card,Credit Card,,
+2200,Sales Tax Payable,Other Current Liability,,
+2700,Loan Payable,Long Term Liability,,
+3000,Owner's Equity,Equity,,
+3010,Owner's Equity:Owner Contributions,Equity,Money the owner puts in,
+3020,Owner's Equity:Owner Draws,Equity,Money the owner takes out,
+3900,Retained Earnings,Equity,Prior years' net income,
+4000,Service Revenue,Income,,c.1
+4100,Product Sales,Income,,c.1
+4900,Refunds and Discounts,Income,,c.2
+5000,Cost of Goods Sold,Cost of Goods Sold,,c.4
+6000,Advertising and Marketing,Expense,,c.8
+6060,Car and Truck Expenses,Expense,Business mileage and vehicle costs,c.9
+6100,Bank Fees,Expense,,c.27a
+6120,Commissions and Fees,Expense,,c.10
+6150,Contract Labor,Expense,,c.11
+6200,Insurance,Expense,,c.15
+6250,Meals,Expense,Business meals,c.24b
+6300,Office Supplies,Expense,,c.18
+6350,Supplies,Expense,Materials used up in the work,c.22
+6400,Professional Fees,Expense,Accounting and legal,c.17
+6450,Repairs and Maintenance,Expense,,c.21
+6500,Rent,Expense,,c.20b
+6550,Taxes and Licenses,Expense,Business licenses and taxes other than income tax,c.23
+6600,Software and Subscriptions,Expense,,c.27a
+6700,Travel,Expense,,c.24a
+6800,Utilities,Expense,,c.25
+6810,Utilities:Electric,Expense,,c.25
+6820,Utilities:Internet and Phone,Expense,,c.25
+6900,Depreciation,Expense,,c.13
+7000,Interest Income,Other Income,,c.6
+8000,Interest Expense,Other Expense,,c.16b

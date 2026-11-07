@@ -28,7 +28,7 @@ public sealed class ChartTemplateTaxTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("sole-proprietor", BusinessType.SoleProprietor, TaxForm.ScheduleC)]
+    [InlineData("sole-proprietor", BusinessType.SoleProprietorship, TaxForm.ScheduleC)]
     [InlineData("partnership", BusinessType.Partnership, TaxForm.Form1065)]
     [InlineData("corporation", BusinessType.SCorporation, TaxForm.Form1120S)]
     [InlineData("corporation", BusinessType.CCorporation, TaxForm.Form1120)]
@@ -48,7 +48,7 @@ public sealed class ChartTemplateTaxTests : IAsyncLifetime
     [Fact]
     public async Task A_sole_proprietor_has_the_schedule_c_categories()
     {
-        var accounts = await Applied("sole-proprietor", BusinessType.SoleProprietor);
+        var accounts = await Applied("sole-proprietor", BusinessType.SoleProprietorship);
         foreach (var (name, key) in new[]
         {
             ("Car and Truck Expenses", "c.9"), ("Commissions and Fees", "c.10"), ("Supplies", "c.22"), ("Repairs and Maintenance", "c.21"), ("Taxes and Licenses", "c.23"),

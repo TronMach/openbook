@@ -1,41 +1,46 @@
-Number,Account,Type,Description
-1000,Checking,Bank,Main operating account
-1010,Savings,Bank,
-1100,Accounts Receivable,Accounts Receivable,Money customers owe you
-1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited
-1300,Prepaid Expenses,Other Current Asset,
-1500,Equipment,Fixed Asset,Computers and other equipment
-1510,Equipment:Accumulated Depreciation,Fixed Asset,
-2000,Accounts Payable,Accounts Payable,Money you owe vendors
-2100,Business Credit Card,Credit Card,
-2200,Sales Tax Payable,Other Current Liability,
-2700,Loan Payable,Long Term Liability,
-2300,Payroll Liabilities,Other Current Liability,
-3000,Partner 1 Equity,Equity,
-3010,Partner 1 Equity:Partner 1 Capital,Equity,Contributions
-3020,Partner 1 Equity:Partner 1 Draws,Equity,Distributions
-3100,Partner 2 Equity,Equity,
-3110,Partner 2 Equity:Partner 2 Capital,Equity,Contributions
-3120,Partner 2 Equity:Partner 2 Draws,Equity,Distributions
-3900,Retained Earnings,Equity,Prior years' net income
-4000,Service Revenue,Income,
-4100,Product Sales,Income,
-4900,Refunds and Discounts,Income,
-6050,Guaranteed Payments to Partners,Expense,
-5000,Cost of Goods Sold,Cost of Goods Sold,
-6000,Advertising and Marketing,Expense,
-6100,Bank Fees,Expense,
-6150,Contract Labor,Expense,
-6200,Insurance,Expense,
-6250,Meals,Expense,Business meals
-6300,Office Supplies,Expense,
-6400,Professional Fees,Expense,Accounting and legal
-6500,Rent,Expense,
-6600,Software and Subscriptions,Expense,
-6700,Travel,Expense,
-6800,Utilities,Expense,
-6810,Utilities:Electric,Expense,
-6820,Utilities:Internet and Phone,Expense,
-6900,Depreciation,Expense,
-7000,Interest Income,Other Income,
-8000,Interest Expense,Other Expense,
+Number,Account,Type,Description,Tax line
+1000,Checking,Bank,Main operating account,
+1010,Savings,Bank,,
+1100,Accounts Receivable,Accounts Receivable,Money customers owe you,
+1200,Undeposited Funds,Other Current Asset,Payments received but not yet deposited,
+1300,Prepaid Expenses,Other Current Asset,,
+1500,Equipment,Fixed Asset,Computers and other equipment,
+1510,Equipment:Accumulated Depreciation,Fixed Asset,,
+2000,Accounts Payable,Accounts Payable,Money you owe vendors,
+2100,Business Credit Card,Credit Card,,
+2200,Sales Tax Payable,Other Current Liability,,
+2700,Loan Payable,Long Term Liability,,
+2300,Payroll Liabilities,Other Current Liability,,
+3000,Partner 1 Equity,Equity,,
+3010,Partner 1 Equity:Partner 1 Capital,Equity,Contributions,
+3020,Partner 1 Equity:Partner 1 Draws,Equity,Distributions,
+3100,Partner 2 Equity,Equity,,
+3110,Partner 2 Equity:Partner 2 Capital,Equity,Contributions,
+3120,Partner 2 Equity:Partner 2 Draws,Equity,Distributions,
+3900,Retained Earnings,Equity,Prior years' net income,
+4000,Service Revenue,Income,,p.1a
+4100,Product Sales,Income,,p.1a
+4900,Refunds and Discounts,Income,,p.1b
+6050,Guaranteed Payments to Partners,Expense,,p.10
+5000,Cost of Goods Sold,Cost of Goods Sold,,p.2
+6000,Advertising and Marketing,Expense,,p.21
+6060,Car and Truck Expenses,Expense,Business mileage and vehicle costs,p.21
+6100,Bank Fees,Expense,,p.21
+6120,Commissions and Fees,Expense,,p.21
+6150,Contract Labor,Expense,,p.21
+6200,Insurance,Expense,,p.21
+6250,Meals,Expense,Business meals,p.21
+6300,Office Supplies,Expense,,p.21
+6350,Supplies,Expense,Materials used up in the work,p.21
+6400,Professional Fees,Expense,Accounting and legal,p.21
+6450,Repairs and Maintenance,Expense,,p.11
+6500,Rent,Expense,,p.13
+6550,Taxes and Licenses,Expense,Business licenses and taxes other than income tax,p.14
+6600,Software and Subscriptions,Expense,,p.21
+6700,Travel,Expense,,p.21
+6800,Utilities,Expense,,p.21
+6810,Utilities:Electric,Expense,,p.21
+6820,Utilities:Internet and Phone,Expense,,p.21
+6900,Depreciation,Expense,,p.16a
+7000,Interest Income,Other Income,,p.7
+8000,Interest Expense,Other Expense,,p.15

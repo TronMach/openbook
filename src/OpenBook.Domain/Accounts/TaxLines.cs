@@ -96,6 +96,10 @@ public static class TaxLines
     public static IReadOnlyList<TaxLine> For(TaxForm form) =>
         [.. All.Where(l => l.Form == form && l.Key != NonDeductibleKey), NonDeductible];
 
+    /// <summary>The line of that name on another form; null for a key that isn't a form's line, or a name it hasn't.</summary>
+    public static TaxLine? Equivalent(string? key, TaxForm form) =>
+        Find(key) is { } line && line.Key != NonDeductibleKey ? All.FirstOrDefault(l => l.Form == form && l.Name == line.Name) : null;
+
     public static TaxForm FormFor(BusinessType type) => type switch
     {
         BusinessType.MultiMemberLlc or BusinessType.Partnership => TaxForm.Form1065,

@@ -15,7 +15,7 @@ A new company has no accounts. The Accounts page offers four starter charts, wit
 | S or C corporation | Common stock, paid-in capital and distributions; payroll expenses and officer pay |
 | Nonprofit | Net assets with and without donor restrictions; contributions, grants and program revenue |
 
-Select **Use this chart**. You can rename, add and deactivate accounts afterwards; the starter chart is only a beginning.
+Select **Use this chart**. You can rename, add and deactivate accounts afterwards; the starter chart is only a beginning. Income and expense accounts in the starter charts already point at the lines of your tax return (Schedule C, Form 1065, 1120-S or 1120, by your legal structure), so **Tax summary** works from the first year; check them with your tax preparer, and change any under **Accounts → Tax lines**.
 
 You can also add accounts one by one (**New account**) or import your own list (**Import CSV**, below).
 
