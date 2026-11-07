@@ -192,7 +192,9 @@ public static class ChannelEndpoints
                 .Where(l => l.Line > 0 && l.Quantity != 0m).ToList();
             var date = DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)
                 ? d : CompanyTime.Today;
-            return await Back($"/sales/channels/orders/{id}", () => orders.ReturnAsync(id, date, lines, form["memo"], ct));
+            var notRestocked = form.Keys.Where(k => k.StartsWith("nostock:", StringComparison.Ordinal) && form[k] == "true")
+                .Select(k => int.TryParse(k[8..], out var n) ? n : 0).Where(n => n > 0).ToHashSet();
+            return await Back($"/sales/channels/orders/{id}", () => orders.ReturnAsync(id, date, lines, form["memo"], notRestocked, ct));
         }).RequireAuthorization();
 
         app.MapPost("/sales/channels/returns/{id:guid}/void", async (Guid id, IFormCollection form, ChannelOrderService orders, ClosedPeriodOverride closing, CancellationToken ct) =>

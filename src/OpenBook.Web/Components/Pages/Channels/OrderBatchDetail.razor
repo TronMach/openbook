@@ -118,7 +118,7 @@
                     <PostForm Action="@($"/sales/channels/orders/{_batch.Id}/returns")" data-enhance="false">
                         <AntiforgeryToken />
                         <table class="data">
-                            <thead><tr><th>Order</th><th>SKU</th><th class="num">Sold</th><th class="num">Back already</th><th class="num">Came back now</th></tr></thead>
+                            <thead><tr><th>Order</th><th>SKU</th><th class="num">Sold</th><th class="num">Back already</th><th class="num">Came back now</th><th>Not back in stock</th></tr></thead>
                             <tbody>
                                 @foreach (var l in _batch.Lines.Where(l => l.Quantity - _returned.GetValueOrDefault(l.LineNumber) > 0m))
                                 {
@@ -128,6 +128,7 @@
                                         <td class="num">@Labels.Quantity(l.Quantity)</td>
                                         <td class="num">@Labels.Quantity(_returned.GetValueOrDefault(l.LineNumber))</td>
                                         <td class="num"><input name="qty:@l.LineNumber" inputmode="decimal" size="5" aria-label="Returned from order @l.OrderId" /></td>
+                                        <td><input type="checkbox" name="nostock:@l.LineNumber" value="true" aria-label="Damaged or not sent back, order @l.OrderId" /></td>
                                     </tr>
                                 }
                             </tbody>

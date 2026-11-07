@@ -119,7 +119,8 @@ public static class ChannelsApi
         channels.MapPost("/orders/{id:guid}/restore", async (Guid id, ChannelOrderService s, CancellationToken ct) => (await s.SetDismissedAsync(id, false, ct)).Status);
         channels.MapPost("/orders/{id:guid}/returns", async (Guid id, ChannelReturnRequest r, ChannelOrderService s, CancellationToken ct) =>
         {
-            var made = await s.ReturnAsync(id, r.Date ?? OpenBook.Application.CompanyTime.Today, [.. (r.Lines ?? []).Select(l => (l.Line, l.Quantity))], r.Memo, ct);
+            var made = await s.ReturnAsync(id, r.Date ?? OpenBook.Application.CompanyTime.Today, [.. (r.Lines ?? []).Select(l => (l.Line, l.Quantity))], r.Memo,
+                (r.Lines ?? []).Where(l => l.NotRestocked).Select(l => l.Line).ToHashSet(), ct);
             return Results.Created($"/api/channels/returns/{made.Id}", ReturnResponse(made));
         });
         channels.MapGet("/returns/{id:guid}", async (Guid id, ChannelOrderService s, CancellationToken ct) =>
@@ -146,4 +147,4 @@ public static class ChannelsApi
 /// <summary>What came back, by the batch's line numbers (<c>GET /api/channels/orders/{id}</c>); date defaults to today.</summary>
 public sealed record ChannelReturnRequest(DateOnly? Date, IReadOnlyList<ChannelReturnLineRequest>? Lines, string? Memo = null);
 
-public sealed record ChannelReturnLineRequest(int Line, decimal Quantity);
+public sealed record ChannelReturnLineRequest(int Line, decimal Quantity, bool NotRestocked = false);

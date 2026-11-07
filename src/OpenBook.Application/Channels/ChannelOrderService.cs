@@ -367,7 +367,9 @@ public sealed class ChannelOrderService(
     /// of goods sold. Only posted orders, stocked SKUs, items without lot or serial tracking (use a credit memo or an
     /// adjustment for those), and no more than was sold on each line less what's already back.
     /// </summary>
-    public async Task<ChannelReturn> ReturnAsync(Guid batchId, DateOnly date, IReadOnlyList<(int OrderLine, decimal Quantity)> lines, string? memo = null, CancellationToken ct = default)
+    /// <param name="notRestocked">Order lines whose goods came back damaged or weren't sent back: counted as returned, but nothing goes into stock.</param>
+    public async Task<ChannelReturn> ReturnAsync(Guid batchId, DateOnly date, IReadOnlyList<(int OrderLine, decimal Quantity)> lines, string? memo = null,
+        IReadOnlySet<int>? notRestocked = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var batch = await store.GetBatchAsync(batchId, ct) ?? throw new EntityNotFoundException(BatchEntity, batchId);
@@ -386,6 +388,8 @@ public sealed class ChannelOrderService(
             var line = batch.Lines.FirstOrDefault(l => l.LineNumber == orderLine) ?? throw new DomainException("channel.return_line", "That order line isn't in these orders.");
             if (quantity < 0m || quantity > line.Quantity - returned.GetValueOrDefault(orderLine))
                 throw new DomainException("channel.return_too_many", $"Order {line.OrderId}: at most {line.Quantity - returned.GetValueOrDefault(orderLine):0.####} can come back.");
+            if (notRestocked?.Contains(orderLine) == true)
+                continue;
             if (!mapping.TryGetValue(line.MappingKey, out var sku) || sku.ItemId is not { } itemId)
                 throw new DomainException("channel.return_not_stocked", $"Order {line.OrderId}: {line.Sku ?? line.Title} isn't a stocked item.");
             byItem.Add((itemId, quantity));

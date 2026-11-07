@@ -467,6 +467,25 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_return_that_doesnt_go_back_on_the_shelf_leaves_stock_alone()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income);
+        var mug = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Blue mug", Domain.Sales.ItemType.Inventory, sales.Id, 40m, Barcode: "MUG-1")));
+        await In<InventoryAdjustmentService, Domain.Inventory.InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(new DateOnly(2026, 3, 1),
+            [new Domain.Inventory.InventoryAdjustmentLineDraft(mug.Id, 10m, 5m)])));
+        var amazon = await Channel(ChannelKind.Amazon, "Amazon US");
+        var imported = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)));
+        var batch = await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(imported.Saved.Single(b => b.Date == new DateOnly(2026, 3, 2)).Id));
+        var line = batch.Lines.Single(l => l.Sku == "MUG-1").LineNumber;
+
+        await In<ChannelOrderService, ChannelReturn>(s => s.ReturnAsync(batch.Id, new DateOnly(2026, 3, 9), [(line, 1m)], "Broken in transit", new HashSet<int> { line }));
+        Assert.Equal(8m, (await In<InventoryService, StockLevel?>(s => s.StockForAsync(mug.Id)))!.Quantity);
+        // It still counts as back: only one more can be returned.
+        Assert.Equal("channel.return_too_many", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ChannelOrderService, ChannelReturn>(s => s.ReturnAsync(batch.Id, new DateOnly(2026, 3, 9), [(line, 2m)])))).Code);
+    }
+
+    [Fact]
     public async Task Posting_orders_moves_stock_once_every_sku_is_mapped()
     {
         var sales = await _db.CreateAccount("Sales", AccountType.Income);
