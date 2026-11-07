@@ -360,6 +360,14 @@ public sealed class BankingService(
         }
     }
 
+    /// <summary>
+    /// Whether a check number is used already on the account (spends, bill payments, refunds), ignoring case and spaces:
+    /// the form warns and asks to save anyway, since a reused number is usually a typing slip. Nothing is refused.
+    /// </summary>
+    public async Task<bool> CheckNumberUsedAsync(Guid accountId, string? reference, CancellationToken ct = default) =>
+        reference?.Trim() is { Length: > 0 } number
+        && (await bank.ListSpendReferencesAsync(accountId, ct)).Any(r => string.Equals(r.Trim(), number, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>One more than the highest numeric check number used on the account, or null if none.</summary>
     public async Task<string?> SuggestCheckNumberAsync(Guid accountId, CancellationToken ct = default)
     {

@@ -102,7 +102,11 @@
 
 
             <div class="actions">
-                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Save</button>
+                @if (_duplicateOf is { } taken && taken == _reference?.Trim())
+                {
+                    <div class="alert notice" role="status">Check number @taken is already used on this account. Check the number, or save anyway if it's right.</div>
+                }
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@(_duplicateOf is { } t && t == _reference?.Trim() ? "Save anyway" : "Save")</button>
                 <a href="/banking/@AccountId">Cancel</a>
             </div>
         </div>
@@ -212,6 +216,9 @@
         }
     }
 
+    /// <summary>A check number found in use, once warned about: saving with it again goes ahead.</summary>
+    private string? _duplicateOf;
+
     private async Task SaveAsync()
     {
         if (_busy)
@@ -220,6 +227,13 @@
         _error = null;
         try
         {
+            if (_kind == BankTransactionKind.Spend && _reference?.Trim() is { Length: > 0 } number && number != _duplicateOf
+                && await Ops.RunAsync<BankingService, bool>(s => s.CheckNumberUsedAsync(AccountId, number)))
+            {
+                _duplicateOf = number;
+                return;
+            }
+
             var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo, l.ClassId)).ToList();
             var saved = await Ops.RunAsync<BankingService, BankTransaction>(s =>
                 s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null, LocationId: _locationId)), _closingPassword);

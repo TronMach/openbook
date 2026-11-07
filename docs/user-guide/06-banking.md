@@ -8,7 +8,7 @@ To add an account, use **Accounts** and give it the type *Bank* or *Credit card*
 
 Each account on the Banking page has:
 
-- **Check / payment** (on a card: **Card charge**): money going out. See [Expenses](05-purchases.md#expenses).
+- **Check / payment** (on a card: **Card charge**): money going out. See [Expenses](05-purchases.md#expenses). A check number already used on the account (by a check, bill payment or refund) is pointed out and the button turns into **Save anyway**, since a repeated number is usually a slip.
 - **Deposit** (on a card: **Card credit**): money coming in that isn't a customer payment, for example an owner's contribution, a loan, interest or a refund. Choose who it's from and the category (account) for each line.
 
 **Transfer** (at the top of the Banking page) moves money between your own bank accounts, or pays a credit card from a bank account. It isn't income or an expense.

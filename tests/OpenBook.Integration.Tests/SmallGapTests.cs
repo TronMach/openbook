@@ -249,4 +249,12 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.Equal(OpenBook.Domain.Assets.FixedAssetStatus.Active,
             (await In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.PutBackAsync(wrong.Id))).Status);
     }
+
+    [Fact]
+    public async Task A_check_number_already_used_on_the_account_is_noticed()
+    {
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(_rent.Id, 50m)], Reference: "1042")));
+        Assert.True(await In<BankingService, bool>(s => s.CheckNumberUsedAsync(_checking.Id, " 1042 ")));
+        Assert.False(await In<BankingService, bool>(s => s.CheckNumberUsedAsync(_checking.Id, "1043")));
+    }
 }
