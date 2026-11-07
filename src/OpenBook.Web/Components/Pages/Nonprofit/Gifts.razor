@@ -10,14 +10,25 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Gifts</h1>
-        <ActionLink Class="button" Href="/nonprofit/gifts/new">Record a gift</ActionLink>
+        <ActionLink Class="button" Href="@(Donor is { } d ? $"/nonprofit/gifts/new?donor={d}" : "/nonprofit/gifts/new")">Record a gift</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts/batch">Enter a batch</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts/import">Import gifts</ActionLink>
         <ActionLink Class="button secondary" Href="/nonprofit/pledges">Pledges</ActionLink>
         <ActionLink Class="button secondary" Href="/nonprofit/recurring">Recurring gifts</ActionLink>
         <ActionLink Class="button secondary" Href="/nonprofit/thanks">Thank donors</ActionLink>
         <ActionLink Class="button secondary" Href="/reports/giving-by-donor">Giving by donor</ActionLink>
     </div>
 
+    @if (Donor is { } donorId)
+    {
+        <p>Gifts from <a href="/customers/@donorId">@_names.GetValueOrDefault(donorId)</a>. <a href="/nonprofit/gifts">Everyone's gifts</a></p>
+    }
+
     <form method="get" class="inline">
+        @if (Donor is { } kept)
+        {
+            <input type="hidden" name="donor" value="@kept" />
+        }
         <label>From <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
         <label>To <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" /></label>
         <button type="submit" class="secondary">Show</button>
@@ -58,12 +69,16 @@
     [SupplyParameterFromQuery] private string? From { get; set; }
     [SupplyParameterFromQuery] private string? To { get; set; }
 
+    /// <summary>One donor's gifts, from every date unless a period is chosen.</summary>
+    [SupplyParameterFromQuery] private Guid? Donor { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         var today = CompanyTime.Today;
-        _from = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : new DateOnly(today.Year, 1, 1);
+        var yearStart = new DateOnly(today.Year, 1, 1);
+        _from = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : Donor is null ? yearStart : new DateOnly(2000, 1, 1);
         _to = DateOnly.TryParseExact(To, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : today;
-        _gifts = await GiftService.ListAsync(_from, _to);
+        _gifts = await GiftService.ListAsync(_from, _to, Donor);
         _names = (await CustomerService.ListAsync(today)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
     }
 }

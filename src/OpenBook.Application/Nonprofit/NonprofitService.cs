@@ -20,6 +20,9 @@ public interface INonprofitStore
 
     Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct);
 
+    /// <summary>Gifts, pledges and grants a search finds, newest first.</summary>
+    Task<(IReadOnlyList<Donation> Gifts, IReadOnlyList<Pledge> Pledges, IReadOnlyList<Grant> Grants)> SearchAsync(DocumentSearch search, CancellationToken ct);
+
     Task<int> CountUnthankedDonationsAsync(CancellationToken ct);
     Task<Donation?> GetDonationAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<Pledge>> ListPledgesAsync(CancellationToken ct);

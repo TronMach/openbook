@@ -38,6 +38,16 @@ On the Nonprofit page, **Set up the usual classes** adds "Programs", "Management
 
 Gifts can be voided from their page.
 
+### Many gifts at once
+
+**Enter a batch** (on the Gifts page) is for a day's mail or an event. Set the date, where the money went and, if you like, the purpose, and type in the **Batch total** from your deposit slip; then add a row per gift. Someone new? Type the name in the donor box and choose **+ Add**. The form shows how far the gifts are from the total, and **Record** saves all of them or none.
+
+**Import gifts** reads a CSV with **Date**, **Donor** and **Amount** columns, and uses a check or reference number, a memo and a purpose (a class, by its full name) when they're there. It shows what it found first. Donors who aren't on your list are added, a gift already in the books with the same donor, date, amount and reference is skipped, and nothing comes in unless every row is good.
+
+### Seeing what a donor has given
+
+A donor's page has a **Giving** card once there's anything to show: this year, last year, all time, the last gift, what's still to come on pledges and any grants. **Their gifts** opens the Gifts page for that donor alone. Their gifts, pledges and grants also list in the **Customer Center** and turn up in search, by donor, reference or amount.
+
 ### Recurring gifts
 
 **Nonprofit → Recurring gifts** for monthly card gifts, standing transfers or pledges paid in installments: donor, amount, deposited to, **every** so often, **starting** and **ending** (or after a number of gifts). Each becomes an ordinary gift on its date, automatically within the hour, or by hand with **Record what's due**. **Stop** ends one. On a pledge, the last gift is whatever's left of it, and the recurring gift then stops by itself.

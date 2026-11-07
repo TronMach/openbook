@@ -49,6 +49,20 @@ public sealed record Giver(Customer Donor, IReadOnlyList<Donation> Gifts)
     public decimal Total => Gifts.Sum(g => g.Amount);
 }
 
+/// <summary>A donor at a glance. <paramref name="OpenPledges"/> is what's still to come on their pledges.</summary>
+public sealed record DonorGiving(decimal ThisYear, decimal LastYear, decimal AllTime, int Gifts, DateOnly? LastGift, decimal OpenPledges, decimal Grants)
+{
+    public bool Any => Gifts > 0 || OpenPledges > 0m || Grants > 0m;
+}
+
+/// <summary>One gift of a batch.</summary>
+/// <param name="ClassId">Its purpose, when it isn't the batch's.</param>
+public sealed record GiftBatchRow(Guid DonorId, decimal Amount, string? Reference = null, string? Memo = null, Guid? ClassId = null);
+
+/// <summary>Gifts opened together, such as a day's mail, with what they share.</summary>
+/// <param name="ControlTotal">What the batch should add up to: the deposit slip's figure. Null checks nothing.</param>
+public sealed record GiftBatchCommand(DateOnly Date, GiftBatchDefaults Defaults, IReadOnlyList<GiftBatchRow> Rows, decimal? ControlTotal = null);
+
 public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string? SignerTitle, string? Intro);
 
 /// <summary>
@@ -57,7 +71,7 @@ public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string
 /// </summary>
 public sealed class GiftService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine, NonprofitService nonprofit,
-    ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IClock clock, ICurrentUser user)
+    ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IUnitOfWork unitOfWork, IClock clock, ICurrentUser user)
 {
     public const string DonationEntity = "donation";
     public const string PledgeEntity = "pledge";
@@ -96,6 +110,49 @@ public sealed class GiftService(
             .OrderByDescending(d => d.Date).ThenByDescending(d => d.Number).ToList();
 
     public Task<Donation?> GetAsync(Guid id, CancellationToken ct = default) => store.GetDonationAsync(id, ct);
+
+    /// <summary>What a donor has given and promised, for their page.</summary>
+    public async Task<DonorGiving> GivingAsync(Guid donorId, CancellationToken ct = default)
+    {
+        var all = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted).ToList();
+        var theirs = all.Where(d => d.DonorId == donorId).ToList();
+        var year = CompanyTime.Today.Year;
+        var pledged = (await store.ListPledgesAsync(ct)).Where(p => p.DonorId == donorId && p.Status == DocumentStatus.Posted)
+            .Sum(p => p.Amount - p.CancelledAmount - Paid(p.Id, all));
+        var grants = (await store.ListGrantsAsync(ct)).Where(g => g.FunderId == donorId && g.Status != GrantStatus.Voided).Sum(g => g.Amount);
+        return new DonorGiving(theirs.Where(d => d.Date.Year == year).Sum(d => d.Amount), theirs.Where(d => d.Date.Year == year - 1).Sum(d => d.Amount),
+            theirs.Sum(d => d.Amount), theirs.Count, theirs.Count == 0 ? null : theirs.Max(d => d.Date), pledged, grants);
+    }
+
+    /// <summary>A batch of gifts, all or none. A refusal names the donor it's about.</summary>
+    public async Task<IReadOnlyList<Donation>> RecordBatchAsync(GiftBatchCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.Rows.Count == 0)
+            throw new DomainException("donation.batch_empty", "Enter at least one gift.");
+        var total = command.Rows.Sum(r => r.Amount);
+        if (command.ControlTotal is { } control && control != total)
+            throw new DomainException("donation.batch_total", $"The gifts add up to {total.ToString("N2", CultureInfo.CurrentCulture)}, not {control.ToString("N2", CultureInfo.CurrentCulture)}.");
+
+        var gifts = new List<Donation>();
+        await using var transaction = await unitOfWork.BeginAsync(ct);
+        foreach (var row in command.Rows)
+        {
+            try
+            {
+                gifts.Add(await RecordAsync(new RecordGiftCommand(row.DonorId, command.Date, row.Amount, command.Defaults.DebitAccountId, IncomeAccountId: command.Defaults.IncomeAccountId,
+                    ClassId: row.ClassId ?? command.Defaults.ClassId, Reference: row.Reference, Memo: row.Memo, Method: command.Defaults.Method), ct));
+            }
+            catch (DomainException ex) when (ex is not ConcurrencyConflictException)
+            {
+                var donor = await sales.GetCustomerAsync(row.DonorId, ct);
+                throw new DomainException(ex.Code, $"{donor?.DisplayName}: {ex.Message}");
+            }
+        }
+
+        await transaction.CommitAsync(ct);
+        return gifts;
+    }
 
     public async Task<Donation> RecordAsync(RecordGiftCommand command, CancellationToken ct = default)
     {

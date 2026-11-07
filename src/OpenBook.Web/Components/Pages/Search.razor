@@ -80,6 +80,9 @@
         SearchKind.CustomerPayment => "Customer payments",
         SearchKind.BillPayment => "Bill payments",
         SearchKind.BankTransaction => "Bank transactions",
+        SearchKind.Gift => "Gifts",
+        SearchKind.Pledge => "Pledges",
+        SearchKind.Grant => "Grants",
         _ => "Journal entries",
     };
 
@@ -95,6 +98,9 @@
         SearchKind.CustomerPayment => $"/sales/payments/{hit.Id}",
         SearchKind.BillPayment => $"/purchases/payments/{hit.Id}",
         SearchKind.BankTransaction => $"/banking/transactions/{hit.Id}",
+        SearchKind.Gift => $"/nonprofit/gifts/{hit.Id}",
+        SearchKind.Pledge => $"/nonprofit/pledges/{hit.Id}",
+        SearchKind.Grant => $"/nonprofit/grants/{hit.Id}",
         _ => $"/journal/{hit.Id}",
     };
 }

@@ -23,6 +23,9 @@ public enum SearchKind
     BillPayment,
     BankTransaction,
     JournalEntry,
+    Gift,
+    Pledge,
+    Grant,
 }
 
 /// <summary>The area (as in permission sets and API key scopes) each kind of result belongs to.</summary>
@@ -33,6 +36,7 @@ public static class SearchAreas
         SearchKind.Customer or SearchKind.Item or SearchKind.Invoice or SearchKind.SalesReceipt or SearchKind.CustomerPayment => "sales",
         SearchKind.Vendor or SearchKind.Bill or SearchKind.BillPayment => "purchases",
         SearchKind.BankTransaction => "banking",
+        SearchKind.Gift or SearchKind.Pledge or SearchKind.Grant => "nonprofit",
         _ => "ledger",
     };
 }
@@ -53,7 +57,7 @@ public sealed class SearchService(
     IPurchasesStore purchases,
     IBankingStore banking,
     ILedgerStore ledger,
-    CustomFields.CustomFieldService customFields)
+    CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit)
 {
     public const int MaxPerKind = 20;
 
@@ -122,6 +126,11 @@ public sealed class SearchService(
         AddAll(billPayments.Select(p => new SearchHit(SearchKind.BillPayment, p.Id, $"Bill payment to {Vendor(p.VendorId)}", p.Reference, p.Date, p.Amount)));
         AddAll((await banking.SearchAsync(For([]), ct))
             .Select(t => new SearchHit(SearchKind.BankTransaction, t.Id, t.Payee ?? t.Memo ?? t.Kind.ToString(), chart.Find(t.AccountId) is null ? null : chart.FullName(t.AccountId), t.Date, t.Amount)));
+
+        var (gifts, pledges, grants) = await nonprofit.SearchAsync(For(customerMatches), ct);
+        AddAll(gifts.Select(g => new SearchHit(SearchKind.Gift, g.Id, $"Gift {g.Number} from {Customer(g.DonorId)}", g.Reference ?? g.Memo, g.Date, g.Amount)));
+        AddAll(pledges.Select(p => new SearchHit(SearchKind.Pledge, p.Id, $"Pledge {p.Number} from {Customer(p.DonorId)}", p.Memo, p.Date, p.Amount)));
+        AddAll(grants.Select(g => new SearchHit(SearchKind.Grant, g.Id, g.Name, Customer(g.FunderId), g.AwardedOn, g.Amount)));
 
         // Manual journal entries; documents' entries are found through their documents above.
         AddAll((await ledger.SearchManualEntriesAsync(For([]), entryNumber, ct))

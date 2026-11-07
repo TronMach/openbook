@@ -1,3 +1,4 @@
+using System.Globalization;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Sales;
@@ -45,7 +46,7 @@ public sealed record CenterRow(
 /// The customer, vendor and item centers: every transaction that belongs to one record, newest first. Reads only;
 /// each row links to the document's own page, where everything is done as usual.
 /// </summary>
-public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, IInventoryStore inventory)
+public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, IInventoryStore inventory, Nonprofit.INonprofitStore nonprofit)
 {
     public async Task<IReadOnlyList<CenterRow>> CustomerAsync(Guid customerId, DateOnly today, CancellationToken ct = default)
     {
@@ -60,6 +61,19 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
             rows.Add(new("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Total, null, Posted(r.Status)));
         foreach (var c in await sales.ListCreditMemosAsync(customerId, ct))
             rows.Add(new("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Total, c.Status == DocumentStatus.Posted && c.Balance > 0m ? c.Balance : null, Posted(c.Status)));
+        var gifts = (await nonprofit.ListDonationsAsync(ct)).Where(g => g.DonorId == customerId).ToList();
+        foreach (var g in gifts)
+            rows.Add(new("donation", g.Id, g.Date, g.Number.ToString(CultureInfo.InvariantCulture), g.Reference ?? g.Memo, g.Amount, null, Posted(g.Status)));
+        foreach (var p in (await nonprofit.ListPledgesAsync(ct)).Where(p => p.DonorId == customerId))
+        {
+            var unpaid = p.Amount - p.CancelledAmount - gifts.Where(g => g.PledgeId == p.Id && g.Status == DocumentStatus.Posted).Sum(g => g.Amount);
+            rows.Add(new("pledge", p.Id, p.Date, p.Number.ToString(CultureInfo.InvariantCulture), p.Memo, p.Amount, p.Status == DocumentStatus.Posted && unpaid > 0m ? unpaid : null,
+                p.Status == DocumentStatus.Voided ? CenterState.Voided : unpaid > 0m ? CenterState.Open : CenterState.Paid));
+        }
+
+        foreach (var g in (await nonprofit.ListGrantsAsync(ct)).Where(g => g.FunderId == customerId))
+            rows.Add(new("grant", g.Id, g.AwardedOn, g.Reference, g.Name, g.Amount, null, g.Status == Domain.Nonprofit.GrantStatus.Voided ? CenterState.Voided
+                : g.Status == Domain.Nonprofit.GrantStatus.Closed ? CenterState.Closed : CenterState.Open));
         foreach (var r in await sales.ListRefundsAsync(customerId, ct))
             rows.Add(new("refund", r.Id, r.Date, r.Reference, r.Memo, r.Amount, null, Posted(r.Status)));
         foreach (var e in await sales.ListEstimatesAsync(customerId, ct))

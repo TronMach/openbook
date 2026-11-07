@@ -1,0 +1,159 @@
+@page "/nonprofit/gifts/import"
+@rendermode InteractiveServer
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Accounts
+@inject Operations Ops
+
+<PageTitle>Import gifts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Import gifts</h1>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts/batch">Enter a batch</ActionLink>
+    </div>
+
+    <div class="card">
+        <p>
+            Upload a CSV with a header row. <strong>Date</strong>, <strong>Donor</strong> and <strong>Amount</strong> columns are required. A check or
+            reference number, a memo and a purpose (a class, by its full name) are used when present. Donors who aren't on your list are added. A gift
+            already in the books with the same donor, date, amount and reference is skipped, so a file can be imported twice. Nothing is imported unless
+            every row is valid.
+        </p>
+        <div class="row">
+            <div class="field">
+                <label for="account">Deposited to</label>
+                <select id="account" @bind="_accountId">
+                    @foreach (var a in _accounts)
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </select>
+            </div>
+            @if (_segments.ClassColumn is { } classes)
+            {
+                <div class="field">
+                    <label for="class">Purpose <span class="muted">(for rows without one)</span></label>
+                    <ClassSelect Classes="classes" Value="_classId" ValueChanged="v => _classId = v" />
+                </div>
+            }
+        </div>
+        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">Imported @_imported.NewCount gift(s) for @Labels.Amount(_imported.Total). <a href="/nonprofit/gifts">View gifts</a>.</div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        @foreach (var warning in _preview.Warnings)
+        {
+            <div class="alert notice">@warning</div>
+        }
+        <div class="import-summary">
+            <span><span class="badge ok">@_preview.NewCount</span> new, @Labels.Amount(_preview.Total)</span>
+            <span><span class="badge">@_preview.NewDonors</span> new donors</span>
+            <span><span class="badge">@_preview.ExistingCount</span> already in the books</span>
+            <span><span class="badge @(_preview.ErrorCount > 0 ? "warn" : null)">@_preview.ErrorCount</span> with errors</span>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Line</th><th>Status</th><th>Date</th><th>Donor</th><th class="num">Amount</th><th>Reference</th><th>Purpose</th><th>Note</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _preview.Rows)
+                    {
+                        <tr class="@(row.Status == ImportRowStatus.Exists ? "inactive" : null)">
+                            <td class="num">@row.Line</td>
+                            <td><span class="badge @(row.Status switch { ImportRowStatus.New => "ok", ImportRowStatus.Error => "warn", _ => null })">@row.Status</span></td>
+                            <td>@(row.Date is { } date ? Labels.Date(date) : null)</td>
+                            <td>@row.Donor @(row.NewDonor ? "(new)" : null)</td>
+                            <td class="num">@Labels.AmountOrBlank(row.Amount)</td>
+                            <td>@row.Reference</td>
+                            <td>@row.Purpose</td>
+                            <td class="out-of-balance">@row.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+        <div class="actions">
+            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _accountId == Guid.Empty || _busy)">Import @_preview.NewCount gift(s)</button>
+        </div>
+    }
+</div>
+
+@code {
+    private string? _csv;
+    private GiftImportResult? _preview;
+    private GiftImportResult? _imported;
+    private List<Account> _accounts = [];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private Guid _accountId;
+    private Guid? _classId;
+    private string? _error;
+    private bool _busy;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+        var chart = await Ops.RunAsync<AccountService, ChartOfAccounts>(s => s.GetChartAsync());
+        _accounts = chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).OrderBy(a => a.Type != AccountType.OtherCurrentAsset).ToList();
+        _accountId = _accounts.FirstOrDefault(a => a.Name == "Undeposited Funds")?.Id ?? _accounts.FirstOrDefault()?.Id ?? Guid.Empty;
+    }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy)
+            return;
+        _error = null;
+        _imported = null;
+        _preview = null;
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(5 * 1024 * 1024);
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
+            _preview = await Ops.RunAsync<GiftImportService, GiftImportResult>(s => s.PreviewAsync(_csv));
+        }
+        catch (Exception ex) when (ex is DomainException or IOException)
+        {
+            _error = ex is DomainException ? ex.Message : "That file is larger than 5 MB.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_busy || _csv is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var defaults = new GiftBatchDefaults(_accountId, null, _classId);
+            _imported = await Ops.RunAsync<GiftImportService, GiftImportResult>(s => s.ImportAsync(_csv, defaults), _closingPassword);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -947,6 +947,9 @@
   <data name="Getting started" xml:space="preserve">
     <value>Getting started</value>
   </data>
+  <data name="Gift" xml:space="preserve">
+    <value>Gift</value>
+  </data>
   <data name="Gifts" xml:space="preserve">
     <value>Gifts</value>
   </data>
@@ -961,6 +964,9 @@
   </data>
   <data name="Go to the home page" xml:space="preserve">
     <value>Go to the home page</value>
+  </data>
+  <data name="Grant" xml:space="preserve">
+    <value>Grant</value>
   </data>
   <data name="Grants" xml:space="preserve">
     <value>Grants</value>
@@ -1651,6 +1657,9 @@
   </data>
   <data name="Phone" xml:space="preserve">
     <value>Phone</value>
+  </data>
+  <data name="Pledge" xml:space="preserve">
+    <value>Pledge</value>
   </data>
   <data name="Pledges" xml:space="preserve">
     <value>Pledges</value>

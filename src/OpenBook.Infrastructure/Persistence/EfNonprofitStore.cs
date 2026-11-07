@@ -1,3 +1,4 @@
+using OpenBook.Application;
 using Microsoft.EntityFrameworkCore;
 using OpenBook.Domain.Common;
 using OpenBook.Application.Nonprofit;
@@ -15,6 +16,24 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
     // Includes gifts added but not saved yet, so numbering and pledge balances see them.
     public Task<int> CountUnthankedDonationsAsync(CancellationToken ct) =>
         db.Donations.CountAsync(d => d.Status == DocumentStatus.Posted && d.AcknowledgedAt == null, ct);
+
+#pragma warning disable CA1304, CA1311, CA1862 // The culture overloads of ToLower don't translate.
+    public async Task<(IReadOnlyList<Donation> Gifts, IReadOnlyList<Pledge> Pledges, IReadOnlyList<Grant> Grants)> SearchAsync(DocumentSearch search, CancellationToken ct)
+    {
+        var (text, amount, parties) = (search.Text, search.Amount ?? -1m, search.PartyIds.ToList());
+        var gifts = await db.Donations.AsNoTracking()
+            .Where(d => (d.Reference != null && d.Reference.ToLower().Contains(text)) || (d.Memo != null && d.Memo.ToLower().Contains(text))
+                || (d.Description != null && d.Description.ToLower().Contains(text)) || parties.Contains(d.DonorId) || d.Amount == amount)
+            .OrderByDescending(d => d.Date).ThenByDescending(d => d.Id).Take(search.Take).ToListAsync(ct);
+        var pledges = await db.Pledges.AsNoTracking()
+            .Where(p => (p.Memo != null && p.Memo.ToLower().Contains(text)) || parties.Contains(p.DonorId) || p.Amount == amount)
+            .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Take(search.Take).ToListAsync(ct);
+        var grants = await db.Grants.AsNoTracking()
+            .Where(g => g.Name.ToLower().Contains(text) || (g.Reference != null && g.Reference.ToLower().Contains(text)) || parties.Contains(g.FunderId) || g.Amount == amount)
+            .OrderByDescending(g => g.AwardedOn).ThenByDescending(g => g.Id).Take(search.Take).ToListAsync(ct);
+        return (gifts, pledges, grants);
+    }
+#pragma warning restore CA1304, CA1311, CA1862
 
     public async Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct) =>
         (await db.Donations.ToListAsync(ct)).Union(db.Donations.Local).Distinct().ToList();

@@ -6,6 +6,7 @@
 @inject OpenBook.Application.Companies.ICompanyStore Companies
 @inject InvoiceService Invoices
 @inject PaymentService Payments
+@inject OpenBook.Application.Nonprofit.GiftService Gifts
 @inject SalesTaxService Taxes
 @inject PricingService Pricing
 @inject FormDesignService Designs
@@ -304,6 +305,41 @@
         }
         <CustomerEmailCard Customer="_customer" Error="@EmailError" />
 
+        @if (_giving is { Any: true } giving)
+        {
+            <section class="card">
+                <h2>Giving</h2>
+                <dl class="facts">
+                    <dt>This year</dt>
+                    <dd>@Labels.Amount(giving.ThisYear)</dd>
+                    <dt>Last year</dt>
+                    <dd>@Labels.Amount(giving.LastYear)</dd>
+                    <dt>All time</dt>
+                    <dd>@Labels.Amount(giving.AllTime) (@giving.Gifts @(giving.Gifts == 1 ? "gift" : "gifts"))</dd>
+                    @if (giving.LastGift is { } lastGift)
+                    {
+                        <dt>Last gift</dt>
+                        <dd>@Labels.Date(lastGift)</dd>
+                    }
+                    @if (giving.OpenPledges > 0m)
+                    {
+                        <dt>Still to come on pledges</dt>
+                        <dd>@Labels.Amount(giving.OpenPledges)</dd>
+                    }
+                    @if (giving.Grants > 0m)
+                    {
+                        <dt>Grants awarded</dt>
+                        <dd>@Labels.Amount(giving.Grants)</dd>
+                    }
+                </dl>
+                <div class="hub-actions">
+                    <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts?donor={_customer.Id}")">Their gifts</ActionLink>
+                    <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts/new?donor={_customer.Id}")">Record a gift</ActionLink>
+                    <ActionLink Class="button secondary" Href="@($"/customers/center?id={_customer.Id}")">Everything for them</ActionLink>
+                </div>
+            </section>
+        }
+
         <CustomFieldPanel EntityType="customer" EntityId="_customer.Id" />
 
         <EmailHistory EntityType="customer" EntityId="_customer.Id" />
@@ -338,6 +374,8 @@
     [SupplyParameterFromQuery(Name = "parent")]
     private Guid? ParentQuery { get; set; }
 
+    private OpenBook.Application.Nonprofit.DonorGiving? _giving;
+
     [SupplyParameterFromForm(FormName = "customer")]
     private CustomerModel Input { get; set; } = default!;
 
@@ -357,6 +395,7 @@
             _descendants = CustomerTree.Descendants(id, _all.Select(c => c.Customer));
             _level = _all.FirstOrDefault(c => c.Customer.Id == id)?.Level ?? 0;
             _children = _all.Where(c => _descendants.Contains(c.Customer.Id)).ToList();
+            _giving = await Gifts.GivingAsync(id);
             _invoices = await Invoices.ListAsync(id);
             _payments = await Payments.ListAsync(id);
             _designs = await Designs.ListAsync();

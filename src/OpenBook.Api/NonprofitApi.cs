@@ -75,6 +75,14 @@ internal static class NonprofitApi
             ReleaseResponse.From(await s.VoidAsync(id, r.Reason, ct)));
         nonprofit.MapGet("/gifts", async (DateOnly? from, DateOnly? to, Guid? donorId, GiftService s, CancellationToken ct) =>
             (await s.ListAsync(from, to, donorId, ct)).Select(GiftResponse.From));
+        nonprofit.MapPost("/gifts/batch", async (GiftBatchCommand r, GiftService s, CancellationToken ct) =>
+            (await s.RecordBatchAsync(r, ct)).Select(GiftResponse.From));
+        nonprofit.MapPost("/gifts/import", async (HttpRequest request, Guid accountId, Guid? incomeAccountId, Guid? classId, bool? dryRun, GiftImportService s, CancellationToken ct) =>
+        {
+            var csv = await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
+            return dryRun == true ? await s.PreviewAsync(csv, ct) : await s.ImportAsync(csv, new GiftBatchDefaults(accountId, incomeAccountId, classId), ct);
+        }).Accepts<string>("text/csv");
+        nonprofit.MapGet("/donors/{id:guid}/giving", (Guid id, GiftService s, CancellationToken ct) => s.GivingAsync(id, ct));
         nonprofit.MapGet("/gifts/{id:guid}", async (Guid id, GiftService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } g ? Results.Ok(GiftResponse.From(g)) : Results.NotFound());
         nonprofit.MapPost("/gifts", async (RecordGiftCommand r, GiftService s, CancellationToken ct) =>

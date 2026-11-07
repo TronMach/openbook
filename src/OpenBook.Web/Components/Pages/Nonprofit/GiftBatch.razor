@@ -1,0 +1,208 @@
+@page "/nonprofit/gifts/batch"
+@rendermode InteractiveServer
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Accounts
+@inject Operations Ops
+
+<PageTitle>Enter a batch of gifts · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Enter a batch of gifts</h1>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts/import">Import from a file</ActionLink>
+    </div>
+    <p class="muted">For a day's mail or an event: everything here shares the date and where the money went. Nothing is recorded unless every gift can be.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_message is not null)
+    {
+        <div class="alert notice" role="status">@_message</div>
+    }
+
+    @if (_loaded)
+    {
+        <FormDraft @ref="_draft" T="Draft" Key="gift-batch" Snapshot="TakeDraft" OnRestore="Restore" />
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="date">Date</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="account">Deposited to</label>
+                    <select id="account" @bind="_accountId">
+                        @foreach (var a in _accounts)
+                        {
+                            <option value="@a.Id">@a.Name</option>
+                        }
+                    </select>
+                </div>
+                @if (_segments.ClassColumn is { } classes)
+                {
+                    <div class="field">
+                        <label for="class">Purpose <span class="muted">(unless a gift has its own)</span></label>
+                        <ClassSelect Classes="classes" Value="_classId" ValueChanged="v => _classId = v" />
+                    </div>
+                }
+                <div class="field">
+                    <label for="control">Batch total <span class="muted">(optional, from the deposit slip)</span></label>
+                    <input id="control" class="amount" type="number" step="0.01" min="0" @bind="_control" @bind:event="oninput" />
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th>Donor</th>
+                            <th class="num">Amount</th>
+                            <th>Check or reference</th>
+                            <th>Memo</th>
+                            @if (_segments.ClassColumn is not null)
+                            {
+                                <th>Purpose</th>
+                            }
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr @key="row">
+                                <td><SearchSelect Options="_donorOptions" @bind-Value="row.DonorId" CustomerAdded="AddDonor" Placeholder="Find a donor…" AriaLabel="Donor" /></td>
+                                <td><input class="amount" type="number" step="0.01" min="0" aria-label="Amount" @bind="row.Amount" @bind:event="oninput" /></td>
+                                <td><input aria-label="Check or reference" maxlength="50" @bind="row.Reference" /></td>
+                                <td><input aria-label="Memo" maxlength="500" @bind="row.Memo" /></td>
+                                @if (_segments.ClassColumn is { } rowClasses)
+                                {
+                                    <td><ClassSelect Classes="rowClasses" Value="row.ClassId" ValueChanged="v => row.ClassId = v" /></td>
+                                }
+                                <td>
+                                    @if (_rows.Count > 1)
+                                    {
+                                        <button type="button" class="remove" title="Remove gift" aria-label="Remove gift" @onclick="() => _rows.Remove(row)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><button type="button" class="secondary" @onclick="() => _rows.Add(new Row())">Add a gift</button></td>
+                            <td class="num">@Labels.Amount(Total)</td>
+                            <td colspan="@(_segments.ClassColumn is null ? 3 : 4)">
+                                @if (_control is { } control && control != Total)
+                                {
+                                    <span class="out-of-balance">@Labels.Amount(control - Total) from the batch total</span>
+                                }
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+
+            <div class="actions">
+                <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">Record @Ready.Count @(Ready.Count == 1 ? "gift" : "gifts")</button>
+                <a href="/nonprofit/gifts">Cancel</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // What's typed so far, kept in the tab in case the connection goes.
+    internal sealed record Draft(DateOnly Date, Guid AccountId, Guid? ClassId, decimal? Control, List<Row> Rows);
+
+    internal sealed class Row
+    {
+        public Guid? DonorId { get; set; }
+        public decimal? Amount { get; set; }
+        public string? Reference { get; set; }
+        public string? Memo { get; set; }
+        public Guid? ClassId { get; set; }
+    }
+
+    private FormDraft<Draft>? _draft;
+    private IReadOnlyList<Customer> _donors = [];
+    private IReadOnlyList<PickerOption> _donorOptions = [];
+    private List<Account> _accounts = [];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private DateOnly _date = CompanyTime.Today;
+    private Guid _accountId;
+    private Guid? _classId;
+    private decimal? _control;
+    private List<Row> _rows = [new(), new(), new()];
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private string? _message;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    private List<Row> Ready => _rows.Where(r => r.DonorId is not null && r.Amount > 0m).ToList();
+
+    private decimal Total => _rows.Sum(r => r.Amount ?? 0m);
+
+    private bool CanSave => Ready.Count > 0 && Ready.Count == _rows.Count(r => r.DonorId is not null || r.Amount is not null) && _accountId != Guid.Empty;
+
+    private Draft? TakeDraft() => Ready.Count == 0 ? null : new Draft(_date, _accountId, _classId, _control, _rows);
+
+    private void Restore(Draft draft)
+    {
+        (_date, _classId, _control) = (draft.Date, draft.ClassId, draft.Control);
+        _accountId = _accounts.Any(a => a.Id == draft.AccountId) ? draft.AccountId : _accountId;
+        _rows = draft.Rows.Count > 0 ? draft.Rows : [new()];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
+        var chart = await Ops.RunAsync<AccountService, ChartOfAccounts>(s => s.GetChartAsync());
+        _donors = await Ops.RunAsync(async sp => (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(c => c.Customer).ToList());
+        _donorOptions = PickerOptions.Customers(_donors);
+        _accounts = chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).OrderBy(a => a.Type != AccountType.OtherCurrentAsset).ToList();
+        _accountId = _accounts.FirstOrDefault(a => a.Name == "Undeposited Funds")?.Id ?? _accounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        _loaded = true;
+    }
+
+    private void AddDonor(Customer donor)
+    {
+        _donors = [.. _donors, donor];
+        _donorOptions = PickerOptions.Customers(_donors);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            var rows = Ready.Select(r => new GiftBatchRow(r.DonorId!.Value, r.Amount!.Value, r.Reference, r.Memo, r.ClassId)).ToList();
+            var command = new GiftBatchCommand(_date, new GiftBatchDefaults(_accountId, null, _classId), rows, _control);
+            var gifts = await Ops.RunAsync<GiftService, IReadOnlyList<OpenBook.Domain.Nonprofit.Donation>>(s => s.RecordBatchAsync(command), _closingPassword);
+            await _draft!.ClearAsync();
+            _message = $"Recorded {gifts.Count} {(gifts.Count == 1 ? "gift" : "gifts")} for {Labels.Amount(gifts.Sum(g => g.Amount))}.";
+            _rows = [new(), new(), new()];
+            _control = null;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
