@@ -86,12 +86,13 @@ public static class DashboardEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapGet("/accountant/package", async (DateOnly? from, DateOnly? to, AccountantPackageService packages, CancellationToken ct) =>
+        app.MapGet("/accountant/package", async (DateOnly? from, DateOnly? to, string? basis, AccountantPackageService packages, CancellationToken ct) =>
         {
             try
             {
                 var end = to ?? CompanyTime.Today;
-                var file = await packages.BuildAsync(from ?? new DateOnly(end.Year, 1, 1), end, ct);
+                var file = await packages.BuildAsync(from ?? new DateOnly(end.Year, 1, 1), end,
+                    Enum.TryParse<OpenBook.Domain.Ledger.ReportBasis>(basis, out var chosen) ? chosen : null, ct);
                 var bytes = await File.ReadAllBytesAsync(file.Path, ct);
                 File.Delete(file.Path);
                 return Results.File(bytes, "application/zip", file.FileName);

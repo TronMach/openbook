@@ -1859,6 +1859,9 @@
   <data name="Record a new gift" xml:space="preserve">
     <value>Record a new gift</value>
   </data>
+  <data name="Record Mileage" xml:space="preserve">
+    <value>Record Mileage</value>
+  </data>
   <data name="Record money paid on an invoice" xml:space="preserve">
     <value>Record money paid on an invoice</value>
   </data>

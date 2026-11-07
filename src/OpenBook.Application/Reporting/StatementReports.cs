@@ -46,7 +46,7 @@ public sealed record TaxSummary(DateOnly From, DateOnly To, ReportBasis Basis, T
 }
 
 /// <summary>Statements beyond <see cref="FinancialReports"/>: comparisons, cash flow, budget vs. actual and the tax summary.</summary>
-public sealed class StatementReports(ReportLedger ledger, AccountService accounts, ICompanyStore companies, IReportingStore store)
+public sealed class StatementReports(ReportLedger ledger, AccountService accounts, ICompanyStore companies, IReportingStore store, Projects.IProjectStore projects)
 {
     public async Task<ReportTable> ProfitAndLossAsync(
         DateOnly from, DateOnly to, ReportBasis? basis = null, Comparison comparison = Comparison.None, SegmentFilter? filter = null, CancellationToken ct = default)
@@ -387,6 +387,31 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
 
         rows.Add(new ReportTableRow(["Income on tax lines", summary.Income], 0, ReportRowStyle.Total));
         rows.Add(new ReportTableRow(["Deductions on tax lines", summary.Deductions], 0, ReportRowStyle.Total));
+        // Business meals are generally deductible at half (Schedule C line 24b); the account holds what was spent.
+        var meals = summary.Lines.FirstOrDefault(l => l.Line!.Form == TaxForm.ScheduleC && l.Line.Line == "24b")?.Total ?? 0m;
+        var mealsLimit = decimal.Round(meals / 2m, 2, MidpointRounding.AwayFromZero);
+        if (mealsLimit != 0m)
+            rows.Add(new ReportTableRow(["Less half of meals (line 24b allows 50% of most business meals)", -mealsLimit], 0, ReportRowStyle.Subtotal));
+        rows.Add(new ReportTableRow([summary.Form == TaxForm.ScheduleC ? "Net profit on tax lines (line 31)" : "Net income on tax lines",
+            summary.Income - summary.Deductions + mealsLimit], 0, ReportRowStyle.Total));
+
+        // What the books don't hold: the standard mileage deduction, worked out from the mileage log.
+        if (summary.Form == TaxForm.ScheduleC)
+        {
+            var trips = await projects.ListMileageAsync(from, to, null, ct);
+            if (trips.Count > 0)
+            {
+                var rates = new SortedDictionary<int, decimal>(Domain.Projects.MileageRate.Standard.ToDictionary(kv => kv.Key, kv => kv.Value));
+                foreach (var r in await projects.ListMileageRatesAsync(ct))
+                    rates[r.Year] = r.Rate;
+                decimal RateFor(int year) => rates.TryGetValue(year, out var rate) ? rate : rates.Where(kv => kv.Key <= year).Select(kv => kv.Value).LastOrDefault();
+                var miles = trips.Sum(t => t.Miles);
+                var value = trips.Sum(t => decimal.Round(t.Miles * RateFor(t.Date.Year), 2, MidpointRounding.AwayFromZero));
+                rows.Add(Row.Section("Not in the books", 2));
+                rows.Add(new ReportTableRow([$"Standard mileage: {miles:N1} business miles from the mileage log", value], 1));
+                rows.Add(new ReportTableRow(["For line 9 if you take the standard mileage rate instead of actual car costs", null], 1));
+            }
+        }
         if (summary.Unassigned.Accounts.Count > 0)
             Group("Not assigned to a tax line", summary.Unassigned, "not assigned");
 

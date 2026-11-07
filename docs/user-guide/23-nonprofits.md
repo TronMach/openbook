@@ -70,7 +70,7 @@ Gifts cleared this way don't wait to be deposited, and can't be voided until the
 
 **Nonprofit → Thank donors**:
 
-- **Gifts not thanked yet**: open a gift to **email the letter** (an acknowledgment PDF), or tick gifts and **mark the ticked gifts as thanked** if you printed or sent them another way.
+- **Gifts not thanked yet**: tick gifts and **Email the ticked gifts' letters** (each donor with an email address gets theirs, and those gifts are marked thanked), **Letters for the ticked gifts (one PDF)** to print them together, or **Mark the ticked gifts as thanked** after printing or sending them another way. A single gift's letter is also on its page.
 - **Year-end giving statements**: choose the **year** and **Show**. Download each donor's statement, all of them in one PDF, or **email every donor with an address**.
 
 Letters use your company name, address and form style. **Nonprofit → Settings** (letter settings) adds:

@@ -146,7 +146,7 @@
                                     <input aria-label="Payee" placeholder="Payee" @bind="row.Payee" class="short-text" />
                                     <button type="button" class="secondary" @onclick="() => AddAsync(row)" disabled="@(!row.CanAdd || _busy)">Add</button>
                                     <button type="button" class="link" @onclick="() => ToggleSplit(row)">@(row.Splits is null ? "Split" : "One category")</button>
-                                    <button type="button" class="link" @onclick="() => ExcludeAsync(row)" disabled="@_busy">Exclude</button>
+                                    <button type="button" class="link" @onclick="() => ExcludeAsync(row)" disabled="@_busy" title="For duplicates and lines that never happened in this account. Personal spending did happen: add it to an owner's draw account instead, or the account won't reconcile.">Exclude</button>
                                     <a class="link" href="@RuleLink(row)" target="_blank" title="Make a rule for lines like this">Rule…</a>
                                 </div>
                                 @if (row.Splits is { } splits)

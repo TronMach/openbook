@@ -58,7 +58,8 @@ public sealed record FixedAssetDetails(
     decimal PriorDepreciation = 0m,
     DateOnly? PriorThrough = null,
     string? Number = null,
-    string? Description = null);
+    string? Description = null,
+    Guid? ClassId = null);
 
 /// <summary>
 /// Something the business owns and uses for more than a year. The asset record posts nothing when created (the
@@ -161,7 +162,13 @@ public sealed class FixedAsset
         MacrsClass = details.Method == DepreciationMethod.Macrs ? details.MacrsClass : null;
         PriorDepreciation = details.PriorDepreciation;
         PriorThrough = details.PriorDepreciation > 0m || details.PriorThrough is not null ? details.PriorThrough : null;
+        ClassId = details.ClassId;
     }
+
+    /// <summary>The class its depreciation is posted to (a program, a department); null for none. Changes only later runs.</summary>
+    public Guid? ClassId { get; private set; }
+
+    public void SetClass(Guid? classId) => ClassId = classId;
 
     /// <summary>Only the name, number and description, once depreciation has been posted.</summary>
     public void Rename(string name, string? number, string? description)

@@ -108,6 +108,28 @@ public static class NonprofitEndpoints
             return Results.Redirect(back == "/nonprofit/thanks" ? $"{back}?done={Uri.EscapeDataString($"{marked} gift(s) marked as thanked.")}" : back);
         }).RequireAuthorization();
 
+        // The ticked gifts' letters: one PDF to print, or each emailed (an emailed letter marks its gift thanked).
+        app.MapPost("/nonprofit/thanks/letters", (IFormCollection form, GiftService gifts, CancellationToken ct) =>
+            Pdf("/nonprofit/thanks", async () => (await gifts.AcknowledgmentsAsync([.. form["id"].Select(Id).OfType<Guid>()], ct)).Pdf)).RequireAuthorization();
+
+        app.MapPost("/nonprofit/thanks/email", async (IFormCollection form, EmailService email, CancellationToken ct) =>
+        {
+            try
+            {
+                var ids = form["id"].Select(Id).OfType<Guid>().Distinct().ToList();
+                if (ids.Count == 0)
+                    throw new DomainException("donation.none_chosen", "Tick at least one gift.");
+                var run = await email.SendEachAsync([.. ids.Select(id => new EmailSource(OpenBook.Domain.Email.EmailKind.GiftAcknowledgment, id))], ct);
+                var notSent = run.NoEmail.Select(n => $"{n}: no email address").Concat(run.Failed.Select(f => $"{f.Name}: {f.Reason}")).ToList();
+                var done = $"{run.Sent.Count} letter(s) emailed." + (notSent.Count > 0 ? $" Not sent: {string.Join("; ", notSent)}." : "");
+                return Results.Redirect($"/nonprofit/thanks?done={Uri.EscapeDataString(done)}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/thanks?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapGet("/nonprofit/statements/{year:int}", (int year, GiftService gifts, CancellationToken ct) =>
             Pdf("/nonprofit/thanks", async () => (await gifts.YearStatementsAsync(year, ct)).Pdf)).RequireAuthorization();
 

@@ -1,6 +1,7 @@
 @page "/assets/new"
 @page "/assets/{Id:guid}/edit"
 @inject FixedAssetService AssetService
+@inject OpenBook.Application.Segments.SegmentService Segments
 @inject AccountService AccountService
 
 <PageTitle>@(Id is null ? "Add an asset" : "Edit asset") · OpenBook</PageTitle>
@@ -120,6 +121,20 @@
                     </div>
                     <p class="hint">Depreciation continues on the schedule after that date.</p>
                 </fieldset>
+                @if (_classes.Count > 0)
+                {
+                    <div class="field">
+                        <label for="classId">Class <span class="muted">(optional)</span></label>
+                        <select id="classId" name="classId">
+                            <option value="">None</option>
+                            @foreach (var c in _classes)
+                            {
+                                <option value="@c.Segment.Id" selected="@(c.Segment.Id == _asset?.ClassId)">@(new string(' ', c.Depth * 3))@c.FullName</option>
+                            }
+                        </select>
+                        <span class="hint">Its depreciation is posted to this class (a program or department), from the next run on.</span>
+                    </div>
+                }
                 <div class="field">
                     <label for="description">Description <span class="muted">(optional)</span></label>
                     <input id="description" name="description" maxlength="1000" value="@_asset?.Description" />
@@ -135,6 +150,7 @@
     private ChartOfAccounts _chart = new([]);
     private List<Account> _assetAccounts = [];
     private List<Account> _expenseAccounts = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
 
     [Parameter] public Guid? Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -147,5 +163,6 @@
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _assetAccounts = active.Where(a => a.Type is AccountType.FixedAsset or AccountType.OtherAsset).ToList();
         _expenseAccounts = active.Where(a => a.Type is AccountType.Expense or AccountType.OtherExpense).ToList();
+        _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
     }
 }

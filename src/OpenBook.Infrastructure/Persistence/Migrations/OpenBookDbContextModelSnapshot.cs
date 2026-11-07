@@ -104,6 +104,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AssetAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Cost")
                         .HasColumnType("INTEGER")
                         .HasColumnName("CostMinor");
@@ -203,6 +206,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long>("AnnualRatePercent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("AnnualRatePercentTenThousandths");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");

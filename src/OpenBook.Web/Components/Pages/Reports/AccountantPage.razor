@@ -26,11 +26,20 @@
         <h2>Year-end package</h2>
         <p class="muted">
             One ZIP with the trial balance and worksheet, adjusting entries, financial statements, general ledger, journal, agings, fixed assets,
-            loans, 1099 summary and tax summary as Excel files, and the 1099 filing data.
+            loans, 1099 summary and tax summary as Excel files, and the 1099 filing data; the mileage log, sales tax, inventory valuation and channel
+            sales too when the company has any.
         </p>
         <form method="get" action="/accountant/package" data-enhance="false" class="inline">
             <label>From <input type="date" name="from" value="@_from.ToString("yyyy-MM-dd")" /></label>
             <label>To <input type="date" name="to" value="@_to.ToString("yyyy-MM-dd")" /></label>
+            <label>
+                Basis
+                <select name="basis">
+                    <option value="">The company's (@_defaultBasis)</option>
+                    <option value="Accrual">Accrual</option>
+                    <option value="Cash">Cash</option>
+                </select>
+            </label>
             <button type="submit">Download package</button>
         </form>
     </div>
@@ -88,12 +97,14 @@
     private List<string> _missingTaxIds = [];
     private DateOnly _from;
     private DateOnly _to;
+    private string _defaultBasis = "accrual";
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         var company = await Settings.GetAsync();
+        _defaultBasis = company.DefaultReportBasis == ReportBasis.Cash ? "cash" : "accrual";
         var today = CompanyTime.Today;
         var last = DateRanges.For(DatePreset.LastFiscalYear, today, company.FiscalYearStartMonth);
         (_from, _to) = (last.From ?? today, last.To);

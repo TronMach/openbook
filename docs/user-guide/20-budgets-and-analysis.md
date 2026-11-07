@@ -62,7 +62,7 @@ Reports go out in the background within the hour. If OpenBook was off at the tim
 **Accountant tools** (`/accountant`, accountant role) gathers what your accountant needs at year end:
 
 - **Check the books**: see [Checking the books](#checking-the-books) below.
-- **Year-end package**: choose **from** and **to** and **Download package**: a ZIP of the main reports as Excel files (statements, trial balance, general ledger, aging, 1099 and more) with the 1099 data and a README. Send it to your accountant instead of exporting reports one by one.
+- **Year-end package**: choose **from**, **to** and the **basis** (accrual or cash; the company's unless you choose) and **Download package**: a ZIP of the main reports as Excel files (statements, trial balance, general ledger, aging, 1099 and more) with the 1099 data and a README, plus the mileage log, sales tax liability, inventory valuation and channel sales when you have any. Send it to your accountant instead of exporting reports one by one.
 - **1099 filing data**: a CSV for the **tax year** with each vendor over the threshold, their full tax ID, address, form and box, and amount, ready for a 1099 e-filing service. It contains full tax IDs, so handle it carefully.
 - **Adjusting entries**: journal entries your accountant marks as *adjusting* (the **Adjusting entry** box on the journal entry form or page). The **Trial balance worksheet** report shows unadjusted balances, the adjustments and adjusted balances side by side, and **Adjusting journal entries** lists them.
 

@@ -371,6 +371,16 @@ public sealed class AccountantPackageService(
         ("tax-summary", "15 Tax summary"),
     ];
 
+    /// <summary>Reports added only when they have something to show: mileage, sales tax, stock, channel sales.</summary>
+    public static IReadOnlyList<(string Key, string File)> WhenUsed { get; } =
+    [
+        ("mileage-log", "22 Mileage log"),
+        ("sales-tax", "23 Sales tax liability"),
+        ("inventory-valuation", "24 Inventory valuation"),
+        ("channel-sales", "25 Sales by channel"),
+        ("channel-sales-tax", "26 Channel sales tax by state"),
+    ];
+
     /// <summary>A nonprofit's statements, added to its package.</summary>
     public static IReadOnlyList<(string Key, string File)> NonprofitReports { get; } =
     [
@@ -381,12 +391,14 @@ public sealed class AccountantPackageService(
         ("grants", "21 Grants"),
     ];
 
-    public async Task<ExportFile> BuildAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    /// <param name="basis">Accrual or cash for the statements; null for the company's default.</param>
+    public async Task<ExportFile> BuildAsync(DateOnly from, DateOnly to, Domain.Ledger.ReportBasis? basis = null, CancellationToken ct = default)
     {
         if (to < from)
             throw new DomainException("package.dates_invalid", "The end date can't be before the start.");
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var query = string.Create(CultureInfo.InvariantCulture, $"preset=Custom&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&asOf={to:yyyy-MM-dd}&year={to.Year}&detail=true");
+        var used = basis ?? company.DefaultReportBasis;
+        var query = string.Create(CultureInfo.InvariantCulture, $"preset=Custom&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&asOf={to:yyyy-MM-dd}&year={to.Year}&detail=true&basis={used}");
         // 1099s go by calendar year: the latest one finished by the end of the period, never part of a year as if it were all.
         var taxYear = to.Month == 12 && to.Day == 31 ? to.Year : to.Year - 1;
         var path = Path.Combine(Path.GetTempPath(), $"openbook-package-{Guid.NewGuid():N}.zip");
@@ -401,6 +413,16 @@ public sealed class AccountantPackageService(
                 await stream.WriteAsync(exporter.ToXlsx(table), ct);
             }
 
+            foreach (var (key, name) in WhenUsed)
+            {
+                var table = await catalog.RunAsync(key, ReportParameters.Parse(query), ct);
+                if (!table.Rows.Any(r => r.Cells.Any(c => c.Value is decimal d && d != 0m)))
+                    continue;
+                var entry = zip.CreateEntry($"{name}.xlsx", CompressionLevel.Optimal);
+                await using var stream = entry.Open();
+                await stream.WriteAsync(exporter.ToXlsx(table), ct);
+            }
+
             var filing = zip.CreateEntry($"16 1099 filing data {taxYear}.csv", CompressionLevel.Optimal);
             await using (var stream = filing.Open())
                 await stream.WriteAsync(await Filing1099CsvAsync(taxYear, ct: ct), ct);
@@ -410,7 +432,8 @@ public sealed class AccountantPackageService(
             {
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(
                     $"{company.Name}: accountant's package for {from:MMM d, yyyy} to {to:MMM d, yyyy}, made {clock.UtcNow.InCompanyTime():g} by {user.Actor}.\r\n\r\n"
-                    + "Reports are on the company's default basis. The 1099 filing data has full taxpayer IDs: keep it private.\r\n"), ct);
+                    + $"Statements are on the {(used == Domain.Ledger.ReportBasis.Cash ? "cash" : "accrual")} basis. Mileage, sales tax, inventory and channel reports are included when the company has any. "
+                    + "The 1099 filing data has full taxpayer IDs: keep it private.\r\n"), ct);
             }
         }
 

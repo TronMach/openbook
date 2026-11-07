@@ -53,7 +53,7 @@ public static class TaxLines
             ("20a", "Rent: vehicles, machinery and equipment", false), ("20b", "Rent: other business property", false),
             ("21", "Repairs and maintenance", false), ("22", "Supplies", false), ("23", "Taxes and licenses", false),
             ("24a", "Travel", false), ("24b", "Deductible meals", false), ("25", "Utilities", false), ("26", "Wages", false),
-            ("27a", "Other expenses", false)),
+            ("27a", "Other expenses", false), ("30", "Business use of home", false)),
         .. Form(TaxForm.Form1065, "p",
             ("1a", "Gross receipts or sales", true), ("1b", "Returns and allowances", true), ("2", "Cost of goods sold", false),
             ("7", "Other income", true), ("9", "Salaries and wages", false), ("10", "Guaranteed payments to partners", false),

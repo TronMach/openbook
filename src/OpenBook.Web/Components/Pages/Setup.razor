@@ -153,6 +153,14 @@
                     </label>
                 </div>
             </div>
+            <div class="field">
+                <label for="basis">When do you count income and expenses?</label>
+                <InputSelect id="basis" @bind-Value="Input.DefaultReportBasis">
+                    <option value="@ReportBasis.Accrual">When I send the invoice or get the bill (accrual)</option>
+                    <option value="@ReportBasis.Cash">When the money comes in or goes out (cash)</option>
+                </InputSelect>
+                <span class="hint">Reports start on this; each report can show the other. Many small businesses file on cash; ask your tax adviser if you aren't sure.</span>
+            </div>
             <span class="hint">In the simple view these set up your chart of accounts for you, and sales tax is next if you charge it. In the full view you choose a starter chart on the next page. Starting from an export uses the accounts in it instead.</span>
             <div class="row">
                 <div class="field">
@@ -342,7 +350,8 @@
             Input.Address,
             Input.Edition,
             Input.DefaultViewMode ?? ViewMode.Simple,
-            Input.Region);
+            Input.Region,
+            Input.DefaultReportBasis);
         try
         {
             User owner;
@@ -429,6 +438,8 @@
         public bool KeepsStock { get; set; }
 
         public bool ChargesSalesTax { get; set; }
+
+        public ReportBasis DefaultReportBasis { get; set; } = ReportBasis.Accrual;
 
         // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
         [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]

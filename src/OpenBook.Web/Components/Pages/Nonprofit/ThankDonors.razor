@@ -47,7 +47,12 @@
                     }
                 </tbody>
             </table>
-            <div class="actions"><button type="submit" class="secondary">Mark the ticked gifts as thanked</button></div>
+            <div class="actions">
+                <button type="submit" formaction="/nonprofit/thanks/email">Email the ticked gifts' letters</button>
+                <button type="submit" class="secondary" formaction="/nonprofit/thanks/letters" formtarget="_blank">Letters for the ticked gifts (one PDF)</button>
+                <button type="submit" class="secondary">Mark the ticked gifts as thanked</button>
+            </div>
+            <p class="hint">An emailed letter marks its gift as thanked. After printing letters, mark them as thanked here.</p>
         </PostForm>
     }
 

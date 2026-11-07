@@ -101,7 +101,8 @@ public static class AssetEndpoints
         }).RequireAuthorization();
 
         app.MapPost("/loans/{id:guid}/details", async (Guid id, IFormCollection form, LoanService loans, CancellationToken ct) =>
-            await Back($"/loans/{id}", () => loans.DescribeAsync(id, form["name"].ToString(), form["notes"].ToString(), ct))).RequireAuthorization();
+            await Back($"/loans/{id}", () => loans.DescribeAsync(id, form["name"].ToString(), form["notes"].ToString(),
+                form.ContainsKey("classId") ? Id(form["classId"]) ?? Guid.Empty : null, ct))).RequireAuthorization();
 
         app.MapPost("/loans/{id:guid}/void", async (Guid id, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
@@ -146,7 +147,8 @@ public static class AssetEndpoints
             Number(form["priorDepreciation"]) ?? 0m,
             Date(form["priorThrough"]),
             form["number"],
-            form["description"]);
+            form["description"],
+            Id(form["classId"]));
     }
 
     private static async Task<IResult> Back<T>(string page, Func<Task<T>> change)

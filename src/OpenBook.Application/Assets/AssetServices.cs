@@ -139,6 +139,7 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
             if (changed)
                 throw new DomainException("asset.depreciated", $"{asset.Name} has depreciation posted, so only its name, number and description can change. Void the depreciation first.");
             asset.Rename(details.Name, details.Number, details.Description);
+            asset.SetClass(details.ClassId);
         }
         else
         {
@@ -189,7 +190,7 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
         if (booked > 0m)
             lines.Add(JournalLineDraft.Dr(asset.AccumulatedAccountId, booked, "Accumulated depreciation removed"));
         if (catchUp > 0m)
-            lines.Add(JournalLineDraft.Dr(asset.ExpenseAccountId, catchUp, "Depreciation to disposal"));
+            lines.Add(JournalLineDraft.Dr(asset.ExpenseAccountId, catchUp, "Depreciation to disposal", asset.ClassId));
         if (proceedsAccount is not null)
             lines.Add(JournalLineDraft.Dr(proceedsAccount.Id, command.Proceeds, "Proceeds"));
         lines.Add(JournalLineDraft.Cr(asset.AssetAccountId, asset.Cost, "Cost removed"));
@@ -238,6 +239,7 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
     private static string Snapshot(FixedAsset a) => JsonSerializer.Serialize(new
     {
         a.Name,
+        a.ClassId,
         a.Number,
         a.AssetAccountId,
         a.AccumulatedAccountId,
@@ -291,7 +293,7 @@ public sealed class DepreciationService(IAssetStore store, PostingEngine engine,
         var id = Guid.CreateVersion7();
         var lines = due.SelectMany(d => new[]
         {
-            JournalLineDraft.Dr(d.Asset.ExpenseAccountId, d.Amount, d.Asset.Name),
+            JournalLineDraft.Dr(d.Asset.ExpenseAccountId, d.Amount, d.Asset.Name, d.Asset.ClassId),
             JournalLineDraft.Cr(d.Asset.AccumulatedAccountId, d.Amount, d.Asset.Name),
         }).ToList();
         var entry = await engine.StageAsync(new PostJournalEntryCommand(through, lines, $"Depreciation through {through:MMM d, yyyy}", DepreciationRun.Source, id), ct);
@@ -397,12 +399,13 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
     }
 
     /// <summary>The name and notes, which stay changeable after payments.</summary>
-    public async Task<Loan> DescribeAsync(Guid id, string name, string? notes, CancellationToken ct = default)
+    /// <param name="classId">The class interest goes to from now on; null keeps it, <see cref="Guid.Empty"/> clears it.</param>
+    public async Task<Loan> DescribeAsync(Guid id, string name, string? notes, Guid? classId = null, CancellationToken ct = default)
     {
         var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(loan);
         loan.Update(new LoanDetails(name, loan.LiabilityAccountId, loan.InterestAccountId, loan.Principal, loan.AnnualRatePercent, loan.Payments,
-            loan.FirstPaymentDate, loan.PaymentAmount, loan.LenderVendorId, notes));
+            loan.FirstPaymentDate, loan.PaymentAmount, loan.LenderVendorId, notes, classId is null ? loan.ClassId : classId == Guid.Empty ? null : classId));
         store.Add(Audit(AuditAction.Updated, loan, before));
         await store.SaveChangesAsync(ct);
         return loan;
@@ -436,7 +439,7 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         if (principal > 0m)
             lines.Add(JournalLineDraft.Dr(loan.LiabilityAccountId, principal, "Principal"));
         if (interest > 0m)
-            lines.Add(JournalLineDraft.Dr(loan.InterestAccountId, interest, "Interest"));
+            lines.Add(JournalLineDraft.Dr(loan.InterestAccountId, interest, "Interest", loan.ClassId));
         lines.Add(JournalLineDraft.Cr(from.Id, interest + principal));
 
         var before = Snapshot(loan);
@@ -481,6 +484,7 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
     private static string Snapshot(Loan l) => JsonSerializer.Serialize(new
     {
         l.Name,
+        l.ClassId,
         l.LiabilityAccountId,
         l.InterestAccountId,
         l.Principal,

@@ -16,7 +16,8 @@ public sealed record LoanDetails(
     DateOnly FirstPaymentDate,
     decimal? PaymentAmount = null,
     Guid? LenderVendorId = null,
-    string? Notes = null);
+    string? Notes = null,
+    Guid? ClassId = null);
 
 /// <summary>One line of an amortization schedule.</summary>
 public readonly record struct Installment(int Number, DateOnly Date, decimal Payment, decimal Interest, decimal Principal, decimal Balance);
@@ -104,7 +105,11 @@ public sealed class Loan
         PaymentAmount = payment;
         LenderVendorId = details.LenderVendorId;
         Notes = Text.Optional(details.Notes, 1000, "loan.notes_too_long", "Notes");
+        ClassId = details.ClassId;
     }
+
+    /// <summary>The class its interest is posted to; null for none. Changes only later payments.</summary>
+    public Guid? ClassId { get; private set; }
 
     public void Void(DateTimeOffset at)
     {

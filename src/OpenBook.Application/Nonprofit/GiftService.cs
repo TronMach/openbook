@@ -384,6 +384,26 @@ public sealed class GiftService(
             renderer.Render([letter]), donor.Id, $"Gift acknowledgment {donation.Number}");
     }
 
+    /// <summary>Thank-you letters for several gifts in one PDF, to print together (voided gifts are left out).</summary>
+    public async Task<RenderedForm> AcknowledgmentsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
+        var letters = new List<DonorLetter>();
+        foreach (var id in ids.Distinct())
+        {
+            if (await store.GetDonationAsync(id, ct) is not { Status: DocumentStatus.Posted } donation)
+                continue;
+            var donor = await DonorAsync(donation.DonorId, ct, activeOnly: false);
+            letters.Add(await LetterAsync(company, donor, "Thank you", donation.Date, [donation], year: null, ct));
+        }
+
+        if (letters.Count == 0)
+            throw new DomainException("donation.none_chosen", "Tick at least one gift.");
+        return new RenderedForm(FormService.FileName(company, "Gift acknowledgments", ""), renderer.Render(letters), Guid.Empty, "Gift acknowledgments");
+    }
+
     /// <summary>A donor's giving statement for a calendar year.</summary>
     public async Task<RenderedForm> YearStatementAsync(Guid donorId, int year, CancellationToken ct = default)
     {

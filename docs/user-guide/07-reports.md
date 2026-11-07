@@ -19,7 +19,7 @@
 
 **Inventory**: Inventory valuation, Inventory stock status, Physical inventory worksheet, Purchases by product (quantity, amount and average cost bought in a period).
 
-**Taxes**: 1099 summary and detail, Sales tax liability, Tax summary (your accounts' totals by tax form line).
+**Taxes**: 1099 summary and detail, Sales tax liability, Tax summary (your accounts' totals by tax form line, ending at net profit; on Schedule C, half of meals comes off for the 50% limit, line 30 is there for the business use of your home, and the mileage log's standard mileage deduction is shown under **Not in the books**, for line 9 if you use the standard rate).
 
 **Accountant**: Account list, Trial balance, General ledger, Journal, Trial balance worksheet, Adjusting journal entries.
 

@@ -18,7 +18,8 @@ public sealed record SetUpCompanyCommand(
     string? Address = null,
     Edition Edition = Edition.General,
     ViewMode DefaultViewMode = ViewMode.Full,
-    string? Region = null);
+    string? Region = null,
+    Domain.Ledger.ReportBasis DefaultReportBasis = Domain.Ledger.ReportBasis.Accrual);
 
 /// <summary>First-run wizard: creates the company and its owner in one save.</summary>
 public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignStore designs, IPasswordHasher hasher, IClock clock)
@@ -44,6 +45,7 @@ public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignSt
             command.Address);
         company.SetEdition(command.Edition);
         company.SetDefaultViewMode(command.DefaultViewMode);
+        company.SetDefaultReportBasis(command.DefaultReportBasis);
         if (command.Region is { Length: > 0 } region)
             company.SetRegion(region);
 

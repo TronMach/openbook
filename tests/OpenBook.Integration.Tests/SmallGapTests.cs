@@ -159,4 +159,58 @@ public sealed class SmallGapTests : IAsyncLifetime
         Assert.Contains("beyond the Latin alphabet", OpenBook.Application.Forms.FormScripts.Warning(["山田商店"]), StringComparison.Ordinal);
         Assert.Contains("right to left", OpenBook.Application.Forms.FormScripts.Warning(["شركة الأمل", "山田"]), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task The_year_end_package_takes_a_basis_and_carries_the_mileage_log_when_there_is_one()
+    {
+        await In<OpenBook.Application.Projects.MileageService, OpenBook.Domain.Projects.MileageTrip>(s => s.CreateAsync(new OpenBook.Domain.Projects.MileageDetails(Mar1, 42m, "Client visit")));
+        var file = await In<OpenBook.Application.Reporting.AccountantPackageService, ExportFile>(s => s.BuildAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), OpenBook.Domain.Ledger.ReportBasis.Cash));
+        try
+        {
+            using var zip = System.IO.Compression.ZipFile.OpenRead(file.Path);
+            Assert.Contains(zip.Entries, e => e.Name == "22 Mileage log.xlsx");
+            Assert.DoesNotContain(zip.Entries, e => e.Name == "24 Inventory valuation.xlsx");
+            using var readme = new StreamReader(zip.Entries.Single(e => e.Name == "README.txt").Open());
+            Assert.Contains("cash basis", await readme.ReadToEndAsync(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(file.Path);
+        }
+    }
+
+    [Fact]
+    public async Task The_tax_summary_ends_at_net_profit_with_meals_at_half_and_mileage_beside_it()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income, "4000");
+        var meals = await _db.CreateAccount("Meals", AccountType.Expense, "6700");
+        await In<OpenBook.Application.Accounts.AccountService, int>(s => s.MapTaxLinesAsync(new Dictionary<Guid, string?> { [sales.Id] = "c.1", [meals.Id] = "c.24b", [_rent.Id] = "c.20b" }));
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Receive, _checking.Id, Mar1, [new BankSplit(sales.Id, 10_000m)])));
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, Mar1, [new BankSplit(_rent.Id, 2_000m), new BankSplit(meals.Id, 300m)])));
+        await In<OpenBook.Application.Projects.MileageService, OpenBook.Domain.Projects.MileageTrip>(s => s.CreateAsync(new OpenBook.Domain.Projects.MileageDetails(Mar1, 100m, "Clients")));
+
+        var table = await In<OpenBook.Application.Reporting.StatementReports, OpenBook.Application.Reporting.ReportTable>(s => s.TaxSummaryTableAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31)));
+        decimal? Value(string label) => table.Rows.FirstOrDefault(r => r.Cells[0].Value is string text && text.StartsWith(label, StringComparison.Ordinal))?.Cells[1].Value as decimal?;
+        Assert.Equal(-150m, Value("Less half of meals"));
+        Assert.Equal(7_850m, Value("Net profit on tax lines (line 31)"));
+        Assert.NotNull(Value("Standard mileage: 100.0 business miles"));
+    }
+
+    [Fact]
+    public async Task Depreciation_and_loan_interest_post_to_the_class_of_their_asset_and_loan()
+    {
+        var program = await In<OpenBook.Application.Segments.SegmentService, OpenBook.Domain.Segments.Segment>(s => s.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Class, "Food pantry"));
+        var equipment = await _db.CreateAccount("Equipment", AccountType.FixedAsset, "1500");
+        var loanAccount = await _db.CreateAccount("Van loan", AccountType.LongTermLiability, "2500");
+        var asset = await In<OpenBook.Application.Assets.FixedAssetService, OpenBook.Domain.Assets.FixedAsset>(s => s.CreateAsync(new OpenBook.Domain.Assets.FixedAssetDetails(
+            "Freezer", equipment.Id, Guid.Empty, Guid.Empty, new DateOnly(2026, 1, 1), 1_200m, OpenBook.Domain.Assets.DepreciationMethod.StraightLine, 12, ClassId: program.Id)));
+        await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Assets.DepreciationService>().RunAsync(Mar31));
+        var loan = await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.Loan>(s => s.CreateAsync(new OpenBook.Application.Assets.CreateLoanCommand(
+            new OpenBook.Domain.Assets.LoanDetails("Van", loanAccount.Id, Guid.Empty, 12_000m, 6m, 24, Mar1, ClassId: program.Id))));
+        await In<OpenBook.Application.Assets.LoanService, OpenBook.Domain.Assets.LoanPayment>(s => s.PayAsync(loan.Id, new OpenBook.Application.Assets.LoanPaymentCommand(Mar1, _checking.Id)));
+
+        var lines = await In<OpenBook.Application.Reporting.ReportLedger, IReadOnlyList<LedgerLine>>(s => s.LinesAsync(OpenBook.Domain.Ledger.ReportBasis.Accrual, new DateOnly(2026, 1, 1), Mar31));
+        Assert.Equal(300m, lines.Where(l => l.ClassId == program.Id && l.Source == OpenBook.Domain.Assets.DepreciationRun.Source).Sum(l => l.Amount));
+        Assert.Equal(60m, lines.Where(l => l.ClassId == program.Id && l.Source == OpenBook.Domain.Assets.Loan.PaymentSource).Sum(l => l.Amount));
+    }
 }

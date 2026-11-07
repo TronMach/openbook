@@ -23,7 +23,9 @@ Record the purchase as usual: a bill, an expense or a journal entry, to a **Fixe
 - **Accumulated depreciation account** and **depreciation expense account**: leave them on the defaults ("Accumulated Depreciation" and "Depreciation Expense", created when first needed) unless your chart has its own.
 - **Depreciation already recorded** **through** a date, for an asset bought before you started with OpenBook. Depreciation carries on from the schedule after that date, and if what you enter differs from the schedule, the last month takes the difference, so the asset still ends at its full depreciable amount.
 
-The asset's page shows its **schedule**, a row a year, adding up exactly to its cost less salvage. Once depreciation has been posted, only the name, number and description can be changed.
+- **Class** (when you use classes): the program or department its depreciation is posted to, so a nonprofit's functional expense statement or a profit and loss by class has it in the right column without reclassifying each run.
+
+The asset's page shows its **schedule**, a row a year, adding up exactly to its cost less salvage. Once depreciation has been posted, only the name, number, description and class can be changed; a new class applies from the next run.
 
 ### Running depreciation
 
@@ -50,7 +52,7 @@ OpenBook posts the depreciation due up to that date, takes the asset's cost and 
 
 On the loan's page, **Record a payment**: date, amount and **paid from**. OpenBook splits it: a month's interest on the balance owed goes to "Interest Expense", and the rest pays down the loan account. **What's left** shows the remaining schedule.
 
-Payments must be in date order; only the latest can be voided. Once a payment is recorded, the loan's terms are fixed, though its **name and notes** can still be changed on its page.
+Payments must be in date order; only the latest can be voided. Once a payment is recorded, the loan's terms are fixed, though its **name, class and notes** can still be changed on its page. With a **class**, each payment's interest is posted to it.
 
 A loan entered by mistake: void its payments, latest first, then **Void this loan** on its page, saying why. That reverses the entry recording the money received, and the loan leaves the list, the Loans report and the forecast. To change the terms of a loan, void it and enter it again.
 

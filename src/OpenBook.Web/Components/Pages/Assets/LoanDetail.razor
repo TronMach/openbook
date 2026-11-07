@@ -1,5 +1,6 @@
 @page "/loans/{Id:guid}"
 @inject LoanService LoanService
+@inject OpenBook.Application.Segments.SegmentService Segments
 @inject AccountService AccountService
 
 <PageTitle>@(_loan?.Name ?? "Loan") · OpenBook</PageTitle>
@@ -94,10 +95,24 @@
         @if (!_loan.IsVoided)
         {
             <div class="card">
-                <h2>Name and notes</h2>
+                <h2>Name, class and notes</h2>
                 <PostForm Action="@($"/loans/{_loan.Id}/details")" data-enhance="false">
                     <AntiforgeryToken />
                     <div class="field"><label for="name">Name</label><input id="name" name="name" maxlength="200" value="@_loan.Name" /></div>
+                    @if (_classes.Count > 0)
+                {
+                    <div class="field">
+                        <label for="classId">Class <span class="muted">(optional)</span></label>
+                        <select id="classId" name="classId">
+                            <option value="">None</option>
+                            @foreach (var c in _classes)
+                            {
+                                <option value="@c.Segment.Id" selected="@(c.Segment.Id == _loan.ClassId)">@(new string(' ', c.Depth * 3))@c.FullName</option>
+                            }
+                        </select>
+                        <span class="hint">Interest is posted to this class from the next payment on.</span>
+                    </div>
+                }
                     <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" maxlength="1000">@_loan.Notes</textarea></div>
                     <div class="actions"><button type="submit" class="secondary">Save</button></div>
                 </PostForm>
@@ -149,6 +164,7 @@
     private ChartOfAccounts _chart = new([]);
     private IReadOnlyList<Installment> _remaining = [];
     private List<Account> _payFrom = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -161,5 +177,6 @@
         if (_loan is not null)
             _remaining = LoanService.RemainingSchedule(_loan);
         _payFrom = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+        _classes = await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class, includeInactive: false);
     }
 }

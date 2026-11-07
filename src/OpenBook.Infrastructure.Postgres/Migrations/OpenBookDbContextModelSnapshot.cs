@@ -109,6 +109,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("AssetAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("Cost")
                         .HasColumnType("bigint")
                         .HasColumnName("CostMinor");
@@ -208,6 +211,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<long>("AnnualRatePercent")
                         .HasColumnType("bigint")
                         .HasColumnName("AnnualRatePercentTenThousandths");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
