@@ -61,6 +61,8 @@ An *invoice* records a sale the customer will pay for later. It increases what t
 6. Optionally write a **message to customer**, which prints on the invoice.
 7. **Save invoice** (or `Ctrl` + `Enter`).
 
+If the connection drops while you're typing (a laptop asleep, the server restarted), the page comes back empty and offers **Bring it back**: what you'd entered is kept in that browser tab until you save, and goes when the tab closes. New invoices, sales receipts, estimates and bills do this.
+
 If the customer has billable expenses, time or mileage waiting to be invoiced, they're listed on the form: tick the ones to add.
 
 ### Sending it

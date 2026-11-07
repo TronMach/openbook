@@ -18,6 +18,7 @@
 
     @if (_loaded)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="invoice-new" Snapshot="TakeDraft" OnRestore="RestoreAsync" />
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -106,6 +107,26 @@
 </div>
 
 @code {
+    // What's typed so far, kept in the tab in case the connection goes.
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly DueDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId,
+        List<SalesLineModel> Lines, List<Guid> Billable, List<Guid> Time, List<Guid> Trips);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _customerId is null && _lines.All(l => l.IsBlank) ? null
+        : new Draft(_customerId, _number, _date, _dueDate, _memo, _taxCodeId, _locationId, _warehouseId, _lines, [.. _chosenBillable], [.. _chosenTime], [.. _chosenTrips]);
+
+    private async Task RestoreAsync(Draft draft)
+    {
+        await SetCustomerAsync(_customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null);
+        (_number, _date, _dueDate, _memo, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.DueDate, draft.Memo, draft.LocationId, draft.WarehouseId);
+        _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        _chosenBillable.UnionWith(draft.Billable.Where(id => _billable.Any(b => b.Id == id)));
+        _chosenTime.UnionWith(draft.Time.Where(id => _time.Any(t => t.Id == id)));
+        _chosenTrips.UnionWith(draft.Trips.Where(id => _trips.Any(t => t.Id == id)));
+    }
+
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private Customer? _customer;
@@ -271,6 +292,7 @@
             var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId,
                 BillableExpenseIds: [.. _chosenBillable], TimeEntryIds: [.. _chosenTime], MileageTripIds: [.. _chosenTrips]);
             var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
+            await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
         }
         catch (DomainException ex)

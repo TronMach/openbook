@@ -18,6 +18,7 @@
 
     @if (_loaded)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="bill-new" Snapshot="TakeDraft" OnRestore="RestoreAsync" />
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -74,6 +75,21 @@
 </div>
 
 @code {
+    // What's typed so far, kept in the tab in case the connection goes.
+    internal sealed record Draft(Guid? VendorId, string? Reference, DateOnly Date, DateOnly DueDate, string? Memo, Guid? LocationId, Guid? WarehouseId, List<BillLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _vendor is null && !_lines.Any(BillLineModel.IsFilledLine) ? null
+        : new Draft(_vendor?.Id, _reference, _date, _dueDate, _memo, _locationId, _warehouseId, _lines);
+
+    private void RestoreAsync(Draft draft)
+    {
+        _vendor = _vendors.FirstOrDefault(v => v.Id == draft.VendorId);
+        (_reference, _date, _dueDate, _memo, _locationId, _warehouseId) = (draft.Reference, draft.Date, draft.DueDate, draft.Memo, draft.LocationId, draft.WarehouseId);
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private IReadOnlyList<Vendor> _vendors = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _categories = [];
@@ -187,6 +203,7 @@
 
             var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo, LocationId: _locationId, WarehouseId: _warehouseId);
             var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command), _closingPassword);
+            await _draft!.ClearAsync();
             Navigation.NavigateTo($"/purchases/bills/{bill.Id}");
         }
         catch (DomainException ex)

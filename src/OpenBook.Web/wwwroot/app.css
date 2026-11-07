@@ -447,6 +447,8 @@ table.entry select[aria-label="Class"] { min-width: 8rem; }
 .search-group { padding: 0.4rem 0.6rem 0.15rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .search-empty { padding: 0.35rem 0.6rem; }
 .search-add { color: var(--accent); border-top: 1px solid var(--border); }
+.draft-found { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+.draft-found span { flex: 1 1 18rem; }
 .quick-add-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1rem; background: rgb(0 0 0 / 0.4); }
 .quick-add { width: min(26rem, 100%); max-height: 100%; overflow-y: auto; margin: 0; text-align: left; white-space: normal; }
 .quick-add h2 { margin-top: 0; }

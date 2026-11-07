@@ -398,6 +398,9 @@
   <data name="Bring bank and card transactions in automatically (through SimpleFIN) instead of importing statement files." xml:space="preserve">
     <value>Bring bank and card transactions in automatically (through SimpleFIN) instead of importing statement files.</value>
   </data>
+  <data name="Bring it back" xml:space="preserve">
+    <value>Bring it back</value>
+  </data>
   <data name="Budgets" xml:space="preserve">
     <value>Budgets</value>
   </data>
@@ -2156,6 +2159,9 @@
   <data name="Start again" xml:space="preserve">
     <value>Start again</value>
   </data>
+  <data name="Start fresh" xml:space="preserve">
+    <value>Start fresh</value>
+  </data>
   <data name="Starting balances when you move your books to OpenBook." xml:space="preserve">
     <value>Starting balances when you move your books to OpenBook.</value>
   </data>
@@ -2314,6 +2320,9 @@
   </data>
   <data name="This recurring invoice is inactive, so no invoices are created from it." xml:space="preserve">
     <value>This recurring invoice is inactive, so no invoices are created from it.</value>
+  </data>
+  <data name="This tab still has what you were typing here, not yet saved. The connection may have dropped." xml:space="preserve">
+    <value>This tab still has what you were typing here, not yet saved. The connection may have dropped.</value>
   </data>
   <data name="Time" xml:space="preserve">
     <value>Time</value>

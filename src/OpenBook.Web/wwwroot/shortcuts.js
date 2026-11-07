@@ -1,3 +1,11 @@
+// What's typed on an interactive form, kept in this tab (FormDraft.razor) in case the connection goes. Browser storage
+// can be refused, and then there's simply no draft.
+window.obDrafts = {
+    read(key) { try { return sessionStorage.getItem(`ob-draft:${key}`); } catch { return null; } },
+    save(key, json) { try { sessionStorage.setItem(`ob-draft:${key}`, json); } catch { } },
+    clear(key) { try { sessionStorage.removeItem(`ob-draft:${key}`); } catch { } },
+};
+
 // OpenBook: theme choice (auto / light / dark) and keyboard shortcuts. No dependencies.
 (() => {
     const themeKey = 'ob-theme';

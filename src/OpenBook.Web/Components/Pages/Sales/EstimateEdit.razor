@@ -23,6 +23,10 @@
     }
     else if (_loaded)
     {
+        @if (Id is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="estimate-new" Snapshot="TakeDraft" OnRestore="RestoreAsync" />
+        }
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -66,6 +70,22 @@
 </div>
 
 @code {
+    // What's typed so far, kept in the tab in case the connection goes (new estimates only).
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly? ExpirationDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, List<SalesLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => Id is not null || (_customerId is null && _lines.All(l => l.IsBlank)) ? null
+        : new Draft(_customerId, _number, _date, _expirationDate, _memo, _taxCodeId, _locationId, _lines);
+
+    private void RestoreAsync(Draft draft)
+    {
+        _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
+        (_number, _date, _expirationDate, _memo, _locationId) = (draft.Number, draft.Date, draft.ExpirationDate, draft.Memo, draft.LocationId);
+        _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private Guid? _customerId;
@@ -174,6 +194,8 @@
         {
             var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId);
             var estimate = await Ops.RunAsync<EstimateService, Estimate>(s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo($"/sales/estimates/{estimate.Id}");
         }
         catch (DomainException ex)

@@ -1,0 +1,135 @@
+@typeparam T where T : class
+@implements IDisposable
+@using System.Text.Json
+@inject IJSRuntime JS
+
+@* Keeps what's being typed on an interactive form in this tab's sessionStorage, every couple of seconds while the page
+   is connected. A circuit doesn't survive a long sleep or a server restart, and the page then reloads empty; this offers
+   the typing back. Only in this tab, under this person's name, and gone when the tab closes or the form is saved.
+   Interop fails harmlessly once the circuit has gone, which is when the copy in the tab is needed. *@
+@if (_found is not null)
+{
+    <div class="alert notice draft-found" role="status">
+        <span>@L["This tab still has what you were typing here, not yet saved. The connection may have dropped."]</span>
+        <button type="button" @onclick="BringBackAsync">@L["Bring it back"]</button>
+        <button type="button" class="secondary" @onclick="DiscardAsync">@L["Start fresh"]</button>
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan Every = TimeSpan.FromSeconds(2);
+    private readonly CancellationTokenSource _stop = new();
+    private string? _storageKey;
+    private string? _found;
+    private string? _kept;
+
+    /// <summary>Which form; a page has one draft per tab.</summary>
+    [Parameter, EditorRequired]
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>What's on the form now, or null when there's nothing worth keeping.</summary>
+    [Parameter, EditorRequired]
+    public Func<T?> Snapshot { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public EventCallback<T> OnRestore { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        var user = AuthState is null ? null : (await AuthState).User.Identity?.Name;
+        _storageKey = $"{user}:{Key}";
+        try
+        {
+            _found = await JS.InvokeAsync<string?>("obDrafts.read", _storageKey);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException or InvalidOperationException)
+        {
+            return;
+        }
+
+        if (_found is not null)
+            StateHasChanged();
+        _ = KeepAsync();
+    }
+
+    private async Task KeepAsync()
+    {
+        using var timer = new PeriodicTimer(Every);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+                await InvokeAsync(KeepNowAsync);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task KeepNowAsync()
+    {
+        // While a draft waits for an answer, a blank form mustn't overwrite it.
+        if (_found is not null || _stop.IsCancellationRequested)
+            return;
+        var snapshot = Snapshot();
+        var json = snapshot is null ? null : JsonSerializer.Serialize(snapshot);
+        if (json == _kept)
+            return;
+        _kept = json;
+        await TryAsync(json is null ? "obDrafts.clear" : "obDrafts.save", json is null ? [_storageKey] : [_storageKey, json]);
+    }
+
+    private async Task TryAsync(string function, object?[] args)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(function, args);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException or InvalidOperationException)
+        {
+        }
+    }
+
+    private async Task BringBackAsync()
+    {
+        var found = _found;
+        _found = null;
+        if (found is null)
+            return;
+        T? draft = null;
+        try
+        {
+            draft = JsonSerializer.Deserialize<T>(found);
+        }
+        catch (JsonException)
+        {
+        }
+
+        if (draft is not null)
+            await OnRestore.InvokeAsync(draft);
+    }
+
+    private async Task DiscardAsync()
+    {
+        _found = null;
+        await TryAsync("obDrafts.clear", [_storageKey]);
+    }
+
+    /// <summary>For when the form has been saved.</summary>
+    public async Task ClearAsync()
+    {
+        await _stop.CancelAsync();
+        await TryAsync("obDrafts.clear", [_storageKey]);
+    }
+
+    public void Dispose()
+    {
+        _stop.Cancel();
+        _stop.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}

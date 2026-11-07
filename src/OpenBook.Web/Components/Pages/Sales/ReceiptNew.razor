@@ -19,6 +19,7 @@
 
     @if (_loaded)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="receipt-new" Snapshot="TakeDraft" OnRestore="RestoreAsync" />
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -76,6 +77,24 @@
 </div>
 
 @code {
+    // What's typed so far, kept in the tab in case the connection goes.
+    internal sealed record Draft(Guid? CustomerId, Guid DepositAccountId, string? Number, DateOnly Date, string? Reference, PaymentMethod? Method, string? Memo,
+        Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _lines.All(l => l.IsBlank) ? null
+        : new Draft(_customerId, _depositAccountId, _number, _date, _reference, _method, _memo, _taxCodeId, _locationId, _warehouseId, _lines);
+
+    private void RestoreAsync(Draft draft)
+    {
+        _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
+        _depositAccountId = _depositAccounts.Any(a => a.Id == draft.DepositAccountId) ? draft.DepositAccountId : _depositAccountId;
+        (_number, _date, _reference, _method, _memo, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.Reference, draft.Method, draft.Memo, draft.LocationId, draft.WarehouseId);
+        _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private ChartOfAccounts _chart = new([]);
@@ -184,6 +203,7 @@
         {
             var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, Method: _method);
             var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command), _closingPassword);
+            await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");
         }
         catch (DomainException ex)
