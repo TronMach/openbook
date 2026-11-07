@@ -265,6 +265,19 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Grant_spending_on_a_subaccount_counts_against_its_budgeted_parent()
+    {
+        var grant = await GrantWithSpending();
+        var hall = await In<OpenBook.Application.Accounts.AccountService, Account>(s => s.CreateAsync(new OpenBook.Application.Accounts.CreateAccountCommand("Hall", AccountType.Expense, "6010", _rent.Id)));
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Mar31,
+            [JournalLineDraft.Dr(hall.Id, 40m, null, grant.ClassId), JournalLineDraft.Cr(_checking.Id, 40m)])));
+        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(_rent.Id, 500m)]));
+        var position = (await In<GrantService, GrantPosition?>(s => s.PositionAsync(grant.Id, Mar31)))!;
+        var row = Assert.Single(position.Rows);
+        Assert.Equal((_rent.Id, 500m, 290m), (row.AccountId, row.Budget, row.Spent));
+    }
+
+    [Fact]
     public async Task The_funders_report_shows_the_period_to_date_and_whats_left()
     {
         var grant = await GrantWithSpending();

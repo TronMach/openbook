@@ -520,8 +520,22 @@ public sealed class GrantService(
             return false;
         }
 
+        // Spending on an account with no budget line of its own counts against its nearest budgeted parent (a budget for
+        // "Supplies" takes "Supplies:Paper").
+        var budgeted = grant.Budget.Select(b => b.AccountId).ToHashSet();
+        Guid BudgetAccount(Guid accountId)
+        {
+            for (Guid? at = accountId; at is { } current; at = context.Chart.Find(current)?.ParentId)
+            {
+                if (budgeted.Contains(current))
+                    return current;
+            }
+
+            return accountId;
+        }
+
         var spent = context.Expenses.Where(l => l.Date >= grant.StartsOn && l.Date <= grant.EndsOn && Under(l.ClassId!.Value))
-            .GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+            .GroupBy(l => BudgetAccount(l.AccountId)).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
         var rows = grant.Budget.Select(b => new GrantBudgetRow(b.AccountId, context.Chart.FullName(b.AccountId), b.Amount, spent.GetValueOrDefault(b.AccountId)))
             .Concat(spent.Where(s => grant.Budget.All(b => b.AccountId != s.Key) && s.Value != 0m)
                 .Select(s => new GrantBudgetRow(s.Key, context.Chart.FullName(s.Key), 0m, s.Value)))
