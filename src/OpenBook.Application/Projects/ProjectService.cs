@@ -42,6 +42,41 @@ public sealed class ProjectService(IProjectStore store, ISalesStore sales, Custo
 
     public Task<Project?> ForCustomerAsync(Guid customerId, CancellationToken ct = default) => store.GetProjectForCustomerAsync(customerId, ct);
 
+    /// <summary>The customer's own responsible person and the one that applies (its own, else the nearest up the tree).</summary>
+    public async Task<(Guid? Own, Guid? Effective)> ResponsibleForAsync(Guid customerId, CancellationToken ct = default)
+    {
+        var byId = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        return (byId.GetValueOrDefault(customerId)?.ResponsibleWorkerId, CustomerTree.Responsible(customerId, byId));
+    }
+
+    /// <summary>
+    /// Sets the person responsible for a client or project (null = the parent's), audited <c>Updated</c> on the customer.
+    /// </summary>
+    public async Task<Customer> SetResponsibleAsync(Guid customerId, Guid? workerId, CancellationToken ct = default)
+    {
+        var customer = await sales.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
+        string? name = null;
+        if (workerId is { } id && id != Guid.Empty)
+        {
+            var worker = await store.GetWorkerAsync(id, ct) ?? throw new EntityNotFoundException(WorkerService.EntityType, id);
+            if (!worker.IsActive && customer.ResponsibleWorkerId != id)
+                throw new DomainException("worker.inactive", $"{worker.Name} is inactive.");
+            name = worker.Name;
+        }
+
+        var before = customer.ResponsibleWorkerId;
+        customer.SetResponsible(workerId);
+        if (before != customer.ResponsibleWorkerId)
+        {
+            sales.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "customer", customer.Id,
+                System.Text.Json.JsonSerializer.Serialize(new { ResponsibleWorkerId = before }),
+                System.Text.Json.JsonSerializer.Serialize(new { customer.ResponsibleWorkerId, Responsible = name })));
+            await sales.SaveChangesAsync(ct);
+        }
+
+        return customer;
+    }
+
     /// <summary>New time and trips go only on a project still under way: a completed or cancelled one is reopened first.</summary>
     internal static async Task EnsureOpenForWorkAsync(IProjectStore store, Customer customer, CancellationToken ct)
     {

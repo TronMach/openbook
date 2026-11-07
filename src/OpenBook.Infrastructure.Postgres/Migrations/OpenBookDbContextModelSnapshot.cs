@@ -5417,6 +5417,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("PriceLevelId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ResponsibleWorkerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ShippingAddress")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

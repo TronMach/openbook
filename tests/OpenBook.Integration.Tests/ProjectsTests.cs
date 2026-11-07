@@ -132,6 +132,27 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_project_takes_its_clients_responsible_person_and_reports_show_one_persons_work()
+    {
+        var project = await NewProject("Annual audit");
+        var bo = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Bo", CostRate: 30m)));
+        await In<ProjectService, Customer>(s => s.SetResponsibleAsync(_acme.Id, _ana.Id));
+        Assert.Equal((null, _ana.Id), await In<ProjectService, (Guid?, Guid?)>(s => s.ResponsibleForAsync(project.CustomerId)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, new DateOnly(2026, 3, 2), 2m, project.CustomerId, _consulting.Id, true)));
+
+        static bool Lists(OpenBook.Application.Reporting.ReportTable t, string name) =>
+            t.Rows.Any(r => r.Cells.Any(c => c.Value is string text && text.Contains(name, StringComparison.Ordinal)));
+        var asOf = new DateOnly(2026, 3, 31);
+        Assert.True(Lists(await In<ProjectReports, OpenBook.Application.Reporting.ReportTable>(s => s.UnbilledWorkAsync(asOf, false, _ana.Id)), "Annual audit"));
+        Assert.False(Lists(await In<ProjectReports, OpenBook.Application.Reporting.ReportTable>(s => s.UnbilledWorkAsync(asOf, false, bo.Id)), "Annual audit"));
+
+        // The project names its own person: the client's no longer reaches it.
+        await In<ProjectService, Customer>(s => s.SetResponsibleAsync(project.CustomerId, bo.Id));
+        Assert.True(Lists(await In<ProjectReports, OpenBook.Application.Reporting.ReportTable>(s => s.ProfitabilityTableAsync(null, asOf, bo.Id)), "Annual audit"));
+        Assert.False(Lists(await In<ProjectReports, OpenBook.Application.Reporting.ReportTable>(s => s.ProfitabilityTableAsync(null, asOf, _ana.Id)), "Annual audit"));
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);

@@ -312,6 +312,7 @@
                 <p class="hint">Their invoices, estimates, credit memos, sales receipts and statements print with it. <ActionLink Href="/settings/forms">Designs</ActionLink></p>
             </section>
         }
+        <ResponsibleCard CustomerId="_customer.Id" />
         <CustomerEmailCard Customer="_customer" Error="@EmailError" />
 
         @if (_giving is { Any: true } giving)

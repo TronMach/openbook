@@ -68,6 +68,12 @@ public static class ProjectsApi
 
     public static void MapProjectsApi(this RouteGroupBuilder api)
     {
+        api.MapPut("/customers/{id:guid}/responsible", async (Guid id, ResponsibleRequest r, ProjectService s, CancellationToken ct) =>
+        {
+            var c = await s.SetResponsibleAsync(id, r.WorkerId, ct);
+            return new { c.Id, c.ResponsibleWorkerId };
+        });
+
         var projects = api.MapGroup("/projects");
 
         projects.MapGet("", async (bool? includeClosed, ProjectService s, CancellationToken ct) =>
@@ -168,3 +174,5 @@ public static class ProjectsApi
         });
     }
 }
+
+public sealed record ResponsibleRequest(Guid? WorkerId);

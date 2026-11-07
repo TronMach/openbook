@@ -144,10 +144,23 @@ public sealed class ProjectReports(
             trips.Where(t => t.Billable && t.InvoiceId is null).Sum(t => t.Amount));
     }
 
-    public async Task<ReportTable> ProfitabilityTableAsync(DateOnly? from, DateOnly to, CancellationToken ct = default)
+    /// <summary>The customers a person is responsible for (their own, or inherited from a parent); null = everyone.</summary>
+    private async Task<Func<Guid, bool>> ResponsibleFilterAsync(Guid? responsibleId, CancellationToken ct)
+    {
+        if (responsibleId is not { } person)
+            return _ => true;
+        var byId = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        return customerId => CustomerTree.Responsible(customerId, byId) == person;
+    }
+
+    private async Task<string?> ResponsibleNameAsync(Guid? responsibleId, CancellationToken ct) =>
+        responsibleId is { } id && await store.GetWorkerAsync(id, ct) is { } w ? $"Responsible: {w.Name}" : null;
+
+    public async Task<ReportTable> ProfitabilityTableAsync(DateOnly? from, DateOnly to, Guid? responsibleId = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var figures = await ProfitabilityAsync(from, to, ct);
+        var mine = await ResponsibleFilterAsync(responsibleId, ct);
+        var figures = (await ProfitabilityAsync(from, to, ct)).Where(f => mine(f.Project.Customer.Id)).ToList();
         var rows = figures.Select(f => new ReportTableRow(
         [
             new ReportCell(f.Project.FullName, new ReportLink("project", f.Project.Project.Id)),
@@ -169,7 +182,7 @@ public sealed class ProjectReports(
         ], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Project profitability",
-            [company.Name, Describe(from, to)],
+            [company.Name, Describe(from, to), .. new[] { await ResponsibleNameAsync(responsibleId, ct) }.OfType<string>()],
             [
                 new("Project"), new("Status"), new("Income", ColumnFormat.Money), new("Expenses", ColumnFormat.Money), new("Labor", ColumnFormat.Money),
                 new("Mileage", ColumnFormat.Money), new("Profit", ColumnFormat.Money), new("Margin", ColumnFormat.Percent), new("Hours", ColumnFormat.Number),
@@ -302,9 +315,10 @@ public sealed class ProjectReports(
             rows);
     }
 
-    public async Task<ReportTable> UnbilledWorkAsync(DateOnly asOf, bool detail, CancellationToken ct = default)
+    public async Task<ReportTable> UnbilledWorkAsync(DateOnly asOf, bool detail, Guid? responsibleId = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
+        var mine = await ResponsibleFilterAsync(responsibleId, ct);
         // Fixed fees are billed as the fee, and written-off time won't be billed: neither is work in progress.
         var fixedFee = (await store.ListProjectsAsync(ct)).Where(p => p.Arrangement == BillingArrangement.FixedFee).Select(p => p.CustomerId).ToHashSet();
         var time = (await store.ListTimeAsync(new TimeFilter(To: asOf), ct)).Where(t => t.Billable && !t.IsRunning && t.CustomerId is { } c && !fixedFee.Contains(c) && !t.WrittenOff).ToList();
@@ -322,6 +336,7 @@ public sealed class ProjectReports(
                 .Select(t => new UnbilledPiece(t.CustomerId!.Value, t.Date, $"{t.Miles:0.#} miles: {t.Purpose}", 0m, 0m, t.Amount, 0m)))
             .Concat(expenses.Where(e => Waiting(e.InvoiceId))
                 .Select(e => new UnbilledPiece(e.CustomerId, e.Date, e.Description, 0m, 0m, 0m, e.Amount)))
+            .Where(x => mine(x.CustomerId))
             .ToList();
 
         var rows = new List<ReportTableRow>();
@@ -352,7 +367,7 @@ public sealed class ProjectReports(
         ], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Unbilled work",
-            [company.Name, $"As of {asOf:MMM d, yyyy}"],
+            [company.Name, $"As of {asOf:MMM d, yyyy}", .. new[] { await ResponsibleNameAsync(responsibleId, ct) }.OfType<string>()],
             [
                 new(detail ? "Client and work" : "Client"), new("Hours", ColumnFormat.Number), new("Time", ColumnFormat.Money), new("Mileage", ColumnFormat.Money),
                 new("Expenses", ColumnFormat.Money), new("Total", ColumnFormat.Money), new(detail ? "Date" : "Oldest", ColumnFormat.Date),

@@ -1,0 +1,50 @@
+@using OpenBook.Application.Projects
+@inject WorkerService Workers
+@inject ProjectService Projects
+
+@* The person responsible for a client or project; a project without one has its client's (or parent's). Shown once there are people. *@
+@if (_people.Count > 0)
+{
+    <section class="card no-print" id="responsible">
+        <h2>Responsible</h2>
+        <PostForm Action="@($"/customers/{CustomerId}/responsible")" data-enhance="false" class="inline-actions">
+            <AntiforgeryToken />
+            @if (Back is not null)
+            {
+                <input type="hidden" name="back" value="@Back" />
+            }
+            <select name="workerId" aria-label="Person responsible">
+                <option value="">@(_inherited is { } i ? $"As above: {Name(i)}" : "Nobody chosen")</option>
+                @foreach (var w in _people.Where(p => p.IsActive || p.Id == _own))
+                {
+                    <option value="@w.Id" selected="@(w.Id == _own)">@w.Name@(w.IsActive ? "" : " (inactive)")</option>
+                }
+            </select>
+            <button type="submit" class="secondary">Save</button>
+        </PostForm>
+        <p class="hint">The partner or manager answering for this work. The project profitability and unbilled work reports can show one person's. Projects below this one take the same person unless they name their own.</p>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<OpenBook.Domain.Projects.Worker> _people = [];
+    private Guid? _own;
+    private Guid? _inherited;
+
+    [Parameter, EditorRequired] public Guid CustomerId { get; set; }
+
+    /// <summary>Where to come back to after saving (the customer page when null).</summary>
+    [Parameter] public string? Back { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _people = await Workers.ListAsync(includeInactive: true);
+        if (_people.Count == 0)
+            return;
+        var (own, effective) = await Projects.ResponsibleForAsync(CustomerId);
+        _own = own;
+        _inherited = own is null ? effective : null;
+    }
+
+    private string Name(Guid id) => _people.FirstOrDefault(p => p.Id == id)?.Name ?? "someone no longer listed";
+}

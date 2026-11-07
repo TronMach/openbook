@@ -3,6 +3,7 @@ using OpenBook.Application.Projects;
 using OpenBook.Application;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Projects;
+using OpenBook.Web.Security;
 
 namespace OpenBook.Web.Endpoints;
 
@@ -29,6 +30,20 @@ public static class ProjectEndpoints
 
         // Fields: workerId, week (any day of it), and per row r: c:r, i:r, b:r and h:r:d (d = 0 for Monday … 6). A posted
         // empty cell means zero; a disabled (locked) cell isn't posted, so it's left alone.
+        app.MapPost("/customers/{id:guid}/responsible", async (Guid id, IFormCollection form, ProjectService projects, CancellationToken ct) =>
+        {
+            var back = AccessRules.LocalPath(form["back"]) ?? $"/customers/{id}";
+            try
+            {
+                await projects.SetResponsibleAsync(id, Guid.TryParse(form["workerId"], out var w) ? w : null, ct);
+                return Results.Redirect($"{back}#responsible");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}{(back.Contains('?', StringComparison.Ordinal) ? '&' : '?')}error={Uri.EscapeDataString(ex.Message)}#responsible");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/time/week", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {
             var workerId = Guid.TryParse(form["workerId"], out var w) ? w : Guid.Empty;

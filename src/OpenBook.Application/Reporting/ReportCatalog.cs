@@ -58,6 +58,9 @@ public enum ReportInputs
 
     /// <summary>grantId: which grant.</summary>
     Grant = 4096,
+
+    /// <summary>responsibleId: only clients and projects that person is responsible for (blank for all).</summary>
+    Responsible = 8192,
 }
 
 public sealed record ReportDefinition(
@@ -230,7 +233,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("tax-summary", "Tax summary", "Income and expenses totalled by the lines of your income tax return.",
             "Taxes", ReportInputs.Period | ReportInputs.Basis, DatePreset.LastFiscalYear),
         new("project-profitability", "Project profitability", "Each project's income, costs (expenses, labor, mileage) and profit, with its cost budget and what's not billed yet.",
-            "Projects and time", ReportInputs.Period),
+            "Projects and time", ReportInputs.Period | ReportInputs.Responsible),
         new("time-by-customer", "Time by customer", "Hours worked for each customer and project, by whom, and whether they're billed.",
             "Projects and time", ReportInputs.Period, DatePreset.ThisMonth),
         new("mileage-log", "Mileage log", "Business trips in a year with miles driven and their value at the standard mileage rate.",
@@ -240,7 +243,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("channel-sales-tax", "Sales tax by state (online orders)", "Sales, shipping and tax charged on channel orders by ship-to state: what you collected apart from what marketplaces collected.",
             "Taxes", ReportInputs.Period, DatePreset.LastQuarter),
         new("unbilled-work", "Unbilled work", "Billable time, mileage and expenses not invoiced yet, by client and project, with the oldest work waiting.",
-            "Projects and time", ReportInputs.AsOf | ReportInputs.Detail),
+            "Projects and time", ReportInputs.AsOf | ReportInputs.Detail | ReportInputs.Responsible),
         new("utilization", "Utilization", "Each person's billable and other hours, against the hours they're available, with what the billable time is worth.",
             "Projects and time", ReportInputs.Period, DatePreset.LastMonth),
         new("fixed-assets", "Fixed asset register", "Each fixed asset's cost, accumulated depreciation and book value on a date.",
@@ -362,7 +365,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "fixed-assets" => await Get<Assets.AssetReports>().RegisterAsync(asOf, ct),
             "depreciation-schedule" => await Get<Assets.AssetReports>().ScheduleAsync(p.GetYear("year") ?? today.Year, ct),
             "loans" => await Get<Assets.AssetReports>().LoansAsync(asOf, ct),
-            "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, ct),
+            "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, p.GetId("responsibleId"), ct),
             "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, ct),
             "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetYear("year") ?? today.Year, ct),
             "channel-sales" => await Get<Channels.ChannelSalesReport>().TableAsync(from, range.To, ct),
@@ -386,7 +389,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "grants" => await Get<Nonprofit.NonprofitReports>().GrantsAsync(asOf, ct),
             "form-990-expenses" => await Get<Nonprofit.NonprofitReports>().Form990ExpensesAsync(from, range.To, basis, ct),
             "channel-sales-tax" => await Get<Channels.ChannelOrderService>().TaxByStateAsync(from, range.To, ct),
-            "unbilled-work" => await Get<Projects.ProjectReports>().UnbilledWorkAsync(asOf, p.GetFlag("detail"), ct),
+            "unbilled-work" => await Get<Projects.ProjectReports>().UnbilledWorkAsync(asOf, p.GetFlag("detail"), p.GetId("responsibleId"), ct),
             "utilization" => await Get<Projects.ProjectReports>().UtilizationAsync(from, range.To, ct),
             _ => plugins.Report(definition.Key) is { } plugin
                 ? await plugin.Run(services, p, ct)

@@ -49,6 +49,11 @@ public sealed class Customer
     /// <summary>The customer this one is a sub-customer (job, project, location) of; null at the top level.</summary>
     public Guid? ParentId { get; private set; }
 
+    /// <summary>The person (a worker) responsible for this client or project; null = the parent's, up the tree.</summary>
+    public Guid? ResponsibleWorkerId { get; private set; }
+
+    public void SetResponsible(Guid? workerId) => ResponsibleWorkerId = workerId == Guid.Empty ? null : workerId;
+
     /// <summary>
     /// A sub-customer whose invoices the parent pays: the parent's payments and credits can settle them, and
     /// they appear on the parent's statement.
@@ -214,6 +219,21 @@ public static class CustomerTree
     /// <summary>
     /// Who is billed for the customer's invoices: walks up through sub-customers billed with their parent.
     /// </summary>
+    /// <summary>Who's responsible for the customer: its own person, else the nearest one up the tree.</summary>
+    public static Guid? Responsible(Guid customerId, IReadOnlyDictionary<Guid, Customer> byId)
+    {
+        ArgumentNullException.ThrowIfNull(byId);
+        var id = (Guid?)customerId;
+        for (var i = 0; i <= MaxDepth && id is { } current && byId.TryGetValue(current, out var c); i++)
+        {
+            if (c.ResponsibleWorkerId is { } worker)
+                return worker;
+            id = c.ParentId;
+        }
+
+        return null;
+    }
+
     public static Guid BillTo(Guid customerId, IReadOnlyDictionary<Guid, Customer> byId)
     {
         var id = customerId;

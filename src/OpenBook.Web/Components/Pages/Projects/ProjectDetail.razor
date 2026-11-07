@@ -71,6 +71,8 @@
             <p>Not billed yet: @Labels.Amount(_figures.Unbilled) (time @Labels.Amount(_figures.UnbilledTime), expenses @Labels.Amount(_figures.UnbilledExpenses), mileage @Labels.Amount(_figures.UnbilledMileage)). <ActionLink Href="@($"/sales/invoices/new?customer={_project.Customer.Id}")">Put it on an invoice</ActionLink>.</p>
         }
 
+        <ResponsibleCard CustomerId="_project.Customer.Id" Back="@($"/projects/{_project.Project.Id}")" />
+
         <h2>Time</h2>
         @if (_time.Count == 0)
         {

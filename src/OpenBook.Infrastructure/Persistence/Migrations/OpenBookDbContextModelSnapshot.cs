@@ -5410,6 +5410,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("PriceLevelId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ResponsibleWorkerId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ShippingAddress")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
