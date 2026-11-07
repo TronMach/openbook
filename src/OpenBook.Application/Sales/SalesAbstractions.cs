@@ -93,6 +93,9 @@ public interface ISalesStore
     /// <summary>Posted payments dated in the range (from null = since the beginning), untracked.</summary>
     Task<IReadOnlyList<CustomerPayment>> ListPostedPaymentsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
 
+    /// <summary>Posted payments that came back (<see cref="CustomerPayment.ReturnedOn"/>) in the range, untracked; rare, so all of them when both are null.</summary>
+    Task<IReadOnlyList<CustomerPayment>> ListReturnedPaymentsAsync(DateOnly? fromDate, DateOnly? toDate, CancellationToken ct);
+
     /// <summary>Posted customer refunds dated in the range (from null = since the beginning), untracked.</summary>
     Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
 
@@ -315,6 +318,18 @@ public sealed class SalesAccounts(AccountService accounts)
             .FirstOrDefault(a => a.Type is AccountType.Income or AccountType.Expense && string.Equals(a.Name, DiscountsAccountName, StringComparison.OrdinalIgnoreCase));
         return existing ?? await accounts.CreateUsualAsync(new CreateAccountCommand(DiscountsAccountName, AccountType.Income,
             Description: "Discounts on sales and early payment discounts; reduces income."), ct);
+    }
+
+    public const string BankChargesAccountName = "Bank Service Charges";
+
+    /// <summary>Where a bank's fees go (a returned check's fee): the active expense account of that name, made on first use.</summary>
+    public async Task<Account> GetOrCreateBankChargesAsync(CancellationToken ct)
+    {
+        var chart = await accounts.GetChartAsync(ct);
+        var existing = chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.Expense && string.Equals(a.Name, BankChargesAccountName, StringComparison.OrdinalIgnoreCase));
+        return existing ?? await accounts.CreateUsualAsync(new CreateAccountCommand(BankChargesAccountName, AccountType.Expense,
+            Description: "Fees the bank charges: account fees, returned checks, wires."), ct);
     }
 
     /// <summary>The active "Undeposited Funds" account, or null if the chart has none.</summary>

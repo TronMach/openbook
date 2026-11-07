@@ -144,6 +144,8 @@ public sealed class PaymentService(
         var payment = await store.GetPaymentAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (payment.Status == DocumentStatus.Voided)
             throw new DomainException("payment.voided", "This payment is voided, so it can't be changed.");
+        if (payment.ReturnedOn is not null)
+            throw new DomainException("payment.returned", "This payment came back unpaid. Take the return back first.");
         var customer = await store.GetCustomerAsync(payment.CustomerId, ct) ?? throw new EntityNotFoundException("customer", payment.CustomerId);
 
         var depositId = command.DepositAccountId is { } given && given != payment.DepositAccountId
@@ -266,6 +268,8 @@ public sealed class PaymentService(
             throw new DomainException("payment.deposited", "This payment is in a bank deposit. Void the deposit first.");
         if (payment.PayoutId is not null)
             throw new DomainException("payment.in_payout", "A sales channel payout brought this money in. Void the payout first.");
+        if (payment.ReturnedOn is not null)
+            throw new DomainException("payment.returned", "This payment came back unpaid. Take the return back first.");
 
         var before = Snapshot(payment);
         // Refuses deposits already reconciled at the bank, before anything changes.
@@ -276,6 +280,93 @@ public sealed class PaymentService(
             invoices[application.InvoiceId].RemovePayment(application.Settled);
 
         store.Add(Audit(AuditAction.Voided, payment, before));
+        await store.SaveChangesAsync(ct);
+        return payment;
+    }
+
+    /// <summary>
+    /// A payment that came back unpaid (a bounced check, a reversed transfer): posts, on the day it came back, Dr A/R and
+    /// Cr the bank it was in, takes back any early payment discount, and optionally the bank's fee (Dr the fee account,
+    /// "Bank Service Charges" unless chosen, Cr the bank). The payment and its deposit stand as they happened; its invoices
+    /// are owed again from that day, and its unused credit is gone. Refused while it's still waiting to be deposited (void
+    /// it instead), refunded, or brought in by a sales channel payout.
+    /// </summary>
+    public async Task<CustomerPayment> ReturnAsync(Guid id, DateOnly date, decimal fee, Guid? feeAccountId, string reason, CancellationToken ct = default)
+    {
+        var payment = await store.GetPaymentAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (payment.Status == DocumentStatus.Voided)
+            throw new DomainException("payment.voided", "This payment is voided.");
+        if (payment.Amount <= 0m)
+            throw new DomainException("payment.nothing_to_return", "No money came in with this payment, so none can come back.");
+        var chart = await ledger.ListAccountsAsync(ct);
+        Guid bankId;
+        if (payment.DepositId is { } depositId)
+            bankId = (await store.GetDepositAsync(depositId, ct) ?? throw new EntityNotFoundException("deposit", depositId)).BankAccountId;
+        else if (chart.FirstOrDefault(a => a.Id == payment.DepositAccountId) is { Type: Domain.Accounts.AccountType.Bank })
+            bankId = payment.DepositAccountId;
+        else
+            throw new DomainException("payment.not_in_bank", "This payment hasn't been deposited yet, so the bank hasn't taken it back. Void the payment instead.");
+
+        // Checked here, so a refusal leaves the payment as it was.
+        payment.MarkReturned(date, Guid.Empty, bankId, fee, reason);
+        payment.UndoReturn();
+
+        var invoices = (await store.GetInvoicesAsync(payment.Applications.Select(a => a.InvoiceId).ToList(), ct)).ToDictionary(i => i.Id);
+        var drafts = payment.Applications.Select(a => new PaymentApplicationDraft(a.InvoiceId, a.Amount, a.Discount)).ToList();
+        var discount = payment.DiscountTaken;
+        var discountsAccount = discount > 0m ? await salesAccounts.GetOrCreateDiscountsAsync(ct) : null;
+        var lines = new List<JournalLineDraft> { JournalLineDraft.Dr(payment.ReceivableAccountId, payment.Amount + discount), JournalLineDraft.Cr(bankId, payment.Amount) };
+        // The early payment discount is taken back on the same classes and location it was given on.
+        lines.AddRange(DiscountLines(drafts, invoices, discountsAccount?.Id).Select(l => l with { Debit = l.Credit, Credit = l.Debit }));
+        if (fee > 0m)
+        {
+            var feeAccount = feeAccountId ?? (await salesAccounts.GetOrCreateBankChargesAsync(ct)).Id;
+            lines.Add(JournalLineDraft.Dr(feeAccount, fee));
+            lines.Add(JournalLineDraft.Cr(bankId, fee));
+        }
+
+        var customer = await store.GetCustomerAsync(payment.CustomerId, ct) ?? throw new EntityNotFoundException("customer", payment.CustomerId);
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(date, lines,
+            $"Payment returned · {customer.DisplayName}{(payment.Reference is { } r ? $" · {r}" : "")}", CustomerPayment.ReturnSource, payment.Id), ct);
+
+        var before = Snapshot(payment);
+        var invoicesBefore = invoices.Values.ToDictionary(i => i.Id, InvoiceService.Snapshot);
+        payment.MarkReturned(date, entry.Id, bankId, fee, reason);
+        foreach (var application in payment.Applications)
+            invoices[application.InvoiceId].RemovePayment(application.Settled);
+        foreach (var invoice in invoices.Values)
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", invoice.Id, invoicesBefore[invoice.Id], InvoiceService.Snapshot(invoice)));
+        store.Add(Audit(AuditAction.Updated, payment, before));
+        await store.SaveChangesAsync(ct);
+        return payment;
+    }
+
+    /// <summary>
+    /// Takes back a return recorded by mistake (the check cleared after all): its entry is voided and the payment settles
+    /// its invoices again, refused when one of them has been paid another way since.
+    /// </summary>
+    public async Task<CustomerPayment> UndoReturnAsync(Guid id, string reason, CancellationToken ct = default)
+    {
+        var payment = await store.GetPaymentAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (payment.ReturnEntryId is not { } entryId)
+            throw new DomainException("payment.not_returned", "This payment isn't marked as returned.");
+        var invoices = (await store.GetInvoicesAsync(payment.Applications.Select(a => a.InvoiceId).ToList(), ct)).ToDictionary(i => i.Id);
+        foreach (var application in payment.Applications)
+        {
+            var invoice = invoices[application.InvoiceId];
+            if (invoice.Status != DocumentStatus.Posted || invoice.AmountPaid + application.Settled > invoice.Total)
+                throw new DomainException("payment.return_invoice_paid", $"Invoice {invoice.Number} has been paid or changed since, so this payment can't settle it again.");
+        }
+
+        await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
+        var before = Snapshot(payment);
+        var invoicesBefore = invoices.Values.ToDictionary(i => i.Id, InvoiceService.Snapshot);
+        payment.UndoReturn();
+        foreach (var application in payment.Applications)
+            invoices[application.InvoiceId].ApplyPayment(application.Settled);
+        foreach (var invoice in invoices.Values)
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", invoice.Id, invoicesBefore[invoice.Id], InvoiceService.Snapshot(invoice)));
+        store.Add(Audit(AuditAction.Updated, payment, before));
         await store.SaveChangesAsync(ct);
         return payment;
     }
@@ -295,6 +386,9 @@ public sealed class PaymentService(
         Status = p.Status.ToString(),
         p.AmountRefunded,
         p.DepositId,
+        p.ReturnedOn,
+        p.ReturnFee,
+        p.ReturnReason,
         Applications = p.Applications.Select(a => new { a.InvoiceId, a.Amount, a.Discount, a.AppliedOn }),
     });
 }

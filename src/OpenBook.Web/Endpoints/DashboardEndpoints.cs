@@ -152,6 +152,22 @@ public static class DashboardEndpoints
             return Results.Redirect($"/reports/1099?year={year}");
         }).RequireAuthorization();
 
+        app.MapPost("/accountant/1099/prior", async (IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
+        {
+            var year = Year(form);
+            try
+            {
+                if (!Guid.TryParse(form["vendorId"], out var vendorId))
+                    throw new DomainException("prior1099.vendor_required", "Choose a vendor.");
+                await filing.SetPriorAsync(vendorId, year, FormNumbers.Amount(form["amount"]), form["note"], ct);
+                return Results.Redirect($"/reports/1099?year={year}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/reports/1099?year={year}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/accountant/1099/filed/clear", async (IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
         {
             var year = Year(form);

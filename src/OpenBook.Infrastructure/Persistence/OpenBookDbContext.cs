@@ -151,6 +151,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<PriceLevel> PriceLevels => Set<PriceLevel>();
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
     public DbSet<Filing1099> Filings1099 => Set<Filing1099>();
+    public DbSet<Prior1099Payment> Prior1099Payments => Set<Prior1099Payment>();
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<LineSegment> LineSegments => Set<LineSegment>();
     public DbSet<EntryTag> EntryTags => Set<EntryTag>();
@@ -598,6 +599,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(f => f.FiledBy).HasMaxLength(100);
             b.HasIndex(f => new { f.Year, f.VendorId }).IsUnique();
             b.HasOne<Vendor>().WithMany().HasForeignKey(f => f.VendorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Prior1099Payment>(b =>
+        {
+            b.ToTable("Prior1099Payments");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(p => p.Note).HasMaxLength(200);
+            b.Property(p => p.EnteredBy).HasMaxLength(100);
+            b.HasIndex(p => new { p.Year, p.VendorId }).IsUnique();
+            b.HasOne<Vendor>().WithMany().HasForeignKey(p => p.VendorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PositivePaySettings>(b =>
@@ -1799,6 +1811,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(p => p.Memo).HasMaxLength(1000);
             b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             b.Property(p => p.AmountRefunded).HasColumnName("AmountRefundedMinor").HasConversion(MinorUnits);
+            b.Property(p => p.ReturnFee).HasColumnName("ReturnFeeMinor").HasConversion(MinorUnits);
+            b.Property(p => p.ReturnReason).HasMaxLength(500);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.ReturnEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.ReturnAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(p => p.ReturnedOn);
             b.Ignore(p => p.AmountApplied);
             b.Ignore(p => p.DiscountTaken);
             b.Ignore(p => p.Unapplied);

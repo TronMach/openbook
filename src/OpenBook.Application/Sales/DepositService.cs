@@ -149,6 +149,7 @@ public sealed class DepositService(
         var deposit = await store.GetDepositAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (deposit.Status == DocumentStatus.Voided)
             throw new DomainException("deposit.already_voided", "This deposit is voided.");
+        await EnsureNoReturnedPaymentsAsync(deposit, ct);
         var account = (await accounts.GetChartAsync(ct)).Get(command.BankAccountId);
         if (account.Type != AccountType.Bank || !account.IsActive)
             throw new DomainException("deposit.account_not_bank", $"'{account.Name}' isn't an active bank account.");
@@ -304,12 +305,24 @@ public sealed class DepositService(
         }
     }
 
+    /// <summary>
+    /// A payment the bank took back stays in its deposit, which happened: the return took the money out of that bank.
+    /// Changing or voiding the deposit would move it from under the return.
+    /// </summary>
+    private async Task EnsureNoReturnedPaymentsAsync(BankDeposit deposit, CancellationToken ct)
+    {
+        var ids = deposit.Lines.Where(l => l.Kind == DepositedKind.Payment).Select(l => l.SourceId).ToList();
+        if (ids.Count > 0 && (await store.GetPaymentsAsync(ids, ct)).Any(p => p.ReturnedOn is not null))
+            throw new DomainException("deposit.payment_returned", "A payment in this deposit came back unpaid. Take the return back on the payment's page first.");
+    }
+
     /// <summary>Voiding puts the payments back in undeposited funds.</summary>
     public async Task<BankDeposit> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var deposit = await store.GetDepositAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (deposit.Status == DocumentStatus.Voided)
             throw new DomainException("deposit.already_voided", "This deposit is already voided.");
+        await EnsureNoReturnedPaymentsAsync(deposit, ct);
 
         var before = Snapshot(deposit);
         await engine.StageVoidAsync(deposit.JournalEntryId, reason, fromDocument: true, ct);

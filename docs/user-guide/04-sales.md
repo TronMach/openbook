@@ -118,6 +118,18 @@ To correct a payment, for example one applied to the wrong invoice, open it and 
 - Once the payment is in a bank deposit, matched to a bank feed line or taken online, the amount and **Deposit to** account stay (and an online payment's reference too); how it's applied can still change.
 - A payment reconciled at the bank can't be changed, as it can't be voided.
 
+### When a payment comes back
+
+A check that bounces, or a transfer the bank reverses, isn't voided: the payment happened, and so did its deposit. Open the payment and fill in **The payment came back**:
+
+- **Came back on**: the date on the bank statement.
+- **The bank's fee**, if it charged one, and the account it goes to (**Bank Service Charges** unless you choose another).
+- **Why it came back**, for example "insufficient funds".
+
+**Record the returned payment** takes the money (and the fee) out of the bank it was deposited to on that date, takes back any early payment discount, and makes the invoices it paid owed again from that date. Agings and statements on earlier dates still show them paid; the statement lists the return as its own line. Any credit the payment left with the customer is gone. On the cash basis the income comes off on the day it came back. To charge the customer a fee for it, make an invoice.
+
+The payment shows **Returned by the bank**, and can't then be changed, voided, refunded or applied; nor can its deposit be changed or voided. If it was recorded by mistake, **Take the return back** puts everything as it was, unless one of its invoices has been paid another way since. A payment still waiting in **Undeposited Funds** never reached the bank: void it instead.
+
 ## Making deposits
 
 If you received payments into Undeposited Funds, record the trip to the bank: **Banking → Make deposit** (the button shows how many are waiting).

@@ -4302,6 +4302,44 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("Filings1099", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Purchases.Prior1099Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<DateTimeOffset>("EnteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EnteredBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("Year", "VendorId")
+                        .IsUnique();
+
+                    b.ToTable("Prior1099Payments", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.PurchaseOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5400,6 +5438,23 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<Guid?>("ReturnAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReturnEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ReturnFee")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ReturnFeeMinor");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateOnly?>("ReturnedOn")
+                        .HasColumnType("date");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -5419,6 +5474,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsUnique();
 
                     b.HasIndex("ReceivableAccountId");
+
+                    b.HasIndex("ReturnAccountId");
+
+                    b.HasIndex("ReturnEntryId");
+
+                    b.HasIndex("ReturnedOn");
 
                     b.HasIndex("CustomerId", "Date");
 
@@ -8899,6 +8960,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Purchases.Prior1099Payment", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Purchases.PurchaseOrder", b =>
                 {
                     b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
@@ -9725,6 +9795,16 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("ReceivableAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.OwnsMany("OpenBook.Domain.Sales.PaymentApplication", "Applications", b1 =>
                         {

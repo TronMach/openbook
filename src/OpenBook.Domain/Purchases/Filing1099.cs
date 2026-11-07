@@ -50,3 +50,42 @@ public sealed partial record AddressParts(string Street, string City, string Sta
     [GeneratedRegex(@"^(?<city>.+?)[,\s]+(?<state>[A-Za-z]{2})\.?\s+(?<zip>\d{5}(-\d{4})?)$", RegexOptions.CultureInvariant, 500)]
     private static partial Regex LastLine();
 }
+
+/// <summary>
+/// What a vendor was paid in a year before the business used OpenBook (or in history moved in as journal entries), so
+/// their 1099 counts it: a figure typed from the old books, reportable (not by card). Posts nothing; one per vendor and year.
+/// </summary>
+public sealed class Prior1099Payment
+{
+    private Prior1099Payment() => EnteredBy = string.Empty;
+
+    public Guid Id { get; private set; }
+
+    public int Year { get; private set; }
+
+    public Guid VendorId { get; private set; }
+
+    public decimal Amount { get; private set; }
+
+    public string? Note { get; private set; }
+
+    public DateTimeOffset EnteredAt { get; private set; }
+
+    public string EnteredBy { get; private set; }
+
+    public static Prior1099Payment Create(int year, Guid vendorId, decimal amount, string? note, DateTimeOffset at, string by)
+    {
+        if (year is < 2000 or > 2100)
+            throw new Common.DomainException("prior1099.year_invalid", "Choose a year between 2000 and 2100.");
+        var payment = new Prior1099Payment { Id = Guid.CreateVersion7(), Year = year, VendorId = vendorId };
+        payment.Change(amount, note, at, by);
+        return payment;
+    }
+
+    public void Change(decimal amount, string? note, DateTimeOffset at, string by)
+    {
+        if (amount <= 0m || decimal.Round(amount, 2) != amount || amount > Common.Money.MaxAmount)
+            throw new Common.DomainException("prior1099.amount_invalid", "Enter an amount above zero, in dollars and cents.");
+        (Amount, Note, EnteredAt, EnteredBy) = (amount, Common.Text.Optional(note, 200, "prior1099.note_too_long", "Note"), at, by);
+    }
+}

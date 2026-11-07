@@ -17,6 +17,13 @@ public interface IPurchasesStore
 
     void Add(Filing1099 filing);
 
+    /// <summary>Amounts paid before OpenBook, tracked, for the year.</summary>
+    Task<IReadOnlyList<Prior1099Payment>> ListPrior1099Async(int year, CancellationToken ct);
+
+    void Add(Prior1099Payment payment);
+
+    void Remove(Prior1099Payment payment);
+
     void Remove(Filing1099 filing);
 
     Task<IReadOnlyList<Vendor>> ListVendorsAsync(CancellationToken ct);

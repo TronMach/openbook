@@ -18,6 +18,9 @@ namespace OpenBook.Api;
 public sealed record GeneralLedgerLineResponse(
     DateOnly Date, long EntryNumber, Guid JournalEntryId, string Source, Guid? SourceId, string? Memo, decimal Debit, decimal Credit, decimal Balance);
 
+/// <param name="Amount">Paid before OpenBook in the year; zero or null removes it.</param>
+public sealed record Prior1099Request(Guid VendorId, decimal? Amount, string? Note);
+
 public sealed record UpdateBudgetRequest(string Name, IReadOnlyList<BudgetAmount> Amounts);
 
 public sealed record SaveReportRequest(string Name, string Report, string? Query);
@@ -161,6 +164,13 @@ internal static class ReportsApi
         accountant.MapDelete("/1099-filed", async (int year, Filing1099Service s, CancellationToken ct) =>
         {
             await s.ClearFiledAsync(year, ct);
+            return Results.NoContent();
+        });
+        accountant.MapGet("/1099-prior", async (int year, Filing1099Service s, CancellationToken ct) =>
+            (await s.PriorAsync(year, ct)).Values.Select(p => new Prior1099Request(p.VendorId, p.Amount, p.Note)));
+        accountant.MapPut("/1099-prior/{year:int}", async (int year, Prior1099Request body, Filing1099Service s, CancellationToken ct) =>
+        {
+            await s.SetPriorAsync(body.VendorId, year, body.Amount, body.Note, ct);
             return Results.NoContent();
         });
         accountant.MapPost("/vendors/{id:guid}/w9-request", async (Guid id, Filing1099Service s, CancellationToken ct) =>

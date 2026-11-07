@@ -68,7 +68,7 @@ public sealed class BooksCheckService(
     /// <summary>The sources whose entries A/R aging accounts for.</summary>
     public static readonly IReadOnlySet<string> ReceivableSources = new HashSet<string>(StringComparer.Ordinal)
     {
-        Invoice.Source, CustomerPayment.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Retainer.ApplicationSource,
+        Invoice.Source, CustomerPayment.Source, CustomerPayment.ReturnSource, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Retainer.ApplicationSource,
     };
 
     /// <summary>The sources whose entries put money in, or take it out of, holding accounts such as Undeposited Funds.</summary>
@@ -243,6 +243,8 @@ public sealed class BooksCheckService(
     [
         .. d.Invoices.Select(i => new Document($"Invoice {i.Number}", "invoice", i.Id, Invoice.Source, i.JournalEntryId, i.Status == DocumentStatus.Posted)),
         .. d.Payments.Select(p => new Document($"Customer payment of {p.Date:MMM d, yyyy}", "payment", p.Id, CustomerPayment.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted)),
+        .. d.Payments.Where(p => p.ReturnEntryId is not null).Select(p => new Document($"Return of the customer payment of {p.Date:MMM d, yyyy}", "payment", p.Id, CustomerPayment.ReturnSource,
+            p.ReturnEntryId!.Value, p.Status == DocumentStatus.Posted)),
         .. d.Receipts.Select(r => new Document($"Sales receipt {r.Number}", "sales_receipt", r.Id, SalesReceipt.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
         .. d.CreditMemos.Select(c => new Document($"Credit memo {c.Number}", "credit_memo", c.Id, CreditMemo.Source, c.JournalEntryId, c.Status == DocumentStatus.Posted)),
         .. d.Refunds.Select(r => new Document($"Customer refund of {r.Date:MMM d, yyyy}", "refund", r.Id, CustomerRefund.Source, r.JournalEntryId, r.Status == DocumentStatus.Posted)),
@@ -317,7 +319,7 @@ public sealed class BooksCheckService(
     {
         var settled = new Dictionary<Guid, decimal>();
         void Add(Guid invoiceId, decimal amount) => settled[invoiceId] = settled.GetValueOrDefault(invoiceId) + amount;
-        foreach (var p in d.Payments.Where(p => p.Status == DocumentStatus.Posted))
+        foreach (var p in d.Payments.Where(p => p.Status == DocumentStatus.Posted && p.ReturnedOn is null))
             foreach (var a in p.Applications)
                 Add(a.InvoiceId, a.Settled);
         foreach (var c in d.CreditMemos.Where(c => c.Status == DocumentStatus.Posted))

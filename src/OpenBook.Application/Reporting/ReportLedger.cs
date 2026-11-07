@@ -31,7 +31,7 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
-        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Retainer.ApplicationSource, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, BillPayment.Source];
+        [Invoice.Source, CreditMemo.Source, CustomerRefund.Source, BadDebtWriteOff.Source, Retainer.ApplicationSource, Bill.Source, VendorCredit.Source, VendorRefund.Source, CustomerPayment.Source, CustomerPayment.ReturnSource, BillPayment.Source];
 
     /// <summary>Every class, location and tag's full name.</summary>
     public async Task<IReadOnlyDictionary<Guid, string>> SegmentNamesAsync(CancellationToken ct = default) =>
@@ -166,16 +166,20 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
 
         // Only what's dated in the range, the documents it settles, and whatever else settles those.
         var customerPayments = await sales.ListPostedPaymentsAsync(from, to, ct);
+        // Payments the bank took back: every one (they're few), for the settlement turns; those returned in the range are derived.
+        var returnedPayments = await sales.ListReturnedPaymentsAsync(null, null, ct);
+        var returnedInRange = returnedPayments.Where(p => InRange(p.ReturnedOn!.Value)).ToList();
         var retainers = (await sales.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted).ToList();
         var applications = retainers
             .SelectMany(r => r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)).Select(a => (Retainer: r, Application: a))).ToList();
         var refunds = await sales.ListPostedRefundsAsync(from, to, ct);
         var invoices = (from is null
             ? await sales.ListInvoicesAsync(null, ct)
-            : await sales.FindInvoicesAsync(customerPayments.SelectMany(p => p.Applications.Select(a => a.InvoiceId)).Concat(applications.Select(a => a.Application.InvoiceId)).ToHashSet(), ct))
+            : await sales.FindInvoicesAsync(customerPayments.Concat(returnedInRange).SelectMany(p => p.Applications.Select(a => a.InvoiceId))
+                .Concat(applications.Select(a => a.Application.InvoiceId)).ToHashSet(), ct))
             .ToDictionary(i => i.Id);
         var credits = await SalesCreditsAsync(invoices, refunds, from is null, ct);
-        var salesPlan = await SalesPlanAsync(invoices, credits, retainers, from is null, ct);
+        var salesPlan = await SalesPlanAsync(invoices, credits, retainers, returnedPayments, from is null, ct);
         if (customerPayments.Count > 0)
         {
             foreach (var payment in customerPayments)
@@ -199,6 +203,27 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 if (unapplied != 0m)
                     cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.ReceivableAccountId, -unapplied, memo, CustomerPayment.Source, payment.Id));
             }
+        }
+
+        // A payment the bank took back undoes what it recognized, on the day it came back: the bank and any discount and fee
+        // lines as posted, the invoices' income taken back in the shares the payment gave it, and its unapplied part back in A/R.
+        foreach (var payment in returnedInRange)
+        {
+            var entryId = payment.ReturnEntryId!.Value;
+            var number = entryNumbers.GetValueOrDefault(entryId);
+            var entryLines = byEntry[entryId].ToList();
+            var memo = entryLines.FirstOrDefault()?.EntryMemo;
+            cash.AddRange(entryLines.Where(l => l.AccountId != payment.ReceivableAccountId));
+            foreach (var application in payment.Applications)
+            {
+                var invoice = invoices[application.InvoiceId];
+                foreach (var (accountId, classId, share) in salesPlan.Of(invoice.Id, entryId))
+                    cash.Add(Derived(entryId, number, payment.ReturnedOn!.Value, accountId, -share, memo, CustomerPayment.ReturnSource, payment.Id, classId, invoice.LocationId));
+            }
+
+            var unapplied = payment.Amount - payment.AmountApplied;
+            if (unapplied != 0m)
+                cash.Add(Derived(entryId, number, payment.ReturnedOn!.Value, payment.ReceivableAccountId, unapplied, memo, CustomerPayment.ReturnSource, payment.Id));
         }
 
         // A retainer applied to an invoice is the invoice being paid: the deposit liability goes down by the amount
@@ -289,7 +314,8 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
     }
 
     private async Task<SettlementPlan> SalesPlanAsync(
-        IReadOnlyDictionary<Guid, Invoice> invoices, IReadOnlyDictionary<Guid, CreditMemo> credits, IReadOnlyList<Retainer> retainers, bool everything, CancellationToken ct)
+        IReadOnlyDictionary<Guid, Invoice> invoices, IReadOnlyDictionary<Guid, CreditMemo> credits, IReadOnlyList<Retainer> retainers,
+        IReadOnlyList<CustomerPayment> returned, bool everything, CancellationToken ct)
     {
         var plan = new SettlementPlan();
         var refunds = (await sales.ListPostedRefundsOfCreditMemosAsync([.. credits.Keys], ct)).ToLookup(r => r.CreditMemoId!.Value);
@@ -305,6 +331,8 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         var paid = (await sales.ListPaymentSettlementsAsync(everything ? null : [.. invoices.Keys], ct))
             .Select(s => (InvoiceId: s.DocumentId, Turn: new SettlementPlan.Turn(s.SourceId, s.Date, s.Amount)))
             .Concat(retainers.SelectMany(r => r.Applications.Where(a => !a.IsVoided).Select(a => (a.InvoiceId, Turn: new SettlementPlan.Turn(a.Id, a.AppliedOn, a.Amount)))))
+            // A returned payment's settlement comes back off on the day it came back (a turn of its own, by the return's entry).
+            .Concat(returned.SelectMany(p => p.Applications.Select(a => (a.InvoiceId, Turn: new SettlementPlan.Turn(p.ReturnEntryId!.Value, p.ReturnedOn!.Value, -a.Settled)))))
             .ToLookup(x => x.InvoiceId, x => x.Turn);
         foreach (var invoice in invoices.Values)
             plan.Add(invoice.Id, SettlementPlan.Less(IncomeLines(invoice.Lines), [.. taken[invoice.Id].SelectMany(c => plan.Of(c, invoice.Id))]), paid[invoice.Id]);

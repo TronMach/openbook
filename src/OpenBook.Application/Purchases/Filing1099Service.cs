@@ -35,6 +35,38 @@ public sealed class Filing1099Service(
         (await store.ListFilings1099Async(year, ct)).ToDictionary(f => f.VendorId);
 
     /// <summary>Who needs a 1099 for the year and has no tax ID on file.</summary>
+    public async Task<IReadOnlyDictionary<Guid, Prior1099Payment>> PriorAsync(int year, CancellationToken ct = default) =>
+        (await store.ListPrior1099Async(year, ct)).ToDictionary(p => p.VendorId);
+
+    /// <summary>
+    /// Sets what a vendor was paid in the year before OpenBook (by check or bank, not card); zero or null removes it.
+    /// Audited on the vendor.
+    /// </summary>
+    public async Task SetPriorAsync(Guid vendorId, int year, decimal? amount, string? note, CancellationToken ct = default)
+    {
+        var vendor = await store.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+        var existing = (await store.ListPrior1099Async(year, ct)).FirstOrDefault(p => p.VendorId == vendor.Id);
+        var before = existing is null ? null : JsonSerializer.Serialize(new { PaidBeforeOpenBook = new { Year = year, existing.Amount, existing.Note } });
+        if (amount is null or 0m)
+        {
+            if (existing is null)
+                return;
+            store.Remove(existing);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "vendor", vendor.Id, before, JsonSerializer.Serialize(new { PaidBeforeOpenBook = (object?)null })));
+        }
+        else
+        {
+            if (existing is null)
+                store.Add(existing = Prior1099Payment.Create(year, vendor.Id, amount.Value, note, clock.UtcNow, user.Actor));
+            else
+                existing.Change(amount.Value, note, clock.UtcNow, user.Actor);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "vendor", vendor.Id, before,
+                JsonSerializer.Serialize(new { PaidBeforeOpenBook = new { Year = year, existing.Amount, existing.Note } })));
+        }
+
+        await store.SaveChangesAsync(ct);
+    }
+
     public async Task<IReadOnlyList<Vendor>> MissingTaxIdsAsync(int year, CancellationToken ct = default) =>
         (await payables.Report1099Async(year, null, ct)).Vendors.Where(v => v.MeetsThreshold && v.Vendor.TaxId is null).Select(v => v.Vendor).ToList();
 

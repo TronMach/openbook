@@ -43,6 +43,9 @@ public sealed class CustomerPayment
 {
     public const string Source = "sales.payment";
 
+    /// <summary>The entry taking a returned payment (a bounced check) back out of the bank, on the day it came back.</summary>
+    public const string ReturnSource = "sales.payment_return";
+
     private readonly List<PaymentApplication> _applications = [];
 
     private CustomerPayment() { }
@@ -83,8 +86,54 @@ public sealed class CustomerPayment
     public decimal AmountApplied => _applications.Sum(a => a.Amount);
     public decimal DiscountTaken => _applications.Sum(a => a.Discount);
 
-    /// <summary>Credit left for the customer.</summary>
-    public decimal Unapplied => Status == DocumentStatus.Voided ? 0m : Amount - AmountApplied - AmountRefunded;
+    /// <summary>Credit left for the customer: none once the payment is voided or came back unpaid.</summary>
+    public decimal Unapplied => Status == DocumentStatus.Voided || ReturnedOn is not null ? 0m : Amount - AmountApplied - AmountRefunded;
+
+    /// <summary>
+    /// The day the bank took the money back (a bounced check, a reversed transfer). The payment and its deposit stand, as
+    /// they happened; from this day its applications no longer settle the invoices and it holds no credit.
+    /// </summary>
+    public DateOnly? ReturnedOn { get; private set; }
+
+    /// <summary>The return's entry (<see cref="ReturnSource"/>): Dr A/R, Cr the bank, plus any fee the bank charged.</summary>
+    public Guid? ReturnEntryId { get; private set; }
+
+    /// <summary>The bank account the money came back out of.</summary>
+    public Guid? ReturnAccountId { get; private set; }
+
+    public decimal ReturnFee { get; private set; }
+
+    public string? ReturnReason { get; private set; }
+
+    /// <summary>Whether the payment settles its invoices, and holds its credit, on the date.</summary>
+    public bool StandsOn(DateOnly date) => ReturnedOn is not { } returned || date < returned;
+
+    public void MarkReturned(DateOnly on, Guid entryId, Guid accountId, decimal fee, string reason)
+    {
+        EnsurePosted();
+        if (ReturnedOn is not null)
+            throw new DomainException("payment.returned", "This payment is already marked as returned.");
+        if (AmountRefunded > 0m)
+            throw new DomainException("payment.refunded", "Part of this payment was refunded. Void the refund first.");
+        if (PayoutId is not null)
+            throw new DomainException("payment.in_payout", "A sales channel payout brought this money in; a dispute comes off the payout.");
+        if (on < Date)
+            throw new DomainException("payment.return_before_payment", "A payment can't come back before it was received.");
+        Money.EnsureCents(fee);
+        if (fee < 0m)
+            throw new DomainException("payment.return_fee_invalid", "The bank's fee can't be negative.");
+        var why = Text.Optional(reason, 500, "payment.reason_too_long", "Reason")
+            ?? throw new DomainException("payment.return_reason_required", "Say why the payment came back (for example: insufficient funds).");
+        (ReturnedOn, ReturnEntryId, ReturnAccountId, ReturnFee, ReturnReason) = (on, entryId, accountId, fee, why);
+    }
+
+    public void UndoReturn() => (ReturnedOn, ReturnEntryId, ReturnAccountId, ReturnFee, ReturnReason) = (null, null, null, 0m, null);
+
+    private void EnsureNotReturned()
+    {
+        if (ReturnedOn is not null)
+            throw new DomainException("payment.returned", "This payment came back unpaid. Take the return back first.");
+    }
 
     public static CustomerPayment Create(
         Guid id,
@@ -155,6 +204,7 @@ public sealed class CustomerPayment
         string? reference, string? memo)
     {
         ArgumentNullException.ThrowIfNull(applications);
+        EnsureNotReturned();
         EnsurePosted();
         var lines = Validate(applications);
         Money.EnsureCents(amount);
@@ -183,6 +233,7 @@ public sealed class CustomerPayment
     public void ApplyCredit(Guid invoiceId, decimal amount, DateOnly appliedOn)
     {
         EnsurePosted();
+        EnsureNotReturned();
         Money.EnsureCents(amount);
         if (amount <= 0m)
             throw new DomainException("payment.amount_not_positive", "Payment amounts must be more than zero.");
@@ -201,6 +252,7 @@ public sealed class CustomerPayment
     public void RecordRefund(decimal amount)
     {
         EnsurePosted();
+        EnsureNotReturned();
         if (amount <= 0m || amount > Unapplied)
             throw new DomainException("refund.exceeds_credit", $"Only {Unapplied:N2} of this payment is unapplied.");
         AmountRefunded += amount;
@@ -238,6 +290,7 @@ public sealed class CustomerPayment
     {
         if (Status == DocumentStatus.Voided)
             throw new DomainException("payment.already_voided", "This payment is already voided.");
+        EnsureNotReturned();
         if (AmountRefunded > 0m)
             throw new DomainException("payment.refunded", "Part of this payment was refunded. Void the refund first.");
         if (DepositId is not null)

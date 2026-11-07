@@ -164,6 +164,11 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .Where(p => p.Status == DocumentStatus.Posted && p.Date <= toDate && (fromDate == null || p.Date >= fromDate))
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<CustomerPayment>> ListReturnedPaymentsAsync(DateOnly? fromDate, DateOnly? toDate, CancellationToken ct) =>
+        await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Status == DocumentStatus.Posted && p.ReturnedOn != null && (toDate == null || p.ReturnedOn <= toDate) && (fromDate == null || p.ReturnedOn >= fromDate))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<CustomerRefund>> ListPostedRefundsAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
         await db.CustomerRefunds.AsNoTracking()
             .Where(r => r.Status == DocumentStatus.Posted && r.Date <= toDate && (fromDate == null || r.Date >= fromDate))

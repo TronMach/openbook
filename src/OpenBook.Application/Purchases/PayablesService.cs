@@ -3,6 +3,7 @@ using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
@@ -22,16 +23,18 @@ public sealed record PayablesAgingReport(DateOnly AsOf, IReadOnlyList<VendorAgin
 /// <param name="CardPayments">Paid by card (Form 1099-K), left out of <paramref name="Total"/>; less refunds to a card when netted.</param>
 /// <param name="MeetsThreshold">Whether a 1099 is due.</param>
 /// <param name="Refunds">Refunds the vendor made in the year.</param>
-public sealed record Vendor1099(Vendor Vendor, decimal Total, decimal CardPayments, bool MeetsThreshold, decimal Refunds = 0m);
+/// <param name="Prior">Paid before OpenBook (<see cref="Prior1099Payment"/>), included in <paramref name="Total"/>.</param>
+public sealed record Vendor1099(Vendor Vendor, decimal Total, decimal CardPayments, bool MeetsThreshold, decimal Refunds = 0m, decimal Prior = 0m);
 
 /// <param name="Year">The tax year.</param>
 /// <param name="Threshold">The reporting threshold used.</param>
 /// <param name="Vendors">Vendors tracked for 1099s.</param>
 /// <param name="RefundsNetted">Whether refunds are taken off the totals (<see cref="PurchasingSettings.Net1099Refunds"/>).</param>
-public sealed record Report1099(int Year, decimal Threshold, IReadOnlyList<Vendor1099> Vendors, bool RefundsNetted = false);
+/// <param name="HistoryImported">History was moved in as journal entries dated in the year: payments in it aren't counted unless entered as paid before OpenBook.</param>
+public sealed record Report1099(int Year, decimal Threshold, IReadOnlyList<Vendor1099> Vendors, bool RefundsNetted = false, bool HistoryImported = false);
 
 /// <summary>What you owe vendors by age (A/P aging), and what you paid 1099 vendors in a year.</summary>
-public sealed class PayablesService(IPurchasesStore store, AccountService accounts)
+public sealed class PayablesService(IPurchasesStore store, AccountService accounts, ILedgerStore ledger)
 {
     /// <summary>
     /// The 1099-NEC/MISC reporting threshold for payments made in <paramref name="year"/>: $600 through 2025,
@@ -136,6 +139,11 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
                 Add(r.VendorId, r.DepositAccountId, -r.Amount);
         }
 
+        var prior = (await store.ListPrior1099Async(year, ct)).ToDictionary(p => p.VendorId, p => p.Amount);
+        foreach (var (vendorId, amount) in prior)
+            paid[vendorId] = (paid.GetValueOrDefault(vendorId).Reportable + amount, paid.GetValueOrDefault(vendorId).Card);
+        var imported = (await ledger.ListEntriesAsync(new JournalEntryFilter(new DateOnly(year, 1, 1), new DateOnly(year, 12, 31), Take: 1, Source: JournalEntry.ImportSource), ct)).Total > 0;
+
         var vendors = (await store.ListVendorsAsync(ct))
             .Where(v => v.Track1099)
             .OrderBy(v => v.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -143,9 +151,9 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             {
                 var (reportable, card) = paid.GetValueOrDefault(v.Id);
                 (reportable, card) = (Math.Max(0m, reportable), Math.Max(0m, card));
-                return new Vendor1099(v, reportable, card, reportable >= limit && reportable > 0m, refunds.GetValueOrDefault(v.Id));
+                return new Vendor1099(v, reportable, card, reportable >= limit && reportable > 0m, refunds.GetValueOrDefault(v.Id), prior.GetValueOrDefault(v.Id));
             })
             .ToList();
-        return new Report1099(year, limit, vendors, net);
+        return new Report1099(year, limit, vendors, net, imported);
     }
 }

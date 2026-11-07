@@ -9,6 +9,9 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Api;
 
+/// <param name="FeeAccountId">Null: "Bank Service Charges".</param>
+public sealed record PaymentReturnRequest(DateOnly Date, string Reason, decimal? Fee = null, Guid? FeeAccountId = null);
+
 public sealed record CustomerResponse(
     Guid Id,
     string DisplayName,
@@ -105,12 +108,13 @@ public sealed record PaymentResponse(
     decimal Unapplied,
     decimal AmountRefunded,
     Guid? DepositId,
-    PaymentMethod? Method = null)
+    PaymentMethod? Method = null,
+    DateOnly? ReturnedOn = null)
 {
     public static PaymentResponse From(CustomerPayment p) => new(
         p.Id, p.CustomerId, p.Date, p.Amount, p.DepositAccountId, p.Reference, p.Memo, p.Status, p.JournalEntryId,
         p.Applications.Select(a => new PaymentApplicationResponse(a.InvoiceId, a.Amount, a.Discount, a.AppliedOn)).ToList(),
-        p.Unapplied, p.AmountRefunded, p.DepositId, p.Method);
+        p.Unapplied, p.AmountRefunded, p.DepositId, p.Method, p.ReturnedOn);
 }
 
 public sealed record PaymentApplicationResponse(Guid InvoiceId, decimal Amount, decimal Discount, DateOnly AppliedOn);
@@ -224,6 +228,11 @@ internal static class SalesApi
             PaymentResponse.From(await s.ChangeAsync(id, r, ct)));
         sales.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, PaymentService s, CancellationToken ct) =>
             PaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
+        // A bounced check: the money leaves the bank on the day it came back and the invoices are owed again.
+        sales.MapPost("/payments/{id:guid}/return", async (Guid id, PaymentReturnRequest r, PaymentService s, CancellationToken ct) =>
+            PaymentResponse.From(await s.ReturnAsync(id, r.Date, r.Fee ?? 0m, r.FeeAccountId, r.Reason, ct)));
+        sales.MapPost("/payments/{id:guid}/return/undo", async (Guid id, VoidRequest r, PaymentService s, CancellationToken ct) =>
+            PaymentResponse.From(await s.UndoReturnAsync(id, r.Reason, ct)));
 
         sales.MapGet("/receipts", async (int? skip, int? take, SalesReceiptService s, ISalesStore store, HttpResponse response, CancellationToken ct) =>
             !ApiPaging.Requested(skip, take) ? (await s.ListAsync(ct)).Select(SalesReceiptResponse.From)

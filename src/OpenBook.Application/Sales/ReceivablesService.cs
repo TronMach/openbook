@@ -129,6 +129,9 @@ public sealed class ReceivablesService(ISalesStore store)
                 activity.Add((p.Date, StatementLineKind.Payment, p.Id, p.Reference ?? "", "Payment received, thank you", -p.Amount, p.CreatedAt));
             if (p.DiscountTaken > 0m)
                 activity.Add((p.Date, StatementLineKind.Discount, p.Id, p.Reference ?? "", "Early payment discount", -p.DiscountTaken, p.CreatedAt));
+            if (p.ReturnedOn is { } returned)
+                activity.Add((returned, StatementLineKind.Payment, p.Id, p.Reference ?? "",
+                    p.DiscountTaken > 0m ? "Payment returned by the bank (and its early payment discount)" : "Payment returned by the bank", p.Amount + p.DiscountTaken, p.CreatedAt));
         }
 
         foreach (var c in data.CreditMemos.Where(c => c.Status == DocumentStatus.Posted && billed.Contains(c.CustomerId)))
@@ -153,7 +156,7 @@ public sealed class ReceivablesService(ISalesStore store)
     private static Dictionary<Guid, decimal> Settled(Ledger data, DateOnly asOf)
     {
         var settled = new Dictionary<Guid, decimal>();
-        foreach (var p in data.Payments.Where(p => p.Status == DocumentStatus.Posted))
+        foreach (var p in data.Payments.Where(p => p.Status == DocumentStatus.Posted && p.StandsOn(asOf)))
             foreach (var a in p.Applications.Where(a => a.AppliedOn <= asOf))
                 settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Settled;
         foreach (var c in data.CreditMemos.Where(c => c.Status == DocumentStatus.Posted))
@@ -194,7 +197,7 @@ public sealed class ReceivablesService(ISalesStore store)
                 credits.Add(new OpenCredit(CreditKind.CreditMemo, c.Id, $"Credit memo {c.Number}", c.Date, left));
         }
 
-        foreach (var p in customerIds.SelectMany(id => data.PaymentsOf[id]).Where(p => p.Status == DocumentStatus.Posted && p.Date <= asOf))
+        foreach (var p in customerIds.SelectMany(id => data.PaymentsOf[id]).Where(p => p.Status == DocumentStatus.Posted && p.Date <= asOf && p.StandsOn(asOf)))
         {
             var left = p.Amount - p.Applications.Where(a => a.AppliedOn <= asOf && !later.Contains(a.InvoiceId)).Sum(a => a.Amount)
                 - refunds.Where(r => r.CustomerPaymentId == p.Id).Sum(r => r.Amount);

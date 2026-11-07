@@ -49,6 +49,14 @@
                 <p>Vendors tracked for 1099s · threshold @Labels.Amount(_report.Threshold) · refunds @(_report.RefundsNetted ? "taken off the totals" : "shown, not taken off")</p>
             </header>
 
+            @if (_report.HistoryImported)
+            {
+                <div class="alert warning no-print" role="status">
+                    History moved in from another program has journal entries dated in @_report.Year. Payments in them aren't counted here:
+                    enter what each vendor was paid before OpenBook below.
+                </div>
+            }
+
             @if (_report.Vendors.Count == 0)
             {
                 <p class="muted">No vendors are tracked for 1099s. Turn on "Track payments for a 1099" on the vendor's page.</p>
@@ -68,7 +76,7 @@
                                 <td><a href="/vendors/@v.Vendor.Id">@v.Vendor.DisplayName</a></td>
                                 <td>@(v.Vendor.MaskedTaxId ?? "Missing")</td>
                                 <td>@Labels.For(v.Vendor.Form1099Box)</td>
-                                <td class="num">@Labels.Amount(v.Total)</td>
+                                <td class="num">@Labels.Amount(v.Total)@if (v.Prior > 0m) { <br /><span class="muted">incl. @Labels.Amount(v.Prior) before OpenBook</span> }</td>
                                 <td class="num">@Labels.AmountOrBlank(v.CardPayments)</td>
                                 <td class="num">@Labels.AmountOrBlank(v.Refunds)</td>
                                 <td>
@@ -155,8 +163,38 @@
                         }
                     </section>
                 }
+                <section class="card no-print" style="margin-top: 1rem">
+                    <h2>Paid before OpenBook</h2>
+                    <p class="muted">For a year you started part-way through: what each vendor was paid by cash, check or bank in your old books. It's added to their total; zero removes it.</p>
+                    @if (_prior.Count > 0)
+                    {
+                        <ul>
+                            @foreach (var (vendorId, prior) in _prior)
+                            {
+                                <li>@(_report.Vendors.FirstOrDefault(v => v.Vendor.Id == vendorId)?.Vendor.DisplayName ?? "A vendor not tracked for 1099s"): @Labels.Amount(prior.Amount)@(prior.Note is { } n ? $" ({n})" : "")</li>
+                            }
+                        </ul>
+                    }
+                    <PostForm Action="/accountant/1099/prior" data-enhance="false">
+                        <input type="hidden" name="year" value="@YearValue" />
+                        <div class="form-row">
+                            <div class="field">
+                                <label for="prior-vendor">Vendor</label>
+                                <select id="prior-vendor" name="vendorId" data-search>
+                                    @foreach (var v in _report.Vendors)
+                                    {
+                                        <option value="@v.Vendor.Id">@v.Vendor.DisplayName</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="field"><label for="prior-amount">Paid before OpenBook</label><input id="prior-amount" name="amount" class="amount" inputmode="decimal" placeholder="0.00" /></div>
+                            <div class="field"><label for="prior-note">Note</label><input id="prior-note" name="note" maxlength="200" placeholder="From the old books" /></div>
+                        </div>
+                        <div class="actions"><button type="submit" class="secondary">Save</button></div>
+                    </PostForm>
+                </section>
                 <p class="hint">
-                    Counts bill payments and expenses dated in the year. Card payments are left out because the card company reports
+                    Counts bill payments and expenses dated in the year, and what you entered as paid before OpenBook. Card payments are left out because the card company reports
                     them on Form 1099-K. This summary is a starting point: check it with your tax adviser before filing.
                 </p>
             }
@@ -176,6 +214,7 @@
 
     private IReadOnlyDictionary<Guid, OpenBook.Domain.Purchases.Filing1099> _filed = new Dictionary<Guid, OpenBook.Domain.Purchases.Filing1099>();
     private string? _payerTaxId;
+    private IReadOnlyDictionary<Guid, OpenBook.Domain.Purchases.Prior1099Payment> _prior = new Dictionary<Guid, OpenBook.Domain.Purchases.Prior1099Payment>();
 
     private string? ThresholdValue => Threshold?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
     private string ThresholdQuery => Threshold is null ? "" : $"&threshold={ThresholdValue}";
@@ -191,6 +230,7 @@
         {
             _report = await Payables.Report1099Async(YearValue, Threshold);
             _filed = await Filing.FiledAsync(YearValue);
+            _prior = await Filing.PriorAsync(YearValue);
         }
         catch (DomainException ex)
         {

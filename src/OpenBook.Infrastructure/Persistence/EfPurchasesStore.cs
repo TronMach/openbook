@@ -18,6 +18,13 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public void Add(Filing1099 filing) => db.Filings1099.Add(filing);
 
+    public async Task<IReadOnlyList<Prior1099Payment>> ListPrior1099Async(int year, CancellationToken ct) =>
+        await db.Prior1099Payments.Where(p => p.Year == year).ToListAsync(ct);
+
+    public void Add(Prior1099Payment payment) => db.Prior1099Payments.Add(payment);
+
+    public void Remove(Prior1099Payment payment) => db.Prior1099Payments.Remove(payment);
+
     public void Remove(Filing1099 filing) => db.Filings1099.Remove(filing);
 
     public async Task<IReadOnlyList<Vendor>> ListVendorsAsync(CancellationToken ct) => await db.Vendors.ToListAsync(ct);

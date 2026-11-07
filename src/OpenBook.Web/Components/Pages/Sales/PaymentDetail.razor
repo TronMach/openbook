@@ -22,13 +22,17 @@
         {
             <span class="badge">Voided</span>
         }
+        else if (_payment.ReturnedOn is not null)
+        {
+            <span class="badge warn">Returned by the bank</span>
+        }
         <ActionLink Class="button secondary" Href="/sales?show=payments">Back to payments</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_payment.Id}")">History</ActionLink>
         @if (_payment.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/sales/email/payments/{_payment.Id}")">Email receipt</ActionLink>
         }
-        @if (_payment.Status == DocumentStatus.Posted)
+        @if (_payment.Status == DocumentStatus.Posted && _payment.ReturnedOn is null)
         {
             <ActionLink Class="button secondary" Href="@($"/sales/payments/{_payment.Id}/edit")">Change</ActionLink>
         }
@@ -65,7 +69,18 @@
             @if (_payment.Method is { } method) { <dt>Payment method</dt><dd>@PaymentMethods.Label(method)</dd> }
             @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }
             <dt>Journal entry</dt><dd><a href="/journal/@_payment.JournalEntryId">View</a></dd>
+            @if (_payment.ReturnedOn is { } returned)
+            {
+                <dt>Returned by the bank</dt><dd>@Labels.Date(returned) · @_payment.ReturnReason</dd>
+                <dt>Taken back out of</dt><dd>@_chart.FullName(_payment.ReturnAccountId!.Value)</dd>
+                @if (_payment.ReturnFee > 0m) { <dt>Bank's fee</dt><dd>@Labels.Amount(_payment.ReturnFee)</dd> }
+                <dt>Return entry</dt><dd><a href="/journal/@_payment.ReturnEntryId">View</a></dd>
+            }
         </dl>
+        @if (_payment.ReturnedOn is not null)
+        {
+            <p class="muted">The invoices below are owed again from the day it came back. To charge the customer a fee for it, make an invoice.</p>
+        }
     </div>
 
     <h2>Applied to</h2>
@@ -87,7 +102,63 @@
         </tbody>
     </table>
 
-    @if (_payment.Status == DocumentStatus.Posted)
+    @if (_payment.Status == DocumentStatus.Posted && _payment.ReturnedOn is null && _payment.Amount > 0m && (_payment.DepositId is not null || _inBank))
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>The payment came back</h2>
+            <p class="muted">For a check that bounced or a transfer the bank reversed. The payment and its deposit stay as they happened; on the day it came back the money leaves the bank and the invoices it paid are owed again.</p>
+            <EditForm Model="ReturnInput" FormName="return" OnValidSubmit="ReturnAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="form-row">
+                    <div class="field">
+                        <label for="return-date">Came back on</label>
+                        <InputDate id="return-date" @bind-Value="ReturnInput.Date" />
+                    </div>
+                    <div class="field">
+                        <label for="return-fee">The bank's fee (optional)</label>
+                        <InputText id="return-fee" class="amount" inputmode="decimal" placeholder="0.00" @bind-Value="ReturnInput.Fee" />
+                    </div>
+                    <div class="field">
+                        <label for="return-fee-account">Fee goes to</label>
+                        <InputSelect id="return-fee-account" @bind-Value="ReturnInput.FeeAccountId">
+                            <option value="">Bank Service Charges</option>
+                            @foreach (var account in _expenseAccounts)
+                            {
+                                <option value="@account.Id">@_chart.FullName(account.Id)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="return-reason">Why it came back</label>
+                    <InputText id="return-reason" placeholder="Insufficient funds" @bind-Value="ReturnInput.Reason" />
+                    <ValidationMessage For="() => ReturnInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="ReturnInput.ClosingPassword" />
+                <div class="actions"><button type="submit" class="danger">Record the returned payment</button></div>
+            </EditForm>
+        </div>
+    }
+
+    @if (_payment.ReturnedOn is not null)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Take the return back</h2>
+            <p class="muted">If it was recorded by mistake (the check cleared after all): the return's entry is voided and the payment pays its invoices again.</p>
+            <EditForm Model="UndoInput" FormName="undo-return" OnValidSubmit="UndoReturnAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="undo-reason">Reason</label>
+                    <InputText id="undo-reason" @bind-Value="UndoInput.Reason" />
+                    <ValidationMessage For="() => UndoInput.Reason" />
+                </div>
+                <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="UndoInput.ClosingPassword" />
+                <div class="actions"><button type="submit" class="secondary">Take the return back</button></div>
+            </EditForm>
+        </div>
+    }
+
+    @if (_payment.Status == DocumentStatus.Posted && _payment.ReturnedOn is null)
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this payment</h2>
@@ -128,9 +199,20 @@
     [SupplyParameterFromForm(FormName = "void")]
     private VoidModel VoidInput { get; set; } = default!;
 
+    [SupplyParameterFromForm(FormName = "return")]
+    private ReturnModel ReturnInput { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "undo-return")]
+    private VoidModel UndoInput { get; set; } = default!;
+
+    private bool _inBank;
+    private List<Account> _expenseAccounts = [];
+
     protected override async Task OnInitializedAsync()
     {
         VoidInput ??= new();
+        ReturnInput ??= new() { Date = CompanyTime.Today };
+        UndoInput ??= new();
         _payment = await Payments.GetAsync(Id);
         if (_payment is null)
             return;
@@ -138,6 +220,54 @@
         _chart = await AccountService.GetChartAsync();
         _invoices = (await Invoices.GetManyAsync(_payment.Applications.Select(a => a.InvoiceId).ToList())).ToDictionary(i => i.Id);
         _changes = await Payments.ChangesAsync(Id);
+        _inBank = _chart.Find(_payment.DepositAccountId)?.Type == AccountType.Bank;
+        _expenseAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Expense).ToList();
+    }
+
+    private async Task ReturnAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = ReturnInput.ClosingPassword;
+            var fee = OpenBook.Web.Endpoints.FormNumbers.Amount(ReturnInput.Fee) ?? 0m;
+            await Payments.ReturnAsync(Id, ReturnInput.Date, fee, ReturnInput.FeeAccountId, ReturnInput.Reason);
+            Navigation.NavigateTo($"/sales/payments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private async Task UndoReturnAsync()
+    {
+        try
+        {
+            ClosingOverride.Password = UndoInput.ClosingPassword;
+            await Payments.UndoReturnAsync(Id, UndoInput.Reason);
+            Navigation.NavigateTo($"/sales/payments/{Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
+        }
+    }
+
+    private sealed class ReturnModel
+    {
+        public DateOnly Date { get; set; }
+
+        public string? Fee { get; set; }
+
+        public Guid? FeeAccountId { get; set; }
+
+        [Required(ErrorMessage = "Say why the payment came back.")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ClosingPassword { get; set; }
     }
 
     private async Task VoidAsync()

@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Companies;
@@ -47,6 +48,19 @@ public sealed class Filing1099Tests : IAsyncLifetime
     private Task<Domain.Companies.EmailSettings> UseEmail() =>
         _db.InScope(sp => sp.GetRequiredService<EmailService>().SaveSettingsAsync(new EmailSettingsCommand(
             Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "pw", false, "books@studio.test", "Studio", null, null)));
+
+    [Fact]
+    public async Task Paid_before_OpenBook_counts_toward_the_total_and_can_be_taken_away()
+    {
+        await In<Filing1099Service, int>(async s => { await s.SetPriorAsync(_noNumber.Id, 2025, 1_400m, "Old books"); return 0; });
+        var row = (await In<PayablesService, Report1099>(s => s.Report1099Async(2025, 2_000m))).Vendors.Single(v => v.Vendor.Id == _noNumber.Id);
+        Assert.Equal((2_300m, 1_400m, true), (row.Total, row.Prior, row.MeetsThreshold));
+
+        await In<Filing1099Service, int>(async s => { await s.SetPriorAsync(_noNumber.Id, 2025, 0m, null); return 0; });
+        row = (await In<PayablesService, Report1099>(s => s.Report1099Async(2025, 2_000m))).Vendors.Single(v => v.Vendor.Id == _noNumber.Id);
+        Assert.Equal((900m, 0m, false), (row.Total, row.Prior, row.MeetsThreshold));
+        Assert.Equal(2, (await _db.InDb(db => db.AuditRecords.Where(r => r.EntityId == _noNumber.Id && r.Action == Domain.Auditing.AuditAction.Updated).CountAsync())));
+    }
 
     [Fact]
     public void Addresses_come_apart_for_the_filing_file()
