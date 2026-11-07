@@ -76,6 +76,20 @@ public static class DocumentEndpoints
                 return "done=read";
             })).RequireAuthorization();
 
+        app.MapPost("/documents/item-codes/{id:guid}/forget", async (IFormCollection form, Guid id, DocumentCaptureService documents, CancellationToken ct) =>
+        {
+            var back = AccessRules.LocalPath(form["back"].ToString()) ?? "/documents";
+            try
+            {
+                await documents.ForgetItemCodeAsync(id, ct);
+                return Results.Redirect(back + "#product-codes");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/documents/{id:guid}/dismiss", async (IFormCollection _, Guid id, DocumentCaptureService documents, CancellationToken ct) =>
             await Back($"/documents/{id}", async () =>
             {

@@ -638,6 +638,9 @@
   <data name="Credits applied" xml:space="preserve">
     <value>Credits applied</value>
   </data>
+  <data name="CSV file" xml:space="preserve">
+    <value>CSV file</value>
+  </data>
   <data name="Current password" xml:space="preserve">
     <value>Current password</value>
   </data>
@@ -730,6 +733,9 @@
   </data>
   <data name="Donors" xml:space="preserve">
     <value>Donors</value>
+  </data>
+  <data name="Download SKUs (CSV)" xml:space="preserve">
+    <value>Download SKUs (CSV)</value>
   </data>
   <data name="Due" xml:space="preserve">
     <value>Due</value>
@@ -949,6 +955,9 @@
   </data>
   <data name="For your screens. Printed documents and emails use the region in the company's details." xml:space="preserve">
     <value>For your screens. Printed documents and emails use the region in the company's details.</value>
+  </data>
+  <data name="Forget" xml:space="preserve">
+    <value>Forget</value>
   </data>
   <data name="Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one." xml:space="preserve">
     <value>Forgot your password? On the computer running OpenBook, run it with reset-password to set a new one.</value>
@@ -1244,6 +1253,9 @@
   <data name="Make your first invoice or sales receipt" xml:space="preserve">
     <value>Make your first invoice or sales receipt</value>
   </data>
+  <data name="Map SKUs in a spreadsheet" xml:space="preserve">
+    <value>Map SKUs in a spreadsheet</value>
+  </data>
   <data name="Match your bank statement" xml:space="preserve">
     <value>Match your bank statement</value>
   </data>
@@ -1462,6 +1474,9 @@
   </data>
   <data name="Note" xml:space="preserve">
     <value>Note</value>
+  </data>
+  <data name="Nothing changed." xml:space="preserve">
+    <value>Nothing changed.</value>
   </data>
   <data name="Nothing due this week" xml:space="preserve">
     <value>Nothing due this week</value>
@@ -2069,6 +2084,9 @@
   <data name="Save settings" xml:space="preserve">
     <value>Save settings</value>
   </data>
+  <data name="Save the mapping" xml:space="preserve">
+    <value>Save the mapping</value>
+  </data>
   <data name="Save the photo" xml:space="preserve">
     <value>Save the photo</value>
   </data>
@@ -2375,6 +2393,12 @@
   <data name="The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look." xml:space="preserve">
     <value>The wording of each email (invoices, statements, reminders and more), with a live preview in your design's look.</value>
   </data>
+  <data name="Their code" xml:space="preserve">
+    <value>Their code</value>
+  </data>
+  <data name="Their product codes ({0})" xml:space="preserve">
+    <value>Their product codes ({0})</value>
+  </data>
   <data name="Their sales and fees aren't in the books until they are" xml:space="preserve">
     <value>Their sales and fees aren't in the books until they are</value>
   </data>
@@ -2506,6 +2530,9 @@
   </data>
   <data name="Unpaid bills" xml:space="preserve">
     <value>Unpaid bills</value>
+  </data>
+  <data name="Upload the mapping" xml:space="preserve">
+    <value>Upload the mapping</value>
   </data>
   <data name="Use account numbers" xml:space="preserve">
     <value>Use account numbers</value>
@@ -2738,6 +2765,9 @@
   <data name="Your EIN and who signs acknowledgment letters and year-end giving statements." xml:space="preserve">
     <value>Your EIN and who signs acknowledgment letters and year-end giving statements.</value>
   </data>
+  <data name="Your item" xml:space="preserve">
+    <value>Your item</value>
+  </data>
   <data name="Your language and region" xml:space="preserve">
     <value>Your language and region</value>
   </data>
@@ -2812,6 +2842,9 @@
   </data>
   <data name="{0} sets" xml:space="preserve">
     <value>{0} sets</value>
+  </data>
+  <data name="{0} SKU(s) mapped." xml:space="preserve">
+    <value>{0} SKU(s) mapped.</value>
   </data>
   <data name="{0} to deposit · {1}" xml:space="preserve">
     <value>{0} to deposit · {1}</value>

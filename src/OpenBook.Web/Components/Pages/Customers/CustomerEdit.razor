@@ -354,6 +354,7 @@
         <EmailHistory EntityType="customer" EntityId="_customer.Id" />
 
         <Notes EntityType="customer" EntityId="_customer.Id" />
+        <OpenBook.Web.Components.Documents.LearnedCodes PartyId="_customer.Id" Back="@($"/customers/{_customer.Id}")" />
         <MergeCard Kind="customers" Id="_customer.Id" Name="@_customer.DisplayName" />
     }
 </div>

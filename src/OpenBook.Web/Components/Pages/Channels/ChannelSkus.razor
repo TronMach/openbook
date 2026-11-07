@@ -26,6 +26,10 @@
         {
             <div class="alert error" role="alert">@Error</div>
         }
+        else if (Changed is { } changed)
+        {
+            <div class="notice" role="status">@(changed == 0 ? L["Nothing changed."] : L["{0} SKU(s) mapped.", changed])</div>
+        }
 
         @if (_skus.Count == 0)
         {
@@ -33,38 +37,64 @@
         }
         else
         {
-            <table class="data">
-                <thead><tr><th>@L["SKU"]</th><th>@L["As sold"]</th><th>@L["Item"]</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var s in _skus)
+            <PostForm Action="@($"/sales/channels/{_channel.Id}/skus/all")" data-enhance="false">
+                <AntiforgeryToken />
+                <datalist id="sku-items">
+                    <option value="none">Not stocked</option>
+                    @foreach (var item in _items)
                     {
-                        <tr class="@(s.Mapped ? "" : "warn")">
-                            <td>@s.Sku</td>
-                            <td class="muted">@s.Title</td>
-                            <td>
-                                <PostForm Action="@($"/sales/channels/{_channel.Id}/skus")" data-enhance="false" class="inline">
-                                    <AntiforgeryToken />
-                                    <input type="hidden" name="sku" value="@s.Sku" />
-                                    <select name="itemId" data-search>
-                                        @if (!s.Mapped)
-                                        {
-                                            <option value="" selected>Choose…</option>
-                                        }
-                                        <option value="none" selected="@(s.Mapped && s.ItemId is null)">Not stocked</option>
-                                        @foreach (var item in _items)
-                                        {
-                                            <option value="@item.Id" selected="@(item.Id == s.ItemId)">@item.Name</option>
-                                        }
-                                    </select>
-                                    <button type="submit" class="secondary">@L["Save"]</button>
-                                </PostForm>
-                            </td>
-                            <td class="muted">@(s.Automatic ? "matched by barcode or name" : s.Mapped ? "" : "not mapped")</td>
-                        </tr>
+                        <option value="@item.Id">@item.Name</option>
                     }
-                </tbody>
-            </table>
+                </datalist>
+                <div>
+                    <table class="data">
+                        <thead><tr><th>@L["SKU"]</th><th>@L["As sold"]</th><th>@L["Item"]</th><th></th></tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < _skus.Count; i++)
+                            {
+                                var s = _skus[i];
+                                <tr class="@(s.Mapped ? "" : "warn")">
+                                    <td>@s.Sku<input type="hidden" name="sku:@i" value="@s.Sku" /></td>
+                                    <td class="muted">@s.Title</td>
+                                    <td>
+                                        <select name="item:@i" data-search data-options="#sku-items" aria-label="Item for @s.Sku">
+                                            <option value="" selected="@(!s.Mapped || s.Automatic)">@(s.Automatic ? "As matched" : "Choose…")</option>
+                                            @if (s.Mapped && !s.Automatic && s.ItemId is null)
+                                            {
+                                                <option value="none" selected>Not stocked</option>
+                                            }
+                                            else if (s.Mapped && !s.Automatic && _items.FirstOrDefault(x => x.Id == s.ItemId) is { } chosen)
+                                            {
+                                                <option value="@chosen.Id" selected>@chosen.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="muted">@(s.Automatic ? $"matched by barcode or name: {_items.FirstOrDefault(x => x.Id == s.ItemId)?.Name}" : s.Mapped ? "" : "not mapped")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="actions"><button type="submit">@L["Save the mapping"]</button></div>
+            </PostForm>
         }
+
+        <div class="card">
+            <h2>@L["Map SKUs in a spreadsheet"]</h2>
+            <p class="muted">
+                Download the list, fill in the Item column with each product's name or barcode (or "Not stocked"), and upload it.
+                Rows with no item are left as they are; a name that isn't one of your items stops the whole file, so nothing changes.
+            </p>
+            <p><a class="button secondary" href="/sales/channels/@_channel.Id/skus.csv" download>@L["Download SKUs (CSV)"]</a></p>
+            <PostForm Action="@($"/sales/channels/{_channel.Id}/skus/import")" enctype="multipart/form-data" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="sku-file">@L["CSV file"]</label>
+                    <input id="sku-file" type="file" name="file" accept=".csv,text/csv" required />
+                </div>
+                <div class="actions"><button type="submit">@L["Upload the mapping"]</button></div>
+            </PostForm>
+        </div>
     }
 </div>
 
@@ -75,6 +105,7 @@
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Changed { get; set; }
 
     protected override async Task OnInitializedAsync()
     {

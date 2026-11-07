@@ -41,6 +41,11 @@ public interface IDocumentStore
     /// <summary>Tracked; the codes learned for one vendor or customer.</summary>
     Task<IReadOnlyList<DocumentItemCode>> ListItemCodesAsync(Guid partyId, CancellationToken ct);
 
+    /// <summary>Tracked.</summary>
+    Task<DocumentItemCode?> GetItemCodeAsync(Guid id, CancellationToken ct);
+
+    void Remove(DocumentItemCode code);
+
     void Add(CapturedDocument document);
     void Add(DocumentItemCode code);
     void Add(DocumentReadingSettings settings);
@@ -73,6 +78,9 @@ public static class DocumentTextNotes
 {
     public const string PagesLeftOut = "[OpenBook read only the first pages:";
 }
+
+/// <summary>A vendor's or customer's product code learned from their documents.</summary>
+public sealed record LearnedItemCode(Guid Id, string Code, Guid ItemId, string ItemName);
 
 public sealed class DocumentCaptureService(
     IDocumentStore store,
@@ -222,18 +230,19 @@ public sealed class DocumentCaptureService(
 
         var before = Snapshot(document);
         document.Review(review);
-        if ((document.VendorId ?? document.CustomerId) is { } partyId)
-            await LearnCodesAsync(partyId, document, ct);
         store.Add(Audit(AuditAction.Updated, document, before));
         await store.SaveChangesAsync(ct);
         return document;
     }
 
-    /// <summary>Remembers the item chosen for each coded line as that party's code for it.</summary>
-    private async Task LearnCodesAsync(Guid partyId, CapturedDocument document, CancellationToken ct)
+    /// <summary>
+    /// Remembers the item on each coded line as that party's code for it. Called when a document is made into a bill, order
+    /// or receipt, from the lines it used, so a review's guesses and lines thrown away teach nothing.
+    /// </summary>
+    internal static async Task LearnCodesAsync(IDocumentStore store, Guid partyId, IEnumerable<CapturedDocumentLine> lines, CancellationToken ct)
     {
         var codes = (await store.ListItemCodesAsync(partyId, ct)).ToDictionary(c => c.Code, StringComparer.Ordinal);
-        foreach (var line in document.Lines.Where(l => l.Sku is not null && l.ItemId is not null))
+        foreach (var line in lines.Where(l => !string.IsNullOrWhiteSpace(l.Sku) && l.ItemId is not null))
         {
             var code = DocumentItemCode.Normalize(line.Sku!);
             if (codes.TryGetValue(code, out var known))
@@ -241,6 +250,26 @@ public sealed class DocumentCaptureService(
             else
                 store.Add(codes[code] = DocumentItemCode.Create(partyId, code, line.ItemId!.Value));
         }
+    }
+
+    /// <summary>The product codes learned for a vendor or customer, by code, with the item each points at.</summary>
+    public async Task<IReadOnlyList<LearnedItemCode>> ItemCodesAsync(Guid partyId, CancellationToken ct = default)
+    {
+        var codes = await store.ListItemCodesAsync(partyId, ct);
+        var items = await sales.GetItemsAsync([.. codes.Select(c => c.ItemId).Distinct()], ct);
+        return [.. codes.OrderBy(c => c.Code, StringComparer.Ordinal)
+            .Select(c => new LearnedItemCode(c.Id, c.Code, c.ItemId, items.GetValueOrDefault(c.ItemId)?.Name ?? "(item not found)"))];
+    }
+
+    /// <summary>Forgets a learned code, audited on the vendor or customer it belongs to.</summary>
+    public async Task ForgetItemCodeAsync(Guid codeId, CancellationToken ct = default)
+    {
+        var code = await store.GetItemCodeAsync(codeId, ct) ?? throw new EntityNotFoundException("document_item_code", codeId);
+        var party = await purchases.GetVendorAsync(code.PartyId, ct) is not null ? "vendor" : "customer";
+        store.Remove(code);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, party, code.PartyId,
+            JsonSerializer.Serialize(new { ProductCode = code.Code, code.ItemId }), JsonSerializer.Serialize(new { ProductCode = code.Code, ItemId = (Guid?)null })));
+        await store.SaveChangesAsync(ct);
     }
 
     public async Task<CapturedDocument> DismissAsync(Guid id, CancellationToken ct = default)

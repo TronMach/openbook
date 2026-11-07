@@ -277,6 +277,8 @@ public sealed class DocumentConversionService(
         foreach (var file in await attachments.ListAsync(DocumentCaptureService.EntityType, document.Id, ct))
             if (await attachments.GetContentAsync(file.Id, ct) is { } bytes)
                 await attachments.AddAsync(resultType, resultId, file.FileName, new MemoryStream(bytes), ct);
+        if ((document.VendorId ?? document.CustomerId) is { } partyId)
+            await DocumentCaptureService.LearnCodesAsync(store, partyId, document.Lines, ct);
         var before = JsonSerializer.Serialize(new { Status = document.Status.ToString() });
         document.Complete(resultType, resultId, clock.UtcNow);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, DocumentCaptureService.EntityType, document.Id, before,

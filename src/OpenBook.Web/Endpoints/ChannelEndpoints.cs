@@ -106,6 +106,53 @@ public static class ChannelEndpoints
             return await Back($"/sales/channels/{id}/skus", () => orders.MapSkuAsync(id, form["sku"].ToString(), Guid.TryParse(choice, out var item) ? item : null, ct));
         }).RequireAuthorization();
 
+        app.MapGet("/sales/channels/{id:guid}/skus.csv", async (Guid id, ChannelOrderService orders, CancellationToken ct) =>
+            Results.File(System.Text.Encoding.UTF8.GetBytes(await orders.SkusCsvAsync(id, ct)), "text/csv", "skus.csv")).RequireAuthorization();
+
+        // Binding the file (with the form) makes minimal APIs check the antiforgery token.
+        app.MapPost("/sales/channels/{id:guid}/skus/import", async (Guid id, IFormFile? file, ChannelOrderService orders, CancellationToken ct) =>
+        {
+            var page = $"/sales/channels/{id}/skus";
+            if (file is null || file.Length == 0)
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString("Choose a CSV file.")}");
+            if (file.Length > MaxReportBytes)
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString("The file is larger than 20 MB.")}");
+            try
+            {
+                using var reader = new StreamReader(file.OpenReadStream());
+                var count = await orders.ImportSkusCsvAsync(id, await reader.ReadToEndAsync(ct), ct);
+                return Results.Redirect($"{page}?changed={count}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        // The whole grid in one form: sku:{i} and item:{i} per row ("none" = not stocked, blank = leave it).
+        app.MapPost("/sales/channels/{id:guid}/skus/all", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
+        {
+            var page = $"/sales/channels/{id}/skus";
+            var mappings = new List<(string, Guid?)>();
+            for (var i = 0; form.ContainsKey($"sku:{i}"); i++)
+            {
+                var choice = form[$"item:{i}"].ToString();
+                if (choice.Length == 0)
+                    continue;
+                mappings.Add((form[$"sku:{i}"].ToString(), Guid.TryParse(choice, out var item) ? item : null));
+            }
+
+            try
+            {
+                var count = await orders.MapSkusAsync(id, mappings, ct);
+                return Results.Redirect($"{page}?changed={count}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/sales/channels/{id:guid}/orders/post-waiting", async (Guid id, IFormCollection _, ChannelOrderService orders, IServiceScopeFactory scopes, CancellationToken ct) =>
         {
             var waiting = (await orders.BatchesAsync(id, ct)).Where(b => b.Status == PayoutStatus.Pending).OrderBy(b => b.Date).Select(b => (b.Id, b.Date)).ToList();

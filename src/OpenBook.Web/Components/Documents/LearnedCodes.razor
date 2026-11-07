@@ -1,0 +1,45 @@
+@using OpenBook.Application.Documents
+@inject DocumentCaptureService Documents
+
+@* The vendor's or customer's own product codes learned from documents made into bills, orders or receipts, each
+   with a button to forget it. Draws nothing until one is learned. *@
+@if (_codes.Count > 0)
+{
+    <details class="card no-print" id="product-codes">
+        <summary>@L["Their product codes ({0})", _codes.Count]</summary>
+        <p class="muted">
+            Codes on their documents that the document inbox now reads as your items. Forget one that points at the wrong item;
+            it's learned again the next time a document with it is made into a bill, order or receipt.
+        </p>
+        <table class="data">
+            <thead><tr><th>@L["Their code"]</th><th>@L["Your item"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var learned in _codes)
+                {
+                    <tr>
+                        <td>@learned.Code</td>
+                        <td><a href="/items/@learned.ItemId">@learned.ItemName</a></td>
+                        <td>
+                            <PostForm Action="@($"/documents/item-codes/{learned.Id}/forget")" class="inline" data-enhance="false">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="back" value="@Back" />
+                                <button type="submit" class="secondary">@L["Forget"]</button>
+                            </PostForm>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </details>
+}
+
+@code {
+    private IReadOnlyList<LearnedItemCode> _codes = [];
+
+    [Parameter, EditorRequired] public Guid PartyId { get; set; }
+
+    /// <summary>The page to come back to.</summary>
+    [Parameter, EditorRequired] public string Back { get; set; } = "/";
+
+    protected override async Task OnInitializedAsync() => _codes = await Documents.ItemCodesAsync(PartyId);
+}

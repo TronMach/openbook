@@ -41,7 +41,7 @@ Open it from the inbox to see the file beside what was read:
 - **Our purchase order**: on vendor documents, the PO number they quote is matched to yours, ignoring prefixes ("PO-1004" finds 1004).
 - **Lines**, each with code, description, quantity, unit price and amount, and the **item** it was matched to: by barcode, name, the PO's line, or a code you taught it before.
 
-Correct anything wrong and **Save**. If the lines don't add up to the total, OpenBook warns you to look for a missed or misread line. When you save, it remembers the item you chose for each product code from that vendor or customer, so next time it matches by itself.
+Correct anything wrong and **Save**. If the lines don't add up to the total, OpenBook warns you to look for a missed or misread line. When the document is made into a bill, order or receipt, OpenBook remembers the item on each coded line as that vendor's or customer's product code, so next time it matches by itself (lines you removed, and documents you dismiss, teach it nothing). The vendor's or customer's page lists what it has learned under **Their product codes**; **Forget** one that points at the wrong item.
 
 Before you enter it, the page warns when the document may already be in the books: the same file uploaded before (to the inbox or as a receipt), a bill from the vendor with the same invoice number, or one for the same total within two weeks of its date. Dismiss it if it's a copy.
 

@@ -420,6 +420,36 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sku_maps_go_out_and_come_back_as_csv_all_or_nothing()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income);
+        var cup = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Teacup", Domain.Sales.ItemType.NonInventory, sales.Id, 12m, Barcode: "TC-9")));
+        var amazon = await Channel(ChannelKind.Amazon, "Amazon US");
+        await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)));
+
+        var csv = await In<ChannelOrderService, string>(s => s.SkusCsvAsync(amazon.Id));
+        Assert.StartsWith("SKU,As sold,Item", csv, StringComparison.Ordinal);
+        Assert.Contains("GIFT", csv, StringComparison.Ordinal);
+
+        // A name that isn't an item stops the file: nothing is mapped.
+        var bad = "SKU,Item\r\nGIFT,Not stocked\r\nMUG-1,Saucer\r\n";
+        Assert.Equal("channel.sku_item_unknown", (await Assert.ThrowsAsync<DomainException>(() => In<ChannelOrderService, int>(s => s.ImportSkusCsvAsync(amazon.Id, bad)))).Code);
+        Assert.False((await In<ChannelOrderService, IReadOnlyList<SkuChoice>>(s => s.SkusAsync(amazon.Id))).Single(c => c.Sku == "GIFT").Mapped);
+
+        // By barcode, and "Not stocked"; a blank item leaves a row alone.
+        Assert.Equal(2, await In<ChannelOrderService, int>(s => s.ImportSkusCsvAsync(amazon.Id, "SKU,Item\r\nGIFT,not stocked\r\nMUG-1,tc-9\r\nOTHER,\r\n")));
+        var skus = await In<ChannelOrderService, IReadOnlyList<SkuChoice>>(s => s.SkusAsync(amazon.Id));
+        Assert.Equal((true, (Guid?)null), (skus.Single(c => c.Sku == "GIFT").Mapped, skus.Single(c => c.Sku == "GIFT").ItemId));
+        Assert.Equal(cup.Id, skus.Single(c => c.Sku == "MUG-1").ItemId);
+        Assert.Contains("MUG-1,Blue mug,Teacup", (await In<ChannelOrderService, string>(s => s.SkusCsvAsync(amazon.Id))).Replace("\"", "", StringComparison.Ordinal), StringComparison.Ordinal);
+
+        // The one-form save changes only what differs.
+        Assert.Equal(0, await In<ChannelOrderService, int>(s => s.MapSkusAsync(amazon.Id, [("GIFT", null), ("MUG-1", cup.Id)])));
+        Assert.Equal(1, await In<ChannelOrderService, int>(s => s.MapSkusAsync(amazon.Id, [("GIFT", cup.Id), ("MUG-1", cup.Id)])));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => In<ChannelOrderService, int>(s => s.MapSkusAsync(amazon.Id, [("GIFT", Guid.NewGuid())])));
+    }
+
+    [Fact]
     public async Task Posting_orders_moves_stock_once_every_sku_is_mapped()
     {
         var sales = await _db.CreateAccount("Sales", AccountType.Income);

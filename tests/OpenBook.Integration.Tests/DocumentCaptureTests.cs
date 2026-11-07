@@ -265,9 +265,15 @@ public sealed class DocumentCaptureTests : IAsyncLifetime
         Assert.Equal(8m, received.Received[1]);
         Assert.Equal("Packing slip PS-1", Assert.Single(received.Receipts).Note);
 
-        // The vendor's code XB-77 was learned for the bracket kit.
-        var next = await Upload(DocumentKind.VendorInvoice, "next.txt", "Parts Supply Co\nInvoice # 9\nXB-77 Something else 1 7.50 7.50");
-        Assert.Equal(_bracket.Id, Assert.Single(next.Lines).ItemId);
+        // The slip's WID-1 was learned for the widget when it was received; XB-77, on a line thrown away, wasn't.
+        var next = await Upload(DocumentKind.VendorInvoice, "next.txt", "Parts Supply Co\nInvoice # 9\nWID-1 Something else 1 7.50 7.50\nXB-77 Another thing 1 2.00 2.00");
+        Assert.Equal([_widget.Id, null], next.Lines.Select(l => l.ItemId));
+        var codes = await In<DocumentCaptureService, IReadOnlyList<LearnedItemCode>>(s => s.ItemCodesAsync(order.VendorId));
+        Assert.Equal(("WID-1", "Widget"), (Assert.Single(codes).Code, codes[0].ItemName));
+
+        // Forgotten, it no longer matches.
+        await In<DocumentCaptureService, bool>(async s => { await s.ForgetItemCodeAsync(codes[0].Id); return true; });
+        Assert.Empty(await In<DocumentCaptureService, IReadOnlyList<LearnedItemCode>>(s => s.ItemCodesAsync(order.VendorId)));
     }
 
     [Fact]

@@ -27,6 +27,10 @@ internal sealed class EfDocumentStore(OpenBookDbContext db) : IDocumentStore
 
     public void Add(DocumentItemCode code) => db.DocumentItemCodes.Add(code);
 
+    public Task<DocumentItemCode?> GetItemCodeAsync(Guid id, CancellationToken ct) => db.DocumentItemCodes.SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    public void Remove(DocumentItemCode code) => db.DocumentItemCodes.Remove(code);
+
     public void Add(DocumentReadingSettings settings) => db.DocumentReadingSettings.Add(settings);
 
     public void Add(AuditRecord record) => db.AuditRecords.Add(record);

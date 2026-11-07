@@ -177,6 +177,106 @@ public sealed class ChannelOrderService(
         return sold.Select(s => new ChannelSold(s.Key.Item, s.Key.Name, s.Value.Quantity, s.Value.Amount)).ToList();
     }
 
+    public const string NotStocked = "Not stocked";
+
+    /// <summary>The channel's SKUs as CSV (SKU, as sold, item): edit the item column and import it back.</summary>
+    public async Task<string> SkusCsvAsync(Guid channelId, CancellationToken ct = default)
+    {
+        await RequiredChannelAsync(channelId, ct);
+        var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id, i => i.Name);
+        var csv = new System.Text.StringBuilder("SKU,As sold,Item\r\n");
+        foreach (var s in await SkusAsync(channelId, ct))
+        {
+            var item = !s.Mapped ? "" : s.ItemId is { } id ? items.GetValueOrDefault(id) ?? "" : NotStocked;
+            csv.Append(string.Join(',', new[] { s.Sku, s.Title ?? "", item }.Select(ReportCsv.Quote))).Append("\r\n");
+        }
+
+        return csv.ToString();
+    }
+
+    /// <summary>
+    /// Maps SKUs from a CSV (a SKU column and an item column: an item's name or barcode, or "Not stocked"), all or nothing:
+    /// a row naming no item is left as it is, and one naming an item that doesn't exist stops the whole file.
+    /// </summary>
+    public async Task<int> ImportSkusCsvAsync(Guid channelId, string csv, CancellationToken ct = default)
+    {
+        await RequiredChannelAsync(channelId, ct);
+        var records = Import.Csv.Parse(csv ?? "");
+        if (records.Count < 2)
+            throw new DomainException("import.empty", "The file needs a header row and at least one SKU.");
+        var cols = new Import.CsvColumns(records[0]);
+        var skuColumn = cols.Find("sku", "sellersku", "variantsku") ?? throw new DomainException("import.no_sku_column", "The file needs a SKU column.");
+        var itemColumn = cols.Find("item", "product", "itemname") ?? throw new DomainException("import.no_item_column", "The file needs an Item column.");
+        var items = await sales.ListItemsAsync(ct);
+        var plan = new List<(string Sku, Guid? ItemId)>();
+        foreach (var r in records.Skip(1))
+        {
+            var sku = Unquote(Import.CsvColumns.Field(r, skuColumn));
+            var name = Unquote(Import.CsvColumns.Field(r, itemColumn));
+            if (string.IsNullOrEmpty(sku) || string.IsNullOrEmpty(name))
+                continue;
+            if (string.Equals(name, NotStocked, StringComparison.OrdinalIgnoreCase) || string.Equals(name, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                plan.Add((sku, null));
+                continue;
+            }
+
+            var item = items.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase))
+                ?? items.FirstOrDefault(i => string.Equals(i.Barcode, name, StringComparison.OrdinalIgnoreCase))
+                ?? throw new DomainException("channel.sku_item_unknown", $"Line {r.Line}: there's no item named \"{name}\".");
+            plan.Add((sku, item.Id));
+        }
+
+        return await MapSkusAsync(channelId, plan, ct);
+    }
+
+    /// <summary>
+    /// Maps several SKUs in one save (item id, or null for not stocked), with one audit record listing them; SKUs whose
+    /// mapping doesn't change are left out. Returns how many changed.
+    /// </summary>
+    public async Task<int> MapSkusAsync(Guid channelId, IReadOnlyList<(string Sku, Guid? ItemId)> mappings, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(mappings);
+        var channel = await RequiredChannelAsync(channelId, ct);
+        var wanted = mappings.Select(m => (Sku: m.Sku?.Trim() ?? "", ItemId: m.ItemId == Guid.Empty ? null : m.ItemId))
+            .DistinctBy(m => m.Sku, StringComparer.OrdinalIgnoreCase).ToList();
+        var ids = wanted.Where(m => m.ItemId is not null).Select(m => m.ItemId!.Value).Distinct().ToList();
+        var found = await sales.GetItemsAsync(ids, ct);
+        if (ids.FirstOrDefault(id => found.GetValueOrDefault(id) is null) is var missing && missing != Guid.Empty)
+            throw new EntityNotFoundException("item", missing);
+        var existing = (await store.ListSkusAsync(channelId, ct)).ToDictionary(s => s.Sku, StringComparer.OrdinalIgnoreCase);
+        var changed = new List<object>();
+        foreach (var (sku, itemId) in wanted)
+        {
+            if (existing.TryGetValue(sku, out var mapped))
+            {
+                if (mapped.ItemId == itemId)
+                    continue;
+                mapped.MapTo(itemId);
+            }
+            else
+            {
+                store.Add(ChannelSku.Create(channelId, sku, itemId));
+            }
+
+            changed.Add(new { Sku = sku, ItemId = itemId });
+        }
+
+        if (changed.Count == 0)
+            return 0;
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, ChannelService.ChannelEntity, channel.Id, null,
+            JsonSerializer.Serialize(new { Skus = changed })));
+        await store.SaveChangesAsync(ct);
+        return changed.Count;
+    }
+
+    // The export guards text a spreadsheet would read as a formula with a leading apostrophe; take it back off.
+    private static string? Unquote(string? field)
+    {
+        var text = field?.Trim();
+        return text is ['\'', '=' or '+' or '-' or '@', ..] ? text[1..] : text;
+    }
+
     /// <summary>Maps a SKU to an item, or (null) marks it not stocked.</summary>
     public async Task MapSkuAsync(Guid channelId, string sku, Guid? itemId, CancellationToken ct = default)
     {
