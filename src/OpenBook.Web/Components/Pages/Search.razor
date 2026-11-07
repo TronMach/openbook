@@ -83,6 +83,12 @@
         SearchKind.Gift => "Gifts",
         SearchKind.Pledge => "Pledges",
         SearchKind.Grant => "Grants",
+        SearchKind.Estimate => "Estimates",
+        SearchKind.SalesOrder => "Sales orders",
+        SearchKind.CreditMemo => "Credit memos",
+        SearchKind.Deposit => "Deposits",
+        SearchKind.PurchaseOrder => "Purchase orders",
+        SearchKind.VendorCredit => "Vendor credits",
         _ => "Journal entries",
     };
 
@@ -101,6 +107,12 @@
         SearchKind.Gift => $"/nonprofit/gifts/{hit.Id}",
         SearchKind.Pledge => $"/nonprofit/pledges/{hit.Id}",
         SearchKind.Grant => $"/nonprofit/grants/{hit.Id}",
+        SearchKind.Estimate => $"/sales/estimates/{hit.Id}",
+        SearchKind.SalesOrder => $"/sales/orders/{hit.Id}",
+        SearchKind.CreditMemo => $"/sales/credit-memos/{hit.Id}",
+        SearchKind.Deposit => $"/banking/deposits/{hit.Id}",
+        SearchKind.PurchaseOrder => $"/purchases/orders/{hit.Id}",
+        SearchKind.VendorCredit => $"/purchases/vendor-credits/{hit.Id}",
         _ => $"/journal/{hit.Id}",
     };
 }

@@ -56,7 +56,7 @@ An edition never hides anything: a page left out of your edition's menu still wo
 
 ## Search
 
-Type in the search box and press Enter. Search looks through names, document numbers, references, memos and amounts, so you can find an invoice by its number, a check by the amount written on it ("1,250.00" or "1250"), or a customer by part of their name. Capital letters don't matter. It shows up to 20 results of each kind, newest first; type more of the number or name to narrow it.
+Type in the search box and press Enter. Search looks through names, document numbers, references, memos and amounts, so you can find an invoice by its number, a check by the amount written on it ("1,250.00" or "1250"), or a customer by part of their name. Capital letters don't matter. It shows up to 20 results of each kind, newest first; type more of the number or name to narrow it. It finds invoices, estimates, sales orders, sales receipts, credit memos, payments, deposits, bills, purchase orders, vendor credits, bill payments, bank transactions, gifts, pledges and grants, and journal entries, including those brought in from another program and opening balances.
 
 ## Choosing from long lists
 

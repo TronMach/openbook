@@ -26,6 +26,12 @@ public enum SearchKind
     Gift,
     Pledge,
     Grant,
+    Estimate,
+    SalesOrder,
+    CreditMemo,
+    Deposit,
+    PurchaseOrder,
+    VendorCredit,
 }
 
 /// <summary>The area (as in permission sets and API key scopes) each kind of result belongs to.</summary>
@@ -33,9 +39,10 @@ public static class SearchAreas
 {
     public static string Of(SearchKind kind) => kind switch
     {
-        SearchKind.Customer or SearchKind.Item or SearchKind.Invoice or SearchKind.SalesReceipt or SearchKind.CustomerPayment => "sales",
-        SearchKind.Vendor or SearchKind.Bill or SearchKind.BillPayment => "purchases",
-        SearchKind.BankTransaction => "banking",
+        SearchKind.Customer or SearchKind.Item or SearchKind.Invoice or SearchKind.SalesReceipt or SearchKind.CustomerPayment
+            or SearchKind.Estimate or SearchKind.SalesOrder or SearchKind.CreditMemo => "sales",
+        SearchKind.Vendor or SearchKind.Bill or SearchKind.BillPayment or SearchKind.PurchaseOrder or SearchKind.VendorCredit => "purchases",
+        SearchKind.BankTransaction or SearchKind.Deposit => "banking",
         SearchKind.Gift or SearchKind.Pledge or SearchKind.Grant => "nonprofit",
         _ => "ledger",
     };
@@ -124,6 +131,14 @@ public sealed class SearchService(
         AddAll(receipts.Select(r => new SearchHit(SearchKind.SalesReceipt, r.Id, $"Sales receipt {r.Number}", Customer(r.CustomerId), r.Date, r.Total)));
         AddAll(payments.Select(p => new SearchHit(SearchKind.CustomerPayment, p.Id, $"Payment from {Customer(p.CustomerId)}", p.Reference, p.Date, p.Amount)));
         AddAll(billPayments.Select(p => new SearchHit(SearchKind.BillPayment, p.Id, $"Bill payment to {Vendor(p.VendorId)}", p.Reference, p.Date, p.Amount)));
+        var more = await sales.SearchMoreAsync(For(customerMatches), ct);
+        AddAll(more.Estimates.Select(e => new SearchHit(SearchKind.Estimate, e.Id, $"Estimate {e.Number}", Customer(e.CustomerId), e.Date, e.Total)));
+        AddAll(more.Orders.Select(o => new SearchHit(SearchKind.SalesOrder, o.Id, $"Sales order {o.Number}", Customer(o.CustomerId), o.Date, o.Total)));
+        AddAll(more.CreditMemos.Select(c => new SearchHit(SearchKind.CreditMemo, c.Id, $"Credit memo {c.Number}", Customer(c.CustomerId), c.Date, c.Total)));
+        var (orders, vendorCredits) = await purchases.SearchMoreAsync(For(vendorMatches), ct);
+        AddAll(orders.Select(o => new SearchHit(SearchKind.PurchaseOrder, o.Id, $"Purchase order {o.Number}", Vendor(o.VendorId), o.Date, o.Total)));
+        AddAll(vendorCredits.Select(c => new SearchHit(SearchKind.VendorCredit, c.Id, c.Reference is null ? "Vendor credit" : $"Vendor credit {c.Reference}", Vendor(c.VendorId), c.Date, c.Total)));
+        AddAll(more.Deposits.Select(d => new SearchHit(SearchKind.Deposit, d.Id, "Deposit", d.Memo ?? (chart.Find(d.BankAccountId) is null ? null : chart.FullName(d.BankAccountId)), d.Date, d.Total)));
         AddAll((await banking.SearchAsync(For([]), ct))
             .Select(t => new SearchHit(SearchKind.BankTransaction, t.Id, t.Payee ?? t.Memo ?? t.Kind.ToString(), chart.Find(t.AccountId) is null ? null : chart.FullName(t.AccountId), t.Date, t.Amount)));
 
@@ -132,7 +147,7 @@ public sealed class SearchService(
         AddAll(pledges.Select(p => new SearchHit(SearchKind.Pledge, p.Id, $"Pledge {p.Number} from {Customer(p.DonorId)}", p.Memo, p.Date, p.Amount)));
         AddAll(grants.Select(g => new SearchHit(SearchKind.Grant, g.Id, g.Name, Customer(g.FunderId), g.AwardedOn, g.Amount)));
 
-        // Manual journal entries; documents' entries are found through their documents above.
+        // Journal entries (by hand, moved in, opening balances, recurring); documents' entries are found through their documents above.
         AddAll((await ledger.SearchManualEntriesAsync(For([]), entryNumber, ct))
             .Select(e => new SearchHit(SearchKind.JournalEntry, e.Id, $"Journal entry {e.Number}", e.Memo, e.Date, e.Lines.Where(l => l.Amount > 0m).Sum(l => l.Amount))));
 

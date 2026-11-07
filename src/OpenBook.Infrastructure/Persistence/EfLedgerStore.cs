@@ -89,8 +89,10 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     public async Task<IReadOnlyList<JournalEntry>> SearchManualEntriesAsync(DocumentSearch search, long? number, CancellationToken ct)
     {
         var (text, hasAmount, amount, wanted) = (search.Text, search.Amount is not null, search.Amount ?? 0m, number ?? -1L);
+        // Entries made in the journal, including history moved in and opening balances: documents' are found through them.
+        string[] sources = [JournalEntry.ManualSource, JournalEntry.ImportSource, JournalEntry.OpeningBalanceSource, JournalEntry.RecurringSource];
         return await db.JournalEntries.AsNoTracking().Include(e => e.Lines)
-            .Where(e => e.Source == JournalEntry.ManualSource && (e.Number == wanted || (e.Memo != null && e.Memo.ToLower().Contains(text))
+            .Where(e => sources.Contains(e.Source) && (e.Number == wanted || (e.Memo != null && e.Memo.ToLower().Contains(text))
                 || e.Lines.Any(l => (l.Memo != null && l.Memo.ToLower().Contains(text)) || (hasAmount && (l.Amount == amount || l.Amount == -amount)))))
             .OrderByDescending(e => e.Date).ThenByDescending(e => e.Number).Take(search.Take)
             .AsSplitQuery()

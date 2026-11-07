@@ -18,6 +18,20 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public void Add(Filing1099 filing) => db.Filings1099.Add(filing);
 
+#pragma warning disable CA1304, CA1311, CA1862 // Translated to SQL lower(): the culture overloads these rules suggest don't translate.
+    public async Task<(IReadOnlyList<PurchaseOrder> Orders, IReadOnlyList<VendorCredit> Credits)> SearchMoreAsync(DocumentSearch search, CancellationToken ct)
+    {
+        var (text, amount, parties) = (search.Text, search.Amount ?? -1m, search.PartyIds.ToList());
+        var orders = await db.PurchaseOrders.AsNoTracking()
+            .Where(o => o.Number.ToLower().Contains(text) || (o.Memo != null && o.Memo.ToLower().Contains(text)) || parties.Contains(o.VendorId) || o.Total == amount)
+            .OrderByDescending(o => o.Date).ThenByDescending(o => o.Id).Take(search.Take).ToListAsync(ct);
+        var credits = await db.VendorCredits.AsNoTracking()
+            .Where(c => (c.Reference != null && c.Reference.ToLower().Contains(text)) || (c.Memo != null && c.Memo.ToLower().Contains(text)) || parties.Contains(c.VendorId) || c.Total == amount)
+            .OrderByDescending(c => c.Date).ThenByDescending(c => c.Id).Take(search.Take).ToListAsync(ct);
+        return (orders, credits);
+    }
+#pragma warning restore CA1304, CA1311, CA1862
+
     public async Task<IReadOnlyList<Prior1099Payment>> ListPrior1099Async(int year, CancellationToken ct) =>
         await db.Prior1099Payments.Where(p => p.Year == year).ToListAsync(ct);
 

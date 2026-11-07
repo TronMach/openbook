@@ -68,6 +68,25 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Take(search.Take).ToListAsync(ct);
         return (invoices, receipts, payments);
     }
+
+    public async Task<SalesSearchMore> SearchMoreAsync(DocumentSearch search, CancellationToken ct)
+    {
+        var (text, amount, parties) = (search.Text, search.Amount ?? -1m, search.PartyIds.ToList());
+        var estimates = await db.Estimates.AsNoTracking()
+            .Where(e => e.Number.ToLower().Contains(text) || (e.Memo != null && e.Memo.ToLower().Contains(text)) || parties.Contains(e.CustomerId) || e.Total == amount)
+            .OrderByDescending(e => e.Date).ThenByDescending(e => e.Id).Take(search.Take).ToListAsync(ct);
+        var orders = await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Number.ToLower().Contains(text) || (o.CustomerReference != null && o.CustomerReference.ToLower().Contains(text))
+                || (o.Memo != null && o.Memo.ToLower().Contains(text)) || parties.Contains(o.CustomerId) || o.Total == amount)
+            .OrderByDescending(o => o.Date).ThenByDescending(o => o.Id).Take(search.Take).ToListAsync(ct);
+        var credits = await db.CreditMemos.AsNoTracking()
+            .Where(c => c.Number.ToLower().Contains(text) || (c.Memo != null && c.Memo.ToLower().Contains(text)) || parties.Contains(c.CustomerId) || c.Total == amount)
+            .OrderByDescending(c => c.Date).ThenByDescending(c => c.Id).Take(search.Take).ToListAsync(ct);
+        var deposits = await db.BankDeposits.AsNoTracking()
+            .Where(d => (d.Memo != null && d.Memo.ToLower().Contains(text)) || d.Total == amount)
+            .OrderByDescending(d => d.Date).ThenByDescending(d => d.Id).Take(search.Take).ToListAsync(ct);
+        return new SalesSearchMore(estimates, orders, credits, deposits);
+    }
 #pragma warning restore CA1304, CA1311, CA1862
 
     public async Task<ReceivableDocuments> ListReceivablesAsync(DateOnly asOf, CancellationToken ct)

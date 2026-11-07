@@ -17,6 +17,9 @@ public interface IPurchasesStore
 
     void Add(Filing1099 filing);
 
+    /// <summary>Purchase orders and vendor credits matching the search, newest first, each at most <see cref="DocumentSearch.Take"/>.</summary>
+    Task<(IReadOnlyList<PurchaseOrder> Orders, IReadOnlyList<VendorCredit> Credits)> SearchMoreAsync(DocumentSearch search, CancellationToken ct);
+
     /// <summary>Amounts paid before OpenBook, tracked, for the year.</summary>
     Task<IReadOnlyList<Prior1099Payment>> ListPrior1099Async(int year, CancellationToken ct);
 

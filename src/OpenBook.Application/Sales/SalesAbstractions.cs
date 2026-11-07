@@ -26,6 +26,8 @@ public sealed record ItemDocuments(
     IReadOnlyList<Invoice> Invoices, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<CreditMemo> CreditMemos,
     IReadOnlyList<Estimate> Estimates, IReadOnlyList<SalesOrder> Orders);
 
+public sealed record SalesSearchMore(IReadOnlyList<Estimate> Estimates, IReadOnlyList<SalesOrder> Orders, IReadOnlyList<CreditMemo> CreditMemos, IReadOnlyList<BankDeposit> Deposits);
+
 public interface ISalesStore
 {
     Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct);
@@ -84,6 +86,9 @@ public interface ISalesStore
     Task<ReceivableDocuments> ListReceivablesForAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken ct);
 
     /// <summary>Invoices, sales receipts and customer payments matching a search, newest first, untracked.</summary>
+    /// <summary>Estimates, sales orders, credit memos and bank deposits matching the search, newest first, each at most <see cref="DocumentSearch.Take"/>.</summary>
+    Task<SalesSearchMore> SearchMoreAsync(DocumentSearch search, CancellationToken ct);
+
     Task<(IReadOnlyList<Invoice> Invoices, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<CustomerPayment> Payments)> SearchAsync(
         DocumentSearch search, CancellationToken ct);
 

@@ -87,4 +87,21 @@ public sealed class SearchTests : IAsyncLifetime
         Assert.DoesNotContain((await Search($"#{(await In<PostingEngine, JournalEntry?>(s => s.GetAsync(invoice.JournalEntryId)))!.Number}")).Hits,
             h => h.Kind == SearchKind.JournalEntry && h.Id == invoice.JournalEntryId);
     }
+
+    [Fact]
+    public async Task Estimates_credit_memos_vendor_credits_and_moved_in_history_are_found()
+    {
+        var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, new DateOnly(2026, 2, 1), [new SalesLineDraft(_work.Id, null, 7m, 100m)])));
+        var credit = await In<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(new CreateCreditMemoCommand(_acme.Id, new DateOnly(2026, 2, 2), [new SalesLineDraft(_work.Id, null, 1m, 33.30m)])));
+        var vendorCredit = await In<VendorCreditService, VendorCredit>(s => s.CreateAsync(new CreateVendorCreditCommand(_paper.Id, new DateOnly(2026, 2, 3), [new BillLineDraft(_supplies.Id, 12.34m)])));
+        var equity = await _db.CreateAccount("Opening Balance Equity", AccountType.Equity, "3900");
+        var imported = await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(new DateOnly(2025, 12, 31),
+            [JournalLineDraft.Dr(_supplies.Id, 55m), JournalLineDraft.Cr(equity.Id, 55m)], "Old books: stationery", JournalEntry.ImportSource, Guid.NewGuid())));
+
+        Assert.Contains((await Search(estimate.Number)).Hits, h => h.Kind == SearchKind.Estimate && h.Id == estimate.Id);
+        Assert.Contains((await Search("700.00")).Hits, h => h.Kind == SearchKind.Estimate && h.Id == estimate.Id);
+        Assert.Contains((await Search("33.30")).Hits, h => h.Kind == SearchKind.CreditMemo && h.Id == credit.Id);
+        Assert.Contains((await Search("paper supply")).Hits, h => h.Kind == SearchKind.VendorCredit && h.Id == vendorCredit.Id);
+        Assert.Contains((await Search("stationery")).Hits, h => h.Kind == SearchKind.JournalEntry && h.Id == imported.Id);
+    }
 }
