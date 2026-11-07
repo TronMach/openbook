@@ -51,6 +51,42 @@
                                 <AntiforgeryToken />
                                 <button type="submit" class="secondary">Send now</button>
                             </PostForm>
+                            <PostForm Action="@($"/reports/schedules/{s.Id}")" data-enhance="false" class="inline">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="active" value="@(s.IsActive ? "false" : "true")" />
+                                <button type="submit" class="secondary">@(s.IsActive ? "Pause" : "Resume")</button>
+                            </PostForm>
+                            <details class="inline">
+                                <summary class="link">Change</summary>
+                                <PostForm Action="@($"/reports/schedules/{s.Id}")" data-enhance="false">
+                                    <AntiforgeryToken />
+                                    <div class="field"><label for="r-@s.Id">Send to</label><input id="r-@s.Id" name="recipients" value="@s.Recipients" maxlength="1000" /></div>
+                                    <div class="row">
+                                        <div class="field">
+                                            <label for="f-@s.Id">How often</label>
+                                            <select id="f-@s.Id" name="frequency">
+                                                @foreach (var freq in Enum.GetValues<ReportFrequency>())
+                                                {
+                                                    <option value="@freq" selected="@(freq == s.Frequency)">@freq</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="field"><label for="w-@s.Id">Weekday (0 = Sunday)</label><input id="w-@s.Id" name="weekday" type="number" min="0" max="6" value="@(s.Frequency == ReportFrequency.Weekly ? s.Day : 1)" /></div>
+                                        <div class="field"><label for="m-@s.Id">Day of the month</label><input id="m-@s.Id" name="monthday" type="number" min="1" max="28" value="@(s.Frequency == ReportFrequency.Monthly ? s.Day : 1)" /></div>
+                                        <div class="field"><label for="h-@s.Id">Hour</label><input id="h-@s.Id" name="hour" type="number" min="0" max="23" value="@s.Hour" /></div>
+                                        <div class="field">
+                                            <label for="x-@s.Id">Format</label>
+                                            <select id="x-@s.Id" name="format">
+                                                @foreach (var fmt in Enum.GetValues<ReportFileFormat>())
+                                                {
+                                                    <option value="@fmt" selected="@(fmt == s.Format)">@fmt</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="actions"><button type="submit">Save</button></div>
+                                </PostForm>
+                            </details>
                             <PostForm Action="@($"/reports/schedules/{s.Id}/delete")" data-enhance="false" class="inline">
                                 <AntiforgeryToken />
                                 <button type="submit" class="link">Delete</button>

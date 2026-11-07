@@ -49,7 +49,7 @@ Have a saved report emailed regularly, for example the profit and loss to the ow
 4. **Format**: PDF, Excel or CSV.
 5. **Schedule**.
 
-Reports go out in the background within the hour. If OpenBook was off at the time, a missed send goes once when it's back. **Send now** sends one straight away. Each send is recorded with its outcome.
+Reports go out in the background within the hour. If OpenBook was off at the time, a missed send goes once when it's back. **Send now** sends one straight away. Each send is recorded with its outcome. **Pause** stops a schedule without losing it (**Resume** starts it again), and **Change** edits who it goes to, how often, the hour and the format.
 
 ## Cash-flow forecast
 

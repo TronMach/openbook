@@ -34,6 +34,24 @@ public static class DashboardEndpoints
                 return "Scheduled.";
             })).RequireAuthorization();
 
+        // Change a schedule in place: its recipients, timing and format, or paused and resumed (the saved report stays).
+        app.MapPost("/reports/schedules/{id:guid}", async (Guid id, IFormCollection form, ReportSubscriptionService subscriptions, CancellationToken ct) =>
+            await Back(async () =>
+            {
+                var current = (await subscriptions.ListAsync(ct)).FirstOrDefault(s => s.Id == id) ?? throw new EntityNotFoundException("report_subscription", id);
+                var frequency = Enum.TryParse<ReportFrequency>(form["frequency"], out var f) ? f : current.Frequency;
+                var day = (frequency == ReportFrequency.Weekly ? form["weekday"] : form["monthday"]).ToString();
+                await subscriptions.UpdateAsync(id, new ReportSubscriptionDetails(
+                    current.SavedReportId,
+                    form.ContainsKey("recipients") ? form["recipients"].ToString() : current.Recipients,
+                    frequency,
+                    day.Length > 0 ? Number(day) : current.Day,
+                    form.ContainsKey("hour") ? Number(form["hour"]) : current.Hour,
+                    Enum.TryParse<ReportFileFormat>(form["format"], out var format) ? format : current.Format,
+                    form.ContainsKey("active") ? form["active"] == "true" : current.IsActive), ct);
+                return form.ContainsKey("active") && !form.ContainsKey("recipients") ? (form["active"] == "true" ? "Resumed." : "Paused.") : "Saved.";
+            })).RequireAuthorization();
+
         app.MapPost("/reports/schedules/{id:guid}/send", async (IFormCollection _, Guid id, ReportSubscriptionService subscriptions, CancellationToken ct) =>
             await Back(async () =>
             {
