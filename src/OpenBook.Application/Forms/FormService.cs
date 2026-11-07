@@ -23,7 +23,7 @@ public sealed record RenderedForm(string FileName, byte[] Pdf, Guid CustomerId, 
 /// <summary>Builds printable invoices, estimates, credit memos, sales receipts and statements, and renders them to PDF.</summary>
 public sealed class FormService(
     ICompanyStore companies, ISalesStore store, ReceivablesService receivables, IFormRenderer renderer, CustomFields.CustomFieldService customFields,
-    FormDesignService designs, Segments.SegmentService segments)
+    FormDesignService designs, Segments.SegmentService segments, Projects.IProjectStore projects)
 {
     /// <summary>The label of the totals row <see cref="FormParts.Savings"/> shows or hides.</summary>
     public const string SavingsLabel = "You saved";
@@ -108,6 +108,9 @@ public sealed class FormService(
             ("Terms", new PaymentTerms(invoice.DueDate.DayNumber - invoice.Date.DayNumber, invoice.EarlyPaymentDiscountPercent,
                 invoice.EarlyPaymentDiscountDate is { } d ? d.DayNumber - invoice.Date.DayNumber : 0).Label),
         };
+        // Time billed on it: the hours, whatever the lines' format.
+        if ((await projects.ListTimeForInvoiceAsync(invoice.Id, ct)).Sum(t => t.Hours) is var hours and > 0m)
+            facts.Add(("Hours", hours.ToString("0.##", CultureInfo.CurrentCulture)));
         // A progress bill shows where the contract stands: its total, billed before this invoice, this one, and what's left.
         if ((invoice.EstimateId is { } estimateId ? await store.GetEstimateAsync(estimateId, ct) : null) is { } estimate)
         {

@@ -5420,6 +5420,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("TaxCodeId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TimeBillingFormat")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");

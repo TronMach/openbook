@@ -67,16 +67,47 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
     }
 
     /// <param name="groups">The line group for each customer's work (null when everything is the invoice customer's own).</param>
-    internal async Task<IReadOnlyList<SalesLineDraft>> DraftsAsync(ProjectCharges charges, IReadOnlyDictionary<Guid, string>? groups, CancellationToken ct)
+    /// <param name="format">How the time shows: a line per entry, or summed (the billed customer's choice).</param>
+    internal async Task<IReadOnlyList<SalesLineDraft>> DraftsAsync(ProjectCharges charges, IReadOnlyDictionary<Guid, string>? groups, CancellationToken ct,
+        TimeBillingFormat format = TimeBillingFormat.EachEntry)
     {
         string? Group(Guid? customerId) => groups is not null && customerId is { } c ? groups.GetValueOrDefault(c) : null;
         var drafts = new List<SalesLineDraft>();
         if (charges.Time.Count > 0)
         {
             var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
-            drafts.AddRange(charges.Time.Select(t => new SalesLineDraft(
-                t.ItemId, Domain.Common.TextCleaning.Cut($"{t.Date:MMM d, yyyy} · {workers[t.WorkerId].Name}{(t.Notes is { } n ? ": " + n : "")}", 1000), t.Hours, t.RateBilled,
-                PriceSource: TimePriceSource, ClassId: workers[t.WorkerId].ClassId, Group: Group(t.CustomerId), OwnerCustomerId: groups is null ? null : t.CustomerId)));
+            if (format == TimeBillingFormat.EachEntry)
+            {
+                drafts.AddRange(charges.Time.Select(t => new SalesLineDraft(
+                    t.ItemId, Domain.Common.TextCleaning.Cut($"{t.Date:MMM d, yyyy} · {workers[t.WorkerId].Name}{(t.Notes is { } n ? ": " + n : "")}", 1000), t.Hours, t.RateBilled,
+                    PriceSource: TimePriceSource, ClassId: workers[t.WorkerId].ClassId, Group: Group(t.CustomerId), OwnerCustomerId: groups is null ? null : t.CustomerId)));
+            }
+            else
+            {
+                // Summed lines keep each customer's, service's, class's (and person's or rate's) time apart, so income still
+                // lands where it did; a line bills hours × rate when that's exactly the entries' total, else the total once.
+                var serviceNames = (await sales.GetItemsAsync([.. charges.Time.Select(t => t.ItemId).OfType<Guid>().Distinct()], ct)).ToDictionary(i => i.Key, i => i.Value.Name);
+                foreach (var g in charges.Time.GroupBy(t => (
+                    t.CustomerId, t.ItemId, workers[t.WorkerId].ClassId,
+                    Person: format == TimeBillingFormat.ByPerson ? t.WorkerId : Guid.Empty,
+                    Rate: format == TimeBillingFormat.OneLine ? 0m : t.RateBilled)))
+                {
+                    var hours = g.Sum(t => t.Hours);
+                    var amount = g.Sum(t => t.Amount);
+                    var from = g.Min(t => t.Date);
+                    var to = g.Max(t => t.Date);
+                    var period = from == to ? $"{from:MMM d, yyyy}" : $"{from:MMM d} to {to:MMM d, yyyy}";
+                    var what = format switch
+                    {
+                        TimeBillingFormat.ByPerson => $"{workers[g.Key.Person].Name}, {period}",
+                        TimeBillingFormat.ByService => $"{(g.Key.ItemId is { } s ? serviceNames.GetValueOrDefault(s, "Services") : "Services")}, {period}",
+                        _ => $"{(g.Key.ItemId is { } s ? serviceNames.GetValueOrDefault(s, "Professional services") : "Professional services")}, {period} ({hours:0.##} hours)",
+                    };
+                    var byHours = format != TimeBillingFormat.OneLine && decimal.Round(hours * g.Key.Rate, 2, MidpointRounding.AwayFromZero) == amount;
+                    drafts.Add(new SalesLineDraft(g.Key.ItemId, Domain.Common.TextCleaning.Cut(what, 1000), byHours ? hours : 1m, byHours ? g.Key.Rate : amount,
+                        PriceSource: TimePriceSource, ClassId: g.Key.ClassId, Group: Group(g.Key.CustomerId), OwnerCustomerId: groups is null ? null : g.Key.CustomerId));
+                }
+            }
         }
 
         if (charges.Mileage.Count > 0)

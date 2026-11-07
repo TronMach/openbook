@@ -71,7 +71,9 @@ public static class ProjectsApi
         api.MapPut("/customers/{id:guid}/responsible", async (Guid id, ResponsibleRequest r, ProjectService s, CancellationToken ct) =>
         {
             var c = await s.SetResponsibleAsync(id, r.WorkerId, ct);
-            return new { c.Id, c.ResponsibleWorkerId };
+            if (r.TimeBillingFormat is { } format)
+                c = await s.SetTimeBillingFormatAsync(id, format, ct);
+            return new { c.Id, c.ResponsibleWorkerId, TimeBillingFormat = c.TimeBillingFormat.ToString() };
         });
 
         var projects = api.MapGroup("/projects");
@@ -175,4 +177,4 @@ public static class ProjectsApi
     }
 }
 
-public sealed record ResponsibleRequest(Guid? WorkerId);
+public sealed record ResponsibleRequest(Guid? WorkerId, OpenBook.Domain.Sales.TimeBillingFormat? TimeBillingFormat = null);

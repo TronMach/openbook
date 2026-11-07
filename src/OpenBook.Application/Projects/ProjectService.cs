@@ -77,6 +77,25 @@ public sealed class ProjectService(IProjectStore store, ISalesStore sales, Custo
         return customer;
     }
 
+    /// <summary>How billed time shows on the client's invoices, audited <c>Updated</c> on the customer.</summary>
+    public async Task<Customer> SetTimeBillingFormatAsync(Guid customerId, TimeBillingFormat format, CancellationToken ct = default)
+    {
+        if (!Enum.IsDefined(format))
+            throw new DomainException("customer.time_format", "Choose how time shows on invoices.");
+        var customer = await sales.GetCustomerAsync(customerId, ct) ?? throw new EntityNotFoundException("customer", customerId);
+        var before = customer.TimeBillingFormat;
+        customer.SetTimeBillingFormat(format);
+        if (before != format)
+        {
+            sales.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "customer", customer.Id,
+                System.Text.Json.JsonSerializer.Serialize(new { TimeBillingFormat = before.ToString() }),
+                System.Text.Json.JsonSerializer.Serialize(new { TimeBillingFormat = format.ToString() })));
+            await sales.SaveChangesAsync(ct);
+        }
+
+        return customer;
+    }
+
     /// <summary>New time and trips go only on a project still under way: a completed or cancelled one is reopened first.</summary>
     internal static async Task EnsureOpenForWorkAsync(IProjectStore store, Customer customer, CancellationToken ct)
     {

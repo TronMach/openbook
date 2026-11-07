@@ -36,6 +36,8 @@ public static class ProjectEndpoints
             try
             {
                 await projects.SetResponsibleAsync(id, Guid.TryParse(form["workerId"], out var w) ? w : null, ct);
+                if (Enum.TryParse<OpenBook.Domain.Sales.TimeBillingFormat>(form["timeFormat"], out var format))
+                    await projects.SetTimeBillingFormatAsync(id, format, ct);
                 return Results.Redirect($"{back}#responsible");
             }
             catch (DomainException ex)

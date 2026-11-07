@@ -54,6 +54,11 @@ public sealed class Customer
 
     public void SetResponsible(Guid? workerId) => ResponsibleWorkerId = workerId == Guid.Empty ? null : workerId;
 
+    /// <summary>How billed time shows on this client's invoices.</summary>
+    public TimeBillingFormat TimeBillingFormat { get; private set; }
+
+    public void SetTimeBillingFormat(TimeBillingFormat format) => TimeBillingFormat = format;
+
     /// <summary>
     /// A sub-customer whose invoices the parent pays: the parent's payments and credits can settle them, and
     /// they appear on the parent's statement.
@@ -168,6 +173,15 @@ public sealed class Customer
     public static string NormalizeName(string? name) =>
         Text.Optional(name, 200, "customer.name_too_long", "Customer name")
         ?? throw new DomainException("customer.name_required", "A customer needs a name.");
+}
+
+/// <summary>How billed time shows on an invoice: a line per entry, or summed by person, by service, or into one line per service.</summary>
+public enum TimeBillingFormat
+{
+    EachEntry,
+    ByPerson,
+    ByService,
+    OneLine,
 }
 
 public sealed record CustomerDetails(

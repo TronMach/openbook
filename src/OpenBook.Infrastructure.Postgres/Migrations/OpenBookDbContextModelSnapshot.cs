@@ -5427,6 +5427,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("TaxCodeId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("TimeBillingFormat")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("integer");

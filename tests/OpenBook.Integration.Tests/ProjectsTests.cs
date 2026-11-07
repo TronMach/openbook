@@ -47,6 +47,26 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_client_billed_by_person_gets_a_line_per_person_and_the_invoice_shows_the_hours()
+    {
+        var bo = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Bo", CostRate: 30m, BillRate: 90m)));
+        var ids = new List<Guid>();
+        foreach (var (who, day, hours) in new[] { (_ana.Id, Mar2, 1.5m), (_ana.Id, Mar2.AddDays(1), 2m), (bo.Id, Mar2, 0.75m) })
+            ids.Add((await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(who, day, hours, _acme.Id, _consulting.Id, true)))).Id);
+        var entries = await In<TimeService, IReadOnlyList<TimeEntry>>(s => s.ListAsync(new TimeFilter(CustomerId: _acme.Id)));
+        await In<ProjectService, Customer>(s => s.SetTimeBillingFormatAsync(_acme.Id, TimeBillingFormat.ByPerson));
+
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2.AddDays(2), [], TimeEntryIds: ids)));
+        var lines = invoice.Lines.Where(l => l.PriceSource == ProjectBilling.TimePriceSource).ToList();
+        Assert.Equal(2, lines.Count);
+        Assert.Equal(entries.Sum(e => e.Amount), lines.Sum(l => l.Amount));
+        Assert.Equal(3.5m, lines.Single(l => l.Description!.StartsWith("Ana", StringComparison.Ordinal)).Quantity);
+
+        var form = await In<OpenBook.Application.Forms.FormService, OpenBook.Application.Forms.SalesForm>(s => s.BuildAsync(OpenBook.Application.Forms.FormKind.Invoice, invoice.Id));
+        Assert.Equal(4.25m.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture), form.Facts.Single(f => f.Item1 == "Hours").Item2);
+    }
+
+    [Fact]
     public async Task Rates_rise_for_the_new_year_and_unbilled_time_can_take_the_card_again()
     {
         await In<BillingRateService, BillingRate>(s => s.CreateAsync(new BillingRateDetails(150m, _acme.Id)));

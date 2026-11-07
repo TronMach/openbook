@@ -159,7 +159,7 @@ public sealed class InvoiceService(
                 Group: groups?.GetValueOrDefault(b.CustomerId), OwnerCustomerId: groups is null ? null : b.CustomerId)));
         }
 
-        drafts.AddRange(await projectBilling.DraftsAsync(charges, groups, ct));
+        drafts.AddRange(await projectBilling.DraftsAsync(charges, groups, ct, customer.TimeBillingFormat));
         if (groups is not null)
         {
             // Keep each group's lines together (the invoice's own lines first), in the order they were added.
