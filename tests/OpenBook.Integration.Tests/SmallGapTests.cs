@@ -181,6 +181,17 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Year_to_date_figures_moved_in_keep_their_class()
+    {
+        var program = await In<OpenBook.Application.Segments.SegmentService, OpenBook.Domain.Segments.Segment>(s => s.CreateAsync(OpenBook.Domain.Segments.SegmentKind.Class, "Literacy"));
+        var entry = await In<OpenBook.Application.Ledger.OpeningBalanceService, OpenBook.Domain.Ledger.JournalEntry>(s => s.PostYearToDateAsync(Mar1,
+            [new OpenBook.Application.Ledger.OpeningBalance(_rent.Id, 750m, program.Id)]));
+        var rentLine = entry.Lines.Single(l => l.AccountId == _rent.Id);
+        Assert.Equal(program.Id, await _db.InDb(db => Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(
+            db.LineSegments.Where(l => l.JournalLineId == rentLine.Id).Select(l => l.ClassId), default)));
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";

@@ -6,7 +6,8 @@ using OpenBook.Domain.Ledger;
 namespace OpenBook.Application.Ledger;
 
 /// <param name="Balance">In the account's natural sign: positive is money in the bank, value of an asset, or amount owed.</param>
-public sealed record OpeningBalance(Guid AccountId, decimal Balance);
+/// <param name="ClassId">The class the amount belongs to (a program, a grant), for history by class; null for none.</param>
+public sealed record OpeningBalance(Guid AccountId, decimal Balance, Guid? ClassId = null);
 
 /// <summary>
 /// Starting balances for a company moving to OpenBook: one entry dated the day before it starts, with the
@@ -50,7 +51,7 @@ public sealed class OpeningBalanceService(AccountService accounts, ILedgerStore 
             // Natural-sign balance to debit/credit: a debit-normal account with a positive balance is a debit.
             var debit = account.Type.IsDebitNormal() == (balance.Balance > 0m);
             var amount = Math.Abs(balance.Balance);
-            lines.Add(debit ? JournalLineDraft.Dr(account.Id, amount) : JournalLineDraft.Cr(account.Id, amount));
+            lines.Add(debit ? JournalLineDraft.Dr(account.Id, amount, null, balance.ClassId) : JournalLineDraft.Cr(account.Id, amount, null, balance.ClassId));
         }
 
         if (lines.Count == 0)
@@ -92,7 +93,7 @@ public sealed class OpeningBalanceService(AccountService accounts, ILedgerStore 
                 throw new DomainException("opening.year_to_date_account", $"'{account.Name}' is a balance sheet account; its balance goes with the opening balances.");
             var debit = account.Type.IsDebitNormal() == (amount.Balance > 0m);
             var value = Math.Abs(amount.Balance);
-            lines.Add(debit ? JournalLineDraft.Dr(account.Id, value) : JournalLineDraft.Cr(account.Id, value));
+            lines.Add(debit ? JournalLineDraft.Dr(account.Id, value, null, amount.ClassId) : JournalLineDraft.Cr(account.Id, value, null, amount.ClassId));
         }
 
         if (lines.Count == 0)
