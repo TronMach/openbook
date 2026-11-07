@@ -207,6 +207,24 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_expense_paid_with_the_owners_own_money_is_money_they_put_in()
+    {
+        var own = await In<BankingService, Account>(s => s.OwnMoneyAccountAsync());
+        Assert.Equal((BankingService.OwnerContributionsName, AccountType.Equity), (own.Name, own.Type));
+        Assert.Equal(own.Id, (await In<BankingService, Account>(s => s.OwnMoneyAccountAsync())).Id);
+
+        var spend = await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, own.Id, Mar1,
+            [new BankSplit(_rent.Id, 75m)], "Office Depot")));
+        var lines = (await In<OpenBook.Application.Reporting.ReportLedger, IReadOnlyList<OpenBook.Application.LedgerLine>>(s => s.LinesAsync(OpenBook.Domain.Ledger.ReportBasis.Accrual, null, Mar31)))
+            .Where(l => l.JournalEntryId == spend.JournalEntryId).ToList();
+        Assert.Equal(-75m, lines.Single(l => l.AccountId == own.Id).Amount);
+        Assert.Equal(75m, lines.Single(l => l.AccountId == _rent.Id).Amount);
+
+        Assert.Equal("bank.not_banking_account", (await Assert.ThrowsAsync<DomainException>(() => In<BankingService, BankTransaction>(s =>
+            s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Receive, own.Id, Mar1, [new BankSplit(_rent.Id, 5m)]))))).Code);
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";

@@ -26,6 +26,14 @@ else
     </div>
 }
 
+<div class="card">
+    <p>@L["Paid for something for the business with your own money?"]</p>
+    <PostForm Action="/banking/paid-personally">
+        <AntiforgeryToken />
+        <button type="submit" class="secondary">@L["Record an expense paid with your own money"]</button>
+    </PostForm>
+</div>
+
 @code {
     private IReadOnlyList<BankAccountSummary> _banks = [];
 

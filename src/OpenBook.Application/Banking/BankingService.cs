@@ -85,6 +85,21 @@ public sealed class BankingService(
 {
     internal const string EntityType = "bank_transaction";
 
+    public const string OwnerContributionsName = "Owner Contributions";
+
+    /// <summary>
+    /// Where an expense paid with the owner's own money comes from: an active equity account named "Owner Contributions"
+    /// (anywhere in the chart), created (and saved) on first use.
+    /// </summary>
+    public async Task<Account> OwnMoneyAccountAsync(CancellationToken ct = default)
+    {
+        var chart = await accounts.GetChartAsync(ct);
+        var existing = chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.Equity && string.Equals(a.Name, OwnerContributionsName, StringComparison.OrdinalIgnoreCase));
+        return existing ?? await accounts.CreateUsualAsync(new CreateAccountCommand(OwnerContributionsName, AccountType.Equity,
+            Description: "Money the owner puts in, including business expenses paid with their own money."), ct);
+    }
+
     public async Task<IReadOnlyList<BankAccountSummary>> ListAccountsAsync(CancellationToken ct = default)
     {
         var chart = await accounts.GetChartAsync(ct);
@@ -403,7 +418,7 @@ public sealed class BankingService(
 
         var account = (await ledger.GetAccountsAsync([command.AccountId], ct)).GetValueOrDefault(command.AccountId)
             ?? throw new EntityNotFoundException("account", command.AccountId);
-        BankingRules.EnsureBankingAccount(account);
+        BankingRules.EnsurePayFrom(account, command.Kind);
 
         // An expense can name a vendor; the payee defaults to their name.
         var payee = command.Payee;

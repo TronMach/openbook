@@ -23,6 +23,10 @@
             <ActionLink Class="button secondary" Href="/banking/positive-pay">Positive pay</ActionLink>
             <ActionLink Class="button secondary" Href="/banking/petty-cash">Petty cash</ActionLink>
             <ActionLink Class="button secondary" Href="/banking/recurring">Recurring expenses</ActionLink>
+            <PostForm Action="/banking/paid-personally" class="inline inline-form">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Paid with your own money</button>
+            </PostForm>
         </div>
         <div class="hub-group"><span class="hub-label">Set up</span>
             <ActionLink Class="button secondary" Href="/banking/rules">Bank rules</ActionLink>

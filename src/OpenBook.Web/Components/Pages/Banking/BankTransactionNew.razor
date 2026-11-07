@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@_title</h1>
-        <ActionLink Class="button secondary" Href="@($"/banking/{AccountId}")">Back to register</ActionLink>
+        <ActionLink Class="button secondary" Href="@RegisterUrl">Back to register</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -19,7 +19,14 @@
     @if (_account is not null)
     {
         <div class="card">
-            <p class="muted">@(_kind == BankTransactionKind.Spend ? "From" : "Into") <strong>@_accountName</strong></p>
+            @if (_ownMoney)
+            {
+                <p class="muted">Paid with your own money: it's recorded as money you put into the business, in <strong>@_accountName</strong>.</p>
+            }
+            else
+            {
+                <p class="muted">@(_kind == BankTransactionKind.Spend ? "From" : "Into") <strong>@_accountName</strong></p>
+            }
             @if (_kind == BankTransactionKind.Spend)
             {
                 <div class="field">
@@ -107,7 +114,7 @@
                     <div class="alert notice" role="status">Check number @taken is already used on this account. Check the number, or save anyway if it's right.</div>
                 }
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@(_duplicateOf is { } t && t == _reference?.Trim() ? "Save anyway" : "Save")</button>
-                <a href="/banking/@AccountId">Cancel</a>
+                <a href="@RegisterUrl">Cancel</a>
             </div>
         </div>
     }
@@ -157,6 +164,8 @@
     [SupplyParameterFromQuery(Name = "copy")]
     private Guid? Copy { get; set; }
 
+    private bool _ownMoney;
+    private string RegisterUrl => _ownMoney ? $"/accounts/{AccountId}/register" : $"/banking/{AccountId}";
     private bool IsCheck => _kind == BankTransactionKind.Spend && _account?.Type == AccountType.Bank;
     private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
     private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
@@ -180,9 +189,10 @@
                 await sp.GetRequiredService<BankingService>().SuggestCheckNumberAsync(AccountId),
                 (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(v => v.Vendor).ToList()));
             _account = _chart.Get(AccountId);
-            BankingRules.EnsureBankingAccount(_account);
+            BankingRules.EnsurePayFrom(_account, _kind);
+            _ownMoney = !BankTransaction.IsBankingAccount(_account.Type);
             _accountName = _chart.FullName(AccountId);
-            _title = Labels.For(_kind, _account.Type);
+            _title = _ownMoney ? "Paid with your own money" : Labels.For(_kind, _account.Type);
             _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
             if (IsCheck)
                 _reference ??= suggestion;

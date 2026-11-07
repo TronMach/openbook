@@ -18,7 +18,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@_title</h1>
-        <ActionLink Class="button secondary" Href="@($"/banking/{_transaction.AccountId}")">Back to register</ActionLink>
+        <ActionLink Class="button secondary" Href="@RegisterUrl">Back to register</ActionLink>
         @if (_transaction.Kind != BankTransactionKind.Transfer)
         {
             <ActionLink Class="button secondary" Href="@($"/banking/{_transaction.AccountId}/record/{(_transaction.Kind == BankTransactionKind.Spend ? "spend" : "receive")}?copy={_transaction.Id}")">Copy</ActionLink>
@@ -51,7 +51,7 @@
     <div class="card">
         <dl class="facts">
             <dt>@(_transaction.Kind == BankTransactionKind.Transfer ? "From" : "Account")</dt>
-            <dd><a href="/banking/@_transaction.AccountId">@_chart.FullName(_transaction.AccountId)</a></dd>
+            <dd><a href="@RegisterUrl">@_chart.FullName(_transaction.AccountId)</a></dd>
             @if (_transaction.TransferAccountId is { } to)
             {
                 <dt>To</dt>
@@ -145,6 +145,8 @@
     private ChartOfAccounts _chart = new([]);
     private bool _useNumbers;
     private string? _title;
+    private bool _ownMoney;
+    private string RegisterUrl => _ownMoney ? $"/accounts/{_transaction!.AccountId}/register" : $"/banking/{_transaction!.AccountId}";
     private IReadOnlyList<DocumentChange> _changes = [];
     private string? _error;
     private bool _needsClosingPassword;
@@ -164,7 +166,9 @@
         _chart = await AccountService.GetChartAsync();
         _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
         _entry = await Engine.GetAsync(_transaction.JournalEntryId);
-        _title = Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type);
+        var payFrom = _chart.Get(_transaction.AccountId).Type;
+        _ownMoney = !BankTransaction.IsBankingAccount(payFrom);
+        _title = _ownMoney ? "Paid with your own money" : Labels.For(_transaction.Kind, payFrom);
         _changes = await BankingService.ChangesAsync(Id);
     }
 

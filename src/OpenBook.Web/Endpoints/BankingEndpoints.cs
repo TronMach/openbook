@@ -95,6 +95,12 @@ public static class BankingEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/banking/paid-personally", async (IFormCollection _, BankingService banking, CancellationToken ct) =>
+        {
+            var account = await banking.OwnMoneyAccountAsync(ct);
+            return Results.Redirect($"/banking/{account.Id}/record/spend");
+        }).RequireAuthorization();
+
         app.MapPost("/banking/petty-cash/new", async (IFormCollection form, PettyCashService service, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

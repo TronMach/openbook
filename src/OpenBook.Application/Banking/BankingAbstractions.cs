@@ -149,6 +149,18 @@ public static class BankingRules
             throw new Domain.Common.DomainException("bank.not_reconcilable", $"'{account.Name}' isn't an account with statements to reconcile: a bank, credit card, investment or other asset account.");
     }
 
+    /// <summary>An expense the owner paid with their own money: from an equity account (what they put in) or a loan from them.</summary>
+    public static bool IsOwnMoney(AccountType type) =>
+        type is AccountType.Equity or AccountType.OtherCurrentLiability or AccountType.LongTermLiability;
+
+    /// <summary>Spends come from a bank or card account, or the owner's own money; deposits only go into a bank or card account.</summary>
+    public static void EnsurePayFrom(Account account, Domain.Banking.BankTransactionKind kind)
+    {
+        if (kind == Domain.Banking.BankTransactionKind.Spend && IsOwnMoney(account.Type))
+            return;
+        EnsureBankingAccount(account);
+    }
+
     public static void EnsureBankingAccount(Account account)
     {
         if (!BankTransaction.IsBankingAccount(account.Type))

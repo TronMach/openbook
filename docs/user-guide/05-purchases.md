@@ -88,6 +88,10 @@ Most expenses don't need typing at all: import your bank or card statement and a
 
 To correct an expense, open it and use **Change** ([Correcting a transaction](06-banking.md#correcting-a-transaction)).
 
+### Paid with your own money
+
+Bought something for the business with your own card or cash? Use **Banking → Paid with your own money** (or the same button on **Write Checks**). It opens the expense form paying from "Owner Contributions", an equity account OpenBook adds the first time: the cost goes to its category and counts as money you put into the business. Vendors, categories and 1099 totals work as for any expense. To pay yourself back later, record a transfer or a check from the bank to an owner's draw account. Through the API, any equity account or a loan from the owner (an other current or long-term liability) can be the pay-from account.
+
 ## Vendor credits
 
 A *vendor credit* reduces what you owe a vendor: a return, a refund promised for a billing mistake.

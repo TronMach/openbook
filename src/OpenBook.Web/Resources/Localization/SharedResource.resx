@@ -1661,6 +1661,9 @@
   <data name="Paid and credited" xml:space="preserve">
     <value>Paid and credited</value>
   </data>
+  <data name="Paid for something for the business with your own money?" xml:space="preserve">
+    <value>Paid for something for the business with your own money?</value>
+  </data>
   <data name="Paid on" xml:space="preserve">
     <value>Paid on</value>
   </data>
@@ -1933,6 +1936,9 @@
   </data>
   <data name="Record a new gift" xml:space="preserve">
     <value>Record a new gift</value>
+  </data>
+  <data name="Record an expense paid with your own money" xml:space="preserve">
+    <value>Record an expense paid with your own money</value>
   </data>
   <data name="Record Mileage" xml:space="preserve">
     <value>Record Mileage</value>

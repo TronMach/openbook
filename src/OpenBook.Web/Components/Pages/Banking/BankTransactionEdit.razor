@@ -190,7 +190,7 @@
                     ? (IReadOnlyList<BillableLine>)(await sp.GetRequiredService<BillableExpenseService>().LinesAsync(BillableSource.Expense, Id)).Where(l => l.Billable is not null).ToList()
                     : []));
             _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_transaction.LocationId, .. splits.Select(s => s.ClassId)]));
-            _title = Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type);
+            _title = OpenBook.Domain.Banking.BankTransaction.IsBankingAccount(_chart.Get(_transaction.AccountId).Type) ? Labels.For(_transaction.Kind, _chart.Get(_transaction.AccountId).Type) : "Expense paid with your own money";
             _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Id != _transaction.AccountId && a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)).ToList();
             foreach (var used in splits.Select(s => s.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
                 _categories.Add(_chart.Get(used));
