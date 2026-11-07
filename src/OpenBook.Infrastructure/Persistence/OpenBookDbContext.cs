@@ -1098,6 +1098,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(c => c.ProtectedCredential).HasMaxLength(2000);
             b.Property(c => c.LastError).HasMaxLength(500);
             b.Ignore(c => c.IsConnected);
+            b.OwnsMany(c => c.Rules, r =>
+            {
+                r.ToTable("SalesChannelRules");
+                r.WithOwner().HasForeignKey("SalesChannelId");
+                r.HasKey("SalesChannelId", nameof(OpenBook.Domain.Channels.ChannelAccountRule.Position));
+                r.Property(x => x.Position).ValueGeneratedNever();
+                r.Property(x => x.Text).HasMaxLength(100);
+                r.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
+                r.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(c => c.Rules).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelPayout>(b =>

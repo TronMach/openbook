@@ -81,6 +81,36 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         return channel;
     }
 
+    /// <summary>
+    /// Replaces the channel's account rules (tried in order; the first whose words are in a payout line's description or
+    /// reference sends it to its account). Payouts waiting to post follow them; posted ones stay as they are.
+    /// </summary>
+    public async Task<SalesChannel> SetRulesAsync(Guid id, IReadOnlyList<ChannelRuleDraft> rules, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        var channel = await store.GetChannelAsync(id, ct) ?? throw new EntityNotFoundException(ChannelEntity, id);
+        var chart = await accounts.GetChartAsync(ct);
+        foreach (var rule in rules)
+        {
+            var account = chart.Get(rule.AccountId);
+            if (!account.IsActive)
+                throw new DomainException("account.inactive", $"'{account.Name}' is inactive.");
+            if (account.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable)
+                throw new DomainException("channel.rule_account", $"'{account.Name}' holds what customers or vendors owe; a payout line can't go there.");
+        }
+
+        var before = RulesSnapshot(channel, chart);
+        channel.SetRules(rules);
+        store.Add(Audit(AuditAction.Updated, ChannelEntity, channel.Id, before, RulesSnapshot(channel, chart)));
+        await store.SaveChangesAsync(ct);
+        return channel;
+    }
+
+    private static string RulesSnapshot(SalesChannel c, ChartOfAccounts chart) => JsonSerializer.Serialize(new
+    {
+        Rules = c.Rules.Select(r => $"\"{r.Text}\"{(r.Type is { } t ? $" ({t})" : "")} → {chart.FullName(r.AccountId)}").ToList(),
+    });
+
     public async Task<SalesChannel> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)
     {
         var channel = await store.GetChannelAsync(id, ct) ?? throw new EntityNotFoundException(ChannelEntity, id);

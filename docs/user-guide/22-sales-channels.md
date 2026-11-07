@@ -22,6 +22,8 @@ Each channel has **settings** for where things go. Leave them on the defaults un
 
 **The marketplace collects and pays sales tax on these orders** is on by default for Amazon, eBay and Etsy, which collect and pay sales tax themselves in most states. That tax passes through the tax account and nets to zero, and the **Sales tax by state (online orders)** report shows it separately.
 
+**Account rules** on the channel's page send some lines elsewhere: say "Advertising" with the type **Fee** to your Advertising account, or "Reserve" to an asset account for money the marketplace holds back. A line whose description or reference contains the words (and of the chosen type, if any) goes to the account of the first rule that fits; the rest go to the accounts above. Payouts still waiting to post follow the rules when they post; posted ones keep their entries (void and post again to apply new rules). Tax lines always go to the tax account.
+
 ## Getting payouts in
 
 ### Importing a payout report

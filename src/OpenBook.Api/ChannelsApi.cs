@@ -60,6 +60,10 @@ public static class ChannelsApi
             var channel = await s.CreateAsync(r.ToDetails(), ct);
             return Results.Created($"/api/channels/{channel.Id}", ChannelResponse.From(channel));
         });
+        channels.MapGet("/{id:guid}/rules", async (Guid id, ChannelService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } c ? Results.Ok(c.Rules.Select(r => new ChannelRuleDraft(r.Text, r.Type, r.AccountId))) : Results.NotFound());
+        channels.MapPut("/{id:guid}/rules", async (Guid id, IReadOnlyList<ChannelRuleDraft> rules, ChannelService s, CancellationToken ct) =>
+            (await s.SetRulesAsync(id, rules, ct)).Rules.Select(r => new ChannelRuleDraft(r.Text, r.Type, r.AccountId)));
         channels.MapPut("/{id:guid}", async (Guid id, ChannelRequest r, ChannelService s, CancellationToken ct) => ChannelResponse.From(await s.UpdateAsync(id, r.ToDetails(), ct)));
         channels.MapGet("/{id:guid}/payouts", async (Guid id, ChannelService s, CancellationToken ct) =>
             (await s.PayoutsAsync(id, ct)).Select(p => PayoutResponse.From(p)));

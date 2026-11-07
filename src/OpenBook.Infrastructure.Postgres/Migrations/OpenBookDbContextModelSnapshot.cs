@@ -7682,6 +7682,44 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("TaxAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Channels.ChannelAccountRule", "Rules", b1 =>
+                        {
+                            b1.Property<Guid>("SalesChannelId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Text")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("Type")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.HasKey("SalesChannelId", "Position");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("SalesChannelRules", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("SalesChannelId");
+                        });
+
+                    b.Navigation("Rules");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Companies.ApiKey", b =>

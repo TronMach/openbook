@@ -183,6 +183,29 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Account_rules_send_payout_lines_to_their_own_accounts()
+    {
+        var amazon = await Channel(ChannelKind.Amazon, "Amazon US");
+        var subscriptions = await _db.CreateAccount("Software Subscriptions", AccountType.Expense);
+        var reimbursed = await _db.CreateAccount("Inventory Reimbursements", AccountType.OtherIncome);
+        var payout = Assert.Single((await Import(amazon, Amazon)).Saved);
+
+        Assert.Equal("channel.rule_type", (await Assert.ThrowsAsync<DomainException>(() => In<ChannelService, SalesChannel>(s =>
+            s.SetRulesAsync(amazon.Id, [new ChannelRuleDraft("Tax", ChannelLineType.Tax, subscriptions.Id)])))).Code);
+        await In<ChannelService, SalesChannel>(s => s.SetRulesAsync(amazon.Id,
+            [new ChannelRuleDraft("subscription", ChannelLineType.Fee, subscriptions.Id), new ChannelRuleDraft("Reimbursement", null, reimbursed.Id)]));
+
+        var posted = await In<ChannelService, ChannelPayout>(s => s.PostAsync(payout.Id));
+        var entry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(posted.JournalEntryId!.Value)))!;
+        decimal Line(Guid account) => entry.Lines.Where(l => l.AccountId == account).Sum(l => l.Amount);
+        Assert.Equal(39.99m, Line(subscriptions.Id));
+        Assert.Equal(10.50m, Line(amazon.FeesAccountId));
+        Assert.Equal(-48.99m, Line(reimbursed.Id));
+        Assert.Equal(0m, Line(amazon.AdjustmentsAccountId));
+        Assert.Equal(73.50m, Line(_checking.Id));
+    }
+
+    [Fact]
     public async Task Payouts_import_once_post_as_one_entry_and_void_back_to_waiting()
     {
         var amazon = await Channel(ChannelKind.Amazon, "Amazon US");

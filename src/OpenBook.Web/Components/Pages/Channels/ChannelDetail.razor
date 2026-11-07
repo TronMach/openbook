@@ -194,6 +194,49 @@
             </div>
         }
 
+        <div class="card" style="margin-top: 1.5rem" id="rules">
+            <h2>Account rules</h2>
+            <p class="hint">Send some payout lines to their own account: advertising fees to Advertising, a reserve held back to an asset account, and so on. A line whose description or reference contains the words (and of the type, when one is chosen) goes to the account of the first rule that fits; the rest go to the accounts below. Payouts waiting to post follow the rules; posted ones keep their entries. Tax lines always go to the tax account.</p>
+            <PostForm Action="@($"/sales/channels/{_channel.Id}/rules")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="table-wrap">
+                    <table class="data entry">
+                        <thead><tr><th>Words in the line</th><th>Type of line</th><th>Account</th></tr></thead>
+                        <tbody>
+                            @{ var rules = _channel.Rules; }
+                            @for (var i = 0; i < rules.Count + 3; i++)
+                            {
+                                var rule = i < rules.Count ? rules[i] : null;
+                                var index = i;
+                                <tr>
+                                    <td><input name="rtext:@index" value="@rule?.Text" maxlength="100" aria-label="Words to look for, rule @(index + 1)" /></td>
+                                    <td>
+                                        <select name="rtype:@index" aria-label="Type of line, rule @(index + 1)">
+                                            <option value="">Any type</option>
+                                            @foreach (var type in RuleTypes)
+                                            {
+                                                <option value="@type" selected="@(rule?.Type == type)">@ChannelPayout.Label(type)</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select name="racct:@index" data-search aria-label="Account, rule @(index + 1)">
+                                            <option value="">Choose an account…</option>
+                                            @foreach (var (account, _) in _chart.Ordered(includeInactive: false).Where(x => x.Account.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable)))
+                                            {
+                                                <option value="@account.Id" selected="@(rule?.AccountId == account.Id)">@_chart.FullName(account.Id)</option>
+                                            }
+                                        </select>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="actions"><button type="submit">Save rules</button></div>
+            </PostForm>
+        </div>
+
         <div class="card" style="margin-top: 1.5rem">
             <h2>@L["Settings"]</h2>
             <PostForm Action="@($"/sales/channels/{_channel.Id}")" data-enhance="false">
@@ -223,6 +266,9 @@
         _ => "any CSV with order id, date, SKU, quantity and price columns (shipping, tax and ship-to state if you have them).",
     };
     private OpenBook.Domain.Accounts.ChartOfAccounts _chart = new([]);
+
+    private static readonly ChannelLineType[] RuleTypes =
+        [ChannelLineType.Sale, ChannelLineType.Shipping, ChannelLineType.Refund, ChannelLineType.Fee, ChannelLineType.Adjustment];
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }

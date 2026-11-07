@@ -60,9 +60,70 @@ public sealed record ChannelDetails(
 /// A place you sell (a Shopify store, an Amazon seller account, an Etsy shop…) and the accounts its payouts post to.
 /// Deactivated, never deleted.
 /// </summary>
+/// <summary>A payout line whose description or reference contains <paramref name="Text"/> (and of <paramref name="Type"/>, when given) posts to <paramref name="AccountId"/>.</summary>
+public sealed record ChannelRuleDraft(string Text, ChannelLineType? Type, Guid AccountId);
+
+/// <summary>One of a channel's account rules, tried in <see cref="Position"/> order; the first that fits a line decides its account.</summary>
+public sealed class ChannelAccountRule
+{
+    private ChannelAccountRule() => Text = string.Empty;
+
+    internal ChannelAccountRule(int position, ChannelRuleDraft draft)
+    {
+        Position = position;
+        Text = draft.Text.Trim();
+        Type = draft.Type;
+        AccountId = draft.AccountId;
+    }
+
+    public int Position { get; private set; }
+    public string Text { get; private set; }
+    public ChannelLineType? Type { get; private set; }
+    public Guid AccountId { get; private set; }
+
+    public bool Fits(ChannelPayoutLine line) =>
+        (Type is null || Type == line.Type)
+        && ((line.Description?.Contains(Text, StringComparison.OrdinalIgnoreCase) ?? false) || (line.Reference?.Contains(Text, StringComparison.OrdinalIgnoreCase) ?? false));
+}
+
 public sealed class SalesChannel
 {
+    public const int MaxRules = 50;
+
+    private readonly List<ChannelAccountRule> _rules = [];
+
     private SalesChannel() => Name = string.Empty;
+
+    /// <summary>Account rules in the order they're tried. Tax and cleared lines never follow a rule.</summary>
+    public IReadOnlyList<ChannelAccountRule> Rules => [.. _rules.OrderBy(r => r.Position)];
+
+    /// <summary>Accounts are checked by the service first.</summary>
+    public void SetRules(IReadOnlyList<ChannelRuleDraft> drafts)
+    {
+        ArgumentNullException.ThrowIfNull(drafts);
+        if (drafts.Count > MaxRules)
+            throw new DomainException("channel.too_many_rules", $"A channel takes at most {MaxRules} account rules.");
+        foreach (var draft in drafts)
+        {
+            var text = draft.Text?.Trim() ?? "";
+            if (text.Length is 0 or > 100)
+                throw new DomainException("channel.rule_text", "Each rule needs the words to look for, up to 100 characters.");
+            if (draft.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax or ChannelLineType.Cleared)
+                throw new DomainException("channel.rule_type", "Tax and cleared lines go to their own accounts; a rule can't move them.");
+        }
+
+        _rules.Clear();
+        _rules.AddRange(drafts.Select((d, i) => new ChannelAccountRule(i + 1, d)));
+    }
+
+    /// <summary>The account the first fitting rule gives the line, if any.</summary>
+    public Guid? RuleAccountFor(ChannelPayoutLine line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        return line.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax or ChannelLineType.Cleared
+            ? null
+            : Rules.FirstOrDefault(r => r.Fits(line))?.AccountId;
+    }
 
     public Guid Id { get; private set; }
     public string Name { get; private set; }
@@ -319,7 +380,7 @@ public sealed class ChannelPayout
         Guid AccountOf(ChannelPayoutLine line) =>
             line.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax && line.Region is { } region && taxAccounts?.GetValueOrDefault(region) is { } agency && agency != Guid.Empty
                 ? agency
-                : channel.AccountFor(line.Type);
+                : channel.RuleAccountFor(line) ?? channel.AccountFor(line.Type);
 
         var lines = new List<Ledger.JournalLineDraft>();
         if (Net != 0m)

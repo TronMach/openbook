@@ -33,6 +33,23 @@ public static class ChannelEndpoints
                 await channels.SetActiveAsync(id, form["active"] == "true", ct);
             })).RequireAuthorization();
 
+        app.MapPost("/sales/channels/{id:guid}/rules", async (Guid id, IFormCollection form, ChannelService channels, CancellationToken ct) =>
+        {
+            var rules = new List<ChannelRuleDraft>();
+            for (var i = 0; form.ContainsKey($"rtext:{i}"); i++)
+            {
+                var text = form[$"rtext:{i}"].ToString().Trim();
+                var hasAccount = Guid.TryParse(form[$"racct:{i}"], out var account);
+                if (text.Length == 0 && !hasAccount)
+                    continue;
+                if (!hasAccount)
+                    return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString($"Rule {i + 1}: choose the account its lines go to.")}#rules");
+                rules.Add(new ChannelRuleDraft(text, Enum.TryParse<ChannelLineType>(form[$"rtype:{i}"], out var type) ? type : null, account));
+            }
+
+            return await Back($"/sales/channels/{id}", () => channels.SetRulesAsync(id, rules, ct));
+        }).RequireAuthorization();
+
         // Form-bound (the file), so the page's antiforgery token is checked automatically.
         app.MapPost("/sales/channels/{id:guid}/import", async (Guid id, IFormFile? file, ChannelService channels, CancellationToken ct) =>
         {
