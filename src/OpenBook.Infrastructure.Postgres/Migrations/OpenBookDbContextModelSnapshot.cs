@@ -8860,6 +8860,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<DateOnly>("Date")
                                 .HasColumnType("date");
 
+                            b1.Property<Guid?>("DepositId")
+                                .HasColumnType("uuid");
+
                             b1.Property<Guid>("EntryId")
                                 .HasColumnType("uuid");
 
@@ -8870,6 +8873,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.HasIndex("BankAccountId");
 
+                            b1.HasIndex("DepositId");
+
                             b1.HasIndex("EntryId");
 
                             b1.ToTable("GrantReceipts", (string)null);
@@ -8879,6 +8884,11 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("BankAccountId")
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Sales.BankDeposit", null)
+                                .WithMany()
+                                .HasForeignKey("DepositId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                                 .WithMany()

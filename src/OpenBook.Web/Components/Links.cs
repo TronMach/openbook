@@ -51,6 +51,8 @@ public static class Links
         OpenBook.Domain.Sales.DepositedKind.Payment => $"/sales/payments/{id}",
         OpenBook.Domain.Sales.DepositedKind.SalesReceipt => $"/sales/receipts/{id}",
         OpenBook.Domain.Sales.DepositedKind.Retainer => $"/sales/retainers/{id}",
+        // A grant payment is known by its journal entry, whose page links to the grant.
+        OpenBook.Domain.Sales.DepositedKind.Grant => $"/journal/{id}",
         _ => $"/nonprofit/gifts/{id}",
     };
 

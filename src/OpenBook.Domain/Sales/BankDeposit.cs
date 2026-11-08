@@ -11,6 +11,9 @@ public enum DepositedKind
 
     /// <summary>A nonprofit's gift (<c>Domain.Nonprofit.Donation</c>).</summary>
     Gift,
+
+    /// <summary>A grant payment (a row of <c>Domain.Nonprofit.Grant</c>), by its journal entry's id.</summary>
+    Grant,
 }
 
 /// <summary>One payment or sales receipt taken out of undeposited funds.</summary>

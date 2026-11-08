@@ -1301,6 +1301,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.Property(x => x.AdvancePart).HasColumnName("AdvancePartMinor").HasConversion(MinorUnits);
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
                 l.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<BankDeposit>().WithMany().HasForeignKey(x => x.DepositId).OnDelete(DeleteBehavior.Restrict);
             });
             b.OwnsMany(g => g.Requests, l =>
             {

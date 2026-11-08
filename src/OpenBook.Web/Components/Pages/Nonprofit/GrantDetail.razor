@@ -145,7 +145,7 @@
                         <div class="field">
                             <label for="bank">Deposited to</label>
                             <select id="bank" name="bankAccountId">
-                                @foreach (var a in _banks)
+                                @foreach (var a in _receiveInto)
                                 {
                                     <option value="@a.Id">@_chart.FullName(a.Id)</option>
                                 }
@@ -348,7 +348,7 @@
                     {
                         <tr class="@(r.IsVoided ? "muted" : "")">
                             <td>@Labels.Date(r.Date)</td>
-                            <td><a href="/journal/@r.EntryId">Payment</a> to @_chart.FullName(r.BankAccountId)@(r.IsVoided ? " (voided)" : "")</td>
+                            <td><a href="/journal/@r.EntryId">Payment</a> to @_chart.FullName(r.BankAccountId)@(r.IsVoided ? " (voided)" : "")@if (r.DepositId is { } deposit) { <span>, <a href="/banking/deposits/@deposit">deposited</a></span> }</td>
                             <td class="num">@Labels.Amount(r.Amount)</td>
                             <td>@if (!r.IsVoided) { <VoidLine Action="@($"/nonprofit/grants/{g.Id}/receipts/{r.LineNumber}/void")" Password="Password" /> }</td>
                         </tr>
@@ -423,6 +423,7 @@
     private GrantPosition? _position;
     private ChartOfAccounts _chart = new([]);
     private List<Account> _banks = [];
+    private List<Account> _receiveInto = [];
     private List<Account> _expenses = [];
 
     [Parameter] public Guid Id { get; set; }
@@ -435,6 +436,8 @@
         _chart = await AccountService.GetChartAsync();
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _banks = active.Where(a => a.Type == AccountType.Bank).ToList();
+        // A bank, or a holding account such as Undeposited Funds to go into a deposit with other money.
+        _receiveInto = [.. _banks, .. active.Where(a => a.Type == AccountType.OtherCurrentAsset && a.Name.Contains("Undeposited", StringComparison.OrdinalIgnoreCase))];
         _expenses = active.Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
     }
 

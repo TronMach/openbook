@@ -8825,6 +8825,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<DateOnly>("Date")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<Guid?>("DepositId")
+                                .HasColumnType("TEXT");
+
                             b1.Property<Guid>("EntryId")
                                 .HasColumnType("TEXT");
 
@@ -8835,6 +8838,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.HasIndex("BankAccountId");
 
+                            b1.HasIndex("DepositId");
+
                             b1.HasIndex("EntryId");
 
                             b1.ToTable("GrantReceipts", (string)null);
@@ -8844,6 +8849,11 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("BankAccountId")
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
+
+                            b1.HasOne("OpenBook.Domain.Sales.BankDeposit", null)
+                                .WithMany()
+                                .HasForeignKey("DepositId")
+                                .OnDelete(DeleteBehavior.Restrict);
 
                             b1.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                                 .WithMany()

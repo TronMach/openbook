@@ -403,6 +403,28 @@ public sealed class NonprofitTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_grant_payment_can_wait_in_undeposited_funds_and_go_into_a_deposit()
+    {
+        var foundation = await Donor("Riverside Foundation");
+        var grant = await NewGrant(new GrantCommand("Literacy 2026", foundation.Id, 10000m, new DateOnly(2026, 1, 5), Jan1, Dec31, IncomeAccountId: Account("Grants:Restricted")));
+        grant = await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 3, 1), 4000m, Account("Undeposited Funds")));
+        var entryId = grant.Receipts.Single().EntryId;
+
+        var waiting = Assert.Single(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()), i => i.Kind == DepositedKind.Grant);
+        Assert.Equal((entryId, 4000m), (waiting.Id, waiting.Amount));
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(Account("Checking"), new DateOnly(2026, 3, 2), [(DepositedKind.Grant, entryId)])));
+        Assert.Equal(deposit.Id, (await In<GrantService, Grant?>(s => s.GetAsync(grant.Id)))!.Receipts.Single().DepositId);
+        Assert.DoesNotContain(await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync()), i => i.Kind == DepositedKind.Grant);
+        Assert.Equal("grant.receipt_deposited", (await Assert.ThrowsAsync<DomainException>(() => In<GrantService, Grant>(s => s.VoidReceiptAsync(grant.Id, 1, "Wrong grant")))).Code);
+        Assert.Equal(CheckOutcome.Ok, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Results.Single(r => r.Key == "undeposited").Outcome);
+
+        await In<DepositService, BankDeposit>(s => s.VoidAsync(deposit.Id, "Wrong account"));
+        Assert.Null((await In<GrantService, Grant?>(s => s.GetAsync(grant.Id)))!.Receipts.Single().DepositId);
+        await In<GrantService, Grant>(s => s.VoidReceiptAsync(grant.Id, 1, "Wrong grant"));
+        Assert.Equal(CheckOutcome.Ok, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Results.Single(r => r.Key == "undeposited").Outcome);
+    }
+
+    [Fact]
     public async Task On_the_cash_basis_a_conditional_grant_paid_ahead_is_income_at_once()
     {
         var city = await Donor("City Arts Council");

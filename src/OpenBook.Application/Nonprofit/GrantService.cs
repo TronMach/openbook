@@ -240,8 +240,8 @@ public sealed class GrantService(
     {
         var grant = await RequiredAsync(id, ct);
         var bank = (await accounts.GetChartAsync(ct)).Find(bankAccountId);
-        if (bank is not { Type: AccountType.Bank, IsActive: true })
-            throw new DomainException("grant.bank", "Choose the bank account it went into.");
+        if (bank is not { Type: AccountType.Bank or AccountType.OtherCurrentAsset, IsActive: true })
+            throw new DomainException("grant.bank", "Choose the bank account it went into, or a holding account such as Undeposited Funds.");
         grant.CheckReceipt(amount);
         var before = Snapshot(grant);
         var memo = $"Grant payment: {grant.Name}";

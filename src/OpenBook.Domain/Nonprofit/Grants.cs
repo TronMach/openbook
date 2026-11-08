@@ -302,6 +302,20 @@ public sealed class Grant
     }
 
     /// <summary>A payment can be voided unless its advance has since been earned (void that recognition first).</summary>
+    public void MarkReceiptDeposited(int line, Guid depositId)
+    {
+        var receipt = _receipts.FirstOrDefault(r => r.LineNumber == line) ?? throw new DomainException("grant.receipt_unknown", "There's no such payment.");
+        if (receipt.IsVoided || receipt.DepositId is not null)
+            throw new DomainException("deposit.item_unavailable", "That grant payment is voided or already deposited.");
+        receipt.DepositId = depositId;
+    }
+
+    public void ClearReceiptDeposit(int line)
+    {
+        if (_receipts.FirstOrDefault(r => r.LineNumber == line) is { } receipt)
+            receipt.DepositId = null;
+    }
+
     public void VoidReceipt(int line)
     {
         var receipt = _receipts.FirstOrDefault(r => r.LineNumber == line) ?? throw new DomainException("grant.receipt_unknown", "There's no such payment.");
@@ -500,10 +514,15 @@ public sealed class GrantReceipt
 
     public bool IsVoided { get; private set; }
 
+    /// <summary>The bank deposit that took it out of a holding account such as Undeposited Funds.</summary>
+    public Guid? DepositId { get; internal set; }
+
     public void Void()
     {
         if (IsVoided)
             throw new DomainException("grant.receipt_voided", "This payment is already voided.");
+        if (DepositId is not null)
+            throw new DomainException("grant.receipt_deposited", "This payment is in a bank deposit. Void the deposit first.");
         IsVoided = true;
     }
 }

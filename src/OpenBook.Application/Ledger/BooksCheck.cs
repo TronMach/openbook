@@ -76,6 +76,7 @@ public sealed class BooksCheckService(
     public static readonly IReadOnlySet<string> UndepositedSources = new HashSet<string>(StringComparer.Ordinal)
     {
         CustomerPayment.Source, SalesReceipt.Source, Retainer.Source, BankDeposit.Source, Domain.Nonprofit.Donation.Source,
+        Domain.Nonprofit.Grant.ReceiptSource,
     };
 
     /// <summary>The sources whose entries A/P aging accounts for.</summary>
@@ -468,6 +469,7 @@ public sealed class BooksCheckService(
             .Concat(d.Retainers.Select(r => r.DepositAccountId))
             .Concat(d.Gifts.Where(g => g.Kind == Domain.Nonprofit.GiftKind.Cash).Select(g => g.DebitAccountId))
             .Concat(waiting.Select(w => w.AccountId))
+            .Concat((await nonprofit.ListGrantsAsync(ct)).SelectMany(g => g.Receipts).Select(r => r.BankAccountId))
             .Where(id => d.Chart.Find(id)?.Type == AccountType.OtherCurrentAsset)
             .ToHashSet();
         var lines = d.Accrual.Where(l => holding.Contains(l.AccountId)).ToList();
