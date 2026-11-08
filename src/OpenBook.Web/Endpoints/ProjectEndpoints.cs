@@ -204,6 +204,48 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/time/week/submit", async (IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            var workerId = Guid.TryParse(form["workerId"], out var w) ? w : Guid.Empty;
+            var day = Date(form["week"]) ?? CompanyTime.Today;
+            var back = $"/time/week?worker={workerId}&week={TimeSheet.MondayOf(day):yyyy-MM-dd}";
+            try
+            {
+                await time.SubmitWeekAsync(workerId, day, ct);
+                return Results.Redirect(back + "#submit");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}&error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/time/review/{id:guid}/approve", async (Guid id, IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            try
+            {
+                await time.ApproveSheetAsync(id, form["note"].ToString(), ct);
+                return Results.Redirect("/time/review?done=" + Uri.EscapeDataString("Approved."));
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/review?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/time/review/{id:guid}/return", async (Guid id, IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            try
+            {
+                await time.ReturnSheetAsync(id, form["note"].ToString(), ct);
+                return Results.Redirect("/time/review?done=" + Uri.EscapeDataString("Returned; the week can be changed again."));
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time/review?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/time/lock", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {
             await time.SetLockAsync(Date(form["through"]), ct);

@@ -4052,6 +4052,55 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("TimeEntries", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Projects.TimeSheet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Hours")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("HoursTenThousandths");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("WeekStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkerId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("WorkerId", "WeekStart")
+                        .IsUnique();
+
+                    b.ToTable("TimeSheets", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Projects.Worker", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9305,6 +9354,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OpenBook.Domain.Projects.Worker", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Projects.TimeSheet", b =>
+                {
                     b.HasOne("OpenBook.Domain.Projects.Worker", null)
                         .WithMany()
                         .HasForeignKey("WorkerId")

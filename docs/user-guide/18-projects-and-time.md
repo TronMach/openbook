@@ -51,6 +51,8 @@ Billable time needs a customer or project and a service. A **rate per hour** typ
 
 **Missing time last week** on the Time page lists people with **hours a week** set (on **People and rates**) who entered fewer than that last week, each linking to their week grid. Under **Time settings** (accountant role): **New time starts billable** ticks the Billable box on the Time form and new week-grid rows, and **Round time up to** rounds every timer and typed entry up to steps of that many minutes (6 minutes is a tenth of an hour). Once a period's hours are reviewed, **Lock time** through its last day: time dated then can't be added, changed or deleted any more, though it can still be billed, written down or repriced. Leave the date blank to unlock.
 
+**Handing in a week.** On the week grid, **Submit this week for review** hands the person's week in (save the grid first). While it waits, and once it's approved, the week's time can't be added to, changed or deleted. **Time → Review time** (accountant role to decide) lists the weeks waiting: **Approve**, or **Return** with a note saying what needs fixing, which opens the week again; the person sees the note on their week grid, fixes it and submits again. An approved week can be returned later the same way. Billing doesn't wait for approval.
+
 ## Mileage
 
 **Mileage** (`/mileage`) records trips: **date**, **miles**, **business purpose**, from, to, vehicle and driver. Add a **customer or project** and a **bill per mile** amount to bill it on.

@@ -100,6 +100,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.Worker> Workers => Set<OpenBook.Domain.Projects.Worker>();
     public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
     public DbSet<OpenBook.Domain.Projects.PreBill> PreBills => Set<OpenBook.Domain.Projects.PreBill>();
+    public DbSet<OpenBook.Domain.Projects.TimeSheet> TimeSheets => Set<OpenBook.Domain.Projects.TimeSheet>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRule> AllocationRules => Set<OpenBook.Domain.Nonprofit.AllocationRule>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRun> AllocationRuns => Set<OpenBook.Domain.Nonprofit.AllocationRun>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
@@ -1448,6 +1449,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
             b.HasOne<OpenBook.Domain.Nonprofit.AllocationRule>().WithMany().HasForeignKey(r => r.RuleId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.TimeSheet>(b =>
+        {
+            b.ToTable("TimeSheets");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Hours).HasColumnName("HoursTenThousandths").HasConversion(TenThousandths);
+            b.Property(x => x.SubmittedBy).HasMaxLength(100);
+            b.Property(x => x.ReviewedBy).HasMaxLength(100);
+            b.Property(x => x.Note).HasMaxLength(OpenBook.Domain.Projects.TimeSheet.MaxNoteLength);
+            b.Ignore(x => x.Locks);
+            b.HasIndex(x => new { x.WorkerId, x.WeekStart }).IsUnique();
+            b.HasIndex(x => x.Status);
+            b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.PreBill>(b =>

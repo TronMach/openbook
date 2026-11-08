@@ -281,11 +281,81 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
 
     public async Task<DateOnly?> LockedThroughAsync(CancellationToken ct = default) => (await companies.GetRequiredCompanyAsync(ct)).TimeLockedThrough;
 
-    private async Task EnsureUnlockedAsync(DateOnly date, CancellationToken ct)
+    private async Task EnsureUnlockedAsync(DateOnly date, CancellationToken ct, Guid? workerId = null)
     {
         if (await LockedThroughAsync(ct) is { } locked && date <= locked)
             throw new DomainException("time.locked", $"Time is locked through {locked:MMM d, yyyy}, so time on {date:MMM d, yyyy} can't be added, changed or deleted.");
+        if (workerId is { } worker && await store.GetTimeSheetAsync(worker, TimeSheet.MondayOf(date), ct) is { Locks: true } sheet)
+            throw new DomainException("time.submitted",
+                $"The week of {sheet.WeekStart:MMM d, yyyy} is {(sheet.Status == TimeSheetStatus.Approved ? "approved" : "submitted for review")}, so its time can't be added, changed or deleted. Ask for it to be returned first.");
     }
+
+    public const string SheetEntityType = "time_sheet";
+
+    /// <summary>The person's week as handed in, if it has been.</summary>
+    public Task<TimeSheet?> SheetAsync(Guid workerId, DateOnly day, CancellationToken ct = default) =>
+        store.GetTimeSheetAsync(workerId, TimeSheet.MondayOf(day), ct);
+
+    public Task<TimeSheet?> GetSheetAsync(Guid id, CancellationToken ct = default) => store.GetTimeSheetAsync(id, ct);
+
+    /// <summary>Weeks handed in, oldest first; all when <paramref name="status"/> is null.</summary>
+    public Task<IReadOnlyList<TimeSheet>> SheetsAsync(TimeSheetStatus? status = null, CancellationToken ct = default) => store.ListTimeSheetsAsync(status, ct);
+
+    /// <summary>Hands in a person's week (a returned one again): it then waits for review, and its time is held as it is.</summary>
+    public async Task<TimeSheet> SubmitWeekAsync(Guid workerId, DateOnly day, CancellationToken ct = default)
+    {
+        var monday = TimeSheet.MondayOf(day);
+        var worker = await store.GetWorkerAsync(workerId, ct) ?? throw new EntityNotFoundException(WorkerService.EntityType, workerId);
+        var all = await store.ListTimeAsync(new TimeFilter(monday, monday.AddDays(6), worker.Id), ct);
+        if (all.Any(e => e.IsRunning))
+            throw new DomainException("timesheet.timer_running", "A timer is running in this week. Stop it first.");
+        if (all.Count == 0)
+            throw new DomainException("timesheet.empty", "There's no time in this week to submit.");
+        var hours = all.Sum(e => e.Hours);
+        var sheet = await store.GetTimeSheetAsync(worker.Id, monday, ct);
+        var before = sheet is null ? null : Snapshot(sheet);
+        if (sheet is null)
+        {
+            sheet = TimeSheet.Submit(worker.Id, monday, hours, clock.UtcNow, user.Actor);
+            store.Add(sheet);
+        }
+        else
+        {
+            sheet.Resubmit(hours, clock.UtcNow, user.Actor);
+        }
+
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, before is null ? AuditAction.Created : AuditAction.Updated, SheetEntityType, sheet.Id, before, Snapshot(sheet)));
+        await store.SaveChangesAsync(ct);
+        return sheet;
+    }
+
+    public Task<TimeSheet> ApproveSheetAsync(Guid id, string? note = null, CancellationToken ct = default) =>
+        ReviewSheetAsync(id, s => s.Approve(clock.UtcNow, user.Actor, note), ct);
+
+    /// <summary>Sends a week back to be fixed (an approved one too): its time opens again.</summary>
+    public Task<TimeSheet> ReturnSheetAsync(Guid id, string note, CancellationToken ct = default) =>
+        ReviewSheetAsync(id, s => s.Return(clock.UtcNow, user.Actor, note), ct);
+
+    private async Task<TimeSheet> ReviewSheetAsync(Guid id, Action<TimeSheet> review, CancellationToken ct)
+    {
+        var sheet = await store.GetTimeSheetAsync(id, ct) ?? throw new EntityNotFoundException(SheetEntityType, id);
+        var before = Snapshot(sheet);
+        review(sheet);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SheetEntityType, sheet.Id, before, Snapshot(sheet)));
+        await store.SaveChangesAsync(ct);
+        return sheet;
+    }
+
+    private static string Snapshot(TimeSheet s) => JsonSerializer.Serialize(new
+    {
+        s.WorkerId,
+        s.WeekStart,
+        Status = s.Status.ToString(),
+        s.Hours,
+        s.SubmittedBy,
+        s.ReviewedBy,
+        s.Note,
+    });
 
     /// <summary>
     /// People expected to work (weekly hours set) who entered fewer hours than that in the week starting
@@ -467,7 +537,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
-        await EnsureUnlockedAsync(entry.Date, ct);
+        await EnsureUnlockedAsync(entry.Date, ct, entry.WorkerId);
         entry.EnsureEditable();
         store.Remove(entry);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, EntityType, entry.Id, Snapshot(entry), null));
@@ -508,7 +578,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
                 var cell = entries.Where(e => e.Date == date && e.CustomerId == row.CustomerId && e.ItemId == row.ItemId && e.Billable == row.Billable).ToList();
                 if (cell.Sum(e => e.Hours) == target)
                     continue;
-                await EnsureUnlockedAsync(date, ct);
+                await EnsureUnlockedAsync(date, ct, workerId);
                 if (cell.Count == 0)
                 {
                     var details = new TimeEntryDetails(workerId, date, target, row.CustomerId, row.ItemId, row.Billable, Notes: string.IsNullOrWhiteSpace(row.Notes) ? null : row.Notes.Trim());
@@ -594,9 +664,9 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
 
     private async Task<(decimal Bill, decimal Cost, string? Source)> RatesAsync(TimeEntryDetails details, CancellationToken ct, TimeEntry? existing = null)
     {
-        await EnsureUnlockedAsync(details.Date, ct);
-        if (existing is not null && existing.Date != details.Date)
-            await EnsureUnlockedAsync(existing.Date, ct);
+        await EnsureUnlockedAsync(details.Date, ct, details.WorkerId);
+        if (existing is not null && (existing.Date != details.Date || existing.WorkerId != details.WorkerId))
+            await EnsureUnlockedAsync(existing.Date, ct, existing.WorkerId);
         var worker = await store.GetWorkerAsync(details.WorkerId, ct) ?? throw new EntityNotFoundException(WorkerService.EntityType, details.WorkerId);
         if (!worker.IsActive && existing?.WorkerId != worker.Id)
             throw new DomainException("worker.inactive", $"{worker.Name} is inactive.");

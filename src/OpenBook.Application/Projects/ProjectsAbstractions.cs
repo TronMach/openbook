@@ -23,6 +23,12 @@ public interface IProjectStore
     Task<PreBill?> GetPreBillAsync(Guid id, CancellationToken ct);
 
     void Add(PreBill preBill);
+
+    /// <summary>Weeks handed in for review, all when <paramref name="status"/> is null; oldest week first.</summary>
+    Task<IReadOnlyList<TimeSheet>> ListTimeSheetsAsync(TimeSheetStatus? status, CancellationToken ct);
+    Task<TimeSheet?> GetTimeSheetAsync(Guid id, CancellationToken ct);
+    Task<TimeSheet?> GetTimeSheetAsync(Guid workerId, DateOnly weekStart, CancellationToken ct);
+    void Add(TimeSheet sheet);
     Task<Project?> GetProjectAsync(Guid id, CancellationToken ct);
     Task<Project?> GetProjectForCustomerAsync(Guid customerId, CancellationToken ct);
 

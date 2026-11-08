@@ -79,6 +79,11 @@ public static class ProjectsApi
         var projects = api.MapGroup("/projects");
         projects.MapGet("/time/lock", async (TimeService s, CancellationToken ct) => new { LockedThrough = await s.LockedThroughAsync(ct) });
         projects.MapPut("/time/lock", async (TimeLockRequest r, TimeService s, CancellationToken ct) => new { LockedThrough = await s.SetLockAsync(r.Through, ct) });
+        projects.MapGet("/time/sheets", async (TimeSheetStatus? status, TimeService s, CancellationToken ct) => await s.SheetsAsync(status, ct));
+        projects.MapPost("/time/sheets", async (SubmitWeekRequest r, TimeService s, CancellationToken ct) => await s.SubmitWeekAsync(r.WorkerId, r.Week, ct));
+        projects.MapGet("/time-review", async (TimeService s, CancellationToken ct) => await s.SheetsAsync(TimeSheetStatus.Submitted, ct));
+        projects.MapPost("/time-review/{id:guid}/approve", async (Guid id, ReviewWeekRequest r, TimeService s, CancellationToken ct) => await s.ApproveSheetAsync(id, r.Note, ct));
+        projects.MapPost("/time-review/{id:guid}/return", async (Guid id, ReviewWeekRequest r, TimeService s, CancellationToken ct) => await s.ReturnSheetAsync(id, r.Note ?? "", ct));
         projects.MapGet("/time/missing", async (DateOnly? week, TimeService s, CancellationToken ct) =>
         {
             var day = week ?? CompanyTime.Today.AddDays(-7);
@@ -188,3 +193,9 @@ public static class ProjectsApi
 public sealed record ResponsibleRequest(Guid? WorkerId, OpenBook.Domain.Sales.TimeBillingFormat? TimeBillingFormat = null);
 
 public sealed record TimeLockRequest(DateOnly? Through);
+
+/// <summary>Hands in a person's week for review (any day of it).</summary>
+public sealed record SubmitWeekRequest(Guid WorkerId, DateOnly Week);
+
+/// <summary>A reviewer's note: optional when approving, what needs fixing when returning.</summary>
+public sealed record ReviewWeekRequest(string? Note);

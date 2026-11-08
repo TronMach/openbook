@@ -4059,6 +4059,55 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("TimeEntries", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Projects.TimeSheet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Hours")
+                        .HasColumnType("bigint")
+                        .HasColumnName("HoursTenThousandths");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("WeekStart")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("WorkerId", "WeekStart")
+                        .IsUnique();
+
+                    b.ToTable("TimeSheets", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Projects.Worker", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9348,6 +9397,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OpenBook.Domain.Projects.Worker", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Projects.TimeSheet", b =>
+                {
                     b.HasOne("OpenBook.Domain.Projects.Worker", null)
                         .WithMany()
                         .HasForeignKey("WorkerId")

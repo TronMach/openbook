@@ -1,4 +1,5 @@
 @page "/time/week"
+@using WeekSheet = OpenBook.Domain.Projects.TimeSheet
 @using System.Globalization
 @inject TimeService TimeService
 @inject WorkerService WorkerService
@@ -25,6 +26,33 @@
     @if (Saved is not null)
     {
         <div class="alert notice" role="status">@Saved change(s) saved.</div>
+    }
+    @if (_worker is not null)
+    {
+        <div class="card" id="submit" style="margin-bottom: 1rem">
+            @if (_sheet is { Status: TimeSheetStatus.Submitted } waiting)
+            {
+                <p>Handed in for review on @waiting.SubmittedAt.InCompanyTime().ToString("g", CultureInfo.CurrentCulture) (@Labels.Quantity(waiting.Hours) hours). Its time can't be changed unless it's returned.</p>
+            }
+            else if (_sheet is { Status: TimeSheetStatus.Approved } approved)
+            {
+                <p>Approved by @approved.ReviewedBy. Its time can't be changed unless it's returned.</p>
+            }
+            else
+            {
+                @if (_sheet is { Status: TimeSheetStatus.Returned } returned)
+                {
+                    <div class="alert notice" role="status">Returned by @returned.ReviewedBy: @returned.Note</div>
+                }
+                <PostForm Action="/time/week/submit" data-enhance="false" class="inline-actions">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="workerId" value="@_worker.Id" />
+                    <input type="hidden" name="week" value="@Iso(_monday)" />
+                    <button type="submit" class="secondary" data-confirm="Hand in @_worker.Name's week for review? Its time can't be changed until it's returned.">Submit this week for review</button>
+                    <span class="hint">Save your changes first.</span>
+                </PostForm>
+            }
+        </div>
     }
 
     @if (_worker is null)
@@ -156,6 +184,7 @@
     private IReadOnlyList<Worker> _workers = [];
     private Worker? _worker;
     private IReadOnlyList<WeekRow> _rows = [];
+    private WeekSheet? _sheet;
     private IReadOnlyList<CustomerSummary> _customers = [];
     private IReadOnlyDictionary<Guid, string> _customerNames = new Dictionary<Guid, string>();
     private Dictionary<Guid, string> _itemNames = [];
@@ -179,6 +208,7 @@
         if (_worker is null)
             return;
         _rows = await TimeService.WeekAsync(_worker.Id, _monday);
+        _sheet = await TimeService.SheetAsync(_worker.Id, _monday);
         _billableDefault = (await TimeService.DefaultsAsync()).BillableByDefault;
         if (Copy)
             _copied = await TimeService.RowsFromLastWeekAsync(_worker.Id, _monday);

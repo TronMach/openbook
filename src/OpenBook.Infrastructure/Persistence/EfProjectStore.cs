@@ -14,6 +14,18 @@ internal sealed class EfProjectStore(OpenBookDbContext db) : IProjectStore
 
     public void Add(PreBill preBill) => db.PreBills.Add(preBill);
 
+    // SQLite can't order by a DateTimeOffset, so the order is made here.
+    public async Task<IReadOnlyList<TimeSheet>> ListTimeSheetsAsync(TimeSheetStatus? status, CancellationToken ct) =>
+        (await db.TimeSheets.Where(s => status == null || s.Status == status).ToListAsync(ct))
+            .OrderBy(s => s.WeekStart).ThenBy(s => s.SubmittedAt).ToList();
+
+    public Task<TimeSheet?> GetTimeSheetAsync(Guid id, CancellationToken ct) => db.TimeSheets.SingleOrDefaultAsync(s => s.Id == id, ct);
+
+    public Task<TimeSheet?> GetTimeSheetAsync(Guid workerId, DateOnly weekStart, CancellationToken ct) =>
+        db.TimeSheets.SingleOrDefaultAsync(s => s.WorkerId == workerId && s.WeekStart == weekStart, ct);
+
+    public void Add(TimeSheet sheet) => db.TimeSheets.Add(sheet);
+
     public async Task<IReadOnlyList<Project>> ListProjectsAsync(CancellationToken ct) => await db.Projects.ToListAsync(ct);
 
     public Task<Project?> GetProjectAsync(Guid id, CancellationToken ct) => db.Projects.SingleOrDefaultAsync(p => p.Id == id, ct);

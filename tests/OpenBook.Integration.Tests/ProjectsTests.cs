@@ -47,6 +47,33 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_submitted_week_holds_its_time_until_it_is_returned()
+    {
+        Task<T> Refused<T>(Func<TimeService, Task<T>> work) => In(work);
+        Assert.Equal("timesheet.empty", (await Assert.ThrowsAsync<DomainException>(() => Refused(s => s.SubmitWeekAsync(_ana.Id, Mar2)))).Code);
+        var entry = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 2m, _acme.Id, _consulting.Id, true)));
+        var sheet = await In<TimeService, TimeSheet>(s => s.SubmitWeekAsync(_ana.Id, Mar2.AddDays(2)));
+        Assert.Equal((TimeSheet.MondayOf(Mar2), 2m, TimeSheetStatus.Submitted), (sheet.WeekStart, sheet.Hours, sheet.Status));
+
+        Assert.Equal("time.submitted", (await Assert.ThrowsAsync<DomainException>(() =>
+            Refused(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2.AddDays(1), 1m))))).Code);
+        Assert.Equal("time.submitted", (await Assert.ThrowsAsync<DomainException>(() =>
+            Refused<bool>(async s => { await s.DeleteAsync(entry.Id); return true; }))).Code);
+        Assert.Equal("timesheet.note_required", (await Assert.ThrowsAsync<DomainException>(() => Refused(s => s.ReturnSheetAsync(sheet.Id, " ")))).Code);
+
+        await In<TimeService, TimeSheet>(s => s.ReturnSheetAsync(sheet.Id, "Add Tuesday's call"));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2.AddDays(1), 1m)));
+        sheet = await In<TimeService, TimeSheet>(s => s.SubmitWeekAsync(_ana.Id, Mar2));
+        Assert.Equal((3m, TimeSheetStatus.Submitted, (string?)null), (sheet.Hours, sheet.Status, sheet.Note));
+        Assert.Single(await In<TimeService, IReadOnlyList<TimeSheet>>(s => s.SheetsAsync(TimeSheetStatus.Submitted)));
+        sheet = await In<TimeService, TimeSheet>(s => s.ApproveSheetAsync(sheet.Id));
+        Assert.Equal(TimeSheetStatus.Approved, sheet.Status);
+        Assert.Equal("timesheet.already_submitted", (await Assert.ThrowsAsync<DomainException>(() => Refused(s => s.SubmitWeekAsync(_ana.Id, Mar2)))).Code);
+        // The next week is free.
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2.AddDays(7), 1m)));
+    }
+
+    [Fact]
     public async Task Billed_time_prints_its_date_and_person_in_columns_of_their_own()
     {
         var time = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 2m, _acme.Id, _consulting.Id, true, Notes: "Kickoff meeting")));

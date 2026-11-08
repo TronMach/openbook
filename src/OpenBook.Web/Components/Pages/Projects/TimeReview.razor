@@ -1,0 +1,118 @@
+@page "/time/review"
+@using WeekSheet = OpenBook.Domain.Projects.TimeSheet
+@inject TimeService TimeService
+@inject WorkerService WorkerService
+
+<PageTitle>Review time · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Review time</h1>
+        <ActionLink Class="button secondary" Href="/time">Time</ActionLink>
+        <ActionLink Class="button secondary" Href="/time/week">Week grid</ActionLink>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is not null)
+    {
+        <div class="alert notice" role="status">@Done</div>
+    }
+    <p class="muted">Weeks people have handed in from the week grid. While a week waits here or is approved, its time can't be changed; returning it opens it again, with your note, to be fixed and handed in again. Billing doesn't wait for approval.</p>
+
+    <div class="card">
+        <h2>Waiting for review</h2>
+        @if (_waiting.Count == 0)
+        {
+            <p class="muted">Nothing is waiting.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Person</th><th>Week of</th><th class="num">Hours</th><th>Handed in</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _waiting)
+                        {
+                            <tr>
+                                <td>@Name(s.WorkerId)</td>
+                                <td><a href="@WeekLink(s)">@Labels.Date(s.WeekStart)</a></td>
+                                <td class="num">@Labels.Quantity(s.Hours)</td>
+                                <td>@s.SubmittedAt.InCompanyTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture) by @s.SubmittedBy</td>
+                                <td>
+                                    <PostForm Action="@($"/time/review/{s.Id}/approve")" data-enhance="false" class="inline-actions">
+                                        <AntiforgeryToken />
+                                        <button type="submit">Approve</button>
+                                    </PostForm>
+                                    <PostForm Action="@($"/time/review/{s.Id}/return")" data-enhance="false" class="inline-actions">
+                                        <AntiforgeryToken />
+                                        <input name="note" required maxlength="500" placeholder="What needs fixing" aria-label="What needs fixing in @Name(s.WorkerId)'s week" />
+                                        <button type="submit" class="secondary">Return</button>
+                                    </PostForm>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @if (_recent.Count > 0)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Reviewed in the last 60 days</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Person</th><th>Week of</th><th class="num">Hours</th><th>Status</th><th>Note</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _recent)
+                        {
+                            <tr>
+                                <td>@Name(s.WorkerId)</td>
+                                <td><a href="@WeekLink(s)">@Labels.Date(s.WeekStart)</a></td>
+                                <td class="num">@Labels.Quantity(s.Hours)</td>
+                                <td>@(s.Status == TimeSheetStatus.Approved ? "Approved" : "Returned") by @s.ReviewedBy</td>
+                                <td>@s.Note</td>
+                                <td>
+                                    @if (s.Status == TimeSheetStatus.Approved)
+                                    {
+                                        <PostForm Action="@($"/time/review/{s.Id}/return")" data-enhance="false" class="inline-actions">
+                                            <AntiforgeryToken />
+                                            <input name="note" required maxlength="500" placeholder="Why it's reopened" aria-label="Why @Name(s.WorkerId)'s week is reopened" />
+                                            <button type="submit" class="secondary">Return</button>
+                                        </PostForm>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<WeekSheet> _waiting = [];
+    private List<WeekSheet> _recent = [];
+    private Dictionary<Guid, string> _names = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _names = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
+        _waiting = await TimeService.SheetsAsync(TimeSheetStatus.Submitted);
+        var since = DateTimeOffset.UtcNow.AddDays(-60);
+        _recent = (await TimeService.SheetsAsync()).Where(s => s.Status != TimeSheetStatus.Submitted && s.ReviewedAt >= since)
+            .OrderByDescending(s => s.ReviewedAt).ToList();
+    }
+
+    private string Name(Guid id) => _names.GetValueOrDefault(id) ?? "(unknown)";
+
+    private static string WeekLink(WeekSheet s) =>
+        $"/time/week?worker={s.WorkerId}&week={s.WeekStart.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)}";
+}

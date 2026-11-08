@@ -109,6 +109,7 @@ public static class Links
         "channel_return" => $"/sales/channels/returns/{id}",
         "loan" => $"/loans/{id}",
         "time_entry" => $"/time/{id}/edit",
+        "time_sheet" => "/time/review",
         "worker" => $"/time/people?edit={id}",
         "mileage_trip" => "/mileage",
         "mileage_rate" => "/mileage",

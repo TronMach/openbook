@@ -101,6 +101,8 @@ public static class AccessRules
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/lock", UserRole.Accountant, UserRole.Accountant),
+        ("/time/review", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/projects/time-review", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/defaults", UserRole.Accountant, UserRole.Accountant),
         ("/api/projects/time/lock", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/people", UserRole.ViewOnly, UserRole.Accountant),
