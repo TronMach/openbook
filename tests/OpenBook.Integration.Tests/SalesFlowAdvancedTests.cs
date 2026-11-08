@@ -62,6 +62,16 @@ public sealed class SalesFlowAdvancedTests : IAsyncLifetime
     // ---- Sales orders ----
 
     [Fact]
+    public async Task Retainer_balances_show_what_is_held_on_a_date()
+    {
+        var retainer = await In<RetainerService, Retainer>(s => s.ReceiveAsync(new ReceiveRetainerCommand(_acme.Id, Mar1, _checking.Id, 1000m)));
+        await In<RetainerService, RetainerRefund>(s => s.RefundAsync(retainer.Id, new RefundRetainerCommand(Mar1.AddDays(20), _checking.Id, 300m)));
+        decimal Held(ReportTable t) => (decimal)t.Rows[^1].Cells[4].Value!;
+        Assert.Equal(1000m, Held(await In<ReportCatalog, ReportTable>(s => s.RunAsync("retainer-balances", ReportParameters.Parse("asOf=2026-03-10")))));
+        Assert.Equal(700m, Held(await In<ReportCatalog, ReportTable>(s => s.RunAsync("retainer-balances", ReportParameters.Parse("asOf=2026-03-31")))));
+    }
+
+    [Fact]
     public async Task Every_line_is_billed_to_a_client_at_their_usual_markup()
     {
         await In<OpenBook.Application.Projects.ProjectService, Customer>(s => s.SetDefaultMarkupAsync(_acme.Id, 15m));

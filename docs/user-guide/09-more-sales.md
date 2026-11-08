@@ -57,6 +57,8 @@ From the retainer's page you can:
 - **Refund what's left**, from a bank or card account.
 - **Take back** an application or refund, or **Void this retainer** when nothing has been used.
 
+**Reports → Retainer balances** lists what each customer has paid ahead and not yet used or refunded on a date; its total is what Customer Deposits holds for retainers. A customer's statement says how much they have paid ahead, since that money isn't in the balance it shows.
+
 ## Credit memos
 
 A *credit memo* is the opposite of an invoice: it reduces the customer's balance and your income. Use it for returns, allowances, or correcting an invoice that's already been paid.

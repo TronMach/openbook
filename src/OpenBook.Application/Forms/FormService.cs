@@ -93,6 +93,15 @@ public sealed class FormService(
             company.HomeCurrency.Code,
             Unstyled);
         form = await designs.ApplyAsync(form, await designs.ChosenAsync(FormDocuments.Statement, customerId, designId, ct), ct);
+        // Money paid ahead isn't in the balance (it's held for invoices to come), so say what's held.
+        var held = (await store.ListRetainersAsync(customerId, ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date <= to)
+            .Sum(r => r.Amount - r.Applications.Where(a => !a.IsVoided && a.AppliedOn <= to).Sum(a => a.Amount) - r.Refunds.Where(f => !f.IsVoided && f.Date <= to).Sum(f => f.Amount));
+        if (held > 0m)
+        {
+            var note = $"You have {held.ToString("N2", CultureInfo.CurrentCulture)} {company.HomeCurrency.Code} paid ahead (a retainer), held for invoices to come.";
+            form = form with { Message = string.IsNullOrWhiteSpace(form.Message) ? note : $"{form.Message}{Environment.NewLine}{note}" };
+        }
+
         return new RenderedForm(FileName(company, form.Title, to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), renderer.Render(form), customerId,
             $"Statement {to.ToString("d", CultureInfo.CurrentCulture)}");
     }

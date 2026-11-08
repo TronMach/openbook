@@ -30,6 +30,34 @@ public sealed class ListReports(
     PurchaseOrderService purchaseOrders,
     SalesOrderService salesOrders)
 {
+    /// <summary>Retainers held for each customer on a date: received, applied to invoices and refunded by then, and what's left.</summary>
+    public async Task<ReportTable> RetainerBalancesAsync(DateOnly asOf, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var names = Domain.Sales.CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
+        var retainers = (await sales.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date <= asOf).ToList();
+        var rows = new List<ReportTableRow>();
+        decimal received = 0m, applied = 0m, refunded = 0m;
+        foreach (var group in retainers.GroupBy(r => r.CustomerId).OrderBy(g => names.GetValueOrDefault(g.Key, ""), StringComparer.OrdinalIgnoreCase))
+        {
+            var r = group.Sum(x => x.Amount);
+            var a = group.SelectMany(x => x.Applications).Where(x => !x.IsVoided && x.AppliedOn <= asOf).Sum(x => x.Amount);
+            var f = group.SelectMany(x => x.Refunds).Where(x => !x.IsVoided && x.Date <= asOf).Sum(x => x.Amount);
+            if (r - a - f == 0m)
+                continue;
+            (received, applied, refunded) = (received + r, applied + a, refunded + f);
+            rows.Add(new ReportTableRow([new ReportCell(names.GetValueOrDefault(group.Key, "?"), new ReportLink("customer", group.Key)), r, a, f, r - a - f]));
+        }
+
+        rows.Add(new ReportTableRow(["Total", received, applied, refunded, received - applied - refunded], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Retainer balances",
+            [company.Name, $"As of {asOf:MMM d, yyyy}"],
+            [new("Customer"), new("Received", ColumnFormat.Money), new("Applied", ColumnFormat.Money), new("Refunded", ColumnFormat.Money), new("Held", ColumnFormat.Money)],
+            rows,
+            Note: "Retainers received by the date, less what was applied to invoices or refunded by then. The total is what Customer Deposits holds for retainers.");
+    }
+
     public async Task<ReportTable> CustomerBalancesAsync(DateOnly asOf, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
