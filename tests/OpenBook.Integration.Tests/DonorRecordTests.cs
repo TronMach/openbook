@@ -71,6 +71,9 @@ public sealed class DonorRecordTests : IAsyncLifetime
         var row = report.Rows[0].Cells;
         Assert.Equal((366.66m, 700m), ((decimal)row[6].Value!, (decimal)row[5].Value!));
         Assert.Equal(new DateOnly(2026, 5, 1), (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Pledge.NextDueAfter(new DateOnly(2026, 4, 15)));
+        var statement = await In<GiftService, OpenBook.Application.Forms.RenderedForm>(s => s.PledgeStatementAsync(pledge.Id, new DateOnly(2026, 4, 15)));
+        Assert.True(statement.Pdf.Length > 1000);
+        Assert.Equal(_pat.Id, statement.CustomerId);
     }
 
     [Fact]

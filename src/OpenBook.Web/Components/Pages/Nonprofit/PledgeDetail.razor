@@ -27,6 +27,10 @@
             {
                 <ActionLink Class="button" Href="@($"/nonprofit/gifts/new?pledge={p.Id}")">Record a payment</ActionLink>
             }
+            @if (p.Status == DocumentStatus.Posted)
+            {
+                <a class="button secondary" href="/nonprofit/pledges/@p.Id/statement" target="_blank">Pledge statement (PDF)</a>
+            }
             <ActionLink Class="button secondary" Href="@($"/journal/{p.JournalEntryId}")">Journal entry</ActionLink>
             <ActionLink Class="button secondary" Href="@($"/audit?entityId={p.Id}")">History</ActionLink>
             <ActionLink Class="button secondary" Href="/nonprofit/pledges">Pledges</ActionLink>

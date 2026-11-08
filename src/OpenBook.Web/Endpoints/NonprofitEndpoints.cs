@@ -141,6 +141,9 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/gifts/{id}", () => gifts.VoidAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
+        app.MapGet("/nonprofit/pledges/{id:guid}/statement", (Guid id, GiftService gifts, CancellationToken ct) =>
+            Pdf($"/nonprofit/pledges/{id}", async () => (await gifts.PledgeStatementAsync(id, CompanyTime.Today, ct)).Pdf)).RequireAuthorization();
+
         app.MapGet("/nonprofit/gifts/{id:guid}/letter", (Guid id, GiftService gifts, CancellationToken ct) =>
             Pdf($"/nonprofit/gifts/{id}", async () => (await gifts.AcknowledgmentAsync(id, ct)).Pdf)).RequireAuthorization();
 

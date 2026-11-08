@@ -95,7 +95,7 @@ A *pledge* is a promise to give. On accrual basis it's income when made; on cash
 
 **Nonprofit → Pledges → Record a pledge**: donor, amount, date, **due by**, contribution account and purpose. It's paid by gifts that name it (**Paying a pledge** on the gift form). The pledge page lists its payments and what's left.
 
-- **Installments**: a pledge paid over time can have a schedule: how many installments, how far apart (a month, 3 or 6 months, a year) and the first due date make equal amounts, the last taking any cents left over. **Replace the schedule** or **Clear the schedule** at any time; it posts nothing. **Reports → Open pledges** shows each pledge's next due date and what's **Overdue**: what the schedule (or the due date) expected by the report's date, less what's been paid.
+- **Installments**: a pledge paid over time can have a schedule: how many installments, how far apart (a month, 3 or 6 months, a year) and the first due date make equal amounts, the last taking any cents left over. **Replace the schedule** or **Clear the schedule** at any time; it posts nothing. **Pledge statement (PDF)** on the pledge's page is a letter for the donor: what they promised, each payment so far, what's left and what's due. **Reports → Open pledges** shows each pledge's next due date and what's **Overdue**: what the schedule (or the due date) expected by the report's date, less what's been paid.
 - **Cancel the rest** when the donor won't pay what's left: it comes off contribution income and pledges receivable. **Undo the cancellation** if they pay after all.
 - **Void** only a pledge recorded by mistake or withdrawn before anything was paid.
 

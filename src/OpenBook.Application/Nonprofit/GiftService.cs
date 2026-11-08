@@ -511,6 +511,47 @@ public sealed class GiftService(
             renderer.Render([letter]), donor.Id, $"Gift acknowledgment {donation.Number}");
     }
 
+    /// <summary>
+    /// A pledge statement for the donor, as of <paramref name="asOf"/>: what they promised, each payment so far, what's
+    /// left, and what's due or overdue by the schedule.
+    /// </summary>
+    public async Task<RenderedForm> PledgeStatementAsync(Guid id, DateOnly asOf, CancellationToken ct = default)
+    {
+        var pledge = await store.GetPledgeAsync(id, ct) ?? throw new EntityNotFoundException(PledgeEntity, id);
+        if (pledge.Status != DocumentStatus.Posted)
+            throw new DomainException("pledge.voided", "This pledge is voided.");
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
+        var donor = await DonorAsync(pledge.DonorId, ct, activeOnly: false);
+        var settings = await GetSettingsAsync(ct);
+        var payments = (await store.ListDonationsAsync(ct)).Where(d => d.PledgeId == pledge.Id && d.Status == DocumentStatus.Posted && d.Date <= asOf).OrderBy(d => d.Date).ToList();
+        var paid = payments.Sum(p => p.Amount);
+        var standing = pledge.Amount - (pledge.CancelledOn <= asOf ? pledge.CancelledAmount : 0m);
+        var left = standing - paid;
+        var overdue = Math.Max(0m, Math.Min(pledge.DueBy(asOf), standing) - paid);
+        var money = (decimal amount) => $"{company.HomeCurrency.Code} {amount.ToString("N2", CultureInfo.CurrentCulture)}";
+        var paragraphs = new List<string> { $"Promised: {money(standing)}. Paid so far: {money(paid)}. Still to come: {money(left)}." };
+        if (overdue > 0m)
+            paragraphs.Add($"By the schedule, {money(overdue)} was due by {asOf.ToString("MMM d, yyyy", CultureInfo.CurrentCulture)}.");
+        if (pledge.NextDueAfter(asOf) is { } next && left > 0m)
+            paragraphs.Add($"The next payment is due {next.ToString("MMM d, yyyy", CultureInfo.CurrentCulture)}.");
+        paragraphs.Add("Thank you for your commitment. Please get in touch if anything here doesn't match your records.");
+        var letter = new DonorLetter(
+            FormService.CompanyParty(company),
+            FormService.CustomerParty(donor),
+            $"Pledge statement {pledge.Number}",
+            asOf,
+            $"Your pledge of {pledge.Date.ToString("MMM d, yyyy", CultureInfo.CurrentCulture)}, as of {asOf.ToString("MMM d, yyyy", CultureInfo.CurrentCulture)}. Payments received:",
+            [.. payments.Select(p => new DonorLetterGift(p.Date, p.Reference is { } r ? $"Payment ({r})" : "Payment", p.Amount))],
+            paragraphs,
+            settings.SignerName,
+            settings.SignerTitle,
+            company.HomeCurrency.Code,
+            await designs.DefaultStyleAsync(ct));
+        return new RenderedForm(FormService.FileName(company, "Pledge statement", pledge.Number.ToString(CultureInfo.InvariantCulture)),
+            renderer.Render([letter]), donor.Id, $"Pledge statement {pledge.Number}");
+    }
+
     /// <summary>Thank-you letters for several gifts in one PDF, to print together (voided gifts are left out).</summary>
     public async Task<RenderedForm> AcknowledgmentsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
     {
