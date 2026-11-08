@@ -28,6 +28,13 @@ public sealed class FormService(
     /// <summary>The label of the totals row <see cref="FormParts.Savings"/> shows or hides.</summary>
     public const string SavingsLabel = "You saved";
 
+    /// <summary>Rows an invoice carries for <see cref="FormParts.AccountBalance"/>, left out by designs without it.</summary>
+    public const string PreviousBalanceLabel = "Previous balance";
+    public const string TotalOwedLabel = "Total now owed";
+    public const string RetainerHeldLabel = "Retainer held";
+
+    public static readonly IReadOnlySet<string> AccountBalanceLabels = new HashSet<string>(StringComparer.Ordinal) { PreviousBalanceLabel, TotalOwedLabel, RetainerHeldLabel };
+
     public Task<RenderedForm> RenderAsync(FormKind kind, Guid id, CancellationToken ct = default) => RenderAsync(kind, id, null, ct);
 
     /// <param name="designId">Print with this design rather than the usual one (a packing slip, say); null = the usual one.</param>
@@ -137,10 +144,45 @@ public sealed class FormService(
         if (invoice.AmountPaid > 0m)
             totals.Add(new FormTotal("Paid and credited", -invoice.AmountPaid));
         totals.Add(new FormTotal("Balance due", invoice.Balance, Emphasis: true));
+        if (invoice.Status == DocumentStatus.Posted)
+            await AddAccountBalanceAsync(totals, invoice, customer.Id, ct);
         AddSavings(totals, invoice.Lines);
         var title = invoice.Status == DocumentStatus.Voided ? "Invoice (void)" : "Invoice";
         return (Form(company, customer, title, invoice.Number, facts, await LinesAsync(invoice.Lines, invoice.TaxCodeId, ct), totals, invoice.Memo, job, invoice.BillToAddress, invoice.ShipToAddress), customer.Id);
     }
+
+    /// <summary>
+    /// The billed customer's other open invoices dated by this one (with those of sub-customers billed with it), the
+    /// total owed with this one, and what's held as a retainer on its date: shown only by designs with
+    /// <see cref="FormParts.AccountBalance"/>, and only when there's something before or held.
+    /// </summary>
+    private async Task AddAccountBalanceAsync(List<FormTotal> totals, Invoice invoice, Guid billedId, CancellationToken ct)
+    {
+        var customers = (await store.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var billed = CustomerTree.Billed(billedId, customers);
+        var previous = 0m;
+        foreach (var id in billed)
+            previous += (await store.ListOpenInvoicesAsync(id, ct))
+                .Where(i => i.Id != invoice.Id && i.Status == DocumentStatus.Posted && Earlier(i, invoice))
+                .Sum(i => i.Balance);
+        var held = 0m;
+        foreach (var id in billed)
+            held += (await store.ListRetainersAsync(id, ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date <= invoice.Date)
+                .Sum(r => r.Amount - r.Applications.Where(a => !a.IsVoided && a.AppliedOn <= invoice.Date).Sum(a => a.Amount)
+                    - r.Refunds.Where(f => !f.IsVoided && f.Date <= invoice.Date).Sum(f => f.Amount));
+        if (previous != 0m)
+        {
+            totals.Add(new FormTotal(PreviousBalanceLabel, previous));
+            totals.Add(new FormTotal(TotalOwedLabel, previous + invoice.Balance, Emphasis: true));
+        }
+
+        if (held > 0m)
+            totals.Add(new FormTotal(RetainerHeldLabel, held));
+    }
+
+    // Before it: dated earlier, or the same day and made earlier (then by number, shorter first, for the same moment).
+    private static bool Earlier(Invoice a, Invoice b) =>
+        (a.Date, a.CreatedAt, a.Number.Length).CompareTo((b.Date, b.CreatedAt, b.Number.Length)) is var c && (c < 0 || (c == 0 && string.CompareOrdinal(a.Number, b.Number) < 0));
 
     private async Task<(SalesForm Form, Guid CustomerId)> EstimateAsync(Company company, Guid id, CancellationToken ct)
     {
@@ -243,12 +285,37 @@ public sealed class FormService(
                     SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount => new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber,
                         Cells: Cells(null, null, ClassOf(l), null)),
                     _ => new FormLine(l.Description, l.Quantity, l.Rate, l.Amount, LineNumber: l.LineNumber,
-                        Cells: Cells(l.ItemId is { } item ? items.GetValueOrDefault(item) : null, l.Lots, ClassOf(l), taxCodeId is null ? null : l.Taxable)),
+                        Cells: Work(Cells(l.ItemId is { } item ? items.GetValueOrDefault(item) : null, l.Lots, ClassOf(l), taxCodeId is null ? null : l.Taxable), l)),
                 })
             .ToList();
     }
 
     /// <summary>The built-in column values of a line (blank ones left out).</summary>
+    /// <summary>
+    /// A line billing one time entry or trip: its date and person as cells, and its description without them (it starts
+    /// "Mar 2, 2026 · Ana" and then ": notes", or the trip), for designs that print them in columns of their own.
+    /// </summary>
+    internal static Dictionary<string, string> Work(Dictionary<string, string> cells, SalesLine line)
+    {
+        if (line.ServiceDate is not { } date)
+            return cells;
+        cells[FormColumns.Date] = date.ToString("d", CultureInfo.CurrentCulture);
+        if (line.Person is { } person)
+            cells[FormColumns.Person] = person;
+        var description = line.Description ?? "";
+        foreach (var culture in new[] { CultureInfo.CurrentCulture, CultureInfo.InvariantCulture })
+        {
+            var prefix = date.ToString("MMM d, yyyy", culture) + (line.Person is { } who ? $" · {who}" : "");
+            if (!description.StartsWith(prefix, StringComparison.Ordinal))
+                continue;
+            var rest = description[prefix.Length..].TrimStart(':', '·', ' ');
+            cells[FormColumns.ShortDescription] = rest.Length > 0 ? rest : cells.GetValueOrDefault(FormColumns.Item) ?? "";
+            break;
+        }
+
+        return cells;
+    }
+
     internal static Dictionary<string, string> Cells(Item? item, string? lots, string? className, bool? taxable)
     {
         var cells = new Dictionary<string, string>();

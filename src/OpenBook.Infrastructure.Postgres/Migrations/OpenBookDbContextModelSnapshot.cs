@@ -10393,6 +10393,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -10404,6 +10408,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("bigint")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("date");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("uuid");
@@ -10657,6 +10664,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -10668,6 +10679,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("bigint")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("date");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("uuid");
@@ -10817,6 +10831,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -10828,6 +10846,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("bigint")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("date");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("uuid");
@@ -11310,6 +11331,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -11321,6 +11346,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("bigint")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("date");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("uuid");
@@ -11454,6 +11482,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
@@ -11465,6 +11497,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("bigint")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("date");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("uuid");

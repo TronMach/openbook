@@ -84,6 +84,20 @@ public sealed class FormDesignTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_design_can_show_the_previous_balance_and_retainer_on_invoices()
+    {
+        var first = await InvoiceFor(_acme);
+        var second = await InvoiceFor(_acme);
+        Assert.DoesNotContain((await Form(FormKind.Invoice, second.Id)).Totals, t => t.Label == FormService.PreviousBalanceLabel);
+
+        var standard = (await Designs(s => s.ListAsync())).Single();
+        await Designs(s => s.UpdateAsync(standard.Id, standard.ToDetails() with { Show = FormParts.Default | FormParts.AccountBalance }));
+        var totals = (await Form(FormKind.Invoice, second.Id)).Totals.ToDictionary(t => t.Label, t => t.Amount);
+        Assert.Equal((200m, 400m), (totals[FormService.PreviousBalanceLabel], totals[FormService.TotalOwedLabel]));
+        Assert.DoesNotContain(FormService.PreviousBalanceLabel, (await Form(FormKind.Invoice, first.Id)).Totals.Select(t => t.Label));
+    }
+
+    [Fact]
     public async Task A_design_sets_titles_messages_terms_ship_to_and_columns()
     {
         var invoice = await InvoiceFor(_acme);

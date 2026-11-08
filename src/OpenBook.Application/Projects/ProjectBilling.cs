@@ -80,7 +80,8 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
             {
                 drafts.AddRange(charges.Time.Select(t => new SalesLineDraft(
                     t.ItemId, Domain.Common.TextCleaning.Cut($"{t.Date:MMM d, yyyy} · {workers[t.WorkerId].Name}{(t.Notes is { } n ? ": " + n : "")}", 1000), t.Hours, t.RateBilled,
-                    PriceSource: TimePriceSource, ClassId: workers[t.WorkerId].ClassId, Group: Group(t.CustomerId), OwnerCustomerId: groups is null ? null : t.CustomerId)));
+                    PriceSource: TimePriceSource, ClassId: workers[t.WorkerId].ClassId, Group: Group(t.CustomerId), OwnerCustomerId: groups is null ? null : t.CustomerId,
+                    ServiceDate: t.Date, Person: workers[t.WorkerId].Name)));
             }
             else
             {
@@ -114,7 +115,8 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
         {
             var itemId = await MileageItemIdAsync(ct);
             drafts.AddRange(charges.Mileage.Select(m => new SalesLineDraft(
-                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.BillRate, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId), OwnerCustomerId: groups is null ? null : m.CustomerId)));
+                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.BillRate, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId), OwnerCustomerId: groups is null ? null : m.CustomerId,
+                ServiceDate: m.Date)));
         }
 
         return drafts;

@@ -30,7 +30,8 @@ public enum SalesLineKind
 /// <param name="PriceSource">Set by the line builder for automatic prices, or kept when copying a line.</param>
 public sealed record SalesLineDraft(
     Guid? ItemId, string? Description, decimal Quantity, decimal Rate, SalesLineKind Kind = SalesLineKind.Item, bool? Taxable = null,
-    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null, string? Lots = null, string? Group = null, Guid? OwnerCustomerId = null)
+    bool AutoPrice = false, string? PriceSource = null, Guid? ClassId = null, string? Lots = null, string? Group = null, Guid? OwnerCustomerId = null,
+    DateOnly? ServiceDate = null, string? Person = null)
 {
     public bool IsDiscount => Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount;
 }
@@ -105,6 +106,12 @@ public sealed class SalesLine
     /// <summary>The project or job this line's work belongs to, when it's billed on someone else's invoice: its income is that project's.</summary>
     public Guid? OwnerCustomerId { get; private set; }
 
+    /// <summary>The day the work was done, on a line billing one time entry or trip; printed in a "Date" column when the design has one.</summary>
+    public DateOnly? ServiceDate { get; private set; }
+
+    /// <summary>Who did the work, on a line billing one time entry; printed in a "Person" column when the design has one.</summary>
+    public string? Person { get; private set; }
+
     public void RecordLots(string? lots) => Lots = string.IsNullOrWhiteSpace(lots) ? null : lots.Length > 1000 ? lots[..1000] : lots;
 
     /// <param name="item">The draft's item, already looked up; null for a note line.</param>
@@ -152,6 +159,8 @@ public sealed class SalesLine
             Lots = item is null ? null : Text.Optional(draft.Lots, 1000, "sales.lots_too_long", "Lot or serial numbers"),
             Group = Text.Optional(draft.Group, 100, "sales.group_too_long", "Line group"),
             OwnerCustomerId = draft.OwnerCustomerId,
+            ServiceDate = draft.ServiceDate,
+            Person = Text.Optional(draft.Person, 100, "sales.person_too_long", "Person"),
         };
     }
 
@@ -305,7 +314,8 @@ public sealed class SalesLine
         Kind == SalesLineKind.Tax
             ? throw new InvalidOperationException("Tax lines are recalculated, not copied.")
             : new(ItemId, Description, Quantity, Rate, Kind == SalesLineKind.Note ? SalesLineKind.Item : Kind, Kind == SalesLineKind.Item && ItemId is not null ? Taxable : null,
-                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId, Lots: Lots, Group: Group, OwnerCustomerId: OwnerCustomerId);
+                PriceSource: PriceSource == ManualPrice ? null : PriceSource, ClassId: ClassId, Lots: Lots, Group: Group, OwnerCustomerId: OwnerCustomerId,
+                ServiceDate: ServiceDate, Person: Person);
 
     /// <summary>The drafts for a document's lines, leaving out its tax lines.</summary>
     public static List<SalesLineDraft> Drafts(IEnumerable<SalesLine> lines) =>

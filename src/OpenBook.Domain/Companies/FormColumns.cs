@@ -32,6 +32,14 @@ public static class FormColumns
     public const string Lots = "lots";
     public const string Class = "class";
     public const string Taxable = "taxable";
+    public const string Date = "date";
+    public const string Person = "person";
+
+    /// <summary>
+    /// Not a column: the description of a line billing one time entry or trip without the date and person it starts
+    /// with, printed instead of the description when the design has a date or person column.
+    /// </summary>
+    public const string ShortDescription = "description:short";
     public const string Quantity = "quantity";
     public const string Rate = "rate";
     public const string Amount = "amount";
@@ -53,6 +61,8 @@ public static class FormColumns
         new(Lots, "Lot / serial", 15, false, true, "Lot or serial numbers sold (otherwise they follow the description)"),
         new(Class, "Class", 13, false, true, "The line's class"),
         new(Taxable, "Tax", 8, false, true, "Whether the line is taxed (only on documents that charge tax)"),
+        new(Date, "Date", 12, false, true, "The day billed time or a trip was done (otherwise it starts the description)"),
+        new(Person, "Person", 14, false, true, "Who did the billed time (otherwise it starts the description)"),
         new(Quantity, "Qty", 10, true, false, "Quantity"),
         new(Rate, "Rate", 14, true, false, "Price per unit"),
         new(Amount, "Amount", 14, true, false, "The line's amount"),
@@ -122,8 +132,11 @@ public enum FormParts
     /// <summary>Every other line shaded.</summary>
     StripedRows = 1024,
 
+    /// <summary>On invoices, the customer's other open invoices ("Previous balance"), the total now owed and any retainer held.</summary>
+    AccountBalance = 2048,
+
     Default = CompanyAddress | CompanyPhone | CompanyEmail | CustomerContact | ShipTo | Terms | PageNumbers | Savings | Totals,
-    All = Default | Acceptance | StripedRows,
+    All = Default | Acceptance | StripedRows | AccountBalance,
 }
 
 public enum FormMargins

@@ -235,8 +235,8 @@ public sealed class FormDesignService(
             Customer = CustomerShown(form.Customer, show),
             Facts = design.ShowTerms ? form.Facts : [.. form.Facts.Where(f => f.Label is not ("Terms" or "Due date"))],
             Totals = !show.HasFlag(FormParts.Totals) ? []
-                : show.HasFlag(FormParts.Savings) ? form.Totals
-                : [.. form.Totals.Where(t => t.Label != FormService.SavingsLabel)],
+                : [.. form.Totals.Where(t => (show.HasFlag(FormParts.Savings) || t.Label != FormService.SavingsLabel)
+                    && (show.HasFlag(FormParts.AccountBalance) || !FormService.AccountBalanceLabels.Contains(t.Label)))],
             Message = Join(form.Message, design.MessageFor(document)),
             ShipTo = design.ShowShipTo ? form.ShipTo : null,
             Acceptance = document == FormDocuments.Estimate && show.HasFlag(FormParts.Acceptance),
@@ -311,7 +311,12 @@ public sealed class FormDesignService(
             facts,
             [
                 new FormLine("Consulting services", 6m, 95m, 570m, LineNumber: 1,
-                    Cells: Sample(new() { [FormColumns.Item] = "Consulting", [FormColumns.Class] = "Services", [FormColumns.Taxable] = "No" })),
+                    Cells: Sample(new()
+                    {
+                        [FormColumns.Item] = "Consulting", [FormColumns.Class] = "Services", [FormColumns.Taxable] = "No",
+                        [FormColumns.Date] = today.ToString("d", System.Globalization.CultureInfo.CurrentCulture), [FormColumns.Person] = "Ana Ruiz",
+                        [FormColumns.ShortDescription] = "Consulting services",
+                    })),
                 new FormLine("Widget, blue", 12m, 4.5m, 54m, LineNumber: 2, Details: "Pack size: Case of 12",
                     Cells: Sample(new() { [FormColumns.Item] = "Widget", [FormColumns.Sku] = "WID-BLU-12", [FormColumns.Lots] = "LOT-2410 x 12", [FormColumns.Class] = "Products", [FormColumns.Taxable] = "Yes" })),
                 new FormLine("Delivery", 1m, 25m, 25m, LineNumber: 3,

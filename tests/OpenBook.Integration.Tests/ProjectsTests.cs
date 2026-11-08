@@ -47,6 +47,22 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Billed_time_prints_its_date_and_person_in_columns_of_their_own()
+    {
+        var time = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 2m, _acme.Id, _consulting.Id, true, Notes: "Kickoff meeting")));
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [], TimeEntryIds: [time.Id])));
+        var line = invoice.Lines.Single(l => l.Kind == SalesLineKind.Item);
+        Assert.Equal((Mar2, "Ana"), (line.ServiceDate!.Value, line.Person!));
+
+        var form = await In<FormService, SalesForm>(s => s.BuildAsync(FormKind.Invoice, invoice.Id));
+        var printed = form.Lines.Single(l => l.Quantity is not null);
+        Assert.Equal("Kickoff meeting", printed.Cell(OpenBook.Domain.Companies.FormColumns.ShortDescription));
+        Assert.Equal("Ana", printed.Cell(OpenBook.Domain.Companies.FormColumns.Person));
+        Assert.NotNull(printed.Cell(OpenBook.Domain.Companies.FormColumns.Date));
+        Assert.StartsWith(Mar2.ToString("MMM d, yyyy", System.Globalization.CultureInfo.CurrentCulture), printed.Description, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_client_billed_by_person_gets_a_line_per_person_and_the_invoice_shows_the_hours()
     {
         var bo = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Bo", CostRate: 30m, BillRate: 90m)));

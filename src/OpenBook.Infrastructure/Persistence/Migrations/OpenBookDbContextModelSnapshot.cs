@@ -10334,6 +10334,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -10345,6 +10349,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("TEXT");
@@ -10596,6 +10603,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -10607,6 +10618,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("TEXT");
@@ -10754,6 +10768,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -10765,6 +10783,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("TEXT");
@@ -11241,6 +11262,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -11252,6 +11277,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("TEXT");
@@ -11383,6 +11411,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("OwnerCustomerId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Person")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("PriceSource")
                                 .HasMaxLength(200)
                                 .HasColumnType("TEXT");
@@ -11394,6 +11426,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<long>("Rate")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("ServiceDate")
+                                .HasColumnType("TEXT");
 
                             b1.Property<Guid?>("TaxRateId")
                                 .HasColumnType("TEXT");

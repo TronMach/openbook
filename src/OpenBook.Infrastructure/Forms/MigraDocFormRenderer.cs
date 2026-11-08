@@ -649,6 +649,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         if (columns.Count == 0)
             columns = [FormTableColumn.For(FormColumns.Description)];
         var lots = columns.Any(c => c.Key == FormColumns.Lots);
+        var work = columns.Any(c => c.Key is FormColumns.Date or FormColumns.Person);
         // Without a description or item column, the first column of words takes the text. Where there's only figures,
         // lines keep them and the first column shows notes and headings.
         var words = columns.Find(c => c.Key is not (FormColumns.Number or FormColumns.Quantity or FormColumns.Rate or FormColumns.Amount))?.Key;
@@ -661,7 +662,7 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         var rows = form.Lines.Select(line =>
         {
             int? n = line.Style == FormLineStyle.Normal && line.Quantity is not null ? ++number : null;
-            return columns.Select(c => c.Key == text && (words is not null || line.Quantity is null && line.Amount is null) ? TextOf(line, text, lots) : Value(line, c.Key, n)).ToArray();
+            return columns.Select(c => c.Key == text && (words is not null || line.Quantity is null && line.Amount is null) ? TextOf(line, text, lots, work) : Value(line, c.Key, n)).ToArray();
         }).ToList();
 
         var table = columns.Any(c => c.AutoWidth)
@@ -720,10 +721,11 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         })];
     }
 
-    private static string TextOf(FormLine line, string key, bool lotsColumn)
+    private static string TextOf(FormLine line, string key, bool lotsColumn, bool workColumns)
     {
-        var text = key == FormColumns.Item ? line.Cell(FormColumns.Item) ?? line.Description ?? ""
-            : key == FormColumns.Description ? line.Description ?? ""
+        var description = workColumns ? line.Cell(FormColumns.ShortDescription) ?? line.Description : line.Description;
+        var text = key == FormColumns.Item ? line.Cell(FormColumns.Item) ?? description ?? ""
+            : key == FormColumns.Description ? description ?? ""
             : line.Cell(key) ?? line.Description ?? "";
         return !lotsColumn && line.Cell(FormColumns.Lots) is { } lots ? $"{text} · {lots}" : text;
     }

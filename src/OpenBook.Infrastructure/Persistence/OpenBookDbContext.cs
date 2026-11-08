@@ -1831,6 +1831,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             l.Property(x => x.PriceSource).HasMaxLength(200);
             l.Property(x => x.Lots).HasMaxLength(1000);
             l.Property(x => x.Group).HasMaxLength(100);
+            l.Property(x => x.Person).HasMaxLength(100);
             l.Ignore(x => x.Saved);
             l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             l.HasOne<Account>().WithMany().HasForeignKey(x => x.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);
