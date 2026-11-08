@@ -20,6 +20,27 @@
         <div class="alert error" role="alert">@Error</div>
     }
 
+    @if (_workers.Any(w => w.VendorId is not null))
+    {
+        <div class="card" id="pay-back">
+            <h2>Pay people back for their trips</h2>
+            <p class="muted">For trips in their own cars: a bill to the person's vendor record for their trips not paid back yet, each at its year's mileage rate, to pay like any bill.</p>
+            <PostForm Action="/mileage/pay-back" data-enhance="false" class="inline-actions">
+                <AntiforgeryToken />
+                <label for="pay-back-person">Person</label>
+                <select id="pay-back-person" name="workerId">
+                    @foreach (var w in _workers.Where(w => w.VendorId is not null))
+                    {
+                        <option value="@w.Id">@w.Name</option>
+                    }
+                </select>
+                <label for="pay-back-through">Trips through</label>
+                <input id="pay-back-through" name="through" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                <button type="submit" class="secondary">Enter the bill</button>
+            </PostForm>
+        </div>
+    }
+
     <div class="card">
         <h2>Add a trip</h2>
         <PostForm Action="/mileage" data-enhance="false">

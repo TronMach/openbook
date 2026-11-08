@@ -3784,6 +3784,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ReimbursedBillId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ToPlace")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");

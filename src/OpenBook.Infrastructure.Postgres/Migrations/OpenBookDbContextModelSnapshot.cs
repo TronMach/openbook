@@ -3791,6 +3791,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("ReimbursedBillId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ToPlace")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

@@ -57,6 +57,8 @@ Billable time needs a customer or project and a service. A **rate per hour** typ
 
 The mileage log by year is your record for taxes. The IRS business rates are filled in at the bottom of the page; check them before filing, and an accountant can add later years as they're announced (**Set rate**).
 
+**Pay people back for their trips** (on the Mileage page, once someone on **People and rates** is linked to a vendor record): choose the person and **Trips through** a date, and **Enter the bill**. OpenBook bills their trips not paid back yet, each at its year's mileage rate, to their vendor record on "Mileage Reimbursement" (an expense account it adds the first time), to pay with **Pay bills** like any other. Voiding that bill makes the trips due again. Other out-of-pocket costs are still entered as a bill to the person.
+
 ## Billing time, mileage and expenses
 
 When you create an invoice for a customer, their unbilled time, trips and billable expenses are listed on the form. Tick what to bill and they're added as lines: time at its service and rate, mileage as a "Mileage" line, expenses as "Billable Expenses".

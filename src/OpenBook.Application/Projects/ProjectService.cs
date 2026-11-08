@@ -753,5 +753,6 @@ public sealed class MileageService(IProjectStore store, ISalesStore sales, ICloc
         t.Billable,
         t.BillRate,
         t.InvoiceId,
+        t.ReimbursedBillId,
     });
 }

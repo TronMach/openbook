@@ -420,6 +420,11 @@ public sealed class MileageTrip
         BillRate = details.Billable ? details.BillRate : 0m;
     }
 
+    /// <summary>The bill that paid the person back for the trip (to their vendor record); null until then.</summary>
+    public Guid? ReimbursedBillId { get; private set; }
+
+    public void MarkReimbursed(Guid billId) => ReimbursedBillId = billId;
+
     public void MarkInvoiced(Guid invoiceId)
     {
         if (!Billable)

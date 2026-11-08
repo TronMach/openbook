@@ -176,6 +176,21 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/mileage/pay-back", async (IFormCollection form, MileageReimbursementService reimbursements, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                var through = Date(form["through"]) ?? CompanyTime.Today;
+                var bill = await reimbursements.PayBackAsync(Guid.TryParse(form["workerId"], out var w) ? w : Guid.Empty, through, CompanyTime.Today, ct);
+                return Results.Redirect($"/purchases/bills/{bill.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/mileage?error={Uri.EscapeDataString(ex.Message)}#pay-back");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/time/lock", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {
             await time.SetLockAsync(Date(form["through"]), ct);

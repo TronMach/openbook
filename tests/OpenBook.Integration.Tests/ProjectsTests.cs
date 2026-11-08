@@ -232,6 +232,25 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task People_are_paid_back_for_their_trips_by_a_bill_to_their_vendor_record()
+    {
+        var vendor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Dee Driver")));
+        var dee = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Dee", CostRate: 30m, VendorId: vendor.Id)));
+        Assert.Equal("mileage.worker_vendor", await Refused(() => In<MileageReimbursementService, Bill>(s => s.PayBackAsync(_ana.Id, Mar2, Mar2))));
+        await In<MileageService, MileageTrip>(s => s.CreateAsync(new MileageDetails(Mar2, 100m, "Site visit", dee.Id)));
+        var rates = await In<MileageService, IReadOnlyDictionary<int, decimal>>(s => s.RatesAsync());
+
+        var bill = await In<MileageReimbursementService, Bill>(s => s.PayBackAsync(dee.Id, Mar2, Mar2.AddDays(1)));
+        Assert.Equal((vendor.Id, decimal.Round(100m * MileageRate.For(rates, 2026), 2)), (bill.VendorId, bill.Total));
+        Assert.Equal("mileage.nothing_to_pay_back", await Refused(() => In<MileageReimbursementService, Bill>(s => s.PayBackAsync(dee.Id, Mar2, Mar2.AddDays(1)))));
+
+        await In<BillService, Bill>(s => s.VoidAsync(bill.Id, "Wrong person"));
+        Assert.Single(await In<MileageReimbursementService, IReadOnlyList<MileageTrip>>(s => s.OwedAsync(dee.Id, Mar2)));
+        var again = await In<MileageReimbursementService, Bill>(s => s.PayBackAsync(dee.Id, Mar2, Mar2.AddDays(2)));
+        Assert.Equal(bill.Total, again.Total);
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);
