@@ -1543,6 +1543,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("TaxId")
                         .HasColumnType("text");
 
+                    b.Property<bool>("TimeBillableByDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("TimeIncrementMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly?>("TimeLockedThrough")
                         .HasColumnType("date");
 

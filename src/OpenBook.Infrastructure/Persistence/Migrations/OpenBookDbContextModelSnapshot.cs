@@ -1536,6 +1536,12 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("TaxId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("TimeBillableByDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TimeIncrementMinutes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateOnly?>("TimeLockedThrough")
                         .HasColumnType("TEXT");
 

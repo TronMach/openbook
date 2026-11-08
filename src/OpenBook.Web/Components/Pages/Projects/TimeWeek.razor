@@ -117,7 +117,7 @@
                                         }
                                     </select>
                                 </td>
-                                <td><input type="checkbox" name="b:@index" value="true" checked="@(start?.Billable == true)" aria-label="Billable" /></td>
+                                <td><input type="checkbox" name="b:@index" value="true" checked="@(start?.Billable ?? _billableDefault)" aria-label="Billable" /></td>
                                 <td><input name="n:@index" size="16" maxlength="500" aria-label="Notes for a new row" /></td>
                                 @for (var d = 0; d < 7; d++)
                                 {
@@ -167,6 +167,7 @@
     [SupplyParameterFromQuery] private int? Saved { get; set; }
     [SupplyParameterFromQuery] private bool Copy { get; set; }
     private IReadOnlyList<WeekRow> _copied = [];
+    private bool _billableDefault;
 
     protected override async Task OnInitializedAsync()
     {
@@ -178,6 +179,7 @@
         if (_worker is null)
             return;
         _rows = await TimeService.WeekAsync(_worker.Id, _monday);
+        _billableDefault = (await TimeService.DefaultsAsync()).BillableByDefault;
         if (Copy)
             _copied = await TimeService.RowsFromLastWeekAsync(_worker.Id, _monday);
         _customers = (await CustomerService.ListAsync(today)).Where(c => c.Customer.IsActive).ToList();

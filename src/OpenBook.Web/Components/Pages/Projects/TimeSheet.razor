@@ -37,8 +37,20 @@
     @if (_workers.Count > 0)
     {
         <div class="card" id="lock">
-            <h2>Lock time</h2>
+            <h2>Time settings</h2>
             <p class="muted">@(_locked is { } l ? $"Time is locked through {Labels.Date(l)}: hours dated then can't be added, changed or deleted. Billing it still works." : "Nothing is locked. Lock time once a period's hours are reviewed, so they can't change afterwards.")</p>
+            <PostForm Action="/time/defaults" data-enhance="false" class="inline-actions" style="margin-bottom: 1rem">
+                <AntiforgeryToken />
+                <label class="check"><input type="checkbox" name="billable" value="true" checked="@_defaults.BillableByDefault" /> <span>New time starts billable</span></label>
+                <label for="increment">Round time up to</label>
+                <select id="increment" name="increment">
+                    @foreach (var m in OpenBook.Domain.Companies.Company.TimeIncrements)
+                    {
+                        <option value="@m" selected="@(m == _defaults.IncrementMinutes)">@(m == 0 ? "Don't round" : $"{m} minutes")</option>
+                    }
+                </select>
+                <button type="submit" class="secondary">Save</button>
+            </PostForm>
             <PostForm Action="/time/lock" data-enhance="false" class="inline-actions">
                 <AntiforgeryToken />
                 <label>Lock through <input type="date" name="through" value="@(_locked?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))" /></label>
@@ -120,7 +132,7 @@
                         <input id="rate" name="rate" class="amount" inputmode="decimal" />
                     </div>
                     <div class="field">
-                        <label><input type="checkbox" name="billable" value="true" /> Billable</label>
+                        <label><input type="checkbox" name="billable" value="true" checked="@_defaults.BillableByDefault" /> Billable</label>
                     </div>
                 </div>
                 <div class="field">
@@ -199,6 +211,7 @@
     private IReadOnlyList<(Worker Worker, decimal Hours)> _missing = [];
     private DateOnly _lastMonday;
     private DateOnly? _locked;
+    private (bool BillableByDefault, int IncrementMinutes) _defaults;
     private Worker? _me;
     private IReadOnlyList<TimeEntry> _running = [];
     private IReadOnlyList<TimeEntry> _entries = [];
@@ -226,6 +239,7 @@
         _lastMonday = monday.AddDays(-7);
         _missing = await TimeService.MissingAsync(_lastMonday);
         _locked = await TimeService.LockedThroughAsync();
+        _defaults = await TimeService.DefaultsAsync();
         _allWorkers = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
         _me = await WorkerService.ForCurrentUserAsync();
         _running = await TimeService.RunningAsync();

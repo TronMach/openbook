@@ -208,6 +208,22 @@ public sealed class Company
 
     public void SetTimeLock(DateOnly? through) => TimeLockedThrough = through;
 
+    /// <summary>New time starts ticked billable on the forms.</summary>
+    public bool TimeBillableByDefault { get; private set; }
+
+    /// <summary>Time from timers and typed entries is rounded up to this many minutes (0 = not rounded).</summary>
+    public int TimeIncrementMinutes { get; private set; }
+
+    public static readonly IReadOnlyList<int> TimeIncrements = [0, 1, 5, 6, 10, 15, 30, 60];
+
+    public void SetTimeDefaults(bool billableByDefault, int incrementMinutes)
+    {
+        if (!TimeIncrements.Contains(incrementMinutes))
+            throw new DomainException("time.increment", "Round time to 1, 5, 6, 10, 15, 30 or 60 minutes, or not at all.");
+        TimeBillableByDefault = billableByDefault;
+        TimeIncrementMinutes = incrementMinutes;
+    }
+
     /// <summary>The view people get until they choose their own (<see cref="ViewPreference"/>).</summary>
     public ViewMode DefaultViewMode { get; private set; }
 

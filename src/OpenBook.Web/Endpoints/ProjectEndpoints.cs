@@ -191,6 +191,19 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapPost("/time/defaults", async (IFormCollection form, TimeService time, CancellationToken ct) =>
+        {
+            try
+            {
+                await time.SetDefaultsAsync(form["billable"] == "true", int.TryParse(form["increment"], out var m) ? m : 0, ct);
+                return Results.Redirect("/time#lock");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/time?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/time/lock", async (IFormCollection form, TimeService time, CancellationToken ct) =>
         {
             await time.SetLockAsync(Date(form["through"]), ct);

@@ -264,6 +264,16 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Time_rounds_up_to_the_billing_increment()
+    {
+        Assert.Equal("time.increment", await Refused(() => In<TimeService, bool>(async s => { await s.SetDefaultsAsync(true, 7); return true; })));
+        await In<TimeService, bool>(async s => { await s.SetDefaultsAsync(true, 6); return true; });
+        var entry = await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_ana.Id, Mar2, 1.33m, _acme.Id, _consulting.Id, true)));
+        Assert.Equal(1.4m, entry.Hours);
+        Assert.Equal((true, 6), await In<TimeService, (bool, int)>(s => s.DefaultsAsync()));
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);

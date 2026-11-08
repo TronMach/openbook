@@ -302,6 +302,15 @@ public sealed class TimeEntry
         StartedAt = null;
     }
 
+    /// <summary>Rounds the hours up to a whole number of <paramref name="minutes"/> (to two decimals of an hour, at most a day).</summary>
+    public void RoundUpTo(int minutes)
+    {
+        if (minutes <= 0 || Hours <= 0m)
+            return;
+        var steps = decimal.Ceiling(decimal.Round(Hours * 60m, 4) / minutes);
+        Hours = Math.Min(MaxHours, decimal.Round(steps * minutes / 60m, 2, MidpointRounding.AwayFromZero));
+    }
+
     public void Update(TimeEntryDetails details, decimal billRate, decimal costRate, string? rateSource = null)
     {
         EnsureEditable();

@@ -354,10 +354,28 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         ArgumentNullException.ThrowIfNull(details);
         var (billRate, costRate, source) = await RatesAsync(details, ct);
         var entry = TimeEntry.Create(details, billRate, costRate, clock.UtcNow, source);
+        entry.RoundUpTo((await companies.GetRequiredCompanyAsync(ct)).TimeIncrementMinutes);
         store.Add(entry);
         store.Add(Audit(AuditAction.Created, entry, null));
         await store.SaveChangesAsync(ct);
         return entry;
+    }
+
+    /// <summary>Whether new time starts billable, and the minutes time is rounded up to; audited on the company.</summary>
+    public async Task SetDefaultsAsync(bool billableByDefault, int incrementMinutes, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var before = JsonSerializer.Serialize(new { company.TimeBillableByDefault, company.TimeIncrementMinutes });
+        company.SetTimeDefaults(billableByDefault, incrementMinutes);
+        companies.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "company", company.Id, before,
+            JsonSerializer.Serialize(new { company.TimeBillableByDefault, company.TimeIncrementMinutes })));
+        await companies.SaveChangesAsync(ct);
+    }
+
+    public async Task<(bool BillableByDefault, int IncrementMinutes)> DefaultsAsync(CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        return (company.TimeBillableByDefault, company.TimeIncrementMinutes);
     }
 
     /// <summary>Starts a timer for the worker (dated today); refused while they have one running.</summary>
@@ -381,6 +399,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         var entry = await store.GetTimeAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(entry);
         entry.Stop(clock.UtcNow);
+        entry.RoundUpTo((await companies.GetRequiredCompanyAsync(ct)).TimeIncrementMinutes);
         store.Add(Audit(AuditAction.Updated, entry, before));
         await store.SaveChangesAsync(ct);
         return entry;
