@@ -115,6 +115,36 @@ public static class ChannelEndpoints
             }
         }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes * 2));
 
+        app.MapPost("/sales/channels/{id:guid}/returns/import", async (Guid id, IFormFile? file, ChannelOrderService orders, CancellationToken ct) =>
+        {
+            if (file is null || file.Length == 0)
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString("Choose the returns report to import.")}#returns");
+            if (file.Length > MaxReportBytes)
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString("The file is larger than 20 MB. Download a shorter period.")}#returns");
+            using var memory = new MemoryStream();
+            await file.CopyToAsync(memory, ct);
+            try
+            {
+                var result = await orders.ImportReturnsAsync(id, memory.ToArray(), dryRun: false, ct);
+                if (!result.Imported && result.Problems.Any())
+                {
+                    var problems = result.Problems.Take(5).Select(p => $"Row {p.Row}: {p.Status}").ToList();
+                    var more = result.Problems.Count() - problems.Count;
+                    var message = $"Nothing was recorded. {string.Join(" ", problems)}{(more > 0 ? $" And {more} more." : "")}";
+                    return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString(message)}#returns");
+                }
+
+                var query = $"returns={result.Recorded}&returnsSkipped={result.AlreadyRecorded}";
+                if (result.Warnings.Count > 0)
+                    query += $"&note={Uri.EscapeDataString(string.Join(" ", result.Warnings))}";
+                return Results.Redirect($"/sales/channels/{id}?{query}#returns");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/sales/channels/{id}?error={Uri.EscapeDataString(ex.Message)}#returns");
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxReportBytes * 2));
+
         app.MapPost("/sales/channels/{id:guid}/skus", async (Guid id, IFormCollection form, ChannelOrderService orders, CancellationToken ct) =>
         {
             var choice = form["itemId"].ToString();

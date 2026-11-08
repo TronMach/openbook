@@ -11,6 +11,11 @@ public sealed record FetchedOrders(IReadOnlyList<ChannelOrderDraft> Lines, IRead
 /// <param name="Cancelled">Orders the report shows cancelled, in case one came in earlier.</param>
 public sealed record OrderReadResult(IReadOnlyList<ChannelOrderDraft> Lines, IReadOnlyList<string> Warnings, IReadOnlyList<string>? Cancelled = null);
 
+/// <summary>One row of a returns report: an order's SKU came back on a date, and whether it can be sold again.</summary>
+public sealed record ChannelReturnRow(int Row, string OrderId, string? Sku, decimal Quantity, DateOnly Date, bool Restock, string? Reason);
+
+public sealed record ReturnReadResult(IReadOnlyList<ChannelReturnRow> Rows, IReadOnlyList<string> Warnings);
+
 /// <summary>
 /// Reads order reports into item lines: Amazon's All Orders report (tab-separated), eBay's orders report, Etsy's sold
 /// order items, Shopify's orders export, or any CSV with an order id, date, SKU and quantity. Headers are matched
@@ -140,6 +145,65 @@ public static class ChannelOrderReports
         if (unreadable > 0)
             warnings.Add($"{unreadable} line(s) had a date that couldn't be read and were left out.");
         return new OrderReadResult(lines, warnings, [.. cancelledOrders]);
+    }
+
+    /// <summary>
+    /// Reads a returns report (Amazon's customer returns, or any CSV with an order id, a quantity and a date; SKU,
+    /// reason and condition optional). A condition naming damage, a defect or unsellable stock means it doesn't go back
+    /// on the shelf.
+    /// </summary>
+    public static ReturnReadResult ReadReturns(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var records = Csv.Parse(text);
+        if (records.Count - 1 > ChannelReports.MaxRows)
+            throw new DomainException("channel.too_many_rows", $"Reports can have at most {ChannelReports.MaxRows} rows. Download a shorter period.");
+        var index = records.ToList().FindIndex(r =>
+        {
+            var names = r.Fields.Select(Csv.Normalize).ToList();
+            return names.Any(n => n is "amazonorderid" or "ordernumber" or "orderid" or "order")
+                && names.Any(n => n is "quantity" or "returnquantity" or "quantityreturned" or "qty");
+        });
+        if (index < 0)
+            throw new DomainException("channel.wrong_report", "This doesn't look like a returns report: it needs order and quantity columns.");
+        var columns = new CsvColumns(records[index]);
+        int? First(params string[] names) => names.Select(n => columns.Find(n)).FirstOrDefault(c => c is not null);
+        var order = First("amazonorderid", "orderid", "ordernumber", "order")!;
+        var quantity = First("quantity", "returnquantity", "quantityreturned", "qty")!;
+        var date = First("returndate", "returnrequestdate", "returnedat", "returned", "refunddate", "date")
+            ?? throw new DomainException("channel.column_missing", "The returns report needs a 'return date' column.");
+        var sku = First("sku", "sellersku", "merchantsku", "lineitemsku", "customlabel");
+        var condition = First("detaileddisposition", "disposition", "condition", "itemcondition", "status");
+        var reason = First("reason", "returnreason", "customercomments");
+
+        var rows = new List<ChannelReturnRow>();
+        var warnings = new List<string>();
+        var dataRows = records.Skip(index + 1).Select((r, i) => (Record: r, Row: index + i + 2)).Where(r => r.Record.Fields.Any(f => f.Length > 0)).ToList();
+        var dateOrder = StatementValues.DetectDateOrder(dataRows.Select(r => Clean(CsvColumns.Field(r.Record, date))).OfType<string>().Take(500).ToList(), CultureInfo.CurrentCulture, out _);
+        var unreadable = 0;
+        foreach (var (record, row) in dataRows)
+        {
+            var id = CsvColumns.Field(record, order)?.Trim();
+            if (string.IsNullOrEmpty(id) || !Amount(CsvColumns.Field(record, quantity), out var qty) || qty == 0m)
+                continue;
+            if (!StatementValues.TryParseDate(Clean(CsvColumns.Field(record, date)), dateOrder, out var on))
+            {
+                unreadable++;
+                continue;
+            }
+
+            var state = CsvColumns.Field(record, condition) ?? "";
+            string[] notSellable = ["unsellable", "damage", "defect", "dispos", "destroy"];
+            var restock = !notSellable.Any(w => state.Contains(w, StringComparison.OrdinalIgnoreCase));
+            var why = CsvColumns.Field(record, reason)?.Trim();
+            var code = CsvColumns.Field(record, sku)?.Trim();
+            rows.Add(new ChannelReturnRow(row, id, string.IsNullOrEmpty(code) ? null : code, Math.Abs(qty), on, restock,
+                string.IsNullOrEmpty(why) ? null : why.Length > 100 ? why[..100] : why));
+        }
+
+        if (unreadable > 0)
+            warnings.Add($"{unreadable} line(s) had a date that couldn't be read and were left out.");
+        return new ReturnReadResult(rows, warnings);
     }
 
     private static DomainException Missing(string column) => new("channel.column_missing", $"The orders report needs a '{column}' column.");

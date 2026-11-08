@@ -99,6 +99,13 @@ public static class ChannelsApi
             var result = await s.ImportAsync(id, memory.ToArray(), ct);
             return new { result.Orders, result.AlreadyImported, Batches = result.Saved.Select(b => b.Id), result.Warnings };
         });
+        // A returns report as the body; ?dryRun=true shows what each row would do.
+        channels.MapPost("/{id:guid}/returns/import", async (Guid id, bool? dryRun, HttpRequest request, ChannelOrderService s, CancellationToken ct) =>
+        {
+            using var memory = new MemoryStream();
+            await request.Body.CopyToAsync(memory, ct);
+            return await s.ImportReturnsAsync(id, memory.ToArray(), dryRun ?? false, ct);
+        });
         channels.MapGet("/{id:guid}/orders", async (Guid id, ChannelOrderService s, CancellationToken ct) =>
             (await s.BatchesAsync(id, ct)).Select(b => new { b.Id, b.Date, b.Status, b.Orders, b.JournalEntryId }));
         channels.MapGet("/{id:guid}/skus", async (Guid id, ChannelOrderService s, CancellationToken ct) => await s.SkusAsync(id, ct));

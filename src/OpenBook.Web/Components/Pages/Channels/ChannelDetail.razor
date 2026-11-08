@@ -133,6 +133,20 @@
                 <div class="field"><input type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
                 <div class="actions"><button type="submit" class="secondary" disabled="@(!_channel.IsActive)">@L["Import orders"]</button></div>
             </PostForm>
+            @if (_batches.Any(b => b.Status == PayoutStatus.Posted))
+            {
+                <h3 id="returns">@L["Returns report"]</h3>
+                <p class="muted">@L["Each row comes back from the posted order it names; a condition such as damaged or unsellable leaves it off the shelf. Rows already recorded are skipped, and if any row can't be matched nothing is recorded."]</p>
+                @if (Returns is not null)
+                {
+                    <div class="alert notice" role="status">@L["Returns recorded: {0}. Already recorded, so skipped: {1}.", Returns, ReturnsSkipped ?? 0]</div>
+                }
+                <PostForm Action="@($"/sales/channels/{_channel.Id}/returns/import")" enctype="multipart/form-data" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field"><input type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
+                    <div class="actions"><button type="submit" class="secondary" disabled="@(!_channel.IsActive)">@L["Import returns"]</button></div>
+                </PostForm>
+            }
             @if (_batches.Count(b => b.Status == PayoutStatus.Pending) is var waiting and > 0)
             {
                 <PostForm Action="@($"/sales/channels/{_channel.Id}/orders/post-waiting")" data-enhance="false" class="actions">
@@ -256,6 +270,8 @@
 
     [Inject] private ChannelOrderService OrderService { get; set; } = default!;
     [SupplyParameterFromQuery(Name = "orders")] private int? Orders { get; set; }
+    [SupplyParameterFromQuery(Name = "returns")] private int? Returns { get; set; }
+    [SupplyParameterFromQuery(Name = "returnsSkipped")] private int? ReturnsSkipped { get; set; }
 
     private static string OrderHelp(ChannelKind kind) => kind switch
     {

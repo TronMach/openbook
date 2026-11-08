@@ -74,6 +74,10 @@ Each import makes an order batch. Before it can be posted, every **SKU** must be
 
 On a posted batch, enter the quantities that came back under **Returns** and **Put the returns in stock**. They go back at their latest sale cost. The refund itself arrives with the channel's payout.
 
+Many returns at once: on the channel's page, under **Returns report**, choose the channel's returns report (Amazon's customer returns report, or any CSV with an order id, a quantity and a return date; the SKU, reason and condition are read when there) and **Import returns**. Each row comes back from the posted batch holding its order. A condition saying damaged, defective or unsellable keeps it out of stock, like **Not back in stock**, and so does a SKU mapped to no item. A row brought in before (same order, SKU and date) is skipped, so an overlapping report is safe; if any row can't be matched (an order not posted yet, more back than was sold), nothing is recorded and the message lists the rows.
+
+**Search** finds a channel order by its order id and opens the day's batch it came in.
+
 ## Reports
 
 - **Sales by channel**: what each channel's posted payouts came to: sales, shipping, refunds, fees and sales tax.

@@ -21,6 +21,13 @@ internal sealed class EfChannelOrderStore(OpenBookDbContext db) : IChannelOrderS
     public async Task<IReadOnlyList<ChannelSku>> ListSkusAsync(Guid channelId, CancellationToken ct) =>
         await db.ChannelSkus.Where(s => s.ChannelId == channelId).ToListAsync(ct);
 
+#pragma warning disable CA1304, CA1311, CA1862 // ToLower translates to SQL; the culture overloads don't
+    public async Task<IReadOnlyList<ChannelOrderBatch>> SearchOrdersAsync(string text, int take, CancellationToken ct) =>
+        await db.ChannelOrderBatches.AsNoTracking()
+            .Where(b => b.Lines.Any(l => l.OrderId.ToLower().Contains(text)))
+            .OrderByDescending(b => b.Date).ThenByDescending(b => b.Id).Take(take).ToListAsync(ct);
+#pragma warning restore CA1304, CA1311, CA1862
+
     public async Task<IReadOnlyList<ChannelReturn>> ListReturnsAsync(Guid batchId, CancellationToken ct) =>
         (await db.ChannelReturns.Where(r => r.BatchId == batchId).ToListAsync(ct)).OrderBy(r => r.Date).ThenBy(r => r.CreatedAt).ToList();
 

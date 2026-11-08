@@ -443,6 +443,51 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_returns_report_records_each_row_once_and_leaves_damaged_goods_off_the_shelf()
+    {
+        var amazon = await Channel(ChannelKind.Amazon, "Amazon US");
+        await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)));
+        foreach (var sku in new[] { "MUG-1", "GIFT" })
+            await _db.InScope(async sp => { await sp.GetRequiredService<ChannelOrderService>().MapSkuAsync(amazon.Id, sku, null); return true; });
+        foreach (var b in await In<ChannelOrderService, IReadOnlyList<ChannelOrderBatch>>(s => s.BatchesAsync(amazon.Id)))
+            await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(b.Id));
+
+        const string report = "return-date,order-id,sku,quantity,detailed-disposition,reason\n" +
+            "2026-03-10,113-1,MUG-1,1,CUSTOMER_DAMAGED,Arrived broken\n" +
+            "2026-03-11,113-3,GIFT,1,SELLABLE,\n";
+        var preview = await In<ChannelOrderService, ReturnImportResult>(s => s.ImportReturnsAsync(amazon.Id, Encoding.UTF8.GetBytes(report), dryRun: true));
+        Assert.False(preview.Imported);
+        Assert.Equal([ReturnImportRow.Ready, ReturnImportRow.Ready], preview.Rows.Select(r => r.Status));
+        Assert.Equal([false, true], preview.Rows.Select(r => r.Restock));
+
+        var result = await In<ChannelOrderService, ReturnImportResult>(s => s.ImportReturnsAsync(amazon.Id, Encoding.UTF8.GetBytes(report)));
+        Assert.Equal(2, result.Recorded);
+        var mugReturn = await In<ChannelOrderService, Domain.Channels.ChannelReturn?>(s => s.GetReturnAsync(result.Rows[0].ReturnId!.Value));
+        Assert.StartsWith("Returns report: order 113-1, MUG-1. Arrived broken", mugReturn!.Memo, StringComparison.Ordinal);
+
+        var again = await In<ChannelOrderService, ReturnImportResult>(s => s.ImportReturnsAsync(amazon.Id, Encoding.UTF8.GetBytes(report + "2026-03-12,999-9,MUG-1,1,SELLABLE,\n")));
+        Assert.False(again.Imported);
+        Assert.Equal([ReturnImportRow.AlreadyRecorded, ReturnImportRow.AlreadyRecorded], again.Rows.Take(2).Select(r => r.Status));
+        Assert.Contains("999-9", Assert.Single(again.Problems).Status, StringComparison.Ordinal);
+
+        const string tooMany = "return-date,order-id,sku,quantity\n2026-03-13,113-1,MUG-1,2\n";
+        Assert.Contains("more came back", Assert.Single((await In<ChannelOrderService, ReturnImportResult>(s => s.ImportReturnsAsync(amazon.Id, Encoding.UTF8.GetBytes(tooMany)))).Problems).Status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Search_finds_a_channel_order_by_its_id()
+    {
+        var amazon = await Channel(ChannelKind.Amazon, "Amazon US");
+        await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(AmazonOrders)));
+        var batch = (await In<ChannelOrderService, IReadOnlyList<ChannelOrderBatch>>(s => s.BatchesAsync(amazon.Id))).Single(b => b.Lines.Any(l => l.OrderId == "113-1"));
+
+        var hit = Assert.Single((await In<Application.Search.SearchService, Application.Search.SearchResults>(s => s.SearchAsync("113-1"))).Hits,
+            h => h.Kind == Application.Search.SearchKind.ChannelOrder);
+        Assert.Equal((batch.Id, "Order 113-1", "Amazon US", 91.80m), (hit.Id, hit.Title, hit.Detail, hit.Amount));
+        Assert.Equal("channels", Application.Search.SearchAreas.Of(hit.Kind));
+    }
+
+    [Fact]
     public async Task Sku_maps_go_out_and_come_back_as_csv_all_or_nothing()
     {
         var sales = await _db.CreateAccount("Sales", AccountType.Income);

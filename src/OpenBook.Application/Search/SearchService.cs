@@ -32,6 +32,7 @@ public enum SearchKind
     Deposit,
     PurchaseOrder,
     VendorCredit,
+    ChannelOrder,
 }
 
 /// <summary>The area (as in permission sets and API key scopes) each kind of result belongs to.</summary>
@@ -44,6 +45,7 @@ public static class SearchAreas
         SearchKind.Vendor or SearchKind.Bill or SearchKind.BillPayment or SearchKind.PurchaseOrder or SearchKind.VendorCredit => "purchases",
         SearchKind.BankTransaction or SearchKind.Deposit => "banking",
         SearchKind.Gift or SearchKind.Pledge or SearchKind.Grant => "nonprofit",
+        SearchKind.ChannelOrder => "channels",
         _ => "ledger",
     };
 }
@@ -64,7 +66,8 @@ public sealed class SearchService(
     IPurchasesStore purchases,
     IBankingStore banking,
     ILedgerStore ledger,
-    CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit)
+    CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit,
+    Channels.IChannelOrderStore channelOrders, Channels.IChannelStore channels)
 {
     public const int MaxPerKind = 20;
 
@@ -146,6 +149,16 @@ public sealed class SearchService(
         AddAll(gifts.Select(g => new SearchHit(SearchKind.Gift, g.Id, $"Gift {g.Number} from {Customer(g.DonorId)}", g.Reference ?? g.Memo, g.Date, g.Amount)));
         AddAll(pledges.Select(p => new SearchHit(SearchKind.Pledge, p.Id, $"Pledge {p.Number} from {Customer(p.DonorId)}", p.Memo, p.Date, p.Amount)));
         AddAll(grants.Select(g => new SearchHit(SearchKind.Grant, g.Id, g.Name, Customer(g.FunderId), g.AwardedOn, g.Amount)));
+
+        // Channel orders by their order id; the hit opens the day's batch the order came in.
+        if (q.Length >= 3)
+        {
+            var channelNames = (await channels.ListChannelsAsync(ct)).ToDictionary(c => c.Id, c => c.Name);
+            AddAll((await channelOrders.SearchOrdersAsync(text, MaxPerKind + 1, ct))
+                .SelectMany(b => b.Lines.Where(l => l.OrderId.Contains(q, StringComparison.OrdinalIgnoreCase)).GroupBy(l => l.OrderId)
+                    .Select(o => new SearchHit(SearchKind.ChannelOrder, b.Id, $"Order {o.Key}", channelNames.GetValueOrDefault(b.ChannelId),
+                        o.Min(l => l.Date), o.Sum(l => l.Sales + l.Shipping + l.Tax)))));
+        }
 
         // Journal entries (by hand, moved in, opening balances, recurring); documents' entries are found through their documents above.
         AddAll((await ledger.SearchManualEntriesAsync(For([]), entryNumber, ct))

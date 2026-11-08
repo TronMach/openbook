@@ -764,6 +764,9 @@
   <data name="Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting." xml:space="preserve">
     <value>Each invoice is taxed with the customer's tax code (and exemption) on its date; items use their own taxable setting.</value>
   </data>
+  <data name="Each row comes back from the posted order it names; a condition such as damaged or unsellable leaves it off the shelf. Rows already recorded are skipped, and if any row can't be matched nothing is recorded." xml:space="preserve">
+    <value>Each row comes back from the posted order it names; a condition such as damaged or unsellable leaves it off the shelf. Rows already recorded are skipped, and if any row can't be matched nothing is recorded.</value>
+  </data>
   <data name="each with its price" xml:space="preserve">
     <value>each with its price</value>
   </data>
@@ -1075,6 +1078,9 @@
   </data>
   <data name="Import orders" xml:space="preserve">
     <value>Import orders</value>
+  </data>
+  <data name="Import returns" xml:space="preserve">
+    <value>Import returns</value>
   </data>
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>
@@ -2071,6 +2077,12 @@
   </data>
   <data name="Retainers applied" xml:space="preserve">
     <value>Retainers applied</value>
+  </data>
+  <data name="Returns recorded: {0}. Already recorded, so skipped: {1}." xml:space="preserve">
+    <value>Returns recorded: {0}. Already recorded, so skipped: {1}.</value>
+  </data>
+  <data name="Returns report" xml:space="preserve">
+    <value>Returns report</value>
   </data>
   <data name="Revoke" xml:space="preserve">
     <value>Revoke</value>

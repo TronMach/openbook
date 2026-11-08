@@ -19,6 +19,9 @@ public interface IChannelOrderStore
     Task<IReadOnlySet<string>> OrderIdsAsync(Guid channelId, CancellationToken ct);
     Task<IReadOnlyList<ChannelSku>> ListSkusAsync(Guid channelId, CancellationToken ct);
 
+    /// <summary>Batches holding an order whose id contains <paramref name="text"/> (lower case), newest first, at most <paramref name="take"/>.</summary>
+    Task<IReadOnlyList<ChannelOrderBatch>> SearchOrdersAsync(string text, int take, CancellationToken ct);
+
     Task<IReadOnlyList<ChannelReturn>> ListReturnsAsync(Guid batchId, CancellationToken ct);
     Task<ChannelReturn?> GetReturnAsync(Guid id, CancellationToken ct);
 
@@ -30,6 +33,24 @@ public interface IChannelOrderStore
 }
 
 public sealed record OrderImportResult(int Orders, int AlreadyImported, IReadOnlyList<ChannelOrderBatch> Saved, IReadOnlyList<string> Warnings);
+
+/// <summary>What became of a returns report row: ready (or recorded), already recorded, or why it can't be.</summary>
+public sealed record ReturnImportRow(int Row, string OrderId, string? Sku, decimal Quantity, DateOnly Date, bool Restock, string Status, Guid? BatchId, Guid? ReturnId = null)
+{
+    public const string Ready = "Ready";
+    public const string Recorded = "Recorded";
+    public const string AlreadyRecorded = "Already recorded";
+
+    public bool IsProblem => Status is not (Ready or Recorded or AlreadyRecorded);
+}
+
+/// <param name="Imported">Whether the returns were recorded (false for a preview, or when a row has a problem).</param>
+public sealed record ReturnImportResult(IReadOnlyList<ReturnImportRow> Rows, IReadOnlyList<string> Warnings, bool Imported)
+{
+    public int Recorded => Rows.Count(r => r.Status == ReturnImportRow.Recorded);
+    public int AlreadyRecorded => Rows.Count(r => r.Status == ReturnImportRow.AlreadyRecorded);
+    public IEnumerable<ReturnImportRow> Problems => Rows.Where(r => r.IsProblem);
+}
 
 /// <summary>What a channel sold of one thing in a period, less what came back. No item: a SKU that isn't stocked.</summary>
 public sealed record ChannelSold(Guid? ItemId, string Name, decimal Quantity, decimal Amount);
@@ -43,7 +64,7 @@ public sealed record SkuChoice(string Sku, string? Title, Guid? ItemId, bool Map
 /// </summary>
 public sealed class ChannelOrderService(
     IChannelOrderStore store, IChannelStore channels, ISalesStore sales, InventoryService inventory, PostingEngine engine,
-    OpenBook.Application.Companies.ICompanyStore companies, IClock clock, ICurrentUser user)
+    OpenBook.Application.Companies.ICompanyStore companies, IClock clock, ICurrentUser user, IUnitOfWork unitOfWork)
 {
     public const string BatchEntity = "channel_orders";
 
@@ -413,6 +434,116 @@ public sealed class ChannelOrderService(
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, ReturnEntity, id, null, ReturnSnapshot(channelReturn)));
         await store.SaveChangesAsync(ct);
         return channelReturn;
+    }
+
+    /// <summary>
+    /// Records a returns report: each row becomes a return from the posted batch holding its order (by SKU when the order
+    /// has several lines), restocked unless its condition says otherwise. A row recorded before (same batch, date and
+    /// memo, which names the order and SKU) is left alone, so an overlapping report can come in again. With
+    /// <paramref name="dryRun"/>, or when any row can't be matched, nothing is recorded; otherwise all of them in one transaction.
+    /// </summary>
+    public async Task<ReturnImportResult> ImportReturnsAsync(Guid channelId, byte[] content, bool dryRun = false, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        var channel = await RequiredChannelAsync(channelId, ct);
+        var read = ChannelOrderReports.ReadReturns(OpenBook.Application.Import.TextFiles.Decode(content));
+        var byOrder = new Dictionary<string, ChannelOrderBatch>(StringComparer.Ordinal);
+        foreach (var batch in (await store.ListBatchesAsync(channel.Id, ct)).Where(b => b.Status == PayoutStatus.Posted))
+            foreach (var line in batch.Lines)
+                byOrder.TryAdd(line.OrderId, batch);
+        var returnedBy = new Dictionary<Guid, Dictionary<int, decimal>>();
+        var existing = new Dictionary<Guid, IReadOnlyList<ChannelReturn>>();
+
+        var planned = new List<(ReturnImportRow Row, List<(int OrderLine, decimal Quantity)> Lines, string Memo)>();
+        foreach (var row in read.Rows)
+        {
+            ReturnImportRow Result(string status, Guid? batchId = null) => new(row.Row, row.OrderId, row.Sku, row.Quantity, row.Date, row.Restock, status, batchId);
+            if (!byOrder.TryGetValue(row.OrderId, out var batch))
+            {
+                planned.Add((Result($"Order {row.OrderId} isn't in this channel's posted orders."), [], ""));
+                continue;
+            }
+
+            // The memo names the row, so the same row in a later report is known.
+            var key = $"Returns report: order {row.OrderId}{(row.Sku is null ? "" : $", {row.Sku}")}.";
+            var memo = row.Reason is null ? key : $"{key} {row.Reason}";
+            if (memo.Length > ChannelReturn.MaxMemoLength)
+                memo = memo[..ChannelReturn.MaxMemoLength];
+            if (!existing.TryGetValue(batch.Id, out var returns))
+                existing[batch.Id] = returns = await store.ListReturnsAsync(batch.Id, ct);
+            if (returns.Any(r => r.Status == DocumentStatus.Posted && r.Date == row.Date && r.Memo is not null && r.Memo.StartsWith(key, StringComparison.Ordinal)))
+            {
+                planned.Add((Result(ReturnImportRow.AlreadyRecorded, batch.Id), [], memo));
+                continue;
+            }
+
+            if (row.Date < batch.Date)
+            {
+                planned.Add((Result($"Order {row.OrderId} was sold on {batch.Date:yyyy-MM-dd}, after this return's date.", batch.Id), [], memo));
+                continue;
+            }
+            var candidates = batch.Lines.Where(l => l.OrderId == row.OrderId
+                && (row.Sku is null || string.Equals(l.Sku, row.Sku, StringComparison.OrdinalIgnoreCase) || string.Equals(l.MappingKey, row.Sku, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (candidates.Count == 0)
+            {
+                planned.Add((Result($"Order {row.OrderId} has no line for {row.Sku}.", batch.Id), [], memo));
+                continue;
+            }
+
+            if (!returnedBy.TryGetValue(batch.Id, out var returned))
+                returnedBy[batch.Id] = returned = new Dictionary<int, decimal>(await ReturnedAsync(batch.Id, ct));
+            var left = row.Quantity;
+            var lines = new List<(int OrderLine, decimal Quantity)>();
+            foreach (var line in candidates)
+            {
+                var take = Math.Min(left, line.Quantity - returned.GetValueOrDefault(line.LineNumber));
+                if (take <= 0m)
+                    continue;
+                lines.Add((line.LineNumber, take));
+                returned[line.LineNumber] = returned.GetValueOrDefault(line.LineNumber) + take;
+                left -= take;
+                if (left == 0m)
+                    break;
+            }
+            planned.Add(left > 0m
+                ? (Result($"Order {row.OrderId}: more came back than is left to return.", batch.Id), [], memo)
+                : (Result(ReturnImportRow.Ready, batch.Id), lines, memo));
+        }
+
+        if (dryRun || planned.Any(p => p.Row.IsProblem) || planned.All(p => p.Row.Status != ReturnImportRow.Ready))
+            return new ReturnImportResult([.. planned.Select(p => p.Row)], read.Warnings, Imported: false);
+
+        var stocked = (await SkusAsync(channel.Id, ct)).Where(s => s.ItemId is not null).Select(s => s.Sku).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = new List<ReturnImportRow>();
+        await using (var tx = await unitOfWork.BeginAsync(ct))
+        {
+            foreach (var (row, lines, memo) in planned)
+            {
+                if (row.Status != ReturnImportRow.Ready)
+                {
+                    rows.Add(row);
+                    continue;
+                }
+
+                try
+                {
+                    // Lines whose SKU isn't stocked come back without moving stock, as on the page.
+                    var batch = byOrder[row.OrderId];
+                    var offShelf = lines.Select(l => l.OrderLine)
+                        .Where(n => !row.Restock || !stocked.Contains(batch.Lines.First(l => l.LineNumber == n).MappingKey)).ToHashSet();
+                    var recorded = await ReturnAsync(row.BatchId!.Value, row.Date, lines, memo, offShelf, ct);
+                    rows.Add(row with { Status = ReturnImportRow.Recorded, ReturnId = recorded.Id });
+                }
+                catch (DomainException ex)
+                {
+                    throw new DomainException(ex.Code, $"Row {row.Row}: {ex.Message}");
+                }
+            }
+
+            await tx.CommitAsync(ct);
+        }
+
+        return new ReturnImportResult(rows, read.Warnings, Imported: true);
     }
 
     /// <summary>Takes the returned stock out again (refused once it has been sold or moved).</summary>
