@@ -5954,6 +5954,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("CostAccountId")
                         .HasColumnType("TEXT");
 

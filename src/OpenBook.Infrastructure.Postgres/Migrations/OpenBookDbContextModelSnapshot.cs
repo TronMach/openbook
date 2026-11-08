@@ -5961,6 +5961,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<Guid?>("CostAccountId")
                         .HasColumnType("uuid");
 

@@ -107,6 +107,9 @@ public sealed class Item
     /// <summary>What a scanner reads off the product (UPC, EAN, or your own code); unique among items.</summary>
     public string? Barcode { get; private set; }
 
+    /// <summary>A product line or group ("Mugs", "Consulting") for reports by category; null for none.</summary>
+    public string? Category { get; private set; }
+
     /// <summary>Who you usually buy it from: reordering groups items into one purchase order per preferred vendor.</summary>
     public Guid? PreferredVendorId { get; private set; }
 
@@ -186,6 +189,8 @@ public sealed class Item
         Description = Text.Optional(details.Description, 1000, "item.description_too_long", "Description");
         Rate = SalesLine.ValidRate(details.Rate);
         Barcode = NormalizeBarcode(details.Barcode);
+        if (details.Category is not null)
+            Category = Text.Optional(details.Category, 50, "item.category_too_long", "Category");
         Taxable = details.Taxable;
         PreferredVendorId = details.PreferredVendorId is { } vendor && vendor != Guid.Empty ? vendor : null;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
@@ -328,4 +333,5 @@ public sealed record ItemDetails(
     ShortStock SellShort = ShortStock.Company,
     Guid? PreferredVendorId = null,
     decimal? ReorderQuantity = null,
-    int? LeadTimeDays = null);
+    int? LeadTimeDays = null,
+    string? Category = null);

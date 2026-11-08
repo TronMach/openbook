@@ -162,6 +162,42 @@ public sealed class ActivityReports(
             "Sales from invoices, sales receipts and channel orders, less credit memos and returns, before discounts given on the whole document. Cost is what stock left for them. A bundle's cost shows on its components; a service has none.");
     }
 
+    /// <summary>Sales by item category (the items' own figures, as on sales by product or service, added up per category).</summary>
+    public async Task<ReportTable> SalesByCategoryAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var (byItem, discounts) = await SoldByItemAsync(from, to, ct);
+        var channel = await channelOrders.SoldAsync(from, to, ct);
+        foreach (var line in channel.Where(c => c.ItemId is not null))
+        {
+            var (q, a) = byItem.GetValueOrDefault(line.ItemId!.Value);
+            byItem[line.ItemId.Value] = (q + line.Quantity, a + line.Amount);
+        }
+
+        var unstocked = channel.Where(c => c.ItemId is null).Sum(c => c.Amount);
+        var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);
+        var total = byItem.Values.Sum(v => v.Amount) + discounts + unstocked;
+        const string None = "No category";
+        var groups = byItem.Where(kv => kv.Value.Amount != 0m || kv.Value.Quantity != 0m)
+            .GroupBy(kv => items.TryGetValue(kv.Key, out var i) && i.Category is { } c ? c : None, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key == None ? 1 : 0).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+        var rows = groups.Select(g => new ReportTableRow(
+        [
+            g.Key, new ReportCell(g.Count()), g.Sum(kv => kv.Value.Amount), new ReportCell(Share(g.Sum(kv => kv.Value.Amount), total)),
+        ])).ToList();
+        if (unstocked != 0m)
+            rows.Add(new ReportTableRow(["Channel sales not stocked", ReportCell.Empty, unstocked, new ReportCell(Share(unstocked, total))]));
+        if (discounts != 0m)
+            rows.Add(new ReportTableRow(["Discounts", ReportCell.Empty, discounts, new ReportCell(Share(discounts, total))]));
+        rows.Add(new ReportTableRow(["Total", ReportCell.Empty, total, new ReportCell(total == 0m ? null : 100m)], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Sales by category",
+            [company.Name, $"{Comparisons.Describe(from, to)} · Accrual basis"],
+            [new("Category"), new("Items sold", ColumnFormat.Number), new("Amount", ColumnFormat.Money), new("% of sales", ColumnFormat.Percent)],
+            rows,
+            Note: "Each product or service's sales, as on sales by product or service, added up by the category on its page.");
+    }
+
     public async Task<ReportTable> SalesByItemAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);

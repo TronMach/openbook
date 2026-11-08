@@ -68,6 +68,16 @@
                 <InputText id="description" @bind-Value="Input.Description" />
             </div>
             <div class="field">
+                <label for="category">Category <span class="muted">(optional)</span></label>
+                <InputText id="category" @bind-Value="Input.Category" maxlength="50" list="categories" placeholder="Mugs, Consulting…" />
+                <datalist id="categories">
+                    @foreach (var c in _categories)
+                    {
+                        <option value="@c"></option>
+                    }
+                </datalist>
+            </div>
+            <div class="field">
                 <label for="barcode">Barcode <span class="muted">(optional)</span></label>
                 <InputText id="barcode" @bind-Value="Input.Barcode" maxlength="50" autocomplete="off" />
                 <span class="hint">UPC, EAN or your own code. Scanning it into an item picker chooses this item.
@@ -396,6 +406,7 @@
     private ChartOfAccounts _chart = new([]);
     private List<Account> _incomeAccounts = [];
     private List<Account> _liabilities = [];
+    private IReadOnlyList<string> _categories = [];
     private List<Account> _assetAccounts = [];
     private List<Account> _costAccounts = [];
     private StockLevel? _stock;
@@ -537,6 +548,7 @@
         // Sales tax liabilities (and the account above them) belong to the tax agencies, not to items.
         var taxAccounts = (await Taxes.ListAgenciesAsync()).Select(t => t.LiabilityAccountId).ToHashSet();
         var taxParents = taxAccounts.Select(id => _chart.Find(id)?.ParentId).OfType<Guid>().ToHashSet();
+        _categories = [.. (await ItemService.ListAsync(includeInactive: true)).Select(i => i.Category).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
         _liabilities = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type == AccountType.OtherCurrentLiability && !taxAccounts.Contains(a.Id) && !taxParents.Contains(a.Id)).ToList();
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
@@ -566,7 +578,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
-                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
+                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, Category = _item.Category, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
                 PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity, LeadTimeDays = _item.LeadTimeDays,
             };
         Input.Version ??= opened;
@@ -608,7 +620,7 @@
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
                 asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort,
-                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays);
+                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays, Input.Category ?? "");
             await Versions.EnsureUnchangedAsync<Item>(_item?.Id ?? Guid.Empty, Input.Version);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
@@ -665,6 +677,7 @@
 
         [StringLength(50)]
         public string? Barcode { get; set; }
+        public string? Category { get; set; }
 
         public Guid? PreferredVendorId { get; set; }
 

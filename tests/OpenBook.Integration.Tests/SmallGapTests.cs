@@ -247,6 +247,24 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sales_add_up_by_item_category()
+    {
+        var fees = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var mug = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Blue mug", ItemType.NonInventory, fees.Id, 10m, Taxable: false, Category: "Mugs")));
+        var cup = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Red cup", ItemType.NonInventory, fees.Id, 6m, Taxable: false, Category: "Mugs")));
+        var talk = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Talk", ItemType.Service, fees.Id, 100m, Taxable: false)));
+        // Updating without a category keeps it.
+        await In<ItemService, Item>(s => s.UpdateAsync(mug.Id, new ItemDetails("Blue mug", ItemType.NonInventory, fees.Id, 12m, Taxable: false)));
+        var buyer = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Shop")));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(buyer.Id, Mar1,
+            [new SalesLineDraft(mug.Id, null, 2m, 12m), new SalesLineDraft(cup.Id, null, 1m, 6m), new SalesLineDraft(talk.Id, null, 1m, 100m)])));
+
+        var report = await In<ReportCatalog, ReportTable>(s => s.RunAsync("sales-by-category", ReportParameters.Parse("preset=Custom&from=2026-03-01&to=2026-03-31")));
+        Assert.Equal(30m, report.Rows.Single(r => (string?)r.Cells[0].Value == "Mugs").Cells[2].Value);
+        Assert.Equal(100m, report.Rows.Single(r => (string?)r.Cells[0].Value == "No category").Cells[2].Value);
+    }
+
+    [Fact]
     public async Task A_bank_file_with_lines_above_its_header_is_read_from_the_header()
     {
         const string csv = "Account Name: Checking\nAccount Number: ****1234\nBalance;1,234.56\n\nDate,Description,Amount\n03/01/2026,Coffee,-4.50\n03/02/2026,\"Deposit, branch\",100.00\n";
