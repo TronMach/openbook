@@ -27,7 +27,7 @@
             <div class="row">
                 <div class="field">
                     <label for="customer">Customer</label>
-                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" @bind-Value="_customerId" @bind-Value:after="DefaultTaxCode" Placeholder="Choose a customer…" />
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" @bind-Value="_customerId" @bind-Value:after="CustomerChangedAsync" Placeholder="Choose a customer…" />
                 </div>
                 <div class="field">
                     <label for="number">Order number</label>
@@ -51,6 +51,10 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" CustomerCodeOff="@(TaxCustomer?.TaxCodeId is { } own && _taxCodes.All(c => c.Code.Id != own))" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
+            @if (_creditWarning is not null)
+            {
+                <div class="alert notice" role="status">@_creditWarning</div>
+            }
             <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
 
             <LocationField Options="_segments" @bind-Value="_locationId" />
@@ -106,6 +110,17 @@
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
     private string? TaxExemption => SelectedTax is null ? null : CustomerTree.ExemptionOn(TaxCustomer, _date, _customers);
     private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
+
+    private string? _creditWarning;
+
+    private async Task CustomerChangedAsync()
+    {
+        DefaultTaxCode();
+        await CheckCreditAsync();
+    }
+
+    private async Task CheckCreditAsync() =>
+        _creditWarning = _customerId is { } who ? await Ops.RunAsync<CustomerService, string?>(s => s.CreditWarningAsync(who)) : null;
 
     private void DefaultTaxCode() =>
         _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
@@ -163,6 +178,7 @@
         }
 
         _loaded = true;
+        await CheckCreditAsync();
     }
 
     private async Task SaveAsync()
