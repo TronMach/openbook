@@ -47,6 +47,9 @@
                 <LocationField Options="_segments" @bind-Value="_locationId" />
                 <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             </MoreOptions>
+            <MoreOptions HasContent="@(_customers.Count > 0)" Open="@(_billTo is not null)" Title="Billing a customer">
+                <BillableToField Customers="_customers" @bind-Value="_billTo" @bind-Markup="_billMarkup" />
+            </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
@@ -91,6 +94,9 @@
     }
 
     private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<Customer> _customers = [];
+    private Guid? _billTo;
+    private decimal? _billMarkup;
     private ChartOfAccounts _chart = new([]);
     private List<Account> _categories = [];
     private IReadOnlyList<Item> _stockItems = [];
@@ -133,6 +139,7 @@
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers));
         _categories = BillLineModel.Categories(_chart);
+        _customers = await Ops.RunAsync(async sp => (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList());
         _stockItems = await Ops.RunAsync(async sp =>
             (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory).ToList());
         if (Copy is { } copyId && await Ops.RunAsync(sp => sp.GetRequiredService<BillService>().GetAsync(copyId)) is { PurchaseOrderId: null } source)
@@ -202,7 +209,17 @@
             }
 
             var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo, LocationId: _locationId, WarehouseId: _warehouseId);
-            var bill = await Ops.RunAsync<BillService, Bill>(s => s.CreateAsync(command), _closingPassword);
+            var (billTo, markup) = (_billTo, _billMarkup);
+            var bill = await Ops.RunAsync(async sp =>
+            {
+                // The marks go in with the bill, or neither does.
+                await using var tx = await sp.GetRequiredService<OpenBook.Application.IUnitOfWork>().BeginAsync(default);
+                var saved = await sp.GetRequiredService<BillService>().CreateAsync(command);
+                if (billTo is { } customer && saved.Lines.Any(l => l.ItemId is null && l.Amount > 0m))
+                    await sp.GetRequiredService<BillableExpenseService>().MarkAllAsync(BillableSource.Bill, saved.Id, customer, markup);
+                await tx.CommitAsync(default);
+                return saved;
+            }, _closingPassword);
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/purchases/bills/{bill.Id}");
         }

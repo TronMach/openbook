@@ -1,0 +1,44 @@
+@using OpenBook.Domain.Sales
+@using OpenBook.Web.Components.Search
+
+@* "Bill these costs to": a customer whose invoice the document's category lines go on, marked billable in the same save
+   as the bill or expense (the panel on its page does the same afterwards, line by line). Blank markup takes the
+   customer's usual one. *@
+<div class="row">
+    <div class="field">
+        <label for="billable-to">Bill these costs to a customer <span class="muted">(optional)</span></label>
+        <SearchSelect Id="billable-to" Options="PickerOptions.Customers(Customers.Where(c => c.IsActive))" Value="Value" ValueChanged="ChooseAsync" EmptyText="No one" Placeholder="Choose a customer…" />
+    </div>
+    @if (Value is { } chosen)
+    {
+        <div class="field">
+            <label for="billable-markup">Markup % <span class="muted">(blank: @(Usual(chosen))%)</span></label>
+            <input id="billable-markup" type="number" min="0" max="1000" step="0.01" value="@Markup?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" @onchange="ChangeMarkupAsync" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Customer> Customers { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    [Parameter]
+    public decimal? Markup { get; set; }
+
+    [Parameter]
+    public EventCallback<decimal?> MarkupChanged { get; set; }
+
+    private string Usual(Guid id) =>
+        (Customers.FirstOrDefault(c => c.Id == id)?.DefaultMarkupPercent ?? 0m).ToString("0.####", System.Globalization.CultureInfo.CurrentCulture);
+
+    private Task ChooseAsync(Guid? id) => ValueChanged.InvokeAsync(id);
+
+    private Task ChangeMarkupAsync(ChangeEventArgs e) =>
+        MarkupChanged.InvokeAsync(decimal.TryParse(e.Value as string, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var m) ? m : null);
+}

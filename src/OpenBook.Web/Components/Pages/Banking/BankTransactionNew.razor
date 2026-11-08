@@ -58,6 +58,12 @@
             <MoreOptions HasContent="@(_segments.Locations.Count > 0)" Open="@(_locationId is not null)">
                 <LocationField Options="_segments" @bind-Value="_locationId" />
             </MoreOptions>
+            @if (_kind == BankTransactionKind.Spend)
+            {
+                <MoreOptions HasContent="@(_customers.Count > 0)" Open="@(_billTo is not null)" Title="Billing a customer">
+                    <BillableToField Customers="_customers" @bind-Value="_billTo" @bind-Markup="_billMarkup" />
+                </MoreOptions>
+            }
 
             <div class="table-wrap">
                 <table class="data entry">
@@ -174,6 +180,9 @@
     private SegmentOptions _segments = SegmentOptions.None;
 
     private Guid? _locationId;
+    private IReadOnlyList<OpenBook.Domain.Sales.Customer> _customers = [];
+    private Guid? _billTo;
+    private decimal? _billMarkup;
 
 
     protected override async Task OnParametersSetAsync()
@@ -190,6 +199,8 @@
                 (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(v => v.Vendor).ToList()));
             _account = _chart.Get(AccountId);
             BankingRules.EnsurePayFrom(_account, _kind);
+            if (_kind == BankTransactionKind.Spend)
+                _customers = await Ops.RunAsync(async sp => (IReadOnlyList<OpenBook.Domain.Sales.Customer>)(await sp.GetRequiredService<OpenBook.Application.Sales.CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList());
             _ownMoney = !BankTransaction.IsBankingAccount(_account.Type);
             _accountName = _chart.FullName(AccountId);
             _title = _ownMoney ? "Paid with your own money" : Labels.For(_kind, _account.Type);
@@ -245,8 +256,18 @@
             }
 
             var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo, l.ClassId)).ToList();
-            var saved = await Ops.RunAsync<BankingService, BankTransaction>(s =>
-                s.RecordAsync(new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null, LocationId: _locationId)), _closingPassword);
+            var command = new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null, LocationId: _locationId);
+            var (billTo, markup) = (_kind == BankTransactionKind.Spend ? _billTo : null, _billMarkup);
+            var saved = await Ops.RunAsync(async sp =>
+            {
+                // The marks go in with the expense, or neither does.
+                await using var tx = await sp.GetRequiredService<OpenBook.Application.IUnitOfWork>().BeginAsync(default);
+                var recorded = await sp.GetRequiredService<BankingService>().RecordAsync(command);
+                if (billTo is { } customer)
+                    await sp.GetRequiredService<OpenBook.Application.Sales.BillableExpenseService>().MarkAllAsync(OpenBook.Domain.Sales.BillableSource.Expense, recorded.Id, customer, markup);
+                await tx.CommitAsync(default);
+                return recorded;
+            }, _closingPassword);
             Navigation.NavigateTo($"/banking/transactions/{saved.Id}");
         }
         catch (DomainException ex)
