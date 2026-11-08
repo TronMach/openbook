@@ -251,6 +251,19 @@ public sealed class ProjectsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Customer_balances_show_one_responsible_persons_clients()
+    {
+        var bo = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Bo", CostRate: 30m)));
+        await In<ProjectService, Customer>(s => s.SetResponsibleAsync(_acme.Id, _ana.Id));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar2, [new SalesLineDraft(_consulting.Id, null, 1m, 200m)])));
+        decimal Total(OpenBook.Application.Reporting.ReportTable t) => (decimal)t.Rows[^1].Cells[2].Value!;
+        Assert.Equal(200m, Total(await In<OpenBook.Application.Reporting.ReportCatalog, OpenBook.Application.Reporting.ReportTable>(s =>
+            s.RunAsync("customer-balances", OpenBook.Application.Reporting.ReportParameters.Parse($"asOf=2026-03-31&responsibleId={_ana.Id}")))));
+        Assert.Equal(0m, Total(await In<OpenBook.Application.Reporting.ReportCatalog, OpenBook.Application.Reporting.ReportTable>(s =>
+            s.RunAsync("customer-balances", OpenBook.Application.Reporting.ReportParameters.Parse($"asOf=2026-03-31&responsibleId={bo.Id}")))));
+    }
+
+    [Fact]
     public async Task Rows_for_the_same_work_add_up_and_a_blank_row_changes_nothing()
     {
         var monday = new DateOnly(2026, 3, 2);

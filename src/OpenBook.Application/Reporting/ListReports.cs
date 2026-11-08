@@ -58,12 +58,16 @@ public sealed class ListReports(
             Note: "Retainers received by the date, less what was applied to invoices or refunded by then. The total is what Customer Deposits holds for retainers.");
     }
 
-    public async Task<ReportTable> CustomerBalancesAsync(DateOnly asOf, CancellationToken ct = default)
+    /// <param name="responsibleId">Only customers that person is responsible for (their own or inherited from a parent).</param>
+    public async Task<ReportTable> CustomerBalancesAsync(DateOnly asOf, Guid? responsibleId = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var aging = await receivables.AgingAsync(asOf, ct);
-        var rows = aging.Customers
-            .Where(c => c.Buckets.Total != 0m)
+        var byId = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var shown = aging.Customers
+            .Where(c => c.Buckets.Total != 0m && (responsibleId is null || Domain.Sales.CustomerTree.Responsible(c.Customer.Id, byId) == responsibleId))
+            .ToList();
+        var rows = shown
             .Select(c => new ReportTableRow(
             [
                 new ReportCell(c.Customer.DisplayName, new ReportLink("customer", c.Customer.Id)),
@@ -71,10 +75,12 @@ public sealed class ListReports(
                 c.Buckets.Total,
             ]))
             .ToList();
-        rows.Add(new ReportTableRow(["Total", aging.Totals.Total - aging.Totals.Current, aging.Totals.Total], 0, ReportRowStyle.Total));
+        var total = responsibleId is null ? aging.Totals.Total : shown.Sum(c => c.Buckets.Total);
+        var current = responsibleId is null ? aging.Totals.Current : shown.Sum(c => c.Buckets.Current);
+        rows.Add(new ReportTableRow(["Total", total - current, total], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Customer balance summary",
-            [company.Name, $"As of {asOf:MMM d, yyyy}"],
+            [company.Name, $"As of {asOf:MMM d, yyyy}", .. responsibleId is null ? Array.Empty<string>() : ["Responsible: one person's clients"]],
             [new("Customer"), new("Past due", ColumnFormat.Money), new("Balance", ColumnFormat.Money)],
             rows,
             Note: "Open invoices less unapplied credits, as on the A/R aging; the total matches it.");
