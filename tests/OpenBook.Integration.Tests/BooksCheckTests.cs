@@ -61,7 +61,7 @@ public sealed class BooksCheckTests : IAsyncLifetime
     private static void AssertAgrees(BooksCheckReport report, string when)
     {
         Assert.True(report.Problems == 0, $"{when}:{Environment.NewLine}{Describe(report)}");
-        Assert.Equal(15, report.Results.Count);
+        Assert.Equal(16, report.Results.Count);
     }
 
     private Task<Invoice> Invoice(Customer customer, decimal hours, DateOnly date) =>

@@ -102,6 +102,7 @@ public sealed class BooksCheckService(
             CustomerDepositsTie(data),
             await ReceivedNotBilledTieAsync(data, ct),
             await PledgesTieAsync(data, ct),
+            await GrantsTieAsync(data, ct),
             await DepreciationTieAsync(data, ct),
             await LoansTieAsync(data, ct),
             await ReconciliationsAsync(data, ct),
@@ -538,6 +539,20 @@ public sealed class BooksCheckService(
         return Compare("pledges", "Pledges receivable match the open pledges",
             "What's still to come on pledges (promised, less cancelled and paid) equals the pledges receivable account, on the accrual basis.",
             promised - paid, lines.Sum(l => l.Amount), others, "Open pledges", Names(d, accountIds, "the pledges receivable account"));
+    }
+
+    /// <summary>Grants receivable (debit) and refundable advances (credit) together, against each grant's own figures.</summary>
+    private async Task<CheckResult> GrantsTieAsync(Data d, CancellationToken ct)
+    {
+        var grants = (await nonprofit.ListGrantsAsync(ct)).Where(g => g.Status != Domain.Nonprofit.GrantStatus.Voided).ToList();
+        var all = await nonprofit.ListGrantsAsync(ct);
+        var accountIds = all.Select(g => g.ReceivableAccountId).Concat(all.Select(g => g.AdvanceAccountId).OfType<Guid>()).ToHashSet();
+        var (lines, others) = On(d, accountIds, Domain.Nonprofit.Grant.AwardSource, Domain.Nonprofit.Grant.ReceiptSource,
+            Domain.Nonprofit.Grant.RecognitionSource, Domain.Nonprofit.Grant.AdjustmentSource);
+        return Compare("grants", "Grants receivable and advances match the grants",
+            "What funders still owe for income recognized, less money they paid ahead and isn't earned yet, equals the grants receivable and refundable advance accounts, on the accrual basis.",
+            grants.Sum(g => g.Receivable) - grants.Sum(g => g.Advance), lines.Sum(l => l.Amount), others, "The grants",
+            Names(d, accountIds, "the grants receivable account"));
     }
 
     private async Task<CheckResult> DepreciationTieAsync(Data d, CancellationToken ct)
