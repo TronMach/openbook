@@ -123,7 +123,7 @@ On the grant's page:
 
 ### Reporting to a funder
 
-On a grant's page, **Grant budget vs. actual** is the report to send: budget, this period, to date and what's left, by budget line. **Make a request** writes a reimbursement request for a period, with the spending by line and the amount, as a letter to print or send. It posts nothing. When the money comes, choose the request under **Pays request** as you record the payment.
+On a grant's page, **Grant budget vs. actual** is the report to send: budget, this period, to date and what's left, by budget line. Under **Reports**, choose **Every grant of the period** as its grant for one report with a section and total per grant (every grant whose dates meet the period), for the board or a funder with several grants. **Make a request** writes a reimbursement request for a period, with the spending by line and the amount, as a letter to print or send. It posts nothing. When the money comes, choose the request under **Pays request** as you record the payment.
 
 ## Reports
 

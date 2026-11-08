@@ -79,6 +79,10 @@
                 <div class="field">
                     <label for="grant">Grant</label>
                     <select id="grant" name="grantId" data-search>
+                        @if (Key == "grant-budget-vs-actual")
+                        {
+                            <option value="all" selected="@(_parameters.Get("grantId") == "all")">Every grant of the period</option>
+                        }
                         @foreach (var g in _grants)
                         {
                             <option value="@g.Id" selected="@(g.Id == _parameters.GetId("grantId"))">@g.Name</option>

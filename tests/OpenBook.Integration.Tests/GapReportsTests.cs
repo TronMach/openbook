@@ -405,6 +405,18 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_grants_report_can_show_every_grant_of_the_period()
+    {
+        var grant = await GrantWithSpending();
+        var table = await Report("grant-budget-vs-actual", "preset=Custom&from=2026-03-01&to=2026-03-31&grantId=all");
+        Assert.Equal("Grant budgets vs. actual", table.Title);
+        Assert.Contains(table.Rows, r => r.Style == ReportRowStyle.Section && (r.Cells[0].Value as string ?? "").StartsWith(grant.Name, StringComparison.Ordinal));
+        var total = table.Rows[^1];
+        Assert.Equal((600m, 50m, 250m), (total.Cells[1].Value as decimal?, total.Cells[2].Value as decimal?, total.Cells[3].Value as decimal?));
+        Assert.Contains("No grant", (await Report("grant-budget-vs-actual", "preset=Custom&from=2020-01-01&to=2020-01-31&grantId=all")).Rows[0].Cells[0].Value as string, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_reimbursement_request_asks_for_whats_spent_and_a_payment_settles_it()
     {
         var grant = await GrantWithSpending();

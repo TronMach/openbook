@@ -176,10 +176,17 @@ public sealed class NonprofitReports(
     /// One grant for its funder: budget, this period, to date and what's left, by budget line, with what's been spent on
     /// accounts the budget doesn't list. Without a grant chosen, the newest active one.
     /// </summary>
-    public async Task<ReportTable> GrantBudgetAsync(Guid? grantId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    /// <param name="grantId">The grant; null for the newest active one.</param>
+    /// <param name="from">The period's start.</param>
+    /// <param name="to">The period's end.</param>
+    /// <param name="everyGrant">Every grant whose period meets the report's, a section each with a total, for a board or a funder with several grants.</param>
+    /// <param name="ct">Cancels it.</param>
+    public async Task<ReportTable> GrantBudgetAsync(Guid? grantId, DateOnly from, DateOnly to, bool everyGrant = false, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var all = await grants.ListAsync(ct);
+        if (everyGrant)
+            return await EveryGrantBudgetAsync(company, all, from, to, ct);
         var grant = grantId is { } id ? all.FirstOrDefault(g => g.Id == id) : all.Where(g => g.Status == GrantStatus.Active).MaxBy(g => g.AwardedOn);
         if (grant is null)
             return new ReportTable("Grant budget vs. actual", [company.Name], [new("")], [new(["There's no grant to report on. Add one under Nonprofit, Grants."])], ReportBasis.Accrual);
@@ -197,6 +204,35 @@ public sealed class NonprofitReports(
             rows,
             ReportBasis.Accrual,
             "Spending on the grant's class and its subclasses, from the grant's start date.");
+    }
+
+    private async Task<ReportTable> EveryGrantBudgetAsync(Domain.Companies.Company company, IReadOnlyList<Grant> all, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var rows = new List<ReportTableRow>();
+        decimal budget = 0m, period = 0m, toDate = 0m;
+        foreach (var grant in all.Where(g => g.Status != GrantStatus.Voided && g.StartsOn <= to && g.EndsOn >= from).OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var atStart = await grants.PositionAsync(grant.Id, from.AddDays(-1), ct);
+            var atEnd = await grants.PositionAsync(grant.Id, to, ct);
+            var before = atStart!.Rows.ToDictionary(r => r.AccountId, r => r.Spent);
+            rows.Add(new ReportTableRow([new ReportCell($"{grant.Name} · {atEnd!.Funder}{(grant.Reference is { } reference ? $" · {reference}" : "")}", new ReportLink("grant", grant.Id)), null, null, null, null], 0, ReportRowStyle.Section));
+            rows.AddRange(atEnd.Rows.Select(r => new ReportTableRow([r.Account, r.Budget, r.Spent - before.GetValueOrDefault(r.AccountId), r.Spent, r.Budget - r.Spent], 1)));
+            var grantBudget = atEnd.Rows.Sum(r => r.Budget);
+            rows.Add(new ReportTableRow([$"Total {grant.Name}", grantBudget, atEnd.Spent - atStart.Spent, atEnd.Spent, grantBudget - atEnd.Spent], 1, ReportRowStyle.Subtotal));
+            (budget, period, toDate) = (budget + grantBudget, period + atEnd.Spent - atStart.Spent, toDate + atEnd.Spent);
+        }
+
+        if (rows.Count == 0)
+            rows.Add(new ReportTableRow(["No grant's period meets this one.", null, null, null, null]));
+        else
+            rows.Add(new ReportTableRow(["Total", budget, period, toDate, budget - toDate], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Grant budgets vs. actual",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Budget line"), new("Budget", ColumnFormat.Money), new("This period", ColumnFormat.Money), new("To date", ColumnFormat.Money), new("Left", ColumnFormat.Money)],
+            rows,
+            ReportBasis.Accrual,
+            "Every grant whose period meets the report's. Spending on each grant's class and its subclasses, from the grant's start date.");
     }
 
     /// <summary>Every grant on a date: awarded, earned as income, paid by the funder, spent and what's left.</summary>
