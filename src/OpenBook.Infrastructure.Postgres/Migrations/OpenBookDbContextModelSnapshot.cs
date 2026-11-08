@@ -5536,6 +5536,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateOnly?>("ExemptionStartsOn")
+                        .HasColumnType("date");
+
                     b.Property<Guid?>("FormDesignId")
                         .HasColumnType("uuid");
 

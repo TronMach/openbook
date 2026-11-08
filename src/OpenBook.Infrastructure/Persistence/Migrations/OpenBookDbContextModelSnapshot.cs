@@ -5529,6 +5529,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("ExemptionStartsOn")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("FormDesignId")
                         .HasColumnType("TEXT");
 

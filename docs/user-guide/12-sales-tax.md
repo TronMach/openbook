@@ -28,7 +28,7 @@ OpenBook adds the tax under the subtotal: taxable lines, less their share of any
 
 ### Exempt customers
 
-On the customer's page, enter their **exemption certificate number**, the **reason** and the **expiry date**. While it's valid, their sales are taxed at zero and reported as exempt. Attach the certificate itself to the customer under **Attachments**. The Sales tax page lists every exempt customer.
+On the customer's page, enter their **exemption certificate number**, the **reason**, the date it's **valid from** (if it doesn't cover earlier sales) and the **expiry date**. While it's valid, their sales are taxed at zero and reported as exempt. Attach the certificate itself to the customer under **Attachments**. The Sales tax page lists every exempt customer.
 
 A project or other sub-customer billed with its parent is covered by the parent's certificate.
 

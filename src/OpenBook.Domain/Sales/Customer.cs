@@ -43,6 +43,9 @@ public sealed class Customer
     /// <summary>Last day the certificate is valid; null when it doesn't expire.</summary>
     public DateOnly? ExemptionExpiresOn { get; private set; }
 
+    /// <summary>The day the certificate takes effect; null = from always.</summary>
+    public DateOnly? ExemptionStartsOn { get; private set; }
+
     /// <summary>The customer's pricing baseline (see <c>Domain.Pricing.PriceLevel</c>); null for list prices.</summary>
     public Guid? PriceLevelId { get; private set; }
 
@@ -143,10 +146,11 @@ public sealed class Customer
         ExemptionCertificate = Text.Optional(details.ExemptionCertificate, 50, "customer.exemption_too_long", "Exemption certificate");
         if (ExemptionCertificate is null)
         {
-            if (details.ExemptionReason is not null || details.ExemptionExpiresOn is not null)
+            if (details.ExemptionReason is not null || details.ExemptionExpiresOn is not null || details.ExemptionStartsOn is not null)
                 throw new DomainException("customer.exemption_number_required", "Enter the exemption certificate number.");
             ExemptionReason = null;
             ExemptionExpiresOn = null;
+            ExemptionStartsOn = null;
         }
         else
         {
@@ -154,6 +158,9 @@ public sealed class Customer
                 ? reason
                 : throw new DomainException("customer.exemption_reason_required", "Choose why the customer is exempt.");
             ExemptionExpiresOn = details.ExemptionExpiresOn;
+            ExemptionStartsOn = details.ExemptionStartsOn;
+            if (ExemptionStartsOn > ExemptionExpiresOn)
+                throw new DomainException("customer.exemption_dates", "The certificate can't start after it expires.");
         }
     }
 
@@ -162,7 +169,7 @@ public sealed class Customer
     /// customer has no certificate or it has expired by then.
     /// </summary>
     public string? ExemptionOn(DateOnly date) =>
-        ExemptionCertificate is not null && (ExemptionExpiresOn is null || date <= ExemptionExpiresOn)
+        ExemptionCertificate is not null && (ExemptionExpiresOn is null || date <= ExemptionExpiresOn) && (ExemptionStartsOn is null || date >= ExemptionStartsOn)
             ? $"{ExemptionReasons.Label(ExemptionReason!.Value)}, certificate {ExemptionCertificate}"
             : null;
 
@@ -212,7 +219,8 @@ public sealed record CustomerDetails(
     bool NoReminders = false,
     bool NoLateFees = false,
     decimal? CreditLimit = null,
-    bool CreditHold = false);
+    bool CreditHold = false,
+    DateOnly? ExemptionStartsOn = null);
 
 /// <summary>
 /// Rules for sub-customers: at most <see cref="MaxDepth"/> levels, no cycles, full names "Parent:Child", and who

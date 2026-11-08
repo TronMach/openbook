@@ -256,6 +256,10 @@
                             </InputSelect>
                         </div>
                         <div class="field">
+                            <label for="exemption-starts">Valid from <span class="muted">(optional)</span></label>
+                            <InputDate id="exemption-starts" @bind-Value="Input.ExemptionStartsOn" />
+                        </div>
+                        <div class="field">
                             <label for="exemption-expires">Expires <span class="muted">(optional)</span></label>
                             <InputDate id="exemption-expires" @bind-Value="Input.ExemptionExpiresOn" />
                         </div>
@@ -430,6 +434,7 @@
                 ExemptionCertificate = _customer.ExemptionCertificate,
                 ExemptionReason = _customer.ExemptionReason,
                 ExemptionExpiresOn = _customer.ExemptionExpiresOn,
+                ExemptionStartsOn = _customer.ExemptionStartsOn,
                 PriceLevelId = _customer.PriceLevelId,
                 ParentId = _customer.ParentId,
                 BillWithParent = _customer.BillWithParent,
@@ -449,7 +454,7 @@
                 Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
                 Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
                 Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty,
-                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees, Input.CreditLimit, Input.CreditHold);
+                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees, Input.CreditLimit, Input.CreditHold, Input.ExemptionStartsOn);
             await Versions.EnsureUnchangedAsync<Customer>(_customer?.Id ?? Guid.Empty, Input.Version);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
@@ -516,6 +521,7 @@
 
         public ExemptionReason? ExemptionReason { get; set; }
         public DateOnly? ExemptionExpiresOn { get; set; }
+        public DateOnly? ExemptionStartsOn { get; set; }
 
         public Guid? PriceLevelId { get; set; }
 

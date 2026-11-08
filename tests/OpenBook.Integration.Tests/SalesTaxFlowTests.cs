@@ -380,6 +380,19 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_certificate_exempts_only_from_the_day_it_takes_effect()
+    {
+        var shop = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("New reseller", TaxCodeId: _springfield.Id,
+            ExemptionCertificate: "R-9", ExemptionReason: ExemptionReason.Resale, ExemptionStartsOn: new DateOnly(2026, 4, 1))));
+        var march = await Invoice(shop, Mar1, null, Widgets(1));
+        var april = await Invoice(shop, new DateOnly(2026, 4, 2), null, Widgets(1));
+        Assert.True(march.Lines.Where(l => l.Kind == SalesLineKind.Tax).Sum(l => l.Amount) > 0m);
+        Assert.Equal(0m, april.Lines.Where(l => l.Kind == SalesLineKind.Tax).Sum(l => l.Amount));
+        Assert.Equal("customer.exemption_dates", await Refused(() => In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Odd dates", TaxCodeId: _springfield.Id,
+            ExemptionCertificate: "R-10", ExemptionReason: ExemptionReason.Resale, ExemptionExpiresOn: Mar1, ExemptionStartsOn: new DateOnly(2026, 4, 1))))));
+    }
+
+    [Fact]
     public async Task A_return_is_due_after_its_period_until_paid()
     {
         await Tax(s => s.UpdateAgencyAsync(_stateDor.Id, new TaxAgencyDetails("State Department of Revenue", FilingFrequency.Monthly, "ST-1", DueDays: 15)));
