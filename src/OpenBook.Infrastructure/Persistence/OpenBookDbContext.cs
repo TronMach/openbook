@@ -141,6 +141,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<TaxRate> TaxRates => Set<TaxRate>();
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
     public DbSet<SalesTaxPayment> SalesTaxPayments => Set<SalesTaxPayment>();
+    public DbSet<SalesTaxFiling> SalesTaxFilings => Set<SalesTaxFiling>();
     public DbSet<NexusThreshold> NexusThresholds => Set<NexusThreshold>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
@@ -748,6 +749,18 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 r.HasOne<TaxRate>().WithMany().HasForeignKey(x => x.TaxRateId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(c => c.Rates).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<SalesTaxFiling>(b =>
+        {
+            b.ToTable("SalesTaxFilings");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Id).ValueGeneratedNever();
+            b.Property(f => f.AmountReported).HasColumnName("AmountReportedMinor").HasConversion(MinorUnits);
+            b.Property(f => f.Reference).HasMaxLength(SalesTaxFiling.MaxReferenceLength);
+            b.Property(f => f.FiledBy).HasMaxLength(100);
+            b.HasIndex(f => new { f.AgencyId, f.PeriodTo }).IsUnique();
+            b.HasOne<TaxAgency>().WithMany().HasForeignKey(f => f.AgencyId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SalesTaxPayment>(b =>

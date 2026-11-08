@@ -97,6 +97,13 @@ internal static class SalesTaxApi
         tax.MapPut("/codes/{id:guid}/active", async (Guid id, SetActiveRequest r, SalesTaxService s, CancellationToken ct) =>
             TaxCodeResponse.From(await s.SetCodeActiveAsync(id, r.Active, ct)));
 
+        tax.MapGet("/filings", async (Guid? agencyId, SalesTaxPaymentService s, CancellationToken ct) => await s.FilingsAsync(agencyId, ct));
+        tax.MapPost("/filings", async (RecordFilingCommand r, SalesTaxPaymentService s, CancellationToken ct) => await s.RecordFilingAsync(r, ct));
+        tax.MapDelete("/filings/{id:guid}", async (Guid id, SalesTaxPaymentService s, CancellationToken ct) =>
+        {
+            await s.RemoveFilingAsync(id, ct);
+            return Results.NoContent();
+        });
         tax.MapGet("/payments", async (Guid? agencyId, SalesTaxPaymentService s, CancellationToken ct) =>
             (await s.ListAsync(agencyId, ct)).Select(SalesTaxPaymentResponse.From));
         tax.MapGet("/payments/{id:guid}", async (Guid id, SalesTaxPaymentService s, CancellationToken ct) =>

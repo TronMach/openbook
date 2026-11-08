@@ -43,6 +43,16 @@ internal sealed class EfSalesTaxStore(OpenBookDbContext db) : ISalesTaxStore
 
     public void Add(SalesTaxPayment payment) => db.SalesTaxPayments.Add(payment);
 
+    public async Task<IReadOnlyList<SalesTaxFiling>> ListFilingsAsync(Guid? agencyId, CancellationToken ct) =>
+        (await db.SalesTaxFilings.Where(f => agencyId == null || f.AgencyId == agencyId).ToListAsync(ct))
+            .OrderByDescending(f => f.PeriodTo).ThenBy(f => f.AgencyId).ToList();
+
+    public Task<SalesTaxFiling?> GetFilingAsync(Guid id, CancellationToken ct) => db.SalesTaxFilings.SingleOrDefaultAsync(f => f.Id == id, ct);
+
+    public void Add(SalesTaxFiling filing) => db.SalesTaxFilings.Add(filing);
+
+    public void Remove(SalesTaxFiling filing) => db.SalesTaxFilings.Remove(filing);
+
     public async Task<IReadOnlyList<NexusThreshold>> ListNexusThresholdsAsync(CancellationToken ct) => await db.NexusThresholds.ToListAsync(ct);
 
     public void Add(NexusThreshold threshold) => db.NexusThresholds.Add(threshold);

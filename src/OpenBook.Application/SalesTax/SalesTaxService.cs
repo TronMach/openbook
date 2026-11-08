@@ -39,6 +39,12 @@ public interface ISalesTaxStore
     void Add(SalesTaxPayment payment);
     void Add(AuditRecord record);
 
+    /// <summary>Returns filed, newest period first; every agency's when <paramref name="agencyId"/> is null.</summary>
+    Task<IReadOnlyList<SalesTaxFiling>> ListFilingsAsync(Guid? agencyId, CancellationToken ct);
+    Task<SalesTaxFiling?> GetFilingAsync(Guid id, CancellationToken ct);
+    void Add(SalesTaxFiling filing);
+    void Remove(SalesTaxFiling filing);
+
     /// <summary>Tracked.</summary>
     Task<IReadOnlyList<NexusThreshold>> ListNexusThresholdsAsync(CancellationToken ct);
 

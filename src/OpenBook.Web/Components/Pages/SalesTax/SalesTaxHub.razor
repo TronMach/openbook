@@ -12,6 +12,10 @@
         <ActionLink Class="button secondary" Href="/sales-tax/nexus">Nexus thresholds</ActionLink>
         <ActionLink Class="button" Href="/sales-tax/pay">Pay sales tax</ActionLink>
     </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
     @if (Welcome)
     {
         <div class="alert notice" role="status">
@@ -50,12 +54,27 @@
                                     @if (a.RegistrationNumber is not null) { <span class="muted"> · @a.RegistrationNumber</span> }
                                 </td>
                                 <td>@a.FilingFrequency</td>
-                                <td><a href="/reports/sales-tax?preset=Custom&amp;from=@from.ToString("yyyy-MM-dd")&amp;to=@to.ToString("yyyy-MM-dd")">@Labels.Date(from) – @Labels.Date(to)</a>@(_payments.Any(p => p.AgencyId == a.Id && p.PeriodEnd == to && p.Status == DocumentStatus.Posted) ? " · paid" : "")</td>
+                                <td><a href="/reports/sales-tax?preset=Custom&amp;from=@from.ToString("yyyy-MM-dd")&amp;to=@to.ToString("yyyy-MM-dd")">@Labels.Date(from) – @Labels.Date(to)</a>@(_payments.Any(p => p.AgencyId == a.Id && p.PeriodEnd == to && p.Status == DocumentStatus.Posted) ? " · paid" : "")@(_filings.FirstOrDefault(f => f.AgencyId == a.Id && f.PeriodTo == to) is { } filed ? $" · filed {Labels.Date(filed.FiledOn)}" : "")</td>
                                 <td class="num">@Labels.Amount(_owed.GetValueOrDefault(a.Id))</td>
                                 <td>
                                     @if (_owed.GetValueOrDefault(a.Id) > 0m)
                                     {
                                         <ActionLink Class="button secondary" Href="@($"/sales-tax/pay?agency={a.Id}")">Pay</ActionLink>
+                                    }
+                                    @if (a.IsActive && !_filings.Any(f => f.AgencyId == a.Id && f.PeriodTo == to))
+                                    {
+                                        <details class="menu">
+                                            <summary class="button secondary">Mark filed</summary>
+                                            <PostForm Action="/sales-tax/filings" data-enhance="false">
+                                                <AntiforgeryToken />
+                                                <input type="hidden" name="agencyId" value="@a.Id" />
+                                                <input type="hidden" name="periodTo" value="@to.ToString("yyyy-MM-dd")" />
+                                                <div class="field"><label for="filed-@a.Id">Filed on</label><input id="filed-@a.Id" name="filedOn" type="date" value="@_today.ToString("yyyy-MM-dd")" /></div>
+                                                <div class="field"><label for="reported-@a.Id">Tax reported</label><input id="reported-@a.Id" name="amount" class="amount" inputmode="decimal" value="@_owed.GetValueOrDefault(a.Id).ToString("0.00")" /></div>
+                                                <div class="field"><label for="ref-@a.Id">Confirmation number <span class="muted">(optional)</span></label><input id="ref-@a.Id" name="reference" maxlength="100" /></div>
+                                                <div class="actions"><button type="submit">Record the return as filed</button></div>
+                                            </PostForm>
+                                        </details>
                                     }
                                 </td>
                             </tr>
@@ -65,6 +84,36 @@
             </div>
         }
     </section>
+
+    @if (_filings.Count > 0)
+    {
+        <section class="card">
+            <h2>Returns filed</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Agency</th><th>Period</th><th>Filed on</th><th class="num">Tax reported</th><th>Confirmation</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _filings.Take(24))
+                        {
+                            <tr>
+                                <td>@_agencyNames.GetValueOrDefault(f.AgencyId)</td>
+                                <td>@Labels.Date(f.PeriodFrom) – @Labels.Date(f.PeriodTo)</td>
+                                <td>@Labels.Date(f.FiledOn)</td>
+                                <td class="num">@Labels.Amount(f.AmountReported)</td>
+                                <td>@f.Reference</td>
+                                <td>
+                                    <PostForm Action="@($"/sales-tax/filings/{f.Id}/remove")" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link" data-confirm="Remove this filing record? Nothing posted is changed.">Remove</button>
+                                    </PostForm>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
 
     <div class="split-grid">
         <section class="card">
@@ -191,11 +240,15 @@
     [SupplyParameterFromQuery]
     private bool Welcome { get; set; }
 
+    [SupplyParameterFromQuery]
+    private string? Error { get; set; }
+
     private readonly DateOnly _today = CompanyTime.Today;
     private IReadOnlyList<TaxAgency> _agencies = [];
     private IReadOnlyList<TaxRate> _rates = [];
     private IReadOnlyList<TaxCode> _codes = [];
     private IReadOnlyList<SalesTaxPayment> _payments = [];
+    private IReadOnlyList<SalesTaxFiling> _filings = [];
     private IReadOnlyList<ExemptCustomer> _exempt = [];
     private IReadOnlyDictionary<Guid, decimal> _owed = new Dictionary<Guid, decimal>();
     private Dictionary<Guid, string> _agencyNames = [];
@@ -207,6 +260,7 @@
         _rates = await Taxes.ListRatesAsync();
         _codes = await Taxes.ListCodesAsync();
         _payments = await Payments.ListAsync();
+        _filings = await Payments.FilingsAsync();
         _exempt = await Reports.ExemptCustomersAsync();
         _owed = await Payments.OwedAsync(_today);
         _agencyNames = _agencies.ToDictionary(a => a.Id, a => a.Name);

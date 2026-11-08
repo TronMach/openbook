@@ -34,7 +34,9 @@ A project or other sub-customer billed with its parent is covered by the parent'
 
 ## What you owe
 
-The **Sales tax** page lists each agency with **Owed today** and the **period to file**. Once a period ends, the home page's to-do list shows **Sales tax returns to file** for each agency with tax owed for it, with the next due date (marked urgent once it's past), until the payment for that period is recorded.
+The **Sales tax** page lists each agency with **Owed today** and the **period to file**. Once a period ends, the home page's to-do list shows **Sales tax returns to file** for each agency with tax owed for it, with the next due date (marked urgent once it's past), until the payment for that period is recorded, or the return is recorded as filed.
+
+To keep a record of what you filed, use **Mark filed** beside the agency once you've filed its return: the date you filed, the tax the return reported and the agency's confirmation number. The period then shows "filed", the return leaves the to-do list, and it's listed under **Returns filed** (posting nothing; **Remove** takes a record entered by mistake away). Pay the tax as usual with **Pay**.
 
 **Reports → Sales tax liability** shows, for a period, each agency and rate: total sales, non-taxable, exempt and taxable amounts, and the tax. Use it to fill in your return. Credit memos are subtracted. **Selling into other states**: **Sales tax → Nexus thresholds** keeps each state's economic nexus threshold (the sales a year, and a number of transactions where the state has one) as you get them from the state or your adviser. **Reports → Sales by state** sets all your sales against them: invoices and receipts less credit memos, by the customer's shipping address (else billing), and sales channels by the state shipped to. A state past its threshold over the last twelve months with no tax agency set up for it shows on the home page's to-do list. OpenBook doesn't know the states' rules.
 

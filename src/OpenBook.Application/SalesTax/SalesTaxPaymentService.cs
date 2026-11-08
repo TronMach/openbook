@@ -27,6 +27,9 @@ public sealed record PaySalesTaxCommand(
 /// <summary>A sales tax return still to file: the agency, its period, when it's due and what's owed for it.</summary>
 public sealed record ReturnDue(TaxAgency Agency, DateOnly From, DateOnly To, DateOnly DueOn, decimal Owed);
 
+/// <summary>Records that an agency's return for the period ending <paramref name="PeriodTo"/> (any day of it) was filed.</summary>
+public sealed record RecordFilingCommand(Guid AgencyId, DateOnly PeriodTo, DateOnly FiledOn, decimal AmountReported, string? Reference = null);
+
 /// <summary>Paying collected sales tax to an agency, and what's owed to each.</summary>
 public sealed class SalesTaxPaymentService(
     ISalesTaxStore store,
@@ -75,16 +78,54 @@ public sealed class SalesTaxPaymentService(
     public async Task<IReadOnlyList<ReturnDue>> ReturnsDueAsync(DateOnly today, CancellationToken ct = default)
     {
         var due = new List<ReturnDue>();
+        var filed = (await store.ListFilingsAsync(null, ct)).Select(f => (f.AgencyId, f.PeriodTo)).ToHashSet();
         foreach (var agency in (await store.ListAgenciesAsync(ct)).Where(a => a.IsActive))
         {
             var (from, to) = FilingPeriods.LastCompleted(agency.FilingFrequency, today);
             var owed = (await OwedForPeriodAsync(to, ct)).GetValueOrDefault(agency.Id);
-            if (owed > 0m)
+            if (owed > 0m && !filed.Contains((agency.Id, to)))
                 due.Add(new ReturnDue(agency, from, to, agency.DueOn(to), owed));
         }
 
         return [.. due.OrderBy(d => d.DueOn).ThenBy(d => d.Agency.Name, StringComparer.OrdinalIgnoreCase)];
     }
+
+    public const string FilingEntity = "sales_tax_filing";
+
+    public Task<IReadOnlyList<SalesTaxFiling>> FilingsAsync(Guid? agencyId = null, CancellationToken ct = default) => store.ListFilingsAsync(agencyId, ct);
+
+    /// <summary>Notes a return as filed for the agency's period containing <see cref="RecordFilingCommand.PeriodTo"/>; it then leaves the to-do list.</summary>
+    public async Task<SalesTaxFiling> RecordFilingAsync(RecordFilingCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var agency = await store.GetAgencyAsync(command.AgencyId, ct) ?? throw new EntityNotFoundException(SalesTaxService.AgencyEntity, command.AgencyId);
+        var (from, to) = FilingPeriods.Containing(agency.FilingFrequency, command.PeriodTo);
+        if ((await store.ListFilingsAsync(agency.Id, ct)).Any(f => f.PeriodTo == to))
+            throw new DomainException("taxfiling.already_filed", $"The {agency.Name} return for {from:MMM d} – {to:MMM d, yyyy} is recorded as filed already.");
+        var filing = SalesTaxFiling.Create(agency.Id, from, to, command.FiledOn, command.AmountReported, command.Reference, user.Actor, clock.UtcNow);
+        store.Add(filing);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, FilingEntity, filing.Id, null, FilingSnapshot(filing)));
+        await store.SaveChangesAsync(ct);
+        return filing;
+    }
+
+    public async Task RemoveFilingAsync(Guid id, CancellationToken ct = default)
+    {
+        var filing = await store.GetFilingAsync(id, ct) ?? throw new EntityNotFoundException(FilingEntity, id);
+        store.Remove(filing);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, FilingEntity, filing.Id, FilingSnapshot(filing), null));
+        await store.SaveChangesAsync(ct);
+    }
+
+    private static string FilingSnapshot(SalesTaxFiling f) => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        f.AgencyId,
+        f.PeriodFrom,
+        f.PeriodTo,
+        f.FiledOn,
+        f.AmountReported,
+        f.Reference,
+    });
 
     public async Task<SalesTaxPayment> PayAsync(PaySalesTaxCommand command, CancellationToken ct = default)
     {

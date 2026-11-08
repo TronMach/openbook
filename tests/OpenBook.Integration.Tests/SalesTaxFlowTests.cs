@@ -407,6 +407,24 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_return_recorded_as_filed_leaves_the_to_do_list()
+    {
+        await Tax(s => s.UpdateAgencyAsync(_stateDor.Id, new TaxAgencyDetails("State Department of Revenue", FilingFrequency.Monthly, "ST-1", DueDays: 15)));
+        await Invoice(_acme, Mar1, null, Widgets(1));
+        var today = new DateOnly(2026, 4, 3);
+        var due = (await In<SalesTaxPaymentService, IReadOnlyList<ReturnDue>>(s => s.ReturnsDueAsync(today))).Single(r => r.Agency.Id == _stateDor.Id);
+
+        var filing = await In<SalesTaxPaymentService, SalesTaxFiling>(s => s.RecordFilingAsync(new RecordFilingCommand(_stateDor.Id, new DateOnly(2026, 3, 15), today, due.Owed, "CONF-881")));
+        Assert.Equal((Mar1, new DateOnly(2026, 3, 31), "CONF-881"), (filing.PeriodFrom, filing.PeriodTo, filing.Reference!));
+        Assert.DoesNotContain(await In<SalesTaxPaymentService, IReadOnlyList<ReturnDue>>(s => s.ReturnsDueAsync(today)), r => r.Agency.Id == _stateDor.Id);
+        Assert.Equal("taxfiling.already_filed", await Refused(() =>
+            In<SalesTaxPaymentService, SalesTaxFiling>(s => s.RecordFilingAsync(new RecordFilingCommand(_stateDor.Id, new DateOnly(2026, 3, 31), today, 0m)))));
+
+        await _db.InScope(async sp => { await sp.GetRequiredService<SalesTaxPaymentService>().RemoveFilingAsync(filing.Id); return true; });
+        Assert.Contains(await In<SalesTaxPaymentService, IReadOnlyList<ReturnDue>>(s => s.ReturnsDueAsync(today)), r => r.Agency.Id == _stateDor.Id);
+    }
+
+    [Fact]
     public async Task A_paid_period_has_nothing_left_to_pay()
     {
         await Invoice(_acme, Mar1, null, Widgets(1));

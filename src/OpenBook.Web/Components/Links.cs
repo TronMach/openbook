@@ -130,6 +130,7 @@ public static class Links
         "tax_rate" => $"/sales-tax/rates/{id}",
         "tax_code" => $"/sales-tax/codes/{id}",
         "sales_tax_payment" => $"/sales-tax/payments/{id}",
+        "sales_tax_filing" => "/sales-tax",
         "budget" => $"/reports/budgets/{id}",
         "inventory_adjustment" => $"/inventory/adjustments/{id}",
         "assembly_build" => $"/inventory/builds/{id}",

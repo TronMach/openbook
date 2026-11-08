@@ -39,6 +39,32 @@ public static class NexusEndpoints
             }
         }).RequireAuthorization();
 
+        // A return noted as filed: agencyId, periodTo (any day of the period), filedOn, amount, reference.
+        app.MapPost("/sales-tax/filings", async (IFormCollection form, SalesTaxPaymentService payments, CancellationToken ct) =>
+        {
+            try
+            {
+                static DateOnly? Day(string? text) => DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+                await payments.RecordFilingAsync(new RecordFilingCommand(
+                    Guid.TryParse(form["agencyId"], out var agency) ? agency : Guid.Empty,
+                    Day(form["periodTo"]) ?? throw new DomainException("taxfiling.period", "Choose the period the return was for."),
+                    Day(form["filedOn"]) ?? OpenBook.Application.CompanyTime.Today,
+                    FormNumbers.Amount(form["amount"]) ?? 0m,
+                    form["reference"].ToString()), ct);
+                return Results.Redirect("/sales-tax");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/sales-tax?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/sales-tax/filings/{id:guid}/remove", async (Guid id, IFormCollection _, SalesTaxPaymentService payments, CancellationToken ct) =>
+        {
+            await payments.RemoveFilingAsync(id, ct);
+            return Results.Redirect("/sales-tax");
+        }).RequireAuthorization();
+
         // A rate's percentage from a date on: effectiveFrom, percent; remove=true takes the change on that date away.
         app.MapPost("/sales-tax/rates/{id:guid}/changes", async (Guid id, IFormCollection form, SalesTaxService taxes, CancellationToken ct) =>
         {

@@ -6808,6 +6808,47 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("NexusThresholds", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxFiling", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AgencyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AmountReported")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AmountReportedMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FiledBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("FiledOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId", "PeriodTo")
+                        .IsUnique();
+
+                    b.ToTable("SalesTaxFilings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxPayment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -11568,6 +11609,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasOne("OpenBook.Domain.Sales.Invoice", null)
                         .WithMany()
                         .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.SalesTax.SalesTaxFiling", b =>
+                {
+                    b.HasOne("OpenBook.Domain.SalesTax.TaxAgency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
