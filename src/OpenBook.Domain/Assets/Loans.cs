@@ -95,7 +95,7 @@ public sealed class Loan
     private void EnsureAfterPayments(DateOnly from)
     {
         if (LatestPayment is { } latest && from <= latest.Date)
-            throw new DomainException("loan.rate_after_payments", $"Payments up to {latest.Date:yyyy-MM-dd} are recorded with the rate then. A change must start after the latest payment, or void the payments after it first.");
+            throw new DomainException("loan.rate_after_payments", $"Payments up to {latest.Date:yyyy-MM-dd} keep the rate they were recorded at. Start the change after the latest payment, or void the later payments first.");
     }
 
     public const string Source = "assets.loan";

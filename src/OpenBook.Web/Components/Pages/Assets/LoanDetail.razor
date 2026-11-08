@@ -28,7 +28,7 @@
         <dl class="facts">
             <dt>Borrowed</dt><dd>@Labels.Amount(_loan.Principal) in @_chart.FullName(_loan.LiabilityAccountId)</dd>
             <dt>Rate</dt><dd>@Labels.Percent(_loan.RateOn(CompanyTime.Today)) a year@(_loan.RateChanges.Count > 0 ? $" (variable; {Labels.Percent(_loan.AnnualRatePercent)} at the start)" : "")</dd>
-            <dt>Payment</dt><dd>@Labels.Amount(_loan.PaymentAmount) a month, @_loan.Payments payments from @Labels.Date(_loan.FirstPaymentDate)</dd>
+            <dt>Payment</dt><dd>@Labels.Amount(_loan.PaymentOn(CompanyTime.Today)) a month@(_loan.PaymentOn(CompanyTime.Today) != _loan.PaymentAmount ? $" ({Labels.Amount(_loan.PaymentAmount)} at the start)" : ""), @_loan.Payments payments from @Labels.Date(_loan.FirstPaymentDate)</dd>
             <dt>Interest to</dt><dd>@_chart.FullName(_loan.InterestAccountId)</dd>
             <dt>Balance</dt><dd>@Labels.Amount(_loan.Balance)</dd>
         </dl>
