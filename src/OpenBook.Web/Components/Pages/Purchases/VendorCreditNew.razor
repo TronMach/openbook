@@ -19,6 +19,7 @@
 
     @if (_loaded)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="vendor-credit-new" Snapshot="TakeDraft" OnRestore="Restore" />
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -59,6 +60,20 @@
     private List<Account> _categories = [];
     private IReadOnlyList<Item> _stockItems = [];
     private bool _useNumbers;
+    internal sealed record Draft(Guid? VendorId, string? Reference, DateOnly Date, string? Memo, Guid? LocationId, List<BillLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _vendorId is null && !_lines.Any(BillLineModel.IsFilledLine) ? null
+        : new Draft(_vendorId, _reference, _date, _memo, _locationId, _lines);
+
+    private void Restore(Draft draft)
+    {
+        _vendorId = _vendors.Any(v => v.Id == draft.VendorId) ? draft.VendorId : null;
+        (_reference, _date, _memo, _locationId) = (draft.Reference, draft.Date, draft.Memo, draft.LocationId);
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private Guid? _vendorId;
     private string? _reference;
     private DateOnly _date = CompanyTime.Today;
@@ -113,6 +128,7 @@
         {
             var command = new CreateVendorCreditCommand(_vendorId!.Value, _date, BillLineModel.Drafts(_lines), _reference, _memo, LocationId: _locationId);
             var credit = await Ops.RunAsync<VendorCreditService, VendorCredit>(s => s.CreateAsync(command), _closingPassword);
+            await _draft!.ClearAsync();
             Navigation.NavigateTo($"/purchases/vendor-credits/{credit.Id}");
         }
         catch (DomainException ex)

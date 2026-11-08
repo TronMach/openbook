@@ -19,6 +19,7 @@
 
     @if (_loaded)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="credit-memo-new" Snapshot="TakeDraft" OnRestore="Restore" />
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -59,6 +60,20 @@
 </div>
 
 @code {
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _customerId is null && _lines.All(l => l.IsBlank) ? null
+        : new Draft(_customerId, _number, _date, _memo, _taxCodeId, _locationId, _warehouseId, _lines);
+
+    private void Restore(Draft draft)
+    {
+        _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
+        (_number, _date, _memo, _taxCodeId, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.Memo, draft.TaxCodeId, draft.LocationId, draft.WarehouseId);
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private Guid? _customerId;
@@ -124,6 +139,7 @@
         {
             var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId);
             var credit = await Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command), _closingPassword);
+            await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/credit-memos/{credit.Id}");
         }
         catch (DomainException ex)
